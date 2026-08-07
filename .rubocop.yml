@@ -14,6 +14,8 @@ Layout/LeadingCommentSpace:
 
 Layout/LineLength:
   Max: 100
+  AllowedPatterns:
+    - "^\\s*#:"
 
 Metrics/AbcSize:
   Exclude:
@@ -27,3 +29,5 @@ Metrics/BlockLength:
 Metrics/ClassLength:
   Max: 150
 
+Metrics/MethodLength:
+  Max: 15

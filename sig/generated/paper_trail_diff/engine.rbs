@@ -1,0 +1,54 @@
+# Generated from lib/paper_trail_diff/engine.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Pure snapshot comparison. This class has no ActiveRecord or PaperTrail dependencies.
+  class Engine
+    # : (RecordSnapshot?, RecordSnapshot?) -> Diff
+    def self.compare: (RecordSnapshot?, RecordSnapshot?) -> Diff
+
+    # : (Hash[String, untyped], Hash[String, untyped]) -> Hash[String, ValueChange]
+    private def self.compare_attributes: (Hash[String, untyped], Hash[String, untyped]) -> Hash[String, ValueChange]
+
+    # : (association_snapshots, association_snapshots) -> association_diffs
+    private def self.compare_associations: (association_snapshots, association_snapshots) -> association_diffs
+
+    # : (AssociationSnapshot?, AssociationSnapshot?) -> [AssociationSnapshot, AssociationSnapshot]
+    private def self.association_pair: (AssociationSnapshot?, AssociationSnapshot?) -> [ AssociationSnapshot, AssociationSnapshot ]
+
+    # : (AssociationSnapshot?, AssociationSnapshot?) -> void
+    private def self.validate_association_kinds!: (AssociationSnapshot?, AssociationSnapshot?) -> void
+
+    # : (AssociationSnapshot?, AssociationSnapshot?) -> bool
+    private def self.kinds_differ?: (AssociationSnapshot?, AssociationSnapshot?) -> bool
+
+    # : (AssociationSnapshot, AssociationSnapshot) -> association_diff
+    private def self.compare_association: (AssociationSnapshot, AssociationSnapshot) -> association_diff
+
+    # : (AssociationSnapshot, AssociationSnapshot) -> ToOneAssociationDiff
+    private def self.compare_to_one: (AssociationSnapshot, AssociationSnapshot) -> ToOneAssociationDiff
+
+    # : (RecordSnapshot?, RecordSnapshot?) -> ValueChange?
+    private def self.relationship_change: (RecordSnapshot?, RecordSnapshot?) -> ValueChange?
+
+    # : (RecordSnapshot, RecordSnapshot) -> RecordChange?
+    private def self.compare_record: (RecordSnapshot, RecordSnapshot) -> RecordChange?
+
+    # : (AssociationSnapshot, AssociationSnapshot) -> CollectionAssociationDiff
+    private def self.compare_collection: (AssociationSnapshot, AssociationSnapshot) -> CollectionAssociationDiff
+
+    # : (Hash[identity, RecordSnapshot], Hash[identity, RecordSnapshot]) -> Array[RecordSnapshot]
+    private def self.records_missing_from: (Hash[identity, RecordSnapshot], Hash[identity, RecordSnapshot]) -> Array[RecordSnapshot]
+
+    # : (Hash[identity, RecordSnapshot], Hash[identity, RecordSnapshot]) -> Array[RecordChange]
+    private def self.changed_records: (Hash[identity, RecordSnapshot], Hash[identity, RecordSnapshot]) -> Array[RecordChange]
+
+    # : (Array[RecordSnapshot]) -> Hash[Array[untyped], RecordSnapshot]
+    private def self.index_records: (Array[RecordSnapshot]) -> Hash[Array[untyped], RecordSnapshot]
+
+    # : (Array[Array[untyped]]) -> Array[Array[untyped]]
+    private def self.sorted_identities: (Array[Array[untyped]]) -> Array[Array[untyped]]
+
+    # : (RecordSnapshot?, RecordSnapshot?) -> bool
+    private def self.same_identity?: (RecordSnapshot?, RecordSnapshot?) -> bool
+  end
+end

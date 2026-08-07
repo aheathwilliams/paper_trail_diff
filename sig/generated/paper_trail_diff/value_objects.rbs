@@ -1,0 +1,85 @@
+# Generated from lib/paper_trail_diff/value_objects.rb with RBS::Inline
+
+module PaperTrailDiff
+  # A directional change between two structured values.
+  class ValueChange
+    attr_reader from: untyped
+
+    attr_reader to: untyped
+
+    # : (from: untyped, to: untyped) -> void
+    def initialize: (from: untyped, to: untyped) -> void
+
+    # : () -> Hash[Symbol, untyped]
+    def to_h: () -> Hash[Symbol, untyped]
+  end
+
+  # Attribute changes for an associated record whose identity did not change.
+  class RecordChange
+    attr_reader record: Hash[Symbol, untyped]
+
+    attr_reader attributes: Hash[String, ValueChange]
+
+    # : (record: RecordSnapshot, attributes: attribute_changes) -> void
+    def initialize: (record: RecordSnapshot, attributes: attribute_changes) -> void
+
+    # : () -> Hash[Symbol, untyped]
+    def to_h: () -> Hash[Symbol, untyped]
+  end
+
+  # Relationship and associated-record changes for belongs_to or has_one.
+  class ToOneAssociationDiff
+    attr_reader kind: Symbol
+
+    attr_reader relationship: ValueChange?
+
+    attr_reader changed: RecordChange?
+
+    # : (kind: Symbol, relationship: ValueChange?, changed: RecordChange?) -> void
+    def initialize: (kind: Symbol, relationship: ValueChange?, changed: RecordChange?) -> void
+
+    # : () -> bool
+    def empty?: () -> bool
+
+    # : () -> Hash[Symbol, untyped]
+    def to_h: () -> Hash[Symbol, untyped]
+  end
+
+  # Membership and associated-record changes for has_many.
+  class CollectionAssociationDiff
+    attr_reader kind: Symbol
+
+    attr_reader added: Array[RecordSnapshot]
+
+    attr_reader removed: Array[RecordSnapshot]
+
+    attr_reader changed: Array[RecordChange]
+
+    # : (kind: Symbol, added: Array[RecordSnapshot], removed: Array[RecordSnapshot], changed: Array[RecordChange]) -> void
+    def initialize: (kind: Symbol, added: Array[RecordSnapshot], removed: Array[RecordSnapshot], changed: Array[RecordChange]) -> void
+
+    # : () -> bool
+    def empty?: () -> bool
+
+    # : () -> Hash[Symbol, untyped]
+    def to_h: () -> Hash[Symbol, untyped]
+  end
+
+  # The complete structured difference between two normalized endpoints.
+  class Diff
+    attr_reader record: ValueChange?
+
+    attr_reader attributes: Hash[String, ValueChange]
+
+    attr_reader associations: Hash[String, ToOneAssociationDiff | CollectionAssociationDiff]
+
+    # : (?record: ValueChange?, ?attributes: attribute_changes, ?associations: association_diffs) -> void
+    def initialize: (?record: ValueChange?, ?attributes: attribute_changes, ?associations: association_diffs) -> void
+
+    # : () -> bool
+    def empty?: () -> bool
+
+    # : () -> Hash[Symbol, untyped]
+    def to_h: () -> Hash[Symbol, untyped]
+  end
+end

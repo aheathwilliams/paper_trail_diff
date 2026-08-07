@@ -1,0 +1,43 @@
+# Generated from lib/paper_trail_diff/snapshot.rb with RBS::Inline
+
+module PaperTrailDiff
+  # A normalized first-level association in a record snapshot.
+  class AssociationSnapshot
+    SUPPORTED_KINDS: untyped
+
+    attr_reader kind: Symbol
+
+    attr_reader records: Array[RecordSnapshot]
+
+    # : (kind: Symbol, records: Array[RecordSnapshot]) -> void
+    def initialize: (kind: Symbol, records: Array[RecordSnapshot]) -> void
+  end
+
+  # An immutable, ActiveRecord-independent representation of a reified record.
+  class RecordSnapshot
+    attr_reader type: String
+
+    attr_reader id: untyped
+
+    attr_reader attributes: Hash[String, untyped]
+
+    attr_reader associations: Hash[String, AssociationSnapshot]
+
+    # : (type: String, id: untyped, attributes: snapshot_attributes, ?associations: snapshot_associations) -> void
+    def initialize: (type: String, id: untyped, attributes: snapshot_attributes, ?associations: snapshot_associations) -> void
+
+    # : () -> Array[untyped]
+    def identity: () -> Array[untyped]
+
+    # : () -> Hash[Symbol, untyped]
+    def reference: () -> Hash[Symbol, untyped]
+
+    # : () -> Hash[Symbol, untyped]
+    def to_h: () -> Hash[Symbol, untyped]
+
+    private
+
+    # : (Hash[untyped, untyped]) -> Hash[String, untyped]
+    def normalize_hash: (Hash[untyped, untyped]) -> Hash[String, untyped]
+  end
+end

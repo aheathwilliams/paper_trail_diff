@@ -1,0 +1,21 @@
+# Generated from lib/paper_trail_diff/support.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Internal helpers for isolating and serializing values held by result objects.
+  module Support
+    # : (untyped) -> untyped
+    def self?.immutable_copy: (untyped) -> untyped
+
+    # : (Hash[untyped, untyped]) -> Hash[untyped, untyped]
+    def self?.immutable_hash: (Hash[untyped, untyped]) -> Hash[untyped, untyped]
+
+    # : (untyped) -> untyped
+    def self?.serialize: (untyped) -> untyped
+
+    # : (untyped) -> untyped
+    def self?.duplicate_and_freeze: (untyped) -> untyped
+
+    # : (untyped) -> bool
+    def self?.paper_trail_diff_value?: (untyped) -> bool
+  end
+end
