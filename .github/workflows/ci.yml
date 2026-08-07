@@ -1,0 +1,124 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    name: Ruby ${{ matrix.ruby }} / PaperTrail ${{ matrix.paper_trail }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - ruby: '3.1'
+            paper_trail: '16'
+            gemfile: paper_trail_16
+          - ruby: '3.2'
+            paper_trail: '17'
+            gemfile: paper_trail_17
+          - ruby: '3.3'
+            paper_trail: '17'
+            gemfile: paper_trail_17
+          - ruby: '3.4'
+            paper_trail: '17'
+            gemfile: paper_trail_17
+          - ruby: '4.0'
+            paper_trail: '16'
+            gemfile: paper_trail_16
+          - ruby: '4.0'
+            paper_trail: '17'
+            gemfile: paper_trail_17
+
+    env:
+      BUNDLE_GEMFILE: gemfiles/${{ matrix.gemfile }}.gemfile
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: true
+
+      - name: Run specs, linting, and type checking
+        run: bundle exec rake
+
+  windows:
+    name: Windows Ruby ${{ matrix.ruby }} / PaperTrail ${{ matrix.paper_trail }}
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - ruby: '3.1'
+            paper_trail: '16'
+            gemfile: paper_trail_16
+          - ruby: '4.0'
+            paper_trail: '17'
+            gemfile: paper_trail_17
+
+    env:
+      BUNDLE_GEMFILE: gemfiles/${{ matrix.gemfile }}.gemfile
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: true
+
+      - name: Run specs, linting, and type checking
+        run: bundle exec rake
+
+  build:
+    name: Package Ruby ${{ matrix.ruby }} / PaperTrail ${{ matrix.paper_trail }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - ruby: '3.1'
+            paper_trail: '16'
+            gemfile: paper_trail_16
+          - ruby: '4.0'
+            paper_trail: '17'
+            gemfile: paper_trail_17
+
+    env:
+      BUNDLE_GEMFILE: gemfiles/${{ matrix.gemfile }}.gemfile
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: true
+
+      - name: Build gem
+        run: bundle exec rake build
+
+      - name: Install and smoke-test without association tracking
+        shell: bash
+        run: |
+          gem install --local pkg/paper_trail_diff-*.gem
+          ruby -e 'require "paper_trail_diff"; abort if defined?(PaperTrailAssociationTracking)'
+
+      - name: Validate packaged RBS signatures
+        shell: bash
+        run: |
+          signature_dir=$(ruby -e 'spec = Gem::Specification.find_by_name("paper_trail_diff"); print File.join(spec.full_gem_path, "sig/generated")')
+          bundle exec rbs -I "$signature_dir" validate
