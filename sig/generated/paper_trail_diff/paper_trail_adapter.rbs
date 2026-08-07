@@ -1,0 +1,54 @@
+# Generated from lib/paper_trail_diff/paper_trail_adapter.rb with RBS::Inline
+
+module PaperTrailDiff
+  # PaperTrail/ActiveRecord boundary that produces plain record snapshots.
+  class PaperTrailAdapter
+    # : (associations: Array[String | Symbol], ignore: Array[String | Symbol]) -> void
+    def initialize: (associations: Array[String | Symbol], ignore: Array[String | Symbol]) -> void
+
+    # : (untyped, untyped) -> Diff
+    def compare: (untyped, untyped) -> Diff
+
+    # : (untyped, from: untyped, to: untyped) -> Array[Step]
+    def timeline: (untyped, from: untyped, to: untyped) -> Array[Step]
+
+    private
+
+    # : (Array[untyped], Array[RecordSnapshot?]) -> Array[Step]
+    def build_steps: (Array[untyped], Array[RecordSnapshot?]) -> Array[Step]
+
+    @ignored_attributes: Array[String]
+
+    @association_names: Array[String]
+
+    # : (untyped) -> RecordSnapshot?
+    def snapshot_for: (untyped) -> RecordSnapshot?
+
+    # : (untyped) -> RecordSnapshot?
+    def normalize_record: (untyped) -> RecordSnapshot?
+
+    # : (untyped) -> Array[String]
+    def excluded_attributes: (untyped) -> Array[String]
+
+    # : (untyped, untyped) -> void
+    def validate_version_pair!: (untyped, untyped) -> void
+
+    # : (untyped) -> Array[String]
+    def version_item_identity: (untyped) -> Array[String]
+
+    # : (untyped) -> Array[untyped]
+    def versions_for: (untyped) -> Array[untyped]
+
+    # : (Array[untyped], untyped, boundary: Symbol) -> Integer
+    def boundary_index: (Array[untyped], untyped, boundary: Symbol) -> Integer
+
+    # : (untyped, untyped) -> bool
+    def same_version?: (untyped, untyped) -> bool
+
+    # : (untyped, option: Symbol) -> Array[String]
+    def normalize_names: (untyped, option: Symbol) -> Array[String]
+
+    # : (untyped) -> bool
+    def valid_names?: (untyped) -> bool
+  end
+end

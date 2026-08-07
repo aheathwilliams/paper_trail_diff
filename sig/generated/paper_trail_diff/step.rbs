@@ -1,0 +1,18 @@
+# Generated from lib/paper_trail_diff/step.rb with RBS::Inline
+
+module PaperTrailDiff
+  # One adjacent transition in a PaperTrail timeline.
+  class Step
+    attr_reader from_version: untyped
+
+    attr_reader to_version: untyped
+
+    attr_reader diff: Diff
+
+    # : (from_version: untyped, to_version: untyped, diff: Diff) -> void
+    def initialize: (from_version: untyped, to_version: untyped, diff: Diff) -> void
+
+    # : () -> Hash[Symbol, untyped]
+    def to_h: () -> Hash[Symbol, untyped]
+  end
+end

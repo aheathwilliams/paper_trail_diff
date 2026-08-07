@@ -2,6 +2,15 @@
 
 # Structured version comparison for PaperTrail.
 module PaperTrailDiff
+  DEFAULT_IGNORED_ATTRIBUTES: untyped
+
+  # Compares the net state reconstructed by two PaperTrail versions.
+  # : (untyped, untyped, ?associations: Array[String | Symbol], ?ignore: Array[String | Symbol]) -> Diff
+  def self.compare: (untyped, untyped, ?associations: Array[String | Symbol], ?ignore: Array[String | Symbol]) -> Diff
+
+  # Compares every adjacent reconstructed state in an inclusive version range.
+  # : (untyped, from: untyped, to: untyped, ?associations: Array[String | Symbol], ?ignore: Array[String | Symbol]) -> Array[Step]
+  def self.timeline: (untyped, from: untyped, to: untyped, ?associations: Array[String | Symbol], ?ignore: Array[String | Symbol]) -> Array[Step]
 end
 
 module PaperTrailDiff
