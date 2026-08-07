@@ -1,0 +1,5 @@
+# Generated from lib/paper_trail_diff/version.rb with RBS::Inline
+
+module PaperTrailDiff
+  VERSION: ::String
+end

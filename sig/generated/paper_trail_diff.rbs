@@ -1,0 +1,5 @@
+# Generated from lib/paper_trail_diff.rb with RBS::Inline
+
+# Structured version comparison for PaperTrail.
+module PaperTrailDiff
+end

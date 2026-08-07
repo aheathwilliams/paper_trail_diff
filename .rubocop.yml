@@ -1,0 +1,29 @@
+AllCops:
+  NewCops: enable
+  SuggestExtensions: false
+  TargetRubyVersion: 3.1
+  Exclude:
+    - "gemfiles/**/*"
+    - "pkg/**/*"
+    - "sig/generated/**/*"
+    - "vendor/**/*"
+
+Layout/LeadingCommentSpace:
+  AllowRBSInlineAnnotation: true
+  AllowSteepAnnotation: true
+
+Layout/LineLength:
+  Max: 100
+
+Metrics/AbcSize:
+  Exclude:
+    - "spec/**/*"
+
+Metrics/BlockLength:
+  Exclude:
+    - "spec/**/*"
+    - "*.gemspec"
+
+Metrics/ClassLength:
+  Max: 150
+
