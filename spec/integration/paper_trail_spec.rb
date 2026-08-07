@@ -78,6 +78,16 @@ RSpec.describe PaperTrailDiff do
       expect { described_class.compare(draft, published, associations: [nil]) }
         .to raise_error(ArgumentError, /associations/)
     end
+
+    it 'raises clearly when associations are requested without PT-AT loaded' do
+      _article, _create, draft, published, = create_history
+
+      expect { described_class.compare(draft, published, associations: [:comments]) }
+        .to raise_error(
+          PaperTrailDiff::AssociationTrackingUnavailableError,
+          /must be loaded and enabled/
+        )
+    end
   end
 
   describe '.timeline' do

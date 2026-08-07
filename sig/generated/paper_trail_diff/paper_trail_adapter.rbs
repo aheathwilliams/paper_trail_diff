@@ -17,6 +17,8 @@ module PaperTrailDiff
     # : (Array[untyped], Array[RecordSnapshot?]) -> Array[Step]
     def build_steps: (Array[untyped], Array[RecordSnapshot?]) -> Array[Step]
 
+    @reflection_cache: Hash[String, Array[untyped]]
+
     @ignored_attributes: Array[String]
 
     @association_names: Array[String]
@@ -24,11 +26,35 @@ module PaperTrailDiff
     # : (untyped) -> RecordSnapshot?
     def snapshot_for: (untyped) -> RecordSnapshot?
 
-    # : (untyped) -> RecordSnapshot?
-    def normalize_record: (untyped) -> RecordSnapshot?
+    # : (untyped, ?reflections: Array[untyped]) -> RecordSnapshot?
+    def normalize_record: (untyped, ?reflections: Array[untyped]) -> RecordSnapshot?
 
-    # : (untyped) -> Array[String]
-    def excluded_attributes: (untyped) -> Array[String]
+    # : (untyped, Array[untyped]) -> Array[String]
+    def excluded_attributes: (untyped, Array[untyped]) -> Array[String]
+
+    # : (Array[untyped]) -> Array[String]
+    def relationship_columns: (Array[untyped]) -> Array[String]
+
+    # : (untyped, Array[untyped]) -> Hash[String, AssociationSnapshot]
+    def normalize_associations: (untyped, Array[untyped]) -> Hash[String, AssociationSnapshot]
+
+    # : (untyped) -> Array[untyped]
+    def reflections_for: (untyped) -> Array[untyped]
+
+    # : (String) -> Array[untyped]
+    def requested_reflections: (String) -> Array[untyped]
+
+    # : (String, Symbol) -> void
+    def validate_association_kind!: (String, Symbol) -> void
+
+    # : (untyped) -> String
+    def version_model_type: (untyped) -> String
+
+    # : (Array[untyped]) -> Hash[Symbol, bool]
+    def reify_options: (Array[untyped]) -> Hash[Symbol, bool]
+
+    # : () -> void
+    def ensure_association_tracking!: () -> void
 
     # : (untyped, untyped) -> void
     def validate_version_pair!: (untyped, untyped) -> void

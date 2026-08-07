@@ -8,6 +8,7 @@ module PaperTrailDiff
     def initialize(associations:, ignore:)
       @association_names = normalize_names(associations, option: :associations)
       @ignored_attributes = normalize_names(ignore, option: :ignore)
+      @reflection_cache = {}
     end
 
     #: (untyped, untyped) -> Diff
@@ -45,32 +46,113 @@ module PaperTrailDiff
 
     # @rbs @association_names: Array[String]
     # @rbs @ignored_attributes: Array[String]
+    # @rbs @reflection_cache: Hash[String, Array[untyped]]
 
     #: (untyped) -> RecordSnapshot?
     def snapshot_for(version)
-      normalize_record(version.reify(dup: true))
+      reflections = reflections_for(version)
+      record = version.reify(reify_options(reflections))
+      normalize_record(record, reflections: reflections)
     end
 
-    #: (untyped) -> RecordSnapshot?
-    def normalize_record(record)
+    #: (untyped, ?reflections: Array[untyped]) -> RecordSnapshot?
+    def normalize_record(record, reflections: [])
       return unless record
 
       attributes = record.attributes.dup
-      excluded_attributes(record).each { |name| attributes.delete(name) }
+      excluded_attributes(record, reflections).each { |name| attributes.delete(name) }
       RecordSnapshot.new(
         type: record.class.name,
         id: record.id,
-        attributes: attributes
+        attributes: attributes,
+        associations: normalize_associations(record, reflections)
       )
     end
 
-    #: (untyped) -> Array[String]
-    def excluded_attributes(record)
+    #: (untyped, Array[untyped]) -> Array[String]
+    def excluded_attributes(record, reflections)
       primary_key = record.class.primary_key #: untyped
       primary_keys = primary_key.is_a?(Array) ? primary_key : [primary_key]
       # @type var primary_keys: Array[untyped]
       primary_keys = primary_keys.map { |key| key.to_s } # rubocop:disable Style/SymbolProc
-      (primary_keys + @ignored_attributes).uniq
+      (primary_keys + @ignored_attributes + relationship_columns(reflections)).uniq
+    end
+
+    #: (Array[untyped]) -> Array[String]
+    def relationship_columns(reflections)
+      reflections.select { |reflection| reflection.macro == :belongs_to }.flat_map do |reflection|
+        columns = [reflection.foreign_key.to_s]
+        columns << reflection.foreign_type.to_s if reflection.polymorphic?
+        columns
+      end
+    end
+
+    #: (untyped, Array[untyped]) -> Hash[String, AssociationSnapshot]
+    def normalize_associations(record, reflections)
+      associations = {} #: Hash[String, AssociationSnapshot]
+      reflections.each do |reflection|
+        associated = record.public_send(reflection.name)
+        records = reflection.macro == :has_many ? associated.to_a : Array(associated).compact
+        associations[reflection.name.to_s] = AssociationSnapshot.new(
+          kind: reflection.macro,
+          records: records.filter_map { |child| normalize_record(child) }
+        )
+      end
+      associations
+    end
+
+    #: (untyped) -> Array[untyped]
+    def reflections_for(version)
+      return [] if @association_names.empty?
+
+      ensure_association_tracking!
+      model_type = version_model_type(version)
+      @reflection_cache[model_type] ||= requested_reflections(model_type)
+    end
+
+    #: (String) -> Array[untyped]
+    def requested_reflections(model_type)
+      model_class = Object.const_get(model_type) #: untyped
+      @association_names.map do |name|
+        reflection = model_class.reflect_on_association(name.to_sym)
+        raise UnknownAssociationError, "unknown association: #{name}" unless reflection
+
+        validate_association_kind!(name, reflection.macro)
+        reflection
+      end.freeze
+    end
+
+    #: (String, Symbol) -> void
+    def validate_association_kind!(name, kind)
+      return if %i[belongs_to has_one has_many].include?(kind)
+
+      raise UnsupportedAssociationError, "unsupported association #{name}: #{kind}"
+    end
+
+    #: (untyped) -> String
+    def version_model_type(version)
+      subtype = version.item_subtype if version.respond_to?(:item_subtype)
+      subtype.to_s.empty? ? version.item_type.to_s : subtype.to_s
+    end
+
+    #: (Array[untyped]) -> Hash[Symbol, bool]
+    def reify_options(reflections)
+      options = { dup: true }
+      reflections.each { |reflection| options[reflection.macro] = true }
+      options
+    end
+
+    #: () -> void
+    def ensure_association_tracking!
+      paper_trail = Object.const_get(:PaperTrail) #: untyped
+      config = paper_trail.config #: untyped
+      available = defined?(::PaperTrailAssociationTracking) &&
+                  config.respond_to?(:track_associations?) &&
+                  config.track_associations?
+      return if available
+
+      message = 'association tracking must be loaded and enabled to compare associations'
+      raise AssociationTrackingUnavailableError, message
     end
 
     #: (untyped, untyped) -> void
