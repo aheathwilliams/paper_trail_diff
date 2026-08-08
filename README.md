@@ -30,12 +30,15 @@ gem "paper_trail-association_tracking"
 PaperTrail.config.track_associations = true
 ```
 
-All associated models being compared must use `has_paper_trail`.
+All associated models whose historical state is compared must use
+`has_paper_trail`.
 
 ## Compare two endpoints
 
 PaperTrail stores an object's state before each recorded event. `compare`
-reifies exactly the two versions supplied and reports their net difference:
+accepts two explicit endpoints: each may be a PaperTrail version or a clean,
+persisted model instance representing current database state. It reports only
+their net difference:
 
 ```ruby
 diff = PaperTrailDiff.compare(article.versions[1], article.versions[4])
@@ -59,6 +62,23 @@ A `create` version reifies to `nil`; comparing it with a record state produces
 a structured `record_presence_change` instead of fake scalar changes. For
 ordinary updates, `record_presence_change` is `nil`, meaning the root record is
 present at both endpoints; scalar changes remain under `attributes`.
+
+Pass the record explicitly when the desired endpoint is current state:
+
+```ruby
+diff = PaperTrailDiff.compare(
+  article.versions.last,
+  article,
+  associations: ["comments.replies"]
+)
+```
+
+Version and record endpoints may appear in either order. Current state is never
+inferred. The record must be persisted, not destroyed, and free of unsaved
+attribute changes. The gem reloads it unscoped before normalization, so stale
+association caches and in-memory edits are not compared. Use a database
+transaction with an appropriate isolation level when several live association
+queries must represent one atomic application snapshot.
 
 ## Build a root-checkpoint timeline
 
@@ -103,11 +123,46 @@ steps = PaperTrailDiff.activity_timeline(
 steps.reject { |step| step.diff.empty? }
 ```
 
-The result is the same frozen array of `Step` objects, but a step's version
-handles may belong to a selected descendant model. PaperTrail versions describe
-pre-change state, so a mutation is visible between its version and a later
-recorded boundary. The API never invents the live current record as the final
-state; the last mutation still needs a later explicit `to` root version.
+Pass the record explicitly as `to:` to include current state without creating a
+final root checkpoint:
+
+```ruby
+steps = PaperTrailDiff.activity_timeline(
+  article,
+  from: article.versions[1],
+  to: article,
+  associations: ["comments.replies", :author]
+)
+```
+
+The result is a frozen array of `ActivityStep` objects. Each step has immutable
+`from_boundary`, `to_boundary`, and `diff` readers. Historical boundaries are
+`kind: :version`; an explicitly requested live endpoint is `kind: :current`:
+
+```ruby
+steps.last.to_boundary.to_h
+# => {
+#   kind: :current,
+#   version_id: nil,
+#   item_type: "Article",
+#   item_id: 42,
+#   recorded_at: 2026-08-08 12:00:00 UTC
+# }
+```
+
+A historical boundary may belong to the root or a selected descendant model.
+PaperTrail versions describe pre-change state, so a mutation becomes visible
+between its version boundary and the next historical or explicit current
+boundary. Passing `to: article` is what removes the need to touch the parent
+after an ordinary versioned child mutation; current state is still never
+implicit.
+
+Live-ended HABTM activity is rejected with
+`PaperTrailDiff::UnsupportedLiveActivityError`. HABTM join rows have no model
+versions, so the gem cannot reliably split their membership mutations into
+intermediate events without transaction-backed owner checkpoints. Historical
+HABTM activity and `compare(version, article, associations: [:tags])` remain
+supported where the historical endpoint has usable PT-AT metadata.
 
 Both timeline APIs preserve empty boundaries. A display may filter
 `step.diff.empty?`, while audit-oriented callers can retain every recorded
@@ -216,9 +271,12 @@ already represented structurally. Join-model attributes for `has_many :through`
 remain available. Cyclic model relationships are safe because only the finite
 paths supplied by the caller are traversed.
 
-Requesting associations without loaded and enabled PT-AT raises
-`PaperTrailDiff::AssociationTrackingUnavailableError`. Unknown names and
-unsupported macros raise explicit `PaperTrailDiff::Error` subclasses.
+Requesting associations for any historical endpoint without loaded and enabled
+PT-AT raises `PaperTrailDiff::AssociationTrackingUnavailableError`. A comparison
+whose endpoints are both live records can normalize associations without PT-AT,
+though it will normally be empty because both records reload the same current
+database state. Unknown names and unsupported macros raise explicit
+`PaperTrailDiff::Error` subclasses.
 Malformed public options raise `PaperTrailDiff::ConfigurationError`, also under
 that base error.
 
@@ -273,11 +331,13 @@ def checkpoint_article(article_id)
 end
 ```
 
-A root checkpoint after a batch supplies its explicit final state. The ordinary
-`timeline` aggregates that batch; `activity_timeline` uses recorded descendant
-versions to split it into activity boundaries. Prefer an explicit join model
-with `has_many :through` when join attributes or join mutations must appear as
-first-class history.
+A root checkpoint after a batch supplies an immutable historical final state.
+The ordinary `timeline` aggregates that batch; `activity_timeline` uses recorded
+descendant versions to split it into activity boundaries. For an interactive
+view, `activity_timeline(..., to: article)` can instead terminate explicitly at
+current state without touching the root. Prefer checkpoints for reproducible
+audits and HABTM, and prefer an explicit join model with `has_many :through`
+when join attributes or join mutations must appear as first-class history.
 
 ## Result objects
 
@@ -285,6 +345,8 @@ The public result types are:
 
 - `PaperTrailDiff::Diff`
 - `PaperTrailDiff::Step`
+- `PaperTrailDiff::ActivityStep`
+- `PaperTrailDiff::ActivityBoundary`
 - `PaperTrailDiff::Analysis`
 - `PaperTrailDiff::ValueChange`
 - `PaperTrailDiff::RecordReference`
@@ -301,7 +363,9 @@ They expose readers, are frozen after construction, and provide deterministic
 names are strings. Attribute values retain their Ruby types. `RecordChange#record`
 is a `RecordReference` with `type` and `id` readers. `Step` itself is frozen but
 intentionally retains the original, potentially mutable PaperTrail version
-objects for metadata access; `Step#to_h` emits only their IDs.
+objects for metadata access; `Step#to_h` emits only their IDs. `ActivityStep`
+instead retains only immutable boundary metadata and serializes as
+`{ from: ..., to: ..., diff: ... }`.
 
 ## Historical correctness and limitations
 
@@ -311,19 +375,21 @@ and PT-AT can reconstruct. In particular:
 - attributes skipped by PaperTrail, deleted versions, and changes made while
   versioning was disabled cannot be recovered;
 - model/schema or serializer changes can affect reification of old versions;
-- comparison and timeline APIs never add the live current record as an implicit
-  endpoint;
+- comparison and activity APIs add live state only when the caller explicitly
+  passes a persisted record endpoint; the adapter reloads that record, but
+  multiple queries are not automatically one database-isolated snapshot;
 - PT-AT requires its schema, callbacks, versioned child models, and transaction
   metadata; callback-skipping writes may not be reconstructable;
 - HABTM membership is limited to the join snapshots PT-AT recorded in
   `version_associations`; historical target attributes require versioned target
   models, otherwise PT-AT may return live target state;
-- `timeline` is bounded by root versions; `activity_timeline` adds recorded
-  descendant boundaries, but its final mutation still needs a later explicit
-  root endpoint because PaperTrail stores pre-change snapshots;
+- `timeline` and `analyze` are bounded by root versions; `activity_timeline`
+  adds recorded descendant boundaries and may terminate at an explicitly passed
+  current record, while a fully historical result still requires a later root
+  version because PaperTrail stores pre-change snapshots;
 - HABTM join-table mutations do not have their own model versions and therefore
-  cannot become standalone activity boundaries; use a versioned join model when
-  that activity matters;
+  cannot become standalone activity boundaries; live-ended HABTM activity is
+  rejected, and a versioned join model should be used when that activity matters;
 - activity discovery uses PT-AT association rows and cannot recover descendant
   events whose relevant callbacks or association metadata were never recorded;
 - PT-AT has documented edge cases, especially around some `has_one` histories;
