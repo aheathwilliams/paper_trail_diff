@@ -23,6 +23,13 @@ module PaperTrailDiff
       versions.slice(from_index..to_index) || []
     end
 
+    #: () -> Array[untyped]
+    def select_through_latest
+      versions = versions_for_record
+      from_index = boundary_index(versions, @from, boundary: :from)
+      versions.slice(from_index..-1) || []
+    end
+
     private
 
     # @rbs @record: untyped

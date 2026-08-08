@@ -15,6 +15,9 @@ module PaperTrailDiff
     # : (untyped, untyped) -> void
     def ensure_habtm_history!: (untyped, untyped) -> void
 
+    # : (untyped) -> Array[String]
+    def habtm_paths: (untyped) -> Array[String]
+
     # : (untyped, AssociationTree, path: String) -> Array[untyped]
     def reflections_for: (untyped, AssociationTree, path: String) -> Array[untyped]
 
@@ -23,9 +26,9 @@ module PaperTrailDiff
 
     private
 
-    @tree: AssociationTree
-
     @reflection_cache: Hash[Array[String], Array[untyped]]
+
+    @tree: AssociationTree
 
     # : (untyped, AssociationTree, path: String) -> Array[Array[untyped]]
     def collect_reflections: (untyped, AssociationTree, path: String) -> Array[Array[untyped]]
@@ -41,6 +44,9 @@ module PaperTrailDiff
 
     # : (untyped, untyped) -> bool
     def paper_trail_versions?: (untyped, untyped) -> bool
+
+    # : (untyped) -> bool
+    def habtm_reflection?: (untyped) -> bool
 
     # : (String, String) -> String
     def join_path: (String, String) -> String

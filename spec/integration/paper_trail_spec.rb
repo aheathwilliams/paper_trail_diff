@@ -184,8 +184,45 @@ RSpec.describe PaperTrailDiff do
       activity = described_class.activity_timeline(article, from: draft, to: reverted)
       timeline = described_class.timeline(article, from: draft, to: reverted)
 
-      expect(activity.map(&:to_h)).to eq(timeline.map(&:to_h))
+      expect(activity.map { |step| step.diff.to_h }).to eq(timeline.map { |step| step.diff.to_h })
+      expect(activity.first.from_boundary.to_h).to include(
+        kind: :version,
+        version_id: draft.id,
+        item_type: 'CoreArticle'
+      )
       expect(activity).to be_frozen
+    end
+
+    it 'adds an explicit current boundary without requiring another root version' do
+      article, _create, _draft, _published, current_before = create_history
+
+      steps = described_class.activity_timeline(article, from: current_before, to: article)
+      step = steps.fetch(0)
+
+      expect(step.from_boundary.kind).to eq(:version)
+      expect(step.to_boundary.to_h).to include(
+        kind: :current,
+        version_id: nil,
+        item_type: 'CoreArticle',
+        item_id: article.id
+      )
+      expect(step.diff.attributes.fetch('internal_note').to_h)
+        .to eq(from: 'stable', to: 'changed')
+      expect(step.to_h.keys).to eq(%i[from to diff])
+    end
+
+    it 'rejects an unsaved current boundary and a non-version starting boundary' do
+      article, _create, _draft, _published, current_before = create_history
+      article.title = 'Unsaved'
+
+      expect do
+        described_class.activity_timeline(article, from: current_before, to: article)
+      end.to raise_error(PaperTrailDiff::InvalidEndpointError, /unsaved/)
+
+      article.restore_attributes
+      expect do
+        described_class.activity_timeline(article, from: article, to: article)
+      end.to raise_error(PaperTrailDiff::InvalidTimelineRangeError, /root PaperTrail version/)
     end
   end
 

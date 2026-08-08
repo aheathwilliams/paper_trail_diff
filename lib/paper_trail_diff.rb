@@ -18,9 +18,11 @@ require_relative 'paper_trail_diff/historical_association_reifier'
 require_relative 'paper_trail_diff/live_association_reader'
 require_relative 'paper_trail_diff/snapshot_normalizer'
 require_relative 'paper_trail_diff/step'
+require_relative 'paper_trail_diff/activity_boundary'
 require_relative 'paper_trail_diff/analysis'
 require_relative 'paper_trail_diff/version_range'
 require_relative 'paper_trail_diff/timeline_builder'
+require_relative 'paper_trail_diff/activity_range'
 require_relative 'paper_trail_diff/activity_version_collector'
 require_relative 'paper_trail_diff/activity_timeline_builder'
 require_relative 'paper_trail_diff/paper_trail_adapter'
@@ -69,7 +71,7 @@ module PaperTrailDiff
     end
 
     # Compares adjacent root and selected-descendant activity boundaries.
-    #: (untyped, from: untyped, to: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option) -> Array[Step]
+    #: (untyped, from: untyped, to: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option) -> Array[ActivityStep]
     def activity_timeline(record, from:, to:, associations: [], ignore: DEFAULT_IGNORED_ATTRIBUTES)
       PaperTrailAdapter.new(associations: associations, ignore: ignore).activity_timeline(
         record,

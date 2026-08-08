@@ -9,6 +9,9 @@ module PaperTrailDiff
     # : () -> Array[untyped]
     def select: () -> Array[untyped]
 
+    # : () -> Array[untyped]
+    def select_through_latest: () -> Array[untyped]
+
     private
 
     @record: untyped

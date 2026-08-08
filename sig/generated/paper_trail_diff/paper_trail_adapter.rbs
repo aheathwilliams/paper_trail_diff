@@ -12,8 +12,8 @@ module PaperTrailDiff
     # : (untyped, from: untyped, to: untyped) -> Array[Step]
     def timeline: (untyped, from: untyped, to: untyped) -> Array[Step]
 
-    # : (untyped, from: untyped, to: untyped) -> Array[Step]
-    def activity_timeline: (untyped, from: untyped, to: untyped) -> Array[Step]
+    # : (untyped, from: untyped, to: untyped) -> Array[ActivityStep]
+    def activity_timeline: (untyped, from: untyped, to: untyped) -> Array[ActivityStep]
 
     # : (untyped, from: untyped, to: untyped) -> Analysis
     def analyze: (untyped, from: untyped, to: untyped) -> Analysis
@@ -25,6 +25,9 @@ module PaperTrailDiff
     @traversal: AssociationTraversal
 
     @association_tree: AssociationTree
+
+    # : (untyped) -> void
+    def reject_live_habtm_activity!: (untyped) -> void
 
     # : (untyped) -> RecordSnapshot?
     def snapshot_for_endpoint: (untyped) -> RecordSnapshot?

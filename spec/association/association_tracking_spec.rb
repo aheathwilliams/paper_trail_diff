@@ -474,7 +474,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     )
     changed_steps = steps.reject { |step| step.diff.empty? }
 
-    expect(changed_steps.map { |step| step.from_version.item_type })
+    expect(changed_steps.map { |step| step.from_boundary.item_type })
       .to eq(%w[TrackedAuthor TrackedComment TrackedReply])
     expect(changed_steps.fetch(0).diff.associations.fetch('author').changed.attributes)
       .to have_key('name')
@@ -499,6 +499,58 @@ RSpec.describe 'PaperTrailDiff association tracking' do
         to: graph[:before]
       )
     end.to raise_error(PaperTrailDiff::InvalidTimelineRangeError, /must not follow/)
+  end
+
+  it 'captures descendant activity through current state without a final root checkpoint' do
+    graph = article_with_graph
+    graph[:kept_comment].update!(body: 'Live activity comment')
+    graph[:reply].update!(body: 'Live activity reply')
+
+    changed = PaperTrailDiff.activity_timeline(
+      graph[:article],
+      from: graph[:before],
+      to: graph[:article],
+      associations: ['comments.replies']
+    ).reject { |step| step.diff.empty? }
+
+    expect(changed.map { |step| step.from_boundary.item_type })
+      .to eq(%w[TrackedComment TrackedReply])
+    expect(changed.last.to_boundary.kind).to eq(:current)
+    reply = changed.last.diff.associations.fetch('comments').changed
+                   .first.associations.fetch('replies').changed.first
+    expect(reply.attributes.fetch('body').to_h)
+      .to eq(from: 'Nested before', to: 'Live activity reply')
+  end
+
+  it 'reports current-ended child additions and removals at their own boundaries' do
+    graph = article_with_graph
+    transient = graph[:article].comments.create!(body: 'Live transient')
+    transient.destroy!
+
+    changed = PaperTrailDiff.activity_timeline(
+      graph[:article],
+      from: graph[:before],
+      to: graph[:article],
+      associations: [:comments]
+    ).reject { |step| step.diff.empty? }
+    comments = changed.map { |step| step.diff.associations.fetch('comments') }
+
+    expect(comments.map { |diff| diff.added.map(&:id) }).to eq([[transient.id], []])
+    expect(comments.map { |diff| diff.removed.map(&:id) }).to eq([[], [transient.id]])
+    expect(changed.last.to_boundary.kind).to eq(:current)
+  end
+
+  it 'rejects live-ended HABTM activity while retaining live endpoint comparison' do
+    graph = article_with_graph
+
+    expect do
+      PaperTrailDiff.activity_timeline(
+        graph[:article],
+        from: graph[:before],
+        to: graph[:article],
+        associations: [:tags]
+      )
+    end.to raise_error(PaperTrailDiff::UnsupportedLiveActivityError, /HABTM/)
   end
 
   it 'reports child additions and removals at their own activity boundaries' do

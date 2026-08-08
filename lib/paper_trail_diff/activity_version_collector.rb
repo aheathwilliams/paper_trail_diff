@@ -4,12 +4,13 @@
 module PaperTrailDiff
   # Collects root and selected-descendant versions relevant to one root history range.
   class ActivityVersionCollector
-    #: (untyped, root_versions: Array[untyped], tree: AssociationTree, traversal: AssociationTraversal) -> void
-    def initialize(record, root_versions:, tree:, traversal:)
+    #: (untyped, root_versions: Array[untyped], tree: AssociationTree, traversal: AssociationTraversal, ?range_end: untyped) -> void
+    def initialize(record, root_versions:, tree:, traversal:, range_end: root_versions.last)
       @record = record
       @root_versions = root_versions
       @tree = tree
       @traversal = traversal
+      @range = ActivityRange.new(root_versions.first, range_end)
       @versions = {} #: Hash[Array[untyped], untyped]
     end
 
@@ -26,6 +27,7 @@ module PaperTrailDiff
     # @rbs @root_versions: Array[untyped]
     # @rbs @tree: AssociationTree
     # @rbs @traversal: AssociationTraversal
+    # @rbs @range: ActivityRange
     # @rbs @versions: Hash[Array[untyped], untyped]
 
     #: (untyped, Array[untyped], AssociationTree, path: String) -> void
@@ -195,8 +197,7 @@ module PaperTrailDiff
 
     #: (untyped) -> bool
     def in_range?(version)
-      Support.compare_versions(@root_versions.first, version) <= 0 &&
-        Support.compare_versions(version, @root_versions.last) <= 0
+      @range.include?(version)
     end
 
     #: (String, String) -> String

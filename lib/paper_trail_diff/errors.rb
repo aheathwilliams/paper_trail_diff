@@ -28,4 +28,7 @@ module PaperTrailDiff
 
   # Raised when recorded PT-AT metadata cannot reliably reconstruct a selected association.
   class IncompleteAssociationHistoryError < Error; end
+
+  # Raised when current-ended activity cannot be reconstructed for a selected association.
+  class UnsupportedLiveActivityError < Error; end
 end

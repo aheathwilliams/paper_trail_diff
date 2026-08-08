@@ -1,0 +1,43 @@
+# Generated from lib/paper_trail_diff/activity_boundary.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Immutable metadata identifying one historical or current activity boundary.
+  class ActivityBoundary
+    attr_reader kind: Symbol
+
+    attr_reader version_id: untyped
+
+    attr_reader item_type: String
+
+    attr_reader item_id: untyped
+
+    attr_reader recorded_at: untyped
+
+    # : (untyped) -> ActivityBoundary
+    def self.from_version: (untyped) -> ActivityBoundary
+
+    # : (untyped, captured_at: untyped) -> ActivityBoundary
+    def self.current: (untyped, captured_at: untyped) -> ActivityBoundary
+
+    # : (kind: Symbol, version_id: untyped, item_type: untyped, item_id: untyped, recorded_at: untyped) -> void
+    def initialize: (kind: Symbol, version_id: untyped, item_type: untyped, item_id: untyped, recorded_at: untyped) -> void
+
+    # : () -> Hash[Symbol, untyped]
+    def to_h: () -> Hash[Symbol, untyped]
+  end
+
+  # One adjacent transition in a descendant-aware activity timeline.
+  class ActivityStep
+    attr_reader from_boundary: ActivityBoundary
+
+    attr_reader to_boundary: ActivityBoundary
+
+    attr_reader diff: Diff
+
+    # : (from_boundary: ActivityBoundary, to_boundary: ActivityBoundary, diff: Diff) -> void
+    def initialize: (from_boundary: ActivityBoundary, to_boundary: ActivityBoundary, diff: Diff) -> void
+
+    # : () -> Hash[Symbol, untyped]
+    def to_h: () -> Hash[Symbol, untyped]
+  end
+end

@@ -33,9 +33,10 @@ module PaperTrailDiff
       builder.build
     end
 
-    #: (untyped, from: untyped, to: untyped) -> Array[Step]
+    #: (untyped, from: untyped, to: untyped) -> Array[ActivityStep]
     def activity_timeline(record, from:, to:)
       prepare_traversal!(record.class, historical: true)
+      reject_live_habtm_activity!(record.class) if Endpoint.record?(to)
       ActivityTimelineBuilder.new(
         record,
         from: from,
@@ -60,6 +61,15 @@ module PaperTrailDiff
     # @rbs @association_tree: AssociationTree
     # @rbs @traversal: AssociationTraversal
     # @rbs @normalizer: SnapshotNormalizer
+
+    #: (untyped) -> void
+    def reject_live_habtm_activity!(model_class)
+      paths = @traversal.habtm_paths(model_class)
+      return if paths.empty?
+
+      message = "live-ended activity cannot reconstruct HABTM event boundaries: #{paths.join(', ')}"
+      raise UnsupportedLiveActivityError, message
+    end
 
     #: (untyped) -> RecordSnapshot?
     def snapshot_for_endpoint(endpoint)

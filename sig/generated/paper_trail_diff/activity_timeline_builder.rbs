@@ -6,25 +6,49 @@ module PaperTrailDiff
     # : (untyped, from: untyped, to: untyped, tree: AssociationTree, snapshotter: untyped) -> void
     def initialize: (untyped, from: untyped, to: untyped, tree: AssociationTree, snapshotter: untyped) -> void
 
-    # : () -> Array[Step]
-    def build: () -> Array[Step]
+    # : () -> Array[ActivityStep]
+    def build: () -> Array[ActivityStep]
 
     private
 
-    @record: untyped
-
-    @from: untyped
-
-    @to: untyped
+    @snapshotter: untyped
 
     @tree: AssociationTree
 
-    @snapshotter: untyped
+    @to: untyped
+
+    @from: untyped
+
+    @record: untyped
+
+    # : () -> Array[ActivityStep]
+    def build_between_versions: () -> Array[ActivityStep]
+
+    # : () -> Array[ActivityStep]
+    def build_to_current: () -> Array[ActivityStep]
+
+    # : () -> [RecordSnapshot?, untyped]
+    def capture_current: () -> [ RecordSnapshot?, untyped ]
+
+    # : (untyped) -> [Array[untyped], Array[RecordSnapshot?]]
+    def history_to_current: (untyped) -> [ Array[untyped], Array[RecordSnapshot?] ]
+
+    # : (Array[untyped], untyped) -> Array[ActivityBoundary]
+    def boundaries_to_current: (Array[untyped], untyped) -> Array[ActivityBoundary]
+
+    # : () -> void
+    def validate_current_range!: () -> void
+
+    # : (Array[untyped], ?range_end: untyped) -> Array[untyped]
+    def collect_versions: (Array[untyped], ?range_end: untyped) -> Array[untyped]
+
+    # : (Array[untyped], untyped, ?current: untyped) -> RecordSnapshot?
+    def snapshot_at: (Array[untyped], untyped, ?current: untyped) -> RecordSnapshot?
 
     # : (Array[untyped], untyped) -> untyped
     def root_anchor: (Array[untyped], untyped) -> untyped
 
-    # : (Array[untyped], Array[RecordSnapshot?]) -> Array[Step]
-    def build_steps: (Array[untyped], Array[RecordSnapshot?]) -> Array[Step]
+    # : (Array[ActivityBoundary], Array[RecordSnapshot?]) -> Array[ActivityStep]
+    def build_steps: (Array[ActivityBoundary], Array[RecordSnapshot?]) -> Array[ActivityStep]
   end
 end

@@ -22,14 +22,19 @@ module PaperTrailDiff
 
     #: (untyped, untyped) -> void
     def ensure_habtm_history!(model_class, version)
-      paths = selected_reflections(model_class).filter_map do |path, reflection|
-        path if reflection.macro == :has_and_belongs_to_many
-      end
+      paths = habtm_paths(model_class)
       return if paths.empty?
       return if version.respond_to?(:transaction_id) && version.transaction_id
 
       message = "HABTM history is incomplete at version #{version.id}: #{paths.join(', ')}"
       raise IncompleteAssociationHistoryError, message
+    end
+
+    #: (untyped) -> Array[String]
+    def habtm_paths(model_class)
+      selected_reflections(model_class).filter_map do |path, reflection|
+        path if habtm_reflection?(reflection)
+      end.freeze
     end
 
     #: (untyped, AssociationTree, path: String) -> Array[untyped]
@@ -108,6 +113,14 @@ module PaperTrailDiff
     def paper_trail_versions?(model_class, reflection)
       model_class.respond_to?(:versions_association_name) &&
         reflection.name.to_s == model_class.versions_association_name.to_s
+    end
+
+    #: (untyped) -> bool
+    def habtm_reflection?(reflection)
+      return true if reflection.macro == :has_and_belongs_to_many
+      return false unless reflection.options[:through]
+
+      habtm_reflection?(reflection.through_reflection)
     end
 
     #: (String, String) -> String

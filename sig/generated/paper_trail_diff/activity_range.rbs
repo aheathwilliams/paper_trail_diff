@@ -1,0 +1,21 @@
+# Generated from lib/paper_trail_diff/activity_range.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Tests activity versions against a historical-version or wall-clock range end.
+  class ActivityRange
+    # : (untyped, untyped) -> void
+    def initialize: (untyped, untyped) -> void
+
+    # : (untyped) -> bool
+    def include?: (untyped) -> bool
+
+    private
+
+    @start_version: untyped
+
+    @end_boundary: untyped
+
+    # : (untyped) -> bool
+    def before_end?: (untyped) -> bool
+  end
+end
