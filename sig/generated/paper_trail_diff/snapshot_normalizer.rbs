@@ -1,0 +1,43 @@
+# Generated from lib/paper_trail_diff/snapshot_normalizer.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Converts an ActiveRecord graph into immutable, persistence-independent snapshots.
+  class SnapshotNormalizer
+    # : (tree: AssociationTree, ignore_policy: IgnorePolicy, traversal: AssociationTraversal) -> void
+    def initialize: (tree: AssociationTree, ignore_policy: IgnorePolicy, traversal: AssociationTraversal) -> void
+
+    # : (untyped, reifier: untyped) -> RecordSnapshot?
+    def call: (untyped, reifier: untyped) -> RecordSnapshot?
+
+    private
+
+    @tree: AssociationTree
+
+    @ignore_policy: IgnorePolicy
+
+    @traversal: AssociationTraversal
+
+    @structural_columns: Hash[String, Array[String]]
+
+    # : (untyped, AssociationTree, String, untyped, Array[untyped]) -> RecordSnapshot?
+    def normalize_record: (untyped, AssociationTree, String, untyped, Array[untyped]) -> RecordSnapshot?
+
+    # : (untyped, Array[untyped], String) -> Array[String]
+    def excluded_attributes: (untyped, Array[untyped], String) -> Array[String]
+
+    # : (Array[untyped]) -> Array[String]
+    def relationship_columns: (Array[untyped]) -> Array[String]
+
+    # : (untyped, AssociationTree, String, untyped, Array[untyped]) -> Hash[String, AssociationSnapshot]
+    def normalize_associations: (untyped, AssociationTree, String, untyped, Array[untyped]) -> Hash[String, AssociationSnapshot]
+
+    # : (untyped, untyped, AssociationTree, String, untyped) -> AssociationSnapshot
+    def association_snapshot: (untyped, untyped, AssociationTree, String, untyped) -> AssociationSnapshot
+
+    # : (Array[untyped], AssociationTree, String, untyped) -> Array[RecordSnapshot]
+    def normalize_children: (Array[untyped], AssociationTree, String, untyped) -> Array[RecordSnapshot]
+
+    # : (untyped, AssociationTree, String) -> Array[untyped]
+    def reflections_for: (untyped, AssociationTree, String) -> Array[untyped]
+  end
+end

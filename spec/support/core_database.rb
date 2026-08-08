@@ -25,8 +25,20 @@ ActiveRecord::Schema.define do
     table.string :internal_note, null: false
     table.timestamps null: false
   end
+
+  create_table :core_comments, force: true do |table|
+    table.string :body, null: false
+    table.integer :article_id, null: false
+    table.timestamps null: false
+  end
 end
 
 class CoreArticle < ActiveRecord::Base
+  has_many :comments, class_name: 'CoreComment', foreign_key: :article_id,
+                      inverse_of: :article
   has_paper_trail
+end
+
+class CoreComment < ActiveRecord::Base
+  belongs_to :article, class_name: 'CoreArticle', inverse_of: :comments
 end

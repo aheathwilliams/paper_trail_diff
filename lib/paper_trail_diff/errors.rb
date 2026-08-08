@@ -11,6 +11,9 @@ module PaperTrailDiff
   # Raised when compare endpoints do not belong to the same PaperTrail item.
   class VersionMismatchError < Error; end
 
+  # Raised when a live endpoint is not a clean, persisted ActiveRecord record.
+  class InvalidEndpointError < Error; end
+
   # Raised when a timeline boundary is absent or the requested range is reversed.
   class InvalidTimelineRangeError < Error; end
 

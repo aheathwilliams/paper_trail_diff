@@ -20,51 +20,37 @@ module PaperTrailDiff
 
     private
 
-    @structural_columns: Hash[String, Array[String]]
+    @normalizer: SnapshotNormalizer
 
     @traversal: AssociationTraversal
-
-    @ignore_policy: IgnorePolicy
 
     @association_tree: AssociationTree
 
     # : (untyped) -> RecordSnapshot?
-    def snapshot_for: (untyped) -> RecordSnapshot?
+    def snapshot_for_endpoint: (untyped) -> RecordSnapshot?
+
+    # : (untyped) -> RecordSnapshot?
+    def historical_snapshot: (untyped) -> RecordSnapshot?
 
     # : (untyped, untyped) -> RecordSnapshot?
     def snapshot_at: (untyped, untyped) -> RecordSnapshot?
 
-    # : (untyped, tree: AssociationTree, path: String, reifier: HistoricalAssociationReifier, reflections: Array[untyped]) -> RecordSnapshot?
-    def normalize_record: (untyped, tree: AssociationTree, path: String, reifier: HistoricalAssociationReifier, reflections: Array[untyped]) -> RecordSnapshot?
+    # : (untyped, untyped) -> RecordSnapshot?
+    def snapshot_from_version: (untyped, untyped) -> RecordSnapshot?
 
-    # : (untyped, Array[untyped], String) -> Array[String]
-    def excluded_attributes: (untyped, Array[untyped], String) -> Array[String]
+    # : (untyped, untyped) -> RecordSnapshot?
+    def snapshot_from_live_root: (untyped, untyped) -> RecordSnapshot?
 
-    # : (Array[untyped]) -> Array[String]
-    def relationship_columns: (Array[untyped]) -> Array[String]
+    # : (untyped) -> RecordSnapshot
+    def live_snapshot: (untyped) -> RecordSnapshot
 
-    # : (untyped, tree: AssociationTree, path: String, reifier: HistoricalAssociationReifier, reflections: Array[untyped]) -> Hash[String, AssociationSnapshot]
-    def normalize_associations: (untyped, tree: AssociationTree, path: String, reifier: HistoricalAssociationReifier, reflections: Array[untyped]) -> Hash[String, AssociationSnapshot]
+    # : (untyped, untyped, habtm_version: untyped) -> RecordSnapshot?
+    def normalize_historical: (untyped, untyped, habtm_version: untyped) -> RecordSnapshot?
 
-    # : (untyped, untyped, AssociationTree, String, HistoricalAssociationReifier) -> AssociationSnapshot
-    def association_snapshot: (untyped, untyped, AssociationTree, String, HistoricalAssociationReifier) -> AssociationSnapshot
-
-    # : (Array[untyped], AssociationTree, String, HistoricalAssociationReifier) -> Array[RecordSnapshot]
-    def normalize_children: (Array[untyped], AssociationTree, String, HistoricalAssociationReifier) -> Array[RecordSnapshot]
-
-    # : (untyped) -> void
-    def prepare_traversal!: (untyped) -> void
-
-    # : (untyped) -> untyped
-    def version_model_class: (untyped) -> untyped
+    # : (untyped, historical: bool) -> void
+    def prepare_traversal!: (untyped, historical: bool) -> void
 
     # : () -> void
     def ensure_association_tracking!: () -> void
-
-    # : (untyped, untyped) -> void
-    def validate_version_pair!: (untyped, untyped) -> void
-
-    # : (untyped) -> Array[String]
-    def version_item_identity: (untyped) -> Array[String]
   end
 end

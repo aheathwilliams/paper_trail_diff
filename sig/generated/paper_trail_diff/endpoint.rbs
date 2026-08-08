@@ -1,0 +1,30 @@
+# Generated from lib/paper_trail_diff/endpoint.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Validates and describes explicit PaperTrail-version and live-record endpoints.
+  module Endpoint
+    # : (untyped, untyped) -> void
+    def self?.validate_pair!: (untyped, untyped) -> void
+
+    # : (untyped) -> void
+    def self?.validate!: (untyped) -> void
+
+    # : (untyped) -> bool
+    def self?.version?: (untyped) -> bool
+
+    # : (untyped) -> bool
+    def self?.record?: (untyped) -> bool
+
+    # : (untyped) -> Array[String]
+    def self?.identity: (untyped) -> Array[String]
+
+    # : (untyped) -> untyped
+    def self?.model_class: (untyped) -> untyped
+
+    # : (untyped) -> untyped
+    def self?.reload_record: (untyped) -> untyped
+
+    # : (untyped) -> void
+    def self?.validate_record!: (untyped) -> void
+  end
+end

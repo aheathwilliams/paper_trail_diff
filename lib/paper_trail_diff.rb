@@ -7,6 +7,7 @@ require_relative 'paper_trail_diff/version'
 require_relative 'paper_trail_diff/support'
 require_relative 'paper_trail_diff/errors'
 require_relative 'paper_trail_diff/configuration'
+require_relative 'paper_trail_diff/endpoint'
 require_relative 'paper_trail_diff/association_traversal'
 require_relative 'paper_trail_diff/association_discovery'
 require_relative 'paper_trail_diff/diagnostics'
@@ -14,6 +15,8 @@ require_relative 'paper_trail_diff/snapshot'
 require_relative 'paper_trail_diff/value_objects'
 require_relative 'paper_trail_diff/engine'
 require_relative 'paper_trail_diff/historical_association_reifier'
+require_relative 'paper_trail_diff/live_association_reader'
+require_relative 'paper_trail_diff/snapshot_normalizer'
 require_relative 'paper_trail_diff/step'
 require_relative 'paper_trail_diff/analysis'
 require_relative 'paper_trail_diff/version_range'
@@ -46,7 +49,7 @@ module PaperTrailDiff
   ].freeze
 
   class << self
-    # Compares the net state reconstructed by two PaperTrail versions.
+    # Compares net state between explicit PaperTrail-version or current-record endpoints.
     #: (untyped, untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option) -> Diff
     def compare(from_version, to_version, associations: [], ignore: DEFAULT_IGNORED_ATTRIBUTES)
       PaperTrailAdapter.new(associations: associations, ignore: ignore).compare(

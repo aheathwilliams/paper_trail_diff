@@ -5,6 +5,7 @@ require_relative '../support/core_database'
 RSpec.describe PaperTrailDiff do
   before do
     PaperTrail::Version.delete_all
+    CoreComment.delete_all
     CoreArticle.delete_all
   end
 
@@ -32,6 +33,50 @@ RSpec.describe PaperTrailDiff do
         attributes: { 'title' => { from: 'Draft', to: 'Published' } },
         associations: {}
       )
+    end
+
+    it 'compares a version with an explicit current record endpoint in either direction' do
+      article, _create, _draft, _published, current_before = create_history
+
+      forward = described_class.compare(current_before, article)
+      reverse = described_class.compare(article, current_before)
+
+      expect(forward.attributes.fetch('internal_note').to_h)
+        .to eq(from: 'stable', to: 'changed')
+      expect(reverse.attributes.fetch('internal_note').to_h)
+        .to eq(from: 'changed', to: 'stable')
+    end
+
+    it 'rejects invalid and mismatched current record endpoints' do
+      article, _create, draft, = create_history
+      other = CoreArticle.create!(title: 'Other', internal_note: 'other')
+      article.title = 'Unsaved'
+
+      expect { described_class.compare(draft, article) }
+        .to raise_error(PaperTrailDiff::InvalidEndpointError, /unsaved/)
+      expect { described_class.compare(draft, CoreArticle.new) }
+        .to raise_error(PaperTrailDiff::InvalidEndpointError, /persisted/)
+      expect { described_class.compare(draft, other) }
+        .to raise_error(PaperTrailDiff::VersionMismatchError, /same PaperTrail item/)
+      expect { described_class.compare(draft, Object.new) }
+        .to raise_error(PaperTrailDiff::InvalidEndpointError, /version or persisted record/)
+
+      other.destroy!
+      expect { described_class.compare(other, other) }
+        .to raise_error(PaperTrailDiff::InvalidEndpointError, /not destroyed/)
+    end
+
+    it 'normalizes associations between live endpoints without requiring PT-AT' do
+      article, = create_history
+      article.comments.create!(body: 'Current comment')
+
+      result = described_class.compare(
+        article,
+        CoreArticle.find(article.id),
+        associations: ['comments.article']
+      )
+
+      expect(result).to be_empty
     end
 
     it 'lets ignore replace the default noise fields' do

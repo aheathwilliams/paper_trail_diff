@@ -6,7 +6,7 @@ module PaperTrailDiff
 
   SUPPORTED_ASSOCIATION_MACROS: untyped
 
-  # Compares the net state reconstructed by two PaperTrail versions.
+  # Compares net state between explicit PaperTrail-version or current-record endpoints.
   # : (untyped, untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option) -> Diff
   def self.compare: (untyped, untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option) -> Diff
 

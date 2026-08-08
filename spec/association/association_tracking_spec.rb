@@ -102,6 +102,35 @@ RSpec.describe 'PaperTrailDiff association tracking' do
       .to eq(from: 'Keep before', to: 'Keep after')
   end
 
+  it 'compares historical associations with current state without a root checkpoint' do
+    graph = article_with_graph
+    graph[:kept_comment].update!(body: 'Live after')
+    added = graph[:article].comments.create!(body: 'Live added')
+
+    result = PaperTrailDiff.compare(
+      graph[:before],
+      graph[:article],
+      associations: ['comments.replies']
+    )
+    comments = result.associations.fetch('comments')
+
+    expect(comments.added.map(&:id)).to eq([added.id])
+    expect(comments.changed.fetch(0).attributes.fetch('body').to_h)
+      .to eq(from: 'Keep before', to: 'Live after')
+    expect(comments.added.first.attributes).not_to have_key('article_id')
+  end
+
+  it 'compares a transaction-backed HABTM version with live membership' do
+    graph = article_with_graph
+    before = habtm_boundary_for(graph[:article])
+    tag = TrackedTag.create!(name: 'Live tag')
+    graph[:article].tags << tag
+
+    result = PaperTrailDiff.compare(before, graph[:article], associations: [:tags])
+
+    expect(result.associations.fetch('tags').added.map(&:id)).to eq([tag.id])
+  end
+
   it 'keeps a belongs_to foreign key scalar when the association is not selected' do
     graph = article_with_graph
     graph[:article].update!(author: graph[:second_author])
