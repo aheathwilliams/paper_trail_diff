@@ -21,6 +21,8 @@ All notable changes to this project will be documented in this file.
   diagnostics.
 - Add `RecordReference`, consistent configuration error subclasses, traversal
   foreign-key suppression, and fail-loud HABTM endpoint validation.
+- Fix selective `has_many :through` reconstruction by reifying the hidden
+  through collection before resolving target records.
 
 ## [0.1.0] - 2026-08-07
 

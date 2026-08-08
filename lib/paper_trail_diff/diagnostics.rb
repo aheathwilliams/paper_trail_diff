@@ -86,7 +86,8 @@ module PaperTrailDiff
       traversal = AssociationTraversal.new(@tree)
       selected = traversal.selected_reflections(model_class)
       inspect_targets(selected)
-      inspect_habtm(model_class, selected)
+      inspect_checkpoint_timestamp(model_class)
+      inspect_habtm(selected)
       DiagnosticReport.new(issues: @issues)
     end
 
@@ -121,18 +122,22 @@ module PaperTrailDiff
       end
     end
 
-    #: (untyped, Array[Array[untyped]]) -> void
-    def inspect_habtm(model_class, selected)
+    #: (Array[Array[untyped]]) -> void
+    def inspect_habtm(selected)
       paths = selected.filter_map do |path, reflection|
         path if reflection.macro == :has_and_belongs_to_many
       end
       return if paths.empty?
 
       inspect_transaction_metadata(paths)
+    end
+
+    #: (untyped) -> void
+    def inspect_checkpoint_timestamp(model_class)
       return if synchronized_timestamp_disabled?(model_class)
 
-      message = 'set synchronize_version_creation_timestamp: false for reliable checkpoints'
-      paths.each { |path| add_warning(:synchronized_version_timestamp, message, path) }
+      message = 'manual checkpoints should set synchronize_version_creation_timestamp: false'
+      add_warning(:synchronized_version_timestamp, message)
     end
 
     #: (Array[String]) -> void

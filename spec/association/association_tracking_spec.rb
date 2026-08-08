@@ -533,7 +533,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     expect(report.errors.map(&:code)).to eq(%i[transaction_id_missing transaction_id_missing])
   end
 
-  it 'warns when HABTM checkpoints synchronize version timestamps' do
+  it 'warns when association checkpoints synchronize version timestamps' do
     graph = article_with_graph
     tag = TrackedTag.create!(name: 'Timestamp')
     graph[:article].tags << tag
@@ -546,6 +546,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     report = PaperTrailDiff.diagnose(before, after, associations: [:tags])
 
     expect(report.warnings.map(&:code)).to eq([:synchronized_version_timestamp])
+    expect(report.warnings.first.path).to be_nil
   ensure
     options[:synchronize_version_creation_timestamp] = previous if options
   end

@@ -64,8 +64,11 @@ module PaperTrailDiff
     # : (Array[Array[untyped]]) -> void
     def inspect_targets: (Array[Array[untyped]]) -> void
 
-    # : (untyped, Array[Array[untyped]]) -> void
-    def inspect_habtm: (untyped, Array[Array[untyped]]) -> void
+    # : (Array[Array[untyped]]) -> void
+    def inspect_habtm: (Array[Array[untyped]]) -> void
+
+    # : (untyped) -> void
+    def inspect_checkpoint_timestamp: (untyped) -> void
 
     # : (Array[String]) -> void
     def inspect_transaction_metadata: (Array[String]) -> void
