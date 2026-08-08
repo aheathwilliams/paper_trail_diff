@@ -243,6 +243,22 @@ RSpec.describe PaperTrailDiff do
       expect(result.timeline.map(&:to_version)).to eq([published, reverted])
       expect(result.to_h.keys).to eq(%i[diff timeline])
     end
+
+    it 'optionally includes an activity timeline built by the same adapter' do
+      article, _create, draft, _published, reverted = create_history
+
+      result = described_class.analyze(
+        article,
+        from: draft,
+        to: reverted,
+        activity: true
+      )
+
+      expect(result.activity_timeline).to be_frozen
+      expect(result.activity_timeline.map { |step| step.diff.to_h })
+        .to eq(result.timeline.map { |step| step.diff.to_h })
+      expect(result.to_h.keys).to eq(%i[diff timeline activity_timeline])
+    end
   end
 
   describe '.association_paths' do

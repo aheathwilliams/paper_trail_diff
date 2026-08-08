@@ -81,12 +81,20 @@ module PaperTrailDiff
     end
 
     # Builds an endpoint diff and root-checkpoint timeline while normalizing each version once.
-    #: (untyped, from: untyped, to: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option) -> Analysis
-    def analyze(record, from:, to:, associations: [], ignore: DEFAULT_IGNORED_ATTRIBUTES)
+    #: (untyped, from: untyped, to: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool) -> Analysis
+    def analyze( # rubocop:disable Metrics/ParameterLists
+      record,
+      from:,
+      to:,
+      associations: [],
+      ignore: DEFAULT_IGNORED_ATTRIBUTES,
+      activity: false
+    )
       PaperTrailAdapter.new(associations: associations, ignore: ignore).analyze(
         record,
         from: from,
-        to: to
+        to: to,
+        activity: activity
       )
     end
 

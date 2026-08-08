@@ -7,8 +7,10 @@ module PaperTrailDiff
 
     attr_reader timeline: Array[Step]
 
-    # : (diff: Diff, timeline: Array[Step]) -> void
-    def initialize: (diff: Diff, timeline: Array[Step]) -> void
+    attr_reader activity_timeline: Array[ActivityStep]?
+
+    # : (diff: Diff, timeline: Array[Step], ?activity_timeline: Array[ActivityStep]?) -> void
+    def initialize: (diff: Diff, timeline: Array[Step], ?activity_timeline: Array[ActivityStep]?) -> void
 
     # : () -> Hash[Symbol, untyped]
     def to_h: () -> Hash[Symbol, untyped]

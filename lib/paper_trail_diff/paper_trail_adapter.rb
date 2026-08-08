@@ -14,6 +14,7 @@ module PaperTrailDiff
         ignore_policy: ignore_policy,
         traversal: @traversal
       )
+      @historical_snapshots = {} #: Hash[Array[untyped], RecordSnapshot?]
     end
 
     #: (untyped, untyped) -> Diff
@@ -46,14 +47,21 @@ module PaperTrailDiff
       ).build
     end
 
-    #: (untyped, from: untyped, to: untyped) -> Analysis
-    def analyze(record, from:, to:)
-      TimelineBuilder.new(
+    #: (untyped, from: untyped, to: untyped, ?activity: bool) -> Analysis
+    def analyze(record, from:, to:, activity: false)
+      analysis = TimelineBuilder.new(
         record,
         from: from,
         to: to,
         snapshotter: method(:historical_snapshot)
       ).analyze
+      return analysis unless activity
+
+      Analysis.new(
+        diff: analysis.diff,
+        timeline: analysis.timeline,
+        activity_timeline: activity_timeline(record, from: from, to: to)
+      )
     end
 
     private
@@ -61,6 +69,7 @@ module PaperTrailDiff
     # @rbs @association_tree: AssociationTree
     # @rbs @traversal: AssociationTraversal
     # @rbs @normalizer: SnapshotNormalizer
+    # @rbs @historical_snapshots: Hash[Array[untyped], RecordSnapshot?]
 
     #: (untyped) -> void
     def reject_live_habtm_activity!(model_class)
@@ -85,11 +94,29 @@ module PaperTrailDiff
     def snapshot_at(root_endpoint, context_endpoint)
       return live_snapshot(root_endpoint) if Endpoint.record?(context_endpoint)
 
+      key = snapshot_key(root_endpoint, context_endpoint)
+      return @historical_snapshots[key] if @historical_snapshots.key?(key)
+
+      @historical_snapshots[key] = build_historical_snapshot(root_endpoint, context_endpoint)
+    end
+
+    #: (untyped, untyped) -> RecordSnapshot?
+    def build_historical_snapshot(root_endpoint, context_endpoint)
       if Endpoint.version?(root_endpoint)
-        snapshot_from_version(root_endpoint, context_endpoint)
-      else
-        snapshot_from_live_root(root_endpoint, context_endpoint)
+        return snapshot_from_version(root_endpoint, context_endpoint)
       end
+
+      snapshot_from_live_root(root_endpoint, context_endpoint)
+    end
+
+    #: (untyped, untyped) -> Array[untyped]
+    def snapshot_key(root_endpoint, context_endpoint)
+      [
+        root_endpoint.class.name,
+        root_endpoint.id,
+        context_endpoint.class.name,
+        context_endpoint.id
+      ]
     end
 
     #: (untyped, untyped) -> RecordSnapshot?

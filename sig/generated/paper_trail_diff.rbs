@@ -19,8 +19,8 @@ module PaperTrailDiff
   def self.activity_timeline: (untyped, from: untyped, to: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option) -> Array[ActivityStep]
 
   # Builds an endpoint diff and root-checkpoint timeline while normalizing each version once.
-  # : (untyped, from: untyped, to: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option) -> Analysis
-  def self.analyze: (untyped, from: untyped, to: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option) -> Analysis
+  # : (untyped, from: untyped, to: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool) -> Analysis
+  def self.analyze: (untyped, from: untyped, to: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool) -> Analysis
 
   # Returns the association macros this release can normalize.
   # : () -> Array[Symbol]

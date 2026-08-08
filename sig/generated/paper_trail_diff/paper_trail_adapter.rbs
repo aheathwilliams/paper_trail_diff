@@ -15,10 +15,12 @@ module PaperTrailDiff
     # : (untyped, from: untyped, to: untyped) -> Array[ActivityStep]
     def activity_timeline: (untyped, from: untyped, to: untyped) -> Array[ActivityStep]
 
-    # : (untyped, from: untyped, to: untyped) -> Analysis
-    def analyze: (untyped, from: untyped, to: untyped) -> Analysis
+    # : (untyped, from: untyped, to: untyped, ?activity: bool) -> Analysis
+    def analyze: (untyped, from: untyped, to: untyped, ?activity: bool) -> Analysis
 
     private
+
+    @historical_snapshots: Hash[Array[untyped], RecordSnapshot?]
 
     @normalizer: SnapshotNormalizer
 
@@ -37,6 +39,12 @@ module PaperTrailDiff
 
     # : (untyped, untyped) -> RecordSnapshot?
     def snapshot_at: (untyped, untyped) -> RecordSnapshot?
+
+    # : (untyped, untyped) -> RecordSnapshot?
+    def build_historical_snapshot: (untyped, untyped) -> RecordSnapshot?
+
+    # : (untyped, untyped) -> Array[untyped]
+    def snapshot_key: (untyped, untyped) -> Array[untyped]
 
     # : (untyped, untyped) -> RecordSnapshot?
     def snapshot_from_version: (untyped, untyped) -> RecordSnapshot?

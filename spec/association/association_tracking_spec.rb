@@ -33,6 +33,17 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     PaperTrail.config.association_reify_error_behaviour = previous
   end
 
+  def sql_query_count(&block)
+    count = 0
+    callback = proc do |_name, _start, _finish, _id, payload|
+      next if payload[:name] == 'SCHEMA' || payload[:cached]
+
+      count += 1
+    end
+    ActiveSupport::Notifications.subscribed(callback, 'sql.active_record', &block)
+    count
+  end
+
   def article_with_graph
     first_author = TrackedAuthor.create!(name: 'Ada')
     second_author = TrackedAuthor.create!(name: 'Grace')
@@ -499,6 +510,40 @@ RSpec.describe 'PaperTrailDiff association tracking' do
         to: graph[:before]
       )
     end.to raise_error(PaperTrailDiff::InvalidTimelineRangeError, /must not follow/)
+  end
+
+  it 'reuses root snapshots when analysis includes activity' do
+    graph = article_with_graph
+    graph[:kept_comment].update!(body: 'Shared activity')
+    after = boundary_for(graph[:article])
+    associations = ['comments.replies']
+
+    separate_queries = sql_query_count do
+      PaperTrailDiff.analyze(
+        graph[:article],
+        from: graph[:before],
+        to: after,
+        associations: associations
+      )
+      PaperTrailDiff.activity_timeline(
+        graph[:article],
+        from: graph[:before],
+        to: after,
+        associations: associations
+      )
+    end
+    combined_queries = sql_query_count do
+      result = PaperTrailDiff.analyze(
+        graph[:article],
+        from: graph[:before],
+        to: after,
+        associations: associations,
+        activity: true
+      )
+      expect(result.activity_timeline).not_to be_empty
+    end
+
+    expect(combined_queries).to be < separate_queries
   end
 
   it 'captures descendant activity through current state without a final root checkpoint' do
