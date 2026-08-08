@@ -21,7 +21,7 @@ RSpec.describe PaperTrailDiff::Engine do
     result = described_class.compare(from, to)
 
     expect(result.to_h).to eq(
-      record: nil,
+      record_presence_change: nil,
       attributes: {
         'alpha' => { from: 'old', to: 'new' },
         'zeta' => { from: 1, to: 2 }
@@ -38,13 +38,13 @@ RSpec.describe PaperTrailDiff::Engine do
     expect(described_class.compare(from, to)).to be_empty
   end
 
-  it 'represents a missing endpoint as a root record transition' do
+  it 'represents a missing endpoint as a root record presence change' do
     record = snapshot(type: 'Article', id: 1, attributes: { title: 'Created' })
 
     result = described_class.compare(nil, record)
 
     expect(result.to_h).to eq(
-      record: {
+      record_presence_change: {
         from: nil,
         to: { type: 'Article', id: 1, attributes: { 'title' => 'Created' } }
       },

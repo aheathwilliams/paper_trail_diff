@@ -101,13 +101,13 @@ module PaperTrailDiff
 
   # The complete structured difference between two normalized endpoints.
   class Diff
-    attr_reader :record #: ValueChange?
+    attr_reader :record_presence_change #: ValueChange?
     attr_reader :attributes #: Hash[String, ValueChange]
     attr_reader :associations #: Hash[String, ToOneAssociationDiff | CollectionAssociationDiff]
 
-    #: (?record: ValueChange?, ?attributes: attribute_changes, ?associations: association_diffs) -> void
-    def initialize(record: nil, attributes: {}, associations: {})
-      @record = record
+    #: (?record_presence_change: ValueChange?, ?attributes: attribute_changes, ?associations: association_diffs) -> void
+    def initialize(record_presence_change: nil, attributes: {}, associations: {})
+      @record_presence_change = record_presence_change
       @attributes = Support.immutable_copy(attributes)
       @associations = Support.immutable_copy(associations)
       freeze
@@ -115,13 +115,13 @@ module PaperTrailDiff
 
     #: () -> bool
     def empty?
-      record.nil? && attributes.empty? && associations.empty?
+      record_presence_change.nil? && attributes.empty? && associations.empty?
     end
 
     #: () -> Hash[Symbol, untyped]
     def to_h
       {
-        record: Support.serialize(record),
+        record_presence_change: Support.serialize(record_presence_change),
         attributes: Support.serialize(attributes),
         associations: Support.serialize(associations)
       }

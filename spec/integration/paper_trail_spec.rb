@@ -28,7 +28,7 @@ RSpec.describe PaperTrailDiff do
       result = described_class.compare(draft, published)
 
       expect(result.to_h).to eq(
-        record: nil,
+        record_presence_change: nil,
         attributes: { 'title' => { from: 'Draft', to: 'Published' } },
         associations: {}
       )
@@ -50,14 +50,14 @@ RSpec.describe PaperTrailDiff do
       expect(described_class.compare(draft, reverted)).to be_empty
     end
 
-    it 'represents a create version reifying to nil as record absence' do
+    it 'represents a create version reifying to nil as a record presence change' do
       _article, create_version, first_record_state, = create_history
 
       result = described_class.compare(create_version, first_record_state)
 
-      expect(result.record.from).to be_nil
-      expect(result.record.to).to be_a(PaperTrailDiff::RecordSnapshot)
-      expect(result.record.to.type).to eq('CoreArticle')
+      expect(result.record_presence_change.from).to be_nil
+      expect(result.record_presence_change.to).to be_a(PaperTrailDiff::RecordSnapshot)
+      expect(result.record_presence_change.to.type).to eq('CoreArticle')
       expect(result.attributes).to be_empty
       expect(result.associations).to be_empty
     end

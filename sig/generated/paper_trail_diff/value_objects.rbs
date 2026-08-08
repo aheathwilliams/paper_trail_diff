@@ -67,14 +67,14 @@ module PaperTrailDiff
 
   # The complete structured difference between two normalized endpoints.
   class Diff
-    attr_reader record: ValueChange?
+    attr_reader record_presence_change: ValueChange?
 
     attr_reader attributes: Hash[String, ValueChange]
 
     attr_reader associations: Hash[String, ToOneAssociationDiff | CollectionAssociationDiff]
 
-    # : (?record: ValueChange?, ?attributes: attribute_changes, ?associations: association_diffs) -> void
-    def initialize: (?record: ValueChange?, ?attributes: attribute_changes, ?associations: association_diffs) -> void
+    # : (?record_presence_change: ValueChange?, ?attributes: attribute_changes, ?associations: association_diffs) -> void
+    def initialize: (?record_presence_change: ValueChange?, ?attributes: attribute_changes, ?associations: association_diffs) -> void
 
     # : () -> bool
     def empty?: () -> bool

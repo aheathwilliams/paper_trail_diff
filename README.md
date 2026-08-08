@@ -43,7 +43,7 @@ diff.attributes["title"].to   # => "Published"
 diff.empty?                    # => false
 diff.to_h
 # => {
-#   record: nil,
+#   record_presence_change: nil,
 #   attributes: {
 #     "title" => { from: "Draft", to: "Published" }
 #   },
@@ -54,7 +54,9 @@ diff.to_h
 Intermediate edits do not affect `compare`. If a title changes and later
 returns to its original value, endpoint comparison reports no title change.
 A `create` version reifies to `nil`; comparing it with a record state produces
-a structured `record` transition instead of fake scalar changes.
+a structured `record_presence_change` instead of fake scalar changes. For
+ordinary updates, `record_presence_change` is `nil`, meaning the root record is
+present at both endpoints; scalar changes remain under `attributes`.
 
 ## Build a timeline
 

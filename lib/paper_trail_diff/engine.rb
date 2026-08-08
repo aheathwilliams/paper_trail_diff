@@ -8,8 +8,10 @@ module PaperTrailDiff
       #: (RecordSnapshot?, RecordSnapshot?) -> Diff
       def compare(from_snapshot, to_snapshot)
         return Diff.new if from_snapshot.nil? && to_snapshot.nil?
+
         if from_snapshot.nil? || to_snapshot.nil?
-          return Diff.new(record: ValueChange.new(from: from_snapshot, to: to_snapshot))
+          change = ValueChange.new(from: from_snapshot, to: to_snapshot)
+          return Diff.new(record_presence_change: change)
         end
 
         Diff.new(
