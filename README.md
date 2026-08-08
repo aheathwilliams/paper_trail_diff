@@ -4,7 +4,8 @@
 [PaperTrail](https://github.com/paper-trail-gem/paper_trail). It returns immutable
 Ruby value objects and hashes rather than formatted text.
 
-PaperTrail is required. First-level association comparison is available when
+PaperTrail is required. Explicit, bounded association-path comparison is
+available when
 [paper_trail-association_tracking](https://github.com/westonganger/paper_trail-association_tracking)
 (PT-AT) is installed, loaded, and enabled.
 
@@ -84,26 +85,50 @@ ignored fields are removed. Equal boundaries return a frozen empty array.
 ## Ignore noise fields
 
 Both APIs ignore `updated_at` by default. `ignore:` replaces that default and
-accepts string or symbol names:
+accepts string or symbol names. The array form applies to the root and every
+selected association:
 
 ```ruby
 PaperTrailDiff.compare(from, to, ignore: %i[updated_at lock_version])
 PaperTrailDiff.compare(from, to, ignore: []) # compare every scalar field
 ```
 
+For exact path control, pass `all:` plus `paths:`. `$` identifies the root:
+
+```ruby
+PaperTrailDiff.compare(
+  from,
+  to,
+  associations: ["comments.replies"],
+  ignore: {
+    all: [:updated_at],
+    paths: {
+      "$" => [:lock_version],
+      "comments.replies" => [:delivery_state]
+    }
+  }
+)
+```
+
+Hash rules replace the default just like an array. `all:` applies everywhere;
+each path entry applies only at that exact path, not its descendants. Ignore
+paths must be `$` or one of the selected or implicitly selected association
+paths.
+
 Primary keys are always represented as record identity rather than scalar
 attributes.
 
-## Compare first-level associations
+## Compare associations
 
-Pass explicit association names. The adapter enables only the PT-AT reification
-macros those names require:
+Pass explicit names or dot-separated paths. Paths are finite traversal plans,
+not a request to recursively inspect the whole object graph. Ancestors are
+selected implicitly:
 
 ```ruby
 diff = PaperTrailDiff.compare(
   from,
   to,
-  associations: %i[author profile comments]
+  associations: [:author, :profile, "comments.replies.author"]
 )
 
 diff.associations["author"].relationship
@@ -113,6 +138,11 @@ comments = diff.associations["comments"]
 comments.added   # full RecordSnapshot objects
 comments.removed # full RecordSnapshot objects
 comments.changed # RecordChange objects for stable identities
+
+replies = comments.changed.first.associations["replies"]
+replies.added
+replies.removed
+replies.changed
 ```
 
 For `belongs_to` and `has_one`, replacing the related identity is a
@@ -120,10 +150,14 @@ For `belongs_to` and `has_one`, replacing the related identity is a
 `changed` record. For `has_many`, membership is split into `added` and
 `removed`; shared identities with scalar changes appear in `changed`.
 
+The same structure repeats at every selected depth. `RecordChange#associations`
+contains nested changes for a stable parent identity. Added and removed record
+snapshots retain their selected subtrees so nested state is not discarded.
+
 Selecting a `belongs_to` removes its foreign-key (and polymorphic type) column
-from root scalar changes. Without association selection, that column remains a
-normal scalar attribute. Traversal stops after one level; child associations
-are never followed recursively.
+from scalar changes at that path. Without association selection, that column
+remains a normal scalar attribute. Cyclic model relationships are safe because
+only the finite paths supplied by the caller are traversed.
 
 Requesting associations without loaded and enabled PT-AT raises
 `PaperTrailDiff::AssociationTrackingUnavailableError`. Unknown names and
@@ -161,7 +195,9 @@ and PT-AT can reconstruct. In particular:
   a later root version cannot form a separate timeline step;
 - PT-AT has documented edge cases, especially around some `has_one` histories;
   `paper_trail_diff` respects PT-AT's configured reification error behavior;
-- recursive association traversal is not implemented in v1.
+- deeper paths require more historical reconstruction and database work, so
+  callers should select only the branches they need;
+- no implicit or unbounded recursive association traversal is performed.
 
 Review the [PaperTrail version semantics](https://github.com/paper-trail-gem/paper_trail#3-working-with-versions)
 and [PT-AT limitations](https://github.com/westonganger/paper_trail-association_tracking#limitations)

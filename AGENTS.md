@@ -9,7 +9,8 @@ of ActiveRecord and PaperTrail.
 
 Association tracking is optional. Never add
 `paper_trail-association_tracking` as a runtime dependency or require it from
-the library entrypoint. Association support is first-level only.
+the library entrypoint. Association traversal must remain explicit and bounded
+by requested paths; never automatically recurse through an entire model graph.
 
 Keep the public API small and explicit. Return value objects and hashes, never
 formatted diff text.
@@ -21,6 +22,7 @@ formatted diff text.
 - Inline RBS comments in `lib/` are the source of truth. Regenerate committed
   signatures with `rake rbs`; never hand-edit `sig/generated/`.
 - Preserve deterministic ordering and immutable public result objects.
+- Keep global-array and exact-path ignore behavior backward compatible.
 
 ## Commands
 
@@ -38,4 +40,3 @@ mise exec -- bundle exec rake build
 
 If mise reports that the project is untrusted, run `mise trust`. If a pinned
 tool is missing, run `mise install`.
-

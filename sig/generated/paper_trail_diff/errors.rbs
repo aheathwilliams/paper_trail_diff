@@ -17,7 +17,7 @@ module PaperTrailDiff
   class UnknownAssociationError < Error
   end
 
-  # Raised when a requested association is not supported in v1.
+  # Raised when a requested association macro is not supported.
   class UnsupportedAssociationError < Error
   end
 
