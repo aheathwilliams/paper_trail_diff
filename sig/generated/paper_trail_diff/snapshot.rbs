@@ -1,6 +1,25 @@
 # Generated from lib/paper_trail_diff/snapshot.rb with RBS::Inline
 
 module PaperTrailDiff
+  # Immutable identity shared by snapshots and stable-record changes.
+  class RecordReference
+    attr_reader type: String
+
+    attr_reader id: untyped
+
+    # : (type: String, id: untyped) -> void
+    def initialize: (type: String, id: untyped) -> void
+
+    # : (reference_key) -> untyped
+    def []: (reference_key) -> untyped
+
+    # : (reference_key) -> untyped
+    def fetch: (reference_key) -> untyped
+
+    # : () -> Hash[Symbol, untyped]
+    def to_h: () -> Hash[Symbol, untyped]
+  end
+
   # A normalized association in a bounded record snapshot tree.
   class AssociationSnapshot
     COLLECTION_KINDS: untyped
@@ -37,8 +56,8 @@ module PaperTrailDiff
     # : () -> Array[untyped]
     def identity: () -> Array[untyped]
 
-    # : () -> Hash[Symbol, untyped]
-    def reference: () -> Hash[Symbol, untyped]
+    # : () -> RecordReference
+    def reference: () -> RecordReference
 
     # : () -> Hash[Symbol, untyped]
     def to_h: () -> Hash[Symbol, untyped]

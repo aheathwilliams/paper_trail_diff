@@ -10,7 +10,7 @@ module PaperTrailDiff
       #: (untyped) -> AssociationTree
       def build(values)
         unless valid_values?(values)
-          raise ArgumentError, 'associations: must be an array of strings or symbols'
+          raise ConfigurationError, 'associations: must be an array of strings or symbols'
         end
 
         tree = {} #: Hash[String, untyped]
@@ -24,7 +24,7 @@ module PaperTrailDiff
       def add_path(tree, path)
         segments = path.split('.', -1)
         if segments.empty? || segments.any?(&:empty?) || path == '$'
-          raise ArgumentError, "invalid association path: #{path.inspect}"
+          raise ConfigurationError, "invalid association path: #{path.inspect}"
         end
 
         segments.inject(tree) do |branch, segment|
@@ -85,7 +85,7 @@ module PaperTrailDiff
         return new(all: normalize_names(value, context: 'ignore'), paths: {}) if value.is_a?(Array)
 
         unless value.is_a?(Hash)
-          raise ArgumentError, 'ignore: must be an array or a hash with all: and paths:'
+          raise ConfigurationError, 'ignore: must be an array or a hash with all: and paths:'
         end
 
         options = normalize_options(value)
@@ -104,7 +104,7 @@ module PaperTrailDiff
         value.each do |key, item|
           name = key.to_s
           unless VALID_KEYS.include?(name) && !options.key?(name)
-            raise ArgumentError, "unknown or duplicate ignore option: #{key.inspect}"
+            raise ConfigurationError, "unknown or duplicate ignore option: #{key.inspect}"
           end
 
           options[name] = item
@@ -114,7 +114,7 @@ module PaperTrailDiff
 
       #: (untyped, Array[String]) -> Hash[String, Array[String]]
       def normalize_paths(value, association_paths)
-        raise ArgumentError, 'ignore[:paths]: must be a hash' unless value.is_a?(Hash)
+        raise ConfigurationError, 'ignore[:paths]: must be a hash' unless value.is_a?(Hash)
 
         allowed_paths = [ROOT_PATH, *association_paths]
         paths = {} #: Hash[String, Array[String]]
@@ -128,7 +128,7 @@ module PaperTrailDiff
       def add_path_rule(paths, path, names, allowed_paths)
         normalized_path = path.to_s
         unless allowed_paths.include?(normalized_path) && !paths.key?(normalized_path)
-          raise ArgumentError, "unknown or duplicate ignore path: #{path.inspect}"
+          raise ConfigurationError, "unknown or duplicate ignore path: #{path.inspect}"
         end
 
         context = "ignore[:paths][#{normalized_path.inspect}]"
@@ -140,7 +140,7 @@ module PaperTrailDiff
         valid = values.is_a?(Array) && values.all? do |value|
           value.is_a?(String) || value.is_a?(Symbol)
         end
-        raise ArgumentError, "#{context}: must be an array of strings or symbols" unless valid
+        raise ConfigurationError, "#{context}: must be an array of strings or symbols" unless valid
 
         values.map(&:to_s).uniq.sort.freeze
       end

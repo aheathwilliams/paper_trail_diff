@@ -14,6 +14,8 @@ module PaperTrailDiff
 
     private
 
+    @structural_columns: Hash[String, Array[String]]
+
     @traversal: AssociationTraversal
 
     @ignore_policy: IgnorePolicy

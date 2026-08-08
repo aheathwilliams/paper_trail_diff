@@ -5,8 +5,8 @@ require 'paper_trail'
 
 require_relative 'paper_trail_diff/version'
 require_relative 'paper_trail_diff/support'
-require_relative 'paper_trail_diff/configuration'
 require_relative 'paper_trail_diff/errors'
+require_relative 'paper_trail_diff/configuration'
 require_relative 'paper_trail_diff/association_traversal'
 require_relative 'paper_trail_diff/snapshot'
 require_relative 'paper_trail_diff/value_objects'
@@ -26,6 +26,7 @@ require_relative 'paper_trail_diff/paper_trail_adapter'
 #     type association_snapshots = Hash[String, AssociationSnapshot]
 #     type identity = Array[untyped]
 #     type ignore_option = Array[String | Symbol] | Hash[String | Symbol, untyped]
+#     type reference_key = :type | :id | "type" | "id"
 #   end
 
 # Structured version comparison for PaperTrail.

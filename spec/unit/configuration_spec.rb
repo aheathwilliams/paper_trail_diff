@@ -12,10 +12,12 @@ RSpec.describe PaperTrailDiff::AssociationTree do
   end
 
   it 'rejects malformed association paths and option values' do
-    expect { described_class.build('comments') }.to raise_error(ArgumentError, /array/)
+    expect { described_class.build('comments') }
+      .to raise_error(PaperTrailDiff::ConfigurationError, /array/)
     expect { described_class.build(['comments..replies']) }
-      .to raise_error(ArgumentError, /association path/)
-    expect { described_class.build(['$']) }.to raise_error(ArgumentError, /association path/)
+      .to raise_error(PaperTrailDiff::ConfigurationError, /association path/)
+    expect { described_class.build(['$']) }
+      .to raise_error(PaperTrailDiff::ConfigurationError, /association path/)
   end
 end
 
@@ -49,10 +51,10 @@ RSpec.describe PaperTrailDiff::IgnorePolicy do
 
   it 'rejects unknown keys, paths, and invalid attribute lists' do
     expect { described_class.build({ models: {} }, association_paths: paths) }
-      .to raise_error(ArgumentError, /ignore option/)
+      .to raise_error(PaperTrailDiff::ConfigurationError, /ignore option/)
     expect { described_class.build({ paths: { replies: [] } }, association_paths: paths) }
-      .to raise_error(ArgumentError, /ignore path/)
+      .to raise_error(PaperTrailDiff::ConfigurationError, /ignore path/)
     expect { described_class.build({ all: nil }, association_paths: paths) }
-      .to raise_error(ArgumentError, /ignore\[:all\]/)
+      .to raise_error(PaperTrailDiff::ConfigurationError, /ignore\[:all\]/)
   end
 end

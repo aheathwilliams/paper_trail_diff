@@ -9,6 +9,7 @@ module PaperTrailDiff
       @association_tree = AssociationTree.build(associations)
       @ignore_policy = IgnorePolicy.build(ignore, association_paths: @association_tree.paths)
       @traversal = AssociationTraversal.new(@association_tree)
+      @structural_columns = {} #: Hash[String, Array[String]]
     end
 
     #: (untyped, untyped) -> Diff
@@ -32,6 +33,7 @@ module PaperTrailDiff
     # @rbs @association_tree: AssociationTree
     # @rbs @ignore_policy: IgnorePolicy
     # @rbs @traversal: AssociationTraversal
+    # @rbs @structural_columns: Hash[String, Array[String]]
 
     #: (untyped) -> RecordSnapshot?
     def snapshot_for(version)
@@ -75,7 +77,8 @@ module PaperTrailDiff
       # @type var primary_keys: Array[untyped]
       primary_keys = primary_keys.map { |key| key.to_s } # rubocop:disable Style/SymbolProc
       ignored = @ignore_policy.attributes_for(path)
-      (primary_keys + ignored + relationship_columns(reflections)).uniq
+      structural = @structural_columns.fetch(path, [])
+      (primary_keys + ignored + relationship_columns(reflections) + structural).uniq
     end
 
     #: (Array[untyped]) -> Array[String]
@@ -108,14 +111,11 @@ module PaperTrailDiff
                 else
                   Array(associated).compact
                 end
+      child_path = join_path(path, reflection.name.to_s)
+      @structural_columns[child_path] ||= @traversal.incoming_relationship_columns(reflection)
       AssociationSnapshot.new(
         kind: reflection.macro,
-        records: normalize_children(
-          records,
-          subtree,
-          join_path(path, reflection.name.to_s),
-          reifier
-        )
+        records: normalize_children(records, subtree, child_path, reifier)
       )
     end
 
@@ -127,7 +127,13 @@ module PaperTrailDiff
         reflections = reflections_by_class[type] ||=
           @traversal.reflections_for(child.class, tree, path: path)
         reifier.reify(child, reflections) unless reflections.empty?
-        normalize_record(child, tree: tree, path: path, reifier: reifier, reflections: reflections)
+        normalize_record(
+          child,
+          tree: tree,
+          path: path,
+          reifier: reifier,
+          reflections: reflections
+        )
       end
     end
 

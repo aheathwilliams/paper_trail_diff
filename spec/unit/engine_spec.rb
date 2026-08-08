@@ -108,6 +108,18 @@ RSpec.describe PaperTrailDiff::Engine do
         attributes: { 'bio' => { from: 'Before', to: 'After' } }
       }
     )
+    expect(profile_diff.changed.record).to be_a(PaperTrailDiff::RecordReference)
+    expect(profile_diff.changed.record.id).to eq(4)
+    expect(profile_diff.changed.record[:type]).to eq('Profile')
+    expect(profile_diff.changed.record.fetch('id')).to eq(4)
+    expect(profile_diff.changed.record).to be_frozen
+  end
+
+  it 'raises when a record reference is fetched with an unknown key' do
+    reference = PaperTrailDiff::RecordReference.new(type: 'Article', id: 1)
+
+    expect(reference[:missing]).to be_nil
+    expect { reference.fetch(:missing) }.to raise_error(KeyError, /missing/)
   end
 
   it 'reports collection additions, removals, and updates in identity order' do

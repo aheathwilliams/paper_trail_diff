@@ -74,9 +74,9 @@ RSpec.describe PaperTrailDiff do
       _article, _create, draft, published, = create_history
 
       expect { described_class.compare(draft, published, ignore: nil) }
-        .to raise_error(ArgumentError, /ignore/)
+        .to raise_error(PaperTrailDiff::ConfigurationError, /ignore/)
       expect { described_class.compare(draft, published, associations: [nil]) }
-        .to raise_error(ArgumentError, /associations/)
+        .to raise_error(PaperTrailDiff::ConfigurationError, /associations/)
     end
 
     it 'raises clearly when associations are requested without PT-AT loaded' do

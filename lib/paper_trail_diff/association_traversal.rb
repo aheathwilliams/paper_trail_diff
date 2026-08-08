@@ -21,6 +21,20 @@ module PaperTrailDiff
       @reflection_cache[key] ||= requested_reflections(model_class, tree, path)
     end
 
+    #: (untyped) -> Array[String]
+    def incoming_relationship_columns(reflection)
+      direct = %i[has_one has_many].include?(reflection.macro) && !reflection.options[:through]
+      return [] unless direct
+
+      foreign_keys = Array(reflection.foreign_key)
+      # @type var foreign_keys: Array[untyped]
+      columns = foreign_keys.map do |column| # rubocop:disable Style/SymbolProc
+        column.to_s
+      end
+      columns << reflection.type.to_s if reflection.options[:as]
+      columns
+    end
+
     private
 
     # @rbs @tree: AssociationTree

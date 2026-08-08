@@ -29,4 +29,6 @@ module PaperTrailDiff
   type identity = Array[untyped]
 
   type ignore_option = Array[String | Symbol] | Hash[String | Symbol, untyped]
+
+  type reference_key = :type | :id | "type" | "id"
 end

@@ -94,6 +94,8 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     comments = result.associations.fetch('comments')
     expect(comments.added.map(&:id)).to eq([added_comment.id])
     expect(comments.removed.map(&:id)).to eq([graph[:removed_comment].id])
+    expect(comments.added.first.attributes).not_to have_key('article_id')
+    expect(comments.removed.first.attributes).not_to have_key('article_id')
     expect(comments.changed.map { |change| change.record.fetch(:id) })
       .to eq([graph[:kept_comment].id])
     expect(comments.changed.first.attributes.fetch('body').to_h)
@@ -177,6 +179,8 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     replies = comment_change.associations.fetch('replies')
     expect(replies.added.map(&:id)).to eq([added_reply.id])
     expect(replies.removed.map(&:id)).to eq([graph[:removed_reply].id])
+    expect(replies.added.first.attributes).not_to have_key('comment_id')
+    expect(replies.removed.first.attributes).not_to have_key('comment_id')
     expect(replies.changed.fetch(0).attributes.fetch('body').to_h)
       .to eq(from: 'Nested before', to: 'Nested after')
   end

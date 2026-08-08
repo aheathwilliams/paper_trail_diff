@@ -12,6 +12,9 @@ module PaperTrailDiff
     # : (untyped, AssociationTree, path: String) -> Array[untyped]
     def reflections_for: (untyped, AssociationTree, path: String) -> Array[untyped]
 
+    # : (untyped) -> Array[String]
+    def incoming_relationship_columns: (untyped) -> Array[String]
+
     private
 
     @tree: AssociationTree

@@ -2,6 +2,40 @@
 # rbs_inline: enabled
 
 module PaperTrailDiff
+  # Immutable identity shared by snapshots and stable-record changes.
+  class RecordReference
+    attr_reader :type #: String
+    attr_reader :id #: untyped
+
+    #: (type: String, id: untyped) -> void
+    def initialize(type:, id:)
+      @type = Support.immutable_copy(type.to_s)
+      @id = Support.immutable_copy(id)
+      freeze
+    end
+
+    #: (reference_key) -> untyped
+    def [](key)
+      case key.to_s
+      when 'type' then type
+      when 'id' then id
+      end
+    end
+
+    #: (reference_key) -> untyped
+    def fetch(key)
+      value = self[key]
+      return value if %w[type id].include?(key.to_s)
+
+      raise KeyError, "key not found: #{key.inspect}"
+    end
+
+    #: () -> Hash[Symbol, untyped]
+    def to_h
+      { type: type, id: id }
+    end
+  end
+
   # A normalized association in a bounded record snapshot tree.
   class AssociationSnapshot
     COLLECTION_KINDS = %i[has_many has_and_belongs_to_many].freeze
@@ -59,9 +93,9 @@ module PaperTrailDiff
       [type, id].freeze
     end
 
-    #: () -> Hash[Symbol, untyped]
+    #: () -> RecordReference
     def reference
-      { type: type, id: id }
+      RecordReference.new(type: type, id: id)
     end
 
     #: () -> Hash[Symbol, untyped]

@@ -22,13 +22,13 @@ module PaperTrailDiff
 
   # Attribute and nested-association changes for a record whose identity did not change.
   class RecordChange
-    attr_reader :record #: Hash[Symbol, untyped]
+    attr_reader :record #: RecordReference
     attr_reader :attributes #: Hash[String, ValueChange]
     attr_reader :associations #: Hash[String, ToOneAssociationDiff | CollectionAssociationDiff]
 
     #: (record: RecordSnapshot, attributes: attribute_changes, ?associations: association_diffs) -> void
     def initialize(record:, attributes:, associations: {})
-      @record = Support.immutable_copy(record.reference)
+      @record = record.reference
       @attributes = Support.immutable_copy(attributes)
       @associations = Support.immutable_copy(associations)
       freeze
