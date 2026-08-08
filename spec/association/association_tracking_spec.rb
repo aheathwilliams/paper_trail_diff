@@ -44,6 +44,21 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     count
   end
 
+  def full_activity_timeline(record, from:, to:, associations:)
+    tree = PaperTrailDiff::AssociationTree.build(associations)
+    adapter = PaperTrailDiff::PaperTrailAdapter.new(
+      associations: associations,
+      ignore: PaperTrailDiff::DEFAULT_IGNORED_ATTRIBUTES
+    )
+    PaperTrailDiff::ActivityTimelineBuilder.new(
+      record,
+      from: from,
+      to: to,
+      tree: tree,
+      snapshotter: adapter.method(:snapshot_at)
+    ).build
+  end
+
   def article_with_graph
     first_author = TrackedAuthor.create!(name: 'Ada')
     second_author = TrackedAuthor.create!(name: 'Grace')
@@ -546,18 +561,81 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     expect(combined_queries).to be < separate_queries
   end
 
+  it 'matches full reconstruction while refreshing only affected branches' do
+    graph = article_with_graph
+    TrackedArticle.transaction do
+      graph[:first_author].update!(name: 'Branch author')
+      graph[:profile].update!(bio: 'Branch profile')
+      graph[:kept_comment].update!(body: 'Branch comment')
+      graph[:reply].update!(body: 'Branch reply')
+    end
+    after = boundary_for(graph[:article])
+    associations = ['author.comments', 'comments.replies', 'profile']
+
+    optimized = PaperTrailDiff.activity_timeline(
+      graph[:article],
+      from: graph[:before],
+      to: after,
+      associations: associations
+    )
+    reference = full_activity_timeline(
+      graph[:article],
+      from: graph[:before],
+      to: after,
+      associations: associations
+    )
+
+    expect(optimized.map(&:to_h)).to eq(reference.map(&:to_h))
+  end
+
+  it 'uses fewer queries for independent changes on unrelated branches' do
+    graph = article_with_graph
+    graph[:first_author].update!(name: 'Independent author')
+    graph[:profile].update!(bio: 'Independent profile')
+    graph[:reply].update!(body: 'Independent reply')
+    after = boundary_for(graph[:article])
+    associations = ['author', 'comments.replies', 'profile']
+
+    optimized_queries = sql_query_count do
+      PaperTrailDiff.activity_timeline(
+        graph[:article],
+        from: graph[:before],
+        to: after,
+        associations: associations
+      )
+    end
+    reference_queries = sql_query_count do
+      full_activity_timeline(
+        graph[:article],
+        from: graph[:before],
+        to: after,
+        associations: associations
+      )
+    end
+
+    expect(optimized_queries).to be < reference_queries
+  end
+
   it 'captures descendant activity through current state without a final root checkpoint' do
     graph = article_with_graph
     graph[:kept_comment].update!(body: 'Live activity comment')
     graph[:reply].update!(body: 'Live activity reply')
 
-    changed = PaperTrailDiff.activity_timeline(
+    steps = PaperTrailDiff.activity_timeline(
       graph[:article],
       from: graph[:before],
       to: graph[:article],
       associations: ['comments.replies']
-    ).reject { |step| step.diff.empty? }
+    )
+    reference = full_activity_timeline(
+      graph[:article],
+      from: graph[:before],
+      to: graph[:article],
+      associations: ['comments.replies']
+    )
+    changed = steps.reject { |step| step.diff.empty? }
 
+    expect(steps.map { |step| step.diff.to_h }).to eq(reference.map { |step| step.diff.to_h })
     expect(changed.map { |step| step.from_boundary.item_type })
       .to eq(%w[TrackedComment TrackedReply])
     expect(changed.last.to_boundary.kind).to eq(:current)

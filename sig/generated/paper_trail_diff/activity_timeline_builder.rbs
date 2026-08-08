@@ -30,23 +30,20 @@ module PaperTrailDiff
     # : () -> [RecordSnapshot?, untyped]
     def capture_current: () -> [ RecordSnapshot?, untyped ]
 
-    # : (untyped) -> [Array[untyped], Array[RecordSnapshot?]]
-    def history_to_current: (untyped) -> [ Array[untyped], Array[RecordSnapshot?] ]
+    # : (untyped) -> [Array[ActivityEvent], Array[RecordSnapshot?]]
+    def history_to_current: (untyped) -> [ Array[ActivityEvent], Array[RecordSnapshot?] ]
 
-    # : (Array[untyped], untyped) -> Array[ActivityBoundary]
-    def boundaries_to_current: (Array[untyped], untyped) -> Array[ActivityBoundary]
+    # : (Array[ActivityEvent], untyped) -> Array[ActivityBoundary]
+    def boundaries_to_current: (Array[ActivityEvent], untyped) -> Array[ActivityBoundary]
 
     # : () -> void
     def validate_current_range!: () -> void
 
-    # : (Array[untyped], ?range_end: untyped) -> Array[untyped]
-    def collect_versions: (Array[untyped], ?range_end: untyped) -> Array[untyped]
+    # : (Array[untyped], ?range_end: untyped) -> Array[ActivityEvent]
+    def collect_events: (Array[untyped], ?range_end: untyped) -> Array[ActivityEvent]
 
-    # : (Array[untyped], untyped, ?current: untyped) -> RecordSnapshot?
-    def snapshot_at: (Array[untyped], untyped, ?current: untyped) -> RecordSnapshot?
-
-    # : (Array[untyped], untyped) -> untyped
-    def root_anchor: (Array[untyped], untyped) -> untyped
+    # : (Array[untyped], Array[ActivityEvent], ?current: untyped) -> Array[RecordSnapshot?]
+    def event_snapshots: (Array[untyped], Array[ActivityEvent], ?current: untyped) -> Array[RecordSnapshot?]
 
     # : (Array[ActivityBoundary], Array[RecordSnapshot?]) -> Array[ActivityStep]
     def build_steps: (Array[ActivityBoundary], Array[RecordSnapshot?]) -> Array[ActivityStep]

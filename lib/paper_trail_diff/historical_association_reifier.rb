@@ -11,6 +11,7 @@ module PaperTrailDiff
         @habtm_transaction_id = habtm_version.transaction_id
       end
       @version_at = version.created_at
+      @reified_associations = {} #: Hash[Array[untyped], bool]
     end
 
     #: (untyped, Array[untyped]) -> void
@@ -23,9 +24,14 @@ module PaperTrailDiff
     # @rbs @transaction_id: untyped
     # @rbs @habtm_transaction_id: untyped
     # @rbs @version_at: untyped
+    # @rbs @reified_associations: Hash[Array[untyped], bool]
 
     #: (untyped, untyped) -> void
     def reify_association(record, reflection)
+      key = [record.object_id, reflection.name]
+      return if @reified_associations[key]
+
+      @reified_associations[key] = true
       case reflection.macro
       when :belongs_to
         reifier(:BelongsTo).reify(reflection, record, options, @transaction_id)

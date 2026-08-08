@@ -11,14 +11,16 @@ module PaperTrailDiff
       @tree = tree
       @traversal = traversal
       @range = ActivityRange.new(root_versions.first, range_end)
-      @versions = {} #: Hash[Array[untyped], untyped]
+      @registry = ActivityEventRegistry.new
     end
 
-    #: () -> Array[untyped]
+    #: () -> Array[ActivityEvent]
     def call
-      add_versions(@root_versions)
-      collect_tree(@record.class, [@record.id], @tree, path: '') unless @tree.empty?
-      @versions.values.sort_by { |version| Support.chronological_version_key(version) }.freeze
+      @registry.add(@root_versions)
+      collect_tree(@record.class, [@record.id], @tree, path: '', branch: nil) unless @tree.empty?
+      @registry.to_a.sort_by do |event|
+        Support.chronological_version_key(event.version)
+      end.freeze
     end
 
     private
@@ -28,35 +30,37 @@ module PaperTrailDiff
     # @rbs @tree: AssociationTree
     # @rbs @traversal: AssociationTraversal
     # @rbs @range: ActivityRange
-    # @rbs @versions: Hash[Array[untyped], untyped]
+    # @rbs @registry: ActivityEventRegistry
 
-    #: (untyped, Array[untyped], AssociationTree, path: String) -> void
-    def collect_tree(parent_class, parent_ids, tree, path:)
+    #: (untyped, Array[untyped], AssociationTree, path: String, branch: String?) -> void
+    def collect_tree(parent_class, parent_ids, tree, path:, branch:)
       parent = group(parent_class, parent_ids)
-      add_versions(parent.fetch(:versions)) unless path.empty?
+      @registry.add(parent.fetch(:versions), branch: branch) unless path.empty?
       @traversal.reflections_for(parent_class, tree, path: path).each do |reflection|
         subtree = tree.child(reflection.name)
         next unless subtree
 
-        collect_reflection(parent, reflection, subtree, path)
+        selected_branch = branch || reflection.name.to_s
+        collect_reflection(parent, reflection, subtree, path, selected_branch)
       end
     end
 
-    #: (Hash[Symbol, untyped], untyped, AssociationTree, String) -> void
-    def collect_reflection(parent, reflection, subtree, path)
-      groups = edge_groups(parent, reflection)
+    #: (Hash[Symbol, untyped], untyped, AssociationTree, String, String) -> void
+    def collect_reflection(parent, reflection, subtree, path, branch)
+      groups = edge_groups(parent, reflection, branch)
       groups.each_value do |group|
-        add_versions(group.fetch(:versions))
+        @registry.add(group.fetch(:versions), branch: branch)
         next if subtree.empty?
 
         child_path = join_path(path, reflection.name.to_s)
-        collect_tree(group.fetch(:model), group.fetch(:ids), subtree, path: child_path)
+        collect_tree(group.fetch(:model), group.fetch(:ids), subtree,
+                     path: child_path, branch: branch)
       end
     end
 
-    #: (Hash[Symbol, untyped], untyped) -> Hash[String, untyped]
-    def edge_groups(parent, reflection)
-      return through_groups(parent, reflection) if reflection.options[:through]
+    #: (Hash[Symbol, untyped], untyped, String) -> Hash[String, untyped]
+    def edge_groups(parent, reflection, branch)
+      return through_groups(parent, reflection, branch) if reflection.options[:through]
 
       case reflection.macro
       when :belongs_to
@@ -70,15 +74,15 @@ module PaperTrailDiff
       end
     end
 
-    #: (Hash[Symbol, untyped], untyped) -> Hash[String, untyped]
-    def through_groups(parent, reflection)
+    #: (Hash[Symbol, untyped], untyped, String) -> Hash[String, untyped]
+    def through_groups(parent, reflection, branch)
       through = reflection.through_reflection
-      intermediate = edge_groups(parent, through)
+      intermediate = edge_groups(parent, through, branch)
       result = {} #: Hash[String, untyped]
       intermediate.each_value do |group|
-        add_versions(group.fetch(:versions))
+        @registry.add(group.fetch(:versions), branch: branch)
         source = reflection.source_reflection
-        children = edge_groups(group, source)
+        children = edge_groups(group, source, branch)
         merge_groups!(result, children)
       end
       result
@@ -188,11 +192,6 @@ module PaperTrailDiff
     #: (untyped, untyped) -> bool
     def version_matches_model?(version, model_class)
       version.item_type.to_s == model_class.base_class.name.to_s
-    end
-
-    #: (Array[untyped]) -> void
-    def add_versions(versions)
-      versions.each { |version| @versions[[version.class.name, version.id]] = version }
     end
 
     #: (untyped) -> bool

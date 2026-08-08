@@ -26,7 +26,7 @@ module PaperTrailDiff
 
     private
 
-    @reflection_cache: Hash[Array[String], Array[untyped]]
+    @reflection_cache: Hash[Array[untyped], Array[untyped]]
 
     @tree: AssociationTree
 

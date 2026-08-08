@@ -1,0 +1,38 @@
+# Generated from lib/paper_trail_diff/branch_snapshot_refresher.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Reconstructs selected root branches and merges them into a prior immutable snapshot.
+  class BranchSnapshotRefresher
+    # : (tree: AssociationTree, ignore_policy: IgnorePolicy, traversal: AssociationTraversal, full_snapshotter: untyped, partial_snapshotter: untyped) -> void
+    def initialize: (tree: AssociationTree, ignore_policy: IgnorePolicy, traversal: AssociationTraversal, full_snapshotter: untyped, partial_snapshotter: untyped) -> void
+
+    # : (untyped, untyped, RecordSnapshot?, Array[String]) -> RecordSnapshot?
+    def call: (untyped, untyped, RecordSnapshot?, Array[String]) -> RecordSnapshot?
+
+    private
+
+    @tree: AssociationTree
+
+    @ignore_policy: IgnorePolicy
+
+    @traversal: AssociationTraversal
+
+    @full_snapshotter: untyped
+
+    @partial_snapshotter: untyped
+
+    @components: Hash[Array[String], [ AssociationTree, SnapshotNormalizer ]]
+
+    # : (Array[String]) -> [AssociationTree, SnapshotNormalizer]
+    def components: (Array[String]) -> [ AssociationTree, SnapshotNormalizer ]
+
+    # : (Array[String]) -> [AssociationTree, SnapshotNormalizer]
+    def build_components: (Array[String]) -> [ AssociationTree, SnapshotNormalizer ]
+
+    # : (untyped, untyped) -> RecordSnapshot?
+    def full_snapshot: (untyped, untyped) -> RecordSnapshot?
+
+    # : (RecordSnapshot, RecordSnapshot) -> RecordSnapshot
+    def merge: (RecordSnapshot, RecordSnapshot) -> RecordSnapshot
+  end
+end

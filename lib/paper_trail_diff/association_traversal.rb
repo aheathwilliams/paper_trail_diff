@@ -39,7 +39,7 @@ module PaperTrailDiff
 
     #: (untyped, AssociationTree, path: String) -> Array[untyped]
     def reflections_for(model_class, tree, path:)
-      key = [model_class.name.to_s, path]
+      key = [model_class.name.to_s, path, tree.object_id]
       @reflection_cache[key] ||= requested_reflections(model_class, tree, path)
     end
 
@@ -60,7 +60,7 @@ module PaperTrailDiff
     private
 
     # @rbs @tree: AssociationTree
-    # @rbs @reflection_cache: Hash[Array[String], Array[untyped]]
+    # @rbs @reflection_cache: Hash[Array[untyped], Array[untyped]]
 
     #: (untyped, AssociationTree, path: String) -> Array[Array[untyped]]
     def collect_reflections(model_class, tree, path:)

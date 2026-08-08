@@ -17,6 +17,8 @@ module PaperTrailDiff
 
     @version_at: untyped
 
+    @reified_associations: Hash[Array[untyped], bool]
+
     # : (untyped, untyped) -> void
     def reify_association: (untyped, untyped) -> void
 

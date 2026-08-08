@@ -26,6 +26,9 @@ module PaperTrailDiff
     # : (String | Symbol) -> AssociationTree?
     def child: (String | Symbol) -> AssociationTree?
 
+    # : (Array[String]) -> AssociationTree
+    def select: (Array[String]) -> AssociationTree
+
     # : (?prefix: String) -> Array[String]
     def paths: (?prefix: String) -> Array[String]
   end

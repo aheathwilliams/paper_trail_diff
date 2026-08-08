@@ -64,6 +64,11 @@ module PaperTrailDiff
       children[name.to_s]
     end
 
+    #: (Array[String]) -> AssociationTree
+    def select(names)
+      self.class.new(children.slice(*names))
+    end
+
     #: (?prefix: String) -> Array[String]
     def paths(prefix: '')
       children.flat_map do |name, subtree|

@@ -1,0 +1,52 @@
+# Generated from lib/paper_trail_diff/activity_snapshot_sequence.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Optional full/partial snapshot operations consumed by the activity sequence.
+  class ActivitySnapshotProvider
+    # : (snapshotter: untyped, refresher: untyped) -> void
+    def initialize: (snapshotter: untyped, refresher: untyped) -> void
+
+    # : (untyped, untyped) -> RecordSnapshot?
+    def call: (untyped, untyped) -> RecordSnapshot?
+
+    # : (untyped, untyped, RecordSnapshot?, Array[String]) -> RecordSnapshot?
+    def refresh: (untyped, untyped, RecordSnapshot?, Array[String]) -> RecordSnapshot?
+
+    @snapshotter: untyped
+
+    @refresher: untyped
+  end
+
+  # Builds chronological snapshots, refreshing only branches affected by prior events.
+  class ActivitySnapshotSequence
+    # : (Array[untyped], Array[ActivityEvent], untyped, ?current: untyped) -> void
+    def initialize: (Array[untyped], Array[ActivityEvent], untyped, ?current: untyped) -> void
+
+    # : () -> Array[RecordSnapshot?]
+    def call: () -> Array[RecordSnapshot?]
+
+    private
+
+    @root_versions: Array[untyped]
+
+    @events: Array[ActivityEvent]
+
+    @snapshotter: untyped
+
+    @current: untyped
+
+    @transaction_groups: ActivityTransactionGroups
+
+    # : (ActivityEvent, ActivityEvent, RecordSnapshot?) -> RecordSnapshot?
+    def transition_snapshot: (ActivityEvent, ActivityEvent, RecordSnapshot?) -> RecordSnapshot?
+
+    # : (ActivityEvent) -> RecordSnapshot?
+    def full_snapshot: (ActivityEvent) -> RecordSnapshot?
+
+    # : (untyped) -> untyped
+    def root_endpoint: (untyped) -> untyped
+
+    # : (untyped) -> untyped
+    def root_anchor: (untyped) -> untyped
+  end
+end

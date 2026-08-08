@@ -1,0 +1,59 @@
+# Generated from lib/paper_trail_diff/activity_event.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Internal activity boundary plus the selected root branches affected by its event.
+  class ActivityEvent
+    attr_reader version: untyped
+
+    attr_reader branches: Array[String]?
+
+    # : (version: untyped, branches: Array[String]?) -> void
+    def initialize: (version: untyped, branches: Array[String]?) -> void
+
+    # : () -> bool
+    def root?: () -> bool
+  end
+
+  # Accumulates each version once while retaining every selected root branch.
+  class ActivityEventRegistry
+    def initialize: () -> untyped
+
+    # : (Array[untyped], ?branch: String?) -> void
+    def add: (Array[untyped], ?branch: String?) -> void
+
+    # : () -> Array[ActivityEvent]
+    def to_a: () -> Array[ActivityEvent]
+
+    private
+
+    @events: Hash[Array[untyped], Hash[Symbol, untyped]]
+
+    # : (Hash[Symbol, untyped]?, String?) -> Array[String]?
+    def merged_branches: (Hash[Symbol, untyped]?, String?) -> Array[String]?
+  end
+
+  # Resolves the branch union that PT-AT exposes atomically for one transaction.
+  class ActivityTransactionGroups
+    # : (Array[ActivityEvent]) -> void
+    def initialize: (Array[ActivityEvent]) -> void
+
+    # : (ActivityEvent) -> Array[String]?
+    def branches_for: (ActivityEvent) -> Array[String]?
+
+    private
+
+    @branches: Hash[Array[untyped], Array[String]?]
+
+    # : (Array[ActivityEvent]) -> Hash[Array[untyped], Array[String]?]
+    def build_groups: (Array[ActivityEvent]) -> Hash[Array[untyped], Array[String]?]
+
+    # : (Array[ActivityEvent]) -> Hash[Array[untyped], Array[ActivityEvent]]
+    def grouped_events: (Array[ActivityEvent]) -> Hash[Array[untyped], Array[ActivityEvent]]
+
+    # : (Array[ActivityEvent]) -> Array[String]?
+    def group_branches: (Array[ActivityEvent]) -> Array[String]?
+
+    # : (ActivityEvent) -> Array[untyped]?
+    def transaction_key: (ActivityEvent) -> Array[untyped]?
+  end
+end

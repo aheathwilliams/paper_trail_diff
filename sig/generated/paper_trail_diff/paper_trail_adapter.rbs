@@ -20,13 +20,23 @@ module PaperTrailDiff
 
     private
 
-    @historical_snapshots: Hash[Array[untyped], RecordSnapshot?]
+    @activity_snapshotter: ActivitySnapshotProvider
+
+    @historical_store: HistoricalSnapshotStore
 
     @normalizer: SnapshotNormalizer
 
     @traversal: AssociationTraversal
 
+    @ignore_policy: IgnorePolicy
+
     @association_tree: AssociationTree
+
+    # : () -> HistoricalSnapshotStore
+    def build_historical_store: () -> HistoricalSnapshotStore
+
+    # : () -> ActivitySnapshotProvider
+    def build_activity_snapshotter: () -> ActivitySnapshotProvider
 
     # : (untyped) -> void
     def reject_live_habtm_activity!: (untyped) -> void
@@ -40,23 +50,8 @@ module PaperTrailDiff
     # : (untyped, untyped) -> RecordSnapshot?
     def snapshot_at: (untyped, untyped) -> RecordSnapshot?
 
-    # : (untyped, untyped) -> RecordSnapshot?
-    def build_historical_snapshot: (untyped, untyped) -> RecordSnapshot?
-
-    # : (untyped, untyped) -> Array[untyped]
-    def snapshot_key: (untyped, untyped) -> Array[untyped]
-
-    # : (untyped, untyped) -> RecordSnapshot?
-    def snapshot_from_version: (untyped, untyped) -> RecordSnapshot?
-
-    # : (untyped, untyped) -> RecordSnapshot?
-    def snapshot_from_live_root: (untyped, untyped) -> RecordSnapshot?
-
     # : (untyped) -> RecordSnapshot
     def live_snapshot: (untyped) -> RecordSnapshot
-
-    # : (untyped, untyped, habtm_version: untyped) -> RecordSnapshot?
-    def normalize_historical: (untyped, untyped, habtm_version: untyped) -> RecordSnapshot?
 
     # : (untyped, historical: bool) -> void
     def prepare_traversal!: (untyped, historical: bool) -> void

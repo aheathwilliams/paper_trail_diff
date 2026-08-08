@@ -32,17 +32,18 @@ module PaperTrailDiff
     #: () -> Array[ActivityStep]
     def build_between_versions
       root_versions = VersionRange.new(@record, from: @from, to: @to).select
-      versions = collect_versions(root_versions)
-      snapshots = versions.map { |version| snapshot_at(root_versions, version) }
-      build_steps(versions.map { |version| ActivityBoundary.from_version(version) }, snapshots)
+      events = collect_events(root_versions)
+      snapshots = event_snapshots(root_versions, events)
+      boundaries = events.map { |event| ActivityBoundary.from_version(event.version) }
+      build_steps(boundaries, snapshots)
     end
 
     #: () -> Array[ActivityStep]
     def build_to_current
       validate_current_range!
       current_snapshot, captured_at = capture_current
-      versions, snapshots = history_to_current(captured_at)
-      boundaries = boundaries_to_current(versions, captured_at)
+      events, snapshots = history_to_current(captured_at)
+      boundaries = boundaries_to_current(events, captured_at)
       build_steps(boundaries, snapshots + [current_snapshot])
     end
 
@@ -51,17 +52,17 @@ module PaperTrailDiff
       [@snapshotter.call(@to, @to), Time.now.utc]
     end
 
-    #: (untyped) -> [Array[untyped], Array[RecordSnapshot?]]
+    #: (untyped) -> [Array[ActivityEvent], Array[RecordSnapshot?]]
     def history_to_current(captured_at)
       root_versions = VersionRange.new(@record, from: @from, to: @from).select_through_latest
-      versions = collect_versions(root_versions, range_end: captured_at)
-      snapshots = versions.map { |version| snapshot_at(root_versions, version, current: @to) }
-      [versions, snapshots]
+      events = collect_events(root_versions, range_end: captured_at)
+      snapshots = event_snapshots(root_versions, events, current: @to)
+      [events, snapshots]
     end
 
-    #: (Array[untyped], untyped) -> Array[ActivityBoundary]
-    def boundaries_to_current(versions, captured_at)
-      boundaries = versions.map { |version| ActivityBoundary.from_version(version) }
+    #: (Array[ActivityEvent], untyped) -> Array[ActivityBoundary]
+    def boundaries_to_current(events, captured_at)
+      boundaries = events.map { |event| ActivityBoundary.from_version(event.version) }
       boundaries << ActivityBoundary.current(@to, captured_at: captured_at)
     end
 
@@ -75,8 +76,8 @@ module PaperTrailDiff
       Endpoint.validate_pair!(@record, @to)
     end
 
-    #: (Array[untyped], ?range_end: untyped) -> Array[untyped]
-    def collect_versions(root_versions, range_end: root_versions.last)
+    #: (Array[untyped], ?range_end: untyped) -> Array[ActivityEvent]
+    def collect_events(root_versions, range_end: root_versions.last)
       ActivityVersionCollector.new(
         @record,
         root_versions: root_versions,
@@ -86,18 +87,14 @@ module PaperTrailDiff
       ).call
     end
 
-    #: (Array[untyped], untyped, ?current: untyped) -> RecordSnapshot?
-    def snapshot_at(root_versions, activity_version, current: nil)
-      root_version = root_anchor(root_versions, activity_version)
-      root_endpoint = root_version || current || root_versions.last
-      @snapshotter.call(root_endpoint, activity_version)
-    end
-
-    #: (Array[untyped], untyped) -> untyped
-    def root_anchor(root_versions, activity_version)
-      root_versions.find do |root_version|
-        Support.compare_versions(root_version, activity_version) >= 0
-      end
+    #: (Array[untyped], Array[ActivityEvent], ?current: untyped) -> Array[RecordSnapshot?]
+    def event_snapshots(root_versions, events, current: nil)
+      ActivitySnapshotSequence.new(
+        root_versions,
+        events,
+        @snapshotter,
+        current: current
+      ).call
     end
 
     #: (Array[ActivityBoundary], Array[RecordSnapshot?]) -> Array[ActivityStep]

@@ -1,0 +1,39 @@
+# Generated from lib/paper_trail_diff/historical_snapshot_store.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Reconstructs and caches immutable historical snapshots for one adapter configuration.
+  class HistoricalSnapshotStore
+    # : (tree: AssociationTree, traversal: AssociationTraversal, normalizer: SnapshotNormalizer, preparer: untyped) -> void
+    def initialize: (tree: AssociationTree, traversal: AssociationTraversal, normalizer: SnapshotNormalizer, preparer: untyped) -> void
+
+    # : (untyped, untyped) -> RecordSnapshot?
+    def call: (untyped, untyped) -> RecordSnapshot?
+
+    # : (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer) -> RecordSnapshot?
+    def custom: (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer) -> RecordSnapshot?
+
+    private
+
+    @tree: AssociationTree
+
+    @traversal: AssociationTraversal
+
+    @normalizer: SnapshotNormalizer
+
+    @preparer: untyped
+
+    @snapshots: Hash[Array[untyped], RecordSnapshot?]
+
+    # : (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer) -> RecordSnapshot?
+    def snapshot_from_version: (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer) -> RecordSnapshot?
+
+    # : (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer) -> RecordSnapshot?
+    def snapshot_from_live_root: (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer) -> RecordSnapshot?
+
+    # : (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer, habtm_version: untyped) -> RecordSnapshot?
+    def normalize: (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer, habtm_version: untyped) -> RecordSnapshot?
+
+    # : (untyped, untyped) -> Array[untyped]
+    def snapshot_key: (untyped, untyped) -> Array[untyped]
+  end
+end

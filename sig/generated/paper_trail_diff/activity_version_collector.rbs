@@ -6,12 +6,12 @@ module PaperTrailDiff
     # : (untyped, root_versions: Array[untyped], tree: AssociationTree, traversal: AssociationTraversal, ?range_end: untyped) -> void
     def initialize: (untyped, root_versions: Array[untyped], tree: AssociationTree, traversal: AssociationTraversal, ?range_end: untyped) -> void
 
-    # : () -> Array[untyped]
-    def call: () -> Array[untyped]
+    # : () -> Array[ActivityEvent]
+    def call: () -> Array[ActivityEvent]
 
     private
 
-    @versions: Hash[Array[untyped], untyped]
+    @registry: ActivityEventRegistry
 
     @range: ActivityRange
 
@@ -23,17 +23,17 @@ module PaperTrailDiff
 
     @record: untyped
 
-    # : (untyped, Array[untyped], AssociationTree, path: String) -> void
-    def collect_tree: (untyped, Array[untyped], AssociationTree, path: String) -> void
+    # : (untyped, Array[untyped], AssociationTree, path: String, branch: String?) -> void
+    def collect_tree: (untyped, Array[untyped], AssociationTree, path: String, branch: String?) -> void
 
-    # : (Hash[Symbol, untyped], untyped, AssociationTree, String) -> void
-    def collect_reflection: (Hash[Symbol, untyped], untyped, AssociationTree, String) -> void
+    # : (Hash[Symbol, untyped], untyped, AssociationTree, String, String) -> void
+    def collect_reflection: (Hash[Symbol, untyped], untyped, AssociationTree, String, String) -> void
 
-    # : (Hash[Symbol, untyped], untyped) -> Hash[String, untyped]
-    def edge_groups: (Hash[Symbol, untyped], untyped) -> Hash[String, untyped]
+    # : (Hash[Symbol, untyped], untyped, String) -> Hash[String, untyped]
+    def edge_groups: (Hash[Symbol, untyped], untyped, String) -> Hash[String, untyped]
 
-    # : (Hash[Symbol, untyped], untyped) -> Hash[String, untyped]
-    def through_groups: (Hash[Symbol, untyped], untyped) -> Hash[String, untyped]
+    # : (Hash[Symbol, untyped], untyped, String) -> Hash[String, untyped]
+    def through_groups: (Hash[Symbol, untyped], untyped, String) -> Hash[String, untyped]
 
     # : (untyped, Array[untyped], untyped) -> Hash[String, untyped]
     def belongs_to_groups: (untyped, Array[untyped], untyped) -> Hash[String, untyped]
@@ -67,9 +67,6 @@ module PaperTrailDiff
 
     # : (untyped, untyped) -> bool
     def version_matches_model?: (untyped, untyped) -> bool
-
-    # : (Array[untyped]) -> void
-    def add_versions: (Array[untyped]) -> void
 
     # : (untyped) -> bool
     def in_range?: (untyped) -> bool

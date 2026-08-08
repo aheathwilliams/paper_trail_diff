@@ -7,14 +7,15 @@ module PaperTrailDiff
     #: (associations: Array[String | Symbol], ignore: ignore_option) -> void
     def initialize(associations:, ignore:)
       @association_tree = AssociationTree.build(associations)
-      ignore_policy = IgnorePolicy.build(ignore, association_paths: @association_tree.paths)
+      @ignore_policy = IgnorePolicy.build(ignore, association_paths: @association_tree.paths)
       @traversal = AssociationTraversal.new(@association_tree)
       @normalizer = SnapshotNormalizer.new(
         tree: @association_tree,
-        ignore_policy: ignore_policy,
+        ignore_policy: @ignore_policy,
         traversal: @traversal
       )
-      @historical_snapshots = {} #: Hash[Array[untyped], RecordSnapshot?]
+      @historical_store = build_historical_store
+      @activity_snapshotter = build_activity_snapshotter
     end
 
     #: (untyped, untyped) -> Diff
@@ -43,7 +44,7 @@ module PaperTrailDiff
         from: from,
         to: to,
         tree: @association_tree,
-        snapshotter: method(:snapshot_at)
+        snapshotter: @activity_snapshotter
       ).build
     end
 
@@ -67,9 +68,33 @@ module PaperTrailDiff
     private
 
     # @rbs @association_tree: AssociationTree
+    # @rbs @ignore_policy: IgnorePolicy
     # @rbs @traversal: AssociationTraversal
     # @rbs @normalizer: SnapshotNormalizer
-    # @rbs @historical_snapshots: Hash[Array[untyped], RecordSnapshot?]
+    # @rbs @historical_store: HistoricalSnapshotStore
+    # @rbs @activity_snapshotter: ActivitySnapshotProvider
+
+    #: () -> HistoricalSnapshotStore
+    def build_historical_store
+      HistoricalSnapshotStore.new(
+        tree: @association_tree,
+        traversal: @traversal,
+        normalizer: @normalizer,
+        preparer: method(:prepare_traversal!)
+      )
+    end
+
+    #: () -> ActivitySnapshotProvider
+    def build_activity_snapshotter
+      refresher = BranchSnapshotRefresher.new(
+        tree: @association_tree,
+        ignore_policy: @ignore_policy,
+        traversal: @traversal,
+        full_snapshotter: method(:snapshot_at),
+        partial_snapshotter: @historical_store.method(:custom)
+      )
+      ActivitySnapshotProvider.new(snapshotter: method(:snapshot_at), refresher: refresher)
+    end
 
     #: (untyped) -> void
     def reject_live_habtm_activity!(model_class)
@@ -94,45 +119,7 @@ module PaperTrailDiff
     def snapshot_at(root_endpoint, context_endpoint)
       return live_snapshot(root_endpoint) if Endpoint.record?(context_endpoint)
 
-      key = snapshot_key(root_endpoint, context_endpoint)
-      return @historical_snapshots[key] if @historical_snapshots.key?(key)
-
-      @historical_snapshots[key] = build_historical_snapshot(root_endpoint, context_endpoint)
-    end
-
-    #: (untyped, untyped) -> RecordSnapshot?
-    def build_historical_snapshot(root_endpoint, context_endpoint)
-      if Endpoint.version?(root_endpoint)
-        return snapshot_from_version(root_endpoint, context_endpoint)
-      end
-
-      snapshot_from_live_root(root_endpoint, context_endpoint)
-    end
-
-    #: (untyped, untyped) -> Array[untyped]
-    def snapshot_key(root_endpoint, context_endpoint)
-      [
-        root_endpoint.class.name,
-        root_endpoint.id,
-        context_endpoint.class.name,
-        context_endpoint.id
-      ]
-    end
-
-    #: (untyped, untyped) -> RecordSnapshot?
-    def snapshot_from_version(root_version, context_version)
-      model_class = Endpoint.model_class(root_version)
-      prepare_traversal!(model_class, historical: true)
-      @traversal.ensure_habtm_history!(model_class, root_version)
-      record = root_version.reify(dup: true)
-      normalize_historical(record, context_version, habtm_version: root_version)
-    end
-
-    #: (untyped, untyped) -> RecordSnapshot?
-    def snapshot_from_live_root(root_record, context_version)
-      record = Endpoint.reload_record(root_record)
-      prepare_traversal!(record.class, historical: true)
-      normalize_historical(record, context_version, habtm_version: context_version)
+      @historical_store.call(root_endpoint, context_endpoint)
     end
 
     #: (untyped) -> RecordSnapshot
@@ -141,15 +128,6 @@ module PaperTrailDiff
       prepare_traversal!(current.class, historical: false)
       @normalizer.call(current, reifier: LiveAssociationReader.new) ||
         raise(InvalidEndpointError, 'current record endpoint could not be normalized')
-    end
-
-    #: (untyped, untyped, habtm_version: untyped) -> RecordSnapshot?
-    def normalize_historical(record, context_version, habtm_version:)
-      reifier = HistoricalAssociationReifier.new(context_version, habtm_version: habtm_version)
-      reflections = [] #: Array[untyped]
-      reflections = @traversal.reflections_for(record.class, @association_tree, path: '') if record
-      reifier.reify(record, reflections) if record && !reflections.empty?
-      @normalizer.call(record, reifier: reifier)
     end
 
     #: (untyped, historical: bool) -> void
