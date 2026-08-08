@@ -11,6 +11,8 @@ Association tracking is optional. Never add
 `paper_trail-association_tracking` as a runtime dependency or require it from
 the library entrypoint. Association traversal must remain explicit and bounded
 by requested paths; never automatically recurse through an entire model graph.
+Supported macros are `belongs_to`, `has_one`, `has_many` (including through),
+and `has_and_belongs_to_many`.
 
 Keep the public API small and explicit. Return value objects and hashes, never
 formatted diff text.

@@ -147,8 +147,14 @@ replies.changed
 
 For `belongs_to` and `has_one`, replacing the related identity is a
 `relationship` change. Updating attributes on the same related identity is a
-`changed` record. For `has_many`, membership is split into `added` and
-`removed`; shared identities with scalar changes appear in `changed`.
+`changed` record. For `has_many` and `has_and_belongs_to_many`, membership is
+split into `added` and `removed`; shared identities with scalar changes appear
+in `changed`. The result preserves the reflected macro in `kind`.
+
+Both Rails many-to-many forms are supported. `has_many :through` uses PT-AT's
+history for the versioned join model. HABTM reports membership and target
+attribute changes, but it cannot report join attributes because HABTM has no
+join model.
 
 The same structure repeats at every selected depth. `RecordChange#associations`
 contains nested changes for a stable parent identity. Added and removed record
@@ -191,6 +197,9 @@ and PT-AT can reconstruct. In particular:
   endpoint;
 - PT-AT requires its schema, callbacks, versioned child models, and transaction
   metadata; callback-skipping writes may not be reconstructable;
+- HABTM membership is limited to the join snapshots PT-AT recorded in
+  `version_associations`; historical target attributes require versioned target
+  models, otherwise PT-AT may return live target state;
 - a timeline is bounded by root-record versions, so a child-only change without
   a later root version cannot form a separate timeline step;
 - PT-AT has documented edge cases, especially around some `has_one` histories;
