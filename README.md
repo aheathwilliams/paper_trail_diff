@@ -170,20 +170,35 @@ boundary.
 
 ## Build an endpoint and timeline together
 
-When a caller needs both the net endpoint diff and root timeline, `analyze`
-normalizes each selected version once:
+When a caller needs the net endpoint diff and root timeline, `analyze`
+normalizes each selected version once. Pass `activity: true` when the same view
+also needs descendant-aware activity; root snapshots are then shared across all
+three results:
 
 ```ruby
 analysis = PaperTrailDiff.analyze(
   article,
   from: article.versions[1],
   to: article.versions[4],
-  associations: ["comments.replies"]
+  associations: ["comments.replies"],
+  activity: true
 )
 
 analysis.diff
 analysis.timeline
+analysis.activity_timeline
 ```
+
+Without `activity: true`, `analysis.activity_timeline` is `nil` and no activity
+work is performed. `analyze` remains version-bounded; use the standalone
+`activity_timeline(..., to: article)` API for an explicit current endpoint.
+
+Activity reconstruction carries immutable snapshots forward between boundaries.
+A root event refreshes the complete selected graph. A descendant event refreshes
+only the selected top-level branches through which that version was discovered;
+events sharing a PT-AT transaction refresh their combined branches atomically.
+This preserves full-reconstruction output while avoiding unrelated association
+queries at every boundary.
 
 ## Ignore noise fields
 
