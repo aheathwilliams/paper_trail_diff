@@ -9,6 +9,7 @@ require_relative 'paper_trail_diff/errors'
 require_relative 'paper_trail_diff/configuration'
 require_relative 'paper_trail_diff/association_traversal'
 require_relative 'paper_trail_diff/association_discovery'
+require_relative 'paper_trail_diff/diagnostics'
 require_relative 'paper_trail_diff/snapshot'
 require_relative 'paper_trail_diff/value_objects'
 require_relative 'paper_trail_diff/engine'
@@ -94,6 +95,12 @@ module PaperTrailDiff
     #: (untyped, ?max_depth: Integer) -> Array[AssociationDescriptor]
     def association_paths(model_or_record, max_depth: 1)
       AssociationDiscovery.new(model_or_record, max_depth: max_depth).call
+    end
+
+    # Reports known reconstruction hazards without mutating application state.
+    #: (untyped, untyped, ?associations: Array[String | Symbol]) -> DiagnosticReport
+    def diagnose(from_version, to_version, associations: [])
+      HistoryDiagnostics.new(from_version, to_version, associations: associations).call
     end
   end
 end

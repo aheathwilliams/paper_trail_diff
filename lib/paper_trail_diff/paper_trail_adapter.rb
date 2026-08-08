@@ -56,6 +56,7 @@ module PaperTrailDiff
     def snapshot_at(root_version, context_version)
       model_class = version_model_class(root_version)
       prepare_traversal!(model_class)
+      @traversal.ensure_habtm_history!(model_class, root_version)
       reflections = @traversal.reflections_for(model_class, @association_tree, path: '')
       record = root_version.reify(dup: true)
       reifier = HistoricalAssociationReifier.new(context_version, habtm_version: root_version)
@@ -130,7 +131,7 @@ module PaperTrailDiff
                 else
                   Array(associated).compact
                 end
-      child_path = join_path(path, reflection.name.to_s)
+      child_path = Support.association_path(path, reflection.name.to_s)
       @structural_columns[child_path] ||= @traversal.incoming_relationship_columns(reflection)
       AssociationSnapshot.new(
         kind: reflection.macro,
@@ -162,11 +163,6 @@ module PaperTrailDiff
 
       ensure_association_tracking!
       @traversal.validate!(model_class)
-    end
-
-    #: (String, String) -> String
-    def join_path(parent, name)
-      parent.empty? ? name : "#{parent}.#{name}"
     end
 
     #: (untyped) -> untyped

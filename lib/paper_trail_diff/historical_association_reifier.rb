@@ -57,6 +57,11 @@ module PaperTrailDiff
 
     #: (untyped, untyped) -> void
     def reify_habtm(record, reflection)
+      unless @habtm_transaction_id
+        message = 'HABTM reconstruction requires a transaction-backed endpoint version'
+        raise IncompleteAssociationHistoryError, message
+      end
+
       paper_trail = Object.const_get(:PaperTrail) #: untyped
       target_versioned = paper_trail.request.enabled_for_model?(reflection.klass)
       reifier(:HasAndBelongsToMany).reify(

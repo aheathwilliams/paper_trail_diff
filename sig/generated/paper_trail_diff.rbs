@@ -29,6 +29,10 @@ module PaperTrailDiff
   # Discovers supported, finite association paths for a model or record.
   # : (untyped, ?max_depth: Integer) -> Array[AssociationDescriptor]
   def self.association_paths: (untyped, ?max_depth: Integer) -> Array[AssociationDescriptor]
+
+  # Reports known reconstruction hazards without mutating application state.
+  # : (untyped, untyped, ?associations: Array[String | Symbol]) -> DiagnosticReport
+  def self.diagnose: (untyped, untyped, ?associations: Array[String | Symbol]) -> DiagnosticReport
 end
 
 module PaperTrailDiff

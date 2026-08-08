@@ -15,6 +15,23 @@ module PaperTrailDiff
       validate_tree!(model_class, @tree, path: '')
     end
 
+    #: (untyped) -> Array[Array[untyped]]
+    def selected_reflections(model_class)
+      collect_reflections(model_class, @tree, path: '').freeze
+    end
+
+    #: (untyped, untyped) -> void
+    def ensure_habtm_history!(model_class, version)
+      paths = selected_reflections(model_class).filter_map do |path, reflection|
+        path if reflection.macro == :has_and_belongs_to_many
+      end
+      return if paths.empty?
+      return if version.respond_to?(:transaction_id) && version.transaction_id
+
+      message = "HABTM history is incomplete at version #{version.id}: #{paths.join(', ')}"
+      raise IncompleteAssociationHistoryError, message
+    end
+
     #: (untyped, AssociationTree, path: String) -> Array[untyped]
     def reflections_for(model_class, tree, path:)
       key = [model_class.name.to_s, path]
@@ -39,6 +56,18 @@ module PaperTrailDiff
 
     # @rbs @tree: AssociationTree
     # @rbs @reflection_cache: Hash[Array[String], Array[untyped]]
+
+    #: (untyped, AssociationTree, path: String) -> Array[Array[untyped]]
+    def collect_reflections(model_class, tree, path:)
+      reflections_for(model_class, tree, path: path).flat_map do |reflection|
+        child_path = join_path(path, reflection.name.to_s)
+        result = [[child_path, reflection]]
+        subtree = tree.child(reflection.name)
+        next result unless subtree && !subtree.empty? && !reflection.polymorphic?
+
+        result + collect_reflections(reflection.klass, subtree, path: child_path)
+      end
+    end
 
     #: (untyped, AssociationTree, path: String) -> void
     def validate_tree!(model_class, tree, path:)

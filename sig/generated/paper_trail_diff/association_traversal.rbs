@@ -9,6 +9,12 @@ module PaperTrailDiff
     # : (untyped) -> void
     def validate!: (untyped) -> void
 
+    # : (untyped) -> Array[Array[untyped]]
+    def selected_reflections: (untyped) -> Array[Array[untyped]]
+
+    # : (untyped, untyped) -> void
+    def ensure_habtm_history!: (untyped, untyped) -> void
+
     # : (untyped, AssociationTree, path: String) -> Array[untyped]
     def reflections_for: (untyped, AssociationTree, path: String) -> Array[untyped]
 
@@ -20,6 +26,9 @@ module PaperTrailDiff
     @tree: AssociationTree
 
     @reflection_cache: Hash[Array[String], Array[untyped]]
+
+    # : (untyped, AssociationTree, path: String) -> Array[Array[untyped]]
+    def collect_reflections: (untyped, AssociationTree, path: String) -> Array[Array[untyped]]
 
     # : (untyped, AssociationTree, path: String) -> void
     def validate_tree!: (untyped, AssociationTree, path: String) -> void

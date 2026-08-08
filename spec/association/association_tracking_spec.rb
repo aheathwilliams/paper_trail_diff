@@ -485,5 +485,52 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     expect(tags.removed).to be_empty
     expect(tags.changed.first.attributes.fetch('name').to_h)
       .to eq(from: 'Activity before', to: 'Activity after')
+    expect(PaperTrailDiff.diagnose(before, after, associations: [:tags])).to be_ok
+  end
+
+  it 'fails loudly and diagnoses HABTM endpoints without transaction snapshots' do
+    graph = article_with_graph
+    after = boundary_for(graph[:article])
+
+    expect do
+      PaperTrailDiff.compare(graph[:before], after, associations: [:tags])
+    end.to raise_error(
+      PaperTrailDiff::IncompleteAssociationHistoryError,
+      /HABTM history is incomplete/
+    )
+
+    report = PaperTrailDiff.diagnose(graph[:before], after, associations: [:tags])
+    expect(report).not_to be_ok
+    expect(report.errors.map(&:code)).to eq(%i[transaction_id_missing transaction_id_missing])
+  end
+
+  it 'warns when HABTM checkpoints synchronize version timestamps' do
+    graph = article_with_graph
+    tag = TrackedTag.create!(name: 'Timestamp')
+    graph[:article].tags << tag
+    before = habtm_boundary_for(graph[:article])
+    after = habtm_boundary_for(graph[:article])
+    options = TrackedArticle.paper_trail_options
+    previous = options[:synchronize_version_creation_timestamp]
+    options[:synchronize_version_creation_timestamp] = true
+
+    report = PaperTrailDiff.diagnose(before, after, associations: [:tags])
+
+    expect(report.warnings.map(&:code)).to eq([:synchronized_version_timestamp])
+  ensure
+    options[:synchronize_version_creation_timestamp] = previous if options
+  end
+
+  it 'diagnoses ordinary tracked association targets as usable' do
+    graph = article_with_graph
+    after = boundary_for(graph[:article])
+
+    report = PaperTrailDiff.diagnose(graph[:before], after, associations: [:author])
+
+    expect(report).to be_ok
+    expect(report.issues).to be_empty
+    expect do
+      PaperTrailDiff.diagnose(graph[:before], after, associations: [:missing])
+    end.to raise_error(PaperTrailDiff::UnknownAssociationError, /missing/)
   end
 end

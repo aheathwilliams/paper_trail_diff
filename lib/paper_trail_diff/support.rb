@@ -57,6 +57,11 @@ module PaperTrailDiff
         raise(ConfigurationError, 'versions have incomparable timestamps')
     end
 
+    #: (String, String) -> String
+    def association_path(parent, name)
+      parent.empty? ? name : "#{parent}.#{name}"
+    end
+
     #: (untyped) -> untyped
     def duplicate_and_freeze(value)
       value.dup.freeze

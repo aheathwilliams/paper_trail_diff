@@ -166,4 +166,34 @@ RSpec.describe PaperTrailDiff do
         .to raise_error(PaperTrailDiff::ConfigurationError, /positive integer/)
     end
   end
+
+  describe '.diagnose' do
+    it 'returns a clean immutable report when no associations are selected' do
+      _article, _create, draft, published, = create_history
+
+      report = described_class.diagnose(draft, published)
+
+      expect(report).to be_frozen
+      expect(report).to be_ok
+      expect(report.to_h).to eq(ok: true, issues: [])
+    end
+
+    it 'reports unavailable association tracking without raising' do
+      _article, _create, draft, published, = create_history
+
+      report = described_class.diagnose(draft, published, associations: [:comments])
+
+      expect(report).not_to be_ok
+      expect(report.errors.map(&:code)).to eq([:association_tracking_unavailable])
+      expect(report.warnings).to be_empty
+    end
+
+    it 'rejects endpoints from different records' do
+      _article, _create, draft, = create_history
+      other = CoreArticle.create!(title: 'Other', internal_note: 'other')
+
+      expect { described_class.diagnose(draft, other.versions.first) }
+        .to raise_error(PaperTrailDiff::VersionMismatchError, /same PaperTrail item/)
+    end
+  end
 end

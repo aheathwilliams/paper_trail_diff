@@ -55,9 +55,6 @@ module PaperTrailDiff
     # : (untyped) -> void
     def prepare_traversal!: (untyped) -> void
 
-    # : (String, String) -> String
-    def join_path: (String, String) -> String
-
     # : (untyped) -> untyped
     def version_model_class: (untyped) -> untyped
 

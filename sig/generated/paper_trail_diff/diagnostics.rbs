@@ -1,0 +1,106 @@
+# Generated from lib/paper_trail_diff/diagnostics.rb with RBS::Inline
+
+module PaperTrailDiff
+  # One immutable historical-reconstruction setup finding.
+  class DiagnosticIssue
+    attr_reader severity: Symbol
+
+    attr_reader code: Symbol
+
+    attr_reader message: String
+
+    attr_reader path: String?
+
+    attr_reader version_id: untyped
+
+    # : (severity: Symbol, code: Symbol, message: String, ?path: String?, ?version_id: untyped) -> void
+    def initialize: (severity: Symbol, code: Symbol, message: String, ?path: String?, ?version_id: untyped) -> void
+
+    # : () -> Hash[Symbol, untyped]
+    def to_h: () -> Hash[Symbol, untyped]
+  end
+
+  # Immutable diagnostics for a requested historical association comparison.
+  class DiagnosticReport
+    attr_reader issues: Array[DiagnosticIssue]
+
+    # : (issues: Array[DiagnosticIssue]) -> void
+    def initialize: (issues: Array[DiagnosticIssue]) -> void
+
+    # : () -> Array[DiagnosticIssue]
+    def errors: () -> Array[DiagnosticIssue]
+
+    # : () -> Array[DiagnosticIssue]
+    def warnings: () -> Array[DiagnosticIssue]
+
+    # : () -> bool
+    def ok?: () -> bool
+
+    # : () -> Hash[Symbol, untyped]
+    def to_h: () -> Hash[Symbol, untyped]
+  end
+
+  # Performs read-only checks for known PaperTrail/PT-AT reconstruction hazards.
+  class HistoryDiagnostics
+    # : (untyped, untyped, associations: Array[String | Symbol]) -> void
+    def initialize: (untyped, untyped, associations: Array[String | Symbol]) -> void
+
+    # : () -> DiagnosticReport
+    def call: () -> DiagnosticReport
+
+    private
+
+    @issues: Array[DiagnosticIssue]
+
+    @tree: AssociationTree
+
+    @to_version: untyped
+
+    @from_version: untyped
+
+    # : () -> untyped
+    def validated_model_class: () -> untyped
+
+    # : (Array[Array[untyped]]) -> void
+    def inspect_targets: (Array[Array[untyped]]) -> void
+
+    # : (untyped, Array[Array[untyped]]) -> void
+    def inspect_habtm: (untyped, Array[Array[untyped]]) -> void
+
+    # : (Array[String]) -> void
+    def inspect_transaction_metadata: (Array[String]) -> void
+
+    # : (untyped, String) -> void
+    def inspect_versioned_model: (untyped, String) -> void
+
+    # : (untyped, String) -> void
+    def inspect_through_model: (untyped, String) -> void
+
+    # : (untyped) -> bool
+    def model_versioned?: (untyped) -> bool
+
+    # : (untyped) -> bool
+    def synchronized_timestamp_disabled?: (untyped) -> bool
+
+    # : () -> bool
+    def association_tracking_available?: () -> bool
+
+    # : (untyped) -> Array[String]
+    def version_identity: (untyped) -> Array[String]
+
+    # : (untyped) -> String
+    def version_type: (untyped) -> String
+
+    # : () -> String
+    def tracking_unavailable_message: () -> String
+
+    # : (Symbol, String, ?String?, ?untyped) -> void
+    def add_error: (Symbol, String, ?String?, ?untyped) -> void
+
+    # : (Symbol, String, ?String?) -> void
+    def add_warning: (Symbol, String, ?String?) -> void
+
+    # : (Symbol, Symbol, String, String?, untyped) -> void
+    def add_issue: (Symbol, Symbol, String, String?, untyped) -> void
+  end
+end

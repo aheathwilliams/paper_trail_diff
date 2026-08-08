@@ -18,6 +18,9 @@ module PaperTrailDiff
     # : (untyped, untyped) -> Integer
     def self?.compare_versions: (untyped, untyped) -> Integer
 
+    # : (String, String) -> String
+    def self?.association_path: (String, String) -> String
+
     # : (untyped) -> untyped
     def self?.duplicate_and_freeze: (untyped) -> untyped
 
