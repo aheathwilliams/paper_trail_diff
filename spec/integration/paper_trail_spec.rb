@@ -64,6 +64,11 @@ RSpec.describe PaperTrailDiff do
       other.destroy!
       expect { described_class.compare(other, other) }
         .to raise_error(PaperTrailDiff::InvalidEndpointError, /not destroyed/)
+
+      missing = CoreArticle.create!(title: 'Missing', internal_note: 'missing')
+      CoreArticle.where(id: missing.id).delete_all
+      expect { described_class.compare(missing, missing) }
+        .to raise_error(PaperTrailDiff::InvalidEndpointError, /reloaded/)
     end
 
     it 'normalizes associations between live endpoints without requiring PT-AT' do

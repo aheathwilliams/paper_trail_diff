@@ -60,12 +60,14 @@ module PaperTrailDiff
     #: (untyped) -> untyped
     def reload_record(record)
       validate_record!(record)
-      begin
-        record.class.unscoped.find(record.id)
-      rescue StandardError => e
-        message = 'current record endpoint could not be reloaded from the database'
-        raise InvalidEndpointError, message, cause: e
-      end
+      record.class.unscoped.find(record.id)
+    rescue StandardError => e
+      active_record = Object.const_get(:ActiveRecord) #: untyped
+      record_not_found = active_record.const_get(:RecordNotFound) #: untyped
+      raise unless e.is_a?(record_not_found)
+
+      message = 'current record endpoint could not be reloaded from the database'
+      raise InvalidEndpointError, message, cause: e
     end
 
     #: (untyped) -> void
