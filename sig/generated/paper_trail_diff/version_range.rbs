@@ -1,0 +1,29 @@
+# Generated from lib/paper_trail_diff/version_range.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Selects an inclusive, chronological range from a record's root versions.
+  class VersionRange
+    # : (untyped, from: untyped, to: untyped) -> void
+    def initialize: (untyped, from: untyped, to: untyped) -> void
+
+    # : () -> Array[untyped]
+    def select: () -> Array[untyped]
+
+    private
+
+    @record: untyped
+
+    @from: untyped
+
+    @to: untyped
+
+    # : () -> Array[untyped]
+    def versions_for_record: () -> Array[untyped]
+
+    # : (Array[untyped], untyped, boundary: Symbol) -> Integer
+    def boundary_index: (Array[untyped], untyped, boundary: Symbol) -> Integer
+
+    # : (untyped, untyped) -> bool
+    def same_version?: (untyped, untyped) -> bool
+  end
+end

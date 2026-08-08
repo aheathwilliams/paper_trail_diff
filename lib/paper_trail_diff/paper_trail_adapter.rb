@@ -20,22 +20,24 @@ module PaperTrailDiff
 
     #: (untyped, from: untyped, to: untyped) -> Array[Step]
     def timeline(record, from:, to:)
-      TimelineBuilder.new(
+      TimelineBuilder.new(record, from: from, to: to, snapshotter: method(:snapshot_for)).build
+    end
+
+    #: (untyped, from: untyped, to: untyped) -> Array[Step]
+    def activity_timeline(record, from:, to:)
+      prepare_traversal!(record.class)
+      ActivityTimelineBuilder.new(
         record,
         from: from,
         to: to,
-        snapshotter: method(:snapshot_for)
+        tree: @association_tree,
+        snapshotter: method(:snapshot_at)
       ).build
     end
 
     #: (untyped, from: untyped, to: untyped) -> Analysis
     def analyze(record, from:, to:)
-      TimelineBuilder.new(
-        record,
-        from: from,
-        to: to,
-        snapshotter: method(:snapshot_for)
-      ).analyze
+      TimelineBuilder.new(record, from: from, to: to, snapshotter: method(:snapshot_for)).analyze
     end
 
     private
@@ -47,15 +49,22 @@ module PaperTrailDiff
 
     #: (untyped) -> RecordSnapshot?
     def snapshot_for(version)
-      model_class = version_model_class(version)
+      snapshot_at(version, version)
+    end
+
+    #: (untyped, untyped) -> RecordSnapshot?
+    def snapshot_at(root_version, context_version)
+      model_class = version_model_class(root_version)
       prepare_traversal!(model_class)
       reflections = @traversal.reflections_for(model_class, @association_tree, path: '')
-      record = version.reify(reify_options(reflections))
+      record = root_version.reify(dup: true)
+      reifier = HistoricalAssociationReifier.new(context_version, habtm_version: root_version)
+      reifier.reify(record, reflections) if record && !reflections.empty?
       normalize_record(
         record,
         tree: @association_tree,
         path: '',
-        reifier: HistoricalAssociationReifier.new(version),
+        reifier: reifier,
         reflections: reflections
       )
     end
@@ -165,13 +174,6 @@ module PaperTrailDiff
       subtype = version.item_subtype if version.respond_to?(:item_subtype)
       model_type = subtype.to_s.empty? ? version.item_type.to_s : subtype.to_s
       Object.const_get(model_type)
-    end
-
-    #: (Array[untyped]) -> Hash[Symbol, bool]
-    def reify_options(reflections)
-      options = { dup: true }
-      reflections.each { |reflection| options[reflection.macro] = true }
-      options
     end
 
     #: () -> void

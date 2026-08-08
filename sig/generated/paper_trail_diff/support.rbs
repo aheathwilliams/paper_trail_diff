@@ -12,6 +12,12 @@ module PaperTrailDiff
     # : (untyped) -> untyped
     def self?.serialize: (untyped) -> untyped
 
+    # : (untyped) -> Array[untyped]
+    def self?.chronological_version_key: (untyped) -> Array[untyped]
+
+    # : (untyped, untyped) -> Integer
+    def self?.compare_versions: (untyped, untyped) -> Integer
+
     # : (untyped) -> untyped
     def self?.duplicate_and_freeze: (untyped) -> untyped
 

@@ -46,6 +46,17 @@ module PaperTrailDiff
       end
     end
 
+    #: (untyped) -> Array[untyped]
+    def chronological_version_key(version)
+      [version.created_at, version.id.to_s.rjust(32, '0')]
+    end
+
+    #: (untyped, untyped) -> Integer
+    def compare_versions(left, right)
+      chronological_version_key(left) <=> chronological_version_key(right) ||
+        raise(ConfigurationError, 'versions have incomparable timestamps')
+    end
+
     #: (untyped) -> untyped
     def duplicate_and_freeze(value)
       value.dup.freeze

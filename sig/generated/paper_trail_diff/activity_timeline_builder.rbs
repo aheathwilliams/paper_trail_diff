@@ -1,0 +1,30 @@
+# Generated from lib/paper_trail_diff/activity_timeline_builder.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Compares adjacent root and selected-descendant activity boundaries.
+  class ActivityTimelineBuilder
+    # : (untyped, from: untyped, to: untyped, tree: AssociationTree, snapshotter: untyped) -> void
+    def initialize: (untyped, from: untyped, to: untyped, tree: AssociationTree, snapshotter: untyped) -> void
+
+    # : () -> Array[Step]
+    def build: () -> Array[Step]
+
+    private
+
+    @record: untyped
+
+    @from: untyped
+
+    @to: untyped
+
+    @tree: AssociationTree
+
+    @snapshotter: untyped
+
+    # : (Array[untyped], untyped) -> untyped
+    def root_anchor: (Array[untyped], untyped) -> untyped
+
+    # : (Array[untyped], Array[RecordSnapshot?]) -> Array[Step]
+    def build_steps: (Array[untyped], Array[RecordSnapshot?]) -> Array[Step]
+  end
+end

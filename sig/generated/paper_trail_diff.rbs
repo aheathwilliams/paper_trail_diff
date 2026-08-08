@@ -14,6 +14,10 @@ module PaperTrailDiff
   # : (untyped, from: untyped, to: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option) -> Array[Step]
   def self.timeline: (untyped, from: untyped, to: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option) -> Array[Step]
 
+  # Compares adjacent root and selected-descendant activity boundaries.
+  # : (untyped, from: untyped, to: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option) -> Array[Step]
+  def self.activity_timeline: (untyped, from: untyped, to: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option) -> Array[Step]
+
   # Builds an endpoint diff and root-checkpoint timeline while normalizing each version once.
   # : (untyped, from: untyped, to: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option) -> Analysis
   def self.analyze: (untyped, from: untyped, to: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option) -> Analysis

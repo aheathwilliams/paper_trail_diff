@@ -415,4 +415,75 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     expect(PaperTrailDiff.association_paths(TrackedArticle.new).map(&:path))
       .to eq(%w[author comments profile tags])
   end
+
+  it 'separates descendant updates into activity timeline steps' do
+    graph = article_with_graph
+    graph[:first_author].update!(name: 'Ada after')
+    graph[:kept_comment].update!(body: 'Comment after')
+    graph[:reply].update!(body: 'Reply after')
+    after = boundary_for(graph[:article])
+
+    steps = PaperTrailDiff.activity_timeline(
+      graph[:article],
+      from: graph[:before],
+      to: after,
+      associations: ['author.comments', 'comments.replies']
+    )
+    changed_steps = steps.reject { |step| step.diff.empty? }
+
+    expect(changed_steps.map { |step| step.from_version.item_type })
+      .to eq(%w[TrackedAuthor TrackedComment TrackedReply])
+    expect(changed_steps.fetch(0).diff.associations.fetch('author').changed.attributes)
+      .to have_key('name')
+    expect(changed_steps.fetch(1).diff.associations.fetch('comments').changed.first.attributes)
+      .to have_key('body')
+    reply = changed_steps.fetch(2).diff.associations.fetch('comments').changed
+                         .first.associations.fetch('replies').changed.first
+    expect(reply.attributes.fetch('body').to_h)
+      .to eq(from: 'Nested before', to: 'Reply after')
+  end
+
+  it 'reports child additions and removals at their own activity boundaries' do
+    graph = article_with_graph
+    transient = graph[:article].comments.create!(body: 'Transient')
+    graph[:kept_comment].update!(body: 'Kept after')
+    transient.destroy!
+    after = boundary_for(graph[:article])
+
+    changed = PaperTrailDiff.activity_timeline(
+      graph[:article],
+      from: graph[:before],
+      to: after,
+      associations: [:comments]
+    ).reject { |step| step.diff.empty? }
+    comment_diffs = changed.map { |step| step.diff.associations.fetch('comments') }
+
+    expect(comment_diffs.map { |diff| diff.added.map(&:id) })
+      .to eq([[transient.id], [], []])
+    expect(comment_diffs.map { |diff| diff.removed.map(&:id) })
+      .to eq([[], [], [transient.id]])
+    expect(comment_diffs.fetch(1).changed.first.attributes).to have_key('body')
+  end
+
+  it 'uses owner checkpoints for HABTM activity membership while diffing target updates' do
+    graph = article_with_graph
+    tag = TrackedTag.create!(name: 'Activity before')
+    graph[:article].tags << tag
+    before = habtm_boundary_for(graph[:article])
+    tag.update!(name: 'Activity after')
+    after = habtm_boundary_for(graph[:article])
+
+    changed = PaperTrailDiff.activity_timeline(
+      graph[:article],
+      from: before,
+      to: after,
+      associations: [:tags]
+    ).reject { |step| step.diff.empty? }
+    tags = changed.fetch(0).diff.associations.fetch('tags')
+
+    expect(tags.added).to be_empty
+    expect(tags.removed).to be_empty
+    expect(tags.changed.first.attributes.fetch('name').to_h)
+      .to eq(from: 'Activity before', to: 'Activity after')
+  end
 end

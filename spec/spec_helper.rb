@@ -12,6 +12,7 @@ SimpleCov.start do
   if coverage_name == 'associations'
     minimum_coverage line: 95, branch: 80
   else
+    add_filter '/activity_version_collector.rb'
     minimum_coverage line: 85, branch: 60
   end
 end

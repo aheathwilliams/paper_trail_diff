@@ -3,8 +3,8 @@
 module PaperTrailDiff
   # Reconstructs selected nested edges at one root PaperTrail endpoint.
   class HistoricalAssociationReifier
-    # : (untyped) -> void
-    def initialize: (untyped) -> void
+    # : (untyped, ?habtm_version: untyped) -> void
+    def initialize: (untyped, ?habtm_version: untyped) -> void
 
     # : (untyped, Array[untyped]) -> void
     def reify: (untyped, Array[untyped]) -> void
@@ -12,6 +12,8 @@ module PaperTrailDiff
     private
 
     @transaction_id: untyped
+
+    @habtm_transaction_id: untyped
 
     @version_at: untyped
 

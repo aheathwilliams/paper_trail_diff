@@ -132,6 +132,18 @@ RSpec.describe PaperTrailDiff do
     end
   end
 
+  describe '.activity_timeline' do
+    it 'matches the root timeline when no descendant paths are selected' do
+      article, _create, draft, _published, reverted = create_history
+
+      activity = described_class.activity_timeline(article, from: draft, to: reverted)
+      timeline = described_class.timeline(article, from: draft, to: reverted)
+
+      expect(activity.map(&:to_h)).to eq(timeline.map(&:to_h))
+      expect(activity).to be_frozen
+    end
+  end
+
   describe '.analyze' do
     it 'builds the endpoint diff and timeline from the same selected history' do
       article, _create, draft, published, reverted = create_history

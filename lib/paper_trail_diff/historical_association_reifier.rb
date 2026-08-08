@@ -4,9 +4,12 @@
 module PaperTrailDiff
   # Reconstructs selected nested edges at one root PaperTrail endpoint.
   class HistoricalAssociationReifier
-    #: (untyped) -> void
-    def initialize(version)
+    #: (untyped, ?habtm_version: untyped) -> void
+    def initialize(version, habtm_version: version)
       @transaction_id = version.transaction_id if version.respond_to?(:transaction_id)
+      if habtm_version.respond_to?(:transaction_id)
+        @habtm_transaction_id = habtm_version.transaction_id
+      end
       @version_at = version.created_at
     end
 
@@ -18,6 +21,7 @@ module PaperTrailDiff
     private
 
     # @rbs @transaction_id: untyped
+    # @rbs @habtm_transaction_id: untyped
     # @rbs @version_at: untyped
 
     #: (untyped, untyped) -> void
@@ -60,7 +64,7 @@ module PaperTrailDiff
         reflection,
         record,
         options,
-        @transaction_id
+        @habtm_transaction_id
       )
     end
 

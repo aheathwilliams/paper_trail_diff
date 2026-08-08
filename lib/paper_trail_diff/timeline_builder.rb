@@ -53,38 +53,7 @@ module PaperTrailDiff
 
     #: () -> Array[untyped]
     def selected_versions
-      versions = versions_for_record
-      from_index = boundary_index(versions, @from, boundary: :from)
-      to_index = boundary_index(versions, @to, boundary: :to)
-      if from_index > to_index
-        raise InvalidTimelineRangeError, '`from` version must not follow `to` version'
-      end
-
-      versions.slice(from_index..to_index) || []
-    end
-
-    #: () -> Array[untyped]
-    def versions_for_record
-      association_name = @record.class.versions_association_name
-      @record.public_send(association_name).reload.to_a
-    rescue NoMethodError => e
-      message = 'record does not expose a PaperTrail version history'
-      raise InvalidTimelineRangeError, message, cause: e
-    end
-
-    #: (Array[untyped], untyped, boundary: Symbol) -> Integer
-    def boundary_index(versions, requested, boundary:)
-      index = versions.index { |version| same_version?(version, requested) }
-      return index if index
-
-      raise InvalidTimelineRangeError, "`#{boundary}` version is not in the record history"
-    end
-
-    #: (untyped, untyped) -> bool
-    def same_version?(version, requested)
-      version.instance_of?(requested.class) && version.id == requested.id
-    rescue NoMethodError
-      false
+      VersionRange.new(@record, from: @from, to: @to).select
     end
   end
 end

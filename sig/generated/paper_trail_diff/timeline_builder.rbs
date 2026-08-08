@@ -30,14 +30,5 @@ module PaperTrailDiff
 
     # : () -> Array[untyped]
     def selected_versions: () -> Array[untyped]
-
-    # : () -> Array[untyped]
-    def versions_for_record: () -> Array[untyped]
-
-    # : (Array[untyped], untyped, boundary: Symbol) -> Integer
-    def boundary_index: (Array[untyped], untyped, boundary: Symbol) -> Integer
-
-    # : (untyped, untyped) -> bool
-    def same_version?: (untyped, untyped) -> bool
   end
 end

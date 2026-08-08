@@ -1,0 +1,78 @@
+# Generated from lib/paper_trail_diff/activity_version_collector.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Collects root and selected-descendant versions relevant to one root history range.
+  class ActivityVersionCollector
+    # : (untyped, root_versions: Array[untyped], tree: AssociationTree, traversal: AssociationTraversal) -> void
+    def initialize: (untyped, root_versions: Array[untyped], tree: AssociationTree, traversal: AssociationTraversal) -> void
+
+    # : () -> Array[untyped]
+    def call: () -> Array[untyped]
+
+    private
+
+    @versions: Hash[Array[untyped], untyped]
+
+    @traversal: AssociationTraversal
+
+    @tree: AssociationTree
+
+    @root_versions: Array[untyped]
+
+    @record: untyped
+
+    # : (untyped, Array[untyped], AssociationTree, path: String) -> void
+    def collect_tree: (untyped, Array[untyped], AssociationTree, path: String) -> void
+
+    # : (Hash[Symbol, untyped], untyped, AssociationTree, String) -> void
+    def collect_reflection: (Hash[Symbol, untyped], untyped, AssociationTree, String) -> void
+
+    # : (Hash[Symbol, untyped], untyped) -> Hash[String, untyped]
+    def edge_groups: (Hash[Symbol, untyped], untyped) -> Hash[String, untyped]
+
+    # : (Hash[Symbol, untyped], untyped) -> Hash[String, untyped]
+    def through_groups: (Hash[Symbol, untyped], untyped) -> Hash[String, untyped]
+
+    # : (untyped, Array[untyped], untyped) -> Hash[String, untyped]
+    def belongs_to_groups: (untyped, Array[untyped], untyped) -> Hash[String, untyped]
+
+    # : (untyped, Array[untyped], untyped) -> Hash[String, untyped]
+    def direct_child_groups: (untyped, Array[untyped], untyped) -> Hash[String, untyped]
+
+    # : (untyped, Array[untyped], untyped) -> Hash[String, untyped]
+    def habtm_groups: (untyped, Array[untyped], untyped) -> Hash[String, untyped]
+
+    # : (Array[untyped], untyped) -> Hash[String, untyped]
+    def identity_groups: (Array[untyped], untyped) -> Hash[String, untyped]
+
+    # : (Array[untyped], untyped) -> Hash[String, untyped]
+    def version_groups: (Array[untyped], untyped) -> Hash[String, untyped]
+
+    # : (untyped, Array[untyped]) -> Hash[Symbol, untyped]
+    def group: (untyped, Array[untyped]) -> Hash[Symbol, untyped]
+
+    # : (Hash[String, untyped], Hash[String, untyped]) -> void
+    def merge_groups!: (Hash[String, untyped], Hash[String, untyped]) -> void
+
+    # : (untyped, Array[untyped]) -> Array[untyped]
+    def versions_for: (untyped, Array[untyped]) -> Array[untyped]
+
+    # : (untyped, untyped) -> untyped
+    def target_class: (untyped, untyped) -> untyped
+
+    # : (untyped, untyped) -> bool
+    def related_parent_type?: (untyped, untyped) -> bool
+
+    # : (untyped, untyped) -> bool
+    def version_matches_model?: (untyped, untyped) -> bool
+
+    # : (Array[untyped]) -> void
+    def add_versions: (Array[untyped]) -> void
+
+    # : (untyped) -> bool
+    def in_range?: (untyped) -> bool
+
+    # : (String, String) -> String
+    def join_path: (String, String) -> String
+  end
+end

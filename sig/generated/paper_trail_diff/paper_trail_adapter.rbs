@@ -12,6 +12,9 @@ module PaperTrailDiff
     # : (untyped, from: untyped, to: untyped) -> Array[Step]
     def timeline: (untyped, from: untyped, to: untyped) -> Array[Step]
 
+    # : (untyped, from: untyped, to: untyped) -> Array[Step]
+    def activity_timeline: (untyped, from: untyped, to: untyped) -> Array[Step]
+
     # : (untyped, from: untyped, to: untyped) -> Analysis
     def analyze: (untyped, from: untyped, to: untyped) -> Analysis
 
@@ -27,6 +30,9 @@ module PaperTrailDiff
 
     # : (untyped) -> RecordSnapshot?
     def snapshot_for: (untyped) -> RecordSnapshot?
+
+    # : (untyped, untyped) -> RecordSnapshot?
+    def snapshot_at: (untyped, untyped) -> RecordSnapshot?
 
     # : (untyped, tree: AssociationTree, path: String, reifier: HistoricalAssociationReifier, reflections: Array[untyped]) -> RecordSnapshot?
     def normalize_record: (untyped, tree: AssociationTree, path: String, reifier: HistoricalAssociationReifier, reflections: Array[untyped]) -> RecordSnapshot?
@@ -54,9 +60,6 @@ module PaperTrailDiff
 
     # : (untyped) -> untyped
     def version_model_class: (untyped) -> untyped
-
-    # : (Array[untyped]) -> Hash[Symbol, bool]
-    def reify_options: (Array[untyped]) -> Hash[Symbol, bool]
 
     # : () -> void
     def ensure_association_tracking!: () -> void
