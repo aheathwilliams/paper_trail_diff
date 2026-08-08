@@ -388,5 +388,31 @@ RSpec.describe 'PaperTrailDiff association tracking' do
         associations: ['comments.missing']
       )
     end.to raise_error(PaperTrailDiff::UnknownAssociationError, /comments\.missing/)
+
+    expect do
+      PaperTrailDiff.compare(graph[:before], graph[:before], associations: [:versions])
+    end.to raise_error(PaperTrailDiff::UnsupportedAssociationError, /PaperTrail versions/)
+  end
+
+  it 'discovers supported association paths with targets, through edges, and cycles' do
+    descriptors = PaperTrailDiff.association_paths(TrackedArticle, max_depth: 2)
+    by_path = descriptors.to_h { |descriptor| [descriptor.path, descriptor] }
+
+    expect(PaperTrailDiff.supported_association_macros).to eq(
+      %i[belongs_to has_one has_many has_and_belongs_to_many]
+    )
+    expect(descriptors).to be_frozen
+    expect(descriptors.map(&:path)).to eq(descriptors.map(&:path).sort)
+    expect(by_path.fetch('comments.replies').to_h).to include(
+      kind: :has_many,
+      target_type: 'TrackedReply',
+      cycle: false
+    )
+    expect(by_path.fetch('comments.article').cycle).to be(true)
+    expect(by_path.fetch('author.comments').through).to eq('articles')
+    expect(PaperTrailDiff.association_paths(TrackedArticle).map(&:path))
+      .to eq(%w[author comments profile tags])
+    expect(PaperTrailDiff.association_paths(TrackedArticle.new).map(&:path))
+      .to eq(%w[author comments profile tags])
   end
 end

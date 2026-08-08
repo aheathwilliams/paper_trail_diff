@@ -62,12 +62,23 @@ module PaperTrailDiff
     def resolve_reflection(model_class, name, full_path)
       reflection = model_class.reflect_on_association(name.to_sym)
       raise UnknownAssociationError, "unknown association: #{full_path}" unless reflection
-      unless %i[belongs_to has_one has_many has_and_belongs_to_many].include?(reflection.macro)
+
+      if paper_trail_versions?(model_class, reflection)
+        message = "unsupported association #{full_path}: PaperTrail versions"
+        raise UnsupportedAssociationError, message
+      end
+      unless SUPPORTED_ASSOCIATION_MACROS.include?(reflection.macro)
         raise UnsupportedAssociationError,
               "unsupported association #{full_path}: #{reflection.macro}"
       end
 
       reflection
+    end
+
+    #: (untyped, untyped) -> bool
+    def paper_trail_versions?(model_class, reflection)
+      model_class.respond_to?(:versions_association_name) &&
+        reflection.name.to_s == model_class.versions_association_name.to_s
     end
 
     #: (String, String) -> String

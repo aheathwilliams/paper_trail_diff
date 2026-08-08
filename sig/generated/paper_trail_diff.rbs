@@ -4,6 +4,8 @@
 module PaperTrailDiff
   DEFAULT_IGNORED_ATTRIBUTES: untyped
 
+  SUPPORTED_ASSOCIATION_MACROS: untyped
+
   # Compares the net state reconstructed by two PaperTrail versions.
   # : (untyped, untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option) -> Diff
   def self.compare: (untyped, untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option) -> Diff
@@ -11,6 +13,18 @@ module PaperTrailDiff
   # Compares every adjacent reconstructed state in an inclusive version range.
   # : (untyped, from: untyped, to: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option) -> Array[Step]
   def self.timeline: (untyped, from: untyped, to: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option) -> Array[Step]
+
+  # Builds an endpoint diff and root-checkpoint timeline while normalizing each version once.
+  # : (untyped, from: untyped, to: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option) -> Analysis
+  def self.analyze: (untyped, from: untyped, to: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option) -> Analysis
+
+  # Returns the association macros this release can normalize.
+  # : () -> Array[Symbol]
+  def self.supported_association_macros: () -> Array[Symbol]
+
+  # Discovers supported, finite association paths for a model or record.
+  # : (untyped, ?max_depth: Integer) -> Array[AssociationDescriptor]
+  def self.association_paths: (untyped, ?max_depth: Integer) -> Array[AssociationDescriptor]
 end
 
 module PaperTrailDiff

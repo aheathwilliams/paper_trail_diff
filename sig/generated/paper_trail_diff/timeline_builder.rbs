@@ -9,6 +9,9 @@ module PaperTrailDiff
     # : () -> Array[Step]
     def build: () -> Array[Step]
 
+    # : () -> Analysis
+    def analyze: () -> Analysis
+
     private
 
     @record: untyped
@@ -18,6 +21,12 @@ module PaperTrailDiff
     @to: untyped
 
     @snapshotter: untyped
+
+    # : (Array[untyped], Array[RecordSnapshot?]) -> Array[Step]
+    def build_steps: (Array[untyped], Array[RecordSnapshot?]) -> Array[Step]
+
+    # : () -> [Array[untyped], Array[RecordSnapshot?]]
+    def normalized_history: () -> [ Array[untyped], Array[RecordSnapshot?] ]
 
     # : () -> Array[untyped]
     def selected_versions: () -> Array[untyped]

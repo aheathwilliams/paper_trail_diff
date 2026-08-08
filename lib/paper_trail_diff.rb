@@ -8,11 +8,13 @@ require_relative 'paper_trail_diff/support'
 require_relative 'paper_trail_diff/errors'
 require_relative 'paper_trail_diff/configuration'
 require_relative 'paper_trail_diff/association_traversal'
+require_relative 'paper_trail_diff/association_discovery'
 require_relative 'paper_trail_diff/snapshot'
 require_relative 'paper_trail_diff/value_objects'
 require_relative 'paper_trail_diff/engine'
 require_relative 'paper_trail_diff/historical_association_reifier'
 require_relative 'paper_trail_diff/step'
+require_relative 'paper_trail_diff/analysis'
 require_relative 'paper_trail_diff/timeline_builder'
 require_relative 'paper_trail_diff/paper_trail_adapter'
 
@@ -32,6 +34,12 @@ require_relative 'paper_trail_diff/paper_trail_adapter'
 # Structured version comparison for PaperTrail.
 module PaperTrailDiff
   DEFAULT_IGNORED_ATTRIBUTES = ['updated_at'].freeze
+  SUPPORTED_ASSOCIATION_MACROS = %i[
+    belongs_to
+    has_one
+    has_many
+    has_and_belongs_to_many
+  ].freeze
 
   class << self
     # Compares the net state reconstructed by two PaperTrail versions.
@@ -51,6 +59,28 @@ module PaperTrailDiff
         from: from,
         to: to
       )
+    end
+
+    # Builds an endpoint diff and root-checkpoint timeline while normalizing each version once.
+    #: (untyped, from: untyped, to: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option) -> Analysis
+    def analyze(record, from:, to:, associations: [], ignore: DEFAULT_IGNORED_ATTRIBUTES)
+      PaperTrailAdapter.new(associations: associations, ignore: ignore).analyze(
+        record,
+        from: from,
+        to: to
+      )
+    end
+
+    # Returns the association macros this release can normalize.
+    #: () -> Array[Symbol]
+    def supported_association_macros
+      SUPPORTED_ASSOCIATION_MACROS
+    end
+
+    # Discovers supported, finite association paths for a model or record.
+    #: (untyped, ?max_depth: Integer) -> Array[AssociationDescriptor]
+    def association_paths(model_or_record, max_depth: 1)
+      AssociationDiscovery.new(model_or_record, max_depth: max_depth).call
     end
   end
 end

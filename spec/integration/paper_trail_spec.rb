@@ -131,4 +131,27 @@ RSpec.describe PaperTrailDiff do
         .to raise_error(PaperTrailDiff::InvalidTimelineRangeError, /version history/)
     end
   end
+
+  describe '.analyze' do
+    it 'builds the endpoint diff and timeline from the same selected history' do
+      article, _create, draft, published, reverted = create_history
+
+      result = described_class.analyze(article, from: draft, to: reverted)
+
+      expect(result).to be_frozen
+      expect(result.diff).to be_empty
+      expect(result.timeline.map(&:from_version)).to eq([draft, published])
+      expect(result.timeline.map(&:to_version)).to eq([published, reverted])
+      expect(result.to_h.keys).to eq(%i[diff timeline])
+    end
+  end
+
+  describe '.association_paths' do
+    it 'validates the model and maximum depth' do
+      expect { described_class.association_paths(Object.new) }
+        .to raise_error(PaperTrailDiff::ConfigurationError, /ActiveRecord/)
+      expect { described_class.association_paths(CoreArticle, max_depth: 0) }
+        .to raise_error(PaperTrailDiff::ConfigurationError, /positive integer/)
+    end
+  end
 end

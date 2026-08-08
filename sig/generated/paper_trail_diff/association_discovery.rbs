@@ -1,0 +1,63 @@
+# Generated from lib/paper_trail_diff/association_discovery.rb with RBS::Inline
+
+module PaperTrailDiff
+  # One discoverable ActiveRecord association path.
+  class AssociationDescriptor
+    attr_reader path: String
+
+    attr_reader kind: Symbol
+
+    attr_reader target_type: String?
+
+    attr_reader through: String?
+
+    attr_reader polymorphic: bool
+
+    attr_reader cycle: bool
+
+    # : (path: String, kind: Symbol, target_type: String?, ?through: String?, ?flags: Array[Symbol]) -> void
+    def initialize: (path: String, kind: Symbol, target_type: String?, ?through: String?, ?flags: Array[Symbol]) -> void
+
+    # : () -> Hash[Symbol, untyped]
+    def to_h: () -> Hash[Symbol, untyped]
+  end
+
+  # Discovers finite, supported association paths for configuration UIs.
+  class AssociationDiscovery
+    # : (untyped, max_depth: Integer) -> void
+    def initialize: (untyped, max_depth: Integer) -> void
+
+    # : () -> Array[AssociationDescriptor]
+    def call: () -> Array[AssociationDescriptor]
+
+    private
+
+    @model_class: untyped
+
+    @max_depth: Integer
+
+    # : (untyped, prefix: String, ancestry: Array[untyped], depth: Integer) -> Array[AssociationDescriptor]
+    def discover: (untyped, prefix: String, ancestry: Array[untyped], depth: Integer) -> Array[AssociationDescriptor]
+
+    # : (untyped, prefix: String, ancestry: Array[untyped], depth: Integer) -> Array[AssociationDescriptor]
+    def describe_and_descend: (untyped, prefix: String, ancestry: Array[untyped], depth: Integer) -> Array[AssociationDescriptor]
+
+    # : (untyped, String, untyped, bool) -> AssociationDescriptor
+    def descriptor_for: (untyped, String, untyped, bool) -> AssociationDescriptor
+
+    # : (untyped) -> Array[untyped]
+    def supported_reflections: (untyped) -> Array[untyped]
+
+    # : (untyped, untyped) -> bool
+    def paper_trail_versions?: (untyped, untyped) -> bool
+
+    # : (untyped) -> untyped
+    def reflection_target: (untyped) -> untyped
+
+    # : (untyped) -> String?
+    def reflection_target_name: (untyped) -> String?
+
+    # : (String, String) -> String
+    def association_path: (String, String) -> String
+  end
+end

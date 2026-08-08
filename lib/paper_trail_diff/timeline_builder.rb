@@ -14,8 +14,28 @@ module PaperTrailDiff
 
     #: () -> Array[Step]
     def build
-      versions = selected_versions
-      snapshots = versions.map { |version| @snapshotter.call(version) }
+      versions, snapshots = normalized_history
+      build_steps(versions, snapshots)
+    end
+
+    #: () -> Analysis
+    def analyze
+      versions, snapshots = normalized_history
+      Analysis.new(
+        diff: Engine.compare(snapshots.first, snapshots.last),
+        timeline: build_steps(versions, snapshots)
+      )
+    end
+
+    private
+
+    # @rbs @record: untyped
+    # @rbs @from: untyped
+    # @rbs @to: untyped
+    # @rbs @snapshotter: untyped
+
+    #: (Array[untyped], Array[RecordSnapshot?]) -> Array[Step]
+    def build_steps(versions, snapshots)
       versions.each_cons(2).with_index.map do |version_pair, index|
         Step.new(
           from_version: version_pair.first,
@@ -25,12 +45,11 @@ module PaperTrailDiff
       end.freeze
     end
 
-    private
-
-    # @rbs @record: untyped
-    # @rbs @from: untyped
-    # @rbs @to: untyped
-    # @rbs @snapshotter: untyped
+    #: () -> [Array[untyped], Array[RecordSnapshot?]]
+    def normalized_history
+      versions = selected_versions
+      [versions, versions.map { |version| @snapshotter.call(version) }]
+    end
 
     #: () -> Array[untyped]
     def selected_versions

@@ -28,6 +28,16 @@ module PaperTrailDiff
       ).build
     end
 
+    #: (untyped, from: untyped, to: untyped) -> Analysis
+    def analyze(record, from:, to:)
+      TimelineBuilder.new(
+        record,
+        from: from,
+        to: to,
+        snapshotter: method(:snapshot_for)
+      ).analyze
+    end
+
     private
 
     # @rbs @association_tree: AssociationTree

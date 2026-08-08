@@ -1,0 +1,16 @@
+# Generated from lib/paper_trail_diff/analysis.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Endpoint and root-checkpoint timeline results built from one normalized history.
+  class Analysis
+    attr_reader diff: Diff
+
+    attr_reader timeline: Array[Step]
+
+    # : (diff: Diff, timeline: Array[Step]) -> void
+    def initialize: (diff: Diff, timeline: Array[Step]) -> void
+
+    # : () -> Hash[Symbol, untyped]
+    def to_h: () -> Hash[Symbol, untyped]
+  end
+end

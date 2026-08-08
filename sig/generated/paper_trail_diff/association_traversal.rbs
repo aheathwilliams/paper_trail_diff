@@ -30,6 +30,9 @@ module PaperTrailDiff
     # : (untyped, String, String) -> untyped
     def resolve_reflection: (untyped, String, String) -> untyped
 
+    # : (untyped, untyped) -> bool
+    def paper_trail_versions?: (untyped, untyped) -> bool
+
     # : (String, String) -> String
     def join_path: (String, String) -> String
   end
