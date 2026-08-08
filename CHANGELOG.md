@@ -15,6 +15,12 @@ All notable changes to this project will be documented in this file.
   timeline boundaries.
 - Rename the root `Diff#record` lifecycle field to the more explicit
   `Diff#record_presence_change`, including its `to_h` key.
+- Add `activity_timeline` for adjacent root and selected-descendant version
+  boundaries while preserving the root-only semantics of `timeline`.
+- Add one-pass `analyze`, bounded association discovery, and structured history
+  diagnostics.
+- Add `RecordReference`, consistent configuration error subclasses, traversal
+  foreign-key suppression, and fail-loud HABTM endpoint validation.
 
 ## [0.1.0] - 2026-08-07
 
