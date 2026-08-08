@@ -1,0 +1,33 @@
+# Generated from lib/paper_trail_diff/association_traversal.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Resolves and validates ActiveRecord reflections for a bounded association tree.
+  class AssociationTraversal
+    # : (AssociationTree) -> void
+    def initialize: (AssociationTree) -> void
+
+    # : (untyped) -> void
+    def validate!: (untyped) -> void
+
+    # : (untyped, AssociationTree, path: String) -> Array[untyped]
+    def reflections_for: (untyped, AssociationTree, path: String) -> Array[untyped]
+
+    private
+
+    @tree: AssociationTree
+
+    @reflection_cache: Hash[Array[String], Array[untyped]]
+
+    # : (untyped, AssociationTree, path: String) -> void
+    def validate_tree!: (untyped, AssociationTree, path: String) -> void
+
+    # : (untyped, AssociationTree, String) -> Array[untyped]
+    def requested_reflections: (untyped, AssociationTree, String) -> Array[untyped]
+
+    # : (untyped, String, String) -> untyped
+    def resolve_reflection: (untyped, String, String) -> untyped
+
+    # : (String, String) -> String
+    def join_path: (String, String) -> String
+  end
+end

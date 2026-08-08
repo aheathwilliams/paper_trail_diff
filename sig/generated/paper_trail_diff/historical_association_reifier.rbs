@@ -1,0 +1,30 @@
+# Generated from lib/paper_trail_diff/historical_association_reifier.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Reconstructs selected nested edges at one root PaperTrail endpoint.
+  class HistoricalAssociationReifier
+    # : (untyped) -> void
+    def initialize: (untyped) -> void
+
+    # : (untyped, Array[untyped]) -> void
+    def reify: (untyped, Array[untyped]) -> void
+
+    private
+
+    @transaction_id: untyped
+
+    @version_at: untyped
+
+    # : (untyped, untyped) -> void
+    def reify_association: (untyped, untyped) -> void
+
+    # : (untyped, untyped) -> void
+    def reify_has_many: (untyped, untyped) -> void
+
+    # : () -> Hash[Symbol, untyped]
+    def options: () -> Hash[Symbol, untyped]
+
+    # : (Symbol) -> untyped
+    def reifier: (Symbol) -> untyped
+  end
+end

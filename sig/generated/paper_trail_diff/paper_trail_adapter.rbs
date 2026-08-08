@@ -14,41 +14,41 @@ module PaperTrailDiff
 
     private
 
-    # : (Array[untyped], Array[RecordSnapshot?]) -> Array[Step]
-    def build_steps: (Array[untyped], Array[RecordSnapshot?]) -> Array[Step]
+    @traversal: AssociationTraversal
 
-    @reflection_cache: Hash[String, Array[untyped]]
+    @ignore_policy: IgnorePolicy
 
-    @ignored_attributes: Array[String]
-
-    @association_names: Array[String]
+    @association_tree: AssociationTree
 
     # : (untyped) -> RecordSnapshot?
     def snapshot_for: (untyped) -> RecordSnapshot?
 
-    # : (untyped, ?reflections: Array[untyped]) -> RecordSnapshot?
-    def normalize_record: (untyped, ?reflections: Array[untyped]) -> RecordSnapshot?
+    # : (untyped, tree: AssociationTree, path: String, reifier: HistoricalAssociationReifier, reflections: Array[untyped]) -> RecordSnapshot?
+    def normalize_record: (untyped, tree: AssociationTree, path: String, reifier: HistoricalAssociationReifier, reflections: Array[untyped]) -> RecordSnapshot?
 
-    # : (untyped, Array[untyped]) -> Array[String]
-    def excluded_attributes: (untyped, Array[untyped]) -> Array[String]
+    # : (untyped, Array[untyped], String) -> Array[String]
+    def excluded_attributes: (untyped, Array[untyped], String) -> Array[String]
 
     # : (Array[untyped]) -> Array[String]
     def relationship_columns: (Array[untyped]) -> Array[String]
 
-    # : (untyped, Array[untyped]) -> Hash[String, AssociationSnapshot]
-    def normalize_associations: (untyped, Array[untyped]) -> Hash[String, AssociationSnapshot]
+    # : (untyped, tree: AssociationTree, path: String, reifier: HistoricalAssociationReifier, reflections: Array[untyped]) -> Hash[String, AssociationSnapshot]
+    def normalize_associations: (untyped, tree: AssociationTree, path: String, reifier: HistoricalAssociationReifier, reflections: Array[untyped]) -> Hash[String, AssociationSnapshot]
 
-    # : (untyped) -> Array[untyped]
-    def reflections_for: (untyped) -> Array[untyped]
+    # : (untyped, untyped, AssociationTree, String, HistoricalAssociationReifier) -> AssociationSnapshot
+    def association_snapshot: (untyped, untyped, AssociationTree, String, HistoricalAssociationReifier) -> AssociationSnapshot
 
-    # : (String) -> Array[untyped]
-    def requested_reflections: (String) -> Array[untyped]
+    # : (Array[untyped], AssociationTree, String, HistoricalAssociationReifier) -> Array[RecordSnapshot]
+    def normalize_children: (Array[untyped], AssociationTree, String, HistoricalAssociationReifier) -> Array[RecordSnapshot]
 
-    # : (String, Symbol) -> void
-    def validate_association_kind!: (String, Symbol) -> void
+    # : (untyped) -> void
+    def prepare_traversal!: (untyped) -> void
 
-    # : (untyped) -> String
-    def version_model_type: (untyped) -> String
+    # : (String, String) -> String
+    def join_path: (String, String) -> String
+
+    # : (untyped) -> untyped
+    def version_model_class: (untyped) -> untyped
 
     # : (Array[untyped]) -> Hash[Symbol, bool]
     def reify_options: (Array[untyped]) -> Hash[Symbol, bool]
@@ -61,20 +61,5 @@ module PaperTrailDiff
 
     # : (untyped) -> Array[String]
     def version_item_identity: (untyped) -> Array[String]
-
-    # : (untyped) -> Array[untyped]
-    def versions_for: (untyped) -> Array[untyped]
-
-    # : (Array[untyped], untyped, boundary: Symbol) -> Integer
-    def boundary_index: (Array[untyped], untyped, boundary: Symbol) -> Integer
-
-    # : (untyped, untyped) -> bool
-    def same_version?: (untyped, untyped) -> bool
-
-    # : (untyped, option: Symbol) -> Array[String]
-    def normalize_names: (untyped, option: Symbol) -> Array[String]
-
-    # : (untyped) -> bool
-    def valid_names?: (untyped) -> bool
   end
 end

@@ -1,0 +1,34 @@
+# Generated from lib/paper_trail_diff/timeline_builder.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Selects and compares a chronological slice of a record's version history.
+  class TimelineBuilder
+    # : (untyped, from: untyped, to: untyped, snapshotter: untyped) -> void
+    def initialize: (untyped, from: untyped, to: untyped, snapshotter: untyped) -> void
+
+    # : () -> Array[Step]
+    def build: () -> Array[Step]
+
+    private
+
+    @record: untyped
+
+    @from: untyped
+
+    @to: untyped
+
+    @snapshotter: untyped
+
+    # : () -> Array[untyped]
+    def selected_versions: () -> Array[untyped]
+
+    # : () -> Array[untyped]
+    def versions_for_record: () -> Array[untyped]
+
+    # : (Array[untyped], untyped, boundary: Symbol) -> Integer
+    def boundary_index: (Array[untyped], untyped, boundary: Symbol) -> Integer
+
+    # : (untyped, untyped) -> bool
+    def same_version?: (untyped, untyped) -> bool
+  end
+end

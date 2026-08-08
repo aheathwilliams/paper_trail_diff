@@ -82,7 +82,7 @@ RSpec.describe PaperTrailDiff do
     it 'raises clearly when associations are requested without PT-AT loaded' do
       _article, _create, draft, published, = create_history
 
-      expect { described_class.compare(draft, published, associations: [:comments]) }
+      expect { described_class.compare(draft, published, associations: ['comments.replies']) }
         .to raise_error(
           PaperTrailDiff::AssociationTrackingUnavailableError,
           /must be loaded and enabled/

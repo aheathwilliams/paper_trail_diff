@@ -6,9 +6,9 @@ module PaperTrailDiff
   class PaperTrailAdapter
     #: (associations: Array[String | Symbol], ignore: ignore_option) -> void
     def initialize(associations:, ignore:)
-      @association_names = normalize_names(associations, option: :associations)
-      @ignored_attributes = normalize_names(ignore, option: :ignore)
-      @reflection_cache = {}
+      @association_tree = AssociationTree.build(associations)
+      @ignore_policy = IgnorePolicy.build(ignore, association_paths: @association_tree.paths)
+      @traversal = AssociationTraversal.new(@association_tree)
     end
 
     #: (untyped, untyped) -> Diff
@@ -19,63 +19,63 @@ module PaperTrailDiff
 
     #: (untyped, from: untyped, to: untyped) -> Array[Step]
     def timeline(record, from:, to:)
-      versions = versions_for(record)
-      from_index = boundary_index(versions, from, boundary: :from)
-      to_index = boundary_index(versions, to, boundary: :to)
-      if from_index > to_index
-        raise InvalidTimelineRangeError, '`from` version must not follow `to` version'
-      end
-
-      selected_versions = versions.slice(from_index..to_index) || []
-      snapshots = selected_versions.map { |version| snapshot_for(version) }
-      build_steps(selected_versions, snapshots)
+      TimelineBuilder.new(
+        record,
+        from: from,
+        to: to,
+        snapshotter: method(:snapshot_for)
+      ).build
     end
 
     private
 
-    #: (Array[untyped], Array[RecordSnapshot?]) -> Array[Step]
-    def build_steps(versions, snapshots)
-      versions.each_cons(2).with_index.map do |version_pair, index|
-        Step.new(
-          from_version: version_pair.first,
-          to_version: version_pair.last,
-          diff: Engine.compare(snapshots.fetch(index), snapshots.fetch(index + 1))
-        )
-      end.freeze
-    end
-
-    # @rbs @association_names: Array[String]
-    # @rbs @ignored_attributes: Array[String]
-    # @rbs @reflection_cache: Hash[String, Array[untyped]]
+    # @rbs @association_tree: AssociationTree
+    # @rbs @ignore_policy: IgnorePolicy
+    # @rbs @traversal: AssociationTraversal
 
     #: (untyped) -> RecordSnapshot?
     def snapshot_for(version)
-      reflections = reflections_for(version)
+      model_class = version_model_class(version)
+      prepare_traversal!(model_class)
+      reflections = @traversal.reflections_for(model_class, @association_tree, path: '')
       record = version.reify(reify_options(reflections))
-      normalize_record(record, reflections: reflections)
+      normalize_record(
+        record,
+        tree: @association_tree,
+        path: '',
+        reifier: HistoricalAssociationReifier.new(version),
+        reflections: reflections
+      )
     end
 
-    #: (untyped, ?reflections: Array[untyped]) -> RecordSnapshot?
-    def normalize_record(record, reflections: [])
+    #: (untyped, tree: AssociationTree, path: String, reifier: HistoricalAssociationReifier, reflections: Array[untyped]) -> RecordSnapshot?
+    def normalize_record(record, tree:, path:, reifier:, reflections:)
       return unless record
 
       attributes = record.attributes.dup
-      excluded_attributes(record, reflections).each { |name| attributes.delete(name) }
+      excluded_attributes(record, reflections, path).each { |name| attributes.delete(name) }
       RecordSnapshot.new(
         type: record.class.name,
         id: record.id,
         attributes: attributes,
-        associations: normalize_associations(record, reflections)
+        associations: normalize_associations(
+          record,
+          tree: tree,
+          path: path,
+          reifier: reifier,
+          reflections: reflections
+        )
       )
     end
 
-    #: (untyped, Array[untyped]) -> Array[String]
-    def excluded_attributes(record, reflections)
+    #: (untyped, Array[untyped], String) -> Array[String]
+    def excluded_attributes(record, reflections, path)
       primary_key = record.class.primary_key #: untyped
       primary_keys = primary_key.is_a?(Array) ? primary_key : [primary_key]
       # @type var primary_keys: Array[untyped]
       primary_keys = primary_keys.map { |key| key.to_s } # rubocop:disable Style/SymbolProc
-      (primary_keys + @ignored_attributes + relationship_columns(reflections)).uniq
+      ignored = @ignore_policy.attributes_for(path)
+      (primary_keys + ignored + relationship_columns(reflections)).uniq
     end
 
     #: (Array[untyped]) -> Array[String]
@@ -87,52 +87,64 @@ module PaperTrailDiff
       end
     end
 
-    #: (untyped, Array[untyped]) -> Hash[String, AssociationSnapshot]
-    def normalize_associations(record, reflections)
+    #: (untyped, tree: AssociationTree, path: String, reifier: HistoricalAssociationReifier, reflections: Array[untyped]) -> Hash[String, AssociationSnapshot]
+    def normalize_associations(record, tree:, path:, reifier:, reflections:)
       associations = {} #: Hash[String, AssociationSnapshot]
       reflections.each do |reflection|
-        associated = record.public_send(reflection.name)
-        records = reflection.macro == :has_many ? associated.to_a : Array(associated).compact
-        associations[reflection.name.to_s] = AssociationSnapshot.new(
-          kind: reflection.macro,
-          records: records.filter_map { |child| normalize_record(child) }
-        )
+        name = reflection.name.to_s
+        subtree = tree.child(name)
+        raise ArgumentError, "missing traversal subtree: #{name}" unless subtree
+
+        associations[name] = association_snapshot(record, reflection, subtree, path, reifier)
       end
       associations
     end
 
-    #: (untyped) -> Array[untyped]
-    def reflections_for(version)
-      return [] if @association_names.empty?
+    #: (untyped, untyped, AssociationTree, String, HistoricalAssociationReifier) -> AssociationSnapshot
+    def association_snapshot(record, reflection, subtree, path, reifier)
+      associated = record.public_send(reflection.name)
+      records = reflection.macro == :has_many ? associated.to_a : Array(associated).compact
+      AssociationSnapshot.new(
+        kind: reflection.macro,
+        records: normalize_children(
+          records,
+          subtree,
+          join_path(path, reflection.name.to_s),
+          reifier
+        )
+      )
+    end
+
+    #: (Array[untyped], AssociationTree, String, HistoricalAssociationReifier) -> Array[RecordSnapshot]
+    def normalize_children(records, tree, path, reifier)
+      reflections_by_class = {} #: Hash[String, Array[untyped]]
+      records.filter_map do |child|
+        type = child.class.name
+        reflections = reflections_by_class[type] ||=
+          @traversal.reflections_for(child.class, tree, path: path)
+        reifier.reify(child, reflections) unless reflections.empty?
+        normalize_record(child, tree: tree, path: path, reifier: reifier, reflections: reflections)
+      end
+    end
+
+    #: (untyped) -> void
+    def prepare_traversal!(model_class)
+      return if @association_tree.empty?
 
       ensure_association_tracking!
-      model_type = version_model_type(version)
-      @reflection_cache[model_type] ||= requested_reflections(model_type)
+      @traversal.validate!(model_class)
     end
 
-    #: (String) -> Array[untyped]
-    def requested_reflections(model_type)
-      model_class = Object.const_get(model_type) #: untyped
-      @association_names.map do |name|
-        reflection = model_class.reflect_on_association(name.to_sym)
-        raise UnknownAssociationError, "unknown association: #{name}" unless reflection
-
-        validate_association_kind!(name, reflection.macro)
-        reflection
-      end.freeze
+    #: (String, String) -> String
+    def join_path(parent, name)
+      parent.empty? ? name : "#{parent}.#{name}"
     end
 
-    #: (String, Symbol) -> void
-    def validate_association_kind!(name, kind)
-      return if %i[belongs_to has_one has_many].include?(kind)
-
-      raise UnsupportedAssociationError, "unsupported association #{name}: #{kind}"
-    end
-
-    #: (untyped) -> String
-    def version_model_type(version)
+    #: (untyped) -> untyped
+    def version_model_class(version)
       subtype = version.item_subtype if version.respond_to?(:item_subtype)
-      subtype.to_s.empty? ? version.item_type.to_s : subtype.to_s
+      model_type = subtype.to_s.empty? ? version.item_type.to_s : subtype.to_s
+      Object.const_get(model_type)
     end
 
     #: (Array[untyped]) -> Hash[Symbol, bool]
@@ -167,46 +179,6 @@ module PaperTrailDiff
       [version.item_type.to_s, version.item_id.to_s]
     rescue NoMethodError => e
       raise VersionMismatchError, 'expected PaperTrail version endpoints', cause: e
-    end
-
-    #: (untyped) -> Array[untyped]
-    def versions_for(record)
-      association_name = record.class.versions_association_name
-      record.public_send(association_name).to_a
-    rescue NoMethodError => e
-      message = 'record does not expose a PaperTrail version history'
-      raise InvalidTimelineRangeError, message, cause: e
-    end
-
-    #: (Array[untyped], untyped, boundary: Symbol) -> Integer
-    def boundary_index(versions, requested, boundary:)
-      index = versions.index { |version| same_version?(version, requested) }
-      return index if index
-
-      raise InvalidTimelineRangeError, "`#{boundary}` version is not in the record history"
-    end
-
-    #: (untyped, untyped) -> bool
-    def same_version?(version, requested)
-      version.instance_of?(requested.class) && version.id == requested.id
-    rescue NoMethodError
-      false
-    end
-
-    #: (untyped, option: Symbol) -> Array[String]
-    def normalize_names(values, option:)
-      unless valid_names?(values)
-        raise ArgumentError, "#{option}: must be an array of strings or symbols"
-      end
-
-      values.map(&:to_s).uniq.freeze
-    end
-
-    #: (untyped) -> bool
-    def valid_names?(values)
-      values.is_a?(Array) && values.all? do |value|
-        value.is_a?(String) || value.is_a?(Symbol)
-      end
     end
   end
 end
