@@ -103,7 +103,11 @@ module PaperTrailDiff
     #: (untyped, untyped, AssociationTree, String, HistoricalAssociationReifier) -> AssociationSnapshot
     def association_snapshot(record, reflection, subtree, path, reifier)
       associated = record.public_send(reflection.name)
-      records = reflection.macro == :has_many ? associated.to_a : Array(associated).compact
+      records = if AssociationSnapshot.collection_kind?(reflection.macro)
+                  associated.to_a
+                else
+                  Array(associated).compact
+                end
       AssociationSnapshot.new(
         kind: reflection.macro,
         records: normalize_children(

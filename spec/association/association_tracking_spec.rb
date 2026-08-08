@@ -19,6 +19,12 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     article.versions.reload.last
   end
 
+  def habtm_boundary_for(article)
+    fresh_article = TrackedArticle.find(article.id)
+    TrackedArticle.transaction { fresh_article.paper_trail.save_with_version }
+    fresh_article.versions.reload.last
+  end
+
   def with_association_reify_behavior(value)
     previous = PaperTrail.config.association_reify_error_behaviour
     PaperTrail.config.association_reify_error_behaviour = value
@@ -238,6 +244,67 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     expect(comments.added.map(&:id)).to eq([added_comment.id])
   end
 
+  it 'reports HABTM membership and target attribute changes as a collection' do
+    graph = article_with_graph
+    kept_tag = TrackedTag.create!(name: 'Kept before')
+    removed_tag = TrackedTag.create!(name: 'Removed')
+    graph[:article].tags << [kept_tag, removed_tag]
+    before = habtm_boundary_for(graph[:article])
+
+    kept_tag.update!(name: 'Kept after')
+    graph[:article].tags.delete(removed_tag)
+    added_tag = TrackedTag.create!(name: 'Added')
+    graph[:article].tags << added_tag
+    after = habtm_boundary_for(graph[:article])
+
+    result = PaperTrailDiff.compare(before, after, associations: [:tags])
+    tags = result.associations.fetch('tags')
+
+    expect(tags.kind).to eq(:has_and_belongs_to_many)
+    expect(tags.added.map(&:id)).to eq([added_tag.id])
+    expect(tags.removed.map(&:id)).to eq([removed_tag.id])
+    expect(tags.changed.fetch(0).attributes.fetch('name').to_h)
+      .to eq(from: 'Kept before', to: 'Kept after')
+
+    step_tags = PaperTrailDiff.timeline(
+      graph[:article],
+      from: before,
+      to: after,
+      associations: [:tags]
+    ).fetch(0).diff.associations.fetch('tags')
+    expect(step_tags.to_h).to eq(tags.to_h)
+  end
+
+  it 'reconstructs nested HABTM paths and bounds cyclic paths explicitly' do
+    graph = article_with_graph
+    kept_tag = TrackedTag.create!(name: 'Nested before')
+    graph[:article].tags << kept_tag
+    before = habtm_boundary_for(graph[:article])
+
+    kept_tag.update!(name: 'Nested after')
+    after = habtm_boundary_for(graph[:article])
+    result = PaperTrailDiff.compare(
+      before,
+      after,
+      associations: ['comments.article.tags']
+    )
+
+    comment = result.associations.fetch('comments').changed.find do |change|
+      change.record.fetch(:id) == graph[:kept_comment].id
+    end
+    article = comment.associations.fetch('article').changed
+    tag_change = article.associations.fetch('tags').changed.fetch(0)
+    expect(tag_change.attributes.fetch('name').to_h)
+      .to eq(from: 'Nested before', to: 'Nested after')
+
+    cyclic = PaperTrailDiff.compare(
+      before,
+      before,
+      associations: ['tags.articles.tags']
+    )
+    expect(cyclic).to be_empty
+  end
+
   it 'applies ignore rules to exact association paths' do
     graph = article_with_graph
     TrackedArticle.transaction do
@@ -303,7 +370,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
       .to eq(from: 'Nested before', to: 'Timeline nested after')
   end
 
-  it 'rejects unknown and unsupported associations' do
+  it 'rejects unknown associations' do
     graph = article_with_graph
 
     expect do
@@ -317,9 +384,5 @@ RSpec.describe 'PaperTrailDiff association tracking' do
         associations: ['comments.missing']
       )
     end.to raise_error(PaperTrailDiff::UnknownAssociationError, /comments\.missing/)
-
-    expect do
-      PaperTrailDiff.compare(graph[:before], graph[:before], associations: [:tags])
-    end.to raise_error(PaperTrailDiff::UnsupportedAssociationError, /tags/)
   end
 end

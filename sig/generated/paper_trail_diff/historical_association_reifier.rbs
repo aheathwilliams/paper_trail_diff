@@ -21,6 +21,9 @@ module PaperTrailDiff
     # : (untyped, untyped) -> void
     def reify_has_many: (untyped, untyped) -> void
 
+    # : (untyped, untyped) -> void
+    def reify_habtm: (untyped, untyped) -> void
+
     # : () -> Hash[Symbol, untyped]
     def options: () -> Hash[Symbol, untyped]
 

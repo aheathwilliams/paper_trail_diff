@@ -29,6 +29,8 @@ module PaperTrailDiff
         reifier(:HasOne).reify(reflection, record, options, @transaction_id)
       when :has_many
         reify_has_many(record, reflection)
+      when :has_and_belongs_to_many
+        reify_habtm(record, reflection)
       end
     end
 
@@ -46,6 +48,19 @@ module PaperTrailDiff
         options,
         @transaction_id,
         version_table
+      )
+    end
+
+    #: (untyped, untyped) -> void
+    def reify_habtm(record, reflection)
+      paper_trail = Object.const_get(:PaperTrail) #: untyped
+      target_versioned = paper_trail.request.enabled_for_model?(reflection.klass)
+      reifier(:HasAndBelongsToMany).reify(
+        target_versioned,
+        reflection,
+        record,
+        options,
+        @transaction_id
       )
     end
 

@@ -3,7 +3,12 @@
 module PaperTrailDiff
   # A normalized association in a bounded record snapshot tree.
   class AssociationSnapshot
+    COLLECTION_KINDS: untyped
+
     SUPPORTED_KINDS: untyped
+
+    # : (Symbol) -> bool
+    def self.collection_kind?: (Symbol) -> bool
 
     attr_reader kind: Symbol
 

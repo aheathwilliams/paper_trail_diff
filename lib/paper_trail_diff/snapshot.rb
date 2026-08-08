@@ -4,8 +4,16 @@
 module PaperTrailDiff
   # A normalized association in a bounded record snapshot tree.
   class AssociationSnapshot
-    SUPPORTED_KINDS = %i[belongs_to has_one has_many].freeze
-    private_constant :SUPPORTED_KINDS
+    COLLECTION_KINDS = %i[has_many has_and_belongs_to_many].freeze
+    SUPPORTED_KINDS = %i[belongs_to has_one has_many has_and_belongs_to_many].freeze
+    private_constant :COLLECTION_KINDS, :SUPPORTED_KINDS
+
+    class << self
+      #: (Symbol) -> bool
+      def collection_kind?(kind)
+        COLLECTION_KINDS.include?(kind)
+      end
+    end
 
     attr_reader :kind #: Symbol
     attr_reader :records #: Array[RecordSnapshot]
@@ -15,7 +23,7 @@ module PaperTrailDiff
       unless SUPPORTED_KINDS.include?(kind)
         raise ArgumentError, "unsupported association kind: #{kind.inspect}"
       end
-      if kind != :has_many && records.length > 1
+      if !self.class.collection_kind?(kind) && records.length > 1
         raise ArgumentError, "#{kind} association snapshots accept at most one record"
       end
 

@@ -48,7 +48,7 @@ module PaperTrailDiff
     def resolve_reflection(model_class, name, full_path)
       reflection = model_class.reflect_on_association(name.to_sym)
       raise UnknownAssociationError, "unknown association: #{full_path}" unless reflection
-      unless %i[belongs_to has_one has_many].include?(reflection.macro)
+      unless %i[belongs_to has_one has_many has_and_belongs_to_many].include?(reflection.macro)
         raise UnsupportedAssociationError,
               "unsupported association #{full_path}: #{reflection.macro}"
       end

@@ -79,7 +79,7 @@ module PaperTrailDiff
 
       #: (AssociationSnapshot, AssociationSnapshot) -> association_diff
       def compare_association(from_association, to_association)
-        if from_association.kind == :has_many
+        if AssociationSnapshot.collection_kind?(from_association.kind)
           return compare_collection(from_association, to_association)
         end
 
@@ -127,7 +127,7 @@ module PaperTrailDiff
         to_records = index_records(to_association.records)
 
         CollectionAssociationDiff.new(
-          kind: :has_many,
+          kind: from_association.kind,
           added: records_missing_from(to_records, from_records),
           removed: records_missing_from(from_records, to_records),
           changed: changed_records(from_records, to_records)

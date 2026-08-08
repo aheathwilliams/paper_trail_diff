@@ -141,6 +141,33 @@ RSpec.describe PaperTrailDiff::Engine do
     )
   end
 
+  it 'treats HABTM as a collection while preserving its macro kind' do
+    removed = snapshot(type: 'Tag', id: 1, attributes: { name: 'Removed' })
+    before = snapshot(type: 'Tag', id: 2, attributes: { name: 'Before' })
+    after = snapshot(type: 'Tag', id: 2, attributes: { name: 'After' })
+    added = snapshot(type: 'Tag', id: 3, attributes: { name: 'Added' })
+    from = snapshot(
+      type: 'Article',
+      id: 1,
+      attributes: {},
+      associations: { tags: association(:has_and_belongs_to_many, removed, before) }
+    )
+    to = snapshot(
+      type: 'Article',
+      id: 1,
+      attributes: {},
+      associations: { tags: association(:has_and_belongs_to_many, after, added) }
+    )
+
+    tags = described_class.compare(from, to).associations.fetch('tags')
+
+    expect(tags.kind).to eq(:has_and_belongs_to_many)
+    expect(tags.added.map(&:id)).to eq([3])
+    expect(tags.removed.map(&:id)).to eq([1])
+    expect(tags.changed.fetch(0).attributes.fetch('name').to_h)
+      .to eq(from: 'Before', to: 'After')
+  end
+
   it 'reports nested association changes for stable parent identities' do
     old_reply = snapshot(type: 'Reply', id: 9, attributes: { body: 'Before' })
     new_reply = snapshot(type: 'Reply', id: 9, attributes: { body: 'After' })

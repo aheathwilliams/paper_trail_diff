@@ -47,7 +47,7 @@ module PaperTrailDiff
     #: () -> Array[untyped]
     def versions_for_record
       association_name = @record.class.versions_association_name
-      @record.public_send(association_name).to_a
+      @record.public_send(association_name).reload.to_a
     rescue NoMethodError => e
       message = 'record does not expose a PaperTrail version history'
       raise InvalidTimelineRangeError, message, cause: e
