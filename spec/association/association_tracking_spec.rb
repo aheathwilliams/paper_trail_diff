@@ -248,6 +248,20 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     expect(comments.added.map(&:id)).to eq([added_comment.id])
   end
 
+  it 'reconstructs a removed through collection before resolving its targets' do
+    author = TrackedAuthor.create!(name: 'Through owner')
+    article = TrackedArticle.create!(title: 'Through parent', author: author)
+    comment = article.comments.create!(body: 'Through child')
+    before = boundary_for(author)
+    article.destroy!
+    after = boundary_for(author)
+
+    result = PaperTrailDiff.compare(before, after, associations: [:comments])
+
+    expect(result.associations.fetch('comments').removed.map(&:id)).to eq([comment.id])
+    expect(PaperTrailDiff.diagnose(before, after, associations: [:comments])).to be_ok
+  end
+
   it 'reports HABTM membership and target attribute changes as a collection' do
     graph = article_with_graph
     kept_tag = TrackedTag.create!(name: 'Kept before')
@@ -441,6 +455,21 @@ RSpec.describe 'PaperTrailDiff association tracking' do
                          .first.associations.fetch('replies').changed.first
     expect(reply.attributes.fetch('body').to_h)
       .to eq(from: 'Nested before', to: 'Reply after')
+
+    empty = PaperTrailDiff.activity_timeline(
+      graph[:article],
+      from: graph[:before],
+      to: graph[:before]
+    )
+    expect(empty).to eq([])
+    expect(empty).to be_frozen
+    expect do
+      PaperTrailDiff.activity_timeline(
+        graph[:article],
+        from: after,
+        to: graph[:before]
+      )
+    end.to raise_error(PaperTrailDiff::InvalidTimelineRangeError, /must not follow/)
   end
 
   it 'reports child additions and removals at their own activity boundaries' do
@@ -529,6 +558,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
 
     expect(report).to be_ok
     expect(report.issues).to be_empty
+    expect(PaperTrailDiff.diagnose(graph[:before], after)).to be_ok
     expect do
       PaperTrailDiff.diagnose(graph[:before], after, associations: [:missing])
     end.to raise_error(PaperTrailDiff::UnknownAssociationError, /missing/)

@@ -82,7 +82,7 @@ class TrackedAuthor < ActiveRecord::Base
   has_many :articles, class_name: 'TrackedArticle', foreign_key: :author_id,
                       inverse_of: :author
   has_many :comments, through: :articles
-  has_paper_trail
+  has_paper_trail synchronize_version_creation_timestamp: false
 end
 
 class TrackedArticle < ActiveRecord::Base

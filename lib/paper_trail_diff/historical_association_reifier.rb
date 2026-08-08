@@ -41,6 +41,7 @@ module PaperTrailDiff
     #: (untyped, untyped) -> void
     def reify_has_many(record, reflection)
       if reflection.options[:through]
+        reify_association(record, reflection.through_reflection)
         reifier(:HasManyThrough).reify(reflection, record, options, @transaction_id)
         return
       end
