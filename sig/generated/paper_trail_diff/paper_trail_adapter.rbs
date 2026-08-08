@@ -3,8 +3,8 @@
 module PaperTrailDiff
   # PaperTrail/ActiveRecord boundary that produces plain record snapshots.
   class PaperTrailAdapter
-    # : (associations: Array[String | Symbol], ignore: Array[String | Symbol]) -> void
-    def initialize: (associations: Array[String | Symbol], ignore: Array[String | Symbol]) -> void
+    # : (associations: Array[String | Symbol], ignore: ignore_option) -> void
+    def initialize: (associations: Array[String | Symbol], ignore: ignore_option) -> void
 
     # : (untyped, untyped) -> Diff
     def compare: (untyped, untyped) -> Diff

@@ -1,0 +1,64 @@
+# Generated from lib/paper_trail_diff/configuration.rb with RBS::Inline
+
+module PaperTrailDiff
+  # An immutable, bounded tree built from explicit association paths.
+  class AssociationTree
+    attr_reader children: Hash[String, AssociationTree]
+
+    # : (untyped) -> AssociationTree
+    def self.build: (untyped) -> AssociationTree
+
+    # : (Hash[String, untyped], String) -> void
+    private def self.add_path: (Hash[String, untyped], String) -> void
+
+    # : (Hash[String, untyped]) -> AssociationTree
+    private def self.from_hash: (Hash[String, untyped]) -> AssociationTree
+
+    # : (untyped) -> bool
+    private def self.valid_values?: (untyped) -> bool
+
+    # : (Hash[String, AssociationTree]) -> void
+    def initialize: (Hash[String, AssociationTree]) -> void
+
+    # : () -> bool
+    def empty?: () -> bool
+
+    # : (String | Symbol) -> AssociationTree?
+    def child: (String | Symbol) -> AssociationTree?
+
+    # : (?prefix: String) -> Array[String]
+    def paths: (?prefix: String) -> Array[String]
+  end
+
+  # Immutable rules for globally and path-specifically excluded attributes.
+  class IgnorePolicy
+    ROOT_PATH: ::String
+
+    VALID_KEYS: untyped
+
+    # : (untyped, association_paths: Array[String]) -> IgnorePolicy
+    def self.build: (untyped, association_paths: Array[String]) -> IgnorePolicy
+
+    # : (Hash[untyped, untyped]) -> Hash[String, untyped]
+    private def self.normalize_options: (Hash[untyped, untyped]) -> Hash[String, untyped]
+
+    # : (untyped, Array[String]) -> Hash[String, Array[String]]
+    private def self.normalize_paths: (untyped, Array[String]) -> Hash[String, Array[String]]
+
+    # : (Hash[String, Array[String]], untyped, untyped, Array[String]) -> void
+    private def self.add_path_rule: (Hash[String, Array[String]], untyped, untyped, Array[String]) -> void
+
+    # : (untyped, context: String) -> Array[String]
+    private def self.normalize_names: (untyped, context: String) -> Array[String]
+
+    attr_reader all: Array[String]
+
+    attr_reader paths: Hash[String, Array[String]]
+
+    # : (all: Array[String], paths: Hash[String, Array[String]]) -> void
+    def initialize: (all: Array[String], paths: Hash[String, Array[String]]) -> void
+
+    # : (String) -> Array[String]
+    def attributes_for: (String) -> Array[String]
+  end
+end

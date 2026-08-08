@@ -4,7 +4,7 @@
 module PaperTrailDiff
   # PaperTrail/ActiveRecord boundary that produces plain record snapshots.
   class PaperTrailAdapter
-    #: (associations: Array[String | Symbol], ignore: Array[String | Symbol]) -> void
+    #: (associations: Array[String | Symbol], ignore: ignore_option) -> void
     def initialize(associations:, ignore:)
       @association_names = normalize_names(associations, option: :associations)
       @ignored_attributes = normalize_names(ignore, option: :ignore)

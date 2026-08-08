@@ -20,21 +20,25 @@ module PaperTrailDiff
     end
   end
 
-  # Attribute changes for an associated record whose identity did not change.
+  # Attribute and nested-association changes for a record whose identity did not change.
   class RecordChange
     attr_reader :record #: Hash[Symbol, untyped]
     attr_reader :attributes #: Hash[String, ValueChange]
+    attr_reader :associations #: Hash[String, ToOneAssociationDiff | CollectionAssociationDiff]
 
-    #: (record: RecordSnapshot, attributes: attribute_changes) -> void
-    def initialize(record:, attributes:)
+    #: (record: RecordSnapshot, attributes: attribute_changes, ?associations: association_diffs) -> void
+    def initialize(record:, attributes:, associations: {})
       @record = Support.immutable_copy(record.reference)
       @attributes = Support.immutable_copy(attributes)
+      @associations = Support.immutable_copy(associations)
       freeze
     end
 
     #: () -> Hash[Symbol, untyped]
     def to_h
-      { record: Support.serialize(record), attributes: Support.serialize(attributes) }
+      value = { record: Support.serialize(record), attributes: Support.serialize(attributes) }
+      value[:associations] = Support.serialize(associations) unless associations.empty?
+      value
     end
   end
 

@@ -115,7 +115,10 @@ module PaperTrailDiff
       #: (RecordSnapshot, RecordSnapshot) -> RecordChange?
       def compare_record(from_record, to_record)
         attributes = compare_attributes(from_record.attributes, to_record.attributes)
-        RecordChange.new(record: to_record, attributes: attributes) unless attributes.empty?
+        associations = compare_associations(from_record.associations, to_record.associations)
+        return if attributes.empty? && associations.empty?
+
+        RecordChange.new(record: to_record, attributes: attributes, associations: associations)
       end
 
       #: (AssociationSnapshot, AssociationSnapshot) -> CollectionAssociationDiff

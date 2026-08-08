@@ -1,7 +1,7 @@
 # Generated from lib/paper_trail_diff/snapshot.rb with RBS::Inline
 
 module PaperTrailDiff
-  # A normalized first-level association in a record snapshot.
+  # A normalized association in a bounded record snapshot tree.
   class AssociationSnapshot
     SUPPORTED_KINDS: untyped
 
@@ -11,6 +11,9 @@ module PaperTrailDiff
 
     # : (kind: Symbol, records: Array[RecordSnapshot]) -> void
     def initialize: (kind: Symbol, records: Array[RecordSnapshot]) -> void
+
+    # : () -> Hash[Symbol, untyped]
+    def to_h: () -> Hash[Symbol, untyped]
   end
 
   # An immutable, ActiveRecord-independent representation of a reified record.

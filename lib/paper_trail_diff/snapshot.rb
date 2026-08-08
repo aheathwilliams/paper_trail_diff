@@ -2,7 +2,7 @@
 # rbs_inline: enabled
 
 module PaperTrailDiff
-  # A normalized first-level association in a record snapshot.
+  # A normalized association in a bounded record snapshot tree.
   class AssociationSnapshot
     SUPPORTED_KINDS = %i[belongs_to has_one has_many].freeze
     private_constant :SUPPORTED_KINDS
@@ -22,6 +22,11 @@ module PaperTrailDiff
       @kind = kind
       @records = records.dup.freeze
       freeze
+    end
+
+    #: () -> Hash[Symbol, untyped]
+    def to_h
+      { kind: kind, records: Support.serialize(records) }
     end
   end
 
@@ -53,11 +58,13 @@ module PaperTrailDiff
 
     #: () -> Hash[Symbol, untyped]
     def to_h
-      {
+      value = {
         type: type,
         id: id,
         attributes: Support.serialize(attributes)
       }
+      value[:associations] = Support.serialize(associations) unless associations.empty?
+      value
     end
 
     private

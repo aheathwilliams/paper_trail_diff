@@ -141,6 +141,79 @@ RSpec.describe PaperTrailDiff::Engine do
     )
   end
 
+  it 'reports nested association changes for stable parent identities' do
+    old_reply = snapshot(type: 'Reply', id: 9, attributes: { body: 'Before' })
+    new_reply = snapshot(type: 'Reply', id: 9, attributes: { body: 'After' })
+    old_comment = snapshot(
+      type: 'Comment',
+      id: 2,
+      attributes: { body: 'Parent' },
+      associations: { replies: association(:has_many, old_reply) }
+    )
+    new_comment = snapshot(
+      type: 'Comment',
+      id: 2,
+      attributes: { body: 'Parent' },
+      associations: { replies: association(:has_many, new_reply) }
+    )
+    from = snapshot(
+      type: 'Article',
+      id: 1,
+      attributes: {},
+      associations: { comments: association(:has_many, old_comment) }
+    )
+    to = snapshot(
+      type: 'Article',
+      id: 1,
+      attributes: {},
+      associations: { comments: association(:has_many, new_comment) }
+    )
+
+    result = described_class.compare(from, to).to_h
+
+    expect(result.dig(:associations, 'comments', :changed, 0, :associations, 'replies'))
+      .to eq(
+        kind: :has_many,
+        added: [],
+        removed: [],
+        changed: [{
+          record: { type: 'Reply', id: 9 },
+          attributes: { 'body' => { from: 'Before', to: 'After' } }
+        }]
+      )
+  end
+
+  it 'serializes selected subtrees on added and removed records' do
+    reply = snapshot(type: 'Reply', id: 9, attributes: { body: 'Nested' })
+    comment = snapshot(
+      type: 'Comment',
+      id: 2,
+      attributes: { body: 'Parent' },
+      associations: { replies: association(:has_many, reply) }
+    )
+    from = snapshot(type: 'Article', id: 1, attributes: {})
+    to = snapshot(
+      type: 'Article',
+      id: 1,
+      attributes: {},
+      associations: { comments: association(:has_many, comment) }
+    )
+
+    added = described_class.compare(from, to).to_h.dig(
+      :associations,
+      'comments',
+      :added,
+      0
+    )
+
+    expect(added[:associations]).to eq(
+      'replies' => {
+        kind: :has_many,
+        records: [{ type: 'Reply', id: 9, attributes: { 'body' => 'Nested' } }]
+      }
+    )
+  end
+
   it 'rejects duplicate collection identities' do
     duplicate = snapshot(type: 'Comment', id: 1, attributes: {})
     from = snapshot(

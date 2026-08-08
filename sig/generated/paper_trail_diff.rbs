@@ -5,12 +5,12 @@ module PaperTrailDiff
   DEFAULT_IGNORED_ATTRIBUTES: untyped
 
   # Compares the net state reconstructed by two PaperTrail versions.
-  # : (untyped, untyped, ?associations: Array[String | Symbol], ?ignore: Array[String | Symbol]) -> Diff
-  def self.compare: (untyped, untyped, ?associations: Array[String | Symbol], ?ignore: Array[String | Symbol]) -> Diff
+  # : (untyped, untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option) -> Diff
+  def self.compare: (untyped, untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option) -> Diff
 
   # Compares every adjacent reconstructed state in an inclusive version range.
-  # : (untyped, from: untyped, to: untyped, ?associations: Array[String | Symbol], ?ignore: Array[String | Symbol]) -> Array[Step]
-  def self.timeline: (untyped, from: untyped, to: untyped, ?associations: Array[String | Symbol], ?ignore: Array[String | Symbol]) -> Array[Step]
+  # : (untyped, from: untyped, to: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option) -> Array[Step]
+  def self.timeline: (untyped, from: untyped, to: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option) -> Array[Step]
 end
 
 module PaperTrailDiff
@@ -27,4 +27,6 @@ module PaperTrailDiff
   type association_snapshots = Hash[String, AssociationSnapshot]
 
   type identity = Array[untyped]
+
+  type ignore_option = Array[String | Symbol] | Hash[String | Symbol, untyped]
 end
