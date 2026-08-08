@@ -222,6 +222,22 @@ RSpec.describe 'PaperTrailDiff association tracking' do
       .to eq(from: 'Before', to: 'Nested profile after')
   end
 
+  it 'reconstructs nested has_many through paths' do
+    graph = article_with_graph
+    added_comment = graph[:article].comments.create!(body: 'Through added')
+    after = boundary_for(graph[:article])
+
+    result = PaperTrailDiff.compare(
+      graph[:before],
+      after,
+      associations: ['author.comments']
+    )
+
+    author = result.associations.fetch('author').changed
+    comments = author.associations.fetch('comments')
+    expect(comments.added.map(&:id)).to eq([added_comment.id])
+  end
+
   it 'applies ignore rules to exact association paths' do
     graph = article_with_graph
     TrackedArticle.transaction do
