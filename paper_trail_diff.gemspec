@@ -15,6 +15,7 @@ Gem::Specification.new do |spec|
   DESCRIPTION
   spec.license = 'MIT'
   spec.required_ruby_version = '>= 3.1'
+  spec.homepage = 'https://github.com/aheathwilliams/paper_trail_diff'
 
   spec.files = Dir.chdir(__dir__) do
     Dir[
@@ -30,5 +31,10 @@ Gem::Specification.new do |spec|
   spec.add_dependency 'paper_trail', '>= 16', '< 18'
 
   spec.metadata['allowed_push_host'] = 'https://rubygems.org'
+  spec.metadata['bug_tracker_uri'] = "#{spec.homepage}/issues"
+  spec.metadata['changelog_uri'] = "#{spec.homepage}/blob/v#{spec.version}/CHANGELOG.md"
+  spec.metadata['documentation_uri'] = "#{spec.homepage}/blob/v#{spec.version}/README.md"
+  spec.metadata['homepage_uri'] = spec.homepage
   spec.metadata['rubygems_mfa_required'] = 'true'
+  spec.metadata['source_code_uri'] = "#{spec.homepage}/tree/v#{spec.version}"
 end
