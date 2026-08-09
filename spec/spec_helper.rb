@@ -6,12 +6,19 @@ require 'simplecov'
 
 coverage_name = ENV.fetch('PAPER_TRAIL_DIFF_COVERAGE', 'core')
 SimpleCov.command_name(coverage_name)
+SimpleCov.use_merging false
 SimpleCov.start do
   enable_coverage :branch
+  coverage_dir File.join('coverage', coverage_name)
   add_filter '/spec/'
   if coverage_name == 'associations'
     minimum_coverage line: 95, branch: 80
   else
+    add_filter '/association_discovery.rb'
+    add_filter '/association_traversal.rb'
+    add_filter '/branch_snapshot_refresher.rb'
+    add_filter '/diagnostics.rb'
+    add_filter '/historical_association_reifier.rb'
     add_filter '/activity_version_collector.rb'
     add_filter '/activity_event_snapshot_refresher.rb'
     add_filter '/activity_root_snapshot_refresher.rb'
