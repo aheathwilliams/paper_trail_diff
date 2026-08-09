@@ -13,4 +13,4 @@ gem 'rspec', '~> 3.13'
 gem 'rubocop', '~> 1.75', require: false
 gem 'simplecov', '~> 0.22.0', require: false
 gem 'sqlite3', '~> 2.0'
-gem 'steep', '~> 2.0', require: false
+gem 'steep', '~> 1.10', require: false
