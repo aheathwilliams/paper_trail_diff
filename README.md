@@ -194,27 +194,31 @@ Without `activity: true`, `analysis.activity_timeline` is `nil` and no activity
 work is performed. `analyze` remains version-bounded; use the standalone
 `activity_timeline(..., to: article)` API for an explicit current endpoint.
 
-Activity reconstruction carries immutable snapshots forward between boundaries.
-Isolated root events with usable serialized changes advance root attributes
-directly. Existing direct, versioned association branches are retained, while
-through, polymorphic, HABTM, or otherwise ambiguous top-level branches are
-selectively reconstructed. Direct `has_many` child events at any selected depth
-and selected non-polymorphic `belongs_to` target events update only the affected
-immutable subtree. Isolated events discovered through several top-level paths
-update safe paths independently and reconstruct only the remaining paths.
-Events sharing a PT-AT transaction still refresh their combined branches
-atomically. Unsupported or ambiguous shapes fall back to normal historical
-reconstruction. This preserves full-reconstruction output while avoiding
-unrelated association queries and object allocation at every boundary.
-Standard PaperTrail create and update versions are advanced from their
-serialized change pairs, avoiding a successor or live-row query for each
-approval-style event. Destroy events require no post-event row lookup.
+`timeline`, `activity_timeline`, and both forms of `analyze` prepare the selected
+historical range once. The loader walks only the explicit association paths and
+builds an immutable temporal index of scalar states, relationship candidates,
+HABTM transaction snapshots, and live fallbacks. Direct relationships,
+`has_many :through` with a `belongs_to` source, and transaction-backed HABTM
+membership are resolved from that index. Endpoint-only `compare` retains the
+lighter two-point reconstruction path.
 
-Version queries are restricted to the requested timeline timestamps before the
-exact `(created_at, id)` boundary comparison is applied. For large histories,
-applications should give the database a matching composite index. A typical
-PaperTrail installation can add one without making it a requirement of this
-gem:
+Activity reconstruction then carries immutable snapshots forward between
+boundaries. Isolated root and descendant events with usable serialized changes
+advance only the affected immutable nodes. Events sharing a PT-AT transaction
+refresh their combined branches atomically. Scoped associations, unversioned
+targets, composite relationship keys, collection-source through associations,
+and other unsupported shapes fall back to the ordinary PT-AT point reifier on
+a per-reflection basis. This hybrid path preserves existing reconstruction
+behavior while avoiding repeated association queries for supported paths.
+
+Activity event discovery is bounded to the selected range. Prepared scalar
+state also retains later successor versions for selected identities because a
+PaperTrail version is a pre-change snapshot and may be the only correct state
+for an earlier boundary. Memory therefore scales with relevant selected
+history, not only with the number of returned steps. Keep requested paths and
+ranges intentional. For large histories, applications should give the database
+a matching composite index. A typical PaperTrail installation can add one
+without making it a requirement of this gem:
 
 ```ruby
 add_index :versions, %i[item_type item_id created_at id],

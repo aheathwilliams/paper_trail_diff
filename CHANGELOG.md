@@ -33,6 +33,13 @@ All notable changes to this project will be documented in this file.
   foreign-key suppression, and fail-loud HABTM endpoint validation.
 - Fix selective `has_many :through` reconstruction by reifying the hidden
   through collection before resolving target records.
+- Prepare timeline record states and association membership once per requested
+  range, using indexed resolution for direct relationships, belongs-to-source
+  through collections, and transaction-backed HABTM membership.
+- Retain point-in-time PT-AT reconstruction as a per-reflection fallback for
+  scoped, unversioned, composite-key, and unsupported through shapes.
+- Keep multiple selected descendant events in one transaction atomic instead
+  of applying an individual event delta before the transaction boundary.
 
 ## [0.1.0] - 2026-08-07
 
