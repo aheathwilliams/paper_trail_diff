@@ -20,13 +20,16 @@ module PaperTrailDiff
 
     @to: untyped
 
-    # : () -> Array[untyped]
-    def versions_for_record: () -> Array[untyped]
+    # : () -> untyped
+    def versions_relation: () -> untyped
 
-    # : (Array[untyped], untyped, boundary: Symbol) -> Integer
-    def boundary_index: (Array[untyped], untyped, boundary: Symbol) -> Integer
+    # : (untyped, ?through: untyped) -> Array[untyped]
+    def select_relation: (untyped, ?through: untyped) -> Array[untyped]
+
+    # : (untyped, untyped, boundary: Symbol) -> void
+    def validate_boundary!: (untyped, untyped, boundary: Symbol) -> void
 
     # : (untyped, untyped) -> bool
-    def same_version?: (untyped, untyped) -> bool
+    def valid_boundary?: (untyped, untyped) -> bool
   end
 end

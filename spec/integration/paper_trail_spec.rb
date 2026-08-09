@@ -22,6 +22,15 @@ RSpec.describe PaperTrailDiff do
     [article, *article.versions.reload.to_a]
   end
 
+  def instantiated_record_count(&block)
+    count = 0
+    callback = proc do |_name, _start, _finish, _id, payload|
+      count += payload[:record_count].to_i
+    end
+    ActiveSupport::Notifications.subscribed(callback, 'instantiation.active_record', &block)
+    count
+  end
+
   describe '.compare' do
     it 'reifies endpoints and compares scalar attributes' do
       _article, _create, draft, published, = create_history
@@ -179,6 +188,23 @@ RSpec.describe PaperTrailDiff do
         .to raise_error(PaperTrailDiff::InvalidTimelineRangeError, /must not follow/)
       expect { described_class.timeline(Object.new, from: draft, to: published) }
         .to raise_error(PaperTrailDiff::InvalidTimelineRangeError, /version history/)
+    end
+
+    it 'loads only the requested slice of a long root history' do
+      article = CoreArticle.create!(title: 'Version 0', internal_note: 'stable')
+      100.times { |index| article.update!(title: "Version #{index + 1}") }
+      versions = article.versions.to_a
+
+      instantiated = instantiated_record_count do
+        steps = described_class.timeline(
+          article,
+          from: versions.fetch(-3),
+          to: versions.fetch(-1)
+        )
+        expect(steps.length).to eq(2)
+      end
+
+      expect(instantiated).to be < 10
     end
   end
 

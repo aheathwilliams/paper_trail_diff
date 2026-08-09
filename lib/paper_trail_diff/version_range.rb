@@ -13,21 +13,24 @@ module PaperTrailDiff
 
     #: () -> Array[untyped]
     def select
-      versions = versions_for_record
-      from_index = boundary_index(versions, @from, boundary: :from)
-      to_index = boundary_index(versions, @to, boundary: :to)
-      if from_index > to_index
+      relation = versions_relation
+      validate_boundary!(@from, relation, boundary: :from)
+      validate_boundary!(@to, relation, boundary: :to)
+      if Support.compare_versions(@from, @to).positive?
         raise InvalidTimelineRangeError, '`from` version must not follow `to` version'
       end
 
-      versions.slice(from_index..to_index) || []
+      select_relation(
+        relation.where(created_at: @from.created_at..@to.created_at),
+        through: @to
+      )
     end
 
     #: () -> Array[untyped]
     def select_through_latest
-      versions = versions_for_record
-      from_index = boundary_index(versions, @from, boundary: :from)
-      versions.slice(from_index..-1) || []
+      relation = versions_relation
+      validate_boundary!(@from, relation, boundary: :from)
+      select_relation(relation.where(created_at: @from.created_at..))
     end
 
     private
@@ -36,28 +39,43 @@ module PaperTrailDiff
     # @rbs @from: untyped
     # @rbs @to: untyped
 
-    #: () -> Array[untyped]
-    def versions_for_record
+    #: () -> untyped
+    def versions_relation
       association_name = @record.class.versions_association_name
-      @record.public_send(association_name).reload.to_a
+      @record.public_send(association_name)
     rescue NoMethodError => e
       message = 'record does not expose a PaperTrail version history'
       raise InvalidTimelineRangeError, message, cause: e
     end
 
-    #: (Array[untyped], untyped, boundary: Symbol) -> Integer
-    def boundary_index(versions, requested, boundary:)
-      index = versions.index { |version| same_version?(version, requested) }
-      return index if index
+    #: (untyped, ?through: untyped) -> Array[untyped]
+    def select_relation(relation, through: nil)
+      selected = relation.to_a.select do |version|
+        next false if Support.compare_versions(@from, version).positive?
+        next true unless through
 
+        Support.compare_versions(version, through) <= 0
+      end
+      selected.sort_by { |version| Support.chronological_version_key(version) }
+    end
+
+    #: (untyped, untyped, boundary: Symbol) -> void
+    def validate_boundary!(requested, relation, boundary:)
+      Endpoint.validate!(requested)
+      return if valid_boundary?(requested, relation)
+
+      raise InvalidTimelineRangeError, "`#{boundary}` version is not in the record history"
+    rescue InvalidEndpointError, NoMethodError
       raise InvalidTimelineRangeError, "`#{boundary}` version is not in the record history"
     end
 
     #: (untyped, untyped) -> bool
-    def same_version?(version, requested)
-      version.instance_of?(requested.class) && version.id == requested.id
-    rescue NoMethodError
-      false
+    def valid_boundary?(requested, relation)
+      expected_identity = [@record.class.base_class.name.to_s, @record.id.to_s]
+      Endpoint.version?(requested) &&
+        requested.instance_of?(relation.klass) &&
+        Endpoint.identity(requested) == expected_identity &&
+        relation.where(id: requested.id).exists?
     end
   end
 end

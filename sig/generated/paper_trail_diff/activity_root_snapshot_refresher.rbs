@@ -1,0 +1,54 @@
+# Generated from lib/paper_trail_diff/activity_root_snapshot_refresher.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Advances scalar-only root events while retaining already reconstructed associations.
+  class ActivityRootSnapshotRefresher
+    # : (tree: AssociationTree, traversal: AssociationTraversal, normalizer: SnapshotNormalizer, record_after: untyped, changeset: untyped, partial_snapshotter: untyped) -> void
+    def initialize: (tree: AssociationTree, traversal: AssociationTraversal, normalizer: SnapshotNormalizer, record_after: untyped, changeset: untyped, partial_snapshotter: untyped) -> void
+
+    # : (untyped, untyped, RecordSnapshot?, ActivityEvent) -> [bool, RecordSnapshot?]
+    def call: (untyped, untyped, RecordSnapshot?, ActivityEvent) -> [ bool, RecordSnapshot? ]
+
+    private
+
+    @relationship_reflections: Hash[String, Array[untyped]]
+
+    @unsupported_branches: Hash[String, Array[String]]
+
+    @partial_snapshotter: untyped
+
+    @changeset: untyped
+
+    @record_after: untyped
+
+    @normalizer: SnapshotNormalizer
+
+    @traversal: AssociationTraversal
+
+    @tree: AssociationTree
+
+    # : (RecordSnapshot, untyped, untyped) -> snapshot_attributes?
+    def advanced_attributes: (RecordSnapshot, untyped, untyped) -> snapshot_attributes?
+
+    # : (untyped, untyped) -> Array[String]
+    def branches_to_refresh: (untyped, untyped) -> Array[String]
+
+    # : (untyped) -> Array[String]
+    def unsupported_branches: (untyped) -> Array[String]
+
+    # : (untyped) -> bool
+    def direct_versioned_reflection?: (untyped) -> bool
+
+    # : (RecordSnapshot, untyped) -> bool
+    def same_record?: (RecordSnapshot, untyped) -> bool
+
+    # : (untyped, untyped) -> Array[String]
+    def changed_relationship_branches: (untyped, untyped) -> Array[String]
+
+    # : (untyped) -> Array[untyped]
+    def root_relationship_reflections: (untyped) -> Array[untyped]
+
+    # : (untyped) -> Array[String]
+    def relationship_columns: (untyped) -> Array[String]
+  end
+end

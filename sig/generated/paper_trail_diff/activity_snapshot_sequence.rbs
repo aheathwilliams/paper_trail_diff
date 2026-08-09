@@ -9,8 +9,11 @@ module PaperTrailDiff
     # : (untyped, untyped) -> RecordSnapshot?
     def call: (untyped, untyped) -> RecordSnapshot?
 
-    # : (untyped, untyped, RecordSnapshot?, Array[String]) -> RecordSnapshot?
-    def refresh: (untyped, untyped, RecordSnapshot?, Array[String]) -> RecordSnapshot?
+    # : (untyped, untyped, RecordSnapshot?, Array[String], event: ActivityEvent, isolated: bool) -> RecordSnapshot?
+    def refresh: (untyped, untyped, RecordSnapshot?, Array[String], event: ActivityEvent, isolated: bool) -> RecordSnapshot?
+
+    # : (untyped, untyped, RecordSnapshot?, event: ActivityEvent) -> RecordSnapshot?
+    def advance_root: (untyped, untyped, RecordSnapshot?, event: ActivityEvent) -> RecordSnapshot?
 
     @snapshotter: untyped
 
@@ -25,6 +28,9 @@ module PaperTrailDiff
     # : () -> Array[RecordSnapshot?]
     def call: () -> Array[RecordSnapshot?]
 
+    # : () { (ActivityEvent, RecordSnapshot?) -> void } -> void
+    def each: () { (ActivityEvent, RecordSnapshot?) -> void } -> void
+
     private
 
     @root_versions: Array[untyped]
@@ -37,8 +43,16 @@ module PaperTrailDiff
 
     @transaction_groups: ActivityTransactionGroups
 
+    @root_endpoints: Hash[untyped, untyped]
+
     # : (ActivityEvent, ActivityEvent, RecordSnapshot?) -> RecordSnapshot?
     def transition_snapshot: (ActivityEvent, ActivityEvent, RecordSnapshot?) -> RecordSnapshot?
+
+    # : (ActivityEvent) -> bool
+    def incremental_root?: (ActivityEvent) -> bool
+
+    # : (ActivityEvent, ActivityEvent, RecordSnapshot?) -> RecordSnapshot?
+    def advance_root: (ActivityEvent, ActivityEvent, RecordSnapshot?) -> RecordSnapshot?
 
     # : (ActivityEvent) -> RecordSnapshot?
     def full_snapshot: (ActivityEvent) -> RecordSnapshot?
@@ -46,7 +60,7 @@ module PaperTrailDiff
     # : (untyped) -> untyped
     def root_endpoint: (untyped) -> untyped
 
-    # : (untyped) -> untyped
-    def root_anchor: (untyped) -> untyped
+    # : () -> Hash[untyped, untyped]
+    def build_root_endpoints: () -> Hash[untyped, untyped]
   end
 end

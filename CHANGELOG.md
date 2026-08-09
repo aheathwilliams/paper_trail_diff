@@ -19,6 +19,16 @@ All notable changes to this project will be documented in this file.
   boundaries while preserving the root-only semantics of `timeline`.
 - Add one-pass `analyze`, bounded association discovery, and structured history
   diagnostics.
+- Bound version loads to the requested time range, stream timeline construction,
+  and reuse immutable snapshot subtrees across adjacent boundaries.
+- Apply event-local snapshot deltas for direct `has_many` membership changes at
+  any selected depth and selected non-polymorphic `belongs_to` target events,
+  with safe reconstruction fallbacks for other association shapes.
+- Reconstruct post-create/update records from PaperTrail's serialized change
+  pairs to avoid per-event successor and live-record lookups.
+- Derive combined endpoint, root-timeline, and activity results from one
+  snapshot pass; advance isolated root changes in place and selectively refresh
+  only ambiguous association branches.
 - Add `RecordReference`, consistent configuration error subclasses, traversal
   foreign-key suppression, and fail-loud HABTM endpoint validation.
 - Fix selective `has_many :through` reconstruction by reifying the hidden

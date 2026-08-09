@@ -9,6 +9,10 @@ module PaperTrailDiff
     # : () -> Array[ActivityStep]
     def build: () -> Array[ActivityStep]
 
+    # Builds all three version-bounded views from one activity snapshot pass.
+    # : () -> Analysis
+    def analyze: () -> Analysis
+
     private
 
     @snapshotter: untyped
@@ -30,22 +34,25 @@ module PaperTrailDiff
     # : () -> [RecordSnapshot?, untyped]
     def capture_current: () -> [ RecordSnapshot?, untyped ]
 
-    # : (untyped) -> [Array[ActivityEvent], Array[RecordSnapshot?]]
-    def history_to_current: (untyped) -> [ Array[ActivityEvent], Array[RecordSnapshot?] ]
-
-    # : (Array[ActivityEvent], untyped) -> Array[ActivityBoundary]
-    def boundaries_to_current: (Array[ActivityEvent], untyped) -> Array[ActivityBoundary]
-
     # : () -> void
     def validate_current_range!: () -> void
 
     # : (Array[untyped], ?range_end: untyped) -> Array[ActivityEvent]
     def collect_events: (Array[untyped], ?range_end: untyped) -> Array[ActivityEvent]
 
-    # : (Array[untyped], Array[ActivityEvent], ?current: untyped) -> Array[RecordSnapshot?]
-    def event_snapshots: (Array[untyped], Array[ActivityEvent], ?current: untyped) -> Array[RecordSnapshot?]
+    # : (Array[untyped], Array[ActivityEvent], ?current: untyped, ?final_boundary: ActivityBoundary?, ?final_snapshot: RecordSnapshot?) -> Array[ActivityStep]
+    def build_event_steps: (Array[untyped], Array[ActivityEvent], ?current: untyped, ?final_boundary: ActivityBoundary?, ?final_snapshot: RecordSnapshot?) -> Array[ActivityStep]
 
-    # : (Array[ActivityBoundary], Array[RecordSnapshot?]) -> Array[ActivityStep]
-    def build_steps: (Array[ActivityBoundary], Array[RecordSnapshot?]) -> Array[ActivityStep]
+    # : (Array[untyped], Array[ActivityEvent], ?current: untyped) -> [Array[ActivityStep], Hash[Array[untyped], RecordSnapshot?], RecordSnapshot?]
+    def event_history: (Array[untyped], Array[ActivityEvent], ?current: untyped) -> [ Array[ActivityStep], Hash[Array[untyped], RecordSnapshot?], RecordSnapshot? ]
+
+    # : (Array[untyped], Hash[Array[untyped], RecordSnapshot?], Array[ActivityStep]) -> Analysis
+    def build_analysis: (Array[untyped], Hash[Array[untyped], RecordSnapshot?], Array[ActivityStep]) -> Analysis
+
+    # : (Array[untyped], Array[RecordSnapshot?]) -> Array[Step]
+    def build_root_steps: (Array[untyped], Array[RecordSnapshot?]) -> Array[Step]
+
+    # : (untyped) -> Array[untyped]
+    def version_key: (untyped) -> Array[untyped]
   end
 end

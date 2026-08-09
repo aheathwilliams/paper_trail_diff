@@ -9,6 +9,9 @@ module PaperTrailDiff
     # : (untyped, untyped) -> RecordSnapshot?
     def call: (untyped, untyped) -> RecordSnapshot?
 
+    # : (untyped, untyped) -> RecordSnapshot?
+    def uncached: (untyped, untyped) -> RecordSnapshot?
+
     # : (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer) -> RecordSnapshot?
     def custom: (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer) -> RecordSnapshot?
 

@@ -9,13 +9,28 @@ module PaperTrailDiff
     # : (untyped) -> bool
     def include?: (untyped) -> bool
 
+    # Narrows an Active Record version relation by timestamp. Exact tie-breaking
+    # remains in #include? so this works for integer, UUID, and custom version IDs.
+    # : (untyped) -> untyped
+    def scope: (untyped) -> untyped
+
     private
 
     @start_version: untyped
 
     @end_boundary: untyped
 
-    # : (untyped) -> bool
-    def before_end?: (untyped) -> bool
+    @start_key: Array[untyped]
+
+    @end_key: Array[untyped]?
+
+    # : (untyped, Array[untyped]) -> bool
+    def before_end?: (untyped, Array[untyped]) -> bool
+
+    # : () -> untyped
+    def end_time: () -> untyped
+
+    # : (Array[untyped], Array[untyped]) -> bool
+    def key_before_or_equal?: (Array[untyped], Array[untyped]) -> bool
   end
 end

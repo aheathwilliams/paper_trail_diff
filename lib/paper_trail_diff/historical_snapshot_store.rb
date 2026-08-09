@@ -26,6 +26,16 @@ module PaperTrailDiff
       )
     end
 
+    #: (untyped, untyped) -> RecordSnapshot?
+    def uncached(root_endpoint, context_endpoint)
+      custom(
+        root_endpoint,
+        context_endpoint,
+        tree: @tree,
+        normalizer: @normalizer
+      )
+    end
+
     #: (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer) -> RecordSnapshot?
     def custom(root_endpoint, context_endpoint, tree:, normalizer:)
       if Endpoint.version?(root_endpoint)

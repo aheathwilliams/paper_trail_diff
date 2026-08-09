@@ -1,26 +1,59 @@
 # Generated from lib/paper_trail_diff/snapshot_normalizer.rb with RBS::Inline
 
 module PaperTrailDiff
+  # Reuses immutable nodes whose normalized state did not change at a selected path.
+  class SnapshotPool
+    def initialize: () -> untyped
+
+    # : (String, RecordSnapshot) -> RecordSnapshot
+    def record: (String, RecordSnapshot) -> RecordSnapshot
+
+    # : (String, AssociationSnapshot) -> AssociationSnapshot
+    def association: (String, AssociationSnapshot) -> AssociationSnapshot
+
+    private
+
+    @records: Hash[Array[untyped], RecordSnapshot]
+
+    @associations: Hash[String, AssociationSnapshot]
+
+    # : (RecordSnapshot, RecordSnapshot) -> bool
+    def equivalent_record?: (RecordSnapshot, RecordSnapshot) -> bool
+  end
+
   # Converts an ActiveRecord graph into immutable, persistence-independent snapshots.
   class SnapshotNormalizer
-    # : (tree: AssociationTree, ignore_policy: IgnorePolicy, traversal: AssociationTraversal) -> void
-    def initialize: (tree: AssociationTree, ignore_policy: IgnorePolicy, traversal: AssociationTraversal) -> void
+    # : (tree: AssociationTree, ignore_policy: IgnorePolicy, traversal: AssociationTraversal, ?pool: SnapshotPool) -> void
+    def initialize: (tree: AssociationTree, ignore_policy: IgnorePolicy, traversal: AssociationTraversal, ?pool: SnapshotPool) -> void
 
     # : (untyped, reifier: untyped) -> RecordSnapshot?
     def call: (untyped, reifier: untyped) -> RecordSnapshot?
 
+    # Normalizes one member of an already selected association branch.
+    # : (untyped, tree: AssociationTree, path: String, incoming: untyped, reifier: untyped) -> RecordSnapshot?
+    def call_child: (untyped, tree: AssociationTree, path: String, incoming: untyped, reifier: untyped) -> RecordSnapshot?
+
+    # Normalizes scalar attributes without traversing or loading associations.
+    # : (untyped, tree: AssociationTree, path: String) -> snapshot_attributes
+    def attributes_for: (untyped, tree: AssociationTree, path: String) -> snapshot_attributes
+
     private
-
-    @tree: AssociationTree
-
-    @ignore_policy: IgnorePolicy
-
-    @traversal: AssociationTraversal
 
     @structural_columns: Hash[String, Array[String]]
 
+    @pool: SnapshotPool
+
+    @traversal: AssociationTraversal
+
+    @ignore_policy: IgnorePolicy
+
+    @tree: AssociationTree
+
     # : (untyped, AssociationTree, String, untyped, Array[untyped]) -> RecordSnapshot?
     def normalize_record: (untyped, AssociationTree, String, untyped, Array[untyped]) -> RecordSnapshot?
+
+    # : (untyped, Array[untyped], String) -> snapshot_attributes
+    def normalized_attributes: (untyped, Array[untyped], String) -> snapshot_attributes
 
     # : (untyped, Array[untyped], String) -> Array[String]
     def excluded_attributes: (untyped, Array[untyped], String) -> Array[String]

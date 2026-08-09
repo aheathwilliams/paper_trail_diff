@@ -21,6 +21,19 @@ module PaperTrailDiff
       build_between_versions
     end
 
+    # Builds all three version-bounded views from one activity snapshot pass.
+    #: () -> Analysis
+    def analyze
+      unless Endpoint.version?(@to)
+        raise InvalidTimelineRangeError, '`to` must be a root PaperTrail version'
+      end
+
+      root_versions = VersionRange.new(@record, from: @from, to: @to).select
+      events = collect_events(root_versions)
+      activity_steps, root_snapshots, = event_history(root_versions, events)
+      build_analysis(root_versions, root_snapshots, activity_steps)
+    end
+
     private
 
     # @rbs @record: untyped
@@ -33,37 +46,27 @@ module PaperTrailDiff
     def build_between_versions
       root_versions = VersionRange.new(@record, from: @from, to: @to).select
       events = collect_events(root_versions)
-      snapshots = event_snapshots(root_versions, events)
-      boundaries = events.map { |event| ActivityBoundary.from_version(event.version) }
-      build_steps(boundaries, snapshots)
+      build_event_steps(root_versions, events)
     end
 
     #: () -> Array[ActivityStep]
     def build_to_current
       validate_current_range!
       current_snapshot, captured_at = capture_current
-      events, snapshots = history_to_current(captured_at)
-      boundaries = boundaries_to_current(events, captured_at)
-      build_steps(boundaries, snapshots + [current_snapshot])
+      root_versions = VersionRange.new(@record, from: @from, to: @from).select_through_latest
+      events = collect_events(root_versions, range_end: captured_at)
+      build_event_steps(
+        root_versions,
+        events,
+        current: @to,
+        final_boundary: ActivityBoundary.current(@to, captured_at: captured_at),
+        final_snapshot: current_snapshot
+      )
     end
 
     #: () -> [RecordSnapshot?, untyped]
     def capture_current
       [@snapshotter.call(@to, @to), Time.now.utc]
-    end
-
-    #: (untyped) -> [Array[ActivityEvent], Array[RecordSnapshot?]]
-    def history_to_current(captured_at)
-      root_versions = VersionRange.new(@record, from: @from, to: @from).select_through_latest
-      events = collect_events(root_versions, range_end: captured_at)
-      snapshots = event_snapshots(root_versions, events, current: @to)
-      [events, snapshots]
-    end
-
-    #: (Array[ActivityEvent], untyped) -> Array[ActivityBoundary]
-    def boundaries_to_current(events, captured_at)
-      boundaries = events.map { |event| ActivityBoundary.from_version(event.version) }
-      boundaries << ActivityBoundary.current(@to, captured_at: captured_at)
     end
 
     #: () -> void
@@ -87,25 +90,80 @@ module PaperTrailDiff
       ).call
     end
 
-    #: (Array[untyped], Array[ActivityEvent], ?current: untyped) -> Array[RecordSnapshot?]
-    def event_snapshots(root_versions, events, current: nil)
-      ActivitySnapshotSequence.new(
+    #: (Array[untyped], Array[ActivityEvent], ?current: untyped, ?final_boundary: ActivityBoundary?, ?final_snapshot: RecordSnapshot?) -> Array[ActivityStep]
+    def build_event_steps(
+      root_versions,
+      events,
+      current: nil,
+      final_boundary: nil,
+      final_snapshot: nil
+    )
+      steps, _root_snapshots, previous_snapshot = event_history(
         root_versions,
         events,
-        @snapshotter,
         current: current
-      ).call
+      )
+      previous_event = events.last
+      previous_boundary = ActivityBoundary.from_version(previous_event.version) if previous_event
+      if final_boundary && previous_boundary
+        steps << ActivityStep.new(
+          from_boundary: previous_boundary,
+          to_boundary: final_boundary,
+          diff: Engine.compare(previous_snapshot, final_snapshot)
+        )
+      end
+      steps.freeze
     end
 
-    #: (Array[ActivityBoundary], Array[RecordSnapshot?]) -> Array[ActivityStep]
-    def build_steps(boundaries, snapshots)
-      boundaries.each_cons(2).with_index.map do |pair, index|
-        ActivityStep.new(
-          from_boundary: pair.first,
-          to_boundary: pair.last,
+    #: (Array[untyped], Array[ActivityEvent], ?current: untyped) -> [Array[ActivityStep], Hash[Array[untyped], RecordSnapshot?], RecordSnapshot?]
+    def event_history(root_versions, events, current: nil) # rubocop:disable Metrics/MethodLength
+      sequence = ActivitySnapshotSequence.new(root_versions, events, @snapshotter, current: current)
+      steps = [] #: Array[ActivityStep]
+      root_snapshots = {} #: Hash[Array[untyped], RecordSnapshot?]
+      previous_boundary = nil #: ActivityBoundary?
+      previous_snapshot = nil #: RecordSnapshot?
+      sequence.each do |event, snapshot|
+        boundary = ActivityBoundary.from_version(event.version)
+        root_snapshots[version_key(event.version)] = snapshot if event.root?
+        if previous_boundary
+          steps << ActivityStep.new(
+            from_boundary: previous_boundary,
+            to_boundary: boundary,
+            diff: Engine.compare(previous_snapshot, snapshot)
+          )
+        end
+        previous_boundary = boundary
+        previous_snapshot = snapshot
+      end
+      [steps, root_snapshots, previous_snapshot]
+    end
+
+    #: (Array[untyped], Hash[Array[untyped], RecordSnapshot?], Array[ActivityStep]) -> Analysis
+    def build_analysis(root_versions, root_snapshots, activity_steps)
+      snapshots = root_versions.map do |version|
+        root_snapshots.fetch(version_key(version))
+      end
+      Analysis.new(
+        diff: Engine.compare(snapshots.first, snapshots.last),
+        timeline: build_root_steps(root_versions, snapshots),
+        activity_timeline: activity_steps.freeze
+      )
+    end
+
+    #: (Array[untyped], Array[RecordSnapshot?]) -> Array[Step]
+    def build_root_steps(root_versions, snapshots)
+      root_versions.each_cons(2).with_index.map do |versions, index|
+        Step.new(
+          from_version: versions.fetch(0),
+          to_version: versions.fetch(1),
           diff: Engine.compare(snapshots.fetch(index), snapshots.fetch(index + 1))
         )
       end.freeze
+    end
+
+    #: (untyped) -> Array[untyped]
+    def version_key(version)
+      [version.class.name, version.id]
     end
   end
 end

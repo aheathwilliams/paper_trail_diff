@@ -76,6 +76,7 @@ module PaperTrailDiff
   class RecordSnapshot
     attr_reader :type #: String
     attr_reader :id #: untyped
+    attr_reader :identity #: Array[untyped]
     attr_reader :attributes #: Hash[String, untyped]
     attr_reader :associations #: Hash[String, AssociationSnapshot]
 
@@ -83,14 +84,10 @@ module PaperTrailDiff
     def initialize(type:, id:, attributes:, associations: {})
       @type = Support.immutable_copy(type.to_s)
       @id = Support.immutable_copy(id)
+      @identity = [@type, @id].freeze
       @attributes = normalize_hash(attributes)
       @associations = normalize_hash(associations)
       freeze
-    end
-
-    #: () -> Array[untyped]
-    def identity
-      [type, id].freeze
     end
 
     #: () -> RecordReference

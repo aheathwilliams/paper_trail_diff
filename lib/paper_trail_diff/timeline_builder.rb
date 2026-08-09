@@ -14,16 +14,16 @@ module PaperTrailDiff
 
     #: () -> Array[Step]
     def build
-      versions, snapshots = normalized_history
-      build_steps(versions, snapshots)
+      steps, = compare_history(selected_versions)
+      steps
     end
 
     #: () -> Analysis
     def analyze
-      versions, snapshots = normalized_history
+      steps, first_snapshot, last_snapshot = compare_history(selected_versions)
       Analysis.new(
-        diff: Engine.compare(snapshots.first, snapshots.last),
-        timeline: build_steps(versions, snapshots)
+        diff: Engine.compare(first_snapshot, last_snapshot),
+        timeline: steps
       )
     end
 
@@ -34,21 +34,21 @@ module PaperTrailDiff
     # @rbs @to: untyped
     # @rbs @snapshotter: untyped
 
-    #: (Array[untyped], Array[RecordSnapshot?]) -> Array[Step]
-    def build_steps(versions, snapshots)
-      versions.each_cons(2).with_index.map do |version_pair, index|
-        Step.new(
-          from_version: version_pair.first,
-          to_version: version_pair.last,
-          diff: Engine.compare(snapshots.fetch(index), snapshots.fetch(index + 1))
+    #: (Array[untyped]) -> [Array[Step], RecordSnapshot?, RecordSnapshot?]
+    def compare_history(versions)
+      first_snapshot = @snapshotter.call(versions.first)
+      previous_snapshot = first_snapshot
+      steps = versions.each_cons(2).map do |from_version, to_version|
+        current_snapshot = @snapshotter.call(to_version)
+        step = Step.new(
+          from_version: from_version,
+          to_version: to_version,
+          diff: Engine.compare(previous_snapshot, current_snapshot)
         )
+        previous_snapshot = current_snapshot
+        step
       end.freeze
-    end
-
-    #: () -> [Array[untyped], Array[RecordSnapshot?]]
-    def normalized_history
-      versions = selected_versions
-      [versions, versions.map { |version| @snapshotter.call(version) }]
+      [steps, first_snapshot, previous_snapshot]
     end
 
     #: () -> Array[untyped]

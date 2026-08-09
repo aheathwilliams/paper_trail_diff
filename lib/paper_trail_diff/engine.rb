@@ -7,7 +7,7 @@ module PaperTrailDiff
     class << self
       #: (RecordSnapshot?, RecordSnapshot?) -> Diff
       def compare(from_snapshot, to_snapshot)
-        return Diff.new if from_snapshot.nil? && to_snapshot.nil?
+        return Diff.new if from_snapshot.equal?(to_snapshot)
 
         if from_snapshot.nil? || to_snapshot.nil?
           change = ValueChange.new(from: from_snapshot, to: to_snapshot)
@@ -39,6 +39,8 @@ module PaperTrailDiff
       def compare_associations(from_associations, to_associations)
         changes = {} #: association_diffs
         (from_associations.keys | to_associations.keys).sort.each do |name|
+          next if from_associations[name].equal?(to_associations[name])
+
           from_association, to_association = association_pair(
             from_associations[name],
             to_associations[name]
@@ -53,8 +55,7 @@ module PaperTrailDiff
       def association_pair(from_association, to_association)
         validate_association_kinds!(from_association, to_association)
         association = from_association || to_association
-        raise ArgumentError, 'association pair cannot be empty' unless association
-
+        # @type var association: AssociationSnapshot
         kind = association.kind
 
         [
@@ -143,7 +144,11 @@ module PaperTrailDiff
       #: (Hash[identity, RecordSnapshot], Hash[identity, RecordSnapshot]) -> Array[RecordChange]
       def changed_records(from_records, to_records)
         sorted_identities(from_records.keys & to_records.keys).filter_map do |identity|
-          compare_record(from_records.fetch(identity), to_records.fetch(identity))
+          from_record = from_records.fetch(identity)
+          to_record = to_records.fetch(identity)
+          next if from_record.equal?(to_record)
+
+          compare_record(from_record, to_record)
         end
       end
 
@@ -151,11 +156,12 @@ module PaperTrailDiff
       def index_records(records)
         index = {} #: Hash[identity, RecordSnapshot]
         records.each do |record|
-          if index.key?(record.identity)
-            raise ArgumentError, "duplicate record identity: #{record.identity.inspect}"
+          identity = record.identity
+          if index.key?(identity)
+            raise ArgumentError, "duplicate record identity: #{identity.inspect}"
           end
 
-          index[record.identity] = record
+          index[identity] = record
         end
         index
       end

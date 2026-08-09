@@ -172,8 +172,9 @@ boundary.
 
 When a caller needs the net endpoint diff and root timeline, `analyze`
 normalizes each selected version once. Pass `activity: true` when the same view
-also needs descendant-aware activity; root snapshots are then shared across all
-three results:
+also needs descendant-aware activity. The endpoint diff and root timeline are
+then derived from the same activity snapshot pass instead of reconstructing the
+root history separately:
 
 ```ruby
 analysis = PaperTrailDiff.analyze(
@@ -194,11 +195,34 @@ work is performed. `analyze` remains version-bounded; use the standalone
 `activity_timeline(..., to: article)` API for an explicit current endpoint.
 
 Activity reconstruction carries immutable snapshots forward between boundaries.
-A root event refreshes the complete selected graph. A descendant event refreshes
-only the selected top-level branches through which that version was discovered;
-events sharing a PT-AT transaction refresh their combined branches atomically.
-This preserves full-reconstruction output while avoiding unrelated association
-queries at every boundary.
+Isolated root events with usable serialized changes advance root attributes
+directly. Existing direct, versioned association branches are retained, while
+through, polymorphic, HABTM, or otherwise ambiguous top-level branches are
+selectively reconstructed. Direct `has_many` child events at any selected depth
+and selected non-polymorphic `belongs_to` target events update only the affected
+immutable subtree. Isolated events discovered through several top-level paths
+update safe paths independently and reconstruct only the remaining paths.
+Events sharing a PT-AT transaction still refresh their combined branches
+atomically. Unsupported or ambiguous shapes fall back to normal historical
+reconstruction. This preserves full-reconstruction output while avoiding
+unrelated association queries and object allocation at every boundary.
+Standard PaperTrail create and update versions are advanced from their
+serialized change pairs, avoiding a successor or live-row query for each
+approval-style event. Destroy events require no post-event row lookup.
+
+Version queries are restricted to the requested timeline timestamps before the
+exact `(created_at, id)` boundary comparison is applied. For large histories,
+applications should give the database a matching composite index. A typical
+PaperTrail installation can add one without making it a requirement of this
+gem:
+
+```ruby
+add_index :versions, %i[item_type item_id created_at id],
+          name: "index_versions_on_item_and_timeline"
+```
+
+PT-AT's normal index beginning with `foreign_key_name`, `foreign_key_id`, and
+`foreign_type` should also be retained on `version_associations`.
 
 ## Ignore noise fields
 

@@ -66,7 +66,9 @@ module PaperTrailDiff
   class ActivityTransactionGroups
     #: (Array[ActivityEvent]) -> void
     def initialize(events)
-      @branches = build_groups(events)
+      groups = grouped_events(events)
+      @branches = build_groups(groups)
+      @group_sizes = groups.transform_values(&:length)
     end
 
     #: (ActivityEvent) -> Array[String]?
@@ -77,13 +79,20 @@ module PaperTrailDiff
       @branches[key]
     end
 
+    #: (ActivityEvent) -> bool
+    def isolated?(event)
+      key = transaction_key(event)
+      !key || @group_sizes.fetch(key, 0) == 1
+    end
+
     private
 
     # @rbs @branches: Hash[Array[untyped], Array[String]?]
+    # @rbs @group_sizes: Hash[Array[untyped], Integer]
 
-    #: (Array[ActivityEvent]) -> Hash[Array[untyped], Array[String]?]
-    def build_groups(events)
-      grouped_events(events).to_h do |key, selected_events|
+    #: (Hash[Array[untyped], Array[ActivityEvent]]) -> Hash[Array[untyped], Array[String]?]
+    def build_groups(groups)
+      groups.to_h do |key, selected_events|
         [key, group_branches(selected_events)]
       end
     end

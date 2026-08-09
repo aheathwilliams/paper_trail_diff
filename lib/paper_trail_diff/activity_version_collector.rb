@@ -98,15 +98,18 @@ module PaperTrailDiff
     end
 
     #: (untyped, Array[untyped], untyped) -> Hash[String, untyped]
-    def direct_child_groups(parent_class, parent_ids, reflection)
-      rows = parent_class.paper_trail.version_association_class.where(
+    def direct_child_groups(parent_class, parent_ids, reflection) # rubocop:disable Metrics/AbcSize
+      version_class = parent_class.paper_trail.version_class
+      relation = parent_class.paper_trail.version_association_class.joins(:version).where(
         foreign_key_name: reflection.foreign_key.to_s,
         foreign_key_id: parent_ids
-      ).includes(:version).to_a
-      versions = rows.filter_map do |row|
-        row.version if related_parent_type?(row, parent_class)
-      end
-      version_groups(versions, reflection.klass)
+      ).where(foreign_type: related_parent_types(parent_class))
+      item_ids = relation.where(
+        version_class.table_name => { item_type: reflection.klass.base_class.name }
+      ).distinct.pluck(version_class.arel_table[:item_id])
+      return {} if item_ids.empty?
+
+      { reflection.klass.name => group(reflection.klass, item_ids) }
     end
 
     #: (untyped, Array[untyped], untyped) -> Hash[String, untyped]
@@ -134,16 +137,6 @@ module PaperTrailDiff
       groups
     end
 
-    #: (Array[untyped], untyped) -> Hash[String, untyped]
-    def version_groups(versions, expected_class)
-      ids = versions.filter_map do |version|
-        version.item_id if version_matches_model?(version, expected_class)
-      end.uniq
-      return {} if ids.empty?
-
-      { expected_class.name => group(expected_class, ids) }
-    end
-
     #: (untyped, Array[untyped]) -> Hash[Symbol, untyped]
     def group(model_class, ids)
       { model: model_class, ids: ids, versions: versions_for(model_class, ids) }
@@ -168,9 +161,11 @@ module PaperTrailDiff
       return [] if ids.empty?
 
       version_class = model_class.paper_trail.version_class
-      version_class.where(
-        item_type: model_class.base_class.name,
-        item_id: ids
+      @range.scope(
+        version_class.where(
+          item_type: model_class.base_class.name,
+          item_id: ids
+        )
       ).to_a.select { |version| in_range?(version) }
     end
 
@@ -183,15 +178,9 @@ module PaperTrailDiff
       nil
     end
 
-    #: (untyped, untyped) -> bool
-    def related_parent_type?(row, parent_class)
-      type = row.foreign_type.to_s
-      type.empty? || [parent_class.name, parent_class.base_class.name].include?(type)
-    end
-
-    #: (untyped, untyped) -> bool
-    def version_matches_model?(version, model_class)
-      version.item_type.to_s == model_class.base_class.name.to_s
+    #: (untyped) -> Array[String?]
+    def related_parent_types(parent_class)
+      [nil, '', parent_class.name.to_s, parent_class.base_class.name.to_s].uniq
     end
 
     #: (untyped) -> bool

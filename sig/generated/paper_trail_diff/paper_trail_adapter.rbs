@@ -26,6 +26,8 @@ module PaperTrailDiff
 
     @normalizer: SnapshotNormalizer
 
+    @snapshot_pool: SnapshotPool
+
     @traversal: AssociationTraversal
 
     @ignore_policy: IgnorePolicy
@@ -38,6 +40,9 @@ module PaperTrailDiff
     # : () -> ActivitySnapshotProvider
     def build_activity_snapshotter: () -> ActivitySnapshotProvider
 
+    # : (untyped, from: untyped, to: untyped) -> ActivityTimelineBuilder
+    def activity_builder: (untyped, from: untyped, to: untyped) -> ActivityTimelineBuilder
+
     # : (untyped) -> void
     def reject_live_habtm_activity!: (untyped) -> void
 
@@ -46,6 +51,9 @@ module PaperTrailDiff
 
     # : (untyped) -> RecordSnapshot?
     def historical_snapshot: (untyped) -> RecordSnapshot?
+
+    # : (untyped) -> RecordSnapshot?
+    def uncached_historical_snapshot: (untyped) -> RecordSnapshot?
 
     # : (untyped, untyped) -> RecordSnapshot?
     def snapshot_at: (untyped, untyped) -> RecordSnapshot?

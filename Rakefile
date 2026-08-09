@@ -19,7 +19,8 @@ end
 Rake::Task[:spec_core].enhance([:core_coverage])
 
 RSpec::Core::RakeTask.new(:spec_associations) do |task|
-  task.pattern = 'spec/association/**/*_spec.rb'
+  task.pattern = 'spec/{unit,association}/**/*_spec.rb'
+  task.exclude_pattern = 'spec/unit/loading_spec.rb'
 end
 Rake::Task[:spec_associations].enhance([:association_coverage])
 

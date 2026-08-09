@@ -9,10 +9,12 @@ module PaperTrailDiff
       @association_tree = AssociationTree.build(associations)
       @ignore_policy = IgnorePolicy.build(ignore, association_paths: @association_tree.paths)
       @traversal = AssociationTraversal.new(@association_tree)
+      @snapshot_pool = SnapshotPool.new
       @normalizer = SnapshotNormalizer.new(
         tree: @association_tree,
         ignore_policy: @ignore_policy,
-        traversal: @traversal
+        traversal: @traversal,
+        pool: @snapshot_pool
       )
       @historical_store = build_historical_store
       @activity_snapshotter = build_activity_snapshotter
@@ -30,7 +32,7 @@ module PaperTrailDiff
         record,
         from: from,
         to: to,
-        snapshotter: method(:historical_snapshot)
+        snapshotter: method(:uncached_historical_snapshot)
       )
       builder.build
     end
@@ -50,19 +52,17 @@ module PaperTrailDiff
 
     #: (untyped, from: untyped, to: untyped, ?activity: bool) -> Analysis
     def analyze(record, from:, to:, activity: false)
-      analysis = TimelineBuilder.new(
+      if activity
+        prepare_traversal!(record.class, historical: true)
+        return activity_builder(record, from: from, to: to).analyze
+      end
+
+      TimelineBuilder.new(
         record,
         from: from,
         to: to,
-        snapshotter: method(:historical_snapshot)
+        snapshotter: method(:uncached_historical_snapshot)
       ).analyze
-      return analysis unless activity
-
-      Analysis.new(
-        diff: analysis.diff,
-        timeline: analysis.timeline,
-        activity_timeline: activity_timeline(record, from: from, to: to)
-      )
     end
 
     private
@@ -70,6 +70,7 @@ module PaperTrailDiff
     # @rbs @association_tree: AssociationTree
     # @rbs @ignore_policy: IgnorePolicy
     # @rbs @traversal: AssociationTraversal
+    # @rbs @snapshot_pool: SnapshotPool
     # @rbs @normalizer: SnapshotNormalizer
     # @rbs @historical_store: HistoricalSnapshotStore
     # @rbs @activity_snapshotter: ActivitySnapshotProvider
@@ -90,10 +91,23 @@ module PaperTrailDiff
         tree: @association_tree,
         ignore_policy: @ignore_policy,
         traversal: @traversal,
+        pool: @snapshot_pool,
+        normalizer: @normalizer,
         full_snapshotter: method(:snapshot_at),
         partial_snapshotter: @historical_store.method(:custom)
       )
       ActivitySnapshotProvider.new(snapshotter: method(:snapshot_at), refresher: refresher)
+    end
+
+    #: (untyped, from: untyped, to: untyped) -> ActivityTimelineBuilder
+    def activity_builder(record, from:, to:)
+      ActivityTimelineBuilder.new(
+        record,
+        from: from,
+        to: to,
+        tree: @association_tree,
+        snapshotter: @activity_snapshotter
+      )
     end
 
     #: (untyped) -> void
@@ -113,6 +127,11 @@ module PaperTrailDiff
     #: (untyped) -> RecordSnapshot?
     def historical_snapshot(version)
       snapshot_at(version, version)
+    end
+
+    #: (untyped) -> RecordSnapshot?
+    def uncached_historical_snapshot(version)
+      @historical_store.uncached(version, version)
     end
 
     #: (untyped, untyped) -> RecordSnapshot?

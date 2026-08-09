@@ -13,6 +13,8 @@ SimpleCov.start do
     minimum_coverage line: 95, branch: 80
   else
     add_filter '/activity_version_collector.rb'
+    add_filter '/activity_event_snapshot_refresher.rb'
+    add_filter '/activity_root_snapshot_refresher.rb'
     minimum_coverage line: 85, branch: 60
   end
 end

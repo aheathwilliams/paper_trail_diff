@@ -38,6 +38,25 @@ RSpec.describe PaperTrailDiff::Engine do
     expect(described_class.compare(from, to)).to be_empty
   end
 
+  it 'returns an empty diff for independently normalized equal collections' do
+    from_child = snapshot(type: 'Comment', id: 1, attributes: { body: 'Same' })
+    to_child = snapshot(type: 'Comment', id: 1, attributes: { body: 'Same' })
+    from = snapshot(
+      type: 'Article',
+      id: 1,
+      attributes: {},
+      associations: { comments: association(:has_many, from_child) }
+    )
+    to = snapshot(
+      type: 'Article',
+      id: 1,
+      attributes: {},
+      associations: { comments: association(:has_many, to_child) }
+    )
+
+    expect(described_class.compare(from, to)).to be_empty
+  end
+
   it 'represents a missing endpoint as a root record presence change' do
     record = snapshot(type: 'Article', id: 1, attributes: { title: 'Created' })
 
@@ -178,6 +197,25 @@ RSpec.describe PaperTrailDiff::Engine do
     expect(tags.removed.map(&:id)).to eq([1])
     expect(tags.changed.fetch(0).attributes.fetch('name').to_h)
       .to eq(from: 'Before', to: 'After')
+  end
+
+  it 'rejects an association macro that changes between snapshots' do
+    child = snapshot(type: 'Comment', id: 1, attributes: {})
+    from = snapshot(
+      type: 'Article',
+      id: 1,
+      attributes: {},
+      associations: { comments: association(:has_many, child) }
+    )
+    to = snapshot(
+      type: 'Article',
+      id: 1,
+      attributes: {},
+      associations: { comments: association(:has_one, child) }
+    )
+
+    expect { described_class.compare(from, to) }
+      .to raise_error(ArgumentError, /association kind changed/)
   end
 
   it 'reports nested association changes for stable parent identities' do

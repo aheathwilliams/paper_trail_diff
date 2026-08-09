@@ -1,0 +1,93 @@
+# Generated from lib/paper_trail_diff/activity_event_snapshot_refresher.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Applies safe descendant event deltas without rebuilding an entire selected branch.
+  # rubocop:disable Metrics/ClassLength
+  class ActivityEventSnapshotRefresher
+    RECORD_AFTER_HANDLERS: untyped
+
+    # : (traversal: AssociationTraversal, pool: SnapshotPool, components: untyped) -> void
+    def initialize: (traversal: AssociationTraversal, pool: SnapshotPool, components: untyped) -> void
+
+    # : (untyped, untyped, RecordSnapshot, Array[String], ActivityEvent?) -> [bool, RecordSnapshot?]
+    def call: (untyped, untyped, RecordSnapshot, Array[String], ActivityEvent?) -> [ bool, RecordSnapshot? ]
+
+    private
+
+    @components: untyped
+
+    @pool: SnapshotPool
+
+    @traversal: AssociationTraversal
+
+    # : (Array[Array[untyped]], untyped) -> bool
+    def unsafe_through_membership_event?: (Array[Array[untyped]], untyped) -> bool
+
+    # : (untyped, untyped, RecordSnapshot, SnapshotNormalizer, Array[Array[untyped]], untyped) -> [bool, RecordSnapshot]
+    def collection_target_snapshot: (untyped, untyped, RecordSnapshot, SnapshotNormalizer, Array[Array[untyped]], untyped) -> [ bool, RecordSnapshot ]
+
+    # : (untyped, AssociationTree, String, ?path: String) -> Array[Array[untyped]]
+    def direct_collection_routes: (untyped, AssociationTree, String, ?path: String) -> Array[Array[untyped]]
+
+    # : (RecordSnapshot, Array[untyped], untyped, untyped, RecordSnapshot?, ?depth: Integer) -> [RecordSnapshot, bool]
+    def replace_collection_route: (RecordSnapshot, Array[untyped], untyped, untyped, RecordSnapshot?, ?depth: Integer) -> [ RecordSnapshot, bool ]
+
+    # : (untyped, untyped, RecordSnapshot, AssociationTree, SnapshotNormalizer, untyped) -> [bool, RecordSnapshot?]
+    def belongs_to_target_snapshot: (untyped, untyped, RecordSnapshot, AssociationTree, SnapshotNormalizer, untyped) -> [ bool, RecordSnapshot? ]
+
+    # : (untyped, AssociationTree, String, ?path: String) -> Array[Array[untyped]]
+    def belongs_to_routes: (untyped, AssociationTree, String, ?path: String) -> Array[Array[untyped]]
+
+    # : (Array[untyped], untyped, SnapshotNormalizer, untyped, untyped) -> RecordSnapshot?
+    def normalized_route_record: (Array[untyped], untyped, SnapshotNormalizer, untyped, untyped) -> RecordSnapshot?
+
+    # : (RecordSnapshot, Array[untyped], untyped, RecordSnapshot?, ?depth: Integer) -> [RecordSnapshot, bool]
+    def replace_route: (RecordSnapshot, Array[untyped], untyped, RecordSnapshot?, ?depth: Integer) -> [ RecordSnapshot, bool ]
+
+    # : (Array[RecordSnapshot], untyped, RecordSnapshot?) -> Array[RecordSnapshot]
+    def replace_existing_target: (Array[RecordSnapshot], untyped, RecordSnapshot?) -> Array[RecordSnapshot]
+
+    # : (untyped) -> untyped
+    def record_after: (untyped) -> untyped
+
+    # PaperTrail create/update versions contain deserialized change pairs, so
+    # their post-event records need no successor query.
+    # : (untyped) -> untyped
+    def changed_record_after: (untyped) -> untyped
+
+    # : (untyped) -> untyped
+    def created_record_after: (untyped) -> untyped
+
+    # : (untyped) -> untyped
+    def updated_record_after: (untyped) -> untyped
+
+    # : (untyped, untyped) -> Hash[untyped, untyped]
+    def after_attributes: (untyped, untyped) -> Hash[untyped, untyped]
+
+    # : (untyped, untyped) -> untyped
+    def apply_changes: (untyped, untyped) -> untyped
+
+    # Mirrors PaperTrail's changeset deserialization without resolving
+    # +version.item+, which would issue one live-record query per event.
+    # : (untyped, untyped) -> untyped
+    def deserialized_changeset: (untyped, untyped) -> untyped
+
+    # : (untyped, untyped, untyped) -> untyped
+    def standard_changeset: (untyped, untyped, untyped) -> untyped
+
+    # : (untyped, untyped, RecordSnapshot) -> bool
+    def member_of_owner?: (untyped, untyped, RecordSnapshot) -> bool
+
+    # : (untyped, untyped, AssociationTree, String, SnapshotNormalizer, untyped, untyped) -> RecordSnapshot?
+    def normalize_event_record: (untyped, untyped, AssociationTree, String, SnapshotNormalizer, untyped, untyped) -> RecordSnapshot?
+
+    # : (Array[RecordSnapshot], untyped, RecordSnapshot?) -> Array[RecordSnapshot]
+    def replace_collection_record: (Array[RecordSnapshot], untyped, RecordSnapshot?) -> Array[RecordSnapshot]
+
+    # : (untyped, RecordSnapshot?) -> String
+    def replacement_type: (untyped, RecordSnapshot?) -> String
+
+    # : (untyped) -> untyped
+    def endpoint_model_class: (untyped) -> untyped
+  end
+end

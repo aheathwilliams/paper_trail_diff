@@ -47,9 +47,6 @@ module PaperTrailDiff
     # : (Array[untyped], untyped) -> Hash[String, untyped]
     def identity_groups: (Array[untyped], untyped) -> Hash[String, untyped]
 
-    # : (Array[untyped], untyped) -> Hash[String, untyped]
-    def version_groups: (Array[untyped], untyped) -> Hash[String, untyped]
-
     # : (untyped, Array[untyped]) -> Hash[Symbol, untyped]
     def group: (untyped, Array[untyped]) -> Hash[Symbol, untyped]
 
@@ -62,11 +59,8 @@ module PaperTrailDiff
     # : (untyped, untyped) -> untyped
     def target_class: (untyped, untyped) -> untyped
 
-    # : (untyped, untyped) -> bool
-    def related_parent_type?: (untyped, untyped) -> bool
-
-    # : (untyped, untyped) -> bool
-    def version_matches_model?: (untyped, untyped) -> bool
+    # : (untyped) -> Array[String?]
+    def related_parent_types: (untyped) -> Array[String?]
 
     # : (untyped) -> bool
     def in_range?: (untyped) -> bool

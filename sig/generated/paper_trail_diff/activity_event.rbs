@@ -40,12 +40,17 @@ module PaperTrailDiff
     # : (ActivityEvent) -> Array[String]?
     def branches_for: (ActivityEvent) -> Array[String]?
 
+    # : (ActivityEvent) -> bool
+    def isolated?: (ActivityEvent) -> bool
+
     private
 
     @branches: Hash[Array[untyped], Array[String]?]
 
-    # : (Array[ActivityEvent]) -> Hash[Array[untyped], Array[String]?]
-    def build_groups: (Array[ActivityEvent]) -> Hash[Array[untyped], Array[String]?]
+    @group_sizes: Hash[Array[untyped], Integer]
+
+    # : (Hash[Array[untyped], Array[ActivityEvent]]) -> Hash[Array[untyped], Array[String]?]
+    def build_groups: (Hash[Array[untyped], Array[ActivityEvent]]) -> Hash[Array[untyped], Array[String]?]
 
     # : (Array[ActivityEvent]) -> Hash[Array[untyped], Array[ActivityEvent]]
     def grouped_events: (Array[ActivityEvent]) -> Hash[Array[untyped], Array[ActivityEvent]]

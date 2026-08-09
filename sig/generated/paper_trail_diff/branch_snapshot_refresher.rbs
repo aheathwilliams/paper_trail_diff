@@ -3,25 +3,40 @@
 module PaperTrailDiff
   # Reconstructs selected root branches and merges them into a prior immutable snapshot.
   class BranchSnapshotRefresher
-    # : (tree: AssociationTree, ignore_policy: IgnorePolicy, traversal: AssociationTraversal, full_snapshotter: untyped, partial_snapshotter: untyped) -> void
-    def initialize: (tree: AssociationTree, ignore_policy: IgnorePolicy, traversal: AssociationTraversal, full_snapshotter: untyped, partial_snapshotter: untyped) -> void
+    # : (tree: AssociationTree, ignore_policy: IgnorePolicy, traversal: AssociationTraversal, pool: SnapshotPool, normalizer: SnapshotNormalizer, full_snapshotter: untyped, partial_snapshotter: untyped) -> void
+    def initialize: (tree: AssociationTree, ignore_policy: IgnorePolicy, traversal: AssociationTraversal, pool: SnapshotPool, normalizer: SnapshotNormalizer, full_snapshotter: untyped, partial_snapshotter: untyped) -> void
 
-    # : (untyped, untyped, RecordSnapshot?, Array[String]) -> RecordSnapshot?
-    def call: (untyped, untyped, RecordSnapshot?, Array[String]) -> RecordSnapshot?
+    # : (untyped, untyped, RecordSnapshot?, event: ActivityEvent) -> RecordSnapshot?
+    def advance_root: (untyped, untyped, RecordSnapshot?, event: ActivityEvent) -> RecordSnapshot?
+
+    # : (untyped, untyped, RecordSnapshot?, Array[String], ?event: ActivityEvent?, ?isolated: bool) -> RecordSnapshot?
+    def call: (untyped, untyped, RecordSnapshot?, Array[String], ?event: ActivityEvent?, ?isolated: bool) -> RecordSnapshot?
 
     private
 
-    @tree: AssociationTree
+    @root_refresher: ActivityRootSnapshotRefresher
 
-    @ignore_policy: IgnorePolicy
+    @event_refresher: ActivityEventSnapshotRefresher
 
-    @traversal: AssociationTraversal
-
-    @full_snapshotter: untyped
+    @components: Hash[Array[String], [ AssociationTree, SnapshotNormalizer ]]
 
     @partial_snapshotter: untyped
 
-    @components: Hash[Array[String], [ AssociationTree, SnapshotNormalizer ]]
+    @full_snapshotter: untyped
+
+    @pool: SnapshotPool
+
+    @traversal: AssociationTraversal
+
+    @ignore_policy: IgnorePolicy
+
+    @tree: AssociationTree
+
+    # : (untyped, untyped, RecordSnapshot, Array[String], ActivityEvent) -> RecordSnapshot?
+    def refresh_independent_branches: (untyped, untyped, RecordSnapshot, Array[String], ActivityEvent) -> RecordSnapshot?
+
+    # : (untyped, untyped, Array[String]) -> RecordSnapshot?
+    def partial_snapshot: (untyped, untyped, Array[String]) -> RecordSnapshot?
 
     # : (Array[String]) -> [AssociationTree, SnapshotNormalizer]
     def components: (Array[String]) -> [ AssociationTree, SnapshotNormalizer ]

@@ -58,6 +58,7 @@ ActiveRecord::Schema.define do
   create_table :tracked_comments, force: true do |table|
     table.string :body, null: false
     table.integer :article_id, null: false
+    table.integer :reviewer_id
     table.timestamps null: false
   end
 
@@ -82,6 +83,8 @@ class TrackedAuthor < ActiveRecord::Base
   has_many :articles, class_name: 'TrackedArticle', foreign_key: :author_id,
                       inverse_of: :author
   has_many :comments, through: :articles
+  has_many :reviewed_comments, class_name: 'TrackedComment', foreign_key: :reviewer_id,
+                               inverse_of: :reviewer
   has_paper_trail synchronize_version_creation_timestamp: false
 end
 
@@ -106,6 +109,8 @@ end
 
 class TrackedComment < ActiveRecord::Base
   belongs_to :article, class_name: 'TrackedArticle', inverse_of: :comments
+  belongs_to :reviewer, class_name: 'TrackedAuthor', optional: true,
+                        inverse_of: :reviewed_comments
   has_many :replies, class_name: 'TrackedReply', foreign_key: :comment_id,
                      inverse_of: :comment
   has_paper_trail
