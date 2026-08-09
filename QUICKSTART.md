@@ -118,7 +118,7 @@ steps.map do |step|
 end
 # => [["Draft", "Published"], ["Published", "Final"]]
 
-visible_steps = steps.reject { |step| step.diff.empty? }
+visible_steps = steps.reject(&:empty?)
 ```
 
 Empty steps remain in the timeline. Filter them only when the application's
@@ -228,7 +228,7 @@ steps = PaperTrailDiff.activity_timeline(
   associations: ["comments"]
 )
 
-steps.reject { |step| step.diff.empty? }.each do |step|
+steps.reject(&:empty?).each do |step|
   boundary = step.to_boundary
   puts "#{boundary.item_type} ##{boundary.item_id}"
 end

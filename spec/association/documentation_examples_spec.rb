@@ -38,7 +38,7 @@ RSpec.describe 'association documentation examples' do
       )
     end.to output(/TrackedArticle #\d+\n/).to_stdout
     steps = context.local_variable_get(:steps)
-    expect(steps.reject { |step| step.diff.empty? }).not_to be_empty
+    expect(steps.reject(&:empty?)).not_to be_empty
   end
 
   def quickstart_path

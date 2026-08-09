@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file. The
 project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- Teach timeline filtering through the shared `Step#empty?` protocol in the
+  README and quickstart examples.
+
 ## [0.2.0] - 2026-08-09
 
 ### Added

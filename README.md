@@ -133,7 +133,7 @@ steps = PaperTrailDiff.activity_timeline(
   associations: ["comments.replies", :author]
 )
 
-steps.reject { |step| step.diff.empty? }
+steps.reject(&:empty?)
 ```
 
 Pass the record explicitly as `to:` to include current state without creating a
@@ -177,9 +177,9 @@ intermediate events without transaction-backed owner checkpoints. Historical
 HABTM activity and `compare(version, article, associations: [:tags])` remain
 supported where the historical endpoint has usable PT-AT metadata.
 
-Both timeline APIs preserve empty boundaries. A display may filter
-`step.diff.empty?`, while audit-oriented callers can retain every recorded
-boundary.
+Both timeline APIs preserve empty boundaries. A display may use
+`steps.reject(&:empty?)`, while audit-oriented callers can retain every
+recorded boundary.
 
 ## Build an endpoint and timeline together
 
