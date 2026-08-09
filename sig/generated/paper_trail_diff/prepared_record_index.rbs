@@ -1,0 +1,84 @@
+# Generated from lib/paper_trail_diff/prepared_record_index.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Immutable scalar state from a PaperTrail version or live-record fallback.
+  class PreparedRecordState
+    # : (untyped) -> void
+    def initialize: (untyped) -> void
+
+    # : () -> untyped
+    def instantiate: () -> untyped
+
+    @model_class: untyped
+
+    @attributes: Hash[untyped, untyped]
+  end
+
+  # Versions and live fallback for one model identity.
+  class PreparedRecordSeries
+    attr_reader versions: Array[untyped]
+
+    # : (versions: Array[untyped], live: PreparedRecordState?) -> void
+    def initialize: (versions: Array[untyped], live: PreparedRecordState?) -> void
+
+    # : (untyped) -> untyped
+    def record_before: (untyped) -> untyped
+
+    # : () -> Array[untyped]
+    def records: () -> Array[untyped]
+
+    private
+
+    @live: PreparedRecordState?
+
+    @states: Hash[untyped, PreparedRecordState?]
+
+    # : (untyped, untyped) -> bool
+    def eligible?: (untyped, untyped) -> bool
+
+    # : (untyped, untyped) -> bool
+    def same_transaction?: (untyped, untyped) -> bool
+
+    # : (untyped) -> PreparedRecordState?
+    def state_for: (untyped) -> PreparedRecordState?
+  end
+
+  # Request-scoped scalar history loaded once per model identity.
+  class PreparedRecordIndex
+    # : (untyped) -> void
+    def initialize: (untyped) -> void
+
+    # : (untyped, Array[untyped]) -> void
+    def load: (untyped, Array[untyped]) -> void
+
+    # : (untyped, untyped, untyped) -> untyped
+    def record_before: (untyped, untyped, untyped) -> untyped
+
+    # : (untyped, Array[untyped]) -> Array[untyped]
+    def records_for: (untyped, Array[untyped]) -> Array[untyped]
+
+    # : (untyped, untyped) -> bool
+    def loaded?: (untyped, untyped) -> bool
+
+    private
+
+    @start_time: untyped
+
+    @series: Hash[Array[String], PreparedRecordSeries]
+
+    # : (untyped, untyped) -> Array[String]
+    def identity: (untyped, untyped) -> Array[String]
+
+    # : (untyped, Array[untyped]) -> Array[untyped]
+    def missing_ids: (untyped, Array[untyped]) -> Array[untyped]
+
+    # : (untyped, untyped, Hash[String, Array[untyped]], Hash[String, untyped]) -> void
+    def add_series: (untyped, untyped, Hash[String, Array[untyped]], Hash[String, untyped]) -> void
+
+    # : (untyped, Array[untyped]) -> Array[untyped]
+    def versions_for: (untyped, Array[untyped]) -> Array[untyped]
+
+    # : (untyped, Array[untyped]) -> Array[untyped]
+    def live_records_for: (untyped, Array[untyped]) -> Array[untyped]
+  end
+end
