@@ -167,6 +167,36 @@ RSpec.describe PaperTrailDiff do
         from_version_id: draft.id,
         to_version_id: published.id
       )
+      expect(steps.first.from_boundary.record.to_h).to eq(
+        type: 'CoreArticle', id: article.id.to_s
+      )
+      expect(steps.first.from_boundary).to be_version
+      expect(steps.first.from_boundary).not_to be_current
+      expect(steps.first.from_boundary.event).to eq('update')
+      expect(steps.first).not_to be_empty
+    end
+
+    it 'exposes immutable version metadata through the shared boundary protocol' do
+      article = CoreArticle.create!(title: 'Draft', internal_note: 'stable')
+      PaperTrail.request(whodunnit: 'developer-7') do
+        article.update!(title: 'Published')
+      end
+      from_version, to_version = article.versions.reload.to_a
+
+      step = described_class.timeline(
+        article,
+        from: from_version,
+        to: to_version
+      ).fetch(0)
+
+      expect(step.from_boundary.event).to eq('create')
+      expect(step.from_boundary.whodunnit).to be_nil
+      expect(step.to_boundary.event).to eq('update')
+      expect(step.to_boundary.whodunnit).to eq('developer-7')
+      expect(step.from_boundary).to be_frozen
+      expect(step.to_boundary).to be_frozen
+      expect(step.from_boundary.to_h.keys)
+        .to eq(%i[kind version_id item_type item_id recorded_at])
     end
 
     it 'returns an empty frozen array for equal boundaries' do
@@ -176,6 +206,26 @@ RSpec.describe PaperTrailDiff do
 
       expect(result).to eq([])
       expect(result).to be_frozen
+    end
+
+    it 'shares empty and boundary readers across both step types' do
+      _article, _create, draft, published, = create_history
+      diff = PaperTrailDiff::Diff.new
+      step = PaperTrailDiff::Step.new(
+        from_version: draft,
+        to_version: published,
+        diff: diff
+      )
+      activity_step = PaperTrailDiff::ActivityStep.new(
+        from_boundary: step.from_boundary,
+        to_boundary: step.to_boundary,
+        diff: diff
+      )
+
+      expect(step).to be_empty
+      expect(activity_step).to be_empty
+      expect(activity_step.from_boundary).to equal(step.from_boundary)
+      expect(activity_step.to_boundary).to equal(step.to_boundary)
     end
 
     it 'rejects missing and reversed boundaries' do
@@ -237,6 +287,14 @@ RSpec.describe PaperTrailDiff do
         item_type: 'CoreArticle',
         item_id: article.id
       )
+      expect(step.to_boundary).to be_current
+      expect(step.to_boundary).not_to be_version
+      expect(step.to_boundary.record.to_h).to eq(
+        type: 'CoreArticle', id: article.id
+      )
+      expect(step.to_boundary.event).to be_nil
+      expect(step.to_boundary.whodunnit).to be_nil
+      expect(step).not_to be_empty
       expect(step.diff.attributes.fetch('internal_note').to_h)
         .to eq(from: 'stable', to: 'changed')
       expect(step.to_h.keys).to eq(%i[from to diff])

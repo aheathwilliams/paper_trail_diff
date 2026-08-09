@@ -13,14 +13,26 @@ module PaperTrailDiff
 
     attr_reader recorded_at: untyped
 
+    attr_reader event: String?
+
+    attr_reader whodunnit: untyped
+
+    attr_reader record: RecordReference
+
     # : (untyped) -> ActivityBoundary
     def self.from_version: (untyped) -> ActivityBoundary
 
     # : (untyped, captured_at: untyped) -> ActivityBoundary
     def self.current: (untyped, captured_at: untyped) -> ActivityBoundary
 
-    # : (kind: Symbol, version_id: untyped, item_type: untyped, item_id: untyped, recorded_at: untyped) -> void
-    def initialize: (kind: Symbol, version_id: untyped, item_type: untyped, item_id: untyped, recorded_at: untyped) -> void
+    # : (kind: Symbol, version_id: untyped, item_type: untyped, item_id: untyped, recorded_at: untyped, ?event: untyped, ?whodunnit: untyped) -> void
+    def initialize: (kind: Symbol, version_id: untyped, item_type: untyped, item_id: untyped, recorded_at: untyped, ?event: untyped, ?whodunnit: untyped) -> void
+
+    # : () -> bool
+    def version?: () -> bool
+
+    # : () -> bool
+    def current?: () -> bool
 
     # : () -> Hash[Symbol, untyped]
     def to_h: () -> Hash[Symbol, untyped]
@@ -36,6 +48,9 @@ module PaperTrailDiff
 
     # : (from_boundary: ActivityBoundary, to_boundary: ActivityBoundary, diff: Diff) -> void
     def initialize: (from_boundary: ActivityBoundary, to_boundary: ActivityBoundary, diff: Diff) -> void
+
+    # : () -> bool
+    def empty?: () -> bool
 
     # : () -> Hash[Symbol, untyped]
     def to_h: () -> Hash[Symbol, untyped]

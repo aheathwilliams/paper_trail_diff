@@ -9,6 +9,9 @@ module PaperTrailDiff
     attr_reader :item_type #: String
     attr_reader :item_id #: untyped
     attr_reader :recorded_at #: untyped
+    attr_reader :event #: String?
+    attr_reader :whodunnit #: untyped
+    attr_reader :record #: RecordReference
 
     class << self
       #: (untyped) -> ActivityBoundary
@@ -18,7 +21,9 @@ module PaperTrailDiff
           version_id: version.id,
           item_type: version.item_type,
           item_id: version.item_id,
-          recorded_at: version.created_at
+          recorded_at: version.created_at,
+          event: version.event,
+          whodunnit: version.whodunnit
         )
       end
 
@@ -34,14 +39,35 @@ module PaperTrailDiff
       end
     end
 
-    #: (kind: Symbol, version_id: untyped, item_type: untyped, item_id: untyped, recorded_at: untyped) -> void
-    def initialize(kind:, version_id:, item_type:, item_id:, recorded_at:)
+    #: (kind: Symbol, version_id: untyped, item_type: untyped, item_id: untyped, recorded_at: untyped, ?event: untyped, ?whodunnit: untyped) -> void
+    def initialize( # rubocop:disable Metrics/ParameterLists
+      kind:,
+      version_id:,
+      item_type:,
+      item_id:,
+      recorded_at:,
+      event: nil,
+      whodunnit: nil
+    )
       @kind = kind
       @version_id = Support.immutable_copy(version_id)
       @item_type = Support.immutable_copy(item_type.to_s)
       @item_id = Support.immutable_copy(item_id)
       @recorded_at = Support.immutable_copy(recorded_at)
+      @event = Support.immutable_copy(event&.to_s)
+      @whodunnit = Support.immutable_copy(whodunnit)
+      @record = RecordReference.new(type: @item_type, id: @item_id)
       freeze
+    end
+
+    #: () -> bool
+    def version?
+      kind == :version
+    end
+
+    #: () -> bool
+    def current?
+      kind == :current
     end
 
     #: () -> Hash[Symbol, untyped]
@@ -68,6 +94,11 @@ module PaperTrailDiff
       @to_boundary = to_boundary
       @diff = diff
       freeze
+    end
+
+    #: () -> bool
+    def empty?
+      diff.empty?
     end
 
     #: () -> Hash[Symbol, untyped]

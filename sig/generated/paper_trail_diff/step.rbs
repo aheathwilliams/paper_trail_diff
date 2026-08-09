@@ -7,10 +7,17 @@ module PaperTrailDiff
 
     attr_reader to_version: untyped
 
+    attr_reader from_boundary: ActivityBoundary
+
+    attr_reader to_boundary: ActivityBoundary
+
     attr_reader diff: Diff
 
     # : (from_version: untyped, to_version: untyped, diff: Diff) -> void
     def initialize: (from_version: untyped, to_version: untyped, diff: Diff) -> void
+
+    # : () -> bool
+    def empty?: () -> bool
 
     # : () -> Hash[Symbol, untyped]
     def to_h: () -> Hash[Symbol, untyped]
