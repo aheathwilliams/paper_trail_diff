@@ -29,5 +29,6 @@ Gem::Specification.new do |spec|
 
   spec.add_dependency 'paper_trail', '>= 16', '< 18'
 
+  spec.metadata['allowed_push_host'] = 'https://rubygems.org'
   spec.metadata['rubygems_mfa_required'] = 'true'
 end

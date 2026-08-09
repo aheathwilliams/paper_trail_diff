@@ -454,12 +454,19 @@ mise install
 mise exec -- bundle install
 mise exec -- bundle exec rake
 mise exec -- bundle exec rake build
+mise exec -- act push -j quality --matrix ruby:4.0 --matrix paper_trail:17
 ```
 
 The default Rake task runs core specs without PT-AT loaded, association specs in
 a separate process, RuboCop, generated-signature verification, and Steep.
 Inline `#:` annotations in `lib/` generate the committed RBS files under
 `sig/generated/`.
+
+Release tags matching `v*` publish through RubyGems trusted publishing. Before
+tagging, replace `Unreleased` in the changelog with the release date, run the
+full CI workflow, and configure the repository's `release` environment as a
+trusted publisher on RubyGems. Do not store a long-lived RubyGems API key in
+the repository.
 
 ## License
 

@@ -38,7 +38,16 @@ mise exec -- bundle exec rake rubocop
 mise exec -- bundle exec rake typecheck
 mise exec -- bundle exec rake
 mise exec -- bundle exec rake build
+mise exec -- act -l
+mise exec -- act push -j quality --matrix ruby:4.0 --matrix paper_trail:17
+mise exec -- act push
 ```
 
 If mise reports that the project is untrusted, run `mise trust`. If a pinned
 tool is missing, run `mise install`.
+
+`act` can exercise the Linux CI jobs locally but cannot reproduce the Windows
+jobs. Release tags matching `v*` publish through RubyGems trusted publishing;
+never add a long-lived RubyGems API key. Before tagging, replace `Unreleased`
+in the changelog with the release date, run all checks, and configure the
+RubyGems trusted publisher for `release.yml` and the `release` environment.

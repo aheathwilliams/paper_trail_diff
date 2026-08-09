@@ -1,8 +1,11 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+All notable changes to this project will be documented in this file. The
+project follows [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.1.0] - Unreleased
+
+### Added
 
 - Add explicit, bounded nested association paths such as
   `comments.replies.author`.
@@ -40,7 +43,3 @@ All notable changes to this project will be documented in this file.
   scoped, unversioned, composite-key, and unsupported through shapes.
 - Keep multiple selected descendant events in one transaction atomic instead
   of applying an individual event delta before the transaction boundary.
-
-## [0.1.0] - 2026-08-07
-
-- Initial development release.
