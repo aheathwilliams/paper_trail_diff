@@ -11,19 +11,19 @@ module PaperTrailDiff
 
     private
 
-    @prepared: Hash[Array[String], Array[String]]
-
     @edges: PreparedEdgeLoader
 
     @history: PreparedHistory
+
+    @prepared: Hash[Array[String], Array[String]]
+
+    @record: untyped
 
     @records: PreparedRecordIndex
 
     @traversal: AssociationTraversal
 
     @tree: AssociationTree
-
-    @record: untyped
 
     # : (untyped, Array[untyped], AssociationTree, path: String) -> void
     def load_node: (untyped, Array[untyped], AssociationTree, path: String) -> void

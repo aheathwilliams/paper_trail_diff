@@ -2,6 +2,7 @@
 
 require 'bundler/gem_tasks'
 require 'fileutils'
+require 'rbconfig'
 require 'rspec/core/rake_task'
 require 'rubocop/rake_task'
 
@@ -34,6 +35,7 @@ task :rbs do
   FileUtils.rm_rf('sig/generated')
   FileUtils.mkdir_p('sig/generated')
   sh 'bundle', 'exec', 'rbs-inline', '--output', 'sig/generated', 'lib'
+  sh RbConfig.ruby, 'script/normalize_generated_rbs', 'sig/generated'
 end
 
 desc 'Regenerate signatures and verify that they are committed'

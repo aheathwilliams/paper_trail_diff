@@ -13,9 +13,9 @@ module PaperTrailDiff
 
     private
 
-    @transaction_ids: Array[untyped]
-
     @records: PreparedRecordIndex
+
+    @transaction_ids: Array[untyped]
 
     # : (untyped, Array[untyped], untyped) -> [Hash[String, Hash[Symbol, untyped]], nil]
     def belongs_to_edge: (untyped, Array[untyped], untyped) -> [ Hash[String, Hash[Symbol, untyped]], nil ]

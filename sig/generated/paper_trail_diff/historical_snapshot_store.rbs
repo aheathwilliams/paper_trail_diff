@@ -23,13 +23,13 @@ module PaperTrailDiff
 
     private
 
-    @prepared_history: PreparedHistory?
+    @normalizer: SnapshotNormalizer
 
-    @snapshots: Hash[Array[untyped], RecordSnapshot?]
+    @prepared_history: PreparedHistory?
 
     @preparer: untyped
 
-    @normalizer: SnapshotNormalizer
+    @snapshots: Hash[Array[untyped], RecordSnapshot?]
 
     @traversal: AssociationTraversal
 

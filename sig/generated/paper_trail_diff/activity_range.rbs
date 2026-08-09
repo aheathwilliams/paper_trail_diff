@@ -16,13 +16,13 @@ module PaperTrailDiff
 
     private
 
-    @start_version: untyped
-
     @end_boundary: untyped
+
+    @end_key: Array[untyped]?
 
     @start_key: Array[untyped]
 
-    @end_key: Array[untyped]?
+    @start_version: untyped
 
     # : (untyped, Array[untyped]) -> bool
     def before_end?: (untyped, Array[untyped]) -> bool

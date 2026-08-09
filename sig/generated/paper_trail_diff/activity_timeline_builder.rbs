@@ -15,15 +15,15 @@ module PaperTrailDiff
 
     private
 
-    @snapshotter: untyped
-
-    @tree: AssociationTree
-
-    @to: untyped
-
     @from: untyped
 
     @record: untyped
+
+    @snapshotter: untyped
+
+    @to: untyped
+
+    @tree: AssociationTree
 
     # : () -> Array[ActivityStep]
     def build_between_versions: () -> Array[ActivityStep]

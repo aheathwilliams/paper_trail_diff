@@ -18,11 +18,11 @@ module PaperTrailDiff
     # : (untyped, untyped, RecordSnapshot?, event: ActivityEvent) -> RecordSnapshot?
     def advance_root: (untyped, untyped, RecordSnapshot?, event: ActivityEvent) -> RecordSnapshot?
 
-    @snapshotter: untyped
+    @preparer: untyped
 
     @refresher: untyped
 
-    @preparer: untyped
+    @snapshotter: untyped
   end
 
   # Builds chronological snapshots, refreshing only branches affected by prior events.
@@ -38,17 +38,17 @@ module PaperTrailDiff
 
     private
 
-    @root_versions: Array[untyped]
+    @current: untyped
 
     @events: Array[ActivityEvent]
 
+    @root_endpoints: Hash[untyped, untyped]
+
+    @root_versions: Array[untyped]
+
     @snapshotter: untyped
 
-    @current: untyped
-
     @transaction_groups: ActivityTransactionGroups
-
-    @root_endpoints: Hash[untyped, untyped]
 
     # : (ActivityEvent, ActivityEvent, RecordSnapshot?) -> RecordSnapshot?
     def transition_snapshot: (ActivityEvent, ActivityEvent, RecordSnapshot?) -> RecordSnapshot?

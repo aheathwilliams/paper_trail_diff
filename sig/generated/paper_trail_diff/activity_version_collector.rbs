@@ -11,17 +11,17 @@ module PaperTrailDiff
 
     private
 
+    @range: ActivityRange
+
+    @record: untyped
+
     @registry: ActivityEventRegistry
 
-    @range: ActivityRange
+    @root_versions: Array[untyped]
 
     @traversal: AssociationTraversal
 
     @tree: AssociationTree
-
-    @root_versions: Array[untyped]
-
-    @record: untyped
 
     # : (untyped, Array[untyped], AssociationTree, path: String, branch: String?) -> void
     def collect_tree: (untyped, Array[untyped], AssociationTree, path: String, branch: String?) -> void

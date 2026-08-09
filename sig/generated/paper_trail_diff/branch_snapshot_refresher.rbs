@@ -14,21 +14,21 @@ module PaperTrailDiff
 
     private
 
-    @root_refresher: ActivityRootSnapshotRefresher
+    @components: Hash[Array[String], [ AssociationTree, SnapshotNormalizer ]]
 
     @event_refresher: ActivityEventSnapshotRefresher
 
-    @components: Hash[Array[String], [ AssociationTree, SnapshotNormalizer ]]
+    @full_snapshotter: untyped
+
+    @ignore_policy: IgnorePolicy
 
     @partial_snapshotter: untyped
 
-    @full_snapshotter: untyped
-
     @pool: SnapshotPool
 
-    @traversal: AssociationTraversal
+    @root_refresher: ActivityRootSnapshotRefresher
 
-    @ignore_policy: IgnorePolicy
+    @traversal: AssociationTraversal
 
     @tree: AssociationTree
 

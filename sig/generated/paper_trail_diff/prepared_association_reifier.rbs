@@ -11,13 +11,13 @@ module PaperTrailDiff
 
     private
 
-    @history: PreparedHistory
-
     @boundary: untyped
+
+    @fallback: HistoricalAssociationReifier
 
     @habtm_boundary: untyped
 
-    @fallback: HistoricalAssociationReifier
+    @history: PreparedHistory
 
     @reified: Hash[Array[untyped], bool]
 

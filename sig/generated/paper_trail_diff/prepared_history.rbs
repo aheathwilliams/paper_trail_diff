@@ -25,13 +25,13 @@ module PaperTrailDiff
 
     private
 
-    @habtm: Hash[Array[String], Hash[String, Array[untyped]]]
-
-    @unsupported: Hash[Array[String], bool]
-
     @edges: Hash[Array[String], Hash[String, Hash[Symbol, untyped]]]
 
+    @habtm: Hash[Array[String], Hash[String, Array[untyped]]]
+
     @records: PreparedRecordIndex
+
+    @unsupported: Hash[Array[String], bool]
 
     # : (untyped, untyped) -> bool
     def supported?: (untyped, untyped) -> bool

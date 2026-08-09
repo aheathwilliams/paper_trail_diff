@@ -9,9 +9,9 @@ module PaperTrailDiff
     # : () -> untyped
     def instantiate: () -> untyped
 
-    @model_class: untyped
-
     @attributes: Hash[untyped, untyped]
+
+    @model_class: untyped
   end
 
   # Versions and live fallback for one model identity.
@@ -62,9 +62,9 @@ module PaperTrailDiff
 
     private
 
-    @start_time: untyped
-
     @series: Hash[Array[String], PreparedRecordSeries]
+
+    @start_time: untyped
 
     # : (untyped, untyped) -> Array[String]
     def identity: (untyped, untyped) -> Array[String]

@@ -11,13 +11,13 @@ module PaperTrailDiff
 
     private
 
-    @transaction_id: untyped
-
     @habtm_transaction_id: untyped
 
-    @version_at: untyped
-
     @reified_associations: Hash[Array[untyped], bool]
+
+    @transaction_id: untyped
+
+    @version_at: untyped
 
     # : (untyped, untyped) -> void
     def reify_association: (untyped, untyped) -> void

@@ -50,13 +50,13 @@ module PaperTrailDiff
 
     private
 
-    @issues: Array[DiagnosticIssue]
+    @from_version: untyped
 
-    @tree: AssociationTree
+    @issues: Array[DiagnosticIssue]
 
     @to_version: untyped
 
-    @from_version: untyped
+    @tree: AssociationTree
 
     # : () -> untyped
     def validated_model_class: () -> untyped

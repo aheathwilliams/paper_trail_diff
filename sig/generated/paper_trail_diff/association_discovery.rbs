@@ -32,9 +32,9 @@ module PaperTrailDiff
 
     private
 
-    @model_class: untyped
-
     @max_depth: Integer
+
+    @model_class: untyped
 
     # : (untyped, prefix: String, ancestry: Array[untyped], depth: Integer) -> Array[AssociationDescriptor]
     def discover: (untyped, prefix: String, ancestry: Array[untyped], depth: Integer) -> Array[AssociationDescriptor]

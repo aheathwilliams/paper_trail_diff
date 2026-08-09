@@ -22,19 +22,19 @@ module PaperTrailDiff
 
     @activity_snapshotter: ActivitySnapshotProvider
 
-    @timeline_snapshotter: TimelineSnapshotProvider
+    @association_tree: AssociationTree
 
     @historical_store: HistoricalSnapshotStore
+
+    @ignore_policy: IgnorePolicy
 
     @normalizer: SnapshotNormalizer
 
     @snapshot_pool: SnapshotPool
 
+    @timeline_snapshotter: TimelineSnapshotProvider
+
     @traversal: AssociationTraversal
-
-    @ignore_policy: IgnorePolicy
-
-    @association_tree: AssociationTree
 
     # : () -> HistoricalSnapshotStore
     def build_historical_store: () -> HistoricalSnapshotStore

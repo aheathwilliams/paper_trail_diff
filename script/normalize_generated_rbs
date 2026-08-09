@@ -1,0 +1,46 @@
+# frozen_string_literal: true
+
+# Gives generated instance-variable declarations a stable order across Rubies.
+module GeneratedRbsNormalizer
+  DECLARATION = /^\s+@\w+:/
+
+  module_function
+
+  def normalize(content)
+    lines = content.lines
+    output = []
+    index = 0
+
+    while index < lines.length
+      unless lines[index].match?(DECLARATION)
+        output << lines[index]
+        index += 1
+        next
+      end
+
+      declarations = [lines[index]]
+      index += 1
+      while lines[index] == "\n" && lines[index + 1]&.match?(DECLARATION)
+        declarations << lines[index + 1]
+        index += 2
+      end
+
+      declarations.sort.each_with_index do |declaration, declaration_index|
+        output << "\n" if declaration_index.positive?
+        output << declaration
+      end
+    end
+
+    output.join
+  end
+
+  def normalize_directory(directory)
+    Dir[File.join(directory, '**/*.rbs')].sort.each do |path|
+      original = File.read(path)
+      normalized = normalize(original)
+      File.write(path, normalized) unless normalized == original
+    end
+  end
+end
+
+GeneratedRbsNormalizer.normalize_directory(ARGV.fetch(0)) if $PROGRAM_NAME == __FILE__

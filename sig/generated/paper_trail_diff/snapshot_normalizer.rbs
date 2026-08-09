@@ -13,9 +13,9 @@ module PaperTrailDiff
 
     private
 
-    @records: Hash[Array[untyped], RecordSnapshot]
-
     @associations: Hash[String, AssociationSnapshot]
+
+    @records: Hash[Array[untyped], RecordSnapshot]
 
     # : (RecordSnapshot, RecordSnapshot) -> bool
     def equivalent_record?: (RecordSnapshot, RecordSnapshot) -> bool
@@ -39,13 +39,13 @@ module PaperTrailDiff
 
     private
 
-    @structural_columns: Hash[String, Array[String]]
+    @ignore_policy: IgnorePolicy
 
     @pool: SnapshotPool
 
-    @traversal: AssociationTraversal
+    @structural_columns: Hash[String, Array[String]]
 
-    @ignore_policy: IgnorePolicy
+    @traversal: AssociationTraversal
 
     @tree: AssociationTree
 

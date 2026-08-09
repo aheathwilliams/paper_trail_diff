@@ -14,9 +14,9 @@ module PaperTrailDiff
 
     private
 
-    @record: untyped
-
     @from: untyped
+
+    @record: untyped
 
     @to: untyped
 

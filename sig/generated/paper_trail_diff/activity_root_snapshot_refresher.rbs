@@ -11,21 +11,21 @@ module PaperTrailDiff
 
     private
 
-    @relationship_reflections: Hash[String, Array[untyped]]
+    @changeset: untyped
 
-    @unsupported_branches: Hash[String, Array[String]]
+    @normalizer: SnapshotNormalizer
 
     @partial_snapshotter: untyped
 
-    @changeset: untyped
-
     @record_after: untyped
 
-    @normalizer: SnapshotNormalizer
+    @relationship_reflections: Hash[String, Array[untyped]]
 
     @traversal: AssociationTraversal
 
     @tree: AssociationTree
+
+    @unsupported_branches: Hash[String, Array[String]]
 
     # : (RecordSnapshot, untyped, untyped) -> snapshot_attributes?
     def advanced_attributes: (RecordSnapshot, untyped, untyped) -> snapshot_attributes?
