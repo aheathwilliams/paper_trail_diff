@@ -36,6 +36,7 @@ module PaperTrailDiff
 
     #: (Array[untyped]) -> [Array[Step], RecordSnapshot?, RecordSnapshot?]
     def compare_history(versions)
+      @snapshotter.prepare(@record, versions) if @snapshotter.respond_to?(:prepare)
       first_snapshot = @snapshotter.call(versions.first)
       previous_snapshot = first_snapshot
       steps = versions.each_cons(2).map do |from_version, to_version|

@@ -1,0 +1,17 @@
+# Generated from lib/paper_trail_diff/timeline_snapshot_provider.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Gives TimelineBuilder one-argument access to a range-prepared snapshot store.
+  class TimelineSnapshotProvider
+    # : (HistoricalSnapshotStore) -> void
+    def initialize: (HistoricalSnapshotStore) -> void
+
+    # : (untyped, Array[untyped]) -> void
+    def prepare: (untyped, Array[untyped]) -> void
+
+    # : (untyped) -> RecordSnapshot?
+    def call: (untyped) -> RecordSnapshot?
+
+    @store: HistoricalSnapshotStore
+  end
+end

@@ -22,6 +22,8 @@ module PaperTrailDiff
 
     @activity_snapshotter: ActivitySnapshotProvider
 
+    @timeline_snapshotter: TimelineSnapshotProvider
+
     @historical_store: HistoricalSnapshotStore
 
     @normalizer: SnapshotNormalizer

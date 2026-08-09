@@ -17,6 +17,7 @@ module PaperTrailDiff
         pool: @snapshot_pool
       )
       @historical_store = build_historical_store
+      @timeline_snapshotter = TimelineSnapshotProvider.new(@historical_store)
       @activity_snapshotter = build_activity_snapshotter
     end
 
@@ -28,11 +29,12 @@ module PaperTrailDiff
 
     #: (untyped, from: untyped, to: untyped) -> Array[Step]
     def timeline(record, from:, to:)
+      prepare_traversal!(record.class, historical: true)
       builder = TimelineBuilder.new(
         record,
         from: from,
         to: to,
-        snapshotter: method(:uncached_historical_snapshot)
+        snapshotter: @timeline_snapshotter
       )
       builder.build
     end
@@ -57,11 +59,12 @@ module PaperTrailDiff
         return activity_builder(record, from: from, to: to).analyze
       end
 
+      prepare_traversal!(record.class, historical: true)
       TimelineBuilder.new(
         record,
         from: from,
         to: to,
-        snapshotter: method(:uncached_historical_snapshot)
+        snapshotter: @timeline_snapshotter
       ).analyze
     end
 
@@ -73,6 +76,7 @@ module PaperTrailDiff
     # @rbs @snapshot_pool: SnapshotPool
     # @rbs @normalizer: SnapshotNormalizer
     # @rbs @historical_store: HistoricalSnapshotStore
+    # @rbs @timeline_snapshotter: TimelineSnapshotProvider
     # @rbs @activity_snapshotter: ActivitySnapshotProvider
 
     #: () -> HistoricalSnapshotStore

@@ -621,6 +621,41 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     expect(combined.activity_timeline.map(&:to_h)).to eq(activity.map(&:to_h))
   end
 
+  it 'prepares ordinary root timelines without changing point-reifier output' do
+    graph = article_with_graph
+    graph[:article].update!(title: 'Prepared root one')
+    graph[:kept_comment].update!(body: 'Prepared child')
+    graph[:article].update!(title: 'Prepared root two')
+    after = boundary_for(graph[:article])
+    associations = ['author.comments', 'comments.replies', 'profile']
+    optimized = nil
+    optimized_queries = sql_query_count do
+      optimized = PaperTrailDiff.analyze(
+        graph[:article],
+        from: graph[:before],
+        to: after,
+        associations: associations
+      )
+    end
+    adapter = PaperTrailDiff::PaperTrailAdapter.new(
+      associations: associations,
+      ignore: PaperTrailDiff::DEFAULT_IGNORED_ATTRIBUTES
+    )
+    reference = nil
+    reference_queries = sql_query_count do
+      reference = PaperTrailDiff::TimelineBuilder.new(
+        graph[:article],
+        from: graph[:before],
+        to: after,
+        snapshotter: adapter.method(:uncached_historical_snapshot)
+      ).analyze
+    end
+
+    expect(optimized.diff.to_h).to eq(reference.diff.to_h)
+    expect(optimized.timeline.map(&:to_h)).to eq(reference.timeline.map(&:to_h))
+    expect(optimized_queries).to be < reference_queries
+  end
+
   it 'advances isolated root changes without rebuilding direct versioned branches' do
     article = TrackedArticle.create!(title: 'Root sequence')
     article.comments.create!(body: 'Stable child')

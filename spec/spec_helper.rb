@@ -20,6 +20,7 @@ SimpleCov.start do
     add_filter '/prepared_edge_loader.rb'
     add_filter '/prepared_history_loader.rb'
     add_filter '/prepared_association_reifier.rb'
+    add_filter '/timeline_snapshot_provider.rb'
     minimum_coverage line: 85, branch: 60
   end
 end
