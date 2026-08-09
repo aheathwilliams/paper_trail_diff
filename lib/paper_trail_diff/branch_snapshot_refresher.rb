@@ -4,7 +4,7 @@
 module PaperTrailDiff
   # Reconstructs selected root branches and merges them into a prior immutable snapshot.
   class BranchSnapshotRefresher
-    #: (tree: AssociationTree, ignore_policy: IgnorePolicy, traversal: AssociationTraversal, pool: SnapshotPool, normalizer: SnapshotNormalizer, full_snapshotter: untyped, partial_snapshotter: untyped) -> void
+    #: (tree: AssociationTree, ignore_policy: IgnorePolicy, traversal: AssociationTraversal, pool: SnapshotPool, normalizer: SnapshotNormalizer, full_snapshotter: untyped, partial_snapshotter: untyped, association_reader: untyped) -> void
     def initialize( # rubocop:disable Metrics/MethodLength, Metrics/ParameterLists
       tree:,
       ignore_policy:,
@@ -12,7 +12,8 @@ module PaperTrailDiff
       pool:,
       normalizer:,
       full_snapshotter:,
-      partial_snapshotter:
+      partial_snapshotter:,
+      association_reader:
     )
       @tree = tree
       @ignore_policy = ignore_policy
@@ -24,7 +25,8 @@ module PaperTrailDiff
       @event_refresher = ActivityEventSnapshotRefresher.new(
         traversal: traversal,
         pool: pool,
-        components: method(:components)
+        components: method(:components),
+        association_reader: association_reader
       )
       @root_refresher = ActivityRootSnapshotRefresher.new(
         tree: tree,
@@ -69,12 +71,13 @@ module PaperTrailDiff
         )
       end
 
-      handled, incremental = @event_refresher.call(
-        root_endpoint,
-        context_endpoint,
+      endpoints = [root_endpoint, context_endpoint]
+      handled, incremental = incremental_event(
+        endpoints,
         previous_snapshot,
         branches,
-        event
+        event,
+        isolated
       )
       return incremental if handled
 
@@ -95,6 +98,19 @@ module PaperTrailDiff
     # @rbs @components: Hash[Array[String], [AssociationTree, SnapshotNormalizer]]
     # @rbs @event_refresher: ActivityEventSnapshotRefresher
     # @rbs @root_refresher: ActivityRootSnapshotRefresher
+
+    #: (Array[untyped], RecordSnapshot, Array[String], ActivityEvent?, bool) -> [bool, RecordSnapshot?]
+    def incremental_event(endpoints, previous, branches, event, isolated)
+      return [false, nil] unless isolated
+
+      @event_refresher.call(
+        endpoints.fetch(0),
+        endpoints.fetch(1),
+        previous,
+        branches,
+        event
+      )
+    end
 
     #: (untyped, untyped, RecordSnapshot, Array[String], ActivityEvent) -> RecordSnapshot?
     def refresh_independent_branches( # rubocop:disable Metrics/MethodLength

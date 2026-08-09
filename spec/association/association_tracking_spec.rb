@@ -9,6 +9,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     TrackedReply.delete_all
     TrackedComment.delete_all
     TrackedProfile.delete_all
+    TrackedAuthorship.delete_all
     TrackedArticle.delete_all
     TrackedAuthor.delete_all
     TrackedTag.delete_all
@@ -501,9 +502,9 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     expect(by_path.fetch('comments.article').cycle).to be(true)
     expect(by_path.fetch('author.comments').through).to eq('articles')
     expect(PaperTrailDiff.association_paths(TrackedArticle).map(&:path))
-      .to eq(%w[author comments profile tags])
+      .to eq(%w[author authorships comments contributors profile tags])
     expect(PaperTrailDiff.association_paths(TrackedArticle.new).map(&:path))
-      .to eq(%w[author comments profile tags])
+      .to eq(%w[author authorships comments contributors profile tags])
   end
 
   it 'separates descendant updates into activity timeline steps' do
@@ -670,6 +671,36 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     expect(optimized.map(&:to_h)).to eq(reference.map(&:to_h))
     expect(optimized.map { |step| step.from_boundary.item_type })
       .to include('TrackedAuthor')
+  end
+
+  it 'keeps same-branch descendant events atomic within one transaction' do
+    article = TrackedArticle.create!(title: 'Atomic descendants')
+    comment = article.comments.create!(body: 'Parent')
+    replies = 2.times.map { |index| comment.replies.create!(body: "Reply #{index}") }
+    before = boundary_for(article)
+    TrackedReply.transaction { replies.each(&:destroy!) }
+    after = boundary_for(article)
+    associations = ['comments.replies']
+
+    optimized = PaperTrailDiff.activity_timeline(
+      article,
+      from: before,
+      to: after,
+      associations: associations
+    )
+    reference = full_activity_timeline(
+      article,
+      from: before,
+      to: after,
+      associations: associations
+    )
+
+    expect(optimized.map(&:to_h)).to eq(reference.map(&:to_h))
+    transaction_steps = optimized.select do |step|
+      step.from_boundary.item_type == 'TrackedReply'
+    end
+    expect(transaction_steps.first.diff).to be_empty
+    expect(transaction_steps.last.diff.empty?).to be(false)
   end
 
   it 'uses fewer queries for independent changes on unrelated branches' do

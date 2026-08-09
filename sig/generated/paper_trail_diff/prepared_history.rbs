@@ -1,0 +1,93 @@
+# Generated from lib/paper_trail_diff/prepared_history.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Batched record states and relationship candidates for one activity range.
+  class PreparedHistory
+    DIRECT_RESOLVERS: untyped
+
+    # : (PreparedRecordIndex) -> void
+    def initialize: (PreparedRecordIndex) -> void
+
+    # : (untyped, untyped, Hash[String, Hash[Symbol, untyped]]) -> void
+    def merge_edge: (untyped, untyped, Hash[String, Hash[Symbol, untyped]]) -> void
+
+    # : (untyped, untyped) -> Hash[String, Hash[Symbol, untyped]]
+    def edge: (untyped, untyped) -> Hash[String, Hash[Symbol, untyped]]
+
+    # : (untyped, untyped) -> void
+    def mark_unsupported: (untyped, untyped) -> void
+
+    # : (untyped, untyped, Hash[String, Array[untyped]]) -> void
+    def register_habtm: (untyped, untyped, Hash[String, Array[untyped]]) -> void
+
+    # : (untyped, untyped, untyped, habtm_boundary: untyped) -> [bool, Array[untyped]]
+    def resolve: (untyped, untyped, untyped, habtm_boundary: untyped) -> [ bool, Array[untyped] ]
+
+    private
+
+    @habtm: Hash[Array[String], Hash[String, Array[untyped]]]
+
+    @unsupported: Hash[Array[String], bool]
+
+    @edges: Hash[Array[String], Hash[String, Hash[Symbol, untyped]]]
+
+    @records: PreparedRecordIndex
+
+    # : (untyped, untyped) -> bool
+    def supported?: (untyped, untyped) -> bool
+
+    # : (untyped) -> bool
+    def default_scoped?: (untyped) -> bool
+
+    # : (untyped, untyped, untyped, untyped) -> Array[untyped]?
+    def direct_records: (untyped, untyped, untyped, untyped) -> Array[untyped]?
+
+    # : (untyped, untyped, untyped, untyped) -> Array[untyped]?
+    def resolve_belongs_to: (untyped, untyped, untyped, untyped) -> Array[untyped]?
+
+    # : (untyped, untyped, untyped, untyped) -> Array[untyped]
+    def resolve_children: (untyped, untyped, untyped, untyped) -> Array[untyped]
+
+    # : (untyped, untyped, untyped, untyped) -> Array[untyped]?
+    def resolve_habtm: (untyped, untyped, untyped, untyped) -> Array[untyped]?
+
+    # : (untyped, untyped, untyped) -> Array[untyped]?
+    def belongs_to_records: (untyped, untyped, untyped) -> Array[untyped]?
+
+    # : (untyped, untyped, untyped) -> Array[untyped]
+    def child_records: (untyped, untyped, untyped) -> Array[untyped]
+
+    # : (untyped, untyped, untyped, untyped) -> Array[untyped]?
+    def habtm_records: (untyped, untyped, untyped, untyped) -> Array[untyped]?
+
+    # : (untyped, untyped, untyped, untyped) -> Array[untyped]?
+    def through_records: (untyped, untyped, untyped, untyped) -> Array[untyped]?
+
+    # : (Array[untyped], untyped, untyped, untyped) -> Array[[bool, Array[untyped]]]
+    def resolve_sources: (Array[untyped], untyped, untyped, untyped) -> Array[[ bool, Array[untyped] ]]
+
+    # : (untyped, untyped, untyped) -> bool
+    def member_of?: (untyped, untyped, untyped) -> bool
+
+    # : (untyped) -> String?
+    def scalar_foreign_key: (untyped) -> String?
+
+    # : (untyped, untyped) -> untyped
+    def belongs_to_class: (untyped, untyped) -> untyped
+
+    # : (untyped, untyped) -> Array[String]
+    def owner_types: (untyped, untyped) -> Array[String]
+
+    # : (untyped) -> untyped
+    def transaction_id_for: (untyped) -> untyped
+
+    # : (Array[untyped]) -> Array[untyped]
+    def unique_records: (Array[untyped]) -> Array[untyped]
+
+    # : (untyped, untyped) -> Array[String]
+    def edge_key: (untyped, untyped) -> Array[String]
+
+    # : (Hash[String, Hash[Symbol, untyped]], Hash[String, Hash[Symbol, untyped]]) -> Hash[String, Hash[Symbol, untyped]]
+    def merge_groups: (Hash[String, Hash[Symbol, untyped]], Hash[String, Hash[Symbol, untyped]]) -> Hash[String, Hash[Symbol, untyped]]
+  end
+end

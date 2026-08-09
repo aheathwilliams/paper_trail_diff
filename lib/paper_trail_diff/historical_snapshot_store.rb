@@ -11,6 +11,19 @@ module PaperTrailDiff
       @normalizer = normalizer
       @preparer = preparer
       @snapshots = {} #: Hash[Array[untyped], RecordSnapshot?]
+      @prepared_history = nil #: PreparedHistory?
+    end
+
+    #: (untyped, Array[untyped]) -> void
+    def prepare(record, root_versions)
+      return if @tree.empty?
+
+      @prepared_history = PreparedHistoryLoader.new(
+        record,
+        root_versions: root_versions,
+        tree: @tree,
+        traversal: @traversal
+      ).call
     end
 
     #: (untyped, untyped) -> RecordSnapshot?
@@ -55,6 +68,23 @@ module PaperTrailDiff
       )
     end
 
+    #: (untyped, habtm_version: untyped) -> untyped
+    def association_reader(context_version, habtm_version:)
+      fallback = HistoricalAssociationReifier.new(
+        context_version,
+        habtm_version: habtm_version
+      )
+      history = @prepared_history
+      return fallback unless history
+
+      PreparedAssociationReifier.new(
+        history,
+        context_version,
+        habtm_boundary: habtm_version,
+        fallback: fallback
+      )
+    end
+
     private
 
     # @rbs @tree: AssociationTree
@@ -62,6 +92,7 @@ module PaperTrailDiff
     # @rbs @normalizer: SnapshotNormalizer
     # @rbs @preparer: untyped
     # @rbs @snapshots: Hash[Array[untyped], RecordSnapshot?]
+    # @rbs @prepared_history: PreparedHistory?
 
     #: (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer) -> RecordSnapshot?
     def snapshot_from_version(root_version, context_version, tree:, normalizer:)
@@ -93,7 +124,7 @@ module PaperTrailDiff
 
     #: (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer, habtm_version: untyped) -> RecordSnapshot?
     def normalize(record, context_version, tree:, normalizer:, habtm_version:)
-      reifier = HistoricalAssociationReifier.new(context_version, habtm_version: habtm_version)
+      reifier = association_reader(context_version, habtm_version: habtm_version)
       reflections = [] #: Array[untyped]
       reflections = @traversal.reflections_for(record.class, tree, path: '') if record
       reifier.reify(record, reflections) if record && !reflections.empty?

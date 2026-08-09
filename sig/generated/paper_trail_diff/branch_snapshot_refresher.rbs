@@ -3,8 +3,8 @@
 module PaperTrailDiff
   # Reconstructs selected root branches and merges them into a prior immutable snapshot.
   class BranchSnapshotRefresher
-    # : (tree: AssociationTree, ignore_policy: IgnorePolicy, traversal: AssociationTraversal, pool: SnapshotPool, normalizer: SnapshotNormalizer, full_snapshotter: untyped, partial_snapshotter: untyped) -> void
-    def initialize: (tree: AssociationTree, ignore_policy: IgnorePolicy, traversal: AssociationTraversal, pool: SnapshotPool, normalizer: SnapshotNormalizer, full_snapshotter: untyped, partial_snapshotter: untyped) -> void
+    # : (tree: AssociationTree, ignore_policy: IgnorePolicy, traversal: AssociationTraversal, pool: SnapshotPool, normalizer: SnapshotNormalizer, full_snapshotter: untyped, partial_snapshotter: untyped, association_reader: untyped) -> void
+    def initialize: (tree: AssociationTree, ignore_policy: IgnorePolicy, traversal: AssociationTraversal, pool: SnapshotPool, normalizer: SnapshotNormalizer, full_snapshotter: untyped, partial_snapshotter: untyped, association_reader: untyped) -> void
 
     # : (untyped, untyped, RecordSnapshot?, event: ActivityEvent) -> RecordSnapshot?
     def advance_root: (untyped, untyped, RecordSnapshot?, event: ActivityEvent) -> RecordSnapshot?
@@ -31,6 +31,9 @@ module PaperTrailDiff
     @ignore_policy: IgnorePolicy
 
     @tree: AssociationTree
+
+    # : (Array[untyped], RecordSnapshot, Array[String], ActivityEvent?, bool) -> [bool, RecordSnapshot?]
+    def incremental_event: (Array[untyped], RecordSnapshot, Array[String], ActivityEvent?, bool) -> [ bool, RecordSnapshot? ]
 
     # : (untyped, untyped, RecordSnapshot, Array[String], ActivityEvent) -> RecordSnapshot?
     def refresh_independent_branches: (untyped, untyped, RecordSnapshot, Array[String], ActivityEvent) -> RecordSnapshot?

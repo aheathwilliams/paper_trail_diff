@@ -1,0 +1,65 @@
+# Generated from lib/paper_trail_diff/prepared_edge_loader.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Loads every historical identity that can participate in one association edge.
+  class PreparedEdgeLoader
+    EDGE_LOADERS: untyped
+
+    # : (PreparedRecordIndex, Array[untyped]) -> void
+    def initialize: (PreparedRecordIndex, Array[untyped]) -> void
+
+    # : (untyped, Array[untyped], untyped) -> [Hash[String, Hash[Symbol, untyped]], Hash[String, Array[untyped]]?]
+    def call: (untyped, Array[untyped], untyped) -> [ Hash[String, Hash[Symbol, untyped]], Hash[String, Array[untyped]]? ]
+
+    private
+
+    @transaction_ids: Array[untyped]
+
+    @records: PreparedRecordIndex
+
+    # : (untyped, Array[untyped], untyped) -> [Hash[String, Hash[Symbol, untyped]], nil]
+    def belongs_to_edge: (untyped, Array[untyped], untyped) -> [ Hash[String, Hash[Symbol, untyped]], nil ]
+
+    # : (untyped, Array[untyped], untyped) -> [Hash[String, Hash[Symbol, untyped]], nil]
+    def child_edge: (untyped, Array[untyped], untyped) -> [ Hash[String, Hash[Symbol, untyped]], nil ]
+
+    # : (untyped, Array[untyped], untyped) -> [Hash[String, Hash[Symbol, untyped]], Hash[String, Array[untyped]]]
+    def habtm_edge: (untyped, Array[untyped], untyped) -> [ Hash[String, Hash[Symbol, untyped]], Hash[String, Array[untyped]] ]
+
+    # : (untyped, Array[untyped], untyped) -> Hash[String, Hash[Symbol, untyped]]
+    def belongs_to_groups: (untyped, Array[untyped], untyped) -> Hash[String, Hash[Symbol, untyped]]
+
+    # : (untyped, Array[untyped], untyped) -> Hash[String, Hash[Symbol, untyped]]
+    def child_groups: (untyped, Array[untyped], untyped) -> Hash[String, Hash[Symbol, untyped]]
+
+    # : (untyped, untyped) -> [Hash[String, Hash[Symbol, untyped]], Hash[String, Array[untyped]]]
+    def habtm_groups: (untyped, untyped) -> [ Hash[String, Hash[Symbol, untyped]], Hash[String, Array[untyped]] ]
+
+    # : (untyped, untyped) -> Array[untyped]
+    def habtm_rows: (untyped, untyped) -> Array[untyped]
+
+    # : (Array[untyped], untyped) -> Array[untyped]
+    def membership_ids: (Array[untyped], untyped) -> Array[untyped]
+
+    # : (untyped, Array[untyped], untyped, String) -> Array[untyped]
+    def historical_child_ids: (untyped, Array[untyped], untyped, String) -> Array[untyped]
+
+    # : (untyped, Array[untyped], untyped, String) -> Array[untyped]
+    def live_child_ids: (untyped, Array[untyped], untyped, String) -> Array[untyped]
+
+    # : (untyped, untyped) -> untyped
+    def target_class: (untyped, untyped) -> untyped
+
+    # : (Hash[String, Hash[Symbol, untyped]], untyped, untyped) -> void
+    def add_identity: (Hash[String, Hash[Symbol, untyped]], untyped, untyped) -> void
+
+    # : (untyped, Array[untyped]) -> Hash[String, Hash[Symbol, untyped]]
+    def group_for: (untyped, Array[untyped]) -> Hash[String, Hash[Symbol, untyped]]
+
+    # : (untyped) -> String?
+    def scalar_foreign_key: (untyped) -> String?
+
+    # : (untyped) -> Array[String?]
+    def parent_types: (untyped) -> Array[String?]
+  end
+end

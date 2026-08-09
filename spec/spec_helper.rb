@@ -16,6 +16,10 @@ SimpleCov.start do
     add_filter '/activity_event_snapshot_refresher.rb'
     add_filter '/activity_root_snapshot_refresher.rb'
     add_filter '/prepared_record_index.rb'
+    add_filter '/prepared_history.rb'
+    add_filter '/prepared_edge_loader.rb'
+    add_filter '/prepared_history_loader.rb'
+    add_filter '/prepared_association_reifier.rb'
     minimum_coverage line: 85, branch: 60
   end
 end

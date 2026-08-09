@@ -49,6 +49,13 @@ ActiveRecord::Schema.define do
     table.timestamps null: false
   end
 
+  create_table :tracked_authorships, force: true do |table|
+    table.integer :article_id, null: false
+    table.integer :author_id, null: false
+    table.string :role, null: false
+    table.timestamps null: false
+  end
+
   create_table :tracked_profiles, force: true do |table|
     table.string :bio, null: false
     table.integer :article_id, null: false
@@ -85,6 +92,8 @@ class TrackedAuthor < ActiveRecord::Base
   has_many :comments, through: :articles
   has_many :reviewed_comments, class_name: 'TrackedComment', foreign_key: :reviewer_id,
                                inverse_of: :reviewer
+  has_many :authorships, class_name: 'TrackedAuthorship', foreign_key: :author_id,
+                         inverse_of: :author
   has_paper_trail synchronize_version_creation_timestamp: false
 end
 
@@ -94,12 +103,21 @@ class TrackedArticle < ActiveRecord::Base
                     inverse_of: :article
   has_many :comments, class_name: 'TrackedComment', foreign_key: :article_id,
                       inverse_of: :article
+  has_many :authorships, class_name: 'TrackedAuthorship', foreign_key: :article_id,
+                         inverse_of: :article
+  has_many :contributors, through: :authorships, source: :author
   has_and_belongs_to_many :tags,
                           class_name: 'TrackedTag',
                           join_table: :tracked_articles_tags,
                           foreign_key: :tracked_article_id,
                           association_foreign_key: :tracked_tag_id
   has_paper_trail synchronize_version_creation_timestamp: false
+end
+
+class TrackedAuthorship < ActiveRecord::Base
+  belongs_to :article, class_name: 'TrackedArticle', inverse_of: :authorships
+  belongs_to :author, class_name: 'TrackedAuthor', inverse_of: :authorships
+  has_paper_trail
 end
 
 class TrackedProfile < ActiveRecord::Base

@@ -1,0 +1,27 @@
+# Generated from lib/paper_trail_diff/prepared_association_reifier.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Resolves indexed associations and delegates unsupported reflections to PT-AT.
+  class PreparedAssociationReifier
+    # : (PreparedHistory, untyped, habtm_boundary: untyped, fallback: HistoricalAssociationReifier) -> void
+    def initialize: (PreparedHistory, untyped, habtm_boundary: untyped, fallback: HistoricalAssociationReifier) -> void
+
+    # : (untyped, Array[untyped]) -> void
+    def reify: (untyped, Array[untyped]) -> void
+
+    private
+
+    @history: PreparedHistory
+
+    @boundary: untyped
+
+    @habtm_boundary: untyped
+
+    @fallback: HistoricalAssociationReifier
+
+    @reified: Hash[Array[untyped], bool]
+
+    # : (untyped, untyped) -> void
+    def reify_association: (untyped, untyped) -> void
+  end
+end

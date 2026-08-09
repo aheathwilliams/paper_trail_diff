@@ -1,0 +1,67 @@
+# Generated from lib/paper_trail_diff/prepared_history_loader.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Expands the explicit association tree into a request-scoped PreparedHistory.
+  class PreparedHistoryLoader
+    # : (untyped, root_versions: Array[untyped], tree: AssociationTree, traversal: AssociationTraversal) -> void
+    def initialize: (untyped, root_versions: Array[untyped], tree: AssociationTree, traversal: AssociationTraversal) -> void
+
+    # : () -> PreparedHistory
+    def call: () -> PreparedHistory
+
+    private
+
+    @prepared: Hash[Array[String], Array[String]]
+
+    @edges: PreparedEdgeLoader
+
+    @history: PreparedHistory
+
+    @records: PreparedRecordIndex
+
+    @traversal: AssociationTraversal
+
+    @tree: AssociationTree
+
+    @record: untyped
+
+    # : (untyped, Array[untyped], AssociationTree, path: String) -> void
+    def load_node: (untyped, Array[untyped], AssociationTree, path: String) -> void
+
+    # : (untyped, Array[untyped], untyped) -> Hash[String, Hash[Symbol, untyped]]
+    def prepare_reflection: (untyped, Array[untyped], untyped) -> Hash[String, Hash[Symbol, untyped]]
+
+    # : (untyped, Array[untyped], untyped) -> Hash[String, Hash[Symbol, untyped]]
+    def prepare_through: (untyped, Array[untyped], untyped) -> Hash[String, Hash[Symbol, untyped]]
+
+    # : (untyped, Array[untyped], untyped) -> Hash[String, Hash[Symbol, untyped]]
+    def prepare_edge: (untyped, Array[untyped], untyped) -> Hash[String, Hash[Symbol, untyped]]
+
+    # : (untyped, Array[untyped], untyped) -> Array[untyped]
+    def unprepared_ids: (untyped, Array[untyped], untyped) -> Array[untyped]
+
+    # : (untyped, Array[untyped], untyped) -> void
+    def mark_prepared: (untyped, Array[untyped], untyped) -> void
+
+    # : (untyped, untyped, Hash[String, Hash[Symbol, untyped]]) -> void
+    def mark_unsupported: (untyped, untyped, Hash[String, Hash[Symbol, untyped]]) -> void
+
+    # : (untyped) -> bool
+    def deferred_macro?: (untyped) -> bool
+
+    # : (Hash[String, Hash[Symbol, untyped]]) -> void
+    def load_groups: (Hash[String, Hash[Symbol, untyped]]) -> void
+
+    # : (untyped, Array[untyped]) -> void
+    def load_records: (untyped, Array[untyped]) -> void
+
+    # : (untyped) -> bool
+    def versioned?: (untyped) -> bool
+
+    # : (untyped, untyped) -> Array[String]
+    def edge_key: (untyped, untyped) -> Array[String]
+
+    # : (Hash[String, Hash[Symbol, untyped]], Hash[String, Hash[Symbol, untyped]]) -> Hash[String, Hash[Symbol, untyped]]
+    def merge_groups: (Hash[String, Hash[Symbol, untyped]], Hash[String, Hash[Symbol, untyped]]) -> Hash[String, Hash[Symbol, untyped]]
+  end
+end

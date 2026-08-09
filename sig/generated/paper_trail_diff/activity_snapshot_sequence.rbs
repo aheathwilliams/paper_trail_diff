@@ -3,8 +3,11 @@
 module PaperTrailDiff
   # Optional full/partial snapshot operations consumed by the activity sequence.
   class ActivitySnapshotProvider
-    # : (snapshotter: untyped, refresher: untyped) -> void
-    def initialize: (snapshotter: untyped, refresher: untyped) -> void
+    # : (snapshotter: untyped, refresher: untyped, preparer: untyped) -> void
+    def initialize: (snapshotter: untyped, refresher: untyped, preparer: untyped) -> void
+
+    # : (untyped, Array[untyped]) -> void
+    def prepare: (untyped, Array[untyped]) -> void
 
     # : (untyped, untyped) -> RecordSnapshot?
     def call: (untyped, untyped) -> RecordSnapshot?
@@ -18,6 +21,8 @@ module PaperTrailDiff
     @snapshotter: untyped
 
     @refresher: untyped
+
+    @preparer: untyped
   end
 
   # Builds chronological snapshots, refreshing only branches affected by prior events.

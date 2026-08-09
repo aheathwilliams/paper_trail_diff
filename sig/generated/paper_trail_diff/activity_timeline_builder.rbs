@@ -40,6 +40,9 @@ module PaperTrailDiff
     # : (Array[untyped], ?range_end: untyped) -> Array[ActivityEvent]
     def collect_events: (Array[untyped], ?range_end: untyped) -> Array[ActivityEvent]
 
+    # : (Array[untyped]) -> void
+    def prepare_history: (Array[untyped]) -> void
+
     # : (Array[untyped], Array[ActivityEvent], ?current: untyped, ?final_boundary: ActivityBoundary?, ?final_snapshot: RecordSnapshot?) -> Array[ActivityStep]
     def build_event_steps: (Array[untyped], Array[ActivityEvent], ?current: untyped, ?final_boundary: ActivityBoundary?, ?final_snapshot: RecordSnapshot?) -> Array[ActivityStep]
 

@@ -94,9 +94,14 @@ module PaperTrailDiff
         pool: @snapshot_pool,
         normalizer: @normalizer,
         full_snapshotter: method(:snapshot_at),
-        partial_snapshotter: @historical_store.method(:custom)
+        partial_snapshotter: @historical_store.method(:custom),
+        association_reader: @historical_store.method(:association_reader)
       )
-      ActivitySnapshotProvider.new(snapshotter: method(:snapshot_at), refresher: refresher)
+      ActivitySnapshotProvider.new(
+        snapshotter: method(:snapshot_at),
+        refresher: refresher,
+        preparer: @historical_store.method(:prepare)
+      )
     end
 
     #: (untyped, from: untyped, to: untyped) -> ActivityTimelineBuilder

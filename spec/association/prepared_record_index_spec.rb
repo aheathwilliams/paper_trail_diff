@@ -9,6 +9,7 @@ RSpec.describe PaperTrailDiff::PreparedRecordIndex do
     TrackedReply.delete_all
     TrackedComment.delete_all
     TrackedProfile.delete_all
+    TrackedAuthorship.delete_all
     TrackedArticle.delete_all
     TrackedAuthor.delete_all
     TrackedTag.delete_all

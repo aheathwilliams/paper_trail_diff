@@ -11,11 +11,12 @@ module PaperTrailDiff
     }.freeze
     private_constant :RECORD_AFTER_HANDLERS
 
-    #: (traversal: AssociationTraversal, pool: SnapshotPool, components: untyped) -> void
-    def initialize(traversal:, pool:, components:)
+    #: (traversal: AssociationTraversal, pool: SnapshotPool, components: untyped, ?association_reader: untyped) -> void
+    def initialize(traversal:, pool:, components:, association_reader: nil)
       @traversal = traversal
       @pool = pool
       @components = components
+      @association_reader = association_reader || method(:historical_reader)
     end
 
     #: (untyped, untyped, RecordSnapshot, Array[String], ActivityEvent?) -> [bool, RecordSnapshot?]
@@ -62,6 +63,7 @@ module PaperTrailDiff
     # @rbs @traversal: AssociationTraversal
     # @rbs @pool: SnapshotPool
     # @rbs @components: untyped
+    # @rbs @association_reader: untyped
 
     #: (Array[Array[untyped]], untyped) -> bool
     def unsafe_through_membership_event?(routes, version)
@@ -438,10 +440,10 @@ module PaperTrailDiff
       root_endpoint,
       context_endpoint
     )
-      habtm_version = Endpoint.version?(root_endpoint) ? root_endpoint : context_endpoint
-      reifier = HistoricalAssociationReifier.new(
+      habtm_boundary = Endpoint.version?(root_endpoint) ? root_endpoint : context_endpoint
+      reifier = @association_reader.call(
         context_endpoint,
-        habtm_version: habtm_version
+        habtm_version: habtm_boundary
       )
       normalizer.call_child(
         record,
@@ -450,6 +452,11 @@ module PaperTrailDiff
         incoming: reflection,
         reifier: reifier
       )
+    end
+
+    #: (untyped, habtm_version: untyped) -> HistoricalAssociationReifier
+    def historical_reader(context_endpoint, habtm_version:)
+      HistoricalAssociationReifier.new(context_endpoint, habtm_version: habtm_version)
     end
 
     #: (Array[RecordSnapshot], untyped, RecordSnapshot?) -> Array[RecordSnapshot]

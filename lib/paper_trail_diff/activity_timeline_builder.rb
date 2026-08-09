@@ -29,6 +29,7 @@ module PaperTrailDiff
       end
 
       root_versions = VersionRange.new(@record, from: @from, to: @to).select
+      prepare_history(root_versions)
       events = collect_events(root_versions)
       activity_steps, root_snapshots, = event_history(root_versions, events)
       build_analysis(root_versions, root_snapshots, activity_steps)
@@ -45,6 +46,7 @@ module PaperTrailDiff
     #: () -> Array[ActivityStep]
     def build_between_versions
       root_versions = VersionRange.new(@record, from: @from, to: @to).select
+      prepare_history(root_versions)
       events = collect_events(root_versions)
       build_event_steps(root_versions, events)
     end
@@ -54,6 +56,7 @@ module PaperTrailDiff
       validate_current_range!
       current_snapshot, captured_at = capture_current
       root_versions = VersionRange.new(@record, from: @from, to: @from).select_through_latest
+      prepare_history(root_versions)
       events = collect_events(root_versions, range_end: captured_at)
       build_event_steps(
         root_versions,
@@ -88,6 +91,11 @@ module PaperTrailDiff
         traversal: AssociationTraversal.new(@tree),
         range_end: range_end
       ).call
+    end
+
+    #: (Array[untyped]) -> void
+    def prepare_history(root_versions)
+      @snapshotter.prepare(@record, root_versions) if @snapshotter.respond_to?(:prepare)
     end
 
     #: (Array[untyped], Array[ActivityEvent], ?current: untyped, ?final_boundary: ActivityBoundary?, ?final_snapshot: RecordSnapshot?) -> Array[ActivityStep]

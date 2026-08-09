@@ -6,13 +6,15 @@ module PaperTrailDiff
   class ActivityEventSnapshotRefresher
     RECORD_AFTER_HANDLERS: untyped
 
-    # : (traversal: AssociationTraversal, pool: SnapshotPool, components: untyped) -> void
-    def initialize: (traversal: AssociationTraversal, pool: SnapshotPool, components: untyped) -> void
+    # : (traversal: AssociationTraversal, pool: SnapshotPool, components: untyped, ?association_reader: untyped) -> void
+    def initialize: (traversal: AssociationTraversal, pool: SnapshotPool, components: untyped, ?association_reader: untyped) -> void
 
     # : (untyped, untyped, RecordSnapshot, Array[String], ActivityEvent?) -> [bool, RecordSnapshot?]
     def call: (untyped, untyped, RecordSnapshot, Array[String], ActivityEvent?) -> [ bool, RecordSnapshot? ]
 
     private
+
+    @association_reader: untyped
 
     @components: untyped
 
@@ -80,6 +82,9 @@ module PaperTrailDiff
 
     # : (untyped, untyped, AssociationTree, String, SnapshotNormalizer, untyped, untyped) -> RecordSnapshot?
     def normalize_event_record: (untyped, untyped, AssociationTree, String, SnapshotNormalizer, untyped, untyped) -> RecordSnapshot?
+
+    # : (untyped, habtm_version: untyped) -> HistoricalAssociationReifier
+    def historical_reader: (untyped, habtm_version: untyped) -> HistoricalAssociationReifier
 
     # : (Array[RecordSnapshot], untyped, RecordSnapshot?) -> Array[RecordSnapshot]
     def replace_collection_record: (Array[RecordSnapshot], untyped, RecordSnapshot?) -> Array[RecordSnapshot]

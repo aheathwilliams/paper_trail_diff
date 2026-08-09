@@ -6,6 +6,9 @@ module PaperTrailDiff
     # : (tree: AssociationTree, traversal: AssociationTraversal, normalizer: SnapshotNormalizer, preparer: untyped) -> void
     def initialize: (tree: AssociationTree, traversal: AssociationTraversal, normalizer: SnapshotNormalizer, preparer: untyped) -> void
 
+    # : (untyped, Array[untyped]) -> void
+    def prepare: (untyped, Array[untyped]) -> void
+
     # : (untyped, untyped) -> RecordSnapshot?
     def call: (untyped, untyped) -> RecordSnapshot?
 
@@ -15,17 +18,22 @@ module PaperTrailDiff
     # : (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer) -> RecordSnapshot?
     def custom: (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer) -> RecordSnapshot?
 
+    # : (untyped, habtm_version: untyped) -> untyped
+    def association_reader: (untyped, habtm_version: untyped) -> untyped
+
     private
 
-    @tree: AssociationTree
+    @prepared_history: PreparedHistory?
 
-    @traversal: AssociationTraversal
-
-    @normalizer: SnapshotNormalizer
+    @snapshots: Hash[Array[untyped], RecordSnapshot?]
 
     @preparer: untyped
 
-    @snapshots: Hash[Array[untyped], RecordSnapshot?]
+    @normalizer: SnapshotNormalizer
+
+    @traversal: AssociationTraversal
+
+    @tree: AssociationTree
 
     # : (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer) -> RecordSnapshot?
     def snapshot_from_version: (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer) -> RecordSnapshot?
