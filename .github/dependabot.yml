@@ -8,6 +8,13 @@ updates:
       development-dependencies:
         patterns:
           - "*"
+    ignore:
+      - dependency-name: simplecov
+        update-types:
+          - version-update:semver-major
+      - dependency-name: steep
+        update-types:
+          - version-update:semver-major
 
   - package-ecosystem: github-actions
     directory: "/"
