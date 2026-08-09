@@ -1,0 +1,29 @@
+# Generated from lib/paper_trail_diff/snapshot_traversal.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Walks nested state included in an added, removed, or replaced record snapshot.
+  class SnapshotTraversal < TraversalEmitter
+    # : (RecordSnapshot, association_path: traversal_association_path, record_path: traversal_record_path, state: traversal_state, ?association_kind: Symbol?, ?include_record: bool) -> void
+    def call: (RecordSnapshot, association_path: traversal_association_path, record_path: traversal_record_path, state: traversal_state, ?association_kind: Symbol?, ?include_record: bool) -> void
+
+    private
+
+    # : (RecordSnapshot, traversal_association_path, traversal_record_path, traversal_state, Symbol?) -> void
+    def emit_record: (RecordSnapshot, traversal_association_path, traversal_record_path, traversal_state, Symbol?) -> void
+
+    # : (RecordSnapshot, traversal_association_path, traversal_record_path, traversal_state, Symbol?) -> void
+    def emit_attributes: (RecordSnapshot, traversal_association_path, traversal_record_path, traversal_state, Symbol?) -> void
+
+    # : (String, untyped, traversal_association_path, traversal_record_path, traversal_state, Symbol?) -> void
+    def emit_attribute: (String, untyped, traversal_association_path, traversal_record_path, traversal_state, Symbol?) -> void
+
+    # : (RecordSnapshot, traversal_association_path, traversal_record_path, traversal_state) -> void
+    def emit_associations: (RecordSnapshot, traversal_association_path, traversal_record_path, traversal_state) -> void
+
+    # : (AssociationSnapshot, traversal_association_path, traversal_record_path, traversal_state) -> void
+    def emit_association: (AssociationSnapshot, traversal_association_path, traversal_record_path, traversal_state) -> void
+
+    # : (AssociationSnapshot, traversal_association_path, traversal_record_path, traversal_state) -> void
+    def emit_association_records: (AssociationSnapshot, traversal_association_path, traversal_record_path, traversal_state) -> void
+  end
+end

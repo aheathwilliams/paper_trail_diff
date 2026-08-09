@@ -13,6 +13,11 @@ require_relative 'paper_trail_diff/association_discovery'
 require_relative 'paper_trail_diff/diagnostics'
 require_relative 'paper_trail_diff/snapshot'
 require_relative 'paper_trail_diff/value_objects'
+require_relative 'paper_trail_diff/traversal_entry'
+require_relative 'paper_trail_diff/traversal_emitter'
+require_relative 'paper_trail_diff/snapshot_traversal'
+require_relative 'paper_trail_diff/association_diff_traversal'
+require_relative 'paper_trail_diff/traversal'
 require_relative 'paper_trail_diff/engine'
 require_relative 'paper_trail_diff/historical_association_reifier'
 require_relative 'paper_trail_diff/prepared_record_index'
@@ -50,6 +55,10 @@ require_relative 'paper_trail_diff/paper_trail_adapter'
 #     type identity = Array[untyped]
 #     type ignore_option = Array[String | Symbol] | Hash[String | Symbol, untyped]
 #     type reference_key = :type | :id | "type" | "id"
+#     type traversal_context = :change | :included_state
+#     type traversal_state = :before | :after
+#     type traversal_association_path = Array[String]
+#     type traversal_record_path = Array[RecordReference]
 #   end
 
 # Structured version comparison for PaperTrail.

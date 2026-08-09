@@ -53,4 +53,12 @@ module PaperTrailDiff
   type ignore_option = Array[String | Symbol] | Hash[String | Symbol, untyped]
 
   type reference_key = :type | :id | "type" | "id"
+
+  type traversal_context = :change | :included_state
+
+  type traversal_state = :before | :after
+
+  type traversal_association_path = Array[String]
+
+  type traversal_record_path = Array[RecordReference]
 end

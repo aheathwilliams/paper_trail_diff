@@ -1,0 +1,41 @@
+# Generated from lib/paper_trail_diff/traversal.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Coordinates root lifecycle, scalar, and association traversal.
+  class DiffTraversal < TraversalEmitter
+    # : (Diff, ^(TraversalEntry) -> void) -> void
+    def initialize: (Diff, ^(TraversalEntry) -> void) -> void
+
+    # : () -> void
+    def call: () -> void
+
+    private
+
+    @associations: AssociationDiffTraversal
+
+    @diff: Diff
+
+    @snapshots: SnapshotTraversal
+
+    # : () -> void
+    def walk_presence_change: () -> void
+
+    # : (RecordSnapshot?, traversal_state) -> void
+    def walk_presence_snapshot: (RecordSnapshot?, traversal_state) -> void
+  end
+
+  # The complete structured difference between two normalized endpoints.
+  class Diff
+    # Walks semantic changes and the nested state carried by added or removed records.
+    # @rbs () { (TraversalEntry) -> void } -> Diff
+    #    | () -> Enumerator[TraversalEntry, Diff]
+    def each_entry: () { (TraversalEntry) -> void } -> Diff
+                  | () -> Enumerator[TraversalEntry, Diff]
+
+    # Walks only semantic changes, excluding snapshot state included for context.
+    # @rbs () { (TraversalEntry) -> void } -> Diff
+    #    | () -> Enumerator[TraversalEntry, Diff]
+    def each_change: () { (TraversalEntry) -> void } -> Diff
+                   | () -> Enumerator[TraversalEntry, Diff]
+  end
+end

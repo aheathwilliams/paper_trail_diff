@@ -1,0 +1,58 @@
+# Generated from lib/paper_trail_diff/association_diff_traversal.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Walks nested singular and collection association differences.
+  class AssociationDiffTraversal < TraversalEmitter
+    # : (^(TraversalEntry) -> void) -> void
+    def initialize: (^(TraversalEntry) -> void) -> void
+
+    # : (association_diffs, association_path: traversal_association_path, record_path: traversal_record_path) -> void
+    def call: (association_diffs, association_path: traversal_association_path, record_path: traversal_record_path) -> void
+
+    # : (Hash[String, ValueChange], association_path: traversal_association_path, record_path: traversal_record_path, association_kind: Symbol?) -> void
+    def attributes: (Hash[String, ValueChange], association_path: traversal_association_path, record_path: traversal_record_path, association_kind: Symbol?) -> void
+
+    private
+
+    @snapshots: SnapshotTraversal
+
+    # : (association_diff, traversal_association_path, traversal_record_path) -> void
+    def walk_association: (association_diff, traversal_association_path, traversal_record_path) -> void
+
+    # : (String, ValueChange, traversal_association_path, traversal_record_path, Symbol?) -> void
+    def emit_attribute: (String, ValueChange, traversal_association_path, traversal_record_path, Symbol?) -> void
+
+    # : (CollectionAssociationDiff, traversal_association_path, traversal_record_path) -> void
+    def walk_collection: (CollectionAssociationDiff, traversal_association_path, traversal_record_path) -> void
+
+    # : (Array[RecordSnapshot], Symbol, traversal_state, CollectionAssociationDiff, traversal_association_path, traversal_record_path) -> void
+    def walk_memberships: (Array[RecordSnapshot], Symbol, traversal_state, CollectionAssociationDiff, traversal_association_path, traversal_record_path) -> void
+
+    # : (RecordSnapshot, Symbol, traversal_state, CollectionAssociationDiff, traversal_association_path, traversal_record_path) -> void
+    def walk_membership: (RecordSnapshot, Symbol, traversal_state, CollectionAssociationDiff, traversal_association_path, traversal_record_path) -> void
+
+    # : (RecordSnapshot, Symbol, traversal_state, CollectionAssociationDiff, traversal_association_path, traversal_record_path) -> void
+    def emit_membership: (RecordSnapshot, Symbol, traversal_state, CollectionAssociationDiff, traversal_association_path, traversal_record_path) -> void
+
+    # : (ToOneAssociationDiff, traversal_association_path, traversal_record_path) -> void
+    def walk_to_one: (ToOneAssociationDiff, traversal_association_path, traversal_record_path) -> void
+
+    # : (ValueChange, Symbol, traversal_association_path, traversal_record_path) -> void
+    def walk_relationship: (ValueChange, Symbol, traversal_association_path, traversal_record_path) -> void
+
+    # : (ValueChange, Symbol, traversal_association_path, traversal_record_path) -> void
+    def emit_relationship: (ValueChange, Symbol, traversal_association_path, traversal_record_path) -> void
+
+    # : (RecordSnapshot?, traversal_state, Symbol, traversal_association_path, traversal_record_path) -> void
+    def walk_related: (RecordSnapshot?, traversal_state, Symbol, traversal_association_path, traversal_record_path) -> void
+
+    # : (ValueChange) -> Symbol
+    def relationship_kind: (ValueChange) -> Symbol
+
+    # : (RecordChange, Symbol, traversal_association_path, traversal_record_path) -> void
+    def walk_record_change: (RecordChange, Symbol, traversal_association_path, traversal_record_path) -> void
+
+    # : (RecordChange, Symbol, traversal_association_path, traversal_record_path) -> void
+    def emit_record_change: (RecordChange, Symbol, traversal_association_path, traversal_record_path) -> void
+  end
+end

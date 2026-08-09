@@ -1,0 +1,52 @@
+# Generated from lib/paper_trail_diff/traversal_entry.rb with RBS::Inline
+
+module PaperTrailDiff
+  # One immutable location and value emitted while walking a Diff tree.
+  class TraversalEntry
+    CONTEXTS: untyped
+
+    STATES: untyped
+
+    attr_reader kind: Symbol
+
+    attr_reader context: traversal_context
+
+    attr_reader association_path: traversal_association_path
+
+    attr_reader record_path: traversal_record_path
+
+    attr_reader association_kind: Symbol?
+
+    attr_reader state: traversal_state?
+
+    attr_reader attribute: String?
+
+    attr_reader value: untyped
+
+    # : (kind: Symbol, context: traversal_context, ?association_path: traversal_association_path, ?record_path: traversal_record_path, ?association_kind: Symbol?, ?state: traversal_state?, ?attribute: String?, ?value: untyped) -> void
+    def initialize: (kind: Symbol, context: traversal_context, ?association_path: traversal_association_path, ?record_path: traversal_record_path, ?association_kind: Symbol?, ?state: traversal_state?, ?attribute: String?, ?value: untyped) -> void
+
+    # : () -> bool
+    def change?: () -> bool
+
+    # : () -> bool
+    def included_state?: () -> bool
+
+    # : () -> String?
+    def association: () -> String?
+
+    # : () -> RecordReference?
+    def record: () -> RecordReference?
+
+    # : () -> Hash[Symbol, untyped]
+    def to_h: () -> Hash[Symbol, untyped]
+
+    private
+
+    # : (Symbol, Symbol?) -> void
+    def validate!: (Symbol, Symbol?) -> void
+
+    # : (traversal_association_path) -> traversal_association_path
+    def immutable_names: (traversal_association_path) -> traversal_association_path
+  end
+end

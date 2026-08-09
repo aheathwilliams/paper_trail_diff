@@ -1,0 +1,16 @@
+# Generated from lib/paper_trail_diff/traversal_emitter.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Shared entry construction for internal traversal collaborators.
+  class TraversalEmitter
+    # : (^(TraversalEntry) -> void) -> void
+    def initialize: (^(TraversalEntry) -> void) -> void
+
+    private
+
+    @receiver: ^(TraversalEntry) -> void
+
+    # : (kind: Symbol, context: traversal_context, association_path: traversal_association_path, record_path: traversal_record_path, value: untyped, ?association_kind: Symbol?, ?state: traversal_state?, ?attribute: String?) -> void
+    def emit: (kind: Symbol, context: traversal_context, association_path: traversal_association_path, record_path: traversal_record_path, value: untyped, ?association_kind: Symbol?, ?state: traversal_state?, ?attribute: String?) -> void
+  end
+end
