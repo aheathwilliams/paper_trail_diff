@@ -95,10 +95,21 @@ steps = PaperTrailDiff.timeline(
 
 steps.first.from_version # the original PaperTrail version
 steps.first.to_version   # the next PaperTrail version
+steps.first.from_boundary # immutable presentation metadata
+steps.first.to_boundary
 steps.first.diff         # a PaperTrailDiff::Diff
+steps.first.empty?        # delegates to the diff
 steps.first.to_h
 # => { from_version_id: 2, to_version_id: 3, diff: { ... } }
 ```
+
+Both timeline types expose `from_boundary`, `to_boundary`, `diff`, and
+`empty?`. A historical boundary has `event`, `whodunnit`, `record`,
+`recorded_at`, `version?`, and `current?` readers. Checkpoint `Step` objects
+also retain their original `from_version` and `to_version` for callers that
+need custom PaperTrail metadata. Existing `Step#to_h` and
+`ActivityBoundary#to_h` shapes remain unchanged; use the readers for the new
+metadata.
 
 Every version boundary remains in the result, even when its diff is empty after
 ignored fields are removed. Equal boundaries return a frozen empty array.
@@ -323,6 +334,59 @@ database state. Unknown names and unsupported macros raise explicit
 Malformed public options raise `PaperTrailDiff::ConfigurationError`, also under
 that base error.
 
+## Traverse result trees
+
+The nested tree remains the canonical, lossless result. For renderers,
+counters, exports, and notifications, `Diff#each_change` provides a
+deterministic depth-first stream of semantic changes:
+
+```ruby
+diff.each_change do |entry|
+  entry.kind              # :attribute_changed, :record_added, ...
+  entry.association_path  # ["comments", "replies"]
+  entry.record_path       # frozen RecordReference objects
+  entry.association_kind  # :has_many, :belongs_to, ...
+  entry.attribute         # "body" for an attribute entry
+  entry.value             # ValueChange, RecordChange, or RecordSnapshot
+end
+
+counts = diff.each_change.map(&:kind).tally
+```
+
+`record_changed` entries are emitted before that record's attribute and nested
+association changes, allowing an application to count both changed records and
+changed fields. Singular relationship operations are classified separately as
+`relationship_added`, `relationship_removed`, or `relationship_replaced`.
+Root create/delete transitions remain `record_presence_changed`.
+
+Added, removed, and replaced records carry complete bounded snapshots. Use
+`each_entry` when a renderer also needs that nested state without writing a
+second snapshot walker:
+
+```ruby
+diff.each_entry do |entry|
+  next unless entry.included_state?
+
+  entry.kind     # :record_included, :attribute_included, :association_included
+  entry.state    # :before or :after
+  entry.context  # :included_state
+end
+```
+
+An included record is historical context, not evidence that the nested record
+changed independently. `each_change` therefore omits included-state entries.
+Both methods return an `Enumerator` when no block is supplied and return the
+diff when called with a block. Entries and their paths are immutable and have
+deterministic `to_h` output. The root location uses empty association and record
+paths; descendant `record_path` values contain only the explicitly traversed
+descendant identities.
+
+Traversal is path-preserving and does not deduplicate. If the same record is
+reachable through two selected paths, it appears at both locations so the
+consumer can choose whether path identity or record identity controls counting.
+Walking a result never performs database access and never discovers additional
+associations.
+
 ## Discover and diagnose associations
 
 Configuration UIs can use bounded public reflection instead of duplicating the
@@ -392,6 +456,7 @@ The public result types are:
 - `PaperTrailDiff::ActivityBoundary`
 - `PaperTrailDiff::Analysis`
 - `PaperTrailDiff::ValueChange`
+- `PaperTrailDiff::TraversalEntry`
 - `PaperTrailDiff::RecordReference`
 - `PaperTrailDiff::RecordSnapshot`
 - `PaperTrailDiff::RecordChange`
@@ -404,11 +469,13 @@ The public result types are:
 They expose readers, are frozen after construction, and provide deterministic
 `to_h` output. Structural hash keys are symbols; attribute and association
 names are strings. Attribute values retain their Ruby types. `RecordChange#record`
-is a `RecordReference` with `type` and `id` readers. `Step` itself is frozen but
-intentionally retains the original, potentially mutable PaperTrail version
-objects for metadata access; `Step#to_h` emits only their IDs. `ActivityStep`
-instead retains only immutable boundary metadata and serializes as
-`{ from: ..., to: ..., diff: ... }`.
+is a `RecordReference` with `type` and `id` readers. `TraversalEntry#record` and
+`#association` return the final components of their corresponding paths. `Step`
+itself is frozen but intentionally retains the original, potentially mutable
+PaperTrail version objects for metadata access; its new boundary readers provide
+an immutable presentation interface, while `Step#to_h` continues to emit only
+version IDs. `ActivityStep` retains only immutable boundary metadata and
+serializes as `{ from: ..., to: ..., diff: ... }`.
 
 ## Historical correctness and limitations
 

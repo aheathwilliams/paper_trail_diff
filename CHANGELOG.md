@@ -3,6 +3,17 @@
 All notable changes to this project will be documented in this file. The
 project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- Add deterministic `Diff#each_entry` and `Diff#each_change` traversal with
+  immutable `TraversalEntry` values for renderers, counters, exports, and
+  notifications.
+- Add immutable version metadata and record references to activity boundaries.
+- Give checkpoint `Step` objects `from_boundary` and `to_boundary` readers and
+  give both timeline step types an `empty?` predicate.
+
 ## [0.1.0] - 2026-08-09
 
 ### Added

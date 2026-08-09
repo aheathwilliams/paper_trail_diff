@@ -65,7 +65,7 @@ module PaperTrailDiff
       {
         kind: kind,
         context: context,
-        association_path: association_path,
+        association_path: Support.serialize(association_path),
         record_path: Support.serialize(record_path),
         association_kind: association_kind,
         state: state,
