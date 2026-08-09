@@ -114,7 +114,7 @@ jobs:
       - name: Install and smoke-test without association tracking
         shell: bash
         run: |
-          gem install --local pkg/paper_trail_diff-*.gem
+          gem install --no-document pkg/paper_trail_diff-*.gem
           ruby -e 'require "paper_trail_diff"; abort if defined?(PaperTrailAssociationTracking)'
 
       - name: Validate packaged RBS signatures
