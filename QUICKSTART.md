@@ -34,6 +34,7 @@ Restart the Rails console after changing the Gemfile or an initializer.
 
 Run this in `bin/rails console`:
 
+<!-- executable:quickstart-history -->
 ```ruby
 article = Article.create!(title: "Draft")
 
@@ -55,6 +56,7 @@ article.title                 # => "Final" (current database state)
 
 ## 4. Compare two states
 
+<!-- executable:quickstart-compare -->
 ```ruby
 diff = PaperTrailDiff.compare(draft_version, published_version)
 
@@ -80,6 +82,7 @@ report intermediate changes.
 Pass the persisted record explicitly when the second endpoint should be the
 current database state:
 
+<!-- executable:quickstart-current -->
 ```ruby
 diff = PaperTrailDiff.compare(published_version, article)
 
@@ -93,6 +96,7 @@ Current state is never inferred automatically.
 
 Create one more historical endpoint:
 
+<!-- executable:quickstart-timeline-state -->
 ```ruby
 article.update!(title: "Archived")
 final_version = article.versions.last # reifies to "Final"
@@ -100,6 +104,7 @@ final_version = article.versions.last # reifies to "Final"
 
 Then compare every adjacent root version:
 
+<!-- executable:quickstart-timeline -->
 ```ruby
 steps = PaperTrailDiff.timeline(
   article,
@@ -136,6 +141,7 @@ own boundary and can end at an explicitly supplied current record.
 
 `updated_at` is ignored by default. Passing `ignore:` replaces that default:
 
+<!-- executable:quickstart-ignore -->
 ```ruby
 PaperTrailDiff.compare(
   draft_version,
@@ -181,6 +187,7 @@ end
 
 Take an explicit root checkpoint before the example change:
 
+<!-- executable:quickstart-association -->
 ```ruby
 Article.transaction do
   Article.find(article.id).paper_trail.save_with_version
@@ -212,6 +219,7 @@ diff = PaperTrailDiff.compare(
 
 To see versioned child events without touching the article after each change:
 
+<!-- executable:quickstart-activity -->
 ```ruby
 steps = PaperTrailDiff.activity_timeline(
   article,

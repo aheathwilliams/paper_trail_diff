@@ -342,6 +342,7 @@ The nested tree remains the canonical, lossless result. For renderers,
 counters, exports, and notifications, `Diff#each_change` provides a
 deterministic depth-first stream of semantic changes:
 
+<!-- executable:readme-traversal-changes -->
 ```ruby
 diff.each_change do |entry|
   entry.kind              # :attribute_changed, :record_added, ...
@@ -365,6 +366,7 @@ Added, removed, and replaced records carry complete bounded snapshots. Use
 `each_entry` when a renderer also needs that nested state without writing a
 second snapshot walker:
 
+<!-- executable:readme-traversal-entries -->
 ```ruby
 diff.each_entry do |entry|
   next unless entry.included_state?
@@ -528,6 +530,9 @@ mise exec -- act push -j quality --matrix ruby:4.0 --matrix paper_trail:17
 
 The default Rake task runs core specs without PT-AT loaded, association specs in
 a separate process, RuboCop, generated-signature verification, and Steep.
+Selected Ruby blocks in this README and the quickstart are executed in those
+same isolated test sessions; the `<!-- executable:... -->` marker opts a block
+into the appropriate stateful session.
 Inline `#:` annotations in `lib/` generate the committed RBS files under
 `sig/generated/`.
 

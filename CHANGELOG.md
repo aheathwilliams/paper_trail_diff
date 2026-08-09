@@ -15,6 +15,8 @@ project follows [Semantic Versioning](https://semver.org/).
   give both timeline step types an `empty?` predicate.
 - Add a Rails-focused quickstart with minimal endpoint, timeline, ignore, and
   association examples.
+- Execute selected README and quickstart examples in isolated core and PT-AT
+  test sessions so documented behavior cannot silently drift.
 
 ## [0.1.0] - 2026-08-09
 

@@ -31,6 +31,11 @@ ActiveRecord::Schema.define do
     table.integer :article_id, null: false
     table.timestamps null: false
   end
+
+  create_table :documentation_articles, force: true do |table|
+    table.string :title, null: false
+    table.timestamps null: false
+  end
 end
 
 class CoreArticle < ActiveRecord::Base
@@ -41,4 +46,8 @@ end
 
 class CoreComment < ActiveRecord::Base
   belongs_to :article, class_name: 'CoreArticle', inverse_of: :comments
+end
+
+class DocumentationArticle < ActiveRecord::Base
+  has_paper_trail
 end
