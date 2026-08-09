@@ -13,6 +13,9 @@ Layout/LeadingCommentSpace:
   AllowRBSInlineAnnotation: true
   AllowSteepAnnotation: true
 
+Layout/EndOfLine:
+  EnforcedStyle: lf
+
 Layout/LineLength:
   Max: 100
   AllowedPatterns:
