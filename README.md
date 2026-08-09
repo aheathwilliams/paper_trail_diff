@@ -12,6 +12,8 @@ available when
 
 Ruby 3.1 or newer and PaperTrail 16 or 17 are supported.
 
+New to the gem? Start with the copyable [Quickstart](QUICKSTART.md).
+
 ## Installation
 
 Add the gem to your bundle:

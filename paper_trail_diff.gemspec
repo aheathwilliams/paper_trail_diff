@@ -23,6 +23,7 @@ Gem::Specification.new do |spec|
       'sig/generated/**/*.rbs',
       'CHANGELOG.md',
       'LICENSE',
+      'QUICKSTART.md',
       'README.md'
     ].sort
   end

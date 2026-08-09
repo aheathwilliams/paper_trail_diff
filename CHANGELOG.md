@@ -13,6 +13,8 @@ project follows [Semantic Versioning](https://semver.org/).
 - Add immutable version metadata and record references to activity boundaries.
 - Give checkpoint `Step` objects `from_boundary` and `to_boundary` readers and
   give both timeline step types an `empty?` predicate.
+- Add a Rails-focused quickstart with minimal endpoint, timeline, ignore, and
+  association examples.
 
 ## [0.1.0] - 2026-08-09
 
