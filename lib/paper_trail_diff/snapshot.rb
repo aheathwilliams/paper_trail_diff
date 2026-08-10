@@ -52,8 +52,8 @@ module PaperTrailDiff
     attr_reader :kind #: Symbol
     attr_reader :records #: Array[RecordSnapshot]
 
-    #: (kind: Symbol, records: Array[RecordSnapshot]) -> void
-    def initialize(kind:, records:)
+    #: (kind: Symbol, records: Array[RecordSnapshot], ?identity_index_holder: untyped, ?transition: CollectionTransition?) -> void
+    def initialize(kind:, records:, identity_index_holder: nil, transition: nil)
       unless SUPPORTED_KINDS.include?(kind)
         raise ArgumentError, "unsupported association kind: #{kind.inspect}"
       end
@@ -63,12 +63,57 @@ module PaperTrailDiff
 
       @kind = kind
       @records = records.dup.freeze
+      @identity_index_holder = identity_index_holder || [nil]
+      @transition = transition
       freeze
+    end
+
+    # Builds a structurally adjacent collection snapshot for internal activity carry-forward.
+    #: (Array[RecordSnapshot], before: RecordSnapshot?, after: RecordSnapshot?, membership_preserved: bool) -> AssociationSnapshot
+    def transition_to(records, before:, after:, membership_preserved:)
+      holder = membership_preserved ? @identity_index_holder : nil
+      self.class.new(
+        kind: kind,
+        records: records,
+        identity_index_holder: holder,
+        transition: CollectionTransition.new(from: self, before: before, after: after)
+      )
+    end
+
+    #: (AssociationSnapshot) -> CollectionTransition?
+    def transition_from(association)
+      @transition if @transition&.from?(association)
+    end
+
+    #: (untyped, untyped) -> Integer?
+    def position(type, id)
+      identity_index.position(type, id)
+    end
+
+    #: (untyped) -> Integer?
+    def position_for_id(id)
+      identity_index.position_for_id(id)
+    end
+
+    #: () -> void
+    def validate_unique_identities!
+      identity_index
+      nil
     end
 
     #: () -> Hash[Symbol, untyped]
     def to_h
       { kind: kind, records: Support.serialize(records) }
+    end
+
+    private
+
+    # @rbs @identity_index_holder: Array[CollectionIdentityIndex?]
+    # @rbs @transition: CollectionTransition?
+
+    #: () -> CollectionIdentityIndex
+    def identity_index
+      @identity_index_holder[0] ||= CollectionIdentityIndex.new(records)
     end
   end
 

@@ -190,6 +190,90 @@ RSpec.describe PaperTrailDiff::Engine do
     expect(changed.map { |change| change.record.id }).to eq([10, 3])
   end
 
+  it 'reports updates from an adjacent collection transition' do
+    before = snapshot(type: 'Comment', id: 2, attributes: { body: 'Before' })
+    after = snapshot(type: 'Comment', id: 2, attributes: { body: 'After' })
+    from_association = association(:has_many, before)
+    to_association = from_association.transition_to(
+      [after],
+      before: before,
+      after: after,
+      membership_preserved: true
+    )
+    from = snapshot(
+      type: 'Article', id: 1, attributes: {},
+      associations: { comments: from_association }
+    )
+    to = snapshot(
+      type: 'Article', id: 1, attributes: {},
+      associations: { comments: to_association }
+    )
+
+    change = described_class.compare(from, to).associations.fetch('comments').changed.fetch(0)
+
+    expect(change.attributes.fetch('body').to_h).to eq(from: 'Before', to: 'After')
+  end
+
+  it 'reports additions and removals from adjacent collection transitions' do
+    existing = snapshot(type: 'Comment', id: 1, attributes: {})
+    transient = snapshot(type: 'Comment', id: 2, attributes: {})
+    before_add = association(:has_many, existing)
+    after_add = before_add.transition_to(
+      [existing, transient],
+      before: nil,
+      after: transient,
+      membership_preserved: false
+    )
+    after_remove = after_add.transition_to(
+      [existing],
+      before: transient,
+      after: nil,
+      membership_preserved: false
+    )
+
+    added = PaperTrailDiff::CollectionComparator.new(
+      before_add, after_add, record_comparer: ->(*) {}
+    ).call
+    removed = PaperTrailDiff::CollectionComparator.new(
+      after_add, after_remove, record_comparer: ->(*) {}
+    ).call
+
+    expect(added.added.map(&:id)).to eq([2])
+    expect(removed.removed.map(&:id)).to eq([2])
+  end
+
+  it 'does not rescan stable members in an indexed adjacent transition' do
+    identity_reads = [0]
+    counting_snapshot = Class.new(PaperTrailDiff::RecordSnapshot) do
+      define_method(:identity) do
+        identity_reads[0] += 1
+        super()
+      end
+    end
+    records = 100.times.map do |id|
+      counting_snapshot.new(type: 'Comment', id: id, attributes: {})
+    end
+    before = records.fetch(50)
+    after = snapshot(type: 'Comment', id: 50, attributes: { body: 'After' })
+    from_association = association(:has_many, *records)
+    from_association.position('Comment', 50)
+    identity_reads[0] = 0
+    updated = records.dup
+    updated[50] = after
+    to_association = from_association.transition_to(
+      updated,
+      before: before,
+      after: after,
+      membership_preserved: true
+    )
+
+    PaperTrailDiff::CollectionComparator.new(
+      from_association, to_association, record_comparer: ->(*) {}
+    ).call
+
+    expect(identity_reads.fetch(0)).to eq(1)
+  end
+
   it 'treats HABTM as a collection while preserving its macro kind' do
     removed = snapshot(type: 'Tag', id: 1, attributes: { name: 'Removed' })
     before = snapshot(type: 'Tag', id: 2, attributes: { name: 'Before' })
@@ -332,6 +416,28 @@ RSpec.describe PaperTrailDiff::Engine do
     to = snapshot(
       type: 'Article', id: 1, attributes: {},
       associations: { comments: association(:has_many, duplicate, duplicate) }
+    )
+
+    expect { described_class.compare(from, to) }
+      .to raise_error(ArgumentError, /duplicate record identity/)
+  end
+
+  it 'rejects duplicate identities in an adjacent collection transition' do
+    duplicate = snapshot(type: 'Comment', id: 1, attributes: {})
+    from_association = association(:has_many, duplicate)
+    to_association = from_association.transition_to(
+      [duplicate, duplicate],
+      before: nil,
+      after: duplicate,
+      membership_preserved: false
+    )
+    from = snapshot(
+      type: 'Article', id: 1, attributes: {},
+      associations: { comments: from_association }
+    )
+    to = snapshot(
+      type: 'Article', id: 1, attributes: {},
+      associations: { comments: to_association }
     )
 
     expect { described_class.compare(from, to) }

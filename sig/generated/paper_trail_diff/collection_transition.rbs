@@ -1,0 +1,18 @@
+# Generated from lib/paper_trail_diff/collection_transition.rb with RBS::Inline
+
+module PaperTrailDiff
+  # One collection mutation between structurally adjacent snapshots.
+  class CollectionTransition
+    attr_reader before: RecordSnapshot?
+
+    attr_reader after: RecordSnapshot?
+
+    # : (from: AssociationSnapshot, before: RecordSnapshot?, after: RecordSnapshot?) -> void
+    def initialize: (from: AssociationSnapshot, before: RecordSnapshot?, after: RecordSnapshot?) -> void
+
+    # : (AssociationSnapshot) -> bool
+    def from?: (AssociationSnapshot) -> bool
+
+    @from_object_id: Integer
+  end
+end

@@ -14,7 +14,8 @@ project follows [Semantic Versioning](https://semver.org/).
   bounded live-association preloading, cross-root prepared history, immutable
   identity-keyed results, and scale-invariant query regression coverage.
 - Add opt-in reuse of fully preloaded current endpoints and namespaced
-  ActiveSupport runtime instrumentation without automatic logging.
+  ActiveSupport runtime instrumentation without automatic logging, including
+  end-to-end activity-timeline duration and step counts.
 
 ### Changed
 
@@ -22,8 +23,9 @@ project follows [Semantic Versioning](https://semver.org/).
   README and quickstart examples.
 - Reuse the live graph loaded by `compare_many` while preparing historical
   association state, and defer root version loading until an edge needs it.
-- Avoid rebuilding general collection identity indexes for activity steps whose
-  immutable collection snapshots retain the same ordered membership.
+- Reuse collection identity positions and adjacent transition hints so activity
+  steps compare only the changed member, and resolve direct nested collection
+  owners by foreign key instead of scanning every parent snapshot.
 - Limit automatic CI to pull requests and `main` pushes, and cancel superseded
   runs for the same pull request or ref.
 

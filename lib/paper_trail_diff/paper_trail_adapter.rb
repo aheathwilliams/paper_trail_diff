@@ -63,14 +63,14 @@ module PaperTrailDiff
 
     #: (untyped, from: untyped, to: untyped, within: untyped) -> Array[ActivityStep]
     def activity_timeline(record, from:, to:, within:)
-      prepare_traversal!(record.class, historical: true)
-      reject_live_habtm_activity!(record.class) if Endpoint.record?(to)
-      ActivityTimelineBuilder.new(
-        record,
-        range: TimelineRange.new(record, from: from, to: to, within: within),
-        tree: @association_tree,
-        snapshotter: @activity_snapshotter
-      ).build
+      payload = @instrumentation_payload.merge(model_type: record.class.base_class.name.to_s)
+      Instrumentation.instrument('activity_timeline', payload) do
+        prepare_traversal!(record.class, historical: true)
+        reject_live_habtm_activity!(record.class) if Endpoint.record?(to)
+        steps = activity_builder(record, from: from, to: to, within: within).build
+        payload[:step_count] = steps.length
+        steps
+      end
     end
 
     #: (untyped, from: untyped, to: untyped, within: untyped, ?activity: bool) -> Analysis

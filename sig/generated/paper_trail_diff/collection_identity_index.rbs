@@ -1,0 +1,29 @@
+# Generated from lib/paper_trail_diff/collection_identity_index.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Immutable positions for one collection membership and ordering.
+  class CollectionIdentityIndex
+    # : (Array[untyped]) -> void
+    def initialize: (Array[untyped]) -> void
+
+    # : (untyped, untyped) -> Integer?
+    def position: (untyped, untyped) -> Integer?
+
+    # : (untyped) -> Integer?
+    def position_for_id: (untyped) -> Integer?
+
+    private
+
+    @id_positions: Hash[String, Integer?]
+
+    @positions: Hash[Array[untyped], Integer]
+
+    @serialized_positions: Hash[Array[String], Integer]
+
+    # : (untyped, Integer) -> void
+    def register: (untyped, Integer) -> void
+
+    # : (untyped, Integer) -> void
+    def register_id: (untyped, Integer) -> void
+  end
+end

@@ -33,11 +33,36 @@ module PaperTrailDiff
 
     attr_reader records: Array[RecordSnapshot]
 
-    # : (kind: Symbol, records: Array[RecordSnapshot]) -> void
-    def initialize: (kind: Symbol, records: Array[RecordSnapshot]) -> void
+    # : (kind: Symbol, records: Array[RecordSnapshot], ?identity_index_holder: untyped, ?transition: CollectionTransition?) -> void
+    def initialize: (kind: Symbol, records: Array[RecordSnapshot], ?identity_index_holder: untyped, ?transition: CollectionTransition?) -> void
+
+    # Builds a structurally adjacent collection snapshot for internal activity carry-forward.
+    # : (Array[RecordSnapshot], before: RecordSnapshot?, after: RecordSnapshot?, membership_preserved: bool) -> AssociationSnapshot
+    def transition_to: (Array[RecordSnapshot], before: RecordSnapshot?, after: RecordSnapshot?, membership_preserved: bool) -> AssociationSnapshot
+
+    # : (AssociationSnapshot) -> CollectionTransition?
+    def transition_from: (AssociationSnapshot) -> CollectionTransition?
+
+    # : (untyped, untyped) -> Integer?
+    def position: (untyped, untyped) -> Integer?
+
+    # : (untyped) -> Integer?
+    def position_for_id: (untyped) -> Integer?
+
+    # : () -> void
+    def validate_unique_identities!: () -> void
 
     # : () -> Hash[Symbol, untyped]
     def to_h: () -> Hash[Symbol, untyped]
+
+    private
+
+    @identity_index_holder: Array[CollectionIdentityIndex?]
+
+    @transition: CollectionTransition?
+
+    # : () -> CollectionIdentityIndex
+    def identity_index: () -> CollectionIdentityIndex
   end
 
   # An immutable, ActiveRecord-independent representation of a reified record.

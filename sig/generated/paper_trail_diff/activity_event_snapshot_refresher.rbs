@@ -34,6 +34,15 @@ module PaperTrailDiff
     # : (RecordSnapshot, Array[untyped], untyped, untyped, RecordSnapshot?, ?depth: Integer) -> [RecordSnapshot, bool]
     def replace_collection_route: (RecordSnapshot, Array[untyped], untyped, untyped, RecordSnapshot?, ?depth: Integer) -> [ RecordSnapshot, bool ]
 
+    # : (AssociationSnapshot, Array[untyped], untyped, untyped, RecordSnapshot?, Integer) -> [Array[RecordSnapshot], RecordSnapshot?, RecordSnapshot?, bool]?
+    def replace_targeted_collection_parent: (AssociationSnapshot, Array[untyped], untyped, untyped, RecordSnapshot?, Integer) -> [ Array[RecordSnapshot], RecordSnapshot?, RecordSnapshot?, bool ]?
+
+    # : (Array[RecordSnapshot], Integer, RecordSnapshot, RecordSnapshot, bool) -> [Array[RecordSnapshot], RecordSnapshot?, RecordSnapshot?, bool]
+    def targeted_parent_replacement: (Array[RecordSnapshot], Integer, RecordSnapshot, RecordSnapshot, bool) -> [ Array[RecordSnapshot], RecordSnapshot?, RecordSnapshot?, bool ]
+
+    # : (AssociationSnapshot, untyped, untyped, untyped) -> Integer?
+    def nested_owner_position: (AssociationSnapshot, untyped, untyped, untyped) -> Integer?
+
     # : (untyped, untyped, RecordSnapshot, AssociationTree, SnapshotNormalizer, untyped) -> [bool, RecordSnapshot?]
     def belongs_to_target_snapshot: (untyped, untyped, RecordSnapshot, AssociationTree, SnapshotNormalizer, untyped) -> [ bool, RecordSnapshot? ]
 
@@ -86,8 +95,11 @@ module PaperTrailDiff
     # : (untyped, habtm_version: untyped) -> HistoricalAssociationReifier
     def historical_reader: (untyped, habtm_version: untyped) -> HistoricalAssociationReifier
 
-    # : (Array[RecordSnapshot], untyped, RecordSnapshot?) -> Array[RecordSnapshot]
-    def replace_collection_record: (Array[RecordSnapshot], untyped, RecordSnapshot?) -> Array[RecordSnapshot]
+    # : (AssociationSnapshot, untyped, RecordSnapshot?) -> [Array[RecordSnapshot], RecordSnapshot?, RecordSnapshot?, bool]
+    def replace_collection_record: (AssociationSnapshot, untyped, RecordSnapshot?) -> [ Array[RecordSnapshot], RecordSnapshot?, RecordSnapshot?, bool ]
+
+    # : (Array[RecordSnapshot], Integer?, RecordSnapshot?) -> Array[RecordSnapshot]
+    def replacement_collection_records: (Array[RecordSnapshot], Integer?, RecordSnapshot?) -> Array[RecordSnapshot]
 
     # : (untyped, RecordSnapshot?) -> String
     def replacement_type: (untyped, RecordSnapshot?) -> String

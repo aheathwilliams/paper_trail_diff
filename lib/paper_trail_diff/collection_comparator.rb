@@ -13,6 +13,9 @@ module PaperTrailDiff
 
     #: () -> CollectionAssociationDiff
     def call
+      transition = @to.transition_from(@from)
+      return transition_difference(transition) if transition
+
       aligned = aligned_changes
       return difference(added: [], removed: [], changed: aligned) if aligned
 
@@ -24,6 +27,27 @@ module PaperTrailDiff
     # @rbs @from: AssociationSnapshot
     # @rbs @to: AssociationSnapshot
     # @rbs @record_comparer: untyped
+
+    #: (CollectionTransition) -> CollectionAssociationDiff
+    def transition_difference(transition)
+      @from.validate_unique_identities!
+      @to.validate_unique_identities!
+      before = transition.before
+      after = transition.after
+      changed = compare_transition_records(before, after)
+      difference(
+        added: before.nil? && after ? [after] : [],
+        removed: after.nil? && before ? [before] : [],
+        changed: changed ? [changed] : []
+      )
+    end
+
+    #: (RecordSnapshot?, RecordSnapshot?) -> RecordChange?
+    def compare_transition_records(before, after)
+      return unless before && after && before.identity == after.identity
+
+      @record_comparer.call(before, after)
+    end
 
     #: () -> Array[RecordChange]?
     def aligned_changes

@@ -150,15 +150,26 @@ module PaperTrailDiff
       name, reflection, _subtree, path = route.fetch(depth)
       association = snapshot.associations.fetch(name)
       changed = false
+      transition_before = nil #: RecordSnapshot?
+      transition_after = nil #: RecordSnapshot?
+      membership_preserved = true
       updated_records = if depth == route.length - 1
                           child = if record && member_of_owner?(record, reflection, snapshot)
                                     replacement
                                   end
-                          replace_collection_record(
-                            association.records,
-                            version,
-                            child
-                          ).tap { |value| changed = !value.equal?(association.records) }
+                          records, transition_before, transition_after, membership_preserved =
+                            replace_collection_record(association, version, child)
+                          records.tap { |value| changed = !value.equal?(association.records) }
+                        elsif (targeted = replace_targeted_collection_parent(
+                          association,
+                          route,
+                          version,
+                          record,
+                          replacement,
+                          depth
+                        ))
+                          records, transition_before, transition_after, changed = targeted
+                          records
                         else
                           association.records.map do |child_snapshot|
                             updated, child_changed = replace_collection_route(
@@ -169,7 +180,11 @@ module PaperTrailDiff
                               replacement,
                               depth: depth + 1
                             )
-                            changed ||= child_changed
+                            if child_changed
+                              changed = true
+                              transition_before = child_snapshot
+                              transition_after = updated
+                            end
                             updated
                           end
                         end
@@ -177,7 +192,12 @@ module PaperTrailDiff
 
       updated_association = @pool.association(
         path,
-        AssociationSnapshot.new(kind: association.kind, records: updated_records)
+        association.transition_to(
+          updated_records,
+          before: transition_before,
+          after: transition_after,
+          membership_preserved: membership_preserved
+        )
       )
       updated_snapshot = RecordSnapshot.new(
         type: snapshot.type,
@@ -188,6 +208,54 @@ module PaperTrailDiff
       parent_path = depth.zero? ? '' : route.fetch(depth - 1).fetch(3)
       updated_snapshot = @pool.record(parent_path, updated_snapshot) unless parent_path.empty?
       [updated_snapshot, true]
+    end
+
+    #: (AssociationSnapshot, Array[untyped], untyped, untyped, RecordSnapshot?, Integer) -> [Array[RecordSnapshot], RecordSnapshot?, RecordSnapshot?, bool]?
+    def replace_targeted_collection_parent( # rubocop:disable Metrics/ParameterLists
+      association,
+      route,
+      version,
+      record,
+      replacement,
+      depth
+    )
+      return unless depth == route.length - 2
+
+      reflection = route.fetch(depth + 1).fetch(1)
+      position = nested_owner_position(association, reflection, version, record)
+      return unless position
+
+      before = association.records.fetch(position)
+      after, changed = replace_collection_route(
+        before,
+        route,
+        version,
+        record,
+        replacement,
+        depth: depth + 1
+      )
+      targeted_parent_replacement(association.records, position, before, after, changed)
+    end
+
+    #: (Array[RecordSnapshot], Integer, RecordSnapshot, RecordSnapshot, bool) -> [Array[RecordSnapshot], RecordSnapshot?, RecordSnapshot?, bool]
+    def targeted_parent_replacement(records, position, before, after, changed)
+      return [records, nil, nil, false] unless changed
+
+      updated = records.dup
+      updated[position] = after
+      [updated, before, after, true]
+    end
+
+    #: (AssociationSnapshot, untyped, untyped, untyped) -> Integer?
+    def nested_owner_position(association, reflection, version, record)
+      membership_record = record || version.reify(dup: true)
+      return unless membership_record
+
+      owner_ids = Array(reflection.foreign_key).map do |foreign_key|
+        membership_record.public_send(foreign_key)
+      end
+      owner_id = owner_ids.one? ? owner_ids.first : owner_ids
+      association.position_for_id(owner_id)
     end
 
     #: (untyped, untyped, RecordSnapshot, AssociationTree, SnapshotNormalizer, untyped) -> [bool, RecordSnapshot?]
@@ -459,19 +527,27 @@ module PaperTrailDiff
       HistoricalAssociationReifier.new(context_endpoint, habtm_version: habtm_version)
     end
 
-    #: (Array[RecordSnapshot], untyped, RecordSnapshot?) -> Array[RecordSnapshot]
-    def replace_collection_record(records, version, replacement)
-      index = records.index do |record|
-        record.id.to_s == version.item_id.to_s &&
-          record.type.to_s == replacement_type(version, replacement)
-      end
-      return records unless replacement || index
+    #: (AssociationSnapshot, untyped, RecordSnapshot?) -> [Array[RecordSnapshot], RecordSnapshot?, RecordSnapshot?, bool]
+    def replace_collection_record(association, version, replacement)
+      records = association.records
+      position = association.position(
+        replacement_type(version, replacement),
+        version.item_id
+      )
+      return [records, nil, nil, true] unless replacement || position
 
+      before = records.fetch(position) if position
+      updated = replacement_collection_records(records, position, replacement)
+      [updated, before, replacement, !before.nil? && !replacement.nil?]
+    end
+
+    #: (Array[RecordSnapshot], Integer?, RecordSnapshot?) -> Array[RecordSnapshot]
+    def replacement_collection_records(records, position, replacement)
       updated = records.dup
       if replacement
-        index ? updated[index] = replacement : updated << replacement
+        position ? updated[position] = replacement : updated << replacement
       else
-        position = index || raise(ConfigurationError, 'missing collection event identity')
+        position ||= raise(ConfigurationError, 'missing collection event identity')
         updated.delete_at(position)
       end
       updated

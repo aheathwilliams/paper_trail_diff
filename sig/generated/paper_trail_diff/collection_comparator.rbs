@@ -17,6 +17,12 @@ module PaperTrailDiff
 
     @to: AssociationSnapshot
 
+    # : (CollectionTransition) -> CollectionAssociationDiff
+    def transition_difference: (CollectionTransition) -> CollectionAssociationDiff
+
+    # : (RecordSnapshot?, RecordSnapshot?) -> RecordChange?
+    def compare_transition_records: (RecordSnapshot?, RecordSnapshot?) -> RecordChange?
+
     # : () -> Array[RecordChange]?
     def aligned_changes: () -> Array[RecordChange]?
 

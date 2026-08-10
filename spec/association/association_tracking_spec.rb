@@ -675,6 +675,33 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     end.to raise_error(PaperTrailDiff::InvalidTimelineRangeError, /must not follow/)
   end
 
+  it 'emits total activity timeline timing and work metadata' do
+    graph = article_with_graph
+    graph[:reply].update!(body: 'Instrumented reply')
+    after = boundary_for(graph[:article])
+    events = []
+    callback = proc { |*args| events << args.last.dup }
+
+    steps = ActiveSupport::Notifications.subscribed(
+      callback,
+      'activity_timeline.paper_trail_diff'
+    ) do
+      PaperTrailDiff.activity_timeline(
+        graph[:article],
+        from: graph[:before],
+        to: after,
+        associations: ['comments.replies']
+      )
+    end
+
+    expect(events).to contain_exactly(
+      association_paths: ['comments', 'comments.replies'],
+      reload_live_endpoints: true,
+      model_type: 'TrackedArticle',
+      step_count: steps.length
+    )
+  end
+
   it 'filters descendant events by time and excludes later mutations from analysis' do
     graph = article_with_graph
     range_start = Time.utc(2031, 1, 1, 12)
@@ -958,7 +985,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
 
   it 'keeps direct collection activity work linear when selected children are nested' do
     article = TrackedArticle.create!(title: 'Scaled activity')
-    comments = 20.times.map do |index|
+    comments = 100.times.map do |index|
       comment = article.comments.create!(body: "Approval #{index}")
       comment.replies.create!(body: "Approver #{index}")
       comment
@@ -976,11 +1003,11 @@ RSpec.describe 'PaperTrailDiff association tracking' do
         to: after,
         associations: ['comments.replies']
       )
-      expect(steps.length).to eq(21)
+      expect(steps.length).to eq(101)
     end
 
-    expect(work.fetch(:queries)).to be < 300
-    expect(work.fetch(:records)).to be < 500
+    expect(work.fetch(:queries)).to be < 25
+    expect(work.fetch(:records)).to be < 600
   end
 
   it 'advances ordinary child updates without per-event live-record queries' do
@@ -1008,7 +1035,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
 
   it 'keeps nested collection activity local to the affected parent snapshots' do
     article = TrackedArticle.create!(title: 'Scaled nested activity')
-    replies = 20.times.map do |index|
+    replies = 100.times.map do |index|
       comment = article.comments.create!(body: "Approval #{index}")
       comment.replies.create!(body: "Approver #{index}")
     end
@@ -1025,11 +1052,11 @@ RSpec.describe 'PaperTrailDiff association tracking' do
         to: after,
         associations: ['comments.replies']
       )
-      expect(steps.length).to eq(21)
+      expect(steps.length).to eq(101)
     end
 
-    expect(work.fetch(:queries)).to be < 300
-    expect(work.fetch(:records)).to be < 500
+    expect(work.fetch(:queries)).to be < 25
+    expect(work.fetch(:records)).to be < 600
   end
 
   it 'does not instantiate out-of-range child history for a leaf collection' do
@@ -1163,6 +1190,71 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     create_version = comment.versions.find_by!(event: 'create')
     allow(refresher).to receive(:deserialized_changeset).and_return(nil)
     expect(refresher.send(:created_record_after, create_version)).to be_nil
+  end
+
+  it 'jumps directly to the nested collection owner by foreign key' do
+    leaf_position_reads = [0]
+    counting_association = Class.new(PaperTrailDiff::AssociationSnapshot) do
+      define_method(:position) do |type, id|
+        leaf_position_reads[0] += 1
+        super(type, id)
+      end
+    end
+    reply_before = PaperTrailDiff::RecordSnapshot.new(
+      type: 'TrackedReply', id: 9, attributes: { body: 'Before' }
+    )
+    reply_after = PaperTrailDiff::RecordSnapshot.new(
+      type: 'TrackedReply', id: 9, attributes: { body: 'After' }
+    )
+    comments = 100.times.map do |id|
+      replies = id == 50 ? [reply_before] : []
+      PaperTrailDiff::RecordSnapshot.new(
+        type: 'TrackedComment', id: id, attributes: {},
+        associations: {
+          replies: counting_association.new(kind: :has_many, records: replies)
+        }
+      )
+    end
+    previous = PaperTrailDiff::RecordSnapshot.new(
+      type: 'TrackedArticle', id: 1, attributes: {},
+      associations: {
+        comments: PaperTrailDiff::AssociationSnapshot.new(
+          kind: :has_many,
+          records: comments
+        )
+      }
+    )
+    route = [
+      ['comments', nil, nil, 'comments'],
+      [
+        'replies',
+        TrackedComment.reflect_on_association(:replies),
+        nil,
+        'comments.replies'
+      ]
+    ]
+    version = instance_double(PaperTrail::Version, item_id: reply_before.id)
+    record = Struct.new(:comment_id).new(50)
+    refresher = PaperTrailDiff::ActivityEventSnapshotRefresher.new(
+      traversal: nil,
+      pool: PaperTrailDiff::SnapshotPool.new,
+      components: nil
+    )
+
+    updated, changed = refresher.send(
+      :replace_collection_route,
+      previous,
+      route,
+      version,
+      record,
+      reply_after
+    )
+
+    replies = updated.associations.fetch('comments').records.fetch(50)
+                     .associations.fetch('replies').records
+    expect(changed).to be(true)
+    expect(replies.fetch(0).attributes.fetch('body')).to eq('After')
+    expect(leaf_position_reads.fetch(0)).to eq(1)
   end
 
   it 'reuses equal immutable nodes and short-circuits shared snapshot comparisons' do
