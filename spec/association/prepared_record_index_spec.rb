@@ -13,6 +13,7 @@ RSpec.describe PaperTrailDiff::PreparedRecordIndex do
     TrackedArticle.delete_all
     TrackedAuthor.delete_all
     TrackedTag.delete_all
+    PreparedDocument.delete_all
   end
 
   def boundary_for(article)
@@ -54,6 +55,58 @@ RSpec.describe PaperTrailDiff::PreparedRecordIndex do
     missing_version = instance_double(PaperTrail::Version, id: -1)
     expect(index.transition(TrackedAuthor, author.id, missing_version)).to be_nil
     expect(index.transition(TrackedAuthor, -1, first_update)).to be_nil
+  end
+
+  it 'prepares ordinary and STI version state without constructing a disposable record' do
+    document = PreparedSpecialDocument.create!(name: 'Before')
+    document.update!(name: 'After')
+    version = document.versions.last
+    reified_attributes = version.reify(dup: true).attributes
+    direct = PaperTrailDiff::PreparedVersionStateLoader.new.call(version)
+    live = PaperTrailDiff::PreparedRecordState.new(document)
+    series = PaperTrailDiff::PreparedRecordSeries.new(versions: [version], live: live)
+    boundary = Struct.new(:created_at).new(version.created_at)
+    allow(version).to receive(:reify).and_raise('unexpected reification')
+
+    prepared = series.record_before(boundary)
+
+    expect(direct&.attributes).to eq(reified_attributes)
+    expect(prepared).to be_a(PreparedSpecialDocument)
+    expect(prepared.name).to eq('Before')
+  end
+
+  it 'falls back to PaperTrail reification for attributes absent from the current schema' do
+    author = TrackedAuthor.create!(name: 'Before fallback')
+    author.update!(name: 'After fallback')
+    version = author.versions.last
+    fallback = version.reify(dup: true)
+    deserialized = version.object_deserialized.merge('retired_column' => 'legacy')
+    allow(version).to receive(:object_deserialized).and_return(deserialized)
+    expect(version).to receive(:reify).and_return(fallback)
+    series = PaperTrailDiff::PreparedRecordSeries.new(
+      versions: [version],
+      live: PaperTrailDiff::PreparedRecordState.new(author)
+    )
+    boundary = Struct.new(:created_at).new(version.created_at)
+
+    expect(series.record_before(boundary).name).to eq('Before fallback')
+  end
+
+  it 'declines direct preparation for encrypted model attributes' do
+    encrypted_model = Class.new do
+      def self.inheritance_column = 'type'
+      def self.encrypted_attributes = ['secret']
+      def self.attribute_names = ['secret']
+    end
+    stub_const('PreparedEncryptedRecord', encrypted_model)
+    version = double(
+      'encrypted version',
+      object: 'payload',
+      object_deserialized: { 'secret' => 'value' },
+      item_type: 'PreparedEncryptedRecord'
+    )
+
+    expect(PaperTrailDiff::PreparedVersionStateLoader.new.call(version)).to be_nil
   end
 
   it 'represents absence before creation and after destruction' do

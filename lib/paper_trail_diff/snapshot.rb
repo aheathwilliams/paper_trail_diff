@@ -77,7 +77,7 @@ module PaperTrailDiff
       end
 
       @kind = kind
-      @records = records.dup.freeze
+      @records = records.frozen? ? records : records.dup.freeze
       @identity_index_cache = identity_index_cache || IdentityIndexCache.new
       @transition = transition
       freeze

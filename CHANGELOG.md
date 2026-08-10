@@ -36,6 +36,10 @@ project follows [Semantic Versioning](https://semver.org/).
   checkpoint plus post-boundary activity and current members.
 - Bound historical activity-child candidates at the selected end so membership
   changes after the range cannot introduce unrelated empty timeline steps.
+- Decode compatible prepared scalar version payloads without constructing an
+  intermediate Active Record object, with reification fallback for unsafe schemas.
+- Reuse internally owned frozen collection arrays instead of defensively copying
+  them a second time during immutable activity reconstruction.
 - Limit automatic CI to pull requests and `main` pushes, and cancel superseded
   runs for the same pull request or ref.
 

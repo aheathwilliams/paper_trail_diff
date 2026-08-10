@@ -14,9 +14,87 @@ module PaperTrailDiff
       freeze
     end
 
+    #: (untyped, Hash[untyped, untyped]) -> PreparedRecordState
+    def self.from_attributes(model_class, attributes)
+      state = allocate
+      state.send(:initialize_attributes, model_class, attributes)
+      state
+    end
+
     #: () -> untyped
     def instantiate
       @model_class.new(@attributes)
+    end
+
+    private
+
+    #: (untyped, Hash[untyped, untyped]) -> void
+    def initialize_attributes(model_class, attributes)
+      @model_class = model_class
+      @attributes = Support.immutable_copy(attributes)
+      freeze
+    end
+  end
+
+  # Extracts a version's scalar state without constructing a disposable AR object.
+  class PreparedVersionStateLoader
+    #: () -> void
+    def initialize
+      @serializers = {} #: Hash[untyped, untyped]
+      @attribute_names = {} #: Hash[untyped, Array[String]]
+    end
+
+    #: (untyped) -> PreparedRecordState?
+    def call(version)
+      return unless version.object
+
+      attributes = version.object_deserialized
+      return unless attributes.is_a?(Hash)
+
+      attributes = stringify_keys(attributes)
+      model_class = reification_class(version, attributes)
+      return unless direct_attributes?(model_class, attributes)
+
+      object_attribute_serializer(model_class).deserialize(attributes)
+      PreparedRecordState.from_attributes(model_class, attributes)
+    rescue StandardError
+      nil
+    end
+
+    private
+
+    # @rbs @serializers: Hash[untyped, untyped]
+    # @rbs @attribute_names: Hash[untyped, Array[String]]
+
+    #: (Hash[untyped, untyped]) -> Hash[String, untyped]
+    def stringify_keys(attributes)
+      attributes.to_h { |name, value| [name.to_s, value] }
+    end
+
+    #: (untyped, Hash[String, untyped]) -> untyped
+    def reification_class(version, attributes)
+      model_class = Endpoint.model_class(version)
+      inheritance_value = attributes[model_class.inheritance_column]
+      return model_class if inheritance_value.nil? || inheritance_value.to_s.empty?
+
+      model_class.sti_class_for(inheritance_value)
+    end
+
+    #: (untyped, Hash[String, untyped]) -> bool
+    def direct_attributes?(model_class, attributes)
+      encrypted = model_class.encrypted_attributes if model_class.respond_to?(:encrypted_attributes)
+      return false if encrypted&.any?
+
+      names = @attribute_names[model_class] ||= model_class.attribute_names
+      (attributes.keys - names).empty?
+    end
+
+    #: (untyped) -> untyped
+    def object_attribute_serializer(model_class)
+      paper_trail = Object.const_get(:PaperTrail)
+      serializers = paper_trail.const_get(:AttributeSerializers)
+      serializer_class = serializers.const_get(:ObjectAttribute)
+      @serializers[model_class] ||= serializer_class.new(model_class)
     end
   end
 
@@ -24,13 +102,14 @@ module PaperTrailDiff
   class PreparedRecordSeries
     attr_reader :versions #: Array[untyped]
 
-    #: (versions: Array[untyped], live: PreparedRecordState?) -> void
-    def initialize(versions:, live:)
+    #: (versions: Array[untyped], live: PreparedRecordState?, ?state_loader: PreparedVersionStateLoader) -> void
+    def initialize(versions:, live:, state_loader: PreparedVersionStateLoader.new)
       @versions = versions.sort_by { |version| Support.chronological_version_key(version) }.freeze
       @version_positions = @versions.each_with_index.to_h do |version, index|
         [version.id.to_s, index]
       end.freeze
       @live = live
+      @state_loader = state_loader
       @states = {} #: Hash[untyped, PreparedRecordState?]
     end
 
@@ -64,6 +143,7 @@ module PaperTrailDiff
     private
 
     # @rbs @live: PreparedRecordState?
+    # @rbs @state_loader: PreparedVersionStateLoader
     # @rbs @states: Hash[untyped, PreparedRecordState?]
     # @rbs @version_positions: Hash[String, Integer]
 
@@ -89,6 +169,9 @@ module PaperTrailDiff
     def state_for(version)
       return @states[version.id] if @states.key?(version.id)
 
+      prepared = @state_loader.call(version)
+      return @states[version.id] = prepared if prepared
+
       record = version.reify(
         dup: true,
         has_many: false,
@@ -108,6 +191,7 @@ module PaperTrailDiff
       @seeded_live_records = live_records.to_h do |record|
         [identity(record.class, record.id), record]
       end
+      @state_loader = PreparedVersionStateLoader.new
       @series = {} #: Hash[Array[String], PreparedRecordSeries]
     end
 
@@ -147,6 +231,7 @@ module PaperTrailDiff
 
     # @rbs @start_time: untyped
     # @rbs @seeded_live_records: Hash[Array[String], untyped]
+    # @rbs @state_loader: PreparedVersionStateLoader
     # @rbs @series: Hash[Array[String], PreparedRecordSeries]
 
     #: (untyped, untyped) -> Array[String]
@@ -164,7 +249,8 @@ module PaperTrailDiff
       record = live[id.to_s]
       @series[identity(model_class, id)] = PreparedRecordSeries.new(
         versions: versions.fetch(id.to_s, []),
-        live: record && PreparedRecordState.new(record)
+        live: record && PreparedRecordState.new(record),
+        state_loader: @state_loader
       )
     end
 

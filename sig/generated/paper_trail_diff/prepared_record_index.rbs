@@ -10,16 +10,51 @@ module PaperTrailDiff
     # : (untyped) -> void
     def initialize: (untyped) -> void
 
+    # : (untyped, Hash[untyped, untyped]) -> PreparedRecordState
+    def self.from_attributes: (untyped, Hash[untyped, untyped]) -> PreparedRecordState
+
     # : () -> untyped
     def instantiate: () -> untyped
+
+    private
+
+    # : (untyped, Hash[untyped, untyped]) -> void
+    def initialize_attributes: (untyped, Hash[untyped, untyped]) -> void
+  end
+
+  # Extracts a version's scalar state without constructing a disposable AR object.
+  class PreparedVersionStateLoader
+    # : () -> void
+    def initialize: () -> void
+
+    # : (untyped) -> PreparedRecordState?
+    def call: (untyped) -> PreparedRecordState?
+
+    private
+
+    @attribute_names: Hash[untyped, Array[String]]
+
+    @serializers: Hash[untyped, untyped]
+
+    # : (Hash[untyped, untyped]) -> Hash[String, untyped]
+    def stringify_keys: (Hash[untyped, untyped]) -> Hash[String, untyped]
+
+    # : (untyped, Hash[String, untyped]) -> untyped
+    def reification_class: (untyped, Hash[String, untyped]) -> untyped
+
+    # : (untyped, Hash[String, untyped]) -> bool
+    def direct_attributes?: (untyped, Hash[String, untyped]) -> bool
+
+    # : (untyped) -> untyped
+    def object_attribute_serializer: (untyped) -> untyped
   end
 
   # Versions and live fallback for one model identity.
   class PreparedRecordSeries
     attr_reader versions: Array[untyped]
 
-    # : (versions: Array[untyped], live: PreparedRecordState?) -> void
-    def initialize: (versions: Array[untyped], live: PreparedRecordState?) -> void
+    # : (versions: Array[untyped], live: PreparedRecordState?, ?state_loader: PreparedVersionStateLoader) -> void
+    def initialize: (versions: Array[untyped], live: PreparedRecordState?, ?state_loader: PreparedVersionStateLoader) -> void
 
     # : (untyped) -> untyped
     def record_before: (untyped) -> untyped
@@ -33,6 +68,8 @@ module PaperTrailDiff
     private
 
     @live: PreparedRecordState?
+
+    @state_loader: PreparedVersionStateLoader
 
     @states: Hash[untyped, PreparedRecordState?]
 
@@ -78,6 +115,8 @@ module PaperTrailDiff
     @series: Hash[Array[String], PreparedRecordSeries]
 
     @start_time: untyped
+
+    @state_loader: PreparedVersionStateLoader
 
     # : (untyped, untyped) -> Array[String]
     def identity: (untyped, untyped) -> Array[String]

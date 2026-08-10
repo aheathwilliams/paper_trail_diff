@@ -107,6 +107,12 @@ ActiveRecord::Schema.define do
     table.timestamps null: false
   end
 
+  create_table :prepared_documents, force: true do |table|
+    table.string :type
+    table.string :name, null: false
+    table.timestamps null: false
+  end
+
   create_table :tracked_articles_tags, id: false, force: true do |table|
     table.integer :tracked_article_id, null: false
     table.integer :tracked_tag_id, null: false
@@ -182,4 +188,11 @@ class TrackedTag < ActiveRecord::Base
                           foreign_key: :tracked_tag_id,
                           association_foreign_key: :tracked_article_id
   has_paper_trail
+end
+
+class PreparedDocument < ActiveRecord::Base
+  has_paper_trail synchronize_version_creation_timestamp: false
+end
+
+class PreparedSpecialDocument < PreparedDocument
 end

@@ -23,6 +23,19 @@ RSpec.describe PaperTrailDiff::Engine do
       .to raise_error(ArgumentError, /at most one record/)
   end
 
+  it 'reuses frozen record arrays while isolating mutable caller input' do
+    record = snapshot(type: 'Author', id: 1, attributes: {})
+    frozen_records = [record].freeze
+    mutable_records = [record]
+
+    expect(PaperTrailDiff::AssociationSnapshot.new(
+      kind: :has_many, records: frozen_records
+    ).records).to equal(frozen_records)
+    expect(PaperTrailDiff::AssociationSnapshot.new(
+      kind: :has_many, records: mutable_records
+    ).records).not_to equal(mutable_records)
+  end
+
   it 'returns sorted scalar attribute changes' do
     from = snapshot(type: 'Article', id: 1, attributes: { zeta: 1, alpha: 'old' })
     to = snapshot(type: 'Article', id: 1, attributes: { zeta: 2, alpha: 'new' })

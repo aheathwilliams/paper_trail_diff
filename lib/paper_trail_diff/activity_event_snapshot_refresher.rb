@@ -277,7 +277,7 @@ module PaperTrailDiff
                               changed = true
                             end
                             updated
-                          end
+                          end.freeze
                         end
       return [snapshot, false] unless changed
 
@@ -354,7 +354,7 @@ module PaperTrailDiff
 
       updated = records.dup
       updated[position] = after
-      [updated, before, after, true]
+      [updated.freeze, before, after, true]
     end
 
     #: (AssociationSnapshot, untyped, untyped, untyped) -> Integer?
@@ -469,7 +469,7 @@ module PaperTrailDiff
                             )
                             changed ||= record_changed
                             updated
-                          end
+                          end.freeze
                         end
       return [snapshot, false] unless changed
 
@@ -496,7 +496,7 @@ module PaperTrailDiff
 
       updated = records.dup
       replacement ? updated[index] = replacement : updated.delete_at(index)
-      updated
+      updated.freeze
     end
 
     #: (untyped) -> untyped
@@ -690,7 +690,7 @@ module PaperTrailDiff
         position ||= raise(ConfigurationError, 'missing collection event identity')
         updated.delete_at(position)
       end
-      updated
+      updated.freeze
     end
 
     #: (untyped, RecordSnapshot?) -> String
