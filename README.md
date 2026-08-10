@@ -339,8 +339,9 @@ analysis.activity_timeline
 ```
 
 Without `activity: true`, `analysis.activity_timeline` is `nil` and no activity
-work is performed. `analyze` remains version-bounded; use the standalone
-`activity_timeline(..., to: article)` API for an explicit current endpoint.
+work is performed. `analyze` accepts explicit historical versions or
+`within:`, but not a current-record endpoint; use the standalone
+`activity_timeline(..., to: article)` API when the final boundary must be live.
 
 `timeline`, `activity_timeline`, and both forms of `analyze` prepare the selected
 historical range once. The loader walks only the explicit association paths and

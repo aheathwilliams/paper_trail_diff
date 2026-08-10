@@ -427,6 +427,20 @@ RSpec.describe PaperTrailDiff do
       )
     end
 
+    it 'replaces configured relation ordering when selecting the trailing boundary' do
+      article, create_version, draft, published, reverted = create_history
+      times = timestamp_versions([create_version, draft, published, reverted])
+      descending = article.versions.reorder(id: :desc)
+      allow(article).to receive(:versions).and_return(descending)
+
+      steps = described_class.timeline(article, within: times.fetch(1)...times.fetch(2))
+
+      expect(steps.map(&:from_version)).to eq([draft])
+      expect(steps.map(&:to_version)).to eq([published])
+      expect(steps.first.diff.attributes.fetch('title').to_h)
+        .to eq(from: 'Draft', to: 'Published')
+    end
+
     it 'includes every tied timestamp through an inclusive end' do
       article, create_version, draft, published, reverted = create_history
       start_at = Time.utc(2030, 2, 1)

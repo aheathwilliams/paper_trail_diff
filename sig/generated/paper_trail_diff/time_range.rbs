@@ -32,6 +32,9 @@ module PaperTrailDiff
     # : (untyped, boundary: Symbol) -> Time
     def coerce_time: (untyped, boundary: Symbol) -> Time
 
+    # : (untyped) -> Time
+    def time_value: (untyped) -> Time
+
     # : () -> void
     def validate_order!: () -> void
   end

@@ -24,6 +24,15 @@ RSpec.describe PaperTrailDiff::TimeRange do
     expect { described_class.new(end_time..start_time) }
       .to raise_error(PaperTrailDiff::InvalidTimeRangeError, /must not follow/)
   end
+
+  it 'normalizes zoned values to their UTC instants' do
+    zone = ActiveSupport::TimeZone['America/Chicago']
+    zoned_start = zone.local(2032, 1, 1, 6)
+    range = described_class.new(zoned_start...(zoned_start + 3600))
+
+    expect(range.begin_time).to eq(Time.utc(2032, 1, 1, 12))
+    expect(range.end_time).to eq(Time.utc(2032, 1, 1, 13))
+  end
 end
 
 RSpec.describe PaperTrailDiff::TimelineRange do

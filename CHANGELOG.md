@@ -40,6 +40,8 @@ project follows [Semantic Versioning](https://semver.org/).
   intermediate Active Record object, with reification fallback for unsafe schemas.
 - Reuse internally owned frozen collection arrays instead of defensively copying
   them a second time during immutable activity reconstruction.
+- Replace pre-existing versions-relation ordering when selecting a time range's
+  immediate trailing reconstruction boundary.
 - Limit automatic CI to pull requests and `main` pushes, and cancel superseded
   runs for the same pull request or ref.
 

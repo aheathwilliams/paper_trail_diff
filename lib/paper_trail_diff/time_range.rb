@@ -60,11 +60,19 @@ module PaperTrailDiff
         raise InvalidTimeRangeError, "`within` #{boundary} must be time-like"
       end
 
-      value.to_time.getutc.freeze
+      time_value(value).getutc.freeze
     rescue ArgumentError, NoMethodError, TypeError => e
       raise InvalidTimeRangeError,
             "`within` #{boundary} must be time-like",
             cause: e
+    end
+
+    #: (untyped) -> Time
+    def time_value(value)
+      return value if value.is_a?(Time)
+
+      utc = value.utc if value.respond_to?(:utc)
+      utc.is_a?(Time) ? utc : value.to_time
     end
 
     #: () -> void
