@@ -42,6 +42,21 @@ module PaperTrailDiff
     SUPPORTED_KINDS = %i[belongs_to has_one has_many has_and_belongs_to_many].freeze
     private_constant :COLLECTION_KINDS, :SUPPORTED_KINDS
 
+    # Non-semantic memoization shared by structurally adjacent snapshots. The
+    # cached value is derived only from frozen records and is itself immutable.
+    class IdentityIndexCache
+      #: () -> void
+      def initialize
+        @index = nil #: CollectionIdentityIndex?
+      end
+
+      #: (Array[RecordSnapshot]) -> CollectionIdentityIndex
+      def index(records)
+        @index ||= CollectionIdentityIndex.new(records)
+      end
+    end
+    private_constant :IdentityIndexCache
+
     class << self
       #: (Symbol) -> bool
       def collection_kind?(kind)
@@ -52,8 +67,8 @@ module PaperTrailDiff
     attr_reader :kind #: Symbol
     attr_reader :records #: Array[RecordSnapshot]
 
-    #: (kind: Symbol, records: Array[RecordSnapshot], ?identity_index_holder: untyped, ?transition: CollectionTransition?) -> void
-    def initialize(kind:, records:, identity_index_holder: nil, transition: nil)
+    #: (kind: Symbol, records: Array[RecordSnapshot], ?identity_index_cache: untyped, ?transition: CollectionTransition?) -> void
+    def initialize(kind:, records:, identity_index_cache: nil, transition: nil)
       unless SUPPORTED_KINDS.include?(kind)
         raise ArgumentError, "unsupported association kind: #{kind.inspect}"
       end
@@ -63,7 +78,7 @@ module PaperTrailDiff
 
       @kind = kind
       @records = records.dup.freeze
-      @identity_index_holder = identity_index_holder || [nil]
+      @identity_index_cache = identity_index_cache || IdentityIndexCache.new
       @transition = transition
       freeze
     end
@@ -71,14 +86,14 @@ module PaperTrailDiff
     # Builds a structurally adjacent collection snapshot for internal activity carry-forward.
     #: (Array[RecordSnapshot], before: RecordSnapshot?, after: RecordSnapshot?, membership_preserved: bool) -> AssociationSnapshot
     def transition_to(records, before:, after:, membership_preserved:)
-      holder = membership_preserved ? @identity_index_holder : nil
+      cache = membership_preserved ? @identity_index_cache : nil
       transition = if before || after
                      CollectionTransition.new(from: self, before: before, after: after)
                    end
       self.class.new(
         kind: kind,
         records: records,
-        identity_index_holder: holder,
+        identity_index_cache: cache,
         transition: transition
       )
     end
@@ -111,12 +126,12 @@ module PaperTrailDiff
 
     private
 
-    # @rbs @identity_index_holder: Array[CollectionIdentityIndex?]
+    # @rbs @identity_index_cache: untyped
     # @rbs @transition: CollectionTransition?
 
     #: () -> CollectionIdentityIndex
     def identity_index
-      @identity_index_holder[0] ||= CollectionIdentityIndex.new(records)
+      @identity_index_cache.index(records)
     end
   end
 

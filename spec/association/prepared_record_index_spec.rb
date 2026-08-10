@@ -16,8 +16,8 @@ RSpec.describe PaperTrailDiff::PreparedRecordIndex do
   end
 
   def boundary_for(article)
-    article.paper_trail.save_with_version
-    article.versions.reload.last
+    article.paper_trail.save_with_version ||
+      raise('PaperTrail did not create the requested boundary version')
   end
 
   it 'uses the first future pre-change state and then the live fallback' do

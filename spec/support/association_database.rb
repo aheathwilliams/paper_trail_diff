@@ -7,6 +7,33 @@ require 'paper_trail-association_tracking'
 PaperTrail.config.track_associations = true
 PaperTrail::Version.include(PaperTrailAssociationTracking::VersionConcern)
 
+# PT-AT reconstructs associations by timestamp and is nondeterministic when
+# SQLite stores multiple versions at the same instant. Keep test-created
+# versions strictly ordered without sleeps or production-side clock changes.
+module AssociationSpecVersionClock
+  class << self
+    def reset!
+      @last = nil
+    end
+
+    def next(timestamp)
+      current = timestamp || Time.now.utc
+      current = @last + Rational(1, 1_000_000) if @last && current <= @last
+      @last = current
+    end
+  end
+end
+
+PaperTrail::Version.before_create do
+  self.created_at = AssociationSpecVersionClock.next(created_at)
+end
+
+if defined?(RSpec)
+  RSpec.configure do |config|
+    config.before { AssociationSpecVersionClock.reset! }
+  end
+end
+
 ActiveRecord::Base.establish_connection(adapter: 'sqlite3', database: ':memory:')
 ActiveRecord::Migration.verbose = false
 ActiveRecord.yaml_column_permitted_classes = [Symbol, Time]
@@ -103,6 +130,15 @@ class TrackedArticle < ActiveRecord::Base
                     inverse_of: :article
   has_many :comments, class_name: 'TrackedComment', foreign_key: :article_id,
                       inverse_of: :article
+  has_many :limited_comments, -> { order(:id).limit(1) },
+           class_name: 'TrackedComment', foreign_key: :article_id,
+           inverse_of: :article
+  has_many :offset_comments, -> { order(:id).offset(1) },
+           class_name: 'TrackedComment', foreign_key: :article_id,
+           inverse_of: :article
+  has_many :owner_comments, ->(article) { where(body: article.title) },
+           class_name: 'TrackedComment', foreign_key: :article_id,
+           inverse_of: :article
   has_many :authorships, class_name: 'TrackedAuthorship', foreign_key: :article_id,
                          inverse_of: :article
   has_many :contributors, through: :authorships, source: :author

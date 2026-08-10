@@ -1,0 +1,32 @@
+# Generated from lib/paper_trail_diff/version_association_candidate_scope.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Selects association activity from a boundary forward plus the state at that boundary.
+  class VersionAssociationCandidateScope
+    # : (untyped, untyped, ?end_at: untyped) -> void
+    def initialize: (untyped, untyped, ?end_at: untyped) -> void
+
+    # : (untyped) -> untyped
+    def call: (untyped) -> untyped
+
+    private
+
+    @end_at: untyped
+
+    @start_at: untyped
+
+    @version_class: untyped
+
+    # : () -> String
+    def candidate_condition: () -> String
+
+    # : (String, String) -> String
+    def activity_condition: (String, String) -> String
+
+    # : (String, String) -> String
+    def column: (String, String) -> String
+
+    # : (String) -> String
+    def compact_sql: (String) -> String
+  end
+end

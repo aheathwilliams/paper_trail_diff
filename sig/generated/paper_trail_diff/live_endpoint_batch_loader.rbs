@@ -16,8 +16,35 @@ module PaperTrailDiff
     # : (untyped, Array[untyped]) -> Array[untyped]
     def load_group: (untyped, Array[untyped]) -> Array[untyped]
 
-    # : (AssociationTree) -> Array[Symbol | Hash[Symbol, untyped]]
-    def preload_spec: (AssociationTree) -> Array[Symbol | Hash[Symbol, untyped]]
+    # : (Array[untyped], AssociationTree) -> void
+    def preload_tree: (Array[untyped], AssociationTree) -> void
+
+    # : (untyped, Array[untyped], AssociationTree) -> void
+    def preload_model_tree: (untyped, Array[untyped], AssociationTree) -> void
+
+    # : (untyped, AssociationTree) -> Array[[untyped, AssociationTree]]
+    def selected_reflections: (untyped, AssociationTree) -> Array[[ untyped, AssociationTree ]]
+
+    # : (Array[untyped], Array[[untyped, AssociationTree]], individually: bool) -> void
+    def preload_subtrees: (Array[untyped], Array[[ untyped, AssociationTree ]], individually: bool) -> void
+
+    # : (Array[untyped], Array[Symbol]) -> void
+    def preload_batch: (Array[untyped], Array[Symbol]) -> void
+
+    # : () -> untyped
+    def active_record_preloader: () -> untyped
+
+    # : (untyped, untyped) -> bool
+    def batch_safe?: (untyped, untyped) -> bool
+
+    # : (Array[untyped], untyped) -> Array[untyped]
+    def load_individually: (Array[untyped], untyped) -> Array[untyped]
+
+    # : (Array[untyped], untyped) -> Array[untyped]
+    def targets: (Array[untyped], untyped) -> Array[untyped]
+
+    # : (Array[untyped]) -> Array[untyped]
+    def unique_records: (Array[untyped]) -> Array[untyped]
 
     # : (Array[untyped], Hash[identity, untyped]) -> void
     def ensure_all_loaded!: (Array[untyped], Hash[identity, untyped]) -> void

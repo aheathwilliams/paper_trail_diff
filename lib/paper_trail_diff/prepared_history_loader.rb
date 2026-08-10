@@ -20,7 +20,7 @@ module PaperTrailDiff
       @traversal = traversal
       @records = PreparedRecordIndex.new(start_at, live_records: live_records)
       @history = PreparedHistory.new(@records)
-      @edges = PreparedEdgeLoader.new(@records, root_versions)
+      @edges = PreparedEdgeLoader.new(@records, root_versions, start_at: start_at)
       @prepared = {} #: Hash[Array[String], Array[String]]
     end
 

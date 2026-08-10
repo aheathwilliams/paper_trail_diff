@@ -3,6 +3,10 @@
 module PaperTrailDiff
   # Tests activity versions against a historical-version or wall-clock range end.
   class ActivityRange
+    attr_reader start_time: untyped
+
+    attr_reader end_time: untyped
+
     # : (untyped, untyped) -> void
     def initialize: (untyped, untyped) -> void
 
@@ -13,6 +17,9 @@ module PaperTrailDiff
     # remains in #include? so this works for integer, UUID, and custom version IDs.
     # : (untyped) -> untyped
     def scope: (untyped) -> untyped
+
+    # : () -> bool
+    def current_end?: () -> bool
 
     private
 
@@ -31,9 +38,6 @@ module PaperTrailDiff
 
     # : (untyped, Array[untyped]) -> bool
     def before_end?: (untyped, Array[untyped]) -> bool
-
-    # : () -> untyped
-    def end_time: () -> untyped
 
     # : (Array[untyped], Array[untyped]) -> bool
     def key_before_or_equal?: (Array[untyped], Array[untyped]) -> bool

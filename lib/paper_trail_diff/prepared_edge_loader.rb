@@ -12,10 +12,11 @@ module PaperTrailDiff
     }.freeze
     private_constant :EDGE_LOADERS
 
-    #: (PreparedRecordIndex, Array[untyped]) -> void
-    def initialize(records, root_versions)
+    #: (PreparedRecordIndex, Array[untyped], ?start_at: untyped) -> void
+    def initialize(records, root_versions, start_at: root_versions.first&.created_at)
       @records = records
       @transaction_ids = root_versions.filter_map(&:transaction_id).uniq.freeze
+      @start_at = start_at
     end
 
     #: (untyped, Array[untyped], untyped) -> [Hash[String, Hash[Symbol, untyped]], Hash[String, Array[untyped]]?]
@@ -28,6 +29,7 @@ module PaperTrailDiff
 
     # @rbs @records: PreparedRecordIndex
     # @rbs @transaction_ids: Array[untyped]
+    # @rbs @start_at: untyped
 
     #: (untyped, Array[untyped], untyped) -> [Hash[String, Hash[Symbol, untyped]], nil]
     def belongs_to_edge(owner_class, owner_ids, reflection)
@@ -94,25 +96,38 @@ module PaperTrailDiff
     end
 
     #: (untyped, Array[untyped], untyped, String) -> Hash[String, Array[untyped]]
-    def historical_child_ids( # rubocop:disable Metrics/AbcSize
+    def historical_child_ids(
       owner_class,
       owner_ids,
       reflection,
       foreign_key
     )
       version_class = owner_class.paper_trail.version_class
-      relation = owner_class.paper_trail.version_association_class.joins(:version).where(
-        foreign_key_name: foreign_key,
-        foreign_key_id: owner_ids
-      ).where(foreign_type: parent_types(owner_class)).where(
-        version_class.table_name => { item_type: reflection.klass.base_class.name }
-      )
       association_class = owner_class.paper_trail.version_association_class
-      pairs = relation.distinct.pluck(
+      relation = historical_child_relation(owner_class, owner_ids, reflection, foreign_key)
+      pairs = child_candidate_scope(version_class).call(relation).distinct.pluck(
         association_class.arel_table[:foreign_key_id],
         version_class.arel_table[:item_id]
       )
       group_ids_by_owner(pairs)
+    end
+
+    #: (untyped, Array[untyped], untyped, String) -> untyped
+    def historical_child_relation(owner_class, owner_ids, reflection, foreign_key)
+      version_class = owner_class.paper_trail.version_class
+      owner_class.paper_trail.version_association_class.joins(:version).where(
+        foreign_key_name: foreign_key,
+        foreign_key_id: owner_ids,
+        foreign_type: parent_types(owner_class)
+      ).where(version_class.table_name => { item_type: reflection.klass.base_class.name })
+    end
+
+    #: (untyped) -> VersionAssociationCandidateScope
+    def child_candidate_scope(version_class)
+      VersionAssociationCandidateScope.new(
+        version_class,
+        @start_at
+      )
     end
 
     #: (untyped, Array[untyped], untyped, String) -> Hash[String, Array[untyped]]

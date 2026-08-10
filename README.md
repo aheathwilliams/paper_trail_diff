@@ -104,9 +104,11 @@ Root identities must be unique within one call. Historical reconstruction for
 ordinary versioned, unscoped association paths is also prepared across the
 collection. Paths that require the existing point-in-time PT-AT fallback retain
 their per-endpoint behavior and all historical reconstruction retains the same
-PaperTrail Association Tracking requirements as `compare`. Callers should still
-use an appropriate database transaction when all live queries must observe one
-atomic snapshot.
+PaperTrail Association Tracking requirements as `compare`. Live collection
+scopes with per-owner semantics, such as `limit`, `offset`, or an owner
+argument, are loaded per root; other selected branches remain batched. Callers
+should still use an appropriate database transaction when all live queries
+must observe one atomic snapshot.
 
 ### Reuse already-preloaded current endpoints
 
@@ -370,17 +372,20 @@ key also locates its parent snapshot directly rather than walking every
 comment. Membership changes and ambiguous or unsupported relationship shapes
 retain the general comparator and traversal fallback.
 
-Activity event discovery is bounded to the selected range. Prepared scalar
-state also retains later successor versions for selected identities because a
-PaperTrail version is a pre-change snapshot and may be the only correct state
-for an earlier boundary. Memory therefore scales with relevant selected
-history, not only with the number of returned steps. Keep requested paths and
-ranges intentional. An activity timeline must also emit a diff for every
-selected event. Repeated events within one wide collection still copy the
-frozen records array when producing each immutable snapshot, so they can do
-pointer-copying work proportional to the number of events times the collection
-width even when SQL and Ruby-level comparison work stay linear. Bound or
-paginate unusually wide activity ranges in latency-sensitive requests.
+Activity event loading is bounded to the selected range. Association identity
+discovery retains one indexed checkpoint for members present at the starting
+boundary, then considers later association activity and current members; it no
+longer materializes every pre-range association row. Prepared scalar state also
+retains later successor versions for selected identities because a PaperTrail
+version is a pre-change snapshot and may be the only correct state for an
+earlier boundary. Memory therefore scales with relevant selected history, not
+only with the number of returned steps. Keep requested paths and ranges
+intentional. An activity timeline must also emit a diff for every selected
+event. Repeated events within one wide collection still copy the frozen records
+array when producing each immutable snapshot, so they can do pointer-copying
+work proportional to the number of events times the collection width even when
+SQL and Ruby-level comparison work stay linear. Bound or paginate unusually
+wide activity ranges in latency-sensitive requests.
 
 For large histories, applications should give the database a matching
 composite index. A typical PaperTrail installation can add one without making

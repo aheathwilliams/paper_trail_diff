@@ -59,9 +59,6 @@ module PaperTrailDiff
     # : (untyped, untyped) -> untyped
     def target_class: (untyped, untyped) -> untyped
 
-    # : (untyped) -> Array[String?]
-    def related_parent_types: (untyped) -> Array[String?]
-
     # : (untyped) -> bool
     def in_range?: (untyped) -> bool
 

@@ -14,6 +14,15 @@ RSpec.describe PaperTrailDiff::Engine do
     PaperTrailDiff::AssociationSnapshot.new(kind: kind, records: records)
   end
 
+  it 'validates association snapshot kinds and singular cardinality' do
+    record = snapshot(type: 'Author', id: 1, attributes: {})
+
+    expect { association(:unsupported, record) }
+      .to raise_error(ArgumentError, /unsupported association kind/)
+    expect { association(:belongs_to, record, record) }
+      .to raise_error(ArgumentError, /at most one record/)
+  end
+
   it 'returns sorted scalar attribute changes' do
     from = snapshot(type: 'Article', id: 1, attributes: { zeta: 1, alpha: 'old' })
     to = snapshot(type: 'Article', id: 1, attributes: { zeta: 2, alpha: 'new' })
@@ -256,7 +265,10 @@ RSpec.describe PaperTrailDiff::Engine do
     before = records.fetch(50)
     after = snapshot(type: 'Comment', id: 50, attributes: { body: 'After' })
     from_association = association(:has_many, *records)
+    serialized = from_association.to_h
     from_association.position('Comment', 50)
+    expect(from_association.to_h).to eq(serialized)
+    expect(from_association).to be_frozen
     identity_reads[0] = 0
     updated = records.dup
     updated[50] = after

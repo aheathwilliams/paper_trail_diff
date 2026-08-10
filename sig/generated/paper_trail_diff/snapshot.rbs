@@ -26,6 +26,16 @@ module PaperTrailDiff
 
     SUPPORTED_KINDS: untyped
 
+    # Non-semantic memoization shared by structurally adjacent snapshots. The
+    # cached value is derived only from frozen records and is itself immutable.
+    class IdentityIndexCache
+      # : () -> void
+      def initialize: () -> void
+
+      # : (Array[RecordSnapshot]) -> CollectionIdentityIndex
+      def index: (Array[RecordSnapshot]) -> CollectionIdentityIndex
+    end
+
     # : (Symbol) -> bool
     def self.collection_kind?: (Symbol) -> bool
 
@@ -33,8 +43,8 @@ module PaperTrailDiff
 
     attr_reader records: Array[RecordSnapshot]
 
-    # : (kind: Symbol, records: Array[RecordSnapshot], ?identity_index_holder: untyped, ?transition: CollectionTransition?) -> void
-    def initialize: (kind: Symbol, records: Array[RecordSnapshot], ?identity_index_holder: untyped, ?transition: CollectionTransition?) -> void
+    # : (kind: Symbol, records: Array[RecordSnapshot], ?identity_index_cache: untyped, ?transition: CollectionTransition?) -> void
+    def initialize: (kind: Symbol, records: Array[RecordSnapshot], ?identity_index_cache: untyped, ?transition: CollectionTransition?) -> void
 
     # Builds a structurally adjacent collection snapshot for internal activity carry-forward.
     # : (Array[RecordSnapshot], before: RecordSnapshot?, after: RecordSnapshot?, membership_preserved: bool) -> AssociationSnapshot
@@ -57,7 +67,7 @@ module PaperTrailDiff
 
     private
 
-    @identity_index_holder: Array[CollectionIdentityIndex?]
+    @identity_index_cache: untyped
 
     @transition: CollectionTransition?
 

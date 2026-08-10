@@ -5,8 +5,8 @@ module PaperTrailDiff
   class PreparedEdgeLoader
     EDGE_LOADERS: untyped
 
-    # : (PreparedRecordIndex, Array[untyped]) -> void
-    def initialize: (PreparedRecordIndex, Array[untyped]) -> void
+    # : (PreparedRecordIndex, Array[untyped], ?start_at: untyped) -> void
+    def initialize: (PreparedRecordIndex, Array[untyped], ?start_at: untyped) -> void
 
     # : (untyped, Array[untyped], untyped) -> [Hash[String, Hash[Symbol, untyped]], Hash[String, Array[untyped]]?]
     def call: (untyped, Array[untyped], untyped) -> [ Hash[String, Hash[Symbol, untyped]], Hash[String, Array[untyped]]? ]
@@ -14,6 +14,8 @@ module PaperTrailDiff
     private
 
     @records: PreparedRecordIndex
+
+    @start_at: untyped
 
     @transaction_ids: Array[untyped]
 
@@ -43,6 +45,12 @@ module PaperTrailDiff
 
     # : (untyped, Array[untyped], untyped, String) -> Hash[String, Array[untyped]]
     def historical_child_ids: (untyped, Array[untyped], untyped, String) -> Hash[String, Array[untyped]]
+
+    # : (untyped, Array[untyped], untyped, String) -> untyped
+    def historical_child_relation: (untyped, Array[untyped], untyped, String) -> untyped
+
+    # : (untyped) -> VersionAssociationCandidateScope
+    def child_candidate_scope: (untyped) -> VersionAssociationCandidateScope
 
     # : (untyped, Array[untyped], untyped, String) -> Hash[String, Array[untyped]]
     def live_child_ids: (untyped, Array[untyped], untyped, String) -> Hash[String, Array[untyped]]

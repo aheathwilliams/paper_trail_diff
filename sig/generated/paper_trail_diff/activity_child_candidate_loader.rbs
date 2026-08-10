@@ -1,0 +1,40 @@
+# Generated from lib/paper_trail_diff/activity_child_candidate_loader.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Loads direct-child identities active at or after one activity boundary.
+  class ActivityChildCandidateLoader
+    # : (untyped, Array[untyped], untyped, ActivityRange) -> void
+    def initialize: (untyped, Array[untyped], untyped, ActivityRange) -> void
+
+    # : () -> Array[untyped]
+    def call: () -> Array[untyped]
+
+    private
+
+    @parent_class: untyped
+
+    @parent_ids: Array[untyped]
+
+    @range: ActivityRange
+
+    @reflection: untyped
+
+    # : () -> Array[untyped]
+    def historical_ids: () -> Array[untyped]
+
+    # : (untyped) -> untyped
+    def historical_relation: (untyped) -> untyped
+
+    # : (untyped) -> VersionAssociationCandidateScope
+    def candidate_scope: (untyped) -> VersionAssociationCandidateScope
+
+    # : () -> Array[untyped]
+    def current_ids: () -> Array[untyped]
+
+    # : () -> String
+    def child_item_type: () -> String
+
+    # : () -> Array[String?]
+    def parent_types: () -> Array[String?]
+  end
+end

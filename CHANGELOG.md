@@ -30,6 +30,12 @@ project follows [Semantic Versioning](https://semver.org/).
   updates instead of reifying and deserializing each PaperTrail event again.
 - Preserve both sides of nested collection membership moves by using the
   general comparator when one event changes multiple parent snapshots.
+- Preserve per-owner `limit`, `offset`, and owner-dependent association scopes
+  in `compare_many` while retaining batched preloading for safe branches.
+- Replace lifetime association-identity materialization with an indexed start-state
+  checkpoint plus post-boundary activity and current members.
+- Bound historical activity-child candidates at the selected end so membership
+  changes after the range cannot introduce unrelated empty timeline steps.
 - Limit automatic CI to pull requests and `main` pushes, and cancel superseded
   runs for the same pull request or ref.
 

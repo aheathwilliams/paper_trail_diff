@@ -4,6 +4,9 @@
 module PaperTrailDiff
   # Tests activity versions against a historical-version or wall-clock range end.
   class ActivityRange
+    attr_reader :start_time #: untyped
+    attr_reader :end_time #: untyped
+
     #: (untyped, untyped) -> void
     def initialize(start_boundary, end_boundary)
       @start_boundary = start_boundary
@@ -12,6 +15,7 @@ module PaperTrailDiff
                      Support.chronological_version_key(start_boundary)
                    end
       @start_time = Endpoint.version?(start_boundary) ? start_boundary.created_at : start_boundary
+      @end_time = Endpoint.version?(end_boundary) ? end_boundary.created_at : end_boundary
       @end_key = if Endpoint.version?(end_boundary)
                    Support.chronological_version_key(end_boundary)
                  end
@@ -28,6 +32,11 @@ module PaperTrailDiff
     #: (untyped) -> untyped
     def scope(relation)
       relation.where(created_at: @start_time..end_time)
+    end
+
+    #: () -> bool
+    def current_end?
+      !Endpoint.version?(@end_boundary)
     end
 
     private
@@ -52,11 +61,6 @@ module PaperTrailDiff
       return key_before_or_equal?(key, end_key) if end_key
 
       version.created_at <= @end_boundary
-    end
-
-    #: () -> untyped
-    def end_time
-      Endpoint.version?(@end_boundary) ? @end_boundary.created_at : @end_boundary
     end
 
     #: (Array[untyped], Array[untyped]) -> bool

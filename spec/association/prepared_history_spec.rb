@@ -17,8 +17,10 @@ RSpec.describe PaperTrailDiff::PreparedHistory do
 
   def boundary_for(article)
     fresh = TrackedArticle.find(article.id)
-    TrackedArticle.transaction { fresh.paper_trail.save_with_version }
-    fresh.versions.reload.last
+    TrackedArticle.transaction do
+      fresh.paper_trail.save_with_version ||
+        raise('PaperTrail did not create the requested boundary version')
+    end
   end
 
   def normalizer(tree, traversal)

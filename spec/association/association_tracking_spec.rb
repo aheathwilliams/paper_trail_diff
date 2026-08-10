@@ -16,14 +16,16 @@ RSpec.describe 'PaperTrailDiff association tracking' do
   end
 
   def boundary_for(article)
-    article.paper_trail.save_with_version
-    article.versions.reload.last
+    article.paper_trail.save_with_version ||
+      raise('PaperTrail did not create the requested boundary version')
   end
 
   def habtm_boundary_for(article)
     fresh_article = TrackedArticle.find(article.id)
-    TrackedArticle.transaction { fresh_article.paper_trail.save_with_version }
-    fresh_article.versions.reload.last
+    TrackedArticle.transaction do
+      fresh_article.paper_trail.save_with_version ||
+        raise('PaperTrail did not create the requested HABTM boundary version')
+    end
   end
 
   def with_association_reify_behavior(value)
@@ -221,6 +223,48 @@ RSpec.describe 'PaperTrailDiff association tracking' do
       model_type: 'TrackedArticle',
       batched: true
     )
+  end
+
+  it 'preserves per-owner collection scopes while batching safe nested associations' do
+    comparisons = 2.times.map do |index|
+      article = TrackedArticle.create!(title: "Limited batch #{index}")
+      before = boundary_for(article)
+      selected = article.comments.create!(body: "Selected #{index}")
+      selected.replies.create!(body: "Nested #{index}")
+      matching = article.comments.create!(body: article.title)
+      matching.replies.create!(body: "Matching nested #{index}")
+      excluded = article.comments.create!(body: "Excluded #{index}")
+      excluded.replies.create!(body: "Excluded nested #{index}")
+      { from: before, to: article }
+    end
+    associations = [
+      'limited_comments.replies',
+      'offset_comments.replies',
+      'owner_comments.replies'
+    ]
+    expected = comparisons.to_h do |comparison|
+      identity = PaperTrailDiff::Endpoint.identity(comparison.fetch(:from))
+      diff = PaperTrailDiff.compare(
+        comparison.fetch(:from),
+        comparison.fetch(:to),
+        associations: associations
+      )
+      [identity, diff.to_h]
+    end
+
+    actual = PaperTrailDiff.compare_many(comparisons, associations: associations)
+
+    expect(actual.transform_values(&:to_h)).to eq(expected)
+    expect(actual.values).to all(satisfy do |diff|
+      association_diffs = diff.associations
+      limited = association_diffs.fetch('limited_comments').added
+      offset = association_diffs.fetch('offset_comments').added
+      owner = association_diffs.fetch('owner_comments').added
+      limited.length == 1 && offset.length == 2 && owner.length == 1 &&
+        [*limited, *offset, *owner].all? do |record|
+          record.associations.fetch('replies').records.length == 1
+        end
+    end)
   end
 
   it 'keeps historical-to-live collection queries constant as the batch grows' do
@@ -628,9 +672,11 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     expect(by_path.fetch('comments.article').cycle).to be(true)
     expect(by_path.fetch('author.comments').through).to eq('articles')
     expect(PaperTrailDiff.association_paths(TrackedArticle).map(&:path))
-      .to eq(%w[author authorships comments contributors profile tags])
+      .to eq(%w[author authorships comments contributors limited_comments offset_comments
+                owner_comments profile tags])
     expect(PaperTrailDiff.association_paths(TrackedArticle.new).map(&:path))
-      .to eq(%w[author authorships comments contributors profile tags])
+      .to eq(%w[author authorships comments contributors limited_comments offset_comments
+                owner_comments profile tags])
   end
 
   it 'separates descendant updates into activity timeline steps' do
@@ -775,6 +821,28 @@ RSpec.describe 'PaperTrailDiff association tracking' do
       .to eq(from: 'Keep before', to: 'Comment in range')
     expect(comment.associations.fetch('replies').changed.first.attributes.fetch('body').to_h)
       .to eq(from: 'Nested before', to: 'Reply in range')
+  end
+
+  it 'excludes activity recorded before a child joins after the selected range' do
+    article = TrackedArticle.create!(title: 'Historical membership range')
+    other = TrackedArticle.create!(title: 'Future owner')
+    comment = other.comments.create!(body: 'Outside before')
+    before = boundary_for(article)
+    comment.update!(body: 'Outside during selected range')
+    outside = comment.versions.last
+    after = boundary_for(article)
+    comment.update!(article: article)
+
+    steps = PaperTrailDiff.activity_timeline(
+      article,
+      from: before,
+      to: after,
+      associations: [:comments]
+    )
+
+    expect(steps.map { |step| step.from_boundary.version_id }).to eq([before.id])
+    expect(steps.map { |step| step.to_boundary.version_id }).to eq([after.id])
+    expect(steps.map { |step| step.from_boundary.version_id }).not_to include(outside.id)
   end
 
   it 'requires a later root checkpoint for a descendant time range' do

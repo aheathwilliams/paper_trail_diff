@@ -105,15 +105,10 @@ module PaperTrailDiff
     end
 
     #: (untyped, Array[untyped], untyped) -> Hash[String, untyped]
-    def direct_child_groups(parent_class, parent_ids, reflection) # rubocop:disable Metrics/AbcSize
-      version_class = parent_class.paper_trail.version_class
-      relation = parent_class.paper_trail.version_association_class.joins(:version).where(
-        foreign_key_name: reflection.foreign_key.to_s,
-        foreign_key_id: parent_ids
-      ).where(foreign_type: related_parent_types(parent_class))
-      item_ids = relation.where(
-        version_class.table_name => { item_type: reflection.klass.base_class.name }
-      ).distinct.pluck(version_class.arel_table[:item_id])
+    def direct_child_groups(parent_class, parent_ids, reflection)
+      item_ids = ActivityChildCandidateLoader.new(
+        parent_class, parent_ids, reflection, @range
+      ).call
       return {} if item_ids.empty?
 
       { reflection.klass.name => group(reflection.klass, item_ids) }
@@ -183,11 +178,6 @@ module PaperTrailDiff
       Object.const_get(row.foreign_type.to_s) unless row.foreign_type.to_s.empty?
     rescue NameError
       nil
-    end
-
-    #: (untyped) -> Array[String?]
-    def related_parent_types(parent_class)
-      [nil, '', parent_class.name.to_s, parent_class.base_class.name.to_s].uniq
     end
 
     #: (untyped) -> bool
