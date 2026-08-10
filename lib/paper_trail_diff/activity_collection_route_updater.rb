@@ -46,8 +46,8 @@ module PaperTrailDiff
 
       targeted = targeted_parent(association, change, depth)
       if targeted
-        records, before, after, preserved = targeted
-        return [records, before, after, preserved, true]
+        records, before, after, changed = targeted
+        return [records, before, after, true, changed]
       end
 
       recursive_records(association, change, depth)

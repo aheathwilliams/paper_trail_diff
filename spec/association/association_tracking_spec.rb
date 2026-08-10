@@ -1331,7 +1331,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
         'comments.replies'
       ]
     ]
-    version = instance_double(PaperTrail::Version, item_id: reply_before.id)
+    version = Struct.new(:item_id, :item_type).new(reply_before.id, 'TrackedReply')
     record = Struct.new(:comment_id).new(50)
     updater = PaperTrailDiff::ActivityCollectionRouteUpdater.new(
       pool: PaperTrailDiff::SnapshotPool.new,
@@ -1352,6 +1352,18 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     expect(changed).to be(true)
     expect(replies.fetch(0).attributes.fetch('body')).to eq('After')
     expect(leaf_position_reads.fetch(0)).to eq(1)
+
+    missing_version = Struct.new(:item_id, :item_type).new(404, 'TrackedReply')
+    missing_change = PaperTrailDiff::ActivityCollectionRouteChange.new(
+      route: route,
+      version: missing_version,
+      record: record,
+      replacement: nil
+    )
+    unchanged, changed = updater.call(previous, missing_change)
+
+    expect(changed).to be(false)
+    expect(unchanged).to equal(previous)
   end
 
   it 'reuses equal immutable nodes and short-circuits shared snapshot comparisons' do
