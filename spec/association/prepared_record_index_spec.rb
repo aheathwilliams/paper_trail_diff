@@ -36,6 +36,44 @@ RSpec.describe PaperTrailDiff::PreparedRecordIndex do
     expect(index.record_before(TrackedAuthor, author.id, after).name).to eq('After')
   end
 
+  it 'keeps one trailing version per identity instead of everything after the range' do
+    article = TrackedArticle.create!(title: 'Bounded tail')
+    comment = TrackedComment.create!(article: article, body: 'In range')
+    start_boundary = boundary_for(article)
+    end_boundary = boundary_for(article)
+    20.times { |index| comment.update!(body: "after range #{index}") }
+    index = described_class.new(start_boundary, end_at: end_boundary)
+
+    index.load(TrackedComment, [comment.id])
+
+    # The state at the closing boundary only exists in the pre-change snapshot
+    # of the first version recorded after it, so that one must survive.
+    expect(index.record_before(TrackedComment, comment.id, end_boundary).body).to eq('In range')
+    # That trailing version plus the live record, not the whole tail.
+    expect(index.records_for(TrackedComment, [comment.id]).length).to eq(2)
+  end
+
+  it 'prefers a boundary transaction sibling recorded before the boundary itself' do
+    article = TrackedArticle.create!(title: 'Boundary transaction')
+    author = TrackedAuthor.create!(name: 'Before')
+    start = boundary_for(article)
+    boundary = nil
+    ActiveRecord::Base.transaction do
+      author.update!(name: 'During')
+      boundary = boundary_for(article)
+    end
+    author.update!(name: 'After')
+    index = described_class.new(start)
+
+    index.load(TrackedAuthor, [author.id])
+
+    sibling = author.versions.order(:id).find do |version|
+      version.transaction_id == boundary.transaction_id
+    end
+    expect(sibling.created_at).to be < boundary.created_at
+    expect(index.record_before(TrackedAuthor, author.id, boundary).name).to eq('Before')
+  end
+
   it 'reuses prepared predecessor, successor, and live attributes for transitions' do
     article = TrackedArticle.create!(title: 'Prepared transitions')
     author = TrackedAuthor.create!(name: 'Before')
@@ -73,6 +111,20 @@ RSpec.describe PaperTrailDiff::PreparedRecordIndex do
     expect(direct&.attributes).to eq(reified_attributes)
     expect(prepared).to be_a(PreparedSpecialDocument)
     expect(prepared.name).to eq('Before')
+  end
+
+  it 'rebuilds prepared state without reapplying overridden attribute writers' do
+    document = PreparedRewrittenDocument.create!(name: 'Before')
+    document.update!(name: 'After')
+    version = document.versions.last
+    reified = version.reify(dup: true)
+    state = PaperTrailDiff::PreparedVersionStateLoader.new.call(version)
+
+    prepared = state&.instantiate
+
+    expect(reified.name).to eq('Before!')
+    expect(prepared&.name).to eq(reified.name)
+    expect(prepared&.attributes).to eq(reified.attributes)
   end
 
   it 'falls back to PaperTrail reification for attributes absent from the current schema' do

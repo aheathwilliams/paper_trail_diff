@@ -60,7 +60,9 @@ module PaperTrailDiff
       validate_current_range!
       current_snapshot, captured_at = capture_current
       root_versions = VersionRange.new(@record, from: @from, to: @from).select_through_latest
-      prepare_history(root_versions)
+      # Descendants can move after the last root version, so the prepared range
+      # ends at the captured instant rather than at that version.
+      prepare_history(root_versions, end_at: captured_at)
       events = collect_events(root_versions, range_end: captured_at)
       build_event_steps(
         root_versions,
@@ -102,15 +104,12 @@ module PaperTrailDiff
       ).call
     end
 
-    #: (Array[untyped], ?start_at: untyped) -> void
-    def prepare_history(root_versions, start_at: nil)
+    #: (Array[untyped], ?end_at: untyped) -> void
+    def prepare_history(root_versions, end_at: nil)
       return unless @snapshotter.respond_to?(:prepare)
+      return @snapshotter.prepare(@record, root_versions) unless end_at
 
-      if start_at
-        @snapshotter.prepare(@record, root_versions, start_at: start_at)
-      else
-        @snapshotter.prepare(@record, root_versions)
-      end
+      @snapshotter.prepare(@record, root_versions, end_at: end_at)
     end
 
     #: (Array[untyped], Array[ActivityEvent], ?current: untyped, ?final_boundary: ActivityBoundary?, ?final_snapshot: RecordSnapshot?) -> Array[ActivityStep]

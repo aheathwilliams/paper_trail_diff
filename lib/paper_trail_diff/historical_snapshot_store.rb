@@ -16,14 +16,20 @@ module PaperTrailDiff
       @prepared_histories = {} #: Hash[Array[untyped], PreparedHistory]
     end
 
-    #: (untyped, Array[untyped], ?start_at: untyped) -> void
-    def prepare(record, root_versions, start_at: root_versions.first.created_at)
+    #: (untyped, Array[untyped], ?start_at: untyped, ?end_at: untyped) -> void
+    def prepare(
+      record,
+      root_versions,
+      start_at: root_versions.first.created_at,
+      end_at: root_versions.last.created_at
+    )
       return if @tree.empty?
 
       @prepared_history = PreparedHistoryLoader.new(
         record,
         root_versions: root_versions,
         start_at: start_at,
+        end_at: end_at,
         tree: @tree,
         traversal: @traversal
       ).call
@@ -139,6 +145,7 @@ module PaperTrailDiff
         root_ids: records.map(&:id),
         root_versions: root_versions,
         start_at: root_versions.map(&:created_at).min,
+        end_at: root_versions.map(&:created_at).max,
         tree: @tree,
         traversal: @traversal,
         live_records: @live_graph_collector.call(records)
