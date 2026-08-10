@@ -9,14 +9,14 @@ module PaperTrailDiff
     # : (untyped, untyped) -> Diff
     def compare: (untyped, untyped) -> Diff
 
-    # : (untyped, from: untyped, to: untyped) -> Array[Step]
-    def timeline: (untyped, from: untyped, to: untyped) -> Array[Step]
+    # : (untyped, from: untyped, to: untyped, within: untyped) -> Array[Step]
+    def timeline: (untyped, from: untyped, to: untyped, within: untyped) -> Array[Step]
 
-    # : (untyped, from: untyped, to: untyped) -> Array[ActivityStep]
-    def activity_timeline: (untyped, from: untyped, to: untyped) -> Array[ActivityStep]
+    # : (untyped, from: untyped, to: untyped, within: untyped) -> Array[ActivityStep]
+    def activity_timeline: (untyped, from: untyped, to: untyped, within: untyped) -> Array[ActivityStep]
 
-    # : (untyped, from: untyped, to: untyped, ?activity: bool) -> Analysis
-    def analyze: (untyped, from: untyped, to: untyped, ?activity: bool) -> Analysis
+    # : (untyped, from: untyped, to: untyped, within: untyped, ?activity: bool) -> Analysis
+    def analyze: (untyped, from: untyped, to: untyped, within: untyped, ?activity: bool) -> Analysis
 
     private
 
@@ -42,8 +42,8 @@ module PaperTrailDiff
     # : () -> ActivitySnapshotProvider
     def build_activity_snapshotter: () -> ActivitySnapshotProvider
 
-    # : (untyped, from: untyped, to: untyped) -> ActivityTimelineBuilder
-    def activity_builder: (untyped, from: untyped, to: untyped) -> ActivityTimelineBuilder
+    # : (untyped, from: untyped, to: untyped, within: untyped) -> ActivityTimelineBuilder
+    def activity_builder: (untyped, from: untyped, to: untyped, within: untyped) -> ActivityTimelineBuilder
 
     # : (untyped) -> void
     def reject_live_habtm_activity!: (untyped) -> void

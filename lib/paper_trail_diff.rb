@@ -36,11 +36,16 @@ require_relative 'paper_trail_diff/activity_boundary'
 require_relative 'paper_trail_diff/step'
 require_relative 'paper_trail_diff/analysis'
 require_relative 'paper_trail_diff/version_range'
+require_relative 'paper_trail_diff/time_range'
+require_relative 'paper_trail_diff/time_version_range'
+require_relative 'paper_trail_diff/timeline_range'
 require_relative 'paper_trail_diff/timeline_builder'
 require_relative 'paper_trail_diff/activity_range'
 require_relative 'paper_trail_diff/activity_event'
 require_relative 'paper_trail_diff/activity_version_collector'
 require_relative 'paper_trail_diff/activity_snapshot_sequence'
+require_relative 'paper_trail_diff/activity_history'
+require_relative 'paper_trail_diff/time_activity_timeline_builder'
 require_relative 'paper_trail_diff/activity_timeline_builder'
 require_relative 'paper_trail_diff/paper_trail_adapter'
 
@@ -82,31 +87,48 @@ module PaperTrailDiff
     end
 
     # Compares every adjacent reconstructed state in an inclusive version range.
-    #: (untyped, from: untyped, to: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option) -> Array[Step]
-    def timeline(record, from:, to:, associations: [], ignore: DEFAULT_IGNORED_ATTRIBUTES)
+    #: (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option) -> Array[Step]
+    def timeline( # rubocop:disable Metrics/ParameterLists
+      record,
+      from: nil,
+      to: nil,
+      within: nil,
+      associations: [],
+      ignore: DEFAULT_IGNORED_ATTRIBUTES
+    )
       PaperTrailAdapter.new(associations: associations, ignore: ignore).timeline(
         record,
         from: from,
-        to: to
+        to: to,
+        within: within
       )
     end
 
     # Compares adjacent root and selected-descendant activity boundaries.
-    #: (untyped, from: untyped, to: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option) -> Array[ActivityStep]
-    def activity_timeline(record, from:, to:, associations: [], ignore: DEFAULT_IGNORED_ATTRIBUTES)
+    #: (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option) -> Array[ActivityStep]
+    def activity_timeline( # rubocop:disable Metrics/ParameterLists
+      record,
+      from: nil,
+      to: nil,
+      within: nil,
+      associations: [],
+      ignore: DEFAULT_IGNORED_ATTRIBUTES
+    )
       PaperTrailAdapter.new(associations: associations, ignore: ignore).activity_timeline(
         record,
         from: from,
-        to: to
+        to: to,
+        within: within
       )
     end
 
     # Builds an endpoint diff and root-checkpoint timeline while normalizing each version once.
-    #: (untyped, from: untyped, to: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool) -> Analysis
+    #: (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool) -> Analysis
     def analyze( # rubocop:disable Metrics/ParameterLists
       record,
-      from:,
-      to:,
+      from: nil,
+      to: nil,
+      within: nil,
       associations: [],
       ignore: DEFAULT_IGNORED_ATTRIBUTES,
       activity: false
@@ -115,6 +137,7 @@ module PaperTrailDiff
         record,
         from: from,
         to: to,
+        within: within,
         activity: activity
       )
     end

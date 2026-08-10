@@ -11,9 +11,9 @@ module PaperTrailDiff
       @preparer = preparer
     end
 
-    #: (untyped, Array[untyped]) -> void
-    def prepare(record, root_versions)
-      @preparer.call(record, root_versions)
+    #: (untyped, Array[untyped], ?start_at: untyped) -> void
+    def prepare(record, root_versions, start_at: root_versions.first.created_at)
+      @preparer.call(record, root_versions, start_at: start_at)
     end
 
     #: (untyped, untyped) -> RecordSnapshot?

@@ -1,0 +1,79 @@
+# Generated from lib/paper_trail_diff/activity_history.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Immutable snapshots and steps produced by one activity-history pass.
+  class ActivityHistory
+    attr_reader steps: Array[ActivityStep]
+
+    attr_reader root_snapshots: Hash[Array[untyped], RecordSnapshot?]
+
+    attr_reader first_snapshot: RecordSnapshot?
+
+    attr_reader last_snapshot: RecordSnapshot?
+
+    # : (steps: Array[ActivityStep], root_snapshots: Hash[Array[untyped], RecordSnapshot?], first_snapshot: RecordSnapshot?, last_snapshot: RecordSnapshot?) -> void
+    def initialize: (steps: Array[ActivityStep], root_snapshots: Hash[Array[untyped], RecordSnapshot?], first_snapshot: RecordSnapshot?, last_snapshot: RecordSnapshot?) -> void
+
+    # : () -> ActivityHistory
+    def self.empty: () -> ActivityHistory
+  end
+
+  # Builds activity steps while retaining root snapshots for combined analysis.
+  class ActivityHistoryBuilder
+    # : (Array[untyped], Array[ActivityEvent], untyped, ?current: untyped, ?include_step: untyped) -> void
+    def initialize: (Array[untyped], Array[ActivityEvent], untyped, ?current: untyped, ?include_step: untyped) -> void
+
+    # : () -> ActivityHistory
+    def call: () -> ActivityHistory
+
+    private
+
+    @current: untyped
+
+    @events: Array[ActivityEvent]
+
+    @first_snapshot: RecordSnapshot?
+
+    @include_step: untyped
+
+    @previous_boundary: ActivityBoundary?
+
+    @previous_event: ActivityEvent?
+
+    @previous_snapshot: RecordSnapshot?
+
+    @root_snapshots: Hash[Array[untyped], RecordSnapshot?]
+
+    @root_versions: Array[untyped]
+
+    @selected_last_snapshot: RecordSnapshot?
+
+    @snapshotter: untyped
+
+    @steps: Array[ActivityStep]
+
+    # : () -> void
+    def reset: () -> void
+
+    # : () -> ActivitySnapshotSequence
+    def sequence: () -> ActivitySnapshotSequence
+
+    # : (ActivityEvent, RecordSnapshot?) -> void
+    def consume: (ActivityEvent, RecordSnapshot?) -> void
+
+    # : (RecordSnapshot?) -> void
+    def capture_first: (RecordSnapshot?) -> void
+
+    # : (ActivityBoundary, RecordSnapshot?) -> void
+    def append_step: (ActivityBoundary, RecordSnapshot?) -> void
+
+    # : () -> bool
+    def include_previous_step?: () -> bool
+
+    # : () -> RecordSnapshot?
+    def final_snapshot: () -> RecordSnapshot?
+
+    # : (untyped) -> Array[untyped]
+    def version_key: (untyped) -> Array[untyped]
+  end
+end

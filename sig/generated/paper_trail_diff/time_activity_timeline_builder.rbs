@@ -1,0 +1,46 @@
+# Generated from lib/paper_trail_diff/time_activity_timeline_builder.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Builds activity views for mutations selected by a wall-clock range.
+  class TimeActivityTimelineBuilder
+    # : (untyped, range: TimelineRange, tree: AssociationTree, snapshotter: untyped) -> void
+    def initialize: (untyped, range: TimelineRange, tree: AssociationTree, snapshotter: untyped) -> void
+
+    # : () -> Array[ActivityStep]
+    def build: () -> Array[ActivityStep]
+
+    # : () -> Analysis
+    def analyze: () -> Analysis
+
+    private
+
+    @range: TimelineRange
+
+    @record: untyped
+
+    @snapshotter: untyped
+
+    @tree: AssociationTree
+
+    # : () -> [ActivityHistory, Array[untyped]]
+    def history_and_versions: () -> [ ActivityHistory, Array[untyped] ]
+
+    # : (Array[untyped]) -> void
+    def prepare_history: (Array[untyped]) -> void
+
+    # : (Array[untyped]) -> Array[ActivityEvent]
+    def collect_events: (Array[untyped]) -> Array[ActivityEvent]
+
+    # : (Array[ActivityEvent]) -> bool
+    def time_events?: (Array[ActivityEvent]) -> bool
+
+    # : (ActivityEvent, Array[ActivityEvent]) -> bool
+    def later_event?: (ActivityEvent, Array[ActivityEvent]) -> bool
+
+    # : (Array[untyped], Hash[Array[untyped], RecordSnapshot?]) -> Array[Step]
+    def root_steps: (Array[untyped], Hash[Array[untyped], RecordSnapshot?]) -> Array[Step]
+
+    # : (untyped) -> Array[untyped]
+    def version_key: (untyped) -> Array[untyped]
+  end
+end

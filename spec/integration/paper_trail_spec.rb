@@ -31,6 +31,14 @@ RSpec.describe PaperTrailDiff do
     count
   end
 
+  def timestamp_versions(versions, start_at: Time.utc(2030, 1, 1))
+    versions.each_with_index.map do |version, index|
+      timestamp = start_at + (index * 3600)
+      version.update_columns(created_at: timestamp)
+      timestamp
+    end
+  end
+
   describe '.compare' do
     it 'reifies endpoints and compares scalar attributes' do
       _article, _create, draft, published, = create_history
@@ -256,6 +264,74 @@ RSpec.describe PaperTrailDiff do
 
       expect(instantiated).to be < 10
     end
+
+    it 'selects timestamped mutations and one trailing reconstruction boundary' do
+      article, create_version, draft, published, reverted = create_history
+      times = timestamp_versions([create_version, draft, published, reverted])
+
+      steps = described_class.timeline(article, within: times.fetch(1)...times.fetch(3))
+
+      expect(steps.map(&:from_version)).to eq([draft, published])
+      expect(steps.map(&:to_version)).to eq([published, reverted])
+      expect(steps.map { |step| step.diff.attributes.fetch('title').to_h }).to eq(
+        [
+          { from: 'Draft', to: 'Published' },
+          { from: 'Published', to: 'Draft' }
+        ]
+      )
+    end
+
+    it 'includes every tied timestamp through an inclusive end' do
+      article, create_version, draft, published, reverted = create_history
+      start_at = Time.utc(2030, 2, 1)
+      timestamp_versions([create_version], start_at: start_at - 3600)
+      timestamp_versions([draft, published], start_at: start_at)
+      published.update_columns(created_at: start_at)
+      timestamp_versions([reverted], start_at: start_at + 3600)
+
+      steps = described_class.timeline(
+        article,
+        within: start_at..start_at
+      )
+
+      expect(steps.map(&:from_version)).to eq([draft, published])
+      expect(steps.last.to_version).to eq(reverted)
+    end
+
+    it 'returns no steps when a time range contains no root versions' do
+      article, create_version, draft, published, reverted = create_history
+      times = timestamp_versions([create_version, draft, published, reverted])
+
+      steps = described_class.timeline(
+        article,
+        within: (times.first - 7200)...(times.first - 3600)
+      )
+
+      expect(steps).to eq([])
+      expect(steps).to be_frozen
+    end
+
+    it 'rejects invalid, mixed, and historically incomplete time ranges' do
+      article, create_version, draft, published, reverted = create_history
+      times = timestamp_versions([create_version, draft, published, reverted])
+
+      expect { described_class.timeline(article) }
+        .to raise_error(PaperTrailDiff::InvalidTimelineRangeError, /provide both/)
+      expect do
+        described_class.timeline(
+          article,
+          from: draft,
+          to: published,
+          within: times.fetch(1)...times.fetch(2)
+        )
+      end.to raise_error(PaperTrailDiff::InvalidTimelineRangeError, /cannot be combined/)
+      expect { described_class.timeline(article, within: 1..2) }
+        .to raise_error(PaperTrailDiff::InvalidTimeRangeError, /time-like/)
+      expect { described_class.timeline(article, within: times.fetch(2)..times.fetch(1)) }
+        .to raise_error(PaperTrailDiff::InvalidTimeRangeError, /must not follow/)
+      expect { described_class.timeline(article, within: times.last..times.last) }
+        .to raise_error(PaperTrailDiff::IncompleteTimeRangeError, /later root version/)
+    end
   end
 
   describe '.activity_timeline' do
@@ -342,6 +418,22 @@ RSpec.describe PaperTrailDiff do
       expect(result.activity_timeline.map { |step| step.diff.to_h })
         .to eq(result.timeline.map { |step| step.diff.to_h })
       expect(result.to_h.keys).to eq(%i[diff timeline activity_timeline])
+    end
+
+    it 'builds endpoint and timeline results for a wall-clock range' do
+      article, create_version, draft, published, reverted = create_history
+      times = timestamp_versions([create_version, draft, published, reverted])
+
+      result = described_class.analyze(
+        article,
+        within: times.fetch(1)...times.fetch(3),
+        activity: true
+      )
+
+      expect(result.diff).to be_empty
+      expect(result.timeline.map(&:from_version)).to eq([draft, published])
+      expect(result.activity_timeline.map { |step| step.from_boundary.version_id })
+        .to eq([draft.id, published.id])
     end
   end
 

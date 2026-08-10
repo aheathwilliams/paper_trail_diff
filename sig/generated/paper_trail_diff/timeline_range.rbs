@@ -1,0 +1,41 @@
+# Generated from lib/paper_trail_diff/timeline_range.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Chooses explicit-version or wall-clock selection for one timeline request.
+  class TimelineRange
+    attr_reader from: untyped
+
+    attr_reader to: untyped
+
+    attr_reader time_range: TimeRange?
+
+    # : (untyped, from: untyped, to: untyped, within: untyped) -> void
+    def initialize: (untyped, from: untyped, to: untyped, within: untyped) -> void
+
+    # : (?context_required: bool) -> Array[untyped]
+    def select: (?context_required: bool) -> Array[untyped]
+
+    # : () -> bool
+    def time?: () -> bool
+
+    # : () -> Time?
+    def begin_time: () -> Time?
+
+    # : (untyped) -> bool
+    def include?: (untyped) -> bool
+
+    private
+
+    @from: untyped
+
+    @record: untyped
+
+    @to: untyped
+
+    # : (untyped) -> TimeRange?
+    def build_time_range: (untyped) -> TimeRange?
+
+    # : () -> void
+    def validate_mode!: () -> void
+  end
+end

@@ -14,13 +14,14 @@ module PaperTrailDiff
       @prepared_history = nil #: PreparedHistory?
     end
 
-    #: (untyped, Array[untyped]) -> void
-    def prepare(record, root_versions)
+    #: (untyped, Array[untyped], ?start_at: untyped) -> void
+    def prepare(record, root_versions, start_at: root_versions.first.created_at)
       return if @tree.empty?
 
       @prepared_history = PreparedHistoryLoader.new(
         record,
         root_versions: root_versions,
+        start_at: start_at,
         tree: @tree,
         traversal: @traversal
       ).call

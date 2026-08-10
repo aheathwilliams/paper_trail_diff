@@ -17,6 +17,12 @@ module PaperTrailDiff
   # Raised when a timeline boundary is absent or the requested range is reversed.
   class InvalidTimelineRangeError < Error; end
 
+  # Raised when `within` is not a finite, chronological range of time-like values.
+  class InvalidTimeRangeError < InvalidTimelineRangeError; end
+
+  # Raised when an in-range mutation has no later root boundary for reconstruction.
+  class IncompleteTimeRangeError < InvalidTimelineRangeError; end
+
   # Raised when a requested ActiveRecord association does not exist.
   class UnknownAssociationError < Error; end
 

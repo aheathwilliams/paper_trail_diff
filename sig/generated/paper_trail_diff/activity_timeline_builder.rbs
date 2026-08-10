@@ -3,8 +3,8 @@
 module PaperTrailDiff
   # Compares adjacent root and selected-descendant activity boundaries.
   class ActivityTimelineBuilder
-    # : (untyped, from: untyped, to: untyped, tree: AssociationTree, snapshotter: untyped) -> void
-    def initialize: (untyped, from: untyped, to: untyped, tree: AssociationTree, snapshotter: untyped) -> void
+    # : (untyped, range: TimelineRange, tree: AssociationTree, snapshotter: untyped) -> void
+    def initialize: (untyped, range: TimelineRange, tree: AssociationTree, snapshotter: untyped) -> void
 
     # : () -> Array[ActivityStep]
     def build: () -> Array[ActivityStep]
@@ -16,6 +16,8 @@ module PaperTrailDiff
     private
 
     @from: untyped
+
+    @range: TimelineRange
 
     @record: untyped
 
@@ -37,25 +39,28 @@ module PaperTrailDiff
     # : () -> void
     def validate_current_range!: () -> void
 
-    # : (Array[untyped], ?range_end: untyped) -> Array[ActivityEvent]
-    def collect_events: (Array[untyped], ?range_end: untyped) -> Array[ActivityEvent]
+    # : (Array[untyped], ?range_start: untyped, ?range_end: untyped) -> Array[ActivityEvent]
+    def collect_events: (Array[untyped], ?range_start: untyped, ?range_end: untyped) -> Array[ActivityEvent]
 
-    # : (Array[untyped]) -> void
-    def prepare_history: (Array[untyped]) -> void
+    # : (Array[untyped], ?start_at: untyped) -> void
+    def prepare_history: (Array[untyped], ?start_at: untyped) -> void
 
     # : (Array[untyped], Array[ActivityEvent], ?current: untyped, ?final_boundary: ActivityBoundary?, ?final_snapshot: RecordSnapshot?) -> Array[ActivityStep]
     def build_event_steps: (Array[untyped], Array[ActivityEvent], ?current: untyped, ?final_boundary: ActivityBoundary?, ?final_snapshot: RecordSnapshot?) -> Array[ActivityStep]
 
-    # : (Array[untyped], Array[ActivityEvent], ?current: untyped) -> [Array[ActivityStep], Hash[Array[untyped], RecordSnapshot?], RecordSnapshot?]
-    def event_history: (Array[untyped], Array[ActivityEvent], ?current: untyped) -> [ Array[ActivityStep], Hash[Array[untyped], RecordSnapshot?], RecordSnapshot? ]
+    # : (Array[untyped], Array[ActivityEvent], ?current: untyped) -> ActivityHistory
+    def event_history: (Array[untyped], Array[ActivityEvent], ?current: untyped) -> ActivityHistory
 
-    # : (Array[untyped], Hash[Array[untyped], RecordSnapshot?], Array[ActivityStep]) -> Analysis
-    def build_analysis: (Array[untyped], Hash[Array[untyped], RecordSnapshot?], Array[ActivityStep]) -> Analysis
+    # : (Array[untyped], ActivityHistory) -> Analysis
+    def build_analysis: (Array[untyped], ActivityHistory) -> Analysis
 
     # : (Array[untyped], Array[RecordSnapshot?]) -> Array[Step]
     def build_root_steps: (Array[untyped], Array[RecordSnapshot?]) -> Array[Step]
 
     # : (untyped) -> Array[untyped]
     def version_key: (untyped) -> Array[untyped]
+
+    # : () -> TimeActivityTimelineBuilder
+    def time_builder: () -> TimeActivityTimelineBuilder
   end
 end

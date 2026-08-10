@@ -4,11 +4,10 @@
 module PaperTrailDiff
   # Selects and compares a chronological slice of a record's version history.
   class TimelineBuilder
-    #: (untyped, from: untyped, to: untyped, snapshotter: untyped) -> void
-    def initialize(record, from:, to:, snapshotter:)
+    #: (untyped, from: untyped, to: untyped, snapshotter: untyped, ?within: untyped) -> void
+    def initialize(record, from:, to:, snapshotter:, within: nil)
       @record = record
-      @from = from
-      @to = to
+      @range = TimelineRange.new(record, from: from, to: to, within: within)
       @snapshotter = snapshotter
     end
 
@@ -30,12 +29,13 @@ module PaperTrailDiff
     private
 
     # @rbs @record: untyped
-    # @rbs @from: untyped
-    # @rbs @to: untyped
+    # @rbs @range: TimelineRange
     # @rbs @snapshotter: untyped
 
     #: (Array[untyped]) -> [Array[Step], RecordSnapshot?, RecordSnapshot?]
     def compare_history(versions)
+      return empty_history if versions.empty?
+
       @snapshotter.prepare(@record, versions) if @snapshotter.respond_to?(:prepare)
       first_snapshot = @snapshotter.call(versions.first)
       previous_snapshot = first_snapshot
@@ -52,9 +52,15 @@ module PaperTrailDiff
       [steps, first_snapshot, previous_snapshot]
     end
 
+    #: () -> [Array[Step], nil, nil]
+    def empty_history
+      steps = [] #: Array[Step]
+      [steps.freeze, nil, nil]
+    end
+
     #: () -> Array[untyped]
     def selected_versions
-      VersionRange.new(@record, from: @from, to: @to).select
+      @range.select
     end
   end
 end

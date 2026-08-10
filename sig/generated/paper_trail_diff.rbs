@@ -11,16 +11,16 @@ module PaperTrailDiff
   def self.compare: (untyped, untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option) -> Diff
 
   # Compares every adjacent reconstructed state in an inclusive version range.
-  # : (untyped, from: untyped, to: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option) -> Array[Step]
-  def self.timeline: (untyped, from: untyped, to: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option) -> Array[Step]
+  # : (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option) -> Array[Step]
+  def self.timeline: (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option) -> Array[Step]
 
   # Compares adjacent root and selected-descendant activity boundaries.
-  # : (untyped, from: untyped, to: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option) -> Array[ActivityStep]
-  def self.activity_timeline: (untyped, from: untyped, to: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option) -> Array[ActivityStep]
+  # : (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option) -> Array[ActivityStep]
+  def self.activity_timeline: (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option) -> Array[ActivityStep]
 
   # Builds an endpoint diff and root-checkpoint timeline while normalizing each version once.
-  # : (untyped, from: untyped, to: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool) -> Analysis
-  def self.analyze: (untyped, from: untyped, to: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool) -> Analysis
+  # : (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool) -> Analysis
+  def self.analyze: (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool) -> Analysis
 
   # Returns the association macros this release can normalize.
   # : () -> Array[Symbol]

@@ -5,10 +5,13 @@ module PaperTrailDiff
   # Tests activity versions against a historical-version or wall-clock range end.
   class ActivityRange
     #: (untyped, untyped) -> void
-    def initialize(start_version, end_boundary)
-      @start_version = start_version
+    def initialize(start_boundary, end_boundary)
+      @start_boundary = start_boundary
       @end_boundary = end_boundary
-      @start_key = Support.chronological_version_key(start_version)
+      @start_key = if Endpoint.version?(start_boundary)
+                     Support.chronological_version_key(start_boundary)
+                   end
+      @start_time = Endpoint.version?(start_boundary) ? start_boundary.created_at : start_boundary
       @end_key = if Endpoint.version?(end_boundary)
                    Support.chronological_version_key(end_boundary)
                  end
@@ -17,22 +20,31 @@ module PaperTrailDiff
     #: (untyped) -> bool
     def include?(version)
       key = Support.chronological_version_key(version)
-      key_before_or_equal?(@start_key, key) && before_end?(version, key)
+      after_start?(version, key) && before_end?(version, key)
     end
 
     # Narrows an Active Record version relation by timestamp. Exact tie-breaking
     # remains in #include? so this works for integer, UUID, and custom version IDs.
     #: (untyped) -> untyped
     def scope(relation)
-      relation.where(created_at: @start_version.created_at..end_time)
+      relation.where(created_at: @start_time..end_time)
     end
 
     private
 
-    # @rbs @start_version: untyped
+    # @rbs @start_boundary: untyped
     # @rbs @end_boundary: untyped
-    # @rbs @start_key: Array[untyped]
+    # @rbs @start_key: Array[untyped]?
+    # @rbs @start_time: untyped
     # @rbs @end_key: Array[untyped]?
+
+    #: (untyped, Array[untyped]) -> bool
+    def after_start?(version, key)
+      start_key = @start_key
+      return key_before_or_equal?(start_key, key) if start_key
+
+      version.created_at >= @start_time
+    end
 
     #: (untyped, Array[untyped]) -> bool
     def before_end?(version, key)

@@ -27,36 +27,36 @@ module PaperTrailDiff
       Engine.compare(snapshot_for_endpoint(from_endpoint), snapshot_for_endpoint(to_endpoint))
     end
 
-    #: (untyped, from: untyped, to: untyped) -> Array[Step]
-    def timeline(record, from:, to:)
+    #: (untyped, from: untyped, to: untyped, within: untyped) -> Array[Step]
+    def timeline(record, from:, to:, within:)
       prepare_traversal!(record.class, historical: true)
       builder = TimelineBuilder.new(
         record,
         from: from,
         to: to,
+        within: within,
         snapshotter: @timeline_snapshotter
       )
       builder.build
     end
 
-    #: (untyped, from: untyped, to: untyped) -> Array[ActivityStep]
-    def activity_timeline(record, from:, to:)
+    #: (untyped, from: untyped, to: untyped, within: untyped) -> Array[ActivityStep]
+    def activity_timeline(record, from:, to:, within:)
       prepare_traversal!(record.class, historical: true)
       reject_live_habtm_activity!(record.class) if Endpoint.record?(to)
       ActivityTimelineBuilder.new(
         record,
-        from: from,
-        to: to,
+        range: TimelineRange.new(record, from: from, to: to, within: within),
         tree: @association_tree,
         snapshotter: @activity_snapshotter
       ).build
     end
 
-    #: (untyped, from: untyped, to: untyped, ?activity: bool) -> Analysis
-    def analyze(record, from:, to:, activity: false)
+    #: (untyped, from: untyped, to: untyped, within: untyped, ?activity: bool) -> Analysis
+    def analyze(record, from:, to:, within:, activity: false)
       if activity
         prepare_traversal!(record.class, historical: true)
-        return activity_builder(record, from: from, to: to).analyze
+        return activity_builder(record, from: from, to: to, within: within).analyze
       end
 
       prepare_traversal!(record.class, historical: true)
@@ -64,6 +64,7 @@ module PaperTrailDiff
         record,
         from: from,
         to: to,
+        within: within,
         snapshotter: @timeline_snapshotter
       ).analyze
     end
@@ -108,12 +109,11 @@ module PaperTrailDiff
       )
     end
 
-    #: (untyped, from: untyped, to: untyped) -> ActivityTimelineBuilder
-    def activity_builder(record, from:, to:)
+    #: (untyped, from: untyped, to: untyped, within: untyped) -> ActivityTimelineBuilder
+    def activity_builder(record, from:, to:, within:)
       ActivityTimelineBuilder.new(
         record,
-        from: from,
-        to: to,
+        range: TimelineRange.new(record, from: from, to: to, within: within),
         tree: @association_tree,
         snapshotter: @activity_snapshotter
       )

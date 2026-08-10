@@ -4,17 +4,19 @@
 module PaperTrailDiff
   # Compares adjacent root and selected-descendant activity boundaries.
   class ActivityTimelineBuilder
-    #: (untyped, from: untyped, to: untyped, tree: AssociationTree, snapshotter: untyped) -> void
-    def initialize(record, from:, to:, tree:, snapshotter:)
+    #: (untyped, range: TimelineRange, tree: AssociationTree, snapshotter: untyped) -> void
+    def initialize(record, range:, tree:, snapshotter:)
       @record = record
-      @from = from
-      @to = to
+      @from = range.from
+      @to = range.to
+      @range = range
       @tree = tree
       @snapshotter = snapshotter
     end
 
     #: () -> Array[ActivityStep]
     def build
+      return time_builder.build if @range.time?
       return build_to_current if Endpoint.record?(@to)
 
       Endpoint.validate!(@to)
@@ -24,15 +26,16 @@ module PaperTrailDiff
     # Builds all three version-bounded views from one activity snapshot pass.
     #: () -> Analysis
     def analyze
+      return time_builder.analyze if @range.time?
+
       unless Endpoint.version?(@to)
         raise InvalidTimelineRangeError, '`to` must be a root PaperTrail version'
       end
 
-      root_versions = VersionRange.new(@record, from: @from, to: @to).select
+      root_versions = @range.select
       prepare_history(root_versions)
       events = collect_events(root_versions)
-      activity_steps, root_snapshots, = event_history(root_versions, events)
-      build_analysis(root_versions, root_snapshots, activity_steps)
+      build_analysis(root_versions, event_history(root_versions, events))
     end
 
     private
@@ -40,12 +43,13 @@ module PaperTrailDiff
     # @rbs @record: untyped
     # @rbs @from: untyped
     # @rbs @to: untyped
+    # @rbs @range: TimelineRange
     # @rbs @tree: AssociationTree
     # @rbs @snapshotter: untyped
 
     #: () -> Array[ActivityStep]
     def build_between_versions
-      root_versions = VersionRange.new(@record, from: @from, to: @to).select
+      root_versions = @range.select
       prepare_history(root_versions)
       events = collect_events(root_versions)
       build_event_steps(root_versions, events)
@@ -82,20 +86,31 @@ module PaperTrailDiff
       Endpoint.validate_pair!(@record, @to)
     end
 
-    #: (Array[untyped], ?range_end: untyped) -> Array[ActivityEvent]
-    def collect_events(root_versions, range_end: root_versions.last)
+    #: (Array[untyped], ?range_start: untyped, ?range_end: untyped) -> Array[ActivityEvent]
+    def collect_events(
+      root_versions,
+      range_start: root_versions.first,
+      range_end: root_versions.last
+    )
       ActivityVersionCollector.new(
         @record,
         root_versions: root_versions,
         tree: @tree,
         traversal: AssociationTraversal.new(@tree),
+        range_start: range_start,
         range_end: range_end
       ).call
     end
 
-    #: (Array[untyped]) -> void
-    def prepare_history(root_versions)
-      @snapshotter.prepare(@record, root_versions) if @snapshotter.respond_to?(:prepare)
+    #: (Array[untyped], ?start_at: untyped) -> void
+    def prepare_history(root_versions, start_at: nil)
+      return unless @snapshotter.respond_to?(:prepare)
+
+      if start_at
+        @snapshotter.prepare(@record, root_versions, start_at: start_at)
+      else
+        @snapshotter.prepare(@record, root_versions)
+      end
     end
 
     #: (Array[untyped], Array[ActivityEvent], ?current: untyped, ?final_boundary: ActivityBoundary?, ?final_snapshot: RecordSnapshot?) -> Array[ActivityStep]
@@ -106,55 +121,39 @@ module PaperTrailDiff
       final_boundary: nil,
       final_snapshot: nil
     )
-      steps, _root_snapshots, previous_snapshot = event_history(
-        root_versions,
-        events,
-        current: current
-      )
+      history = event_history(root_versions, events, current: current)
+      steps = history.steps.dup
       previous_event = events.last
       previous_boundary = ActivityBoundary.from_version(previous_event.version) if previous_event
       if final_boundary && previous_boundary
         steps << ActivityStep.new(
           from_boundary: previous_boundary,
           to_boundary: final_boundary,
-          diff: Engine.compare(previous_snapshot, final_snapshot)
+          diff: Engine.compare(history.last_snapshot, final_snapshot)
         )
       end
       steps.freeze
     end
 
-    #: (Array[untyped], Array[ActivityEvent], ?current: untyped) -> [Array[ActivityStep], Hash[Array[untyped], RecordSnapshot?], RecordSnapshot?]
-    def event_history(root_versions, events, current: nil) # rubocop:disable Metrics/MethodLength
-      sequence = ActivitySnapshotSequence.new(root_versions, events, @snapshotter, current: current)
-      steps = [] #: Array[ActivityStep]
-      root_snapshots = {} #: Hash[Array[untyped], RecordSnapshot?]
-      previous_boundary = nil #: ActivityBoundary?
-      previous_snapshot = nil #: RecordSnapshot?
-      sequence.each do |event, snapshot|
-        boundary = ActivityBoundary.from_version(event.version)
-        root_snapshots[version_key(event.version)] = snapshot if event.root?
-        if previous_boundary
-          steps << ActivityStep.new(
-            from_boundary: previous_boundary,
-            to_boundary: boundary,
-            diff: Engine.compare(previous_snapshot, snapshot)
-          )
-        end
-        previous_boundary = boundary
-        previous_snapshot = snapshot
-      end
-      [steps, root_snapshots, previous_snapshot]
+    #: (Array[untyped], Array[ActivityEvent], ?current: untyped) -> ActivityHistory
+    def event_history(root_versions, events, current: nil)
+      ActivityHistoryBuilder.new(
+        root_versions,
+        events,
+        @snapshotter,
+        current: current
+      ).call
     end
 
-    #: (Array[untyped], Hash[Array[untyped], RecordSnapshot?], Array[ActivityStep]) -> Analysis
-    def build_analysis(root_versions, root_snapshots, activity_steps)
+    #: (Array[untyped], ActivityHistory) -> Analysis
+    def build_analysis(root_versions, history)
       snapshots = root_versions.map do |version|
-        root_snapshots.fetch(version_key(version))
+        history.root_snapshots.fetch(version_key(version))
       end
       Analysis.new(
-        diff: Engine.compare(snapshots.first, snapshots.last),
+        diff: Engine.compare(history.first_snapshot, history.last_snapshot),
         timeline: build_root_steps(root_versions, snapshots),
-        activity_timeline: activity_steps.freeze
+        activity_timeline: history.steps
       )
     end
 
@@ -172,6 +171,16 @@ module PaperTrailDiff
     #: (untyped) -> Array[untyped]
     def version_key(version)
       [version.class.name, version.id]
+    end
+
+    #: () -> TimeActivityTimelineBuilder
+    def time_builder
+      TimeActivityTimelineBuilder.new(
+        @record,
+        range: @range,
+        tree: @tree,
+        snapshotter: @snapshotter
+      )
     end
   end
 end

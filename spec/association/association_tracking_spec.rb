@@ -74,8 +74,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     )
     PaperTrailDiff::ActivityTimelineBuilder.new(
       record,
-      from: from,
-      to: to,
+      range: PaperTrailDiff::TimelineRange.new(record, from: from, to: to, within: nil),
       tree: tree,
       snapshotter: adapter.method(:snapshot_at)
     ).build
@@ -547,6 +546,70 @@ RSpec.describe 'PaperTrailDiff association tracking' do
         to: graph[:before]
       )
     end.to raise_error(PaperTrailDiff::InvalidTimelineRangeError, /must not follow/)
+  end
+
+  it 'filters descendant events by time and excludes later mutations from analysis' do
+    graph = article_with_graph
+    range_start = Time.utc(2031, 1, 1, 12)
+    graph[:before].update_columns(created_at: range_start - 3600)
+
+    graph[:kept_comment].update!(body: 'Comment in range')
+    comment_version = graph[:kept_comment].versions.reorder(id: :asc).last
+    comment_version.update_columns(created_at: range_start)
+
+    graph[:reply].update!(body: 'Reply in range')
+    reply_version = graph[:reply].versions.reorder(id: :asc).last
+    reply_version.update_columns(created_at: range_start + 1800)
+
+    graph[:kept_comment].update!(body: 'Comment outside range')
+    outside_version = graph[:kept_comment].versions.reorder(id: :asc).last
+    outside_version.update_columns(created_at: range_start + 5400)
+
+    trailing = boundary_for(graph[:article])
+    trailing.update_columns(created_at: range_start + 7200)
+    window = range_start...(range_start + 3600)
+
+    steps = PaperTrailDiff.activity_timeline(
+      graph[:article],
+      within: window,
+      associations: ['comments.replies']
+    )
+    result = PaperTrailDiff.analyze(
+      graph[:article],
+      within: window,
+      associations: ['comments.replies'],
+      activity: true
+    )
+
+    expect(steps.map { |step| step.from_boundary.version_id })
+      .to eq([comment_version.id, reply_version.id])
+    expect(steps.last.to_boundary.version_id).to eq(outside_version.id)
+    expect(result.timeline).to be_empty
+    expect(result.activity_timeline.map(&:to_h)).to eq(steps.map(&:to_h))
+
+    comments = result.diff.associations.fetch('comments')
+    comment = comments.changed.find { |change| change.record.id == graph[:kept_comment].id }
+    expect(comment.attributes.fetch('body').to_h)
+      .to eq(from: 'Keep before', to: 'Comment in range')
+    expect(comment.associations.fetch('replies').changed.first.attributes.fetch('body').to_h)
+      .to eq(from: 'Nested before', to: 'Reply in range')
+  end
+
+  it 'requires a later root checkpoint for a descendant time range' do
+    graph = article_with_graph
+    range_start = Time.utc(2031, 2, 1, 12)
+    graph[:before].update_columns(created_at: range_start - 3600)
+    graph[:kept_comment].update!(body: 'No trailing checkpoint')
+    latest = graph[:kept_comment].versions.reorder(id: :asc).last
+    latest.update_columns(created_at: range_start)
+
+    expect do
+      PaperTrailDiff.activity_timeline(
+        graph[:article],
+        within: range_start...(range_start + 3600),
+        associations: [:comments]
+      )
+    end.to raise_error(PaperTrailDiff::IncompleteTimeRangeError, /later root version/)
   end
 
   it 'reuses root snapshots when analysis includes activity' do

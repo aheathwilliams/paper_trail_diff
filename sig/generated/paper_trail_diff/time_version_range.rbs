@@ -1,0 +1,27 @@
+# Generated from lib/paper_trail_diff/time_version_range.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Selects in-range root versions plus one later reconstruction boundary.
+  class TimeVersionRange
+    # : (untyped, time_range: TimeRange) -> void
+    def initialize: (untyped, time_range: TimeRange) -> void
+
+    # : (?context_required: bool) -> Array[untyped]
+    def select: (?context_required: bool) -> Array[untyped]
+
+    private
+
+    @record: untyped
+
+    @time_range: TimeRange
+
+    # : () -> untyped
+    def versions_relation: () -> untyped
+
+    # : (untyped) -> untyped
+    def trailing_version: (untyped) -> untyped
+
+    # : (Array[untyped]) -> Array[untyped]
+    def ordered: (Array[untyped]) -> Array[untyped]
+  end
+end

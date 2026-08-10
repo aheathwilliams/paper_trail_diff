@@ -1,0 +1,38 @@
+# Generated from lib/paper_trail_diff/time_range.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Validates and applies a finite wall-clock range without loading model state.
+  class TimeRange
+    attr_reader begin_time: Time
+
+    attr_reader end_time: Time
+
+    # : (untyped) -> void
+    def initialize: (untyped) -> void
+
+    # : () -> bool
+    def exclude_end?: () -> bool
+
+    # : (untyped) -> bool
+    def include?: (untyped) -> bool
+
+    # : (untyped) -> untyped
+    def scope: (untyped) -> untyped
+
+    # : (untyped) -> untyped
+    def trailing_scope: (untyped) -> untyped
+
+    private
+
+    @exclude_end: bool
+
+    # : () -> Range[Time]
+    def query_range: () -> Range[Time]
+
+    # : (untyped, boundary: Symbol) -> Time
+    def coerce_time: (untyped, boundary: Symbol) -> Time
+
+    # : () -> void
+    def validate_order!: () -> void
+  end
+end

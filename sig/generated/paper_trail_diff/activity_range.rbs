@@ -20,9 +20,14 @@ module PaperTrailDiff
 
     @end_key: Array[untyped]?
 
-    @start_key: Array[untyped]
+    @start_boundary: untyped
 
-    @start_version: untyped
+    @start_key: Array[untyped]?
+
+    @start_time: untyped
+
+    # : (untyped, Array[untyped]) -> bool
+    def after_start?: (untyped, Array[untyped]) -> bool
 
     # : (untyped, Array[untyped]) -> bool
     def before_end?: (untyped, Array[untyped]) -> bool

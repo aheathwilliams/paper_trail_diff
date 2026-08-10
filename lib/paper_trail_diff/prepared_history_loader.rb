@@ -4,12 +4,18 @@
 module PaperTrailDiff
   # Expands the explicit association tree into a request-scoped PreparedHistory.
   class PreparedHistoryLoader
-    #: (untyped, root_versions: Array[untyped], tree: AssociationTree, traversal: AssociationTraversal) -> void
-    def initialize(record, root_versions:, tree:, traversal:)
+    #: (untyped, root_versions: Array[untyped], tree: AssociationTree, traversal: AssociationTraversal, ?start_at: untyped) -> void
+    def initialize(
+      record,
+      root_versions:,
+      tree:,
+      traversal:,
+      start_at: root_versions.first.created_at
+    )
       @record = record
       @tree = tree
       @traversal = traversal
-      @records = PreparedRecordIndex.new(root_versions.first)
+      @records = PreparedRecordIndex.new(start_at)
       @history = PreparedHistory.new(@records)
       @edges = PreparedEdgeLoader.new(@records, root_versions)
       @prepared = {} #: Hash[Array[String], Array[String]]

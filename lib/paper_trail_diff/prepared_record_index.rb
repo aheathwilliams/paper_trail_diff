@@ -81,8 +81,8 @@ module PaperTrailDiff
   # Request-scoped scalar history loaded once per model identity.
   class PreparedRecordIndex
     #: (untyped) -> void
-    def initialize(start_version)
-      @start_time = start_version.created_at
+    def initialize(start_at)
+      @start_time = start_at
       @series = {} #: Hash[Array[String], PreparedRecordSeries]
     end
 
