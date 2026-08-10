@@ -1274,9 +1274,10 @@ RSpec.describe 'PaperTrailDiff association tracking' do
       active_record: TrackedArticle
     )
     subject = Struct.new(:subject_id, :subject_type).new(article.id, 'TrackedArticle')
-    expect(refresher.send(:member_of_owner?, subject, polymorphic, previous)).to be(true)
+    relationship = PaperTrailDiff::ActivityRelationship.new
+    expect(relationship.member_of_owner?(subject, polymorphic, previous)).to be(true)
     subject.subject_type = 'OtherType'
-    expect(refresher.send(:member_of_owner?, subject, polymorphic, previous)).to be(false)
+    expect(relationship.member_of_owner?(subject, polymorphic, previous)).to be(false)
 
     resolver = PaperTrailDiff::ActivityEventRecordResolver.new
     irrelevant = instance_double(PaperTrail::Version, event: 'touch')
@@ -1332,20 +1333,19 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     ]
     version = instance_double(PaperTrail::Version, item_id: reply_before.id)
     record = Struct.new(:comment_id).new(50)
-    refresher = PaperTrailDiff::ActivityEventSnapshotRefresher.new(
-      traversal: nil,
+    updater = PaperTrailDiff::ActivityCollectionRouteUpdater.new(
       pool: PaperTrailDiff::SnapshotPool.new,
-      components: nil
+      relationship: PaperTrailDiff::ActivityRelationship.new
+    )
+    change = PaperTrailDiff::ActivityCollectionRouteChange.new(
+      route: route,
+      version: version,
+      record: record,
+      replacement: reply_after
     )
 
-    updated, changed = refresher.send(
-      :replace_collection_route,
-      previous,
-      route,
-      version,
-      record,
-      reply_after
-    )
+    updated, changed = updater.call(previous, change)
+    expect(change).to be_frozen
 
     replies = updated.associations.fetch('comments').records.fetch(50)
                      .associations.fetch('replies').records

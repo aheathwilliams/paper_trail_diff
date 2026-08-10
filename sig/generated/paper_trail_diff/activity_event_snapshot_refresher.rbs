@@ -12,8 +12,8 @@ module PaperTrailDiff
     # : (SnapshotPool) -> ActivityCollectionRouteUpdater
     def collection_updater: (SnapshotPool) -> ActivityCollectionRouteUpdater
 
-    # : (ActivityEventRecordNormalizer) -> ActivityCollectionEventApplier
-    def collection_applier: (ActivityEventRecordNormalizer) -> ActivityCollectionEventApplier
+    # : (ActivityEventRecordNormalizer, ActivityCollectionRouteUpdater) -> ActivityCollectionEventApplier
+    def collection_applier: (ActivityEventRecordNormalizer, ActivityCollectionRouteUpdater) -> ActivityCollectionEventApplier
 
     # : (ActivityEventRecordNormalizer) -> ActivityBelongsToEventApplier
     def belongs_to_applier: (ActivityEventRecordNormalizer) -> ActivityBelongsToEventApplier
@@ -27,8 +27,6 @@ module PaperTrailDiff
 
     @collection_applier: ActivityCollectionEventApplier
 
-    @collection_updater: ActivityCollectionRouteUpdater
-
     @components: untyped
 
     @record_resolver: ActivityEventRecordResolver
@@ -37,17 +35,11 @@ module PaperTrailDiff
 
     @route_finder: ActivityEventRouteFinder
 
-    # : (RecordSnapshot, Array[untyped], untyped, untyped, RecordSnapshot?, ?depth: Integer) -> [RecordSnapshot, bool]
-    def replace_collection_route: (RecordSnapshot, Array[untyped], untyped, untyped, RecordSnapshot?, ?depth: Integer) -> [ RecordSnapshot, bool ]
-
     # : (untyped) -> untyped
     def record_after: (untyped) -> untyped
 
     # : (untyped, untyped) -> untyped
     def deserialized_changeset: (untyped, untyped) -> untyped
-
-    # : (untyped, untyped, RecordSnapshot, ?state: Symbol) -> bool
-    def member_of_owner?: (untyped, untyped, RecordSnapshot, ?state: Symbol) -> bool
 
     # : (untyped) -> untyped
     def endpoint_model_class: (untyped) -> untyped

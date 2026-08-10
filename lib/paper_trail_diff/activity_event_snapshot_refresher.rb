@@ -15,11 +15,11 @@ module PaperTrailDiff
 
     #: (SnapshotPool, untyped) -> void
     def configure_appliers(pool, association_reader)
-      @collection_updater = collection_updater(pool)
+      route_updater = collection_updater(pool)
       record_normalizer = ActivityEventRecordNormalizer.new(
         association_reader: association_reader
       )
-      @collection_applier = collection_applier(record_normalizer)
+      @collection_applier = collection_applier(record_normalizer, route_updater)
       @belongs_to_applier = belongs_to_applier(record_normalizer)
     end
 
@@ -28,12 +28,12 @@ module PaperTrailDiff
       ActivityCollectionRouteUpdater.new(pool: pool, relationship: @relationship)
     end
 
-    #: (ActivityEventRecordNormalizer) -> ActivityCollectionEventApplier
-    def collection_applier(record_normalizer)
+    #: (ActivityEventRecordNormalizer, ActivityCollectionRouteUpdater) -> ActivityCollectionEventApplier
+    def collection_applier(record_normalizer, route_updater)
       ActivityCollectionEventApplier.new(
         record_resolver: @record_resolver,
         record_normalizer: record_normalizer,
-        route_updater: @collection_updater,
+        route_updater: route_updater,
         relationship: @relationship
       )
     end
@@ -92,29 +92,10 @@ module PaperTrailDiff
     # @rbs @record_resolver: ActivityEventRecordResolver
     # @rbs @route_finder: ActivityEventRouteFinder
     # @rbs @relationship: ActivityRelationship
-    # @rbs @collection_updater: ActivityCollectionRouteUpdater
     # @rbs @collection_applier: ActivityCollectionEventApplier
     # @rbs @belongs_to_applier: ActivityBelongsToEventApplier
 
     private :belongs_to_applier, :collection_applier, :collection_updater, :configure_appliers
-
-    #: (RecordSnapshot, Array[untyped], untyped, untyped, RecordSnapshot?, ?depth: Integer) -> [RecordSnapshot, bool]
-    def replace_collection_route( # rubocop:disable Metrics/ParameterLists
-      snapshot,
-      route,
-      version,
-      record,
-      replacement,
-      depth: 0
-    )
-      change = ActivityCollectionRouteChange.new(
-        route: route,
-        version: version,
-        record: record,
-        replacement: replacement
-      )
-      @collection_updater.call(snapshot, change, depth: depth)
-    end
 
     #: (untyped) -> untyped
     def record_after(version)
@@ -124,11 +105,6 @@ module PaperTrailDiff
     #: (untyped, untyped) -> untyped
     def deserialized_changeset(version, model_class)
       @record_resolver.deserialized_changeset(version, model_class)
-    end
-
-    #: (untyped, untyped, RecordSnapshot, ?state: Symbol) -> bool
-    def member_of_owner?(record, reflection, owner, state: :after)
-      @relationship.member_of_owner?(record, reflection, owner, state: state)
     end
 
     #: (untyped) -> untyped
