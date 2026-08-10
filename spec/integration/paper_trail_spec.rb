@@ -64,6 +64,28 @@ RSpec.describe PaperTrailDiff do
         .to eq(from: 'changed', to: 'stable')
     end
 
+    it 'rejects two versions given in reverse chronological order' do
+      article, _create, draft, published, = create_history
+
+      expect { described_class.compare(published, draft) }
+        .to raise_error(PaperTrailDiff::ReversedEndpointsError, /chronological order/)
+
+      # Swapping reads the same difference in the other direction.
+      expect(described_class.compare(draft, published).attributes.fetch('title').to_h)
+        .to eq(from: 'Draft', to: 'Published')
+      # A current-record endpoint is self-evidently live, so either side is fine.
+      expect { described_class.compare(article, draft) }.not_to raise_error
+      expect { described_class.compare(draft, draft) }.not_to raise_error
+    end
+
+    it 'rejects a reversed pair in a batched comparison' do
+      _article, _create, draft, published, = create_history
+
+      expect do
+        described_class.compare_many([{ from: published, to: draft }])
+      end.to raise_error(PaperTrailDiff::ReversedEndpointsError, /chronological order/)
+    end
+
     it 'rejects invalid and mismatched current record endpoints' do
       article, _create, draft, = create_history
       other = CoreArticle.create!(title: 'Other', internal_note: 'other')
@@ -458,6 +480,25 @@ RSpec.describe PaperTrailDiff do
       expect(steps.last.to_version).to eq(reverted)
     end
 
+    it 'accepts a window that closes on the record being destroyed' do
+      article, create_version, draft, published, reverted = create_history
+      article.destroy!
+      destroy_version = PaperTrail::Version
+                        .where(item_type: 'CoreArticle', item_id: article.id).order(:id).last
+      times = timestamp_versions(
+        [create_version, draft, published, reverted, destroy_version]
+      )
+
+      steps = described_class.timeline(article, within: times.first..times.last)
+      selected = [create_version, draft, published, reverted, destroy_version]
+
+      # No later root version can ever exist, so demanding one would reject this
+      # window permanently. The checkpoint timeline still reports edits only.
+      expect(steps.map { |step| [step.from_version.id, step.to_version.id] })
+        .to eq(selected.each_cons(2).map { |from, to| [from.id, to.id] })
+      expect(steps.map { |step| step.to_boundary.kind }).to all(eq(:version))
+    end
+
     it 'returns no steps when a time range contains no root versions' do
       article, create_version, draft, published, reverted = create_history
       times = timestamp_versions([create_version, draft, published, reverted])
@@ -592,6 +633,28 @@ RSpec.describe PaperTrailDiff do
       expect(analysis.activity_timeline.map(&:to_h)).to eq(destroyed.map(&:to_h))
       # The endpoint diff and root timeline keep their `compare` semantics.
       expect(analysis.timeline.map { |step| step.to_boundary.kind }).to all(eq(:version))
+    end
+
+    it 'closes a destroyed root selected by a time window' do
+      article, create_version, draft, published, reverted = create_history
+      article.destroy!
+      destroy_version = PaperTrail::Version
+                        .where(item_type: 'CoreArticle', item_id: article.id).order(:id).last
+      times = timestamp_versions(
+        [create_version, draft, published, reverted, destroy_version]
+      )
+
+      covering = described_class.activity_timeline(article, within: times.first..times.last)
+      trailing_only = described_class.activity_timeline(
+        article, within: times.first..times.fetch(3)
+      )
+
+      expect(covering.last.to_boundary).to be_destroyed
+      expect(covering.count { |step| step.to_boundary.destroyed? }).to eq(1)
+      expect(covering.last.diff.record_presence_change.to).to be_nil
+      # In the shorter window the destroy is only reconstruction context, so it
+      # must not be reported as a selected mutation.
+      expect(trailing_only.map { |step| step.to_boundary.kind }).to all(eq(:version))
     end
 
     it 'rejects an unsaved current boundary and a non-version starting boundary' do

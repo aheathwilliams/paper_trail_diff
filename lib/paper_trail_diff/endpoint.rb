@@ -10,10 +10,35 @@ module PaperTrailDiff
     def validate_pair!(from_endpoint, to_endpoint)
       validate!(from_endpoint)
       validate!(to_endpoint)
-      return if identity(from_endpoint) == identity(to_endpoint)
+      unless identity(from_endpoint) == identity(to_endpoint)
+        raise VersionMismatchError, 'endpoints must belong to the same PaperTrail item'
+      end
 
-      raise VersionMismatchError, 'endpoints must belong to the same PaperTrail item'
+      validate_order!(from_endpoint, to_endpoint)
     end
+
+    # Two versions carry no visible cue about which is earlier, so transposing
+    # them is easy to do by accident and impossible to detect afterwards: the
+    # result is a valid inverse diff and carries no direction of its own. It is
+    # also redundant, because the two orders differ only in which side of each
+    # change is `from`. A current-record endpoint is exempt: it is self-evidently
+    # the live state, so putting it first is a deliberate reverse comparison.
+    #: (untyped, untyped) -> void
+    def validate_order!(from_endpoint, to_endpoint)
+      return unless reversed_versions?(from_endpoint, to_endpoint)
+
+      raise ReversedEndpointsError,
+            'version endpoints must be given in chronological order; ' \
+            'swap them to read the same difference in the other direction'
+    end
+
+    #: (untyped, untyped) -> bool
+    def reversed_versions?(from_endpoint, to_endpoint)
+      return false unless version?(from_endpoint) && version?(to_endpoint)
+
+      Support.compare_versions(from_endpoint, to_endpoint).positive?
+    end
+    private_class_method :reversed_versions?
 
     #: (untyped) -> void
     def validate!(endpoint)

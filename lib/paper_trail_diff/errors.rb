@@ -11,6 +11,9 @@ module PaperTrailDiff
   # Raised when compare endpoints do not belong to the same PaperTrail item.
   class VersionMismatchError < Error; end
 
+  # Raised when comparison endpoints are given in reverse chronological order.
+  class ReversedEndpointsError < Error; end
+
   # Raised when a live endpoint is not a clean, persisted ActiveRecord record.
   class InvalidEndpointError < Error; end
 
