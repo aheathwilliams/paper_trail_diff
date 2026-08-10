@@ -124,6 +124,30 @@ visible_steps = steps.reject(&:empty?)
 Empty steps remain in the timeline. Filter them only when the application's
 display does not need every version boundary.
 
+### Select mutations by time
+
+Use `within:` when the application has a reporting window rather than saved
+endpoint versions:
+
+<!-- executable:quickstart-time-range -->
+```ruby
+window = draft_version.created_at...final_version.created_at
+ranged_steps = PaperTrailDiff.timeline(article, within: window)
+
+ranged_steps.map do |step|
+  change = step.diff.attributes["title"]
+  [change.from, change.to]
+end
+# => [["Draft", "Published"], ["Published", "Final"]]
+```
+
+The half-open range selects the mutations recorded by `draft_version` and
+`published_version`. The excluded `final_version` is still used as the trailing
+boundary needed to reveal the last selected mutation. PaperTrail versions are
+pre-change snapshots, so a range containing mutations must have a later root
+version. The gem raises `PaperTrailDiff::IncompleteTimeRangeError` instead of
+assuming that the current record is the missing endpoint.
+
 ## 6. Choose the right API
 
 | Need | Call |
@@ -237,10 +261,27 @@ end
 Use a later transaction-backed root checkpoint instead of `to: current` when
 the result must remain reproducible after the database changes again.
 
+For a historical reporting window, replace `from:` and `to:` with `within:`:
+
+```ruby
+steps = PaperTrailDiff.activity_timeline(
+  article,
+  within: report_start...report_end,
+  associations: ["comments"]
+)
+```
+
+This selects versioned comment activity directly, even if the article had no
+mutation during the window. Take a root checkpoint after `report_end`; it gives
+the gem the historical context needed to expose the final child mutation.
+
 ## 9. Common surprises
 
 - PaperTrail stores pre-change snapshots. The current record is not represented
   by `versions.last`; pass the record explicitly when current state is wanted.
+- A `within:` window containing mutations needs a later root checkpoint. The
+  trailing version is reconstruction context and may appear as a step's ending
+  boundary even though its own mutation is outside the window.
 - `ignore:` replaces the default list. Include `updated_at` yourself when using
   a custom list and you still want it ignored.
 - Historical associations require PT-AT to be installed, loaded, migrated, and

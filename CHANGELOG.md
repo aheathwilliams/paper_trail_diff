@@ -5,6 +5,12 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Add `within:` time-range selection to checkpoint timelines, activity
+  timelines, and combined analysis, with inclusive/exclusive end handling and
+  explicit errors when a final mutation cannot be reconstructed.
+
 ### Changed
 
 - Teach timeline filtering through the shared `Step#empty?` protocol in the

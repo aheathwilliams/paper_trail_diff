@@ -181,6 +181,52 @@ Both timeline APIs preserve empty boundaries. A display may use
 `steps.reject(&:empty?)`, while audit-oriented callers can retain every
 recorded boundary.
 
+## Select mutations by time
+
+`timeline`, `activity_timeline`, and `analyze` also accept a finite time range
+through `within:` instead of explicit `from:` and `to:` versions. Half-open
+ranges are recommended for adjacent reporting windows:
+
+```ruby
+window = Time.zone.parse("2026-08-01")...Time.zone.parse("2026-09-01")
+
+steps = PaperTrailDiff.timeline(article, within: window)
+
+activity_steps = PaperTrailDiff.activity_timeline(
+  article,
+  within: window,
+  associations: ["comments.replies", :author]
+)
+
+analysis = PaperTrailDiff.analyze(
+  article,
+  within: window,
+  associations: ["comments.replies"],
+  activity: true
+)
+```
+
+The range selects mutations by the timestamp of their source PaperTrail
+version. Ruby's inclusive (`..`) and exclusive (`...`) end semantics are
+honored. A returned step's `to_boundary` may be after the range: because a
+PaperTrail version is a pre-change snapshot, the gem needs one later root
+version to reveal the final selected mutation. That version is reconstruction
+context, not an additional selected mutation.
+
+If the window contains a relevant mutation but no later root version exists,
+the call raises `PaperTrailDiff::IncompleteTimeRangeError`. Create a root
+checkpoint after the reporting window before running historical analysis. The
+gem does not silently substitute current database state. A root-only window
+with no selected mutation returns a frozen empty timeline.
+
+Time ranges and explicit `from:`/`to:` endpoints are mutually exclusive.
+Malformed, open-ended, or reversed ranges raise
+`PaperTrailDiff::InvalidTimeRangeError`. With `activity_timeline`, selected
+descendant versions are included even when no root mutation occurred inside
+the window; the later root checkpoint is still required so PT-AT can
+reconstruct the enclosing graph and determine whether descendant activity is
+present. The ordinary `timeline` remains a root-only checkpoint timeline.
+
 ## Build an endpoint and timeline together
 
 When a caller needs the net endpoint diff and root timeline, `analyze`
@@ -237,6 +283,10 @@ without making it a requirement of this gem:
 add_index :versions, %i[item_type item_id created_at id],
           name: "index_versions_on_item_and_timeline"
 ```
+
+This index is especially useful for repeated `within:` queries because root
+selection is constrained by `item_type`, `item_id`, and `created_at`, then
+ordered deterministically by timestamp and version ID.
 
 PT-AT's normal index beginning with `foreign_key_name`, `foreign_key_id`, and
 `foreign_type` should also be retained on `version_associations`.

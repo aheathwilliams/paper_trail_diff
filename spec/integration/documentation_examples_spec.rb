@@ -46,6 +46,12 @@ RSpec.describe 'core documentation examples' do
       [%w[Draft Published], %w[Published Final]]
     )
 
+    timestamp_quickstart_versions(context)
+    run_quickstart('quickstart-time-range', context)
+    expect(documented_title_changes(context, variable: :ranged_steps)).to eq(
+      [%w[Draft Published], %w[Published Final]]
+    )
+
     ignore_results = run_quickstart('quickstart-ignore', context)
     expect(ignore_results.last.attributes.keys)
       .to include('title', 'updated_at')
@@ -95,10 +101,18 @@ RSpec.describe 'core documentation examples' do
     expect(context.local_variable_get(:counts)).to eq(record_added: 1)
   end
 
-  def documented_title_changes(context)
-    context.local_variable_get(:steps).map do |step|
+  def documented_title_changes(context, variable: :steps)
+    context.local_variable_get(variable).map do |step|
       change = step.diff.attributes.fetch('title')
       [change.from, change.to]
+    end
+  end
+
+  def timestamp_quickstart_versions(context)
+    start_at = Time.utc(2032, 1, 1, 12)
+    %i[draft_version published_version final_version].each_with_index do |name, index|
+      version = context.local_variable_get(name)
+      version.update_columns(created_at: start_at + (index * 60))
     end
   end
 
