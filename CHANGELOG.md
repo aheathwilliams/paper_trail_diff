@@ -9,6 +9,8 @@ project follows [Semantic Versioning](https://semver.org/).
 
 - Teach timeline filtering through the shared `Step#empty?` protocol in the
   README and quickstart examples.
+- Limit automatic CI to pull requests and `main` pushes, and cancel superseded
+  runs for the same pull request or ref.
 
 ## [0.2.0] - 2026-08-09
 
