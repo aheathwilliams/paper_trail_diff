@@ -1,5 +1,14 @@
 # paper_trail_diff
 
+> [!WARNING]
+> **Experimental software and AI disclosure:** This gem is experimental and may
+> contain incomplete behavior, reconstruction errors, performance problems, or
+> breaking changes. AI-assisted coding tools made significant contributions to
+> its design, implementation, tests, and documentation under maintainer
+> direction. AI involvement is not a substitute for independent review: audit
+> the code and validate it against your own PaperTrail history before relying on
+> it in production, compliance, security, or other high-stakes workflows.
+
 `paper_trail_diff` adds structured endpoint, checkpoint-timeline, and activity
 comparisons to
 [PaperTrail](https://github.com/paper-trail-gem/paper_trail). It returns immutable
