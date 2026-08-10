@@ -14,17 +14,17 @@ module PaperTrailDiff
 
     #: () -> Array[ActivityStep]
     def build
-      history, = history_and_versions
-      history.steps
+      history, _root_versions, closing = history_and_versions
+      activity_steps(history, closing)
     end
 
     #: () -> Analysis
     def analyze
-      history, root_versions = history_and_versions
+      history, root_versions, closing = history_and_versions
       Analysis.new(
         diff: Engine.compare(history.first_snapshot, history.last_snapshot),
         timeline: root_steps(root_versions, history.root_snapshots),
-        activity_timeline: history.steps
+        activity_timeline: activity_steps(history, closing)
       )
     end
 
@@ -35,22 +35,61 @@ module PaperTrailDiff
     # @rbs @tree: AssociationTree
     # @rbs @snapshotter: untyped
 
-    #: () -> [ActivityHistory, Array[untyped]]
+    #: () -> [ActivityHistory, Array[untyped], ActivityStep?]
     def history_and_versions
       root_versions = @range.select(context_required: !@tree.empty?)
-      return [ActivityHistory.empty, root_versions] if root_versions.empty?
+      return [ActivityHistory.empty, root_versions, nil] if root_versions.empty?
 
       prepare_history(root_versions)
       events = collect_events(root_versions)
-      return [ActivityHistory.empty, root_versions] unless time_events?(events)
+      selected = selected_events(events)
+      return [ActivityHistory.empty, root_versions, nil] unless time_events?(selected, events)
 
-      history = ActivityHistoryBuilder.new(
+      history = build_history(root_versions, events)
+      [history, root_versions, closing_step(history, selected.last)]
+    end
+
+    #: (Array[untyped], Array[ActivityEvent]) -> ActivityHistory
+    def build_history(root_versions, events)
+      ActivityHistoryBuilder.new(
         root_versions,
         events,
         @snapshotter,
         include_step: ->(event) { @range.include?(event.version) }
       ).call
-      [history, root_versions]
+    end
+
+    #: (ActivityHistory, ActivityStep?) -> Array[ActivityStep]
+    def activity_steps(history, closing)
+      return history.steps unless closing
+
+      (history.steps + [closing]).freeze
+    end
+
+    #: (Array[ActivityEvent]) -> Array[ActivityEvent]
+    def selected_events(events)
+      events.select { |event| @range.include?(event.version) }
+    end
+
+    # The window's last selected mutation is the root's own destruction, so the
+    # timeline closes on the absence it leaves rather than on a later boundary.
+    #: (ActivityHistory, ActivityEvent?) -> ActivityStep?
+    def closing_step(history, event)
+      return unless event && terminal_destroy?(event)
+
+      version = event.version
+      ActivityStep.new(
+        from_boundary: ActivityBoundary.from_version(version),
+        to_boundary: ActivityBoundary.destroyed(version),
+        diff: Engine.compare(history.root_snapshots[version_key(version)], nil)
+      )
+    end
+
+    #: (ActivityEvent?) -> bool
+    def terminal_destroy?(event)
+      return false unless event
+
+      event.root? && event.version.event.to_s == 'destroy'
     end
 
     #: (Array[untyped]) -> void
@@ -72,11 +111,11 @@ module PaperTrailDiff
       ).call
     end
 
-    #: (Array[ActivityEvent]) -> bool
-    def time_events?(events)
-      selected = events.select { |event| @range.include?(event.version) }
+    #: (Array[ActivityEvent], Array[ActivityEvent]) -> bool
+    def time_events?(selected, events)
       return false if selected.empty?
       return true if later_event?(selected.last, events)
+      return true if terminal_destroy?(selected.last)
 
       message = 'time range requires a later activity boundary to reconstruct its final change'
       raise IncompleteTimeRangeError, message

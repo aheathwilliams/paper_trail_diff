@@ -12,7 +12,19 @@ project follows [Semantic Versioning](https://semver.org/).
   as a `record_presence_change` to `nil`. `ActivityBoundary` gains a
   `destroyed?` predicate, so consumers branching only on `version?` should
   handle the third kind. `compare`, `timeline`, and `analyze`'s endpoint diff
-  are unchanged, and a `within:` range still requires a later root version.
+  are unchanged.
+- Accept a `within:` window whose last selected mutation is the root's own
+  destruction, which no later root version can follow, instead of raising
+  `IncompleteTimeRangeError` for a range that could never be satisfied. A
+  destruction outside the window remains reconstruction context only.
+
+### Removed
+
+- Reject two version endpoints given in reverse chronological order with the
+  new `PaperTrailDiff::ReversedEndpointsError`, in `compare` and
+  `compare_many`. A transposed pair silently produced the inverse diff, and a
+  result carries no direction that would reveal it. A current-record endpoint
+  may still appear on either side.
 
 ### Fixed
 

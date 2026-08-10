@@ -167,10 +167,18 @@ diff = PaperTrailDiff.compare(
 )
 ```
 
-Version and record endpoints may appear in either order. Current state is never
-inferred. The record must be persisted, not destroyed, and free of unsaved
-attribute changes. The gem reloads it unscoped before normalization, so stale
-association caches and in-memory edits are not compared. Use a database
+Two version endpoints must be given in chronological order. A transposed pair
+produces the inverse diff, which is easy to do by accident and impossible to
+detect afterwards because a result carries no direction of its own, so it
+raises `PaperTrailDiff::ReversedEndpointsError` instead. Nothing is lost by
+this: the two orders differ only in which side of each change is `from`.
+
+A current-record endpoint is exempt and may appear on either side, because it
+is self-evidently the live state and placing it first is a deliberate reverse
+comparison. Current state is never inferred. The record must be persisted, not
+destroyed, and free of unsaved attribute changes. The gem reloads it unscoped
+before normalization, so stale association caches and in-memory edits are not
+compared. Use a database
 transaction with an appropriate isolation level when several live association
 queries must represent one atomic application snapshot.
 
@@ -381,10 +389,15 @@ handle `destroyed?`.
 
 `analyze(activity: true)` reports the same closing step in its
 `activity_timeline`. Its `diff` and `timeline` keep their `compare` and
-`timeline` semantics and do not report the deletion. Selecting a `within:`
-time range still requires a later root version and raises
-`IncompleteTimeRangeError` for a destroyed record; use explicit `from:` and
-`to:` versions for a history that ends in a deletion.
+`timeline` semantics and do not report the deletion.
+
+A `within:` window behaves the same way. A window whose last selected mutation
+is the root's destruction needs no later root version, because none can ever
+exist, so it closes on the removal instead of raising
+`IncompleteTimeRangeError`. When the destruction falls *outside* the window it
+remains ordinary reconstruction context and is not reported as a selected
+mutation. The same relaxation lets the plain `timeline` accept such a window,
+though it still reports only the edits.
 
 Live-ended HABTM activity is rejected with
 `PaperTrailDiff::UnsupportedLiveActivityError`. HABTM join rows have no model
@@ -433,7 +446,9 @@ If the window contains a relevant mutation but no later root version exists,
 the call raises `PaperTrailDiff::IncompleteTimeRangeError`. Create a root
 checkpoint after the reporting window before running historical analysis. The
 gem does not silently substitute current database state. A root-only window
-with no selected mutation returns a frozen empty timeline.
+with no selected mutation returns a frozen empty timeline. The one exception is
+a window that closes on the root's own destruction, which no later version can
+ever follow; see [closing a destroyed root](#closing-a-destroyed-root).
 
 Time ranges and explicit `from:`/`to:` endpoints are mutually exclusive.
 Malformed, open-ended, or reversed ranges raise

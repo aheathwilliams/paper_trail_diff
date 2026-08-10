@@ -22,8 +22,25 @@ module PaperTrailDiff
 
     @tree: AssociationTree
 
-    # : () -> [ActivityHistory, Array[untyped]]
-    def history_and_versions: () -> [ ActivityHistory, Array[untyped] ]
+    # : () -> [ActivityHistory, Array[untyped], ActivityStep?]
+    def history_and_versions: () -> [ ActivityHistory, Array[untyped], ActivityStep? ]
+
+    # : (Array[untyped], Array[ActivityEvent]) -> ActivityHistory
+    def build_history: (Array[untyped], Array[ActivityEvent]) -> ActivityHistory
+
+    # : (ActivityHistory, ActivityStep?) -> Array[ActivityStep]
+    def activity_steps: (ActivityHistory, ActivityStep?) -> Array[ActivityStep]
+
+    # : (Array[ActivityEvent]) -> Array[ActivityEvent]
+    def selected_events: (Array[ActivityEvent]) -> Array[ActivityEvent]
+
+    # The window's last selected mutation is the root's own destruction, so the
+    # timeline closes on the absence it leaves rather than on a later boundary.
+    # : (ActivityHistory, ActivityEvent?) -> ActivityStep?
+    def closing_step: (ActivityHistory, ActivityEvent?) -> ActivityStep?
+
+    # : (ActivityEvent?) -> bool
+    def terminal_destroy?: (ActivityEvent?) -> bool
 
     # : (Array[untyped]) -> void
     def prepare_history: (Array[untyped]) -> void
@@ -31,8 +48,8 @@ module PaperTrailDiff
     # : (Array[untyped]) -> Array[ActivityEvent]
     def collect_events: (Array[untyped]) -> Array[ActivityEvent]
 
-    # : (Array[ActivityEvent]) -> bool
-    def time_events?: (Array[ActivityEvent]) -> bool
+    # : (Array[ActivityEvent], Array[ActivityEvent]) -> bool
+    def time_events?: (Array[ActivityEvent], Array[ActivityEvent]) -> bool
 
     # : (ActivityEvent, Array[ActivityEvent]) -> bool
     def later_event?: (ActivityEvent, Array[ActivityEvent]) -> bool
