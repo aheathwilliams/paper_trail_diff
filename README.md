@@ -187,17 +187,30 @@ preload each explicitly selected live association path across the batch. Each
 entry has the same endpoints and options as `compare`; results are returned in
 input order as a frozen hash keyed by `[item_type, item_id]` strings:
 
+Endpoints are still supplied by the caller, so look them up in bulk too —
+otherwise the per-root queries this API removes come straight back. Two
+queries resolve the earliest version of every root, whatever the batch size:
+
+```ruby
+orders = Order.where(id: order_ids).to_a
+
+earliest_ids = PaperTrail::Version
+  .where(item_type: "Order", item_id: orders.map(&:id))
+  .group(:item_id)
+  .minimum(:id)
+first_versions = PaperTrail::Version
+  .where(id: earliest_ids.values)
+  .index_by(&:item_id)
+```
+
 ```ruby
 diffs = PaperTrailDiff.compare_many(
-  [
-    { from: first_versions.fetch(order_a.id), to: order_a },
-    { from: first_versions.fetch(order_b.id), to: order_b }
-  ],
+  orders.map { |order| { from: first_versions.fetch(order.id), to: order } },
   associations: [:line_items],
   ignore: []
 )
 
-diffs.fetch(["Order", order_a.id.to_s]) # => PaperTrailDiff::Diff
+diffs.fetch(["Order", orders.first.id.to_s]) # => PaperTrailDiff::Diff
 ```
 
 Root identities must be unique within one call. Historical reconstruction for
@@ -216,7 +229,8 @@ must observe one atomic snapshot.
 already owns a consistent, fully preloaded graph may opt out:
 
 ```ruby
-orders = Order.where(id: ids).preload(line_items: :product).to_a
+orders = Order.where(id: order_ids).preload(line_items: :product).to_a
+# `first_versions` is the same bulk endpoint lookup shown above.
 
 diffs = PaperTrailDiff.compare_many(
   orders.map do |order|
