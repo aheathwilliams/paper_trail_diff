@@ -25,6 +25,9 @@ module PaperTrailDiff
     # : (untyped, habtm_version: untyped) -> untyped
     def association_reader: (untyped, habtm_version: untyped) -> untyped
 
+    # : (untyped) -> [Hash[untyped, untyped], Hash[untyped, untyped]]?
+    def record_transition: (untyped) -> [ Hash[untyped, untyped], Hash[untyped, untyped] ]?
+
     private
 
     @live_graph_collector: LiveGraphCollector

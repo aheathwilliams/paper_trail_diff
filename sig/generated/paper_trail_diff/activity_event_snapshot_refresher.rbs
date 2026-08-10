@@ -6,8 +6,8 @@ module PaperTrailDiff
   class ActivityEventSnapshotRefresher
     RECORD_AFTER_HANDLERS: untyped
 
-    # : (traversal: AssociationTraversal, pool: SnapshotPool, components: untyped, ?association_reader: untyped) -> void
-    def initialize: (traversal: AssociationTraversal, pool: SnapshotPool, components: untyped, ?association_reader: untyped) -> void
+    # : (traversal: AssociationTraversal, pool: SnapshotPool, components: untyped, ?association_reader: untyped, ?record_transition: untyped) -> void
+    def initialize: (traversal: AssociationTraversal, pool: SnapshotPool, components: untyped, ?association_reader: untyped, ?record_transition: untyped) -> void
 
     # : (untyped, untyped, RecordSnapshot, Array[String], ActivityEvent?) -> [bool, RecordSnapshot?]
     def call: (untyped, untyped, RecordSnapshot, Array[String], ActivityEvent?) -> [ bool, RecordSnapshot? ]
@@ -20,19 +20,39 @@ module PaperTrailDiff
 
     @pool: SnapshotPool
 
+    @record_transition: untyped
+
     @traversal: AssociationTraversal
 
     # : (Array[Array[untyped]], untyped) -> bool
     def unsafe_through_membership_event?: (Array[Array[untyped]], untyped) -> bool
 
-    # : (untyped, untyped, RecordSnapshot, SnapshotNormalizer, Array[Array[untyped]], untyped) -> [bool, RecordSnapshot]
-    def collection_target_snapshot: (untyped, untyped, RecordSnapshot, SnapshotNormalizer, Array[Array[untyped]], untyped) -> [ bool, RecordSnapshot ]
+    # : (Array[Array[untyped]], ActivitySnapshotDelta?) -> bool
+    def unsafe_nested_membership_delta?: (Array[Array[untyped]], ActivitySnapshotDelta?) -> bool
+
+    # : (untyped, untyped, RecordSnapshot, SnapshotNormalizer, Array[Array[untyped]], untyped, ActivitySnapshotDelta?) -> [bool, RecordSnapshot]
+    def collection_target_snapshot: (untyped, untyped, RecordSnapshot, SnapshotNormalizer, Array[Array[untyped]], untyped, ActivitySnapshotDelta?) -> [ bool, RecordSnapshot ]
+
+    # : (RecordSnapshot, Array[untyped], untyped, ActivitySnapshotDelta?, Array[untyped], SnapshotNormalizer, untyped, untyped) -> [untyped, RecordSnapshot?]
+    def collection_route_event_state: (RecordSnapshot, Array[untyped], untyped, ActivitySnapshotDelta?, Array[untyped], SnapshotNormalizer, untyped, untyped) -> [ untyped, RecordSnapshot? ]
+
+    # : (untyped, Array[untyped], SnapshotNormalizer, untyped, untyped) -> RecordSnapshot?
+    def normalized_collection_event_record: (untyped, Array[untyped], SnapshotNormalizer, untyped, untyped) -> RecordSnapshot?
+
+    # : (RecordSnapshot, Array[untyped], untyped, ActivitySnapshotDelta?) -> RecordSnapshot?
+    def existing_delta_record: (RecordSnapshot, Array[untyped], untyped, ActivitySnapshotDelta?) -> RecordSnapshot?
+
+    # : (RecordSnapshot, Array[untyped], ActivitySnapshotDelta) -> RecordSnapshot?
+    def nested_delta_owner: (RecordSnapshot, Array[untyped], ActivitySnapshotDelta) -> RecordSnapshot?
 
     # : (untyped, AssociationTree, String, ?path: String) -> Array[Array[untyped]]
     def direct_collection_routes: (untyped, AssociationTree, String, ?path: String) -> Array[Array[untyped]]
 
     # : (RecordSnapshot, Array[untyped], untyped, untyped, RecordSnapshot?, ?depth: Integer) -> [RecordSnapshot, bool]
     def replace_collection_route: (RecordSnapshot, Array[untyped], untyped, untyped, RecordSnapshot?, ?depth: Integer) -> [ RecordSnapshot, bool ]
+
+    # : (AssociationSnapshot, untyped, untyped, untyped, RecordSnapshot, RecordSnapshot?) -> RecordSnapshot?
+    def collection_event_child: (AssociationSnapshot, untyped, untyped, untyped, RecordSnapshot, RecordSnapshot?) -> RecordSnapshot?
 
     # : (AssociationSnapshot, Array[untyped], untyped, untyped, RecordSnapshot?, Integer) -> [Array[RecordSnapshot], RecordSnapshot?, RecordSnapshot?, bool]?
     def replace_targeted_collection_parent: (AssociationSnapshot, Array[untyped], untyped, untyped, RecordSnapshot?, Integer) -> [ Array[RecordSnapshot], RecordSnapshot?, RecordSnapshot?, bool ]?
@@ -86,8 +106,17 @@ module PaperTrailDiff
     # : (untyped, untyped, untyped) -> untyped
     def standard_changeset: (untyped, untyped, untyped) -> untyped
 
-    # : (untyped, untyped, RecordSnapshot) -> bool
-    def member_of_owner?: (untyped, untyped, RecordSnapshot) -> bool
+    # : (untyped) -> ActivitySnapshotDelta?
+    def activity_snapshot_delta: (untyped) -> ActivitySnapshotDelta?
+
+    # : (untyped, untyped, RecordSnapshot, ?state: Symbol) -> bool
+    def member_of_owner?: (untyped, untyped, RecordSnapshot, ?state: Symbol) -> bool
+
+    # : (untyped, untyped, state: Symbol) -> untyped
+    def event_attribute: (untyped, untyped, state: Symbol) -> untyped
+
+    # : (untyped, untyped, state: Symbol) -> untyped
+    def relationship_owner_id: (untyped, untyped, state: Symbol) -> untyped
 
     # : (untyped, untyped, AssociationTree, String, SnapshotNormalizer, untyped, untyped) -> RecordSnapshot?
     def normalize_event_record: (untyped, untyped, AssociationTree, String, SnapshotNormalizer, untyped, untyped) -> RecordSnapshot?

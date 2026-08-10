@@ -116,14 +116,13 @@ module PaperTrailDiff
     #: () -> ActivitySnapshotProvider
     def build_activity_snapshotter
       refresher = BranchSnapshotRefresher.new(
-        tree: @association_tree,
-        ignore_policy: @ignore_policy,
-        traversal: @traversal,
-        pool: @snapshot_pool,
+        tree: @association_tree, ignore_policy: @ignore_policy,
+        traversal: @traversal, pool: @snapshot_pool,
         normalizer: @normalizer,
         full_snapshotter: method(:snapshot_at),
         partial_snapshotter: @historical_store.method(:custom),
-        association_reader: @historical_store.method(:association_reader)
+        association_reader: @historical_store.method(:association_reader),
+        record_transition: @historical_store.method(:record_transition)
       )
       ActivitySnapshotProvider.new(
         snapshotter: method(:snapshot_at),

@@ -702,6 +702,34 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     )
   end
 
+  it 'reuses prepared successor states across repeated child updates' do
+    article = TrackedArticle.create!(title: 'Repeated child updates')
+    comment = article.comments.create!(body: 'Before')
+    before = boundary_for(article)
+    %w[First Second Third].each { |body| comment.update!(body: body) }
+    after = boundary_for(article)
+
+    optimized = PaperTrailDiff.activity_timeline(
+      article,
+      from: before,
+      to: after,
+      associations: [:comments]
+    )
+    reference = full_activity_timeline(
+      article,
+      from: before,
+      to: after,
+      associations: [:comments]
+    )
+    bodies = optimized.reject { |step| step.diff.empty? }.map do |step|
+      step.diff.associations.fetch('comments').changed.first
+          .attributes.fetch('body').to
+    end
+
+    expect(optimized.map(&:to_h)).to eq(reference.map(&:to_h))
+    expect(bodies).to eq(%w[First Second Third])
+  end
+
   it 'filters descendant events by time and excludes later mutations from analysis' do
     graph = article_with_graph
     range_start = Time.utc(2031, 1, 1, 12)
@@ -1372,6 +1400,32 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     expect(comment_diffs.map { |diff| diff.removed.map(&:id) })
       .to eq([[], [], [transient.id]])
     expect(comment_diffs.fetch(1).changed.first.attributes).to have_key('body')
+  end
+
+  it 'moves an updated nested child between selected parent snapshots' do
+    article = TrackedArticle.create!(title: 'Nested move')
+    first = article.comments.create!(body: 'First owner')
+    second = article.comments.create!(body: 'Second owner')
+    reply = first.replies.create!(body: 'Moving reply')
+    before = boundary_for(article)
+    reply.update!(comment: second)
+    after = boundary_for(article)
+    associations = ['comments.replies']
+
+    steps = PaperTrailDiff.activity_timeline(
+      article,
+      from: before,
+      to: after,
+      associations: associations
+    )
+
+    changed = steps.reject { |step| step.diff.empty? }.first.diff
+                   .associations.fetch('comments').changed
+    changes_by_parent = changed.to_h { |change| [change.record.id, change] }
+    removed = changes_by_parent.fetch(first.id).associations.fetch('replies').removed
+    added = changes_by_parent.fetch(second.id).associations.fetch('replies').added
+    expect(removed.map(&:id)).to eq([reply.id])
+    expect(added.map(&:id)).to eq([reply.id])
   end
 
   it 'reports nested child additions and removals at their own activity boundaries' do

@@ -1,0 +1,33 @@
+# Generated from lib/paper_trail_diff/activity_snapshot_delta.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Internal scalar transition for one isolated PaperTrail update event.
+  class ActivitySnapshotDelta
+    # : (before_attributes: Hash[untyped, untyped], after_attributes: Hash[untyped, untyped]) -> void
+    def initialize: (before_attributes: Hash[untyped, untyped], after_attributes: Hash[untyped, untyped]) -> void
+
+    # : (RecordSnapshot) -> RecordSnapshot
+    def apply: (RecordSnapshot) -> RecordSnapshot
+
+    # : (untyped) -> untyped
+    def before_value: (untyped) -> untyped
+
+    # : (untyped) -> untyped
+    def after_value: (untyped) -> untyped
+
+    # : (untyped) -> bool
+    def relationship_changed?: (untyped) -> bool
+
+    private
+
+    @after_attributes: Hash[String, untyped]
+
+    @before_attributes: Hash[String, untyped]
+
+    # : (Hash[untyped, untyped]) -> Hash[String, untyped]
+    def normalize_hash: (Hash[untyped, untyped]) -> Hash[String, untyped]
+
+    # : (untyped) -> Array[untyped]
+    def relationship_keys: (untyped) -> Array[untyped]
+  end
+end

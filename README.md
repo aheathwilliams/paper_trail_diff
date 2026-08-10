@@ -360,6 +360,11 @@ behavior while avoiding repeated association queries for supported paths.
 For supported collection events, adjacent snapshots share an immutable
 identity-position index and carry a one-step transition hint. Diffing therefore
 visits only the changed member instead of hashing the whole collection again.
+Prepared scalar history also exposes the predecessor and successor attributes
+for isolated update events, allowing activity reconstruction to update the
+immutable snapshot directly instead of reifying and deserializing the same
+PaperTrail event again. Missing, ambiguous, or identity-changing transitions
+fall back to the ordinary event reifier.
 For a direct nested `has_many` such as `comments.replies`, the child's foreign
 key also locates its parent snapshot directly rather than walking every
 comment. Membership changes and ambiguous or unsupported relationship shapes

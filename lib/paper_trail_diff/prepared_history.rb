@@ -43,6 +43,11 @@ module PaperTrailDiff
       @habtm[edge_key(owner_class, reflection)] = memberships.transform_keys(&:to_s)
     end
 
+    #: (untyped, untyped, untyped) -> [Hash[untyped, untyped], Hash[untyped, untyped]]?
+    def record_transition(model_class, id, version)
+      @records.transition(model_class, id, version)
+    end
+
     #: (untyped, untyped, untyped, habtm_boundary: untyped) -> [bool, Array[untyped]]
     def resolve(record, reflection, boundary, habtm_boundary:)
       return [false, []] unless supported?(record.class, reflection)

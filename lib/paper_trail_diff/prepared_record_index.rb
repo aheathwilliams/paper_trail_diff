@@ -4,6 +4,9 @@
 module PaperTrailDiff
   # Immutable scalar state from a PaperTrail version or live-record fallback.
   class PreparedRecordState
+    attr_reader :model_class #: untyped
+    attr_reader :attributes #: Hash[untyped, untyped]
+
     #: (untyped) -> void
     def initialize(record)
       @model_class = record.class
@@ -15,9 +18,6 @@ module PaperTrailDiff
     def instantiate
       @model_class.new(@attributes)
     end
-
-    # @rbs @model_class: untyped
-    # @rbs @attributes: Hash[untyped, untyped]
   end
 
   # Versions and live fallback for one model identity.
@@ -26,7 +26,10 @@ module PaperTrailDiff
 
     #: (versions: Array[untyped], live: PreparedRecordState?) -> void
     def initialize(versions:, live:)
-      @versions = versions.freeze
+      @versions = versions.sort_by { |version| Support.chronological_version_key(version) }.freeze
+      @version_positions = @versions.each_with_index.to_h do |version, index|
+        [version.id.to_s, index]
+      end.freeze
       @live = live
       @states = {} #: Hash[untyped, PreparedRecordState?]
     end
@@ -46,10 +49,29 @@ module PaperTrailDiff
       live ? [*version_records, live.instantiate] : version_records
     end
 
+    #: (untyped) -> [Hash[untyped, untyped], Hash[untyped, untyped]]?
+    def transition(version)
+      index = @version_positions[version.id.to_s]
+      return unless index
+
+      before = state_for(versions.fetch(index))
+      after = state_after(index)
+      return unless before && after && before.model_class == after.model_class
+
+      [before.attributes, after.attributes]
+    end
+
     private
 
     # @rbs @live: PreparedRecordState?
     # @rbs @states: Hash[untyped, PreparedRecordState?]
+    # @rbs @version_positions: Hash[String, Integer]
+
+    #: (Integer) -> PreparedRecordState?
+    def state_after(index)
+      successor = versions[index + 1]
+      successor ? state_for(successor) : @live
+    end
 
     #: (untyped, untyped) -> bool
     def eligible?(version, boundary)
@@ -104,6 +126,11 @@ module PaperTrailDiff
     #: (untyped, untyped, untyped) -> untyped
     def record_before(model_class, id, boundary)
       @series.fetch(identity(model_class, id)).record_before(boundary)
+    end
+
+    #: (untyped, untyped, untyped) -> [Hash[untyped, untyped], Hash[untyped, untyped]]?
+    def transition(model_class, id, version)
+      @series[identity(model_class, id)]&.transition(version)
     end
 
     #: (untyped, Array[untyped]) -> Array[untyped]

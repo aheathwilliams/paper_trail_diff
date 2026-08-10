@@ -20,6 +20,9 @@ module PaperTrailDiff
     # : (untyped, untyped, Hash[String, Array[untyped]]) -> void
     def register_habtm: (untyped, untyped, Hash[String, Array[untyped]]) -> void
 
+    # : (untyped, untyped, untyped) -> [Hash[untyped, untyped], Hash[untyped, untyped]]?
+    def record_transition: (untyped, untyped, untyped) -> [ Hash[untyped, untyped], Hash[untyped, untyped] ]?
+
     # : (untyped, untyped, untyped, habtm_boundary: untyped) -> [bool, Array[untyped]]
     def resolve: (untyped, untyped, untyped, habtm_boundary: untyped) -> [ bool, Array[untyped] ]
 

@@ -11,16 +11,17 @@ module PaperTrailDiff
     }.freeze
     private_constant :RECORD_AFTER_HANDLERS
 
-    #: (traversal: AssociationTraversal, pool: SnapshotPool, components: untyped, ?association_reader: untyped) -> void
-    def initialize(traversal:, pool:, components:, association_reader: nil)
+    #: (traversal: AssociationTraversal, pool: SnapshotPool, components: untyped, ?association_reader: untyped, ?record_transition: untyped) -> void
+    def initialize(traversal:, pool:, components:, association_reader: nil, record_transition: nil)
       @traversal = traversal
       @pool = pool
       @components = components
       @association_reader = association_reader || method(:historical_reader)
+      @record_transition = record_transition
     end
 
     #: (untyped, untyped, RecordSnapshot, Array[String], ActivityEvent?) -> [bool, RecordSnapshot?]
-    def call( # rubocop:disable Metrics/MethodLength
+    def call( # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
       root_endpoint,
       context_endpoint,
       previous,
@@ -38,13 +39,17 @@ module PaperTrailDiff
       unless collection_routes.empty?
         return [false, nil] if unsafe_through_membership_event?(collection_routes, event.version)
 
+        delta = activity_snapshot_delta(event.version)
+        return [false, nil] if unsafe_nested_membership_delta?(collection_routes, delta)
+
         return collection_target_snapshot(
           root_endpoint,
           context_endpoint,
           previous,
           normalizer,
           collection_routes,
-          event.version
+          event.version,
+          delta
         )
       end
 
@@ -64,6 +69,7 @@ module PaperTrailDiff
     # @rbs @pool: SnapshotPool
     # @rbs @components: untyped
     # @rbs @association_reader: untyped
+    # @rbs @record_transition: untyped
 
     #: (Array[Array[untyped]], untyped) -> bool
     def unsafe_through_membership_event?(routes, version)
@@ -77,33 +83,109 @@ module PaperTrailDiff
       end
     end
 
-    #: (untyped, untyped, RecordSnapshot, SnapshotNormalizer, Array[Array[untyped]], untyped) -> [bool, RecordSnapshot]
+    #: (Array[Array[untyped]], ActivitySnapshotDelta?) -> bool
+    def unsafe_nested_membership_delta?(routes, delta)
+      return false unless delta
+
+      routes.any? do |route|
+        route.length > 1 && delta.relationship_changed?(route.last.fetch(1))
+      end
+    end
+
+    #: (untyped, untyped, RecordSnapshot, SnapshotNormalizer, Array[Array[untyped]], untyped, ActivitySnapshotDelta?) -> [bool, RecordSnapshot]
     def collection_target_snapshot( # rubocop:disable Metrics/MethodLength, Metrics/ParameterLists
       root_endpoint,
       context_endpoint,
       previous,
       normalizer,
       routes,
-      version
+      version,
+      delta
     )
-      record = record_after(version)
+      fallback_record = [] #: Array[untyped]
       snapshot = previous
       routes.each do |route|
-        _name, reflection, subtree, path = route.last
-        replacement = if record
-                        normalize_event_record(
-                          record,
-                          reflection,
-                          subtree,
-                          path,
-                          normalizer,
-                          root_endpoint,
-                          context_endpoint
-                        )
-                      end
+        record, replacement = collection_route_event_state(
+          snapshot,
+          route,
+          version,
+          delta,
+          fallback_record,
+          normalizer,
+          root_endpoint,
+          context_endpoint
+        )
         snapshot, = replace_collection_route(snapshot, route, version, record, replacement)
       end
       [true, snapshot]
+    end
+
+    #: (RecordSnapshot, Array[untyped], untyped, ActivitySnapshotDelta?, Array[untyped], SnapshotNormalizer, untyped, untyped) -> [untyped, RecordSnapshot?]
+    def collection_route_event_state( # rubocop:disable Metrics/ParameterLists
+      snapshot,
+      route,
+      version,
+      delta,
+      fallback_record,
+      normalizer,
+      root_endpoint,
+      context_endpoint
+    )
+      existing = existing_delta_record(snapshot, route, version, delta) if delta
+      return [delta, delta.apply(existing)] if delta && existing
+
+      fallback_record << record_after(version) if fallback_record.empty?
+      record = fallback_record.first
+      return [record, nil] unless record
+
+      [record, normalized_collection_event_record(
+        record, route, normalizer, root_endpoint, context_endpoint
+      )]
+    end
+
+    #: (untyped, Array[untyped], SnapshotNormalizer, untyped, untyped) -> RecordSnapshot?
+    def normalized_collection_event_record(
+      record,
+      route,
+      normalizer,
+      root_endpoint,
+      context_endpoint
+    )
+      _name, reflection, subtree, path = route.last
+      normalize_event_record(
+        record,
+        reflection,
+        subtree,
+        path,
+        normalizer,
+        root_endpoint,
+        context_endpoint
+      )
+    end
+
+    #: (RecordSnapshot, Array[untyped], untyped, ActivitySnapshotDelta?) -> RecordSnapshot?
+    def existing_delta_record(snapshot, route, version, delta)
+      return unless delta && route.length.between?(1, 2)
+
+      owner = route.length == 1 ? snapshot : nested_delta_owner(snapshot, route, delta)
+      return unless owner
+
+      association = owner.associations.fetch(route.last.fetch(0))
+      position = association.position_for_id(version.item_id)
+      association.records.fetch(position) if position
+    end
+
+    #: (RecordSnapshot, Array[untyped], ActivitySnapshotDelta) -> RecordSnapshot?
+    def nested_delta_owner(snapshot, route, delta)
+      parent_name = route.first.fetch(0)
+      reflection = route.last.fetch(1)
+      association = snapshot.associations.fetch(parent_name)
+      owner_id = relationship_owner_id(delta, reflection, state: :before)
+      position = association.position_for_id(owner_id)
+      return unless position
+
+      owner = association.records.fetch(position)
+      owner if member_of_owner?(delta, reflection, owner, state: :before)
     end
 
     #: (untyped, AssociationTree, String, ?path: String) -> Array[Array[untyped]]
@@ -154,9 +236,14 @@ module PaperTrailDiff
       transition_after = nil #: RecordSnapshot?
       membership_preserved = true
       updated_records = if depth == route.length - 1
-                          child = if record && member_of_owner?(record, reflection, snapshot)
-                                    replacement
-                                  end
+                          child = collection_event_child(
+                            association,
+                            version,
+                            record,
+                            reflection,
+                            snapshot,
+                            replacement
+                          )
                           records, transition_before, transition_after, membership_preserved =
                             replace_collection_record(association, version, child)
                           records.tap { |value| changed = !value.equal?(association.records) }
@@ -181,9 +268,13 @@ module PaperTrailDiff
                               depth: depth + 1
                             )
                             if child_changed
+                              transition_before = nil if changed
+                              transition_after = nil if changed
+                              unless changed
+                                transition_before = child_snapshot
+                                transition_after = updated
+                              end
                               changed = true
-                              transition_before = child_snapshot
-                              transition_after = updated
                             end
                             updated
                           end
@@ -208,6 +299,26 @@ module PaperTrailDiff
       parent_path = depth.zero? ? '' : route.fetch(depth - 1).fetch(3)
       updated_snapshot = @pool.record(parent_path, updated_snapshot) unless parent_path.empty?
       [updated_snapshot, true]
+    end
+
+    #: (AssociationSnapshot, untyped, untyped, untyped, RecordSnapshot, RecordSnapshot?) -> RecordSnapshot?
+    def collection_event_child( # rubocop:disable Metrics/ParameterLists
+      association, version, record, reflection, owner, replacement
+    )
+      return unless record
+
+      unless record.is_a?(ActivitySnapshotDelta)
+        return replacement if member_of_owner?(record, reflection, owner)
+
+        return
+      end
+      unless record.relationship_changed?(reflection)
+        return replacement if association.position_for_id(version.item_id)
+
+        return
+      end
+
+      replacement if member_of_owner?(record, reflection, owner)
     end
 
     #: (AssociationSnapshot, Array[untyped], untyped, untyped, RecordSnapshot?, Integer) -> [Array[RecordSnapshot], RecordSnapshot?, RecordSnapshot?, bool]?
@@ -250,11 +361,10 @@ module PaperTrailDiff
     def nested_owner_position(association, reflection, version, record)
       membership_record = record || version.reify(dup: true)
       return unless membership_record
+      return if membership_record.is_a?(ActivitySnapshotDelta) &&
+                membership_record.relationship_changed?(reflection)
 
-      owner_ids = Array(reflection.foreign_key).map do |foreign_key|
-        membership_record.public_send(foreign_key)
-      end
-      owner_id = owner_ids.one? ? owner_ids.first : owner_ids
+      owner_id = relationship_owner_id(membership_record, reflection, state: :after)
       association.position_for_id(owner_id)
     end
 
@@ -477,10 +587,23 @@ module PaperTrailDiff
       changes
     end
 
-    #: (untyped, untyped, RecordSnapshot) -> bool
-    def member_of_owner?(record, reflection, owner) # rubocop:disable Metrics/AbcSize
+    #: (untyped) -> ActivitySnapshotDelta?
+    def activity_snapshot_delta(version)
+      return unless version.event.to_s == 'update' && version.object
+
+      transition = @record_transition&.call(version)
+      return unless transition
+
+      ActivitySnapshotDelta.new(
+        before_attributes: transition.fetch(0),
+        after_attributes: transition.fetch(1)
+      )
+    end
+
+    #: (untyped, untyped, RecordSnapshot, ?state: Symbol) -> bool
+    def member_of_owner?(record, reflection, owner, state: :after) # rubocop:disable Metrics/AbcSize
       foreign_keys = Array(reflection.foreign_key)
-      actual_ids = foreign_keys.map { |key| record.public_send(key) }
+      actual_ids = foreign_keys.map { |key| event_attribute(record, key, state: state) }
       expected_ids = Array(owner.id)
       # @type var expected_ids: Array[untyped]
       # Explicit blocks keep the inline RBS checker from inferring an unusable Proc type.
@@ -489,13 +612,30 @@ module PaperTrailDiff
       return false unless actual == expected
       return true unless reflection.options[:as]
 
-      type = record.public_send(reflection.type).to_s
+      type = event_attribute(record, reflection.type, state: state).to_s
       owner_types = [
         owner.type.to_s,
         reflection.active_record.name.to_s,
         reflection.active_record.base_class.name.to_s
       ]
       owner_types.include?(type)
+    end
+
+    #: (untyped, untyped, state: Symbol) -> untyped
+    def event_attribute(record, name, state:)
+      if record.is_a?(ActivitySnapshotDelta)
+        return state == :before ? record.before_value(name) : record.after_value(name)
+      end
+
+      record.public_send(name)
+    end
+
+    #: (untyped, untyped, state: Symbol) -> untyped
+    def relationship_owner_id(record, reflection, state:)
+      owner_ids = Array(reflection.foreign_key).map do |foreign_key|
+        event_attribute(record, foreign_key, state: state)
+      end
+      owner_ids.one? ? owner_ids.first : owner_ids
     end
 
     #: (untyped, untyped, AssociationTree, String, SnapshotNormalizer, untyped, untyped) -> RecordSnapshot?

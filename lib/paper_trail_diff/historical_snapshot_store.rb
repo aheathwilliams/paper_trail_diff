@@ -98,6 +98,14 @@ module PaperTrailDiff
       )
     end
 
+    #: (untyped) -> [Hash[untyped, untyped], Hash[untyped, untyped]]?
+    def record_transition(version)
+      history = @prepared_history
+      return unless history
+
+      history.record_transition(Endpoint.model_class(version), version.item_id, version)
+    end
+
     private
 
     # @rbs @tree: AssociationTree

@@ -35,6 +35,27 @@ RSpec.describe PaperTrailDiff::PreparedRecordIndex do
     expect(index.record_before(TrackedAuthor, author.id, after).name).to eq('After')
   end
 
+  it 'reuses prepared predecessor, successor, and live attributes for transitions' do
+    article = TrackedArticle.create!(title: 'Prepared transitions')
+    author = TrackedAuthor.create!(name: 'Before')
+    before = boundary_for(article)
+    author.update!(name: 'Middle')
+    first_update = author.versions.last
+    author.update!(name: 'After')
+    second_update = author.versions.last
+    index = described_class.new(before)
+
+    index.load(TrackedAuthor, [author.id])
+
+    first = index.transition(TrackedAuthor, author.id, first_update)
+    second = index.transition(TrackedAuthor, author.id, second_update)
+    expect(first&.map { |attributes| attributes.fetch('name') }).to eq(%w[Before Middle])
+    expect(second&.map { |attributes| attributes.fetch('name') }).to eq(%w[Middle After])
+    missing_version = instance_double(PaperTrail::Version, id: -1)
+    expect(index.transition(TrackedAuthor, author.id, missing_version)).to be_nil
+    expect(index.transition(TrackedAuthor, -1, first_update)).to be_nil
+  end
+
   it 'represents absence before creation and after destruction' do
     article = TrackedArticle.create!(title: 'Temporal absence')
     before = boundary_for(article)
@@ -133,6 +154,14 @@ RSpec.describe PaperTrailDiff::PreparedRecordIndex do
     composite = double('composite model', primary_key: %i[tenant_id id])
 
     expect(series.record_before(boundary).name).to eq('Timestamp fallback')
+    mismatched = PaperTrailDiff::PreparedRecordState.new(
+      TrackedArticle.create!(title: 'Different transition type')
+    )
+    mismatched_series = PaperTrailDiff::PreparedRecordSeries.new(
+      versions: [version],
+      live: mismatched
+    )
+    expect(mismatched_series.transition(version)).to be_nil
     expect(index.send(:live_records_for, composite, [author.id])).to eq([])
   end
 end

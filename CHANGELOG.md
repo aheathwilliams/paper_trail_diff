@@ -26,6 +26,10 @@ project follows [Semantic Versioning](https://semver.org/).
 - Reuse collection identity positions and adjacent transition hints so activity
   steps compare only the changed member, and resolve direct nested collection
   owners by foreign key instead of scanning every parent snapshot.
+- Reuse prepared predecessor and successor scalar states for isolated activity
+  updates instead of reifying and deserializing each PaperTrail event again.
+- Preserve both sides of nested collection membership moves by using the
+  general comparator when one event changes multiple parent snapshots.
 - Limit automatic CI to pull requests and `main` pushes, and cancel superseded
   runs for the same pull request or ref.
 

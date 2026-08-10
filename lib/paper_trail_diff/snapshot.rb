@@ -72,11 +72,14 @@ module PaperTrailDiff
     #: (Array[RecordSnapshot], before: RecordSnapshot?, after: RecordSnapshot?, membership_preserved: bool) -> AssociationSnapshot
     def transition_to(records, before:, after:, membership_preserved:)
       holder = membership_preserved ? @identity_index_holder : nil
+      transition = if before || after
+                     CollectionTransition.new(from: self, before: before, after: after)
+                   end
       self.class.new(
         kind: kind,
         records: records,
         identity_index_holder: holder,
-        transition: CollectionTransition.new(from: self, before: before, after: after)
+        transition: transition
       )
     end
 
