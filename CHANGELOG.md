@@ -3,7 +3,12 @@
 All notable changes to this project will be documented in this file. The
 project follows [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.3.1] - 2026-08-10
+
+### Fixed
+
+- Preserve immutable activity snapshots for nested events that do not match a
+  selected child record, instead of reporting a false change.
 
 ### Changed
 

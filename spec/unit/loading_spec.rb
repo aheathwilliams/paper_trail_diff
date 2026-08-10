@@ -3,6 +3,6 @@
 RSpec.describe PaperTrailDiff do
   it 'loads without association tracking' do
     expect(defined?(PaperTrail::VersionAssociation)).to be_nil
-    expect(described_class::VERSION).to eq('0.3.0')
+    expect(described_class::VERSION).to eq('0.3.1')
   end
 end
