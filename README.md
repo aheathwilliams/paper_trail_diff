@@ -44,12 +44,84 @@ PaperTrail.config.track_associations = true
 All associated models whose historical state is compared must use
 `has_paper_trail`.
 
+## How PaperTrail records state
+
+Almost everything else in this README follows from one property of PaperTrail,
+so it is worth being precise about it first: **a version stores the state that
+existed _before_ the event that created it.** A version is a record of what was
+overwritten, not of what was written.
+
+Take an article created as `"Draft"`, then updated to `"Published"`, then to
+`"Final"`:
+
+```text
+        v1              v2                v3            (no version)
+     "create"        "update"          "update"
+         |               |                 |                 |
+   ──────●───────────────●─────────────────●─────────────────●──────▶ time
+         |               |                 |                 |
+         └─── "Draft" ───┘                 |                 |
+              stored in v2                 |                 |
+                         └─ "Published" ───┘                 |
+                              stored in v3                   |
+                                           └──── "Final" ────┘
+                                             only in the table
+```
+
+Each state is stored by the version at the *end* of the interval it was live
+for. Three consequences run through the rest of this document:
+
+- **A `create` version reifies to `nil`.** Nothing preceded it. Comparing it
+  with a later state reports a structured `record_presence_change` rather than
+  inventing scalar changes.
+- **The newest state has no version at all.** It exists only in the table. A
+  fully historical result therefore needs a version *later* than the last change
+  it should reveal, which is why a `within:` window can raise
+  `IncompleteTimeRangeError`, and why `activity_timeline(..., to: article)`
+  exists for ending at current state instead.
+- **A change is visible between two boundaries**, never "at" one. This is why
+  both timeline APIs return steps rather than events.
+
+The [Quickstart](QUICKSTART.md) walks through the same idea against a real
+console session.
+
+## Choosing an entry point
+
+| You need | Call |
+| --- | --- |
+| The net difference between two endpoints | `compare` |
+| The same, for many records in one pass | `compare_many` |
+| One step per version of the root record | `timeline` |
+| One step per version of the root *or a selected child* | `activity_timeline` |
+| A net difference and a timeline from one history pass | `analyze` |
+
+`timeline` and `activity_timeline` differ only in which recorded versions
+become boundaries. Given an article with two comment edits between two article
+versions:
+
+```text
+recorded versions   A1        C1      C2        A2      A = Article version
+                    |         |       |         |       C = Comment version
+                ────●─────────●───────●─────────●────▶ time
+                    |         |       |         |
+timeline            └───────── 1 step ──────────┘
+                    both comment changes land inside that one step
+
+activity_timeline   └── 1 ────┴── 2 ──┴─── 3 ───┘
+                    each recorded version becomes its own boundary
+```
+
+Both report the same underlying data: a `timeline` step still contains every
+selected association, because it has to describe what changed beneath the root.
+They differ in how finely that change is split, and in what the reconstruction
+costs. That cost trade-off is covered under
+[choosing a reconstruction strategy](#choosing-between-timeline-and-analyzeactivity-true).
+
 ## Compare two endpoints
 
-PaperTrail stores an object's state before each recorded event. `compare`
-accepts two explicit endpoints: each may be a PaperTrail version or a clean,
-persisted model instance representing current database state. It reports only
-their net difference:
+`compare` accepts two explicit endpoints: each may be a PaperTrail version or a
+clean, persisted model instance representing current database state. It reports
+only their net difference:
 
 ```ruby
 diff = PaperTrailDiff.compare(article.versions[1], article.versions[4])
