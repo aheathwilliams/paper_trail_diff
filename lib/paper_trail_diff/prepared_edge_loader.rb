@@ -164,13 +164,15 @@ module PaperTrailDiff
       { model_class.name.to_s => group }
     end
 
+    # Keyed rather than scanned so that a wide edge stays linear in its width.
     #: (Array[Array[untyped]]) -> Hash[String, Array[untyped]]
     def group_ids_by_owner(pairs)
-      grouped = {} #: Hash[String, Array[untyped]]
-      pairs.each_with_object(grouped) do |(owner_id, child_id), result|
-        ids = result[owner_id.to_s] ||= []
-        ids << child_id unless ids.include?(child_id)
+      grouped = {} #: Hash[String, Hash[untyped, true]]
+      pairs.each do |owner_id, child_id|
+        ids = grouped[owner_id.to_s] ||= {} #: Hash[untyped, true]
+        ids[child_id] = true
       end
+      grouped.transform_values(&:keys)
     end
 
     #: (Hash[String, Array[untyped]], Hash[String, Array[untyped]]) -> Hash[String, Array[untyped]]

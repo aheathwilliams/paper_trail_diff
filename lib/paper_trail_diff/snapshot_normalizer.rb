@@ -53,6 +53,7 @@ module PaperTrailDiff
       @traversal = traversal
       @pool = pool
       @structural_columns = {} #: Hash[String, Array[String]]
+      @excluded_attributes = {} #: Hash[Array[untyped], Array[String]]
     end
 
     #: (untyped, reifier: untyped) -> RecordSnapshot?
@@ -86,6 +87,7 @@ module PaperTrailDiff
     # @rbs @traversal: AssociationTraversal
     # @rbs @pool: SnapshotPool
     # @rbs @structural_columns: Hash[String, Array[String]]
+    # @rbs @excluded_attributes: Hash[Array[untyped], Array[String]]
 
     #: (untyped, AssociationTree, String, untyped, Array[untyped]) -> RecordSnapshot?
     def normalize_record(record, tree, path, reifier, reflections)
@@ -107,15 +109,25 @@ module PaperTrailDiff
       attributes
     end
 
+    # Every input is fixed for one model class at one selected path, and the
+    # path's structural columns are recorded before its records normalize, so
+    # this is resolved once instead of per record per boundary.
     #: (untyped, Array[untyped], String) -> Array[String]
     def excluded_attributes(record, reflections, path)
-      primary_key = record.class.primary_key #: untyped
+      model_class = record.class
+      @excluded_attributes[[model_class, path]] ||=
+        build_excluded_attributes(model_class, reflections, path)
+    end
+
+    #: (untyped, Array[untyped], String) -> Array[String]
+    def build_excluded_attributes(model_class, reflections, path)
+      primary_key = model_class.primary_key #: untyped
       primary_keys = primary_key.is_a?(Array) ? primary_key : [primary_key]
       # @type var primary_keys: Array[untyped]
       primary_keys = primary_keys.map { |key| key.to_s } # rubocop:disable Style/SymbolProc
       ignored = @ignore_policy.attributes_for(path)
       structural = @structural_columns.fetch(path, [])
-      (primary_keys + ignored + relationship_columns(reflections) + structural).uniq
+      (primary_keys + ignored + relationship_columns(reflections) + structural).uniq.freeze
     end
 
     #: (Array[untyped]) -> Array[String]

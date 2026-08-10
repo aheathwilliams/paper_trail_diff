@@ -64,6 +64,7 @@ module PaperTrailDiff
     # : (untyped, Array[untyped], ?owners: Hash[String, Array[untyped]]?) -> Hash[String, Hash[Symbol, untyped]]
     def group_for: (untyped, Array[untyped], ?owners: Hash[String, Array[untyped]]?) -> Hash[String, Hash[Symbol, untyped]]
 
+    # Keyed rather than scanned so that a wide edge stays linear in its width.
     # : (Array[Array[untyped]]) -> Hash[String, Array[untyped]]
     def group_ids_by_owner: (Array[Array[untyped]]) -> Hash[String, Array[untyped]]
 
