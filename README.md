@@ -141,10 +141,19 @@ diff.to_h
 
 Intermediate edits do not affect `compare`. If a title changes and later
 returns to its original value, endpoint comparison reports no title change.
-A `create` version reifies to `nil`; comparing it with a record state produces
-a structured `record_presence_change` instead of fake scalar changes. For
-ordinary updates, `record_presence_change` is `nil`, meaning the root record is
-present at both endpoints; scalar changes remain under `attributes`.
+
+`record_presence_change` reports whether the root record *existed* at each
+endpoint, and is `nil` for the ordinary case where it existed at both. It is
+populated when one endpoint reifies to `nil` — most often a `create` version,
+whose pre-change state is the absence of the record — and it then carries whole
+`RecordSnapshot` values rather than fake scalar changes from `nil`.
+
+Destroying the root record is not reported this way, and the reason follows
+from the [pre-change model](#how-papertrail-records-state): the state *at* a
+`destroy` version is the state immediately before the deletion, so the record
+is still present there. A comparison ending at a `destroy` version reports that
+last edit, not the deletion. Deleting a *selected child* is reported normally,
+as a `removed` member of its parent's collection.
 
 Pass the record explicitly when the desired endpoint is current state:
 
@@ -730,6 +739,29 @@ when join attributes or join mutations must appear as first-class history.
 
 ## Result objects
 
+Every level of a result separates the same two kinds of change in the same way:
+
+| | a record appears or disappears | a record stays and its fields change |
+| --- | --- | --- |
+| the root record | `record_presence_change` | `attributes`, `associations` |
+| `has_many`, HABTM | `added`, `removed` | `changed` |
+| `belongs_to`, `has_one` | `relationship` | `changed` |
+
+The left column carries whole `RecordSnapshot` values; the right column carries
+field-level `ValueChange` deltas. That split is deliberate. A record that has
+just appeared has no previous value for any of its fields, so reporting one
+`nil` to value change per attribute would both add noise and blur the
+difference between "this field was edited" and "this record did not exist".
+
+The consequence is that reading a result tree directly means branching on which
+column applies: a created record's state is under
+`record_presence_change.to.attributes`, an edited record's is under
+`attributes`. Consumers that would rather not branch should use
+[`each_entry`](#traverse-result-trees), which flattens both into one stream —
+an edit arrives as `attribute_changed` carrying a `ValueChange`, and a created
+record's fields arrive as `attribute_included` entries carrying values with
+`state: :after`.
+
 The public result types are:
 
 - `PaperTrailDiff::Diff`
@@ -775,6 +807,10 @@ and PT-AT can reconstruct. In particular:
 - HABTM membership is limited to the join snapshots PT-AT recorded in
   `version_associations`; historical target attributes require versioned target
   models, otherwise PT-AT may return live target state;
+- destroying the root record is not reported as a presence change, because the
+  state recorded at a `destroy` version is the state before the deletion and no
+  later boundary exists; select the record as an association of its parent when
+  its removal must appear in a result;
 - `timeline` and `analyze` are bounded by root versions; `activity_timeline`
   adds recorded descendant boundaries and may terminate at an explicitly passed
   current record, while a fully historical result still requires a later root
