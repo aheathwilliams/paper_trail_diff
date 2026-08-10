@@ -172,6 +172,24 @@ RSpec.describe PaperTrailDiff::Engine do
     )
   end
 
+  it 'reports aligned collection changes in deterministic identity order' do
+    before_three = snapshot(type: 'Comment', id: 3, attributes: { body: 'Before 3' })
+    after_three = snapshot(type: 'Comment', id: 3, attributes: { body: 'After 3' })
+    before_ten = snapshot(type: 'Comment', id: 10, attributes: { body: 'Before 10' })
+    after_ten = snapshot(type: 'Comment', id: 10, attributes: { body: 'After 10' })
+    from = snapshot(
+      type: 'Article', id: 1, attributes: {},
+      associations: { comments: association(:has_many, before_three, before_ten) }
+    )
+    to = snapshot(
+      type: 'Article', id: 1, attributes: {},
+      associations: { comments: association(:has_many, after_three, after_ten) }
+    )
+    changed = described_class.compare(from, to).associations.fetch('comments').changed
+
+    expect(changed.map { |change| change.record.id }).to eq([10, 3])
+  end
+
   it 'treats HABTM as a collection while preserving its macro kind' do
     removed = snapshot(type: 'Tag', id: 1, attributes: { name: 'Removed' })
     before = snapshot(type: 'Tag', id: 2, attributes: { name: 'Before' })
@@ -300,6 +318,21 @@ RSpec.describe PaperTrailDiff::Engine do
       associations: { comments: association(:has_many, duplicate, duplicate) }
     )
     to = snapshot(type: 'Article', id: 1, attributes: {})
+
+    expect { described_class.compare(from, to) }
+      .to raise_error(ArgumentError, /duplicate record identity/)
+  end
+
+  it 'rejects aligned duplicate collection identities on the fast path' do
+    duplicate = snapshot(type: 'Comment', id: 1, attributes: {})
+    from = snapshot(
+      type: 'Article', id: 1, attributes: {},
+      associations: { comments: association(:has_many, duplicate, duplicate) }
+    )
+    to = snapshot(
+      type: 'Article', id: 1, attributes: {},
+      associations: { comments: association(:has_many, duplicate, duplicate) }
+    )
 
     expect { described_class.compare(from, to) }
       .to raise_error(ArgumentError, /duplicate record identity/)

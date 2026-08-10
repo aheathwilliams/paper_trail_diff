@@ -22,6 +22,8 @@ project follows [Semantic Versioning](https://semver.org/).
   README and quickstart examples.
 - Reuse the live graph loaded by `compare_many` while preparing historical
   association state, and defer root version loading until an edge needs it.
+- Avoid rebuilding general collection identity indexes for activity steps whose
+  immutable collection snapshots retain the same ordered membership.
 - Limit automatic CI to pull requests and `main` pushes, and cancel superseded
   runs for the same pull request or ref.
 

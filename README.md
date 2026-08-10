@@ -359,9 +359,15 @@ state also retains later successor versions for selected identities because a
 PaperTrail version is a pre-change snapshot and may be the only correct state
 for an earlier boundary. Memory therefore scales with relevant selected
 history, not only with the number of returned steps. Keep requested paths and
-ranges intentional. For large histories, applications should give the database
-a matching composite index. A typical PaperTrail installation can add one
-without making it a requirement of this gem:
+ranges intentional. An activity timeline must also emit a diff for every
+selected event. Repeated events within one wide collection can therefore do
+work proportional to the number of events times the collection width even when
+the SQL query count is constant. Bound or paginate unusually wide activity
+ranges in latency-sensitive requests.
+
+For large histories, applications should give the database a matching
+composite index. A typical PaperTrail installation can add one without making
+it a requirement of this gem:
 
 ```ruby
 add_index :versions, %i[item_type item_id created_at id],

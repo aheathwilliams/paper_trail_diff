@@ -985,7 +985,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
 
   it 'advances ordinary child updates without per-event live-record queries' do
     article = TrackedArticle.create!(title: 'Serialized activity changes')
-    comments = 30.times.map do |index|
+    comments = 100.times.map do |index|
       article.comments.create!(body: "Approval #{index}")
     end
     before = boundary_for(article)

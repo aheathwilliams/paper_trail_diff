@@ -1,0 +1,53 @@
+# Generated from lib/paper_trail_diff/collection_comparator.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Compares collection snapshots with a low-allocation path for stable membership.
+  class CollectionComparator
+    # : (AssociationSnapshot, AssociationSnapshot, record_comparer: untyped) -> void
+    def initialize: (AssociationSnapshot, AssociationSnapshot, record_comparer: untyped) -> void
+
+    # : () -> CollectionAssociationDiff
+    def call: () -> CollectionAssociationDiff
+
+    private
+
+    @from: AssociationSnapshot
+
+    @record_comparer: untyped
+
+    @to: AssociationSnapshot
+
+    # : () -> Array[RecordChange]?
+    def aligned_changes: () -> Array[RecordChange]?
+
+    # : () -> Array[[RecordSnapshot, RecordSnapshot]]?
+    def aligned_changed_pairs: () -> Array[[ RecordSnapshot, RecordSnapshot ]]?
+
+    # : (Array[RecordSnapshot], Array[RecordSnapshot]) -> Array[[RecordSnapshot, RecordSnapshot]]?
+    def collect_aligned_pairs: (Array[RecordSnapshot], Array[RecordSnapshot]) -> Array[[ RecordSnapshot, RecordSnapshot ]]?
+
+    # : () -> CollectionAssociationDiff
+    def indexed_difference: () -> CollectionAssociationDiff
+
+    # : (added: Array[RecordSnapshot], removed: Array[RecordSnapshot], changed: Array[RecordChange]) -> CollectionAssociationDiff
+    def difference: (added: Array[RecordSnapshot], removed: Array[RecordSnapshot], changed: Array[RecordChange]) -> CollectionAssociationDiff
+
+    # : (Hash[identity, RecordSnapshot], Hash[identity, RecordSnapshot]) -> Array[RecordSnapshot]
+    def records_missing_from: (Hash[identity, RecordSnapshot], Hash[identity, RecordSnapshot]) -> Array[RecordSnapshot]
+
+    # : (Hash[identity, RecordSnapshot], Hash[identity, RecordSnapshot]) -> Array[RecordChange]
+    def changed_records: (Hash[identity, RecordSnapshot], Hash[identity, RecordSnapshot]) -> Array[RecordChange]
+
+    # : (Array[RecordSnapshot]) -> Hash[identity, RecordSnapshot]
+    def index_records: (Array[RecordSnapshot]) -> Hash[identity, RecordSnapshot]
+
+    # : (Array[identity]) -> Array[identity]
+    def sorted_identities: (Array[identity]) -> Array[identity]
+
+    # : (identity) -> Array[untyped]
+    def sortable_identity: (identity) -> Array[untyped]
+
+    # : (identity) -> void
+    def raise_duplicate_identity!: (identity) -> void
+  end
+end

@@ -124,51 +124,11 @@ module PaperTrailDiff
 
       #: (AssociationSnapshot, AssociationSnapshot) -> CollectionAssociationDiff
       def compare_collection(from_association, to_association)
-        from_records = index_records(from_association.records)
-        to_records = index_records(to_association.records)
-
-        CollectionAssociationDiff.new(
-          kind: from_association.kind,
-          added: records_missing_from(to_records, from_records),
-          removed: records_missing_from(from_records, to_records),
-          changed: changed_records(from_records, to_records)
-        )
-      end
-
-      #: (Hash[identity, RecordSnapshot], Hash[identity, RecordSnapshot]) -> Array[RecordSnapshot]
-      def records_missing_from(records, other_records)
-        identities = sorted_identities(records.keys - other_records.keys)
-        identities.map { |identity| records.fetch(identity) }
-      end
-
-      #: (Hash[identity, RecordSnapshot], Hash[identity, RecordSnapshot]) -> Array[RecordChange]
-      def changed_records(from_records, to_records)
-        sorted_identities(from_records.keys & to_records.keys).filter_map do |identity|
-          from_record = from_records.fetch(identity)
-          to_record = to_records.fetch(identity)
-          next if from_record.equal?(to_record)
-
-          compare_record(from_record, to_record)
-        end
-      end
-
-      #: (Array[RecordSnapshot]) -> Hash[Array[untyped], RecordSnapshot]
-      def index_records(records)
-        index = {} #: Hash[identity, RecordSnapshot]
-        records.each do |record|
-          identity = record.identity
-          if index.key?(identity)
-            raise ArgumentError, "duplicate record identity: #{identity.inspect}"
-          end
-
-          index[identity] = record
-        end
-        index
-      end
-
-      #: (Array[Array[untyped]]) -> Array[Array[untyped]]
-      def sorted_identities(identities)
-        identities.sort_by { |type, id| [type, id.inspect] }
+        CollectionComparator.new(
+          from_association,
+          to_association,
+          record_comparer: method(:compare_record)
+        ).call
       end
 
       #: (RecordSnapshot?, RecordSnapshot?) -> bool
