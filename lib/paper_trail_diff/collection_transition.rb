@@ -7,9 +7,12 @@ module PaperTrailDiff
     attr_reader :before #: RecordSnapshot?
     attr_reader :after #: RecordSnapshot?
 
+    # The origin is recorded by serial rather than by reference, because
+    # holding it would retain every earlier snapshot at the same path for the
+    # whole timeline.
     #: (from: AssociationSnapshot, before: RecordSnapshot?, after: RecordSnapshot?) -> void
     def initialize(from:, before:, after:)
-      @from_object_id = from.object_id
+      @from_serial = from.serial
       @before = before
       @after = after
       freeze
@@ -17,9 +20,9 @@ module PaperTrailDiff
 
     #: (AssociationSnapshot) -> bool
     def from?(association)
-      @from_object_id == association.object_id
+      @from_serial == association.serial
     end
 
-    # @rbs @from_object_id: Integer
+    # @rbs @from_serial: Integer
   end
 end

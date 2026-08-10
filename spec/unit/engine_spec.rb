@@ -236,6 +236,24 @@ RSpec.describe PaperTrailDiff::Engine do
     expect(change.attributes.fetch('body').to_h).to eq(from: 'Before', to: 'After')
   end
 
+  it 'applies a collection transition only to the snapshot it was carried from' do
+    before = snapshot(type: 'Comment', id: 2, attributes: { body: 'Before' })
+    after = snapshot(type: 'Comment', id: 2, attributes: { body: 'After' })
+    from_association = association(:has_many, before)
+    equivalent = association(:has_many, before)
+    to_association = from_association.transition_to(
+      [after],
+      before: before,
+      after: after,
+      membership_preserved: true
+    )
+
+    expect(to_association.transition_from(from_association)).not_to be_nil
+    # Same kind and same records, but not the snapshot the transition recorded.
+    expect(to_association.transition_from(equivalent)).to be_nil
+    expect(from_association.serial).not_to eq(equivalent.serial)
+  end
+
   it 'reports additions and removals from adjacent collection transitions' do
     existing = snapshot(type: 'Comment', id: 1, attributes: {})
     transient = snapshot(type: 'Comment', id: 2, attributes: {})

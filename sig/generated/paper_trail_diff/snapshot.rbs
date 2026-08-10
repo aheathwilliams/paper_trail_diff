@@ -36,12 +36,32 @@ module PaperTrailDiff
       def index: (Array[RecordSnapshot]) -> CollectionIdentityIndex
     end
 
+    # Identifies one snapshot for internal carry-forward. A transition cannot
+    # hold its origin without retaining every earlier snapshot at that path,
+    # and `object_id` is only guaranteed unique among live objects, so Ruby may
+    # hand a collected snapshot's id to a later one.
+    class SerialSequence
+      # : () -> void
+      def initialize: () -> void
+
+      # : () -> Integer
+      def next_serial: () -> Integer
+
+      @counter: Integer
+
+      @mutex: Thread::Mutex
+    end
+
+    SERIALS: untyped
+
     # : (Symbol) -> bool
     def self.collection_kind?: (Symbol) -> bool
 
     attr_reader kind: Symbol
 
     attr_reader records: Array[RecordSnapshot]
+
+    attr_reader serial: Integer
 
     # : (kind: Symbol, records: Array[RecordSnapshot], ?identity_index_cache: untyped, ?transition: CollectionTransition?) -> void
     def initialize: (kind: Symbol, records: Array[RecordSnapshot], ?identity_index_cache: untyped, ?transition: CollectionTransition?) -> void
