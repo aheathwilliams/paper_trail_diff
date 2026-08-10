@@ -1366,6 +1366,25 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     expect(unchanged).to equal(previous)
   end
 
+  it 'reuses immutable activity routes for repeated event types' do
+    tree = PaperTrailDiff::AssociationTree.build(['comments.replies'])
+    finder = PaperTrailDiff::ActivityEventRouteFinder.new(
+      PaperTrailDiff::AssociationTraversal.new(tree)
+    )
+
+    first = finder.collection_routes(TrackedArticle, tree, 'TrackedReply')
+    repeated = finder.collection_routes(TrackedArticle, tree, 'TrackedReply')
+
+    expect(repeated).to equal(first)
+    expect(first).to be_frozen
+    expect(first).to all(be_frozen)
+    expect(first.flat_map(&:itself)).to all(be_frozen)
+
+    other_type = finder.collection_routes(TrackedArticle, tree, 'TrackedComment')
+    expect(other_type).not_to equal(first)
+    expect(other_type).to be_frozen
+  end
+
   it 'reuses equal immutable nodes and short-circuits shared snapshot comparisons' do
     pool = PaperTrailDiff::SnapshotPool.new
     record = PaperTrailDiff::RecordSnapshot.new(

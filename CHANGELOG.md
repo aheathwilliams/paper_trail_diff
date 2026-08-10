@@ -10,6 +10,8 @@ project follows [Semantic Versioning](https://semver.org/).
 - Split activity-event reconstruction, route discovery, relationship matching,
   collection mutation, and `belongs_to` target application into focused
   internal collaborators without changing result shapes.
+- Reuse immutable activity-event routes and cached branch components across
+  repeated event types to reduce timeline allocation overhead.
 
 ## [0.3.0] - 2026-08-10
 

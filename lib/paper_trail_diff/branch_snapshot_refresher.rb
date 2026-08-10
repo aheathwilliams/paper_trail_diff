@@ -159,6 +159,8 @@ module PaperTrailDiff
 
     #: (Array[String]) -> [AssociationTree, SnapshotNormalizer]
     def components(branches)
+      return @components[branches] if @components.key?(branches)
+
       key = branches.sort.freeze
       @components[key] ||= build_components(key)
     end
