@@ -3,6 +3,38 @@
 All notable changes to this project will be documented in this file. The
 project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- Rebuild prepared scalar state with direct attribute writes so a model that
+  overrides an attribute writer reconstructs the state PaperTrail recorded
+  instead of reapplying the override.
+
+### Changed
+
+- Resolve a boundary's prepared record state by chronological search and an
+  indexed boundary transaction instead of scanning a record's versions, so
+  timelines over long single-record histories stay linear in their step count.
+- Bound prepared scalar history at the selected range plus one trailing version
+  per identity, instead of every version recorded between the range and the
+  present, so a short range early in a long history no longer pays for the
+  history after it.
+- Document that `timeline` and `analyze(activity: true)` produce the same
+  root-checkpoint steps through different reconstruction strategies, and when
+  each one is cheaper.
+- Borrow a connection through `with_connection` where Active Record provides
+  it, so applications that opt into deprecating permanent checkouts no longer
+  see a deprecation warning from association candidate selection.
+- Identify carried-forward collection snapshots and per-pass reification by
+  an owned serial and by record identity, rather than by `object_id`, which
+  Ruby only guarantees to be unique among live objects.
+- Retain activity-event routes for every event type a timeline visits, rather
+  than only the most recent one, so interleaved descendant types stop
+  rediscovering the same routes.
+- Resolve excluded attributes once per model class and selected path, and key
+  historical child identities instead of rescanning them.
+
 ## [0.3.1] - 2026-08-10
 
 ### Fixed
