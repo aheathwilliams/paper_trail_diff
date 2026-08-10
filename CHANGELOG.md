@@ -45,6 +45,11 @@ project follows [Semantic Versioning](https://semver.org/).
 - Limit automatic CI to pull requests and `main` pushes, and cancel superseded
   runs for the same pull request or ref.
 
+### Fixed
+
+- Supply TZInfo's timezone database to the test bundle so zoned-time coverage
+  runs on Windows as well as systems with a native zoneinfo database.
+
 ## [0.2.0] - 2026-08-09
 
 ### Added
