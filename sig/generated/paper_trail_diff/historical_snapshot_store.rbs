@@ -27,6 +27,8 @@ module PaperTrailDiff
 
     private
 
+    @live_graph_collector: LiveGraphCollector
+
     @normalizer: SnapshotNormalizer
 
     @prepared_histories: Hash[Array[untyped], PreparedHistory]

@@ -1,0 +1,27 @@
+# Generated from lib/paper_trail_diff/live_graph_collector.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Flattens an already-preloaded, explicitly bounded live association graph.
+  class LiveGraphCollector
+    # : (tree: AssociationTree, traversal: AssociationTraversal) -> void
+    def initialize: (tree: AssociationTree, traversal: AssociationTraversal) -> void
+
+    # : (Array[untyped]) -> Array[untyped]
+    def call: (Array[untyped]) -> Array[untyped]
+
+    private
+
+    @traversal: AssociationTraversal
+
+    @tree: AssociationTree
+
+    # : (Array[untyped], AssociationTree, path: String, into: Hash[Array[untyped], untyped]) -> void
+    def collect: (Array[untyped], AssociationTree, path: String, into: Hash[Array[untyped], untyped]) -> void
+
+    # : (untyped, Array[untyped], AssociationTree, path: String, into: Hash[Array[untyped], untyped]) -> void
+    def collect_group: (untyped, Array[untyped], AssociationTree, path: String, into: Hash[Array[untyped], untyped]) -> void
+
+    # : (Array[untyped], untyped) -> Array[untyped]
+    def children_for: (Array[untyped], untyped) -> Array[untyped]
+  end
+end

@@ -45,8 +45,8 @@ module PaperTrailDiff
 
   # Request-scoped scalar history loaded once per model identity.
   class PreparedRecordIndex
-    # : (untyped) -> void
-    def initialize: (untyped) -> void
+    # : (untyped, ?live_records: Array[untyped]) -> void
+    def initialize: (untyped, ?live_records: Array[untyped]) -> void
 
     # : (untyped, Array[untyped]) -> void
     def load: (untyped, Array[untyped]) -> void
@@ -61,6 +61,8 @@ module PaperTrailDiff
     def loaded?: (untyped, untyped) -> bool
 
     private
+
+    @seeded_live_records: Hash[Array[String], untyped]
 
     @series: Hash[Array[String], PreparedRecordSeries]
 
@@ -77,6 +79,9 @@ module PaperTrailDiff
 
     # : (untyped, Array[untyped]) -> Array[untyped]
     def versions_for: (untyped, Array[untyped]) -> Array[untyped]
+
+    # : (untyped, Array[untyped]) -> Array[untyped]
+    def available_live_records: (untyped, Array[untyped]) -> Array[untyped]
 
     # : (untyped, Array[untyped]) -> Array[untyped]
     def live_records_for: (untyped, Array[untyped]) -> Array[untyped]

@@ -10,6 +10,7 @@ module PaperTrailDiff
       @traversal = traversal
       @normalizer = normalizer
       @preparer = preparer
+      @live_graph_collector = LiveGraphCollector.new(tree: tree, traversal: traversal)
       @snapshots = {} #: Hash[Array[untyped], RecordSnapshot?]
       @prepared_history = nil #: PreparedHistory?
       @prepared_histories = {} #: Hash[Array[untyped], PreparedHistory]
@@ -103,6 +104,7 @@ module PaperTrailDiff
     # @rbs @traversal: AssociationTraversal
     # @rbs @normalizer: SnapshotNormalizer
     # @rbs @preparer: untyped
+    # @rbs @live_graph_collector: LiveGraphCollector
     # @rbs @snapshots: Hash[Array[untyped], RecordSnapshot?]
     # @rbs @prepared_history: PreparedHistory?
     # @rbs @prepared_histories: Hash[Array[untyped], PreparedHistory]
@@ -130,7 +132,8 @@ module PaperTrailDiff
         root_versions: root_versions,
         start_at: root_versions.map(&:created_at).min,
         tree: @tree,
-        traversal: @traversal
+        traversal: @traversal,
+        live_records: @live_graph_collector.call(records)
       ).call
       root_versions.each { |version| @prepared_histories[context_key(version)] = history }
     end

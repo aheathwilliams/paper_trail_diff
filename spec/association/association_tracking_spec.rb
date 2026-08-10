@@ -248,9 +248,10 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     expect(large.fetch(:result).values).to all(satisfy do |diff|
       diff.associations.fetch('comments').changed.length == 1
     end)
-    expect(large_sql.length).to eq(small_sql.length).and eq(8)
-    expect(large_sql.count { |payload| payload[:name] == 'TrackedArticle Load' }).to eq(2)
-    expect(large_sql.count { |payload| payload[:name] == 'TrackedComment Load' }).to eq(2)
+    expect(large_sql.length).to eq(small_sql.length).and eq(5)
+    expect(large_sql.count { |payload| payload[:name] == 'PaperTrail::Version Load' }).to eq(1)
+    expect(large_sql.count { |payload| payload[:name] == 'TrackedArticle Load' }).to eq(1)
+    expect(large_sql.count { |payload| payload[:name] == 'TrackedComment Load' }).to eq(1)
   end
 
   it 'validates malformed collection input before loading endpoints' do

@@ -4,20 +4,21 @@
 module PaperTrailDiff
   # Expands the explicit association tree into a request-scoped PreparedHistory.
   class PreparedHistoryLoader
-    #: (untyped, root_versions: Array[untyped], tree: AssociationTree, traversal: AssociationTraversal, ?root_ids: Array[untyped], ?start_at: untyped) -> void
+    #: (untyped, root_versions: Array[untyped], tree: AssociationTree, traversal: AssociationTraversal, ?root_ids: Array[untyped], ?start_at: untyped, ?live_records: Array[untyped]) -> void
     def initialize( # rubocop:disable Metrics/ParameterLists
       record,
       root_versions:,
       tree:,
       traversal:,
       root_ids: [record.id],
-      start_at: root_versions.first.created_at
+      start_at: root_versions.first.created_at,
+      live_records: []
     )
       @record = record
       @root_ids = root_ids
       @tree = tree
       @traversal = traversal
-      @records = PreparedRecordIndex.new(start_at)
+      @records = PreparedRecordIndex.new(start_at, live_records: live_records)
       @history = PreparedHistory.new(@records)
       @edges = PreparedEdgeLoader.new(@records, root_versions)
       @prepared = {} #: Hash[Array[String], Array[String]]
@@ -42,7 +43,6 @@ module PaperTrailDiff
 
     #: (untyped, Array[untyped], AssociationTree, path: String) -> void
     def load_node(model_class, ids, tree, path:)
-      load_records(model_class, ids)
       @traversal.reflections_for(model_class, tree, path: path).each do |reflection|
         subtree = tree.child(reflection.name)
         next unless subtree
@@ -82,6 +82,7 @@ module PaperTrailDiff
       missing = unprepared_ids(owner_class, owner_ids, reflection)
       return @history.edge(owner_class, reflection) if missing.empty?
 
+      load_records(owner_class, missing) if reflection.macro == :belongs_to
       groups, memberships = @edges.call(owner_class, missing, reflection)
       @history.merge_edge(owner_class, reflection, groups)
       @history.register_habtm(owner_class, reflection, memberships) if memberships

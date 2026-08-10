@@ -20,6 +20,8 @@ project follows [Semantic Versioning](https://semver.org/).
 
 - Teach timeline filtering through the shared `Step#empty?` protocol in the
   README and quickstart examples.
+- Reuse the live graph loaded by `compare_many` while preparing historical
+  association state, and defer root version loading until an edge needs it.
 - Limit automatic CI to pull requests and `main` pushes, and cancel superseded
   runs for the same pull request or ref.
 

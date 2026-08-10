@@ -82,6 +82,29 @@ RSpec.describe PaperTrailDiff::PreparedRecordIndex do
     expect(repeated_queries).to be_zero
   end
 
+  it 'reuses seeded live records while querying any identities not supplied' do
+    article = TrackedArticle.create!(title: 'Seeded live records')
+    authors = 3.times.map { |index| TrackedAuthor.create!(name: "Author #{index}") }
+    before = boundary_for(article)
+    authors.each { |author| author.update!(name: "#{author.name} updated") }
+    index = described_class.new(before, live_records: authors.first(2))
+    statements = []
+    callback = proc do |_name, _start, _finish, _id, payload|
+      statements << payload[:name] unless payload[:name] == 'SCHEMA' || payload[:cached]
+    end
+
+    ActiveSupport::Notifications.subscribed(callback, 'sql.active_record') do
+      index.load(TrackedAuthor, authors.map(&:id))
+    end
+
+    expect(statements.count { |name| name == 'PaperTrail::Version Load' }).to eq(1)
+    expect(statements.count { |name| name == 'TrackedAuthor Load' }).to eq(1)
+    expect(index.record_before(TrackedAuthor, authors.first.id, before).name)
+      .to eq('Author 0')
+    expect(index.record_before(TrackedAuthor, authors.last.id, before).name)
+      .to eq('Author 2')
+  end
+
   it 'treats versions from the boundary transaction as pre-change state' do
     article = TrackedArticle.create!(title: 'Transaction boundary')
     author = TrackedAuthor.create!(name: 'Before transaction')

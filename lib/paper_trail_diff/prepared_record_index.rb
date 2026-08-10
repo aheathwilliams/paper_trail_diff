@@ -80,9 +80,12 @@ module PaperTrailDiff
 
   # Request-scoped scalar history loaded once per model identity.
   class PreparedRecordIndex
-    #: (untyped) -> void
-    def initialize(start_at)
+    #: (untyped, ?live_records: Array[untyped]) -> void
+    def initialize(start_at, live_records: [])
       @start_time = start_at
+      @seeded_live_records = live_records.to_h do |record|
+        [identity(record.class, record.id), record]
+      end
       @series = {} #: Hash[Array[String], PreparedRecordSeries]
     end
 
@@ -92,7 +95,9 @@ module PaperTrailDiff
       return if missing.empty?
 
       versions = versions_for(model_class, missing).group_by { |version| version.item_id.to_s }
-      live = live_records_for(model_class, missing).to_h { |record| [record.id.to_s, record] }
+      live = available_live_records(model_class, missing).to_h do |record|
+        [record.id.to_s, record]
+      end
       missing.each { |id| add_series(model_class, id, versions, live) }
     end
 
@@ -114,6 +119,7 @@ module PaperTrailDiff
     private
 
     # @rbs @start_time: untyped
+    # @rbs @seeded_live_records: Hash[Array[String], untyped]
     # @rbs @series: Hash[Array[String], PreparedRecordSeries]
 
     #: (untyped, untyped) -> Array[String]
@@ -144,7 +150,16 @@ module PaperTrailDiff
     end
 
     #: (untyped, Array[untyped]) -> Array[untyped]
+    def available_live_records(model_class, ids)
+      seeded = ids.filter_map { |id| @seeded_live_records[identity(model_class, id)] }
+      missing = ids.reject { |id| @seeded_live_records.key?(identity(model_class, id)) }
+      seeded.concat(live_records_for(model_class, missing))
+    end
+
+    #: (untyped, Array[untyped]) -> Array[untyped]
     def live_records_for(model_class, ids)
+      return [] if ids.empty?
+
       primary_key = model_class.primary_key
       return [] if primary_key.is_a?(Array)
 
