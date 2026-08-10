@@ -5,6 +5,15 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Close an activity timeline that ends at the root's own `destroy` version with
+  a step into a new `kind: :destroyed` boundary, reporting the record's removal
+  as a `record_presence_change` to `nil`. `ActivityBoundary` gains a
+  `destroyed?` predicate, so consumers branching only on `version?` should
+  handle the third kind. `compare`, `timeline`, and `analyze`'s endpoint diff
+  are unchanged, and a `within:` range still requires a later root version.
+
 ### Fixed
 
 - Rebuild prepared scalar state with direct attribute writes so a model that

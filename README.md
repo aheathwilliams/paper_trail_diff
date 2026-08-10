@@ -153,7 +153,9 @@ from the [pre-change model](#how-papertrail-records-state): the state *at* a
 `destroy` version is the state immediately before the deletion, so the record
 is still present there. A comparison ending at a `destroy` version reports that
 last edit, not the deletion. Deleting a *selected child* is reported normally,
-as a `removed` member of its parent's collection.
+as a `removed` member of its parent's collection, and `activity_timeline`
+reports a destroyed root through a
+[closing removal step](#closing-a-destroyed-root).
 
 Pass the record explicitly when the desired endpoint is current state:
 
@@ -286,7 +288,7 @@ steps.first.to_h
 
 Both timeline types expose `from_boundary`, `to_boundary`, `diff`, and
 `empty?`. A historical boundary has `event`, `whodunnit`, `record`,
-`recorded_at`, `version?`, and `current?` readers. Checkpoint `Step` objects
+`recorded_at`, `version?`, `current?`, and `destroyed?` readers. Checkpoint `Step` objects
 also retain their original `from_version` and `to_version` for callers that
 need custom PaperTrail metadata. Existing `Step#to_h` and
 `ActivityBoundary#to_h` shapes remain unchanged; use the readers for the new
@@ -348,6 +350,41 @@ between its version boundary and the next historical or explicit current
 boundary. Passing `to: article` is what removes the need to touch the parent
 after an ordinary versioned child mutation; current state is still never
 implicit.
+
+### Closing a destroyed root
+
+A `destroy` version is the one boundary whose following state needs no later
+version: the event itself says the record is gone. When an activity timeline
+ends at the root's own `destroy` version, it therefore closes with one more
+step, from that version to a `kind: :destroyed` boundary, whose diff is a
+`record_presence_change` from the record's final state to `nil`:
+
+```ruby
+steps = PaperTrailDiff.activity_timeline(
+  article,
+  from: article.versions.first,
+  to: article.versions.last # a destroy version
+)
+
+removal = steps.last
+removal.to_boundary.destroyed?                  # => true
+removal.to_boundary.kind                        # => :destroyed
+removal.diff.record_presence_change.from        # the state it was deleted in
+removal.diff.record_presence_change.to          # => nil
+```
+
+The removal step's `from_boundary` is the ordinary `kind: :version` boundary
+for the same destroy version, since that boundary still holds the record.
+Boundaries therefore have three kinds — `:version`, `:current`, and
+`:destroyed` — so a consumer that branches on `version?` alone should also
+handle `destroyed?`.
+
+`analyze(activity: true)` reports the same closing step in its
+`activity_timeline`. Its `diff` and `timeline` keep their `compare` and
+`timeline` semantics and do not report the deletion. Selecting a `within:`
+time range still requires a later root version and raises
+`IncompleteTimeRangeError` for a destroyed record; use explicit `from:` and
+`to:` versions for a history that ends in a deletion.
 
 Live-ended HABTM activity is rejected with
 `PaperTrailDiff::UnsupportedLiveActivityError`. HABTM join rows have no model
@@ -807,10 +844,10 @@ and PT-AT can reconstruct. In particular:
 - HABTM membership is limited to the join snapshots PT-AT recorded in
   `version_associations`; historical target attributes require versioned target
   models, otherwise PT-AT may return live target state;
-- destroying the root record is not reported as a presence change, because the
-  state recorded at a `destroy` version is the state before the deletion and no
-  later boundary exists; select the record as an association of its parent when
-  its removal must appear in a result;
+- `compare`, `timeline`, and `analyze`'s endpoint diff do not report the root
+  record's destruction, because the state recorded at a `destroy` version is the
+  state before the deletion; `activity_timeline` closes on a `:destroyed`
+  boundary instead, and a selected child's removal is reported by its parent;
 - `timeline` and `analyze` are bounded by root versions; `activity_timeline`
   adds recorded descendant boundaries and may terminate at an explicitly passed
   current record, while a fully historical result still requires a later root

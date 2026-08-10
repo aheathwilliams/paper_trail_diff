@@ -35,7 +35,7 @@ module PaperTrailDiff
       root_versions = @range.select
       prepare_history(root_versions)
       events = collect_events(root_versions)
-      build_analysis(root_versions, event_history(root_versions, events))
+      build_analysis(root_versions, events, event_history(root_versions, events))
     end
 
     private
@@ -121,6 +121,18 @@ module PaperTrailDiff
       final_snapshot: nil
     )
       history = event_history(root_versions, events, current: current)
+      activity_steps(
+        history,
+        events,
+        final_boundary || destroyed_boundary(root_versions),
+        final_snapshot
+      )
+    end
+
+    # Appends the transition into an explicit closing boundary, which is either
+    # a requested current record or the absence a final root destroy leaves.
+    #: (ActivityHistory, Array[ActivityEvent], ActivityBoundary?, RecordSnapshot?) -> Array[ActivityStep]
+    def activity_steps(history, events, final_boundary, final_snapshot)
       steps = history.steps.dup
       previous_event = events.last
       previous_boundary = ActivityBoundary.from_version(previous_event.version) if previous_event
@@ -134,6 +146,16 @@ module PaperTrailDiff
       steps.freeze
     end
 
+    # A destroyed root has no later version, but its own event states that
+    # nothing follows it, so the removal can still close the timeline.
+    #: (Array[untyped]) -> ActivityBoundary?
+    def destroyed_boundary(root_versions)
+      version = root_versions.last
+      return unless version && version.event.to_s == 'destroy'
+
+      ActivityBoundary.destroyed(version)
+    end
+
     #: (Array[untyped], Array[ActivityEvent], ?current: untyped) -> ActivityHistory
     def event_history(root_versions, events, current: nil)
       ActivityHistoryBuilder.new(
@@ -144,15 +166,20 @@ module PaperTrailDiff
       ).call
     end
 
-    #: (Array[untyped], ActivityHistory) -> Analysis
-    def build_analysis(root_versions, history)
+    # Only the activity view gains the closing removal. The endpoint diff and
+    # the root timeline keep their `compare` and `timeline` semantics, under
+    # which the state at a destroy version is the state before the deletion.
+    #: (Array[untyped], Array[ActivityEvent], ActivityHistory) -> Analysis
+    def build_analysis(root_versions, events, history)
       snapshots = root_versions.map do |version|
         history.root_snapshots.fetch(version_key(version))
       end
       Analysis.new(
         diff: Engine.compare(history.first_snapshot, history.last_snapshot),
         timeline: build_root_steps(root_versions, snapshots),
-        activity_timeline: history.steps
+        activity_timeline: activity_steps(
+          history, events, destroyed_boundary(root_versions), nil
+        )
       )
     end
 

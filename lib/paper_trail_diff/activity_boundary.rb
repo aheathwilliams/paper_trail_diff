@@ -37,6 +37,22 @@ module PaperTrailDiff
           recorded_at: captured_at
         )
       end
+
+      # The state a `destroy` version leaves behind. A version records the state
+      # before its own event, so the boundary built from a destroy version still
+      # holds the record; this one is the absence that follows it.
+      #: (untyped) -> ActivityBoundary
+      def destroyed(version)
+        new(
+          kind: :destroyed,
+          version_id: version.id,
+          item_type: version.item_type,
+          item_id: version.item_id,
+          recorded_at: version.created_at,
+          event: version.event,
+          whodunnit: version.whodunnit
+        )
+      end
     end
 
     #: (kind: Symbol, version_id: untyped, item_type: untyped, item_id: untyped, recorded_at: untyped, ?event: untyped, ?whodunnit: untyped) -> void
@@ -68,6 +84,11 @@ module PaperTrailDiff
     #: () -> bool
     def current?
       kind == :current
+    end
+
+    #: () -> bool
+    def destroyed?
+      kind == :destroyed
     end
 
     #: () -> Hash[Symbol, untyped]
