@@ -5,19 +5,15 @@ module PaperTrailDiff
   # Applies safe descendant event deltas without rebuilding an entire selected branch.
   # rubocop:disable Metrics/ClassLength
   class ActivityEventSnapshotRefresher
-    RECORD_AFTER_HANDLERS = {
-      'create' => :created_record_after,
-      'update' => :updated_record_after
-    }.freeze
-    private_constant :RECORD_AFTER_HANDLERS
-
     #: (traversal: AssociationTraversal, pool: SnapshotPool, components: untyped, ?association_reader: untyped, ?record_transition: untyped) -> void
     def initialize(traversal:, pool:, components:, association_reader: nil, record_transition: nil)
       @traversal = traversal
       @pool = pool
       @components = components
       @association_reader = association_reader || method(:historical_reader)
-      @record_transition = record_transition
+      @record_resolver = ActivityEventRecordResolver.new(record_transition: record_transition)
+      @route_finder = ActivityEventRouteFinder.new(traversal)
+      @relationship = ActivityRelationship.new
     end
 
     #: (untyped, untyped, RecordSnapshot, Array[String], ActivityEvent?) -> [bool, RecordSnapshot?]
@@ -69,7 +65,9 @@ module PaperTrailDiff
     # @rbs @pool: SnapshotPool
     # @rbs @components: untyped
     # @rbs @association_reader: untyped
-    # @rbs @record_transition: untyped
+    # @rbs @record_resolver: ActivityEventRecordResolver
+    # @rbs @route_finder: ActivityEventRouteFinder
+    # @rbs @relationship: ActivityRelationship
 
     #: (Array[Array[untyped]], untyped) -> bool
     def unsafe_through_membership_event?(routes, version)
@@ -189,35 +187,8 @@ module PaperTrailDiff
     end
 
     #: (untyped, AssociationTree, String, ?path: String) -> Array[Array[untyped]]
-    def direct_collection_routes( # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/MethodLength, Metrics/PerceivedComplexity
-      model_class,
-      tree,
-      target_type,
-      path: ''
-    )
-      @traversal.reflections_for(model_class, tree, path: path).flat_map do |reflection|
-        name = reflection.name.to_s
-        subtree = tree.child(name)
-        next [] unless subtree
-
-        child_path = Support.association_path(path, name)
-        route_entry = [name, reflection, subtree, child_path]
-        routes = [] #: Array[Array[untyped]]
-        if reflection.macro == :has_many && !reflection.options[:through] &&
-           reflection.klass.base_class.name.to_s == target_type
-          routes << [route_entry]
-        end
-        unless subtree.empty? || reflection.polymorphic?
-          nested = direct_collection_routes(
-            reflection.klass,
-            subtree,
-            target_type,
-            path: child_path
-          )
-          routes.concat(nested.map { |route| [route_entry, *route] })
-        end
-        routes
-      end
+    def direct_collection_routes(model_class, tree, target_type, path: '')
+      @route_finder.collection_routes(model_class, tree, target_type, path: path)
     end
 
     #: (RecordSnapshot, Array[untyped], untyped, untyped, RecordSnapshot?, ?depth: Integer) -> [RecordSnapshot, bool]
@@ -398,30 +369,8 @@ module PaperTrailDiff
     end
 
     #: (untyped, AssociationTree, String, ?path: String) -> Array[Array[untyped]]
-    def belongs_to_routes( # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/MethodLength, Metrics/PerceivedComplexity
-      model_class,
-      tree,
-      target_type,
-      path: ''
-    )
-      @traversal.reflections_for(model_class, tree, path: path).flat_map do |reflection|
-        name = reflection.name.to_s
-        subtree = tree.child(name)
-        next [] unless subtree
-
-        child_path = Support.association_path(path, name)
-        route_entry = [name, reflection, subtree, child_path]
-        routes = [] #: Array[Array[untyped]]
-        if reflection.macro == :belongs_to && !reflection.polymorphic? &&
-           reflection.klass.base_class.name.to_s == target_type
-          routes << [route_entry]
-        end
-        unless subtree.empty? || reflection.polymorphic?
-          nested = belongs_to_routes(reflection.klass, subtree, target_type, path: child_path)
-          routes.concat(nested.map { |route| [route_entry, *route] })
-        end
-        routes
-      end
+    def belongs_to_routes(model_class, tree, target_type, path: '')
+      @route_finder.belongs_to_routes(model_class, tree, target_type, path: path)
     end
 
     #: (Array[untyped], untyped, SnapshotNormalizer, untyped, untyped) -> RecordSnapshot?
@@ -501,141 +450,46 @@ module PaperTrailDiff
 
     #: (untyped) -> untyped
     def record_after(version)
-      return if version.event.to_s == 'destroy'
-
-      changed_record = changed_record_after(version)
-      return changed_record if changed_record
-
-      successor = version.next
-      record = successor&.reify(dup: true)
-      return record if record
-
-      model_class = Endpoint.model_class(version)
-      criteria = { model_class.primary_key => version.item_id } #: Hash[untyped, untyped]
-      model_class.unscoped.find_by(criteria)
+      @record_resolver.record_after(version)
     end
 
     # PaperTrail create/update versions contain deserialized change pairs, so
     # their post-event records need no successor query.
     #: (untyped) -> untyped
     def changed_record_after(version)
-      handler = RECORD_AFTER_HANDLERS[version.event.to_s]
-      send(handler, version) if handler
+      @record_resolver.changed_record_after(version)
     end
 
     #: (untyped) -> untyped
     def created_record_after(version)
-      model_class = Endpoint.model_class(version)
-      changes = deserialized_changeset(version, model_class)
-      return unless changes.respond_to?(:each) && !changes.empty?
-
-      attributes = after_attributes(changes, model_class)
-      model_class.new(attributes)
+      @record_resolver.created_record_after(version)
     end
 
     #: (untyped) -> untyped
     def updated_record_after(version)
-      record = version.reify(dup: true)
-      changes = deserialized_changeset(version, record&.class)
-      apply_changes(record, changes)
-    end
-
-    #: (untyped, untyped) -> Hash[untyped, untyped]
-    def after_attributes(changes, model_class)
-      names = model_class.attribute_names
-      attributes = {} #: Hash[untyped, untyped]
-      changes.each do |name, values|
-        next unless names.include?(name.to_s)
-
-        attributes[name] = values.last
-      end
-      attributes
-    end
-
-    #: (untyped, untyped) -> untyped
-    def apply_changes(record, changes)
-      return unless record && changes.respond_to?(:each) && !changes.empty?
-
-      changes.each do |name, values|
-        next unless record.has_attribute?(name) && values.respond_to?(:last)
-
-        record[name] = values.last
-      end
-      record
+      @record_resolver.updated_record_after(version)
     end
 
     # Mirrors PaperTrail's changeset deserialization without resolving
     # +version.item+, which would issue one live-record query per event.
     #: (untyped, untyped) -> untyped
     def deserialized_changeset(version, model_class)
-      return unless model_class && version.class.column_names.include?('object_changes')
-
-      paper_trail = Object.const_get(:PaperTrail) #: untyped
-      adapter = paper_trail.config.object_changes_adapter
-      return adapter.load_changeset(version) if adapter.respond_to?(:load_changeset)
-
-      standard_changeset(paper_trail, version, model_class)
-    end
-
-    #: (untyped, untyped, untyped) -> untyped
-    def standard_changeset(paper_trail, version, model_class)
-      raw_changes = version.send(:object_changes_deserialized)
-      active_support = Object.const_get(:ActiveSupport) #: untyped
-      changes = active_support.const_get(:HashWithIndifferentAccess).new(raw_changes)
-      serializers = paper_trail.const_get(:AttributeSerializers)
-      serializers.const_get(:ObjectChangesAttribute).new(model_class).deserialize(changes)
-      changes
+      @record_resolver.deserialized_changeset(version, model_class)
     end
 
     #: (untyped) -> ActivitySnapshotDelta?
     def activity_snapshot_delta(version)
-      return unless version.event.to_s == 'update' && version.object
-
-      transition = @record_transition&.call(version)
-      return unless transition
-
-      ActivitySnapshotDelta.new(
-        before_attributes: transition.fetch(0),
-        after_attributes: transition.fetch(1)
-      )
+      @record_resolver.snapshot_delta(version)
     end
 
     #: (untyped, untyped, RecordSnapshot, ?state: Symbol) -> bool
-    def member_of_owner?(record, reflection, owner, state: :after) # rubocop:disable Metrics/AbcSize
-      foreign_keys = Array(reflection.foreign_key)
-      actual_ids = foreign_keys.map { |key| event_attribute(record, key, state: state) }
-      expected_ids = Array(owner.id)
-      # @type var expected_ids: Array[untyped]
-      # Explicit blocks keep the inline RBS checker from inferring an unusable Proc type.
-      actual = actual_ids.map { |id| id.to_s } # rubocop:disable Style/SymbolProc
-      expected = expected_ids.map { |id| id.to_s } # rubocop:disable Style/SymbolProc
-      return false unless actual == expected
-      return true unless reflection.options[:as]
-
-      type = event_attribute(record, reflection.type, state: state).to_s
-      owner_types = [
-        owner.type.to_s,
-        reflection.active_record.name.to_s,
-        reflection.active_record.base_class.name.to_s
-      ]
-      owner_types.include?(type)
-    end
-
-    #: (untyped, untyped, state: Symbol) -> untyped
-    def event_attribute(record, name, state:)
-      if record.is_a?(ActivitySnapshotDelta)
-        return state == :before ? record.before_value(name) : record.after_value(name)
-      end
-
-      record.public_send(name)
+    def member_of_owner?(record, reflection, owner, state: :after)
+      @relationship.member_of_owner?(record, reflection, owner, state: state)
     end
 
     #: (untyped, untyped, state: Symbol) -> untyped
     def relationship_owner_id(record, reflection, state:)
-      owner_ids = Array(reflection.foreign_key).map do |foreign_key|
-        event_attribute(record, foreign_key, state: state)
-      end
-      owner_ids.one? ? owner_ids.first : owner_ids
+      @relationship.owner_id(record, reflection, state: state)
     end
 
     #: (untyped, untyped, AssociationTree, String, SnapshotNormalizer, untyped, untyped) -> RecordSnapshot?

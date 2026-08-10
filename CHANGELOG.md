@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file. The
 project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- Split activity-event reconstruction, route discovery, and relationship
+  matching into focused internal collaborators without changing result shapes.
+
 ## [0.3.0] - 2026-08-10
 
 ### Added

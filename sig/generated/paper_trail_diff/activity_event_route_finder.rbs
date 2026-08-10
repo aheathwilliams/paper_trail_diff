@@ -1,0 +1,31 @@
+# Generated from lib/paper_trail_diff/activity_event_route_finder.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Finds explicitly selected collection and belongs-to routes for one event type.
+  class ActivityEventRouteFinder
+    # : (AssociationTraversal) -> void
+    def initialize: (AssociationTraversal) -> void
+
+    # : (untyped, AssociationTree, String, ?path: String) -> Array[Array[untyped]]
+    def collection_routes: (untyped, AssociationTree, String, ?path: String) -> Array[Array[untyped]]
+
+    # : (untyped, AssociationTree, String, ?path: String) -> Array[Array[untyped]]
+    def belongs_to_routes: (untyped, AssociationTree, String, ?path: String) -> Array[Array[untyped]]
+
+    private
+
+    @traversal: AssociationTraversal
+
+    # : (untyped, AssociationTree, String, Symbol, path: String) -> Array[Array[untyped]]
+    def routes: (untyped, AssociationTree, String, Symbol, path: String) -> Array[Array[untyped]]
+
+    # : (untyped, AssociationTree, String, Symbol, String) -> Array[Array[untyped]]
+    def routes_for_reflection: (untyped, AssociationTree, String, Symbol, String) -> Array[Array[untyped]]
+
+    # : (untyped, String, Symbol) -> bool
+    def direct_route?: (untyped, String, Symbol) -> bool
+
+    # : (untyped, Symbol) -> bool
+    def supported_direct_reflection?: (untyped, Symbol) -> bool
+  end
+end

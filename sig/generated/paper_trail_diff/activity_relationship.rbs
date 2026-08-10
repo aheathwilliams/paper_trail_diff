@@ -1,0 +1,23 @@
+# Generated from lib/paper_trail_diff/activity_relationship.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Reads event-side foreign keys and matches them to an immutable snapshot owner.
+  class ActivityRelationship
+    # : (untyped, untyped, RecordSnapshot, ?state: Symbol) -> bool
+    def member_of_owner?: (untyped, untyped, RecordSnapshot, ?state: Symbol) -> bool
+
+    # : (untyped, untyped, state: Symbol) -> untyped
+    def owner_id: (untyped, untyped, state: Symbol) -> untyped
+
+    private
+
+    # : (untyped, untyped, state: Symbol) -> Array[String]
+    def relationship_owner_values: (untyped, untyped, state: Symbol) -> Array[String]
+
+    # : (untyped, untyped, state: Symbol) -> untyped
+    def event_attribute: (untyped, untyped, state: Symbol) -> untyped
+
+    # : (untyped, RecordSnapshot) -> Array[String]
+    def owner_types: (untyped, RecordSnapshot) -> Array[String]
+  end
+end

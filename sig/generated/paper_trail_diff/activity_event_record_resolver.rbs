@@ -1,0 +1,44 @@
+# Generated from lib/paper_trail_diff/activity_event_record_resolver.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Reconstructs an event's post-change record or immutable scalar delta.
+  class ActivityEventRecordResolver
+    RECORD_AFTER_HANDLERS: untyped
+
+    # : (?record_transition: untyped) -> void
+    def initialize: (?record_transition: untyped) -> void
+
+    # : (untyped) -> untyped
+    def record_after: (untyped) -> untyped
+
+    # : (untyped) -> ActivitySnapshotDelta?
+    def snapshot_delta: (untyped) -> ActivitySnapshotDelta?
+
+    # : (untyped) -> untyped
+    def changed_record_after: (untyped) -> untyped
+
+    # : (untyped) -> untyped
+    def created_record_after: (untyped) -> untyped
+
+    # : (untyped) -> untyped
+    def updated_record_after: (untyped) -> untyped
+
+    # Mirrors PaperTrail's changeset deserialization without resolving
+    # +version.item+, which would issue one live-record query per event.
+    # : (untyped, untyped) -> untyped
+    def deserialized_changeset: (untyped, untyped) -> untyped
+
+    private
+
+    @record_transition: untyped
+
+    # : (untyped, untyped) -> Hash[untyped, untyped]
+    def after_attributes: (untyped, untyped) -> Hash[untyped, untyped]
+
+    # : (untyped, untyped) -> untyped
+    def apply_changes: (untyped, untyped) -> untyped
+
+    # : (untyped, untyped, untyped) -> untyped
+    def standard_changeset: (untyped, untyped, untyped) -> untyped
+  end
+end
