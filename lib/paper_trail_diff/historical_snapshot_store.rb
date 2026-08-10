@@ -12,6 +12,7 @@ module PaperTrailDiff
       @preparer = preparer
       @snapshots = {} #: Hash[Array[untyped], RecordSnapshot?]
       @prepared_history = nil #: PreparedHistory?
+      @prepared_histories = {} #: Hash[Array[untyped], PreparedHistory]
     end
 
     #: (untyped, Array[untyped], ?start_at: untyped) -> void
@@ -25,6 +26,16 @@ module PaperTrailDiff
         tree: @tree,
         traversal: @traversal
       ).call
+    end
+
+    # Prepares selected history for several roots of the same model class.
+    #: (Array[untyped], Array[untyped]) -> void
+    def prepare_batch(records, root_versions)
+      return if @tree.empty? || records.empty? || root_versions.empty?
+
+      Instrumentation.instrument('prepare_history', batch_payload(records, root_versions)) do
+        register_batch(records, root_versions)
+      end
     end
 
     #: (untyped, untyped) -> RecordSnapshot?
@@ -75,7 +86,7 @@ module PaperTrailDiff
         context_version,
         habtm_version: habtm_version
       )
-      history = @prepared_history
+      history = @prepared_histories[context_key(context_version)] || @prepared_history
       return fallback unless history
 
       PreparedAssociationReifier.new(
@@ -94,6 +105,35 @@ module PaperTrailDiff
     # @rbs @preparer: untyped
     # @rbs @snapshots: Hash[Array[untyped], RecordSnapshot?]
     # @rbs @prepared_history: PreparedHistory?
+    # @rbs @prepared_histories: Hash[Array[untyped], PreparedHistory]
+
+    #: (untyped) -> Array[untyped]
+    def context_key(endpoint)
+      [endpoint.class.name, endpoint.id]
+    end
+
+    #: (Array[untyped], Array[untyped]) -> Hash[Symbol, untyped]
+    def batch_payload(records, root_versions)
+      {
+        root_count: records.length,
+        version_count: root_versions.length,
+        model_type: records.first.class.base_class.name.to_s,
+        batched: true
+      }
+    end
+
+    #: (Array[untyped], Array[untyped]) -> void
+    def register_batch(records, root_versions)
+      history = PreparedHistoryLoader.new(
+        records.first,
+        root_ids: records.map(&:id),
+        root_versions: root_versions,
+        start_at: root_versions.map(&:created_at).min,
+        tree: @tree,
+        traversal: @traversal
+      ).call
+      root_versions.each { |version| @prepared_histories[context_key(version)] = history }
+    end
 
     #: (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer) -> RecordSnapshot?
     def snapshot_from_version(root_version, context_version, tree:, normalizer:)

@@ -1,0 +1,25 @@
+# Generated from lib/paper_trail_diff/live_endpoint_batch_loader.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Reloads current-record endpoints and their explicitly selected associations in batches.
+  class LiveEndpointBatchLoader
+    # : (tree: AssociationTree) -> void
+    def initialize: (tree: AssociationTree) -> void
+
+    # : (Array[untyped]) -> Hash[identity, untyped]
+    def call: (Array[untyped]) -> Hash[identity, untyped]
+
+    private
+
+    @tree: AssociationTree
+
+    # : (untyped, Array[untyped]) -> Array[untyped]
+    def load_group: (untyped, Array[untyped]) -> Array[untyped]
+
+    # : (AssociationTree) -> Array[Symbol | Hash[Symbol, untyped]]
+    def preload_spec: (AssociationTree) -> Array[Symbol | Hash[Symbol, untyped]]
+
+    # : (Array[untyped], Hash[identity, untyped]) -> void
+    def ensure_all_loaded!: (Array[untyped], Hash[identity, untyped]) -> void
+  end
+end

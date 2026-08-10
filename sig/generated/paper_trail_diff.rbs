@@ -7,8 +7,12 @@ module PaperTrailDiff
   SUPPORTED_ASSOCIATION_MACROS: untyped
 
   # Compares net state between explicit PaperTrail-version or current-record endpoints.
-  # : (untyped, untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option) -> Diff
-  def self.compare: (untyped, untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option) -> Diff
+  # : (untyped, untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?reload_live_endpoints: bool) -> Diff
+  def self.compare: (untyped, untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?reload_live_endpoints: bool) -> Diff
+
+  # Compares many independent endpoint pairs while batching current-record loading.
+  # : (Array[comparison_input], ?associations: Array[String | Symbol], ?ignore: ignore_option, ?reload_live_endpoints: bool) -> comparison_results
+  def self.compare_many: (Array[comparison_input], ?associations: Array[String | Symbol], ?ignore: ignore_option, ?reload_live_endpoints: bool) -> comparison_results
 
   # Compares every adjacent reconstructed state in an inclusive version range.
   # : (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option) -> Array[Step]
@@ -49,6 +53,10 @@ module PaperTrailDiff
   type association_snapshots = Hash[String, AssociationSnapshot]
 
   type identity = Array[untyped]
+
+  type comparison_input = Hash[String | Symbol, untyped]
+
+  type comparison_results = Hash[identity, Diff]
 
   type ignore_option = Array[String | Symbol] | Hash[String | Symbol, untyped]
 

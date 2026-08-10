@@ -4,17 +4,19 @@
 module PaperTrailDiff
   # PaperTrail/ActiveRecord boundary that produces plain record snapshots.
   class PaperTrailAdapter
-    #: (associations: Array[String | Symbol], ignore: ignore_option) -> void
-    def initialize(associations:, ignore:)
+    #: (associations: Array[String | Symbol], ignore: ignore_option, ?reload_live_endpoints: bool) -> void
+    def initialize(associations:, ignore:, reload_live_endpoints: true)
       @association_tree = AssociationTree.build(associations)
       @ignore_policy = IgnorePolicy.build(ignore, association_paths: @association_tree.paths)
       @traversal = AssociationTraversal.new(@association_tree)
+      @live_endpoints = LiveEndpointProvider.new(
+        tree: @association_tree, traversal: @traversal, reload: reload_live_endpoints
+      )
+      @instrumentation_payload = @live_endpoints.comparison_payload
       @snapshot_pool = SnapshotPool.new
       @normalizer = SnapshotNormalizer.new(
-        tree: @association_tree,
-        ignore_policy: @ignore_policy,
-        traversal: @traversal,
-        pool: @snapshot_pool
+        tree: @association_tree, ignore_policy: @ignore_policy,
+        traversal: @traversal, pool: @snapshot_pool
       )
       @historical_store = build_historical_store
       @timeline_snapshotter = TimelineSnapshotProvider.new(@historical_store)
@@ -23,8 +25,27 @@ module PaperTrailDiff
 
     #: (untyped, untyped) -> Diff
     def compare(from_endpoint, to_endpoint)
-      Endpoint.validate_pair!(from_endpoint, to_endpoint)
-      Engine.compare(snapshot_for_endpoint(from_endpoint), snapshot_for_endpoint(to_endpoint))
+      payload = @instrumentation_payload.merge(comparison_count: 1)
+      Instrumentation.instrument('compare', payload) do
+        Endpoint.validate_pair!(from_endpoint, to_endpoint)
+        Engine.compare(snapshot_for_endpoint(from_endpoint), snapshot_for_endpoint(to_endpoint))
+      end
+    end
+
+    # Compares independent pairs and returns immutable results keyed by item identity.
+    #: (Array[comparison_input]) -> comparison_results
+    def compare_many(comparisons)
+      count = comparisons.is_a?(Array) ? comparisons.length : 0
+      payload = @instrumentation_payload.merge(comparison_count: count)
+      Instrumentation.instrument('compare_many', payload) do
+        ComparisonBatch.new(
+          comparisons,
+          live_loader: @live_endpoints.method(:call), preparer: method(:prepare_traversal!),
+          history_preparer: @historical_store.method(:prepare_batch),
+          historical_snapshotter: method(:historical_snapshot),
+          live_normalizer: method(:normalize_live_snapshot)
+        ).call
+      end
     end
 
     #: (untyped, from: untyped, to: untyped, within: untyped) -> Array[Step]
@@ -72,6 +93,8 @@ module PaperTrailDiff
     private
 
     # @rbs @association_tree: AssociationTree
+    # @rbs @live_endpoints: LiveEndpointProvider
+    # @rbs @instrumentation_payload: Hash[Symbol, untyped]
     # @rbs @ignore_policy: IgnorePolicy
     # @rbs @traversal: AssociationTraversal
     # @rbs @snapshot_pool: SnapshotPool
@@ -152,7 +175,12 @@ module PaperTrailDiff
 
     #: (untyped) -> RecordSnapshot
     def live_snapshot(record)
-      current = Endpoint.reload_record(record)
+      current = @live_endpoints.call([record]).fetch(Endpoint.identity(record))
+      normalize_live_snapshot(current)
+    end
+
+    #: (untyped) -> RecordSnapshot
+    def normalize_live_snapshot(current)
       prepare_traversal!(current.class, historical: false)
       @normalizer.call(current, reifier: LiveAssociationReader.new) ||
         raise(InvalidEndpointError, 'current record endpoint could not be normalized')

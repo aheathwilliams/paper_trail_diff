@@ -112,11 +112,18 @@ module PaperTrailDiff
     def child_records(record, reflection, boundary)
       edge(record.class, reflection).values.flat_map do |group|
         model_class = group.fetch(:model)
-        group.fetch(:ids).filter_map do |id|
+        child_ids_for(group, record).filter_map do |id|
           child = @records.record_before(model_class, id, boundary)
           child if child && member_of?(child, reflection, record)
         end
       end
+    end
+
+    #: (Hash[Symbol, untyped], untyped) -> Array[untyped]
+    def child_ids_for(group, owner)
+      owners = group[:owners]
+      empty = [] #: Array[untyped]
+      owners ? owners.fetch(owner.id.to_s, empty) : group.fetch(:ids)
     end
 
     #: (untyped, untyped, untyped, untyped) -> Array[untyped]?
@@ -209,9 +216,7 @@ module PaperTrailDiff
 
     #: (Hash[String, Hash[Symbol, untyped]], Hash[String, Hash[Symbol, untyped]]) -> Hash[String, Hash[Symbol, untyped]]
     def merge_groups(existing, incoming)
-      existing.merge(incoming) do |_name, left, right|
-        left.merge(ids: (left.fetch(:ids) | right.fetch(:ids)))
-      end
+      Support.merge_record_groups(existing, incoming)
     end
   end
 end

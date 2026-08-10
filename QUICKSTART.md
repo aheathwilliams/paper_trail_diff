@@ -153,6 +153,7 @@ assuming that the current record is the missing endpoint.
 | Need | Call |
 | --- | --- |
 | Net difference between two endpoints | `compare` |
+| Net differences for many current records | `compare_many` |
 | One step per root-record version | `timeline` |
 | Steps for root and selected child versions | `activity_timeline` |
 | Net diff and timelines from one history pass | `analyze` |

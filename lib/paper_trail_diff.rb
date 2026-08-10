@@ -5,6 +5,7 @@ require 'paper_trail'
 
 require_relative 'paper_trail_diff/version'
 require_relative 'paper_trail_diff/support'
+require_relative 'paper_trail_diff/instrumentation'
 require_relative 'paper_trail_diff/errors'
 require_relative 'paper_trail_diff/configuration'
 require_relative 'paper_trail_diff/endpoint'
@@ -26,6 +27,10 @@ require_relative 'paper_trail_diff/prepared_edge_loader'
 require_relative 'paper_trail_diff/prepared_history_loader'
 require_relative 'paper_trail_diff/prepared_association_reifier'
 require_relative 'paper_trail_diff/live_association_reader'
+require_relative 'paper_trail_diff/live_endpoint_batch_loader'
+require_relative 'paper_trail_diff/preloaded_endpoint_batch_loader'
+require_relative 'paper_trail_diff/live_endpoint_provider'
+require_relative 'paper_trail_diff/comparison_batch'
 require_relative 'paper_trail_diff/snapshot_normalizer'
 require_relative 'paper_trail_diff/historical_snapshot_store'
 require_relative 'paper_trail_diff/timeline_snapshot_provider'
@@ -58,6 +63,8 @@ require_relative 'paper_trail_diff/paper_trail_adapter'
 #     type association_diffs = Hash[String, association_diff]
 #     type association_snapshots = Hash[String, AssociationSnapshot]
 #     type identity = Array[untyped]
+#     type comparison_input = Hash[String | Symbol, untyped]
+#     type comparison_results = Hash[identity, Diff]
 #     type ignore_option = Array[String | Symbol] | Hash[String | Symbol, untyped]
 #     type reference_key = :type | :id | "type" | "id"
 #     type traversal_context = :change | :included_state
@@ -78,12 +85,37 @@ module PaperTrailDiff
 
   class << self
     # Compares net state between explicit PaperTrail-version or current-record endpoints.
-    #: (untyped, untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option) -> Diff
-    def compare(from_version, to_version, associations: [], ignore: DEFAULT_IGNORED_ATTRIBUTES)
-      PaperTrailAdapter.new(associations: associations, ignore: ignore).compare(
+    #: (untyped, untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?reload_live_endpoints: bool) -> Diff
+    def compare(
+      from_version,
+      to_version,
+      associations: [],
+      ignore: DEFAULT_IGNORED_ATTRIBUTES,
+      reload_live_endpoints: true
+    )
+      PaperTrailAdapter.new(
+        associations: associations,
+        ignore: ignore,
+        reload_live_endpoints: reload_live_endpoints
+      ).compare(
         from_version,
         to_version
       )
+    end
+
+    # Compares many independent endpoint pairs while batching current-record loading.
+    #: (Array[comparison_input], ?associations: Array[String | Symbol], ?ignore: ignore_option, ?reload_live_endpoints: bool) -> comparison_results
+    def compare_many(
+      comparisons,
+      associations: [],
+      ignore: DEFAULT_IGNORED_ATTRIBUTES,
+      reload_live_endpoints: true
+    )
+      PaperTrailAdapter.new(
+        associations: associations,
+        ignore: ignore,
+        reload_live_endpoints: reload_live_endpoints
+      ).compare_many(comparisons)
     end
 
     # Compares every adjacent reconstructed state in an inclusive version range.

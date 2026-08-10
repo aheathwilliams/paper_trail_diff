@@ -9,6 +9,10 @@ module PaperTrailDiff
     # : (untyped, Array[untyped], ?start_at: untyped) -> void
     def prepare: (untyped, Array[untyped], ?start_at: untyped) -> void
 
+    # Prepares selected history for several roots of the same model class.
+    # : (Array[untyped], Array[untyped]) -> void
+    def prepare_batch: (Array[untyped], Array[untyped]) -> void
+
     # : (untyped, untyped) -> RecordSnapshot?
     def call: (untyped, untyped) -> RecordSnapshot?
 
@@ -25,6 +29,8 @@ module PaperTrailDiff
 
     @normalizer: SnapshotNormalizer
 
+    @prepared_histories: Hash[Array[untyped], PreparedHistory]
+
     @prepared_history: PreparedHistory?
 
     @preparer: untyped
@@ -34,6 +40,15 @@ module PaperTrailDiff
     @traversal: AssociationTraversal
 
     @tree: AssociationTree
+
+    # : (untyped) -> Array[untyped]
+    def context_key: (untyped) -> Array[untyped]
+
+    # : (Array[untyped], Array[untyped]) -> Hash[Symbol, untyped]
+    def batch_payload: (Array[untyped], Array[untyped]) -> Hash[Symbol, untyped]
+
+    # : (Array[untyped], Array[untyped]) -> void
+    def register_batch: (Array[untyped], Array[untyped]) -> void
 
     # : (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer) -> RecordSnapshot?
     def snapshot_from_version: (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer) -> RecordSnapshot?

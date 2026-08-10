@@ -1,0 +1,65 @@
+# Generated from lib/paper_trail_diff/comparison_batch.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Validates and executes independent comparisons with shared live endpoint loading.
+  class ComparisonBatch
+    # : (Array[comparison_input], live_loader: untyped, preparer: untyped, history_preparer: untyped, historical_snapshotter: untyped, live_normalizer: untyped) -> void
+    def initialize: (Array[comparison_input], live_loader: untyped, preparer: untyped, history_preparer: untyped, historical_snapshotter: untyped, live_normalizer: untyped) -> void
+
+    # : () -> comparison_results
+    def call: () -> comparison_results
+
+    private
+
+    @comparisons: Array[comparison_input]
+
+    @historical_snapshotter: untyped
+
+    @history_preparer: untyped
+
+    @live_loader: untyped
+
+    @live_normalizer: untyped
+
+    @preparer: untyped
+
+    # : (untyped, untyped, Hash[identity, RecordSnapshot]) -> Diff
+    def compare: (untyped, untyped, Hash[identity, RecordSnapshot]) -> Diff
+
+    # : (untyped, Hash[identity, RecordSnapshot]) -> RecordSnapshot?
+    def snapshot: (untyped, Hash[identity, RecordSnapshot]) -> RecordSnapshot?
+
+    # : (Array[untyped]) -> Hash[identity, untyped]
+    def load_live_records: (Array[untyped]) -> Hash[identity, untyped]
+
+    # : (Hash[identity, untyped]) -> Hash[identity, RecordSnapshot]
+    def normalize_live_records: (Hash[identity, untyped]) -> Hash[identity, RecordSnapshot]
+
+    # : (Array[[untyped, untyped]], Hash[identity, untyped]) -> void
+    def prepare_historical_batches!: (Array[[ untyped, untyped ]], Hash[identity, untyped]) -> void
+
+    # : (Array[[untyped, untyped]], Hash[identity, untyped]) -> Array[untyped]
+    def historical_versions: (Array[[ untyped, untyped ]], Hash[identity, untyped]) -> Array[untyped]
+
+    # : () -> Array[[untyped, untyped]]
+    def comparison_pairs: () -> Array[[ untyped, untyped ]]
+
+    # : (untyped, Integer) -> [untyped, untyped]
+    def comparison_pair: (untyped, Integer) -> [ untyped, untyped ]
+
+    # : (untyped, Integer) -> void
+    def valid_comparison!: (untyped, Integer) -> void
+
+    # : (Hash[untyped, untyped], Symbol) -> untyped
+    def endpoint: (Hash[untyped, untyped], Symbol) -> untyped
+
+    # : (Array[[untyped, untyped]]) -> void
+    def ensure_unique_identities!: (Array[[ untyped, untyped ]]) -> void
+
+    # : (Array[[untyped, untyped]]) -> void
+    def prepare_endpoint_classes!: (Array[[ untyped, untyped ]]) -> void
+
+    # : (Array[[untyped, untyped]]) -> Hash[untyped, bool]
+    def endpoint_requirements: (Array[[ untyped, untyped ]]) -> Hash[untyped, bool]
+  end
+end

@@ -3,11 +3,15 @@
 module PaperTrailDiff
   # PaperTrail/ActiveRecord boundary that produces plain record snapshots.
   class PaperTrailAdapter
-    # : (associations: Array[String | Symbol], ignore: ignore_option) -> void
-    def initialize: (associations: Array[String | Symbol], ignore: ignore_option) -> void
+    # : (associations: Array[String | Symbol], ignore: ignore_option, ?reload_live_endpoints: bool) -> void
+    def initialize: (associations: Array[String | Symbol], ignore: ignore_option, ?reload_live_endpoints: bool) -> void
 
     # : (untyped, untyped) -> Diff
     def compare: (untyped, untyped) -> Diff
+
+    # Compares independent pairs and returns immutable results keyed by item identity.
+    # : (Array[comparison_input]) -> comparison_results
+    def compare_many: (Array[comparison_input]) -> comparison_results
 
     # : (untyped, from: untyped, to: untyped, within: untyped) -> Array[Step]
     def timeline: (untyped, from: untyped, to: untyped, within: untyped) -> Array[Step]
@@ -27,6 +31,10 @@ module PaperTrailDiff
     @historical_store: HistoricalSnapshotStore
 
     @ignore_policy: IgnorePolicy
+
+    @instrumentation_payload: Hash[Symbol, untyped]
+
+    @live_endpoints: LiveEndpointProvider
 
     @normalizer: SnapshotNormalizer
 
@@ -62,6 +70,9 @@ module PaperTrailDiff
 
     # : (untyped) -> RecordSnapshot
     def live_snapshot: (untyped) -> RecordSnapshot
+
+    # : (untyped) -> RecordSnapshot
+    def normalize_live_snapshot: (untyped) -> RecordSnapshot
 
     # : (untyped, historical: bool) -> void
     def prepare_traversal!: (untyped, historical: bool) -> void

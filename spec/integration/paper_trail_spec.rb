@@ -157,6 +157,152 @@ RSpec.describe PaperTrailDiff do
     end
   end
 
+  describe '.compare_many' do
+    it 'matches individual comparisons and batches current root loading' do
+      endpoints = 3.times.map do |index|
+        article = CoreArticle.create!(title: "Draft #{index}", internal_note: 'stable')
+        article.update!(title: "Published #{index}")
+        [article.versions.reload.last, article]
+      end
+      comparisons = endpoints.map { |from, to| { from: from, to: to } }
+      expected = endpoints.to_h do |from, to|
+        [PaperTrailDiff::Endpoint.identity(from), described_class.compare(from, to).to_h]
+      end
+      sql = []
+      callback = proc do |_name, _start, _finish, _id, payload|
+        sql << payload[:sql] unless payload[:name] == 'SCHEMA' || payload[:cached]
+      end
+
+      results = ActiveSupport::Notifications.subscribed(callback, 'sql.active_record') do
+        described_class.compare_many(comparisons)
+      end
+
+      expect(results.transform_values(&:to_h)).to eq(expected)
+      expect(sql.grep(/FROM "core_articles"/).length).to eq(1)
+      expect(results).to be_frozen
+      expect(results.keys).to all(be_frozen)
+    end
+
+    it 'preloads the selected live association once for the whole batch' do
+      articles = 3.times.map do |index|
+        article = CoreArticle.create!(title: "Article #{index}", internal_note: 'stable')
+        article.comments.create!(body: "Comment #{index}")
+        article
+      end
+      comparisons = articles.map { |article| { 'from' => article, 'to' => article } }
+      sql = []
+      callback = proc do |_name, _start, _finish, _id, payload|
+        sql << payload[:sql] unless payload[:name] == 'SCHEMA' || payload[:cached]
+      end
+
+      results = ActiveSupport::Notifications.subscribed(callback, 'sql.active_record') do
+        described_class.compare_many(comparisons, associations: [:comments])
+      end
+
+      expect(results.values).to all(be_empty)
+      expect(sql.grep(/FROM "core_articles"/).length).to eq(1)
+      expect(sql.grep(/FROM "core_comments"/).length).to eq(1)
+    end
+
+    it 'reuses fully preloaded endpoints without live-record queries' do
+      articles = 3.times.map do |index|
+        article = CoreArticle.create!(title: "Preloaded #{index}", internal_note: 'stable')
+        article.comments.create!(body: "Comment #{index}")
+        article
+      end
+      preloaded = CoreArticle.where(id: articles.map(&:id)).preload(:comments).to_a
+      comparisons = preloaded.map { |article| { from: article, to: article } }
+      sql = []
+      callback = proc do |_name, _start, _finish, _id, payload|
+        sql << payload[:sql] unless payload[:name] == 'SCHEMA' || payload[:cached]
+      end
+
+      results = ActiveSupport::Notifications.subscribed(callback, 'sql.active_record') do
+        described_class.compare_many(
+          comparisons,
+          associations: [:comments],
+          reload_live_endpoints: false
+        )
+      end
+      single = ActiveSupport::Notifications.subscribed(callback, 'sql.active_record') do
+        described_class.compare(
+          preloaded.first,
+          preloaded.first,
+          associations: [:comments],
+          reload_live_endpoints: false
+        )
+      end
+
+      expect(results.values).to all(be_empty)
+      expect(single).to be_empty
+      expect(sql).to be_empty
+    end
+
+    it 'rejects missing preloads and invalid reload options' do
+      article = CoreArticle.create!(title: 'Not preloaded', internal_note: 'stable')
+      current = CoreArticle.find(article.id)
+
+      expect do
+        described_class.compare(
+          current,
+          current,
+          associations: [:comments],
+          reload_live_endpoints: false
+        )
+      end.to raise_error(
+        PaperTrailDiff::UnloadedAssociationError,
+        /not preloaded: comments/
+      )
+      expect do
+        described_class.compare_many([], reload_live_endpoints: nil)
+      end.to raise_error(PaperTrailDiff::ConfigurationError, /must be true or false/)
+    end
+
+    it 'emits namespaced runtime notifications without endpoint objects' do
+      article = CoreArticle.create!(title: 'Instrumented', internal_note: 'stable')
+      events = []
+      callback = proc do |name, started, finished, _id, payload|
+        events << { name: name, duration: finished - started, payload: payload }
+      end
+
+      ActiveSupport::Notifications.subscribed(callback, /\.paper_trail_diff\z/) do
+        described_class.compare_many([{ from: article, to: article }])
+      end
+
+      comparison = events.find { |event| event.fetch(:name) == 'compare_many.paper_trail_diff' }
+      loading = events.find { |event| event.fetch(:name) == 'load_live_endpoints.paper_trail_diff' }
+      expect(comparison.fetch(:payload)).to eq(
+        comparison_count: 1,
+        association_paths: [],
+        reload_live_endpoints: true
+      )
+      expect(loading.fetch(:payload)).to eq(
+        endpoint_count: 1,
+        model_types: ['CoreArticle'],
+        reload_live_endpoints: true
+      )
+      expect(events.map { |event| event.fetch(:duration) }).to all(be >= 0)
+    end
+
+    it 'validates the batch shape, unique identities, and reloadability' do
+      article = CoreArticle.create!(title: 'Valid', internal_note: 'stable')
+      comparison = { from: article, to: article }
+
+      expect(described_class.compare_many([])).to eq({})
+      expect(described_class.compare_many([])).to be_frozen
+      expect { described_class.compare_many(nil) }
+        .to raise_error(PaperTrailDiff::ConfigurationError, /must be an array/)
+      expect { described_class.compare_many([{ from: article }]) }
+        .to raise_error(PaperTrailDiff::ConfigurationError, /exactly from: and to:/)
+      expect { described_class.compare_many([comparison, comparison]) }
+        .to raise_error(PaperTrailDiff::ConfigurationError, /identities must be unique/)
+
+      CoreArticle.where(id: article.id).delete_all
+      expect { described_class.compare_many([comparison]) }
+        .to raise_error(PaperTrailDiff::InvalidEndpointError, /reloaded/)
+    end
+  end
+
   describe '.timeline' do
     it 'returns every adjacent step including both sides of a revert' do
       article, _create, draft, published, reverted = create_history

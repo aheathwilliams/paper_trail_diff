@@ -1,0 +1,23 @@
+# Generated from lib/paper_trail_diff/live_endpoint_provider.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Selects safe reload or validated caller-owned loading for current endpoints.
+  class LiveEndpointProvider
+    attr_reader reload: bool
+
+    attr_reader comparison_payload: Hash[Symbol, untyped]
+
+    # : (tree: AssociationTree, traversal: AssociationTraversal, reload: bool) -> void
+    def initialize: (tree: AssociationTree, traversal: AssociationTraversal, reload: bool) -> void
+
+    # : (Array[untyped]) -> Hash[identity, untyped]
+    def call: (Array[untyped]) -> Hash[identity, untyped]
+
+    private
+
+    @loader: untyped
+
+    # : (Array[untyped]) -> Hash[Symbol, untyped]
+    def payload: (Array[untyped]) -> Hash[Symbol, untyped]
+  end
+end

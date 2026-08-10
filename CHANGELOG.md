@@ -10,6 +10,11 @@ project follows [Semantic Versioning](https://semver.org/).
 - Add `within:` time-range selection to checkpoint timelines, activity
   timelines, and combined analysis, with inclusive/exclusive end handling and
   explicit errors when a final mutation cannot be reconstructed.
+- Add `compare_many` for collection reports, with batched current-root loading,
+  bounded live-association preloading, cross-root prepared history, immutable
+  identity-keyed results, and scale-invariant query regression coverage.
+- Add opt-in reuse of fully preloaded current endpoints and namespaced
+  ActiveSupport runtime instrumentation without automatic logging.
 
 ### Changed
 

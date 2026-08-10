@@ -182,4 +182,58 @@ RSpec.describe PaperTrailDiff::PreparedHistory do
       expect(indexed.to_h).to eq(point.to_h)
     end
   end
+
+  it 'merges and resolves prepared owner candidate indexes' do
+    left = {
+      'TrackedComment' => {
+        model: TrackedComment,
+        ids: [1],
+        owners: { '10' => [1] }
+      }
+    }
+    right = {
+      'TrackedComment' => {
+        model: TrackedComment,
+        ids: [2],
+        owners: { '10' => [2], '11' => [2] }
+      }
+    }
+    merged = PaperTrailDiff::Support.merge_record_groups(left, right)
+    expect(merged.dig('TrackedComment', :ids)).to eq([1, 2])
+    expect(merged.dig('TrackedComment', :owners)).to eq(
+      '10' => [1, 2],
+      '11' => [2]
+    )
+
+    without_left_owners = PaperTrailDiff::Support.merge_record_groups(
+      { 'TrackedComment' => { model: TrackedComment, ids: [1] } },
+      right
+    )
+    without_right_owners = PaperTrailDiff::Support.merge_record_groups(
+      left,
+      { 'TrackedComment' => { model: TrackedComment, ids: [2] } }
+    )
+    without_owners = PaperTrailDiff::Support.merge_record_groups(
+      { 'TrackedComment' => { model: TrackedComment, ids: [1] } },
+      { 'TrackedComment' => { model: TrackedComment, ids: [2] } }
+    )
+    expect(without_left_owners.dig('TrackedComment', :owners))
+      .to eq(right.dig('TrackedComment', :owners))
+    expect(without_right_owners.dig('TrackedComment', :owners))
+      .to eq(left.dig('TrackedComment', :owners))
+    expect(without_owners.dig('TrackedComment', :owners)).to be_nil
+
+    history = described_class.new(instance_double(PaperTrailDiff::PreparedRecordIndex))
+    owner = Struct.new(:id).new(10)
+    expect(history.send(:child_ids_for, { ids: [1, 2] }, owner)).to eq([1, 2])
+    expect(history.send(:child_ids_for, { ids: [1], owners: {} }, owner)).to eq([])
+
+    loader = PaperTrailDiff::PreparedEdgeLoader.new(
+      instance_double(PaperTrailDiff::PreparedRecordIndex),
+      []
+    )
+    expect(loader.send(:group_ids_by_owner, [[10, 1], [10, 1], [10, 2]]))
+      .to eq('10' => [1, 2])
+    expect(loader.send(:group_for, TrackedComment, [], owners: {})).to eq({})
+  end
 end

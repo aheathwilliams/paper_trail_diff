@@ -45,6 +45,21 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     count
   end
 
+  def captured_sql(&block)
+    statements = []
+    callback = proc do |_name, _start, _finish, _id, payload|
+      next if payload[:name] == 'SCHEMA' || payload[:cached]
+
+      statements << payload
+    end
+    result = ActiveSupport::Notifications.subscribed(
+      callback,
+      'sql.active_record',
+      &block
+    )
+    { result: result, statements: statements }
+  end
+
   def database_work(&block) # rubocop:disable Metrics/MethodLength
     queries = 0
     records = 0
@@ -165,6 +180,117 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     expect(comments.changed.fetch(0).attributes.fetch('body').to_h)
       .to eq(from: 'Keep before', to: 'Live after')
     expect(comments.added.first.attributes).not_to have_key('article_id')
+  end
+
+  it 'bulk-compares historical graphs with preloaded nested live associations' do
+    graphs = 2.times.map do |index|
+      graph = article_with_graph
+      graph[:kept_comment].update!(body: "Live after #{index}")
+      graph[:reply].update!(body: "Nested live after #{index}")
+      graph
+    end
+    comparisons = graphs.map do |graph|
+      { from: graph[:before], to: graph[:article] }
+    end
+    expected = graphs.to_h do |graph|
+      identity = PaperTrailDiff::Endpoint.identity(graph[:before])
+      diff = PaperTrailDiff.compare(
+        graph[:before],
+        graph[:article],
+        associations: ['comments.replies']
+      )
+      [identity, diff.to_h]
+    end
+
+    events = []
+    callback = proc { |*args| events << args.last }
+    results = ActiveSupport::Notifications.subscribed(
+      callback,
+      'prepare_history.paper_trail_diff'
+    ) do
+      PaperTrailDiff.compare_many(
+        comparisons,
+        associations: ['comments.replies']
+      )
+    end
+
+    expect(results.transform_values(&:to_h)).to eq(expected)
+    expect(events).to contain_exactly(
+      root_count: 2,
+      version_count: 2,
+      model_type: 'TrackedArticle',
+      batched: true
+    )
+  end
+
+  it 'keeps historical-to-live collection queries constant as the batch grows' do
+    build_comparisons = lambda do |count|
+      count.times.map do |index|
+        article = TrackedArticle.create!(title: "Bulk order #{index}")
+        comment = article.comments.create!(body: 'Before')
+        before = boundary_for(article)
+        comment.update!(body: 'After')
+        { from: before, to: article }
+      end
+    end
+    measure = lambda do |comparisons|
+      captured_sql do
+        PaperTrailDiff.compare_many(comparisons, associations: [:comments])
+      end
+    end
+
+    small = measure.call(build_comparisons.call(2))
+    large = measure.call(build_comparisons.call(50))
+    small_sql = small.fetch(:statements)
+    large_sql = large.fetch(:statements)
+
+    expect(large.fetch(:result).length).to eq(50)
+    expect(large.fetch(:result).values).to all(satisfy do |diff|
+      diff.associations.fetch('comments').changed.length == 1
+    end)
+    expect(large_sql.length).to eq(small_sql.length).and eq(8)
+    expect(large_sql.count { |payload| payload[:name] == 'TrackedArticle Load' }).to eq(2)
+    expect(large_sql.count { |payload| payload[:name] == 'TrackedComment Load' }).to eq(2)
+  end
+
+  it 'validates malformed collection input before loading endpoints' do
+    expect { PaperTrailDiff.compare_many(nil) }
+      .to raise_error(PaperTrailDiff::ConfigurationError, /must be an array/)
+
+    article = TrackedArticle.create!(title: 'Scalar batch')
+    article.update!(title: 'Scalar checkpoint')
+    before = article.versions.last
+    article.update!(title: 'Scalar batch after')
+    result = PaperTrailDiff.compare_many([{ from: before, to: article }])
+    expect(result.values.first.attributes.fetch('title').to).to eq('Scalar batch after')
+  end
+
+  it 'validates nested caller-preloaded endpoint graphs' do
+    graph = article_with_graph
+    graph[:reply].update!(body: 'Preloaded nested after')
+    current = TrackedArticle.preload(comments: :replies).find(graph[:article].id)
+
+    result = PaperTrailDiff.compare(
+      graph[:before],
+      current,
+      associations: ['comments.replies'],
+      reload_live_endpoints: false
+    )
+    comment = result.associations.fetch('comments').changed.find do |change|
+      change.record.id == graph[:kept_comment].id
+    end
+    expect(comment.associations.fetch('replies').changed.first.attributes.fetch('body').to)
+      .to eq('Preloaded nested after')
+
+    missing_nested = TrackedArticle.preload(:comments).find(graph[:article].id)
+    expect do
+      PaperTrailDiff.compare(
+        graph[:before],
+        missing_nested,
+        associations: ['comments.replies'],
+        reload_live_endpoints: false
+      )
+    end.to raise_error(PaperTrailDiff::UnloadedAssociationError, /comments.replies/)
   end
 
   it 'compares a transaction-backed HABTM version with live membership' do

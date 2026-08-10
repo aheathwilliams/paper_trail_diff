@@ -21,8 +21,14 @@ module PaperTrailDiff
     # : (String, String) -> String
     def self?.association_path: (String, String) -> String
 
+    # : (Hash[String, Hash[Symbol, untyped]], Hash[String, Hash[Symbol, untyped]]) -> Hash[String, Hash[Symbol, untyped]]
+    def self?.merge_record_groups: (Hash[String, Hash[Symbol, untyped]], Hash[String, Hash[Symbol, untyped]]) -> Hash[String, Hash[Symbol, untyped]]
+
     # : (untyped) -> untyped
     def self?.duplicate_and_freeze: (untyped) -> untyped
+
+    # : (Hash[String, Array[untyped]]?, Hash[String, Array[untyped]]?) -> Hash[String, Array[untyped]]?
+    def self?.merge_record_owners: (Hash[String, Array[untyped]]?, Hash[String, Array[untyped]]?) -> Hash[String, Array[untyped]]?
 
     # : (untyped) -> bool
     def self?.paper_trail_diff_value?: (untyped) -> bool

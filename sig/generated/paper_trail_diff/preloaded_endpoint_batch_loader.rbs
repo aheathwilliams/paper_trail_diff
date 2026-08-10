@@ -1,0 +1,24 @@
+# Generated from lib/paper_trail_diff/preloaded_endpoint_batch_loader.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Validates and reuses caller-owned live records without issuing association queries.
+  class PreloadedEndpointBatchLoader
+    # : (tree: AssociationTree, traversal: AssociationTraversal) -> void
+    def initialize: (tree: AssociationTree, traversal: AssociationTraversal) -> void
+
+    # : (Array[untyped]) -> Hash[identity, untyped]
+    def call: (Array[untyped]) -> Hash[identity, untyped]
+
+    private
+
+    @traversal: AssociationTraversal
+
+    @tree: AssociationTree
+
+    # : (untyped, AssociationTree, path: String) -> void
+    def validate_record: (untyped, AssociationTree, path: String) -> void
+
+    # : (untyped, AssociationTree, String, untyped) -> void
+    def validate_association: (untyped, AssociationTree, String, untyped) -> void
+  end
+end

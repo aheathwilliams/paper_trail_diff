@@ -41,11 +41,11 @@ module PaperTrailDiff
     # : (Array[untyped], untyped) -> Array[untyped]
     def membership_ids: (Array[untyped], untyped) -> Array[untyped]
 
-    # : (untyped, Array[untyped], untyped, String) -> Array[untyped]
-    def historical_child_ids: (untyped, Array[untyped], untyped, String) -> Array[untyped]
+    # : (untyped, Array[untyped], untyped, String) -> Hash[String, Array[untyped]]
+    def historical_child_ids: (untyped, Array[untyped], untyped, String) -> Hash[String, Array[untyped]]
 
-    # : (untyped, Array[untyped], untyped, String) -> Array[untyped]
-    def live_child_ids: (untyped, Array[untyped], untyped, String) -> Array[untyped]
+    # : (untyped, Array[untyped], untyped, String) -> Hash[String, Array[untyped]]
+    def live_child_ids: (untyped, Array[untyped], untyped, String) -> Hash[String, Array[untyped]]
 
     # : (untyped, untyped) -> untyped
     def target_class: (untyped, untyped) -> untyped
@@ -53,8 +53,14 @@ module PaperTrailDiff
     # : (Hash[String, Hash[Symbol, untyped]], untyped, untyped) -> void
     def add_identity: (Hash[String, Hash[Symbol, untyped]], untyped, untyped) -> void
 
-    # : (untyped, Array[untyped]) -> Hash[String, Hash[Symbol, untyped]]
-    def group_for: (untyped, Array[untyped]) -> Hash[String, Hash[Symbol, untyped]]
+    # : (untyped, Array[untyped], ?owners: Hash[String, Array[untyped]]?) -> Hash[String, Hash[Symbol, untyped]]
+    def group_for: (untyped, Array[untyped], ?owners: Hash[String, Array[untyped]]?) -> Hash[String, Hash[Symbol, untyped]]
+
+    # : (Array[Array[untyped]]) -> Hash[String, Array[untyped]]
+    def group_ids_by_owner: (Array[Array[untyped]]) -> Hash[String, Array[untyped]]
+
+    # : (Hash[String, Array[untyped]], Hash[String, Array[untyped]]) -> Hash[String, Array[untyped]]
+    def merge_owners: (Hash[String, Array[untyped]], Hash[String, Array[untyped]]) -> Hash[String, Array[untyped]]
 
     # : (untyped) -> String?
     def scalar_foreign_key: (untyped) -> String?

@@ -57,6 +57,9 @@ module PaperTrailDiff
     # : (untyped, untyped, untyped) -> Array[untyped]
     def child_records: (untyped, untyped, untyped) -> Array[untyped]
 
+    # : (Hash[Symbol, untyped], untyped) -> Array[untyped]
+    def child_ids_for: (Hash[Symbol, untyped], untyped) -> Array[untyped]
+
     # : (untyped, untyped, untyped, untyped) -> Array[untyped]?
     def habtm_records: (untyped, untyped, untyped, untyped) -> Array[untyped]?
 

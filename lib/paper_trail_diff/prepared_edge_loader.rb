@@ -63,9 +63,10 @@ module PaperTrailDiff
       key = scalar_foreign_key(reflection)
       return {} unless key
 
-      ids = historical_child_ids(owner_class, owner_ids, reflection, key)
-      ids.concat(live_child_ids(owner_class, owner_ids, reflection, key))
-      group_for(reflection.klass, ids)
+      historical = historical_child_ids(owner_class, owner_ids, reflection, key)
+      live = live_child_ids(owner_class, owner_ids, reflection, key)
+      owners = merge_owners(historical, live)
+      group_for(reflection.klass, owners.values.flatten, owners: owners)
     end
 
     #: (untyped, untyped) -> [Hash[String, Hash[Symbol, untyped]], Hash[String, Array[untyped]]]
@@ -92,7 +93,7 @@ module PaperTrailDiff
       end.uniq
     end
 
-    #: (untyped, Array[untyped], untyped, String) -> Array[untyped]
+    #: (untyped, Array[untyped], untyped, String) -> Hash[String, Array[untyped]]
     def historical_child_ids( # rubocop:disable Metrics/AbcSize
       owner_class,
       owner_ids,
@@ -106,16 +107,21 @@ module PaperTrailDiff
       ).where(foreign_type: parent_types(owner_class)).where(
         version_class.table_name => { item_type: reflection.klass.base_class.name }
       )
-      relation.distinct.pluck(version_class.arel_table[:item_id])
+      association_class = owner_class.paper_trail.version_association_class
+      pairs = relation.distinct.pluck(
+        association_class.arel_table[:foreign_key_id],
+        version_class.arel_table[:item_id]
+      )
+      group_ids_by_owner(pairs)
     end
 
-    #: (untyped, Array[untyped], untyped, String) -> Array[untyped]
+    #: (untyped, Array[untyped], untyped, String) -> Hash[String, Array[untyped]]
     def live_child_ids(owner_class, owner_ids, reflection, foreign_key)
       relation = reflection.klass.base_class.unscoped.where(foreign_key => owner_ids)
       if reflection.options[:as]
         relation = relation.where(reflection.type => parent_types(owner_class))
       end
-      relation.pluck(reflection.klass.primary_key)
+      group_ids_by_owner(relation.pluck(foreign_key, reflection.klass.primary_key))
     end
 
     #: (untyped, untyped) -> untyped
@@ -133,12 +139,28 @@ module PaperTrailDiff
       group.fetch(:ids) << id unless group.fetch(:ids).include?(id)
     end
 
-    #: (untyped, Array[untyped]) -> Hash[String, Hash[Symbol, untyped]]
-    def group_for(model_class, ids)
+    #: (untyped, Array[untyped], ?owners: Hash[String, Array[untyped]]?) -> Hash[String, Hash[Symbol, untyped]]
+    def group_for(model_class, ids, owners: nil)
       unique = ids.compact.uniq
       return {} if unique.empty?
 
-      { model_class.name.to_s => { model: model_class, ids: unique } }
+      group = { model: model_class, ids: unique } #: Hash[Symbol, untyped]
+      group[:owners] = owners if owners
+      { model_class.name.to_s => group }
+    end
+
+    #: (Array[Array[untyped]]) -> Hash[String, Array[untyped]]
+    def group_ids_by_owner(pairs)
+      grouped = {} #: Hash[String, Array[untyped]]
+      pairs.each_with_object(grouped) do |(owner_id, child_id), result|
+        ids = result[owner_id.to_s] ||= []
+        ids << child_id unless ids.include?(child_id)
+      end
+    end
+
+    #: (Hash[String, Array[untyped]], Hash[String, Array[untyped]]) -> Hash[String, Array[untyped]]
+    def merge_owners(left, right)
+      left.merge(right) { |_owner, first, second| first | second }
     end
 
     #: (untyped) -> String?

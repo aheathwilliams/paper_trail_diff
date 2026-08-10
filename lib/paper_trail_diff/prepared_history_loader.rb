@@ -4,15 +4,17 @@
 module PaperTrailDiff
   # Expands the explicit association tree into a request-scoped PreparedHistory.
   class PreparedHistoryLoader
-    #: (untyped, root_versions: Array[untyped], tree: AssociationTree, traversal: AssociationTraversal, ?start_at: untyped) -> void
-    def initialize(
+    #: (untyped, root_versions: Array[untyped], tree: AssociationTree, traversal: AssociationTraversal, ?root_ids: Array[untyped], ?start_at: untyped) -> void
+    def initialize( # rubocop:disable Metrics/ParameterLists
       record,
       root_versions:,
       tree:,
       traversal:,
+      root_ids: [record.id],
       start_at: root_versions.first.created_at
     )
       @record = record
+      @root_ids = root_ids
       @tree = tree
       @traversal = traversal
       @records = PreparedRecordIndex.new(start_at)
@@ -23,13 +25,14 @@ module PaperTrailDiff
 
     #: () -> PreparedHistory
     def call
-      load_node(@record.class, [@record.id], @tree, path: '')
+      load_node(@record.class, @root_ids, @tree, path: '')
       @history
     end
 
     private
 
     # @rbs @record: untyped
+    # @rbs @root_ids: Array[untyped]
     # @rbs @tree: AssociationTree
     # @rbs @traversal: AssociationTraversal
     # @rbs @records: PreparedRecordIndex
@@ -134,9 +137,7 @@ module PaperTrailDiff
 
     #: (Hash[String, Hash[Symbol, untyped]], Hash[String, Hash[Symbol, untyped]]) -> Hash[String, Hash[Symbol, untyped]]
     def merge_groups(left, right)
-      left.merge(right) do |_name, first, second|
-        first.merge(ids: (first.fetch(:ids) | second.fetch(:ids)))
-      end
+      Support.merge_record_groups(left, right)
     end
   end
 end

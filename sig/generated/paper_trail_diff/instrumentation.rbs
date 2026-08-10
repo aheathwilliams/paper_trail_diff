@@ -1,0 +1,12 @@
+# Generated from lib/paper_trail_diff/instrumentation.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Emits quiet, namespaced runtime events for application-owned diagnostics.
+  module Instrumentation
+    # : (String | Symbol, Hash[Symbol, untyped]) { () -> untyped } -> untyped
+    def self?.instrument: (String | Symbol, Hash[Symbol, untyped]) { () -> untyped } -> untyped
+
+    # : (association_paths: Array[String], reload_live_endpoints: bool) -> Hash[Symbol, untyped]
+    def self?.comparison_payload: (association_paths: Array[String], reload_live_endpoints: bool) -> Hash[Symbol, untyped]
+  end
+end

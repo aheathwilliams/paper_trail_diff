@@ -82,6 +82,90 @@ association caches and in-memory edits are not compared. Use a database
 transaction with an appropriate isolation level when several live association
 queries must represent one atomic application snapshot.
 
+For collection-level reports, use `compare_many` to reload current roots and
+preload each explicitly selected live association path across the batch. Each
+entry has the same endpoints and options as `compare`; results are returned in
+input order as a frozen hash keyed by `[item_type, item_id]` strings:
+
+```ruby
+diffs = PaperTrailDiff.compare_many(
+  [
+    { from: first_versions.fetch(order_a.id), to: order_a },
+    { from: first_versions.fetch(order_b.id), to: order_b }
+  ],
+  associations: [:line_items],
+  ignore: []
+)
+
+diffs.fetch(["Order", order_a.id.to_s]) # => PaperTrailDiff::Diff
+```
+
+Root identities must be unique within one call. Historical reconstruction for
+ordinary versioned, unscoped association paths is also prepared across the
+collection. Paths that require the existing point-in-time PT-AT fallback retain
+their per-endpoint behavior and all historical reconstruction retains the same
+PaperTrail Association Tracking requirements as `compare`. Callers should still
+use an appropriate database transaction when all live queries must observe one
+atomic snapshot.
+
+### Reuse already-preloaded current endpoints
+
+`compare` and `compare_many` reload current endpoints by default. A caller that
+already owns a consistent, fully preloaded graph may opt out:
+
+```ruby
+orders = Order.where(id: ids).preload(line_items: :product).to_a
+
+diffs = PaperTrailDiff.compare_many(
+  orders.map do |order|
+    { from: first_versions.fetch(order.id), to: order }
+  end,
+  associations: ["line_items.product"],
+  reload_live_endpoints: false
+)
+```
+
+With `reload_live_endpoints: false`, scalar values and association targets come
+from the supplied instances. Every requested association path must already be
+loaded; otherwise `PaperTrailDiff::UnloadedAssociationError` is raised before
+normalization instead of silently issuing an N+1 query. The caller is
+responsible for the consistency and freshness of that in-memory graph.
+
+### Runtime performance diagnostics
+
+The gem never prints or logs automatically. It emits these
+`ActiveSupport::Notifications` events so applications can choose their logger
+and formatting:
+
+- `compare.paper_trail_diff`
+- `compare_many.paper_trail_diff`
+- `load_live_endpoints.paper_trail_diff`
+- `prepare_history.paper_trail_diff`
+
+```ruby
+ActiveSupport::Notifications.subscribe(/\.paper_trail_diff\z/) do |name, start, finish, _id, payload|
+  Rails.logger.debug(
+    event: name,
+    duration_ms: ((finish - start) * 1_000).round(1),
+    **payload
+  )
+end
+```
+
+The payloads contain counts, model names, association paths, and reload mode,
+not endpoint objects or record attributes. To inspect the exact SQL generated
+by one report, scope a standard `sql.active_record` subscriber around it:
+
+```ruby
+callback = proc do |_name, _start, _finish, _id, payload|
+  Rails.logger.debug(payload[:sql]) unless payload[:cached] || payload[:name] == "SCHEMA"
+end
+
+ActiveSupport::Notifications.subscribed(callback, "sql.active_record") do
+  PaperTrailDiff.compare_many(comparisons, associations: [:line_items])
+end
+```
+
 ## Build a root-checkpoint timeline
 
 `timeline` accepts two version objects from the supplied record's history. The

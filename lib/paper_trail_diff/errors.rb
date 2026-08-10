@@ -14,6 +14,9 @@ module PaperTrailDiff
   # Raised when a live endpoint is not a clean, persisted ActiveRecord record.
   class InvalidEndpointError < Error; end
 
+  # Raised when reload opt-out encounters an association that was not preloaded.
+  class UnloadedAssociationError < InvalidEndpointError; end
+
   # Raised when a timeline boundary is absent or the requested range is reversed.
   class InvalidTimelineRangeError < Error; end
 
