@@ -7,8 +7,9 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
-- Split activity-event reconstruction, route discovery, and relationship
-  matching into focused internal collaborators without changing result shapes.
+- Split activity-event reconstruction, route discovery, relationship matching,
+  collection mutation, and `belongs_to` target application into focused
+  internal collaborators without changing result shapes.
 
 ## [0.3.0] - 2026-08-10
 

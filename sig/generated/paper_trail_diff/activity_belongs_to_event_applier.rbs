@@ -1,0 +1,41 @@
+# Generated from lib/paper_trail_diff/activity_belongs_to_event_applier.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Applies selected non-polymorphic belongs-to target updates to a snapshot.
+  class ActivityBelongsToEventApplier
+    # : (route_finder: ActivityEventRouteFinder, record_resolver: ActivityEventRecordResolver, record_normalizer: ActivityEventRecordNormalizer) -> void
+    def initialize: (route_finder: ActivityEventRouteFinder, record_resolver: ActivityEventRecordResolver, record_normalizer: ActivityEventRecordNormalizer) -> void
+
+    # : (untyped, untyped, RecordSnapshot, AssociationTree, SnapshotNormalizer, untyped) -> [bool, RecordSnapshot?]
+    def call: (untyped, untyped, RecordSnapshot, AssociationTree, SnapshotNormalizer, untyped) -> [ bool, RecordSnapshot? ]
+
+    private
+
+    @record_normalizer: ActivityEventRecordNormalizer
+
+    @record_resolver: ActivityEventRecordResolver
+
+    @route_finder: ActivityEventRouteFinder
+
+    # : (Array[untyped], untyped, SnapshotNormalizer, untyped, untyped) -> RecordSnapshot?
+    def normalized_route_record: (Array[untyped], untyped, SnapshotNormalizer, untyped, untyped) -> RecordSnapshot?
+
+    # : (RecordSnapshot, Array[untyped], untyped, RecordSnapshot?, ?depth: Integer) -> [RecordSnapshot, bool]
+    def replace_route: (RecordSnapshot, Array[untyped], untyped, RecordSnapshot?, ?depth: Integer) -> [ RecordSnapshot, bool ]
+
+    # : (Array[RecordSnapshot], Array[untyped], untyped, RecordSnapshot?, Integer) -> [Array[RecordSnapshot], bool]
+    def replacement_records: (Array[RecordSnapshot], Array[untyped], untyped, RecordSnapshot?, Integer) -> [ Array[RecordSnapshot], bool ]
+
+    # : (Array[RecordSnapshot], untyped, RecordSnapshot?) -> [Array[RecordSnapshot], bool]
+    def replace_existing_target: (Array[RecordSnapshot], untyped, RecordSnapshot?) -> [ Array[RecordSnapshot], bool ]
+
+    # : (RecordSnapshot, String, AssociationSnapshot) -> RecordSnapshot
+    def replace_association: (RecordSnapshot, String, AssociationSnapshot) -> RecordSnapshot
+
+    # : (untyped, RecordSnapshot?) -> String
+    def replacement_type: (untyped, RecordSnapshot?) -> String
+
+    # : (untyped) -> untyped
+    def endpoint_model_class: (untyped) -> untyped
+  end
+end

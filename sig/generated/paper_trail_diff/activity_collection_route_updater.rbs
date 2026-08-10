@@ -1,0 +1,44 @@
+# Generated from lib/paper_trail_diff/activity_collection_route_updater.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Replaces a collection event record along one explicit immutable snapshot route.
+  class ActivityCollectionRouteUpdater
+    # : (pool: SnapshotPool, relationship: ActivityRelationship) -> void
+    def initialize: (pool: SnapshotPool, relationship: ActivityRelationship) -> void
+
+    # : (RecordSnapshot, ActivityCollectionRouteChange, ?depth: Integer) -> [RecordSnapshot, bool]
+    def call: (RecordSnapshot, ActivityCollectionRouteChange, ?depth: Integer) -> [ RecordSnapshot, bool ]
+
+    private
+
+    @pool: SnapshotPool
+
+    @record_updater: ActivityCollectionRecordUpdater
+
+    @relationship: ActivityRelationship
+
+    # : (AssociationSnapshot, RecordSnapshot, ActivityCollectionRouteChange, Integer) -> [Array[RecordSnapshot], RecordSnapshot?, RecordSnapshot?, bool, bool]
+    def updated_records: (AssociationSnapshot, RecordSnapshot, ActivityCollectionRouteChange, Integer) -> [ Array[RecordSnapshot], RecordSnapshot?, RecordSnapshot?, bool, bool ]
+
+    # : (AssociationSnapshot, RecordSnapshot, ActivityCollectionRouteChange) -> [Array[RecordSnapshot], RecordSnapshot?, RecordSnapshot?, bool, bool]
+    def leaf_records: (AssociationSnapshot, RecordSnapshot, ActivityCollectionRouteChange) -> [ Array[RecordSnapshot], RecordSnapshot?, RecordSnapshot?, bool, bool ]
+
+    # : (AssociationSnapshot, ActivityCollectionRouteChange, Integer) -> [Array[RecordSnapshot], RecordSnapshot?, RecordSnapshot?, bool]?
+    def targeted_parent: (AssociationSnapshot, ActivityCollectionRouteChange, Integer) -> [ Array[RecordSnapshot], RecordSnapshot?, RecordSnapshot?, bool ]?
+
+    # : (AssociationSnapshot, ActivityCollectionRouteChange, Integer) -> [Array[RecordSnapshot], RecordSnapshot?, RecordSnapshot?, bool, bool]
+    def recursive_records: (AssociationSnapshot, ActivityCollectionRouteChange, Integer) -> [ Array[RecordSnapshot], RecordSnapshot?, RecordSnapshot?, bool, bool ]
+
+    # : ([RecordSnapshot?, RecordSnapshot?, bool], RecordSnapshot, RecordSnapshot, bool) -> [RecordSnapshot?, RecordSnapshot?, bool]
+    def recursive_transition: ([ RecordSnapshot?, RecordSnapshot?, bool ], RecordSnapshot, RecordSnapshot, bool) -> [ RecordSnapshot?, RecordSnapshot?, bool ]
+
+    # : (Array[RecordSnapshot], Integer, RecordSnapshot, RecordSnapshot, bool) -> [Array[RecordSnapshot], RecordSnapshot?, RecordSnapshot?, bool]
+    def targeted_parent_replacement: (Array[RecordSnapshot], Integer, RecordSnapshot, RecordSnapshot, bool) -> [ Array[RecordSnapshot], RecordSnapshot?, RecordSnapshot?, bool ]
+
+    # : (AssociationSnapshot, untyped, ActivityCollectionRouteChange) -> Integer?
+    def nested_owner_position: (AssociationSnapshot, untyped, ActivityCollectionRouteChange) -> Integer?
+
+    # : (RecordSnapshot, String, AssociationSnapshot) -> RecordSnapshot
+    def replace_association: (RecordSnapshot, String, AssociationSnapshot) -> RecordSnapshot
+  end
+end

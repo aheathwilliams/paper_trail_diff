@@ -1,0 +1,46 @@
+# Generated from lib/paper_trail_diff/activity_collection_event_applier.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Applies a safe collection event across every selected route for its record type.
+  class ActivityCollectionEventApplier
+    # : (record_resolver: ActivityEventRecordResolver, record_normalizer: ActivityEventRecordNormalizer, route_updater: ActivityCollectionRouteUpdater, relationship: ActivityRelationship) -> void
+    def initialize: (record_resolver: ActivityEventRecordResolver, record_normalizer: ActivityEventRecordNormalizer, route_updater: ActivityCollectionRouteUpdater, relationship: ActivityRelationship) -> void
+
+    # : (Array[Array[untyped]], untyped, ActivitySnapshotDelta?) -> bool
+    def safe?: (Array[Array[untyped]], untyped, ActivitySnapshotDelta?) -> bool
+
+    # : (untyped, untyped, RecordSnapshot, SnapshotNormalizer, Array[Array[untyped]], untyped, ActivitySnapshotDelta?) -> [bool, RecordSnapshot]
+    def call: (untyped, untyped, RecordSnapshot, SnapshotNormalizer, Array[Array[untyped]], untyped, ActivitySnapshotDelta?) -> [ bool, RecordSnapshot ]
+
+    private
+
+    @record_normalizer: ActivityEventRecordNormalizer
+
+    @record_resolver: ActivityEventRecordResolver
+
+    @relationship: ActivityRelationship
+
+    @route_updater: ActivityCollectionRouteUpdater
+
+    # : (RecordSnapshot, Array[untyped], untyped, ActivitySnapshotDelta?, Array[untyped], SnapshotNormalizer, Array[untyped]) -> RecordSnapshot
+    def apply_route: (RecordSnapshot, Array[untyped], untyped, ActivitySnapshotDelta?, Array[untyped], SnapshotNormalizer, Array[untyped]) -> RecordSnapshot
+
+    # : (Array[Array[untyped]], untyped) -> bool
+    def unsafe_through_membership_event?: (Array[Array[untyped]], untyped) -> bool
+
+    # : (Array[Array[untyped]], ActivitySnapshotDelta?) -> bool
+    def unsafe_nested_membership_delta?: (Array[Array[untyped]], ActivitySnapshotDelta?) -> bool
+
+    # : (RecordSnapshot, Array[untyped], untyped, ActivitySnapshotDelta?, Array[untyped], SnapshotNormalizer, Array[untyped]) -> [untyped, RecordSnapshot?]
+    def route_event_state: (RecordSnapshot, Array[untyped], untyped, ActivitySnapshotDelta?, Array[untyped], SnapshotNormalizer, Array[untyped]) -> [ untyped, RecordSnapshot? ]
+
+    # : (untyped, Array[untyped], SnapshotNormalizer, Array[untyped]) -> RecordSnapshot?
+    def normalized_event_record: (untyped, Array[untyped], SnapshotNormalizer, Array[untyped]) -> RecordSnapshot?
+
+    # : (RecordSnapshot, Array[untyped], untyped, ActivitySnapshotDelta?) -> RecordSnapshot?
+    def existing_delta_record: (RecordSnapshot, Array[untyped], untyped, ActivitySnapshotDelta?) -> RecordSnapshot?
+
+    # : (RecordSnapshot, Array[untyped], ActivitySnapshotDelta) -> RecordSnapshot?
+    def nested_delta_owner: (RecordSnapshot, Array[untyped], ActivitySnapshotDelta) -> RecordSnapshot?
+  end
+end

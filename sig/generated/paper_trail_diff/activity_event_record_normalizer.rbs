@@ -1,0 +1,19 @@
+# Generated from lib/paper_trail_diff/activity_event_record_normalizer.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Normalizes one event record with the historical reader for its boundary.
+  class ActivityEventRecordNormalizer
+    # : (?association_reader: untyped) -> void
+    def initialize: (?association_reader: untyped) -> void
+
+    # : (untyped, reflection: untyped, subtree: AssociationTree, path: String, normalizer: SnapshotNormalizer, root_endpoint: untyped, context_endpoint: untyped) -> RecordSnapshot?
+    def call: (untyped, reflection: untyped, subtree: AssociationTree, path: String, normalizer: SnapshotNormalizer, root_endpoint: untyped, context_endpoint: untyped) -> RecordSnapshot?
+
+    private
+
+    @association_reader: untyped
+
+    # : (untyped, habtm_version: untyped) -> HistoricalAssociationReifier
+    def historical_reader: (untyped, habtm_version: untyped) -> HistoricalAssociationReifier
+  end
+end

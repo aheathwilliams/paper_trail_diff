@@ -1,0 +1,17 @@
+# Generated from lib/paper_trail_diff/activity_collection_route_change.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Carries one collection event through recursive immutable route replacement.
+  class ActivityCollectionRouteChange
+    attr_reader route: Array[untyped]
+
+    attr_reader version: untyped
+
+    attr_reader record: untyped
+
+    attr_reader replacement: RecordSnapshot?
+
+    # : (route: Array[untyped], version: untyped, record: untyped, replacement: RecordSnapshot?) -> void
+    def initialize: (route: Array[untyped], version: untyped, record: untyped, replacement: RecordSnapshot?) -> void
+  end
+end

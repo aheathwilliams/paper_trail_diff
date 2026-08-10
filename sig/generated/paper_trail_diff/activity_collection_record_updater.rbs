@@ -1,0 +1,25 @@
+# Generated from lib/paper_trail_diff/activity_collection_record_updater.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Applies one event to the leaf records of a collection association snapshot.
+  class ActivityCollectionRecordUpdater
+    # : (ActivityRelationship) -> void
+    def initialize: (ActivityRelationship) -> void
+
+    # : (AssociationSnapshot, ActivityCollectionRouteChange, untyped, RecordSnapshot) -> RecordSnapshot?
+    def event_child: (AssociationSnapshot, ActivityCollectionRouteChange, untyped, RecordSnapshot) -> RecordSnapshot?
+
+    # : (AssociationSnapshot, untyped, RecordSnapshot?) -> [Array[RecordSnapshot], RecordSnapshot?, RecordSnapshot?, bool]
+    def call: (AssociationSnapshot, untyped, RecordSnapshot?) -> [ Array[RecordSnapshot], RecordSnapshot?, RecordSnapshot?, bool ]
+
+    # : (untyped, RecordSnapshot?) -> String
+    def replacement_type: (untyped, RecordSnapshot?) -> String
+
+    private
+
+    @relationship: ActivityRelationship
+
+    # : (Array[RecordSnapshot], Integer?, RecordSnapshot?) -> Array[RecordSnapshot]
+    def replacement_records: (Array[RecordSnapshot], Integer?, RecordSnapshot?) -> Array[RecordSnapshot]
+  end
+end
