@@ -17,18 +17,18 @@ module PaperTrailDiff
   def self.compare_many: (Array[comparison_input], ?associations: Array[String | Symbol], ?ignore: ignore_option, ?reload_live_endpoints: bool) -> comparison_results
 
   # Compares every adjacent reconstructed state in an inclusive version range.
-  # : (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option) -> Array[Step]
-  def self.timeline: (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option) -> Array[Step]
+  # : (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?version_scope: untyped) -> Array[Step]
+  def self.timeline: (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?version_scope: untyped) -> Array[Step]
 
   # Compares adjacent root and selected-descendant activity boundaries.
   # `reload_live_endpoints:` applies only when `to:` is a current record; the
   # other range forms never read live state.
-  # : (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?reload_live_endpoints: bool) -> Array[ActivityStep]
-  def self.activity_timeline: (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?reload_live_endpoints: bool) -> Array[ActivityStep]
+  # : (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?reload_live_endpoints: bool, ?version_scope: untyped) -> Array[ActivityStep]
+  def self.activity_timeline: (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?reload_live_endpoints: bool, ?version_scope: untyped) -> Array[ActivityStep]
 
   # Builds an endpoint diff and root-checkpoint timeline while normalizing each version once.
-  # : (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool) -> Analysis
-  def self.analyze: (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool) -> Analysis
+  # : (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped) -> Analysis
+  def self.analyze: (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped) -> Analysis
 
   # Analyzes many roots over one shared time window, preparing their selected
   # history once for the batch instead of once per record. Roots with no

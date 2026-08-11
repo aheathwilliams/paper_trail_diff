@@ -3,11 +3,16 @@
 module PaperTrailDiff
   # Selects in-range root versions plus one later reconstruction boundary.
   class TimeVersionRange
-    # : (untyped, time_range: TimeRange) -> void
-    def initialize: (untyped, time_range: TimeRange) -> void
+    # : (untyped, time_range: TimeRange, ?version_scope: untyped) -> void
+    def initialize: (untyped, time_range: TimeRange, ?version_scope: untyped) -> void
 
     # : (?context_required: bool) -> Array[untyped]
     def select: (?context_required: bool) -> Array[untyped]
+
+    # The second value is the version present only to reveal the last selected
+    # mutation, which a caller reporting mutations must not treat as one.
+    # : (?context_required: bool) -> [Array[untyped], untyped]
+    def select_with_context: (?context_required: bool) -> [ Array[untyped], untyped ]
 
     private
 
@@ -15,15 +20,10 @@ module PaperTrailDiff
 
     @time_range: TimeRange
 
+    @version_scope: untyped
+
     # : () -> untyped
     def versions_relation: () -> untyped
-
-    # A window closing on the record's own destruction needs no later version:
-    # the destroy reveals the preceding mutation and nothing can follow it, so
-    # demanding a checkpoint that can never be written would reject the range
-    # permanently.
-    # : (Array[untyped]) -> bool
-    def terminal_destroy?: (Array[untyped]) -> bool
 
     # : (untyped) -> untyped
     def trailing_version: (untyped) -> untyped

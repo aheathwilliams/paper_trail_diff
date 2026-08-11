@@ -3,8 +3,8 @@
 module PaperTrailDiff
   # Selects an inclusive, chronological range from a record's root versions.
   class VersionRange
-    # : (untyped, from: untyped, to: untyped) -> void
-    def initialize: (untyped, from: untyped, to: untyped) -> void
+    # : (untyped, from: untyped, to: untyped, ?version_scope: untyped) -> void
+    def initialize: (untyped, from: untyped, to: untyped, ?version_scope: untyped) -> void
 
     # : () -> Array[untyped]
     def select: () -> Array[untyped]
@@ -20,11 +20,16 @@ module PaperTrailDiff
 
     @to: untyped
 
+    @version_scope: untyped
+
     # : () -> untyped
     def versions_relation: () -> untyped
 
     # : (untyped, ?through: untyped) -> Array[untyped]
     def select_relation: (untyped, ?through: untyped) -> Array[untyped]
+
+    # : (Array[untyped]) -> Array[untyped]
+    def ordered: (Array[untyped]) -> Array[untyped]
 
     # : (untyped, untyped, boundary: Symbol) -> void
     def validate_boundary!: (untyped, untyped, boundary: Symbol) -> void

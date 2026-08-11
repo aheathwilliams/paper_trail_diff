@@ -11,8 +11,8 @@ module PaperTrailDiff
 
     attr_reader time_range: TimeRange?
 
-    # : (untyped, from: untyped, to: untyped, within: untyped, ?versions: Array[untyped]?) -> void
-    def initialize: (untyped, from: untyped, to: untyped, within: untyped, ?versions: Array[untyped]?) -> void
+    # : (untyped, from: untyped, to: untyped, within: untyped, ?versions: Array[untyped]?, ?version_scope: untyped) -> void
+    def initialize: (untyped, from: untyped, to: untyped, within: untyped, ?versions: Array[untyped]?, ?version_scope: untyped) -> void
 
     # A record with no versions has no first or last boundary to resolve, which
     # is an empty history rather than a bad request.
@@ -21,6 +21,9 @@ module PaperTrailDiff
 
     # A batch may have selected these versions already, in which case reselecting
     # them per record would undo the batching.
+    # : (?context_required: bool) -> [Array[untyped], untyped]
+    def select_with_context: (?context_required: bool) -> [ Array[untyped], untyped ]
+
     # : (?context_required: bool) -> Array[untyped]
     def select: (?context_required: bool) -> Array[untyped]
 
@@ -44,6 +47,8 @@ module PaperTrailDiff
     @requested_to: untyped
 
     @to: untyped
+
+    @version_scope: untyped
 
     @versions: Array[untyped]?
 

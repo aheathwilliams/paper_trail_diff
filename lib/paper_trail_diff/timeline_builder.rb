@@ -4,10 +4,13 @@
 module PaperTrailDiff
   # Selects and compares a chronological slice of a record's version history.
   class TimelineBuilder
-    #: (untyped, from: untyped, to: untyped, snapshotter: untyped, ?within: untyped, ?versions: Array[untyped]?) -> void
-    def initialize(record, from:, to:, snapshotter:, within: nil, versions: nil) # rubocop:disable Metrics/ParameterLists
+    #: (untyped, from: untyped, to: untyped, snapshotter: untyped, ?within: untyped, ?versions: Array[untyped]?, ?version_scope: untyped) -> void
+    def initialize(record, from:, to:, snapshotter:, within: nil, versions: nil, version_scope: nil) # rubocop:disable Metrics/ParameterLists
       @record = record
-      @range = TimelineRange.new(record, from: from, to: to, within: within, versions: versions)
+      @range = TimelineRange.new(
+        record, from: from, to: to, within: within,
+                versions: versions, version_scope: version_scope
+      )
       @snapshotter = snapshotter
     end
 

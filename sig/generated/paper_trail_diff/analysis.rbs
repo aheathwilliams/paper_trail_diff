@@ -23,7 +23,10 @@ module PaperTrailDiff
     # : (diff: Diff, timeline: Array[Step], ?activity_timeline: Array[ActivityStep]?, ?from_snapshot: RecordSnapshot?, ?to_snapshot: RecordSnapshot?) -> void
     def initialize: (diff: Diff, timeline: Array[Step], ?activity_timeline: Array[ActivityStep]?, ?from_snapshot: RecordSnapshot?, ?to_snapshot: RecordSnapshot?) -> void
 
-    # : () -> Hash[Symbol, untyped]
-    def to_h: () -> Hash[Symbol, untyped]
+    # Reconstructed endpoint states are opt-in, because they carry the whole
+    # selected graph whether or not anything changed, which dwarfs the rest of
+    # the payload for a wide graph.
+    # : (?snapshots: bool) -> Hash[Symbol, untyped]
+    def to_h: (?snapshots: bool) -> Hash[Symbol, untyped]
   end
 end

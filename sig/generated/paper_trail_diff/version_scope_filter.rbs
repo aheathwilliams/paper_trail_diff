@@ -1,0 +1,22 @@
+# Generated from lib/paper_trail_diff/version_scope_filter.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Applies a caller's version filter to a range, naming which of its versions
+  # count as selected mutations. The unfiltered versions stay available to the
+  # caller, because the one that reveals the last selected mutation is drawn
+  # from them.
+  class VersionScopeFilter
+    # : (untyped) -> void
+    def initialize: (untyped) -> void
+
+    # : (untyped, Array[untyped]) -> Array[untyped]
+    def call: (untyped, Array[untyped]) -> Array[untyped]
+
+    private
+
+    @scope: untyped
+
+    # : (untyped) -> untyped
+    def validated: (untyped) -> untyped
+  end
+end

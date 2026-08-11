@@ -4,11 +4,12 @@
 module PaperTrailDiff
   # Selects an inclusive, chronological range from a record's root versions.
   class VersionRange
-    #: (untyped, from: untyped, to: untyped) -> void
-    def initialize(record, from:, to:)
+    #: (untyped, from: untyped, to: untyped, ?version_scope: untyped) -> void
+    def initialize(record, from:, to:, version_scope: nil)
       @record = record
       @from = from
       @to = to
+      @version_scope = version_scope
     end
 
     #: () -> Array[untyped]
@@ -38,6 +39,7 @@ module PaperTrailDiff
     # @rbs @record: untyped
     # @rbs @from: untyped
     # @rbs @to: untyped
+    # @rbs @version_scope: untyped
 
     #: () -> untyped
     def versions_relation
@@ -50,13 +52,23 @@ module PaperTrailDiff
 
     #: (untyped, ?through: untyped) -> Array[untyped]
     def select_relation(relation, through: nil)
-      selected = relation.to_a.select do |version|
+      in_range = ordered(relation.to_a.select do |version|
         next false if Support.compare_versions(@from, version).positive?
         next true unless through
 
         Support.compare_versions(version, through) <= 0
-      end
-      selected.sort_by { |version| Support.chronological_version_key(version) }
+      end)
+      RootVersionSelection.new(
+        in_range: in_range,
+        selected: VersionScopeFilter.new(@version_scope).call(relation, in_range),
+        after_range: nil,
+        windowed: false
+      ).call.first
+    end
+
+    #: (Array[untyped]) -> Array[untyped]
+    def ordered(versions)
+      versions.sort_by { |version| Support.chronological_version_key(version) }
     end
 
     #: (untyped, untyped, boundary: Symbol) -> void

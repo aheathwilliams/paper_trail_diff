@@ -16,14 +16,14 @@ module PaperTrailDiff
     # : (Array[comparison_input]) -> comparison_results
     def compare_many: (Array[comparison_input]) -> comparison_results
 
-    # : (untyped, from: untyped, to: untyped, within: untyped) -> Array[Step]
-    def timeline: (untyped, from: untyped, to: untyped, within: untyped) -> Array[Step]
+    # : (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped) -> Array[Step]
+    def timeline: (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped) -> Array[Step]
 
-    # : (untyped, from: untyped, to: untyped, within: untyped) -> Array[ActivityStep]
-    def activity_timeline: (untyped, from: untyped, to: untyped, within: untyped) -> Array[ActivityStep]
+    # : (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped) -> Array[ActivityStep]
+    def activity_timeline: (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped) -> Array[ActivityStep]
 
-    # : (untyped, from: untyped, to: untyped, within: untyped, ?activity: bool) -> Analysis
-    def analyze: (untyped, from: untyped, to: untyped, within: untyped, ?activity: bool) -> Analysis
+    # : (untyped, from: untyped, to: untyped, within: untyped, ?activity: bool, ?version_scope: untyped) -> Analysis
+    def analyze: (untyped, from: untyped, to: untyped, within: untyped, ?activity: bool, ?version_scope: untyped) -> Analysis
 
     # Analyzes many roots over one shared range, preparing their history once.
     # : (Array[untyped], within: untyped, ?activity: bool, ?version_scope: untyped) -> Hash[identity, Analysis]
@@ -65,8 +65,8 @@ module PaperTrailDiff
     # : () -> ActivitySnapshotProvider
     def build_activity_snapshotter: () -> ActivitySnapshotProvider
 
-    # : (untyped, from: untyped, to: untyped, within: untyped) -> ActivityTimelineBuilder
-    def activity_builder: (untyped, from: untyped, to: untyped, within: untyped) -> ActivityTimelineBuilder
+    # : (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped) -> ActivityTimelineBuilder
+    def activity_builder: (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped) -> ActivityTimelineBuilder
 
     # : (untyped) -> void
     def reject_live_habtm_activity!: (untyped) -> void

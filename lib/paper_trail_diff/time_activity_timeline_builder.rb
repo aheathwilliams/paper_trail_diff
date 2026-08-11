@@ -39,12 +39,14 @@ module PaperTrailDiff
 
     #: () -> [ActivityHistory, Array[untyped], ActivityStep?]
     def history_and_versions
-      root_versions = @range.select(context_required: !@tree.empty?)
+      root_versions, context_version = @range.select_with_context(
+        context_required: !@tree.empty?
+      )
       return [ActivityHistory.empty, root_versions, nil] if root_versions.empty?
 
       prepare_history(root_versions)
       events = collect_events(root_versions)
-      selected = selected_events(events)
+      selected = selected_events(events, context_version)
       return [ActivityHistory.empty, root_versions, nil] unless time_events?(selected, events)
 
       history = build_history(root_versions, events)
@@ -68,9 +70,23 @@ module PaperTrailDiff
       (history.steps + [closing]).freeze
     end
 
-    #: (Array[ActivityEvent]) -> Array[ActivityEvent]
-    def selected_events(events)
-      events.select { |event| @range.include?(event.version) }
+    # A root version appended only to reveal the last selected mutation sits
+    # inside the window once a filter is in play, but it is context rather than
+    # a reported mutation, so it must not be counted as one.
+    #: (Array[ActivityEvent], untyped) -> Array[ActivityEvent]
+    def selected_events(events, context_version)
+      events.select do |event|
+        next false unless @range.include?(event.version)
+
+        !context_event?(event, context_version)
+      end
+    end
+
+    #: (ActivityEvent, untyped) -> bool
+    def context_event?(event, context_version)
+      return false unless context_version && event.root?
+
+      event.version.id == context_version.id
     end
 
     # The window's last selected mutation is the root's own destruction, so the

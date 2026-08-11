@@ -7,15 +7,16 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- Accept `version_scope:` on `analyze_many`, narrowing which root versions count
-  as selected mutations. The version following the last selected mutation is
+- Accept `version_scope:` on `timeline`, `activity_timeline`, `analyze`, and
+  `analyze_many`, narrowing which root versions count as selected mutations. The version following the last selected mutation is
   still loaded unfiltered, because it is the reconstruction context that reveals
   what that mutation produced, and its own change is not attributed to it. A
   root left with no selected mutation reports an empty `Analysis`.
 - Expose `from_snapshot` and `to_snapshot` on `Analysis`, the reconstructed
   states its diff was taken between, so a report can render unchanged columns
-  without selecting versions or reifying them itself. `Analysis#to_h` is
-  unchanged, matching the precedent set when `Step` gained boundary readers.
+  without selecting versions or reifying them itself. `Analysis#to_h` keeps its
+  shape by default and takes `snapshots: true` to include them, because they
+  carry the whole selected graph whether or not anything changed.
 
 ## [0.5.0] - 2026-08-11
 

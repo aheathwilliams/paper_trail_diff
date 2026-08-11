@@ -54,32 +54,14 @@ module PaperTrailDiff
       ]
     end
 
-    # The selected mutations, plus whichever unfiltered version follows the last
-    # of them. That successor is reconstruction context rather than a selected
-    # mutation, so a filter must never remove it: without it the final selected
-    # change cannot be revealed at all. A range closing on the root's own
-    # destruction needs no successor, because none can exist.
     #: (Array[untyped], Set[untyped]?, untyped) -> Array[untyped]
     def versions_for(in_range, chosen, after_range)
-      selected = chosen ? in_range.select { |version| chosen.include?(version.id) } : in_range
-      return selected.freeze if selected.empty?
-
-      successor = successor_for(in_range, selected.last, after_range)
-      return (selected + [successor]).freeze if successor
-      return selected.freeze if @time_range.nil? || terminal_destroy?(selected)
-
-      raise IncompleteTimeRangeError,
-            'time range requires a later root version to reconstruct its final change'
-    end
-
-    # A filtered-out version still inside the range is the state the last
-    # selected change produced, so it is preferred over anything after the range.
-    #: (Array[untyped], untyped, untyped) -> untyped
-    def successor_for(in_range, last_selected, after_range)
-      within = in_range.find do |version|
-        Support.compare_versions(last_selected, version).negative?
-      end
-      within || after_range
+      RootVersionSelection.new(
+        in_range: in_range,
+        selected: chosen ? in_range.select { |version| chosen.include?(version.id) } : in_range,
+        after_range: after_range,
+        windowed: !@time_range.nil?
+      ).call.first
     end
 
     # One extra query names the selected mutations without discarding the
@@ -93,11 +75,6 @@ module PaperTrailDiff
       # `pluck` to plain enumerables, so an array of versions works too.
       filtered = scope.call(range_scope(model_class, ids, range))
       Set.new(filtered.pluck(:id))
-    end
-
-    #: (Array[untyped]) -> bool
-    def terminal_destroy?(versions)
-      versions.last&.event.to_s == 'destroy'
     end
 
     #: (untyped, Array[untyped], TimeRange?) -> Hash[String, Array[untyped]]

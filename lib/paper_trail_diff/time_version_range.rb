@@ -4,34 +4,39 @@
 module PaperTrailDiff
   # Selects in-range root versions plus one later reconstruction boundary.
   class TimeVersionRange
-    #: (untyped, time_range: TimeRange) -> void
-    def initialize(record, time_range:)
+    #: (untyped, time_range: TimeRange, ?version_scope: untyped) -> void
+    def initialize(record, time_range:, version_scope: nil)
       @record = record
       @time_range = time_range
+      @version_scope = version_scope
     end
 
     #: (?context_required: bool) -> Array[untyped]
     def select(context_required: false)
+      select_with_context(context_required: context_required).first
+    end
+
+    # The second value is the version present only to reveal the last selected
+    # mutation, which a caller reporting mutations must not treat as one.
+    #: (?context_required: bool) -> [Array[untyped], untyped]
+    def select_with_context(context_required: false)
       relation = versions_relation
-      selected = ordered(@time_range.scope(relation).to_a)
-      empty = [] #: Array[untyped]
-      return empty.freeze if selected.empty? && !context_required
-
-      trailing = trailing_version(relation)
-      unless trailing
-        return selected.freeze if terminal_destroy?(selected)
-
-        message = 'time range requires a later root version to reconstruct its final change'
-        raise IncompleteTimeRangeError, message
-      end
-
-      (selected + [trailing]).freeze
+      in_range = ordered(@time_range.scope(relation).to_a)
+      RootVersionSelection.new(
+        in_range: in_range,
+        selected: VersionScopeFilter.new(@version_scope).call(@time_range.scope(relation),
+                                                              in_range),
+        after_range: trailing_version(relation),
+        windowed: true,
+        context_required: context_required
+      ).call
     end
 
     private
 
     # @rbs @record: untyped
     # @rbs @time_range: TimeRange
+    # @rbs @version_scope: untyped
 
     #: () -> untyped
     def versions_relation
@@ -40,15 +45,6 @@ module PaperTrailDiff
     rescue NoMethodError => e
       message = 'record does not expose a PaperTrail version history'
       raise InvalidTimelineRangeError, message, cause: e
-    end
-
-    # A window closing on the record's own destruction needs no later version:
-    # the destroy reveals the preceding mutation and nothing can follow it, so
-    # demanding a checkpoint that can never be written would reject the range
-    # permanently.
-    #: (Array[untyped]) -> bool
-    def terminal_destroy?(versions)
-      versions.last&.event.to_s == 'destroy'
     end
 
     #: (untyped) -> untyped

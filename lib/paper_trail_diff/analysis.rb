@@ -31,11 +31,19 @@ module PaperTrailDiff
       freeze
     end
 
-    #: () -> Hash[Symbol, untyped]
-    def to_h
+    # Reconstructed endpoint states are opt-in, because they carry the whole
+    # selected graph whether or not anything changed, which dwarfs the rest of
+    # the payload for a wide graph.
+    #: (?snapshots: bool) -> Hash[Symbol, untyped]
+    def to_h(snapshots: false)
       value = { diff: diff.to_h, timeline: Support.serialize(timeline) }
       value[:activity_timeline] = Support.serialize(activity_timeline) if activity_timeline
-      value
+      return value unless snapshots
+
+      value.merge(
+        from_snapshot: Support.serialize(from_snapshot),
+        to_snapshot: Support.serialize(to_snapshot)
+      )
     end
   end
 end

@@ -26,26 +26,13 @@ module PaperTrailDiff
     # : (untyped, Array[untyped]) -> [Hash[String, Array[untyped]], Set[untyped]?, Hash[String, untyped]]
     def model_versions: (untyped, Array[untyped]) -> [ Hash[String, Array[untyped]], Set[untyped]?, Hash[String, untyped] ]
 
-    # The selected mutations, plus whichever unfiltered version follows the last
-    # of them. That successor is reconstruction context rather than a selected
-    # mutation, so a filter must never remove it: without it the final selected
-    # change cannot be revealed at all. A range closing on the root's own
-    # destruction needs no successor, because none can exist.
     # : (Array[untyped], Set[untyped]?, untyped) -> Array[untyped]
     def versions_for: (Array[untyped], Set[untyped]?, untyped) -> Array[untyped]
-
-    # A filtered-out version still inside the range is the state the last
-    # selected change produced, so it is preferred over anything after the range.
-    # : (Array[untyped], untyped, untyped) -> untyped
-    def successor_for: (Array[untyped], untyped, untyped) -> untyped
 
     # One extra query names the selected mutations without discarding the
     # unfiltered versions the successor lookup still needs.
     # : (untyped, Array[untyped], TimeRange?) -> Set[untyped]?
     def chosen_version_ids: (untyped, Array[untyped], TimeRange?) -> Set[untyped]?
-
-    # : (Array[untyped]) -> bool
-    def terminal_destroy?: (Array[untyped]) -> bool
 
     # : (untyped, Array[untyped], TimeRange?) -> Hash[String, Array[untyped]]
     def grouped_versions: (untyped, Array[untyped], TimeRange?) -> Hash[String, Array[untyped]]

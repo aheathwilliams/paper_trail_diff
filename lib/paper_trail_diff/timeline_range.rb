@@ -10,10 +10,11 @@ module PaperTrailDiff
     attr_reader :to #: untyped
     attr_reader :time_range #: TimeRange?
 
-    #: (untyped, from: untyped, to: untyped, within: untyped, ?versions: Array[untyped]?) -> void
-    def initialize(record, from:, to:, within:, versions: nil)
+    #: (untyped, from: untyped, to: untyped, within: untyped, ?versions: Array[untyped]?, ?version_scope: untyped) -> void
+    def initialize(record, from:, to:, within:, versions: nil, version_scope: nil) # rubocop:disable Metrics/ParameterLists
       @record = record
       @versions = versions&.freeze
+      @version_scope = version_scope
       @requested_from = from
       @requested_to = to
       @time_range = build_time_range(within)
@@ -32,6 +33,16 @@ module PaperTrailDiff
 
     # A batch may have selected these versions already, in which case reselecting
     # them per record would undo the batching.
+    #: (?context_required: bool) -> [Array[untyped], untyped]
+    def select_with_context(context_required: false)
+      range = time_range
+      return [select(context_required: context_required), nil] unless range && !unresolved?
+
+      TimeVersionRange.new(
+        @record, time_range: range, version_scope: @version_scope
+      ).select_with_context(context_required: context_required)
+    end
+
     #: (?context_required: bool) -> Array[untyped]
     def select(context_required: false)
       preselected = @versions
@@ -39,13 +50,13 @@ module PaperTrailDiff
 
       range = time_range
       if range
-        return TimeVersionRange.new(@record, time_range: range).select(
-          context_required: context_required
-        )
+        return TimeVersionRange.new(
+          @record, time_range: range, version_scope: @version_scope
+        ).select(context_required: context_required)
       end
       return empty_versions if unresolved?
 
-      VersionRange.new(@record, from: @from, to: @to).select
+      VersionRange.new(@record, from: @from, to: @to, version_scope: @version_scope).select
     end
 
     #: () -> bool
@@ -68,6 +79,7 @@ module PaperTrailDiff
 
     # @rbs @record: untyped
     # @rbs @versions: Array[untyped]?
+    # @rbs @version_scope: untyped
     # @rbs @requested_from: untyped
     # @rbs @requested_to: untyped
     # @rbs @from: untyped

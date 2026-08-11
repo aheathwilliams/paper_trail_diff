@@ -31,8 +31,14 @@ module PaperTrailDiff
     # : (ActivityHistory, ActivityStep?) -> Array[ActivityStep]
     def activity_steps: (ActivityHistory, ActivityStep?) -> Array[ActivityStep]
 
-    # : (Array[ActivityEvent]) -> Array[ActivityEvent]
-    def selected_events: (Array[ActivityEvent]) -> Array[ActivityEvent]
+    # A root version appended only to reveal the last selected mutation sits
+    # inside the window once a filter is in play, but it is context rather than
+    # a reported mutation, so it must not be counted as one.
+    # : (Array[ActivityEvent], untyped) -> Array[ActivityEvent]
+    def selected_events: (Array[ActivityEvent], untyped) -> Array[ActivityEvent]
+
+    # : (ActivityEvent, untyped) -> bool
+    def context_event?: (ActivityEvent, untyped) -> bool
 
     # The window's last selected mutation is the root's own destruction, so the
     # timeline closes on the absence it leaves rather than on a later boundary.

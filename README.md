@@ -330,20 +330,27 @@ listing page needs no special case. Root identities must be unique.
 which is what a "changes made by a user" report needs:
 
 ```ruby
-results = PaperTrailDiff.analyze_many(
-  articles,
-  within: window,
-  associations: [:comments],
-  version_scope: ->(scope) { scope.where.not(whodunnit: nil) }
-)
+user_edits = ->(scope) { scope.where.not(whodunnit: nil) }
+
+PaperTrailDiff.analyze_many(articles, within: window, version_scope: user_edits)
+PaperTrailDiff.timeline(article, within: window, version_scope: user_edits)
 ```
 
-The hook receives the version relation for the window and returns a narrowed
-one. It filters *selected mutations only*. The version that follows the last
-selected mutation is still loaded unfiltered, because a version records the
-state before its own event: without the next one, whatever the last selected
-change produced cannot be shown at all. That version is reconstruction context,
-so its own change is never attributed to the selected mutation.
+The hook receives the version relation for the range and returns a narrowed one.
+It is accepted by `timeline`, `activity_timeline`, `analyze`, and
+`analyze_many`, with any range form.
+
+It filters *selected mutations only*. The version that follows the last selected
+mutation is still loaded unfiltered, because a version records the state before
+its own event: without the next one, whatever the last selected change produced
+cannot be shown at all. That version is reconstruction context, so its own
+change is never attributed to the selected mutation.
+
+Consecutive selected mutations bound each other, so a change made between two of
+them by someone the filter excluded appears inside that step. A filtered
+timeline reports what changed between the selected checkpoints, which is not the
+same as what each selected mutation did in isolation. Only the last one gets a
+dedicated revealing version, because only it has nothing selected after it.
 
 Given a user edit followed by a system edit, filtering to user changes yields
 one step running from the user version to the system version, whose diff is

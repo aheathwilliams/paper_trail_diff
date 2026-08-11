@@ -50,44 +50,48 @@ module PaperTrailDiff
       end
     end
 
-    #: (untyped, from: untyped, to: untyped, within: untyped) -> Array[Step]
-    def timeline(record, from:, to:, within:)
-      @traversal_preparer.call(record.class, historical: true)
-      builder = TimelineBuilder.new(
-        record,
-        from: from,
-        to: to,
-        within: within,
-        snapshotter: @timeline_snapshotter
-      )
-      builder.build
-    end
-
-    #: (untyped, from: untyped, to: untyped, within: untyped) -> Array[ActivityStep]
-    def activity_timeline(record, from:, to:, within:)
-      payload = @instrumentation_payload.merge(model_type: record.class.base_class.name.to_s)
-      Instrumentation.instrument('activity_timeline', payload) do
-        @traversal_preparer.call(record.class, historical: true)
-        reject_live_habtm_activity!(record.class) if Endpoint.record?(to)
-        steps = activity_builder(record, from: from, to: to, within: within).build
-        payload[:step_count] = steps.length
-        steps
-      end
-    end
-
-    #: (untyped, from: untyped, to: untyped, within: untyped, ?activity: bool) -> Analysis
-    def analyze(record, from:, to:, within:, activity: false)
-      if activity
-        @traversal_preparer.call(record.class, historical: true)
-        return activity_builder(record, from: from, to: to, within: within).analyze
-      end
-
+    #: (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped) -> Array[Step]
+    def timeline(record, from:, to:, within:, version_scope: nil)
       @traversal_preparer.call(record.class, historical: true)
       TimelineBuilder.new(
         record,
         from: from,
         to: to,
         within: within,
+        version_scope: version_scope,
+        snapshotter: @timeline_snapshotter
+      ).build
+    end
+
+    #: (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped) -> Array[ActivityStep]
+    def activity_timeline(record, from:, to:, within:, version_scope: nil)
+      payload = @instrumentation_payload.merge(model_type: record.class.base_class.name.to_s)
+      Instrumentation.instrument('activity_timeline', payload) do
+        @traversal_preparer.call(record.class, historical: true)
+        reject_live_habtm_activity!(record.class) if Endpoint.record?(to)
+        steps = activity_builder(
+          record, from: from, to: to, within: within, version_scope: version_scope
+        ).build
+        payload[:step_count] = steps.length
+        steps
+      end
+    end
+
+    #: (untyped, from: untyped, to: untyped, within: untyped, ?activity: bool, ?version_scope: untyped) -> Analysis
+    def analyze(record, from:, to:, within:, activity: false, version_scope: nil) # rubocop:disable Metrics/ParameterLists
+      @traversal_preparer.call(record.class, historical: true)
+      if activity
+        return activity_builder(
+          record, from: from, to: to, within: within, version_scope: version_scope
+        ).analyze
+      end
+
+      TimelineBuilder.new(
+        record,
+        from: from,
+        to: to,
+        within: within,
+        version_scope: version_scope,
         snapshotter: @timeline_snapshotter
       ).analyze
     end
@@ -169,11 +173,13 @@ module PaperTrailDiff
       )
     end
 
-    #: (untyped, from: untyped, to: untyped, within: untyped) -> ActivityTimelineBuilder
-    def activity_builder(record, from:, to:, within:)
+    #: (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped) -> ActivityTimelineBuilder
+    def activity_builder(record, from:, to:, within:, version_scope: nil)
       ActivityTimelineBuilder.new(
         record,
-        range: TimelineRange.new(record, from: from, to: to, within: within),
+        range: TimelineRange.new(
+          record, from: from, to: to, within: within, version_scope: version_scope
+        ),
         tree: @association_tree,
         snapshotter: @activity_snapshotter
       )
