@@ -213,6 +213,21 @@ diffs = PaperTrailDiff.compare_many(
 diffs.fetch(["Order", orders.first.id.to_s]) # => PaperTrailDiff::Diff
 ```
 
+Endpoints may also be given as `:first` or `:last`, resolved against the record
+the pair's other endpoint names. That replaces the lookup above entirely, and
+resolves every root in two queries per model class rather than one per root:
+
+```ruby
+diffs = PaperTrailDiff.compare_many(
+  orders.map { |order| { from: :first, to: order } },
+  associations: [:line_items]
+)
+```
+
+A symbol carries no identity of its own, so `{ from: :first, to: :last }` raises
+rather than guessing. A root with no recorded history resolves to an empty
+`Diff`, matching how the timeline APIs answer the same question.
+
 Root identities must be unique within one call. Historical reconstruction for
 ordinary versioned, unscoped association paths is also prepared across the
 collection. Paths that require the existing point-in-time PT-AT fallback retain
@@ -286,6 +301,43 @@ ActiveSupport::Notifications.subscribed(callback, "sql.active_record") do
   PaperTrailDiff.compare_many(comparisons, associations: [:line_items])
 end
 ```
+
+## Analyze many records over one window
+
+`analyze_many` answers "what changed for these records during this period" for a
+whole collection, selecting every root's versions and preparing their selected
+association history once for the batch:
+
+```ruby
+results = PaperTrailDiff.analyze_many(
+  Order.where(status: "open").to_a,
+  within: Time.zone.parse("2026-08-01")...Time.zone.parse("2026-09-01"),
+  associations: [:line_items]
+)
+
+results.fetch(["Order", order.id.to_s]).diff      # net change across the window
+results.fetch(["Order", order.id.to_s]).timeline  # its checkpoint steps
+```
+
+Results are a frozen hash keyed by `[item_type, item_id]` strings, and each
+value is the same `Analysis` that `analyze` returns for one record. A root with
+no versions inside the window gets an empty `Analysis` rather than raising, so a
+listing page needs no special case. Root identities must be unique.
+
+Omit `within:` to analyze each root's whole recorded history instead, which is
+the batched equivalent of `analyze(record, from: :first, to: :last)`. Explicit
+version endpoints are not accepted, because a single pair cannot mean the same
+thing for every root.
+
+Query cost is flat in the number of roots for the diff and timeline views:
+selecting versions and preparing history are both shared across the batch. On a
+twenty-root batch that is 7 queries against 120 for the same work done one
+record at a time. Passing `activity: true` also works and returns the same
+results, but discovering descendant events is inherently per-root, so that view
+batches far less.
+
+Roots are supplied as live records, so a root deleted inside the window cannot
+be included; use `activity_timeline` for a history that ends in a deletion.
 
 ## Build a root-checkpoint timeline
 

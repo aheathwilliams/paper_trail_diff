@@ -1,0 +1,22 @@
+# Generated from lib/paper_trail_diff/traversal_preparer.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Checks that a model can be traversed before any reconstruction starts, and
+  # that association tracking is actually available when history is involved.
+  class TraversalPreparer
+    # : (tree: AssociationTree, traversal: AssociationTraversal) -> void
+    def initialize: (tree: AssociationTree, traversal: AssociationTraversal) -> void
+
+    # : (untyped, historical: bool) -> void
+    def call: (untyped, historical: bool) -> void
+
+    private
+
+    @traversal: AssociationTraversal
+
+    @tree: AssociationTree
+
+    # : () -> void
+    def ensure_association_tracking!: () -> void
+  end
+end

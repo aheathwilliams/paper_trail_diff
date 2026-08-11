@@ -86,6 +86,44 @@ RSpec.describe PaperTrailDiff do
       end.to raise_error(PaperTrailDiff::ReversedEndpointsError, /chronological order/)
     end
 
+    it 'resolves :first and :last endpoints for a whole batch' do
+      endpoints = 3.times.map do |index|
+        article = CoreArticle.create!(title: "Draft #{index}", internal_note: 'stable')
+        article.update!(title: "Published #{index}")
+        article
+      end
+
+      symbolic = described_class.compare_many(
+        endpoints.map { |article| { from: :first, to: article } }
+      )
+      explicit = described_class.compare_many(
+        endpoints.map { |article| { from: article.versions.reload.first, to: article } }
+      )
+
+      expect(symbolic.transform_values(&:to_h)).to eq(explicit.transform_values(&:to_h))
+    end
+
+    it 'answers an unresolvable or unanchored boundary symbol explicitly' do
+      article = CoreArticle.create!(title: 'Draft', internal_note: 'stable')
+      article.update!(title: 'Published')
+      untracked = PaperTrail.request(enabled: false) do
+        CoreArticle.create!(title: 'Untracked', internal_note: 'none')
+      end
+
+      # No recorded history is an empty result, not a failure.
+      results = described_class.compare_many(
+        [{ from: :first, to: article }, { from: :first, to: untracked }]
+      )
+      expect(results.fetch(PaperTrailDiff::Endpoint.identity(untracked))).to be_empty
+      expect(results.fetch(PaperTrailDiff::Endpoint.identity(article))).not_to be_empty
+
+      # A symbol carries no identity, so something must anchor it.
+      expect { described_class.compare_many([{ from: :first, to: :last }]) }
+        .to raise_error(PaperTrailDiff::ConfigurationError, /name a record/)
+      expect { described_class.compare_many([{ from: :beginning, to: article }]) }
+        .to raise_error(PaperTrailDiff::ConfigurationError, /unsupported boundary/)
+    end
+
     it 'rejects invalid and mismatched current record endpoints' do
       article, _create, draft, = create_history
       other = CoreArticle.create!(title: 'Other', internal_note: 'other')
@@ -322,6 +360,59 @@ RSpec.describe PaperTrailDiff do
       CoreArticle.where(id: article.id).delete_all
       expect { described_class.compare_many([comparison]) }
         .to raise_error(PaperTrailDiff::InvalidEndpointError, /reloaded/)
+    end
+  end
+
+  describe '.analyze_many' do
+    def windowed_articles(count)
+      articles = count.times.map do |index|
+        article = CoreArticle.create!(title: "Draft #{index}", internal_note: 'stable')
+        article.update!(title: "Published #{index}")
+        article
+      end
+      start_at = PaperTrail::Version.order(:id).first.created_at
+      cutoff = PaperTrail::Version.order(:id).last.created_at
+      articles.each_with_index { |article, i| article.update!(title: "Final #{i}") }
+      [articles, start_at..cutoff]
+    end
+
+    it 'matches analyzing each root separately over the same window' do
+      articles, window = windowed_articles(3)
+
+      batched = described_class.analyze_many(articles, within: window)
+      separately = articles.to_h do |article|
+        [PaperTrailDiff::Endpoint.identity(article),
+         described_class.analyze(article, within: window)]
+      end
+
+      expect(batched.keys).to eq(separately.keys)
+      expect(batched.transform_values(&:to_h)).to eq(separately.transform_values(&:to_h))
+      expect(batched).to be_frozen
+    end
+
+    it 'returns an empty analysis for a root with no versions in the window' do
+      articles, window = windowed_articles(2)
+      untracked = PaperTrail.request(enabled: false) do
+        CoreArticle.create!(title: 'Untracked', internal_note: 'none')
+      end
+
+      results = described_class.analyze_many(articles + [untracked], within: window)
+      empty = results.fetch(PaperTrailDiff::Endpoint.identity(untracked))
+
+      expect(results.length).to eq(3)
+      expect(empty.timeline).to eq([])
+      expect(empty.diff).to be_empty
+    end
+
+    it 'rejects duplicate roots and non-record input' do
+      articles, window = windowed_articles(1)
+
+      expect { described_class.analyze_many(articles * 2, within: window) }
+        .to raise_error(PaperTrailDiff::ConfigurationError, /unique/)
+      expect { described_class.analyze_many(articles.first, within: window) }
+        .to raise_error(PaperTrailDiff::ConfigurationError, /must be an array/)
+      expect { described_class.analyze_many([Object.new], within: window) }
+        .to raise_error(PaperTrailDiff::InvalidEndpointError)
     end
   end
 

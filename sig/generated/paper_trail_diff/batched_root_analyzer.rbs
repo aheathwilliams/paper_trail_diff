@@ -1,0 +1,28 @@
+# Generated from lib/paper_trail_diff/batched_root_analyzer.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Builds one root's Analysis inside a batch, from versions the batch already
+  # selected and history it already prepared.
+  class BatchedRootAnalyzer
+    # : (tree: AssociationTree, timeline_snapshotter: untyped, activity_snapshotter: untyped, preparer: untyped, activity: bool) -> void
+    def initialize: (tree: AssociationTree, timeline_snapshotter: untyped, activity_snapshotter: untyped, preparer: untyped, activity: bool) -> void
+
+    # : (untyped, Array[untyped]) -> Analysis
+    def call: (untyped, Array[untyped]) -> Analysis
+
+    private
+
+    @activity: bool
+
+    @activity_snapshotter: untyped
+
+    @preparer: untyped
+
+    @timeline_snapshotter: untyped
+
+    @tree: AssociationTree
+
+    # : (untyped, Array[untyped]) -> Analysis
+    def activity_analysis: (untyped, Array[untyped]) -> Analysis
+  end
+end

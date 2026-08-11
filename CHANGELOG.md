@@ -7,6 +7,17 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Add `analyze_many`, which analyzes many roots over one shared `within:` window,
+  or over each root's whole history when the window is omitted, selecting their
+  versions and preparing their history once for the batch. Query cost is flat in
+  the number of roots for the endpoint diff and checkpoint timeline; descendant
+  event discovery under `activity: true` remains per-root. A root with no
+  versions in range returns an empty `Analysis`, and roots are supplied as live
+  records so a root deleted inside the window cannot be included.
+- Accept `:first` and `:last` as `compare_many` endpoints, resolved against the
+  record the pair's other endpoint names, in two queries per model class rather
+  than one lookup per root. A root with no recorded history compares as an empty
+  `Diff`, and an unanchored `{ from: :first, to: :last }` raises.
 - Accept `reload_live_endpoints:` on `activity_timeline`, which reads live state
   whenever `to:` is a current record but previously had no way to reuse an
   already-preloaded graph. `timeline` and `analyze` are bounded by versions and

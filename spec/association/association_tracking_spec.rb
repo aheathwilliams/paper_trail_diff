@@ -1366,6 +1366,117 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     expect(unchanged).to equal(previous)
   end
 
+  it 'analyzes each root whole history when no window is given' do
+    articles = 2.times.map do |index|
+      article = TrackedArticle.create!(title: "Whole #{index}")
+      article.comments.create!(body: "Comment #{index}")
+      article.update!(title: "Whole updated #{index}")
+      article
+    end
+
+    batched = PaperTrailDiff.analyze_many(articles, associations: [:comments])
+    separately = articles.to_h do |article|
+      [PaperTrailDiff::Endpoint.identity(article),
+       PaperTrailDiff.analyze(article, from: :first, to: :last, associations: [:comments])]
+    end
+
+    expect(batched.transform_values(&:to_h)).to eq(separately.transform_values(&:to_h))
+    expect(PaperTrailDiff.analyze_many([], associations: [:comments])).to eq({})
+  end
+
+  it 'compares a batch whose root has no recorded history as empty' do
+    tracked = TrackedArticle.create!(title: 'Tracked')
+    tracked.comments.create!(body: 'Comment')
+    tracked.update!(title: 'Tracked again')
+    untracked = PaperTrail.request(enabled: false) { TrackedArticle.create!(title: 'Untracked') }
+
+    results = PaperTrailDiff.compare_many(
+      [{ from: :first, to: tracked }, { from: :first, to: untracked }],
+      associations: [:comments]
+    )
+
+    expect(results.fetch(PaperTrailDiff::Endpoint.identity(untracked))).to be_empty
+    expect(results.fetch(PaperTrailDiff::Endpoint.identity(tracked))).not_to be_empty
+  end
+
+  it 'rejects a destroyed root, whose live state a batch cannot read' do
+    doomed = TrackedArticle.create!(title: 'Doomed')
+    kept = TrackedArticle.create!(title: 'Kept')
+    start_at = PaperTrail::Version.order(:id).first.created_at
+    doomed.destroy!
+    kept.update!(title: 'Kept again')
+    cutoff = PaperTrail::Version.order(:id).last.created_at
+    kept.update!(title: 'After window')
+
+    # `analyze_many` takes live records, so a root deleted inside the window has
+    # no live state to supply. Use `activity_timeline` for that history instead.
+    expect { PaperTrailDiff.analyze_many([doomed, kept], within: start_at..cutoff) }
+      .to raise_error(PaperTrailDiff::InvalidEndpointError, /not destroyed/)
+    expect(PaperTrailDiff.analyze_many([kept], within: start_at..cutoff).length).to eq(1)
+  end
+
+  it 'refuses a batched window whose final mutation has no later root version' do
+    article = TrackedArticle.create!(title: 'Unreconstructable')
+    start_at = PaperTrail::Version.order(:id).first.created_at
+    article.update!(title: 'Last recorded change')
+    cutoff = PaperTrail::Version.order(:id).last.created_at + 60
+
+    expect { PaperTrailDiff.analyze_many([article], within: start_at..cutoff) }
+      .to raise_error(PaperTrailDiff::IncompleteTimeRangeError, /later root version/)
+  end
+
+  it 'anchors a batched boundary symbol on a version as well as a record' do
+    article = TrackedArticle.create!(title: 'Anchored')
+    article.comments.create!(body: 'First')
+    first_version = article.versions.reload.first
+    boundary_for(article)
+
+    from_record = PaperTrailDiff.compare_many([{ from: :first, to: article }],
+                                              associations: [:comments])
+    from_version = PaperTrailDiff.compare_many([{ from: first_version, to: :last }],
+                                               associations: [:comments])
+
+    expect(from_record.length).to eq(1)
+    expect(from_version.length).to eq(1)
+    expect(from_version.values.first).not_to be_empty
+  end
+
+  it 'keeps batched analysis queries constant as the root count grows' do
+    build = lambda do |count|
+      articles = count.times.map do |index|
+        article = TrackedArticle.create!(title: "Batched #{index}")
+        article.comments.create!(body: "Comment #{index}")
+        article.update!(title: "Updated #{index}")
+        article
+      end
+      start_at = PaperTrail::Version.order(:id).first.created_at
+      cutoff = PaperTrail::Version.order(:id).last.created_at
+      articles.each_with_index { |article, i| article.update!(title: "Final #{i}") }
+      [articles, start_at..cutoff]
+    end
+
+    small_articles, small_window = build.call(2)
+    small = sql_query_count do
+      PaperTrailDiff.analyze_many(small_articles, within: small_window, associations: [:comments])
+    end
+    large_articles, large_window = build.call(8)
+    batched = nil
+    large = sql_query_count do
+      batched = PaperTrailDiff.analyze_many(
+        large_articles, within: large_window, associations: [:comments]
+      )
+    end
+
+    separately = large_articles.to_h do |article|
+      [PaperTrailDiff::Endpoint.identity(article),
+       PaperTrailDiff.analyze(article, within: large_window, associations: [:comments])]
+    end
+
+    # Preparation and root selection are shared, so the batch does not pay per root.
+    expect(large).to eq(small)
+    expect(batched.transform_values(&:to_h)).to eq(separately.transform_values(&:to_h))
+  end
+
   it 'reuses an already-preloaded current boundary when asked not to reload' do
     article = TrackedArticle.create!(title: 'Preloaded')
     TrackedComment.create!(article: article, body: 'First')

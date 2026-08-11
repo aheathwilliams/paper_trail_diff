@@ -24,6 +24,8 @@ module PaperTrailDiff
       end_at: root_versions.last.created_at
     )
       return if @tree.empty?
+      # A batched preparation already covers these roots.
+      return if root_versions.any? { |v| @prepared_histories.key?(context_key(v)) }
 
       @prepared_history = PreparedHistoryLoader.new(
         record,
@@ -35,7 +37,6 @@ module PaperTrailDiff
       ).call
     end
 
-    # Prepares selected history for several roots of the same model class.
     #: (Array[untyped], Array[untyped]) -> void
     def prepare_batch(records, root_versions)
       return if @tree.empty? || records.empty? || root_versions.empty?
@@ -50,12 +51,7 @@ module PaperTrailDiff
       key = snapshot_key(root_endpoint, context_endpoint)
       return @snapshots[key] if @snapshots.key?(key)
 
-      @snapshots[key] = custom(
-        root_endpoint,
-        context_endpoint,
-        tree: @tree,
-        normalizer: @normalizer
-      )
+      @snapshots[key] = uncached(root_endpoint, context_endpoint)
     end
 
     #: (untyped, untyped) -> RecordSnapshot?

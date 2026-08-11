@@ -1,7 +1,10 @@
 # Generated from lib/paper_trail_diff/paper_trail_adapter.rb with RBS::Inline
 
 module PaperTrailDiff
-  # PaperTrail/ActiveRecord boundary that produces plain record snapshots.
+  # PaperTrail/ActiveRecord boundary that produces plain record snapshots. It is
+  # deliberately the widest class here: it fronts every public operation and is
+  # the only place allowed to know about both PaperTrail and the pure engine.
+  # Reconstruction logic lives in the collaborators it wires together.
   class PaperTrailAdapter
     # : (associations: Array[String | Symbol], ignore: ignore_option, ?reload_live_endpoints: bool) -> void
     def initialize: (associations: Array[String | Symbol], ignore: ignore_option, ?reload_live_endpoints: bool) -> void
@@ -21,6 +24,10 @@ module PaperTrailDiff
 
     # : (untyped, from: untyped, to: untyped, within: untyped, ?activity: bool) -> Analysis
     def analyze: (untyped, from: untyped, to: untyped, within: untyped, ?activity: bool) -> Analysis
+
+    # Analyzes many roots over one shared range, preparing their history once.
+    # : (Array[untyped], within: untyped, ?activity: bool) -> Hash[identity, Analysis]
+    def analyze_many: (Array[untyped], within: untyped, ?activity: bool) -> Hash[identity, Analysis]
 
     private
 
@@ -43,6 +50,14 @@ module PaperTrailDiff
     @timeline_snapshotter: TimelineSnapshotProvider
 
     @traversal: AssociationTraversal
+
+    @traversal_preparer: TraversalPreparer
+
+    # : () -> void
+    def build_snapshotters: () -> void
+
+    # : (bool) -> BatchedRootAnalyzer
+    def batched_root_analyzer: (bool) -> BatchedRootAnalyzer
 
     # : () -> HistoricalSnapshotStore
     def build_historical_store: () -> HistoricalSnapshotStore
@@ -73,11 +88,5 @@ module PaperTrailDiff
 
     # : (untyped) -> RecordSnapshot
     def normalize_live_snapshot: (untyped) -> RecordSnapshot
-
-    # : (untyped, historical: bool) -> void
-    def prepare_traversal!: (untyped, historical: bool) -> void
-
-    # : () -> void
-    def ensure_association_tracking!: () -> void
   end
 end

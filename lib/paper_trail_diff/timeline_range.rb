@@ -10,9 +10,10 @@ module PaperTrailDiff
     attr_reader :to #: untyped
     attr_reader :time_range #: TimeRange?
 
-    #: (untyped, from: untyped, to: untyped, within: untyped) -> void
-    def initialize(record, from:, to:, within:)
+    #: (untyped, from: untyped, to: untyped, within: untyped, ?versions: Array[untyped]?) -> void
+    def initialize(record, from:, to:, within:, versions: nil)
       @record = record
+      @versions = versions&.freeze
       @requested_from = from
       @requested_to = to
       @time_range = build_time_range(within)
@@ -29,8 +30,13 @@ module PaperTrailDiff
       (symbolic?(@requested_from) && @from.nil?) || (symbolic?(@requested_to) && @to.nil?)
     end
 
+    # A batch may have selected these versions already, in which case reselecting
+    # them per record would undo the batching.
     #: (?context_required: bool) -> Array[untyped]
     def select(context_required: false)
+      preselected = @versions
+      return preselected if preselected
+
       range = time_range
       if range
         return TimeVersionRange.new(@record, time_range: range).select(
@@ -61,6 +67,7 @@ module PaperTrailDiff
     private
 
     # @rbs @record: untyped
+    # @rbs @versions: Array[untyped]?
     # @rbs @requested_from: untyped
     # @rbs @requested_to: untyped
     # @rbs @from: untyped

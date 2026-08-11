@@ -1,0 +1,42 @@
+# Generated from lib/paper_trail_diff/analysis_batch.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Builds one Analysis per root over a shared range, selecting every root's
+  # versions and preparing their association history once for the whole batch
+  # rather than once per root.
+  class AnalysisBatch
+    # : (Array[untyped], time_range: TimeRange?, live_loader: untyped, history_preparer: untyped, analyzer: untyped) -> void
+    def initialize: (Array[untyped], time_range: TimeRange?, live_loader: untyped, history_preparer: untyped, analyzer: untyped) -> void
+
+    # : () -> Hash[identity, Analysis]
+    def call: () -> Hash[identity, Analysis]
+
+    private
+
+    @analyzer: untyped
+
+    @history_preparer: untyped
+
+    @live_loader: untyped
+
+    @records: Array[untyped]
+
+    @time_range: TimeRange?
+
+    # : () -> Array[untyped]
+    def validated_records: () -> Array[untyped]
+
+    # Association history is prepared per model class across every selected root
+    # version, which is the work that would otherwise repeat for each record.
+    # The roots are preloaded first, because preparation reads their current
+    # association state as a fallback and would otherwise walk it one root at a
+    # time.
+    # : (Array[untyped], Hash[Array[String], Array[untyped]]) -> void
+    def prepare: (Array[untyped], Hash[Array[String], Array[untyped]]) -> void
+
+    # A root with no versions in range has nothing to report, which is an empty
+    # result rather than a failed request.
+    # : (untyped, Array[untyped]) -> Analysis
+    def analysis_for: (untyped, Array[untyped]) -> Analysis
+  end
+end

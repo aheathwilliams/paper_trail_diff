@@ -1,0 +1,62 @@
+# Generated from lib/paper_trail_diff/batched_root_versions.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Selects each root's versions for a batched range in a fixed number of
+  # queries. Only the range forms that mean the same thing for every root are
+  # supported: a shared wall-clock window, or each root's own whole history.
+  class BatchedRootVersions
+    # : (Array[untyped], time_range: TimeRange?) -> void
+    def initialize: (Array[untyped], time_range: TimeRange?) -> void
+
+    # Returns root versions per record identity, in chronological order.
+    # : () -> Hash[Array[String], Array[untyped]]
+    def call: () -> Hash[Array[String], Array[untyped]]
+
+    private
+
+    @records: Array[untyped]
+
+    @time_range: TimeRange?
+
+    # : (untyped, Array[untyped], Hash[Array[String], Array[untyped]]) -> void
+    def select_model: (untyped, Array[untyped], Hash[Array[String], Array[untyped]]) -> void
+
+    # The window's own versions plus, when it has one, the later version needed
+    # to reveal the last mutation inside it. A window closing on the root's own
+    # destruction needs no later version, because none can exist.
+    # : (Array[untyped], untyped) -> Array[untyped]
+    def versions_for: (Array[untyped], untyped) -> Array[untyped]
+
+    # : (Array[untyped]) -> bool
+    def terminal_destroy?: (Array[untyped]) -> bool
+
+    # : (untyped, Array[untyped], TimeRange?) -> Hash[String, Array[untyped]]
+    def grouped_versions: (untyped, Array[untyped], TimeRange?) -> Hash[String, Array[untyped]]
+
+    # One row per root: the earliest version after the window, found without a
+    # window function so the query stays portable.
+    # : (untyped, Array[untyped], TimeRange) -> Hash[String, untyped]
+    def trailing_versions: (untyped, Array[untyped], TimeRange) -> Hash[String, untyped]
+
+    # : (untyped, TimeRange) -> untyped
+    def no_earlier_trailing: (untyped, TimeRange) -> untyped
+
+    # Mirrors the window's own end handling, so a version sitting exactly on an
+    # inclusive boundary stays inside the window instead of masking the trailing
+    # version that follows it.
+    # : (untyped, untyped, TimeRange) -> untyped
+    def preceding: (untyped, untyped, TimeRange) -> untyped
+
+    # : (untyped, TimeRange) -> untyped
+    def after_window: (untyped, TimeRange) -> untyped
+
+    # : (untyped, Array[untyped]) -> untyped
+    def base_scope: (untyped, Array[untyped]) -> untyped
+
+    # : (untyped) -> Array[untyped]
+    def ordered: (untyped) -> Array[untyped]
+
+    # : (untyped, untyped) -> Array[String]
+    def identity: (untyped, untyped) -> Array[String]
+  end
+end

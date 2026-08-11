@@ -10,6 +10,7 @@ require_relative 'paper_trail_diff/errors'
 require_relative 'paper_trail_diff/configuration'
 require_relative 'paper_trail_diff/endpoint'
 require_relative 'paper_trail_diff/association_traversal'
+require_relative 'paper_trail_diff/traversal_preparer'
 require_relative 'paper_trail_diff/association_discovery'
 require_relative 'paper_trail_diff/diagnostics'
 require_relative 'paper_trail_diff/collection_identity_index'
@@ -36,7 +37,9 @@ require_relative 'paper_trail_diff/live_endpoint_batch_loader'
 require_relative 'paper_trail_diff/preloaded_endpoint_batch_loader'
 require_relative 'paper_trail_diff/live_endpoint_provider'
 require_relative 'paper_trail_diff/live_graph_collector'
+require_relative 'paper_trail_diff/batch_boundary_resolver'
 require_relative 'paper_trail_diff/comparison_batch'
+require_relative 'paper_trail_diff/batched_root_versions'
 require_relative 'paper_trail_diff/snapshot_normalizer'
 require_relative 'paper_trail_diff/historical_snapshot_store'
 require_relative 'paper_trail_diff/timeline_snapshot_provider'
@@ -56,6 +59,8 @@ require_relative 'paper_trail_diff/activity_boundary'
 require_relative 'paper_trail_diff/step'
 require_relative 'paper_trail_diff/analysis'
 require_relative 'paper_trail_diff/activity_root_steps'
+require_relative 'paper_trail_diff/analysis_batch'
+require_relative 'paper_trail_diff/batched_root_analyzer'
 require_relative 'paper_trail_diff/version_range'
 require_relative 'paper_trail_diff/time_range'
 require_relative 'paper_trail_diff/time_version_range'
@@ -90,8 +95,9 @@ require_relative 'paper_trail_diff/paper_trail_adapter'
 #     type traversal_record_path = Array[RecordReference]
 #   end
 
-# Structured version comparison for PaperTrail.
-module PaperTrailDiff
+# Structured version comparison for PaperTrail. Each method is a thin,
+# documented entry point, so this reads as an API listing rather than logic.
+module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
   DEFAULT_IGNORED_ATTRIBUTES = ['updated_at'].freeze
   SUPPORTED_ASSOCIATION_MACROS = %i[
     belongs_to
@@ -193,6 +199,24 @@ module PaperTrailDiff
         record,
         from: from,
         to: to,
+        within: within,
+        activity: activity
+      )
+    end
+
+    # Analyzes many roots over one shared time window, preparing their selected
+    # history once for the batch instead of once per record. Roots with no
+    # versions in the window return an empty `Analysis`.
+    #: (Array[untyped], ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool) -> Hash[identity, Analysis]
+    def analyze_many(
+      records,
+      within: nil,
+      associations: [],
+      ignore: DEFAULT_IGNORED_ATTRIBUTES,
+      activity: false
+    )
+      PaperTrailAdapter.new(associations: associations, ignore: ignore).analyze_many(
+        records,
         within: within,
         activity: activity
       )

@@ -1,7 +1,9 @@
 # Generated from lib/paper_trail_diff.rb with RBS::Inline
 
-# Structured version comparison for PaperTrail.
+# Structured version comparison for PaperTrail. Each method is a thin,
+# documented entry point, so this reads as an API listing rather than logic.
 module PaperTrailDiff
+  # rubocop:disable Metrics/ModuleLength
   DEFAULT_IGNORED_ATTRIBUTES: untyped
 
   SUPPORTED_ASSOCIATION_MACROS: untyped
@@ -27,6 +29,12 @@ module PaperTrailDiff
   # Builds an endpoint diff and root-checkpoint timeline while normalizing each version once.
   # : (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool) -> Analysis
   def self.analyze: (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool) -> Analysis
+
+  # Analyzes many roots over one shared time window, preparing their selected
+  # history once for the batch instead of once per record. Roots with no
+  # versions in the window return an empty `Analysis`.
+  # : (Array[untyped], ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool) -> Hash[identity, Analysis]
+  def self.analyze_many: (Array[untyped], ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool) -> Hash[identity, Analysis]
 
   # Returns the association macros this release can normalize.
   # : () -> Array[Symbol]
