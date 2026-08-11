@@ -154,16 +154,23 @@ module PaperTrailDiff
     end
 
     # Compares adjacent root and selected-descendant activity boundaries.
-    #: (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option) -> Array[ActivityStep]
+    # `reload_live_endpoints:` applies only when `to:` is a current record; the
+    # other range forms never read live state.
+    #: (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?reload_live_endpoints: bool) -> Array[ActivityStep]
     def activity_timeline( # rubocop:disable Metrics/ParameterLists
       record,
       from: nil,
       to: nil,
       within: nil,
       associations: [],
-      ignore: DEFAULT_IGNORED_ATTRIBUTES
+      ignore: DEFAULT_IGNORED_ATTRIBUTES,
+      reload_live_endpoints: true
     )
-      PaperTrailAdapter.new(associations: associations, ignore: ignore).activity_timeline(
+      PaperTrailAdapter.new(
+        associations: associations,
+        ignore: ignore,
+        reload_live_endpoints: reload_live_endpoints
+      ).activity_timeline(
         record,
         from: from,
         to: to,

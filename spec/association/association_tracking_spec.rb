@@ -1366,6 +1366,34 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     expect(unchanged).to equal(previous)
   end
 
+  it 'reuses an already-preloaded current boundary when asked not to reload' do
+    article = TrackedArticle.create!(title: 'Preloaded')
+    TrackedComment.create!(article: article, body: 'First')
+    start = boundary_for(article)
+    preloaded = TrackedArticle.where(id: article.id).preload(:comments).first
+
+    steps = PaperTrailDiff.activity_timeline(
+      preloaded, from: start, to: preloaded,
+                 associations: [:comments], reload_live_endpoints: false
+    )
+    reloaded = PaperTrailDiff.activity_timeline(
+      TrackedArticle.find(article.id), from: start, to: TrackedArticle.find(article.id),
+                                       associations: [:comments]
+    )
+
+    # Only the captured instant of the current boundary may differ between them.
+    expect(steps.map { |step| step.diff.to_h }).to eq(reloaded.map { |step| step.diff.to_h })
+    expect(steps.last.to_boundary.kind).to eq(:current)
+    # An unloaded association must still fail loudly rather than silently querying.
+    expect do
+      bare = TrackedArticle.find(article.id)
+      PaperTrailDiff.activity_timeline(
+        bare, from: start, to: bare,
+              associations: [:comments], reload_live_endpoints: false
+      )
+    end.to raise_error(PaperTrailDiff::UnloadedAssociationError)
+  end
+
   it 'reuses immutable activity routes for repeated event types' do
     tree = PaperTrailDiff::AssociationTree.build(['comments.replies'])
     finder = PaperTrailDiff::ActivityEventRouteFinder.new(

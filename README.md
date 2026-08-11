@@ -225,8 +225,10 @@ must observe one atomic snapshot.
 
 ### Reuse already-preloaded current endpoints
 
-`compare` and `compare_many` reload current endpoints by default. A caller that
-already owns a consistent, fully preloaded graph may opt out:
+`compare`, `compare_many`, and `activity_timeline(..., to: record)` reload
+current endpoints by default. A caller that already owns a consistent, fully
+preloaded graph may opt out. The option has no effect on `timeline` or
+`analyze`, which are bounded by versions and never read live state:
 
 ```ruby
 orders = Order.where(id: order_ids).preload(line_items: :product).to_a

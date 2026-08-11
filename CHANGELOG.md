@@ -3,6 +3,15 @@
 All notable changes to this project will be documented in this file. The
 project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- Accept `reload_live_endpoints:` on `activity_timeline`, which reads live state
+  whenever `to:` is a current record but previously had no way to reuse an
+  already-preloaded graph. `timeline` and `analyze` are bounded by versions and
+  never read live state, so the option is deliberately absent there.
+
 ## [0.4.0] - 2026-08-11
 
 ### Added
