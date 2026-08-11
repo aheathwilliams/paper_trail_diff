@@ -184,7 +184,7 @@ RSpec.describe PaperTrailDiff::Engine do
 
     comments = described_class.compare(from, to).associations.fetch('comments')
 
-    expect(comments.added.map(&:id)).to eq([10, 3])
+    expect(comments.added.map(&:id)).to eq([3, 10])
     expect(comments.removed.map(&:id)).to eq([1])
     expect(comments.changed.map(&:to_h)).to eq(
       [{
@@ -192,6 +192,25 @@ RSpec.describe PaperTrailDiff::Engine do
         attributes: { 'body' => { from: 'Before', to: 'After' } }
       }]
     )
+  end
+
+  it 'orders collection results naturally within an id type and totally across types' do
+    added_order = lambda do |ids|
+      records = ids.map { |id| snapshot(type: 'Comment', id: id, attributes: {}) }
+      from = snapshot(type: 'Article', id: 1, attributes: {},
+                      associations: { comments: association(:has_many) })
+      to = snapshot(type: 'Article', id: 1, attributes: {},
+                    associations: { comments: association(:has_many, *records) })
+      described_class.compare(from, to).associations.fetch('comments').added.map(&:id)
+    end
+
+    # Numeric ids sort numerically rather than by their printed form.
+    expect(added_order.call([10, 2, 1, 20, 3])).to eq([1, 2, 3, 10, 20])
+    expect(added_order.call(%w[b-2 a-10 a-2])).to eq(%w[a-10 a-2 b-2])
+    # Mixed and unusual id types must still order totally, without raising.
+    expect(added_order.call([10, 'b', 2, 'a'])).to eq([2, 10, 'a', 'b'])
+    expect(added_order.call([[2, 1], [1, 2]])).to eq([[1, 2], [2, 1]])
+    expect(added_order.call([2, nil, 1])).to eq([1, 2, nil])
   end
 
   it 'reports aligned collection changes in deterministic identity order' do
@@ -209,7 +228,7 @@ RSpec.describe PaperTrailDiff::Engine do
     )
     changed = described_class.compare(from, to).associations.fetch('comments').changed
 
-    expect(changed.map { |change| change.record.id }).to eq([10, 3])
+    expect(changed.map { |change| change.record.id }).to eq([3, 10])
   end
 
   it 'reports updates from an adjacent collection transition' do

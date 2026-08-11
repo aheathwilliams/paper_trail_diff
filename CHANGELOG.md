@@ -39,6 +39,9 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Order collection `added`, `removed`, and `changed` results naturally within
+  one id type instead of by the printed form, so numeric ids sort `2` before
+  `10`. Ordering remains deterministic and total for mixed id types.
 - Resolve a boundary's prepared record state by chronological search and an
   indexed boundary transaction instead of scanning a record's versions, so
   timelines over long single-record histories stay linear in their step count.

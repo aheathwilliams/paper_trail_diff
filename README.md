@@ -869,7 +869,9 @@ The public result types are:
 - `PaperTrailDiff::DiagnosticIssue`
 
 They expose readers, are frozen after construction, and provide deterministic
-`to_h` output. Structural hash keys are symbols; attribute and association
+`to_h` output. Collection results are ordered by record identity: by type, then
+naturally within one id type, so numeric ids sort `2` before `10`. Mixed or
+unusual id types still order totally rather than raising. Structural hash keys are symbols; attribute and association
 names are strings. Attribute values retain their Ruby types. `RecordChange#record`
 is a `RecordReference` with `type` and `id` readers. `TraversalEntry#record` and
 `#association` return the final components of their corresponding paths. `Step`
