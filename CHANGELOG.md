@@ -15,7 +15,9 @@ project follows [Semantic Versioning](https://semver.org/).
   mutation is bounded by the version that immediately followed it rather than by
   the next selected one, so its diff is exactly what that mutation did however
   many excluded changes follow it. A selected mutation nothing follows yet is
-  not reported, since no version records the state it produced. A root left with
+  not reported, since no version records the state it produced; a selected
+  destruction is the exception, because the absence it leaves is what it
+  produced and `activity_timeline` closes on it. A root left with
   no selected mutation reports an empty `Analysis`. Under `activity: true` the
   filter decides the span; `activity_timeline` still lists every boundary inside
   it, because dropping one would fold its change into a neighbouring step.

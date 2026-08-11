@@ -359,7 +359,9 @@ Given a user edit followed by a system edit, filtering to user changes yields
 one step running from the user version to the system version, whose diff is
 exactly the user's change. A selected mutation that nothing follows yet is not
 reported, since no version records the state it produced — the same blind spot
-an unfiltered timeline has at its `to:` boundary. A root with no selected
+an unfiltered timeline has at its `to:` boundary. A selected *destruction* is
+the exception: nothing can follow one, but the absence it leaves is what it
+produced, so `activity_timeline` still closes on it. A root with no selected
 mutation reports an empty `Analysis` rather than raising.
 
 The hook applies to root versions only. Under `activity: true` the filter
