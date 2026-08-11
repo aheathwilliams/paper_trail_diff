@@ -9,13 +9,19 @@ module PaperTrailDiff
 
     attr_reader activity_timeline: Array[ActivityStep]?
 
+    attr_reader from_snapshot: RecordSnapshot?
+
+    attr_reader to_snapshot: RecordSnapshot?
+
     # The result for a record whose requested history contains no versions,
     # which is an empty history rather than a failed request.
     # : () -> Analysis
     def self.empty: () -> Analysis
 
-    # : (diff: Diff, timeline: Array[Step], ?activity_timeline: Array[ActivityStep]?) -> void
-    def initialize: (diff: Diff, timeline: Array[Step], ?activity_timeline: Array[ActivityStep]?) -> void
+    # The reconstructed states the diff was taken between. A report that has to
+    # render unchanged columns needs the whole final state, not only what moved.
+    # : (diff: Diff, timeline: Array[Step], ?activity_timeline: Array[ActivityStep]?, ?from_snapshot: RecordSnapshot?, ?to_snapshot: RecordSnapshot?) -> void
+    def initialize: (diff: Diff, timeline: Array[Step], ?activity_timeline: Array[ActivityStep]?, ?from_snapshot: RecordSnapshot?, ?to_snapshot: RecordSnapshot?) -> void
 
     # : () -> Hash[Symbol, untyped]
     def to_h: () -> Hash[Symbol, untyped]

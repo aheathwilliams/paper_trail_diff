@@ -22,7 +22,9 @@ module PaperTrailDiff
       steps, first_snapshot, last_snapshot = compare_history(selected_versions)
       Analysis.new(
         diff: Engine.compare(first_snapshot, last_snapshot),
-        timeline: steps
+        timeline: steps,
+        from_snapshot: first_snapshot,
+        to_snapshot: last_snapshot
       )
     end
 

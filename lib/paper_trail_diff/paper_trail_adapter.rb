@@ -93,14 +93,15 @@ module PaperTrailDiff
     end
 
     # Analyzes many roots over one shared range, preparing their history once.
-    #: (Array[untyped], within: untyped, ?activity: bool) -> Hash[identity, Analysis]
-    def analyze_many(records, within:, activity: false)
+    #: (Array[untyped], within: untyped, ?activity: bool, ?version_scope: untyped) -> Hash[identity, Analysis]
+    def analyze_many(records, within:, activity: false, version_scope: nil)
       count = records.is_a?(Array) ? records.length : 0
       payload = @instrumentation_payload.merge(comparison_count: count)
       Instrumentation.instrument('analyze_many', payload) do
         AnalysisBatch.new(
           records,
           time_range: within.nil? ? nil : TimeRange.new(within),
+          version_scope: version_scope,
           live_loader: @live_endpoints.method(:call),
           history_preparer: @historical_store.method(:prepare_batch),
           analyzer: batched_root_analyzer(activity)

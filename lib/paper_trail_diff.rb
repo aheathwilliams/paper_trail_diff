@@ -207,18 +207,20 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
     # Analyzes many roots over one shared time window, preparing their selected
     # history once for the batch instead of once per record. Roots with no
     # versions in the window return an empty `Analysis`.
-    #: (Array[untyped], ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool) -> Hash[identity, Analysis]
-    def analyze_many(
+    #: (Array[untyped], ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped) -> Hash[identity, Analysis]
+    def analyze_many( # rubocop:disable Metrics/ParameterLists
       records,
       within: nil,
       associations: [],
       ignore: DEFAULT_IGNORED_ATTRIBUTES,
-      activity: false
+      activity: false,
+      version_scope: nil
     )
       PaperTrailAdapter.new(associations: associations, ignore: ignore).analyze_many(
         records,
         within: within,
-        activity: activity
+        activity: activity,
+        version_scope: version_scope
       )
     end
 

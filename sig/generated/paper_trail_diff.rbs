@@ -33,8 +33,8 @@ module PaperTrailDiff
   # Analyzes many roots over one shared time window, preparing their selected
   # history once for the batch instead of once per record. Roots with no
   # versions in the window return an empty `Analysis`.
-  # : (Array[untyped], ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool) -> Hash[identity, Analysis]
-  def self.analyze_many: (Array[untyped], ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool) -> Hash[identity, Analysis]
+  # : (Array[untyped], ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped) -> Hash[identity, Analysis]
+  def self.analyze_many: (Array[untyped], ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped) -> Hash[identity, Analysis]
 
   # Returns the association macros this release can normalize.
   # : () -> Array[Symbol]

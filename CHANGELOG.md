@@ -3,6 +3,20 @@
 All notable changes to this project will be documented in this file. The
 project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- Accept `version_scope:` on `analyze_many`, narrowing which root versions count
+  as selected mutations. The version following the last selected mutation is
+  still loaded unfiltered, because it is the reconstruction context that reveals
+  what that mutation produced, and its own change is not attributed to it. A
+  root left with no selected mutation reports an empty `Analysis`.
+- Expose `from_snapshot` and `to_snapshot` on `Analysis`, the reconstructed
+  states its diff was taken between, so a report can render unchanged columns
+  without selecting versions or reifying them itself. `Analysis#to_h` is
+  unchanged, matching the precedent set when `Step` gained boundary readers.
+
 ## [0.5.0] - 2026-08-11
 
 ### Added

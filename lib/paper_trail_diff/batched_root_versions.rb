@@ -6,10 +6,11 @@ module PaperTrailDiff
   # queries. Only the range forms that mean the same thing for every root are
   # supported: a shared wall-clock window, or each root's own whole history.
   class BatchedRootVersions
-    #: (Array[untyped], time_range: TimeRange?) -> void
-    def initialize(records, time_range:)
+    #: (Array[untyped], time_range: TimeRange?, ?version_scope: untyped) -> void
+    def initialize(records, time_range:, version_scope: nil)
       @records = records
       @time_range = time_range
+      @version_scope = version_scope
     end
 
     # Returns root versions per record identity, in chronological order.
@@ -28,35 +29,70 @@ module PaperTrailDiff
 
     # @rbs @records: Array[untyped]
     # @rbs @time_range: TimeRange?
+    # @rbs @version_scope: untyped
 
     #: (untyped, Array[untyped], Hash[Array[String], Array[untyped]]) -> void
     def select_model(model_class, records, selected)
       ids = records.map(&:id)
-      range = @time_range
-      grouped = grouped_versions(model_class, ids, range)
-      empty = {} #: Hash[String, untyped]
-      trailing = range ? trailing_versions(model_class, ids, range) : empty
+      in_range, chosen, trailing = model_versions(model_class, ids)
       records.each do |record|
         key = identity(model_class, record.id)
-        selected[key] = versions_for(grouped.fetch(record.id.to_s, []), trailing[record.id.to_s])
+        selected[key] = versions_for(
+          in_range.fetch(record.id.to_s, []), chosen, trailing[record.id.to_s]
+        )
       end
     end
 
-    # The window's own versions plus, when it has one, the later version needed
-    # to reveal the last mutation inside it. A window closing on the root's own
-    # destruction needs no later version, because none can exist.
-    #: (Array[untyped], untyped) -> Array[untyped]
-    def versions_for(in_range, trailing)
-      return in_range if @time_range.nil?
-      return in_range.freeze if in_range.empty?
-      return in_range.freeze if trailing.nil? && terminal_destroy?(in_range)
+    #: (untyped, Array[untyped]) -> [Hash[String, Array[untyped]], Set[untyped]?, Hash[String, untyped]]
+    def model_versions(model_class, ids)
+      range = @time_range
+      empty = {} #: Hash[String, untyped]
+      [
+        grouped_versions(model_class, ids, range),
+        chosen_version_ids(model_class, ids, range),
+        range ? trailing_versions(model_class, ids, range) : empty
+      ]
+    end
 
-      unless trailing
-        raise IncompleteTimeRangeError,
-              'time range requires a later root version to reconstruct its final change'
+    # The selected mutations, plus whichever unfiltered version follows the last
+    # of them. That successor is reconstruction context rather than a selected
+    # mutation, so a filter must never remove it: without it the final selected
+    # change cannot be revealed at all. A range closing on the root's own
+    # destruction needs no successor, because none can exist.
+    #: (Array[untyped], Set[untyped]?, untyped) -> Array[untyped]
+    def versions_for(in_range, chosen, after_range)
+      selected = chosen ? in_range.select { |version| chosen.include?(version.id) } : in_range
+      return selected.freeze if selected.empty?
+
+      successor = successor_for(in_range, selected.last, after_range)
+      return (selected + [successor]).freeze if successor
+      return selected.freeze if @time_range.nil? || terminal_destroy?(selected)
+
+      raise IncompleteTimeRangeError,
+            'time range requires a later root version to reconstruct its final change'
+    end
+
+    # A filtered-out version still inside the range is the state the last
+    # selected change produced, so it is preferred over anything after the range.
+    #: (Array[untyped], untyped, untyped) -> untyped
+    def successor_for(in_range, last_selected, after_range)
+      within = in_range.find do |version|
+        Support.compare_versions(last_selected, version).negative?
       end
+      within || after_range
+    end
 
-      (in_range + [trailing]).freeze
+    # One extra query names the selected mutations without discarding the
+    # unfiltered versions the successor lookup still needs.
+    #: (untyped, Array[untyped], TimeRange?) -> Set[untyped]?
+    def chosen_version_ids(model_class, ids, range)
+      scope = @version_scope
+      return unless scope
+
+      # A narrowed relation is the expected return. Active Support also gives
+      # `pluck` to plain enumerables, so an array of versions works too.
+      filtered = scope.call(range_scope(model_class, ids, range))
+      Set.new(filtered.pluck(:id))
     end
 
     #: (Array[untyped]) -> bool
@@ -66,9 +102,13 @@ module PaperTrailDiff
 
     #: (untyped, Array[untyped], TimeRange?) -> Hash[String, Array[untyped]]
     def grouped_versions(model_class, ids, range)
+      ordered(range_scope(model_class, ids, range)).group_by { |version| version.item_id.to_s }
+    end
+
+    #: (untyped, Array[untyped], TimeRange?) -> untyped
+    def range_scope(model_class, ids, range)
       scope = base_scope(model_class, ids)
-      scope = range.scope(scope) if range
-      ordered(scope).group_by { |version| version.item_id.to_s }
+      range ? range.scope(scope) : scope
     end
 
     # One row per root: the earliest version after the window, found without a

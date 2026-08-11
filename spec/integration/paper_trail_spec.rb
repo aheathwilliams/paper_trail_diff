@@ -404,6 +404,71 @@ RSpec.describe PaperTrailDiff do
       expect(empty.diff).to be_empty
     end
 
+    it 'filters selected mutations while keeping the version that reveals the last one' do
+      article = CoreArticle.create!(title: 'Start', internal_note: 'stable')
+      start_at = PaperTrail::Version.order(:id).first.created_at
+      PaperTrail.request(whodunnit: 'alice') { article.update!(title: 'By Alice') }
+      PaperTrail.request(whodunnit: nil) { article.update!(title: 'By system') }
+      cutoff = PaperTrail::Version.order(:id).last.created_at
+      PaperTrail.request(whodunnit: 'bob') { article.update!(title: 'After window') }
+      key = PaperTrailDiff::Endpoint.identity(article)
+
+      filtered = described_class.analyze_many(
+        [article],
+        within: start_at..cutoff,
+        version_scope: ->(scope) { scope.where.not(whodunnit: nil) }
+      ).fetch(key)
+
+      # One selected mutation, bounded by the system version that follows it.
+      # That version is reconstruction context, so the filter must not drop it,
+      # and its own change must not be attributed to the selected one.
+      expect(filtered.timeline.length).to eq(1)
+      expect(filtered.timeline.map { |step| step.from_version.whodunnit }).to eq(['alice'])
+      expect(filtered.timeline.map { |step| step.to_version.whodunnit }).to eq([nil])
+      expect(filtered.diff.attributes.fetch('title').to_h)
+        .to eq(from: 'Start', to: 'By Alice')
+      expect(filtered.to_snapshot.attributes.fetch('title')).to eq('By Alice')
+    end
+
+    it 'reports nothing for a filter that selects no mutation, and rejects a non-callable one' do
+      article = CoreArticle.create!(title: 'Start', internal_note: 'stable')
+      start_at = PaperTrail::Version.order(:id).first.created_at
+      article.update!(title: 'Changed')
+      cutoff = PaperTrail::Version.order(:id).last.created_at
+      article.update!(title: 'After window')
+      key = PaperTrailDiff::Endpoint.identity(article)
+
+      nothing = described_class.analyze_many(
+        [article], within: start_at..cutoff,
+                   version_scope: ->(scope) { scope.where(whodunnit: 'nobody') }
+      ).fetch(key)
+
+      expect(nothing.timeline).to eq([])
+      expect(nothing.diff).to be_empty
+      expect do
+        described_class.analyze_many([article], within: start_at..cutoff, version_scope: :nope)
+      end
+        .to raise_error(PaperTrailDiff::ConfigurationError, /respond to call/)
+    end
+
+    it 'exposes the reconstructed states the diff was taken between' do
+      articles, window = windowed_articles(2)
+
+      results = described_class.analyze_many(articles, within: window)
+      analysis = results.fetch(PaperTrailDiff::Endpoint.identity(articles.first))
+
+      expect(analysis.to_snapshot).to be_a(PaperTrailDiff::RecordSnapshot)
+      expect(analysis.to_snapshot).to be_frozen
+      expect(analysis.to_snapshot.attributes).to include('title')
+      # Unchanged columns are present, which is the point of exposing them.
+      expect(analysis.to_snapshot.attributes.fetch('internal_note')).to eq('stable')
+      # This window opens on a create version, whose pre-change state is the
+      # absence of the record, so there is genuinely no starting snapshot.
+      expect(analysis.from_snapshot).to be_nil
+      expect(analysis.diff.record_presence_change.to).to eq(analysis.to_snapshot)
+      expect(PaperTrailDiff::Analysis.empty.to_snapshot).to be_nil
+    end
+
     it 'rejects duplicate roots and non-record input' do
       articles, window = windowed_articles(1)
 

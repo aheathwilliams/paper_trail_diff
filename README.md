@@ -324,6 +324,34 @@ value is the same `Analysis` that `analyze` returns for one record. A root with
 no versions inside the window gets an empty `Analysis` rather than raising, so a
 listing page needs no special case. Root identities must be unique.
 
+### Reporting on a subset of mutations
+
+`version_scope:` narrows which root versions count as *selected mutations*,
+which is what a "changes made by a user" report needs:
+
+```ruby
+results = PaperTrailDiff.analyze_many(
+  articles,
+  within: window,
+  associations: [:comments],
+  version_scope: ->(scope) { scope.where.not(whodunnit: nil) }
+)
+```
+
+The hook receives the version relation for the window and returns a narrowed
+one. It filters *selected mutations only*. The version that follows the last
+selected mutation is still loaded unfiltered, because a version records the
+state before its own event: without the next one, whatever the last selected
+change produced cannot be shown at all. That version is reconstruction context,
+so its own change is never attributed to the selected mutation.
+
+Given a user edit followed by a system edit, filtering to user changes yields
+one step running from the user version to the system version, whose diff is
+exactly the user's change. A root with no selected mutation reports an empty
+`Analysis` rather than raising. The hook applies to root versions only;
+`activity: true` still discovers every descendant event between the selected
+boundaries.
+
 Omit `within:` to analyze each root's whole recorded history instead, which is
 the batched equivalent of `analyze(record, from: :first, to: :last)`. Explicit
 version endpoints are not accepted, because a single pair cannot mean the same
@@ -922,10 +950,27 @@ The public result types are:
 - `PaperTrailDiff::DiagnosticReport`
 - `PaperTrailDiff::DiagnosticIssue`
 
+`Analysis` also exposes the reconstructed states its diff was taken between, as
+`from_snapshot` and `to_snapshot`. A report that renders unchanged columns needs
+the whole final state, not only what moved, and these are the states the gem
+already reconstructed:
+
+```ruby
+analysis.to_snapshot.attributes    # every selected scalar, changed or not
+analysis.to_snapshot.associations  # the selected association tree
+```
+
+Either is `nil` when that endpoint has no reconstructable state — most often a
+`from_snapshot` at a `create` boundary, whose pre-change state is the absence of
+the record. Following the precedent set by `Step`, `Analysis#to_h` is unchanged;
+serialize `to_snapshot.to_h` when a serialized form is wanted.
+
 They expose readers, are frozen after construction, and provide deterministic
 `to_h` output. Collection results are ordered by record identity: by type, then
 naturally within one id type, so numeric ids sort `2` before `10`. Mixed or
-unusual id types still order totally rather than raising. Structural hash keys are symbols; attribute and association
+unusual id types still order totally rather than raising.
+
+Structural hash keys are symbols; attribute and association
 names are strings. Attribute values retain their Ruby types. `RecordChange#record`
 is a `RecordReference` with `type` and `id` readers. `TraversalEntry#record` and
 `#association` return the final components of their corresponding paths. `Step`

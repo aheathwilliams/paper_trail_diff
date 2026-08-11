@@ -5,8 +5,8 @@ module PaperTrailDiff
   # queries. Only the range forms that mean the same thing for every root are
   # supported: a shared wall-clock window, or each root's own whole history.
   class BatchedRootVersions
-    # : (Array[untyped], time_range: TimeRange?) -> void
-    def initialize: (Array[untyped], time_range: TimeRange?) -> void
+    # : (Array[untyped], time_range: TimeRange?, ?version_scope: untyped) -> void
+    def initialize: (Array[untyped], time_range: TimeRange?, ?version_scope: untyped) -> void
 
     # Returns root versions per record identity, in chronological order.
     # : () -> Hash[Array[String], Array[untyped]]
@@ -18,20 +18,40 @@ module PaperTrailDiff
 
     @time_range: TimeRange?
 
+    @version_scope: untyped
+
     # : (untyped, Array[untyped], Hash[Array[String], Array[untyped]]) -> void
     def select_model: (untyped, Array[untyped], Hash[Array[String], Array[untyped]]) -> void
 
-    # The window's own versions plus, when it has one, the later version needed
-    # to reveal the last mutation inside it. A window closing on the root's own
-    # destruction needs no later version, because none can exist.
-    # : (Array[untyped], untyped) -> Array[untyped]
-    def versions_for: (Array[untyped], untyped) -> Array[untyped]
+    # : (untyped, Array[untyped]) -> [Hash[String, Array[untyped]], Set[untyped]?, Hash[String, untyped]]
+    def model_versions: (untyped, Array[untyped]) -> [ Hash[String, Array[untyped]], Set[untyped]?, Hash[String, untyped] ]
+
+    # The selected mutations, plus whichever unfiltered version follows the last
+    # of them. That successor is reconstruction context rather than a selected
+    # mutation, so a filter must never remove it: without it the final selected
+    # change cannot be revealed at all. A range closing on the root's own
+    # destruction needs no successor, because none can exist.
+    # : (Array[untyped], Set[untyped]?, untyped) -> Array[untyped]
+    def versions_for: (Array[untyped], Set[untyped]?, untyped) -> Array[untyped]
+
+    # A filtered-out version still inside the range is the state the last
+    # selected change produced, so it is preferred over anything after the range.
+    # : (Array[untyped], untyped, untyped) -> untyped
+    def successor_for: (Array[untyped], untyped, untyped) -> untyped
+
+    # One extra query names the selected mutations without discarding the
+    # unfiltered versions the successor lookup still needs.
+    # : (untyped, Array[untyped], TimeRange?) -> Set[untyped]?
+    def chosen_version_ids: (untyped, Array[untyped], TimeRange?) -> Set[untyped]?
 
     # : (Array[untyped]) -> bool
     def terminal_destroy?: (Array[untyped]) -> bool
 
     # : (untyped, Array[untyped], TimeRange?) -> Hash[String, Array[untyped]]
     def grouped_versions: (untyped, Array[untyped], TimeRange?) -> Hash[String, Array[untyped]]
+
+    # : (untyped, Array[untyped], TimeRange?) -> untyped
+    def range_scope: (untyped, Array[untyped], TimeRange?) -> untyped
 
     # One row per root: the earliest version after the window, found without a
     # window function so the query stays portable.

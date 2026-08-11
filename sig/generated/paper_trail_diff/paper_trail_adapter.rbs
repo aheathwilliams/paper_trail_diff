@@ -26,8 +26,8 @@ module PaperTrailDiff
     def analyze: (untyped, from: untyped, to: untyped, within: untyped, ?activity: bool) -> Analysis
 
     # Analyzes many roots over one shared range, preparing their history once.
-    # : (Array[untyped], within: untyped, ?activity: bool) -> Hash[identity, Analysis]
-    def analyze_many: (Array[untyped], within: untyped, ?activity: bool) -> Hash[identity, Analysis]
+    # : (Array[untyped], within: untyped, ?activity: bool, ?version_scope: untyped) -> Hash[identity, Analysis]
+    def analyze_many: (Array[untyped], within: untyped, ?activity: bool, ?version_scope: untyped) -> Hash[identity, Analysis]
 
     private
 

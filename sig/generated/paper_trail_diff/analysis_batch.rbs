@@ -5,8 +5,8 @@ module PaperTrailDiff
   # versions and preparing their association history once for the whole batch
   # rather than once per root.
   class AnalysisBatch
-    # : (Array[untyped], time_range: TimeRange?, live_loader: untyped, history_preparer: untyped, analyzer: untyped) -> void
-    def initialize: (Array[untyped], time_range: TimeRange?, live_loader: untyped, history_preparer: untyped, analyzer: untyped) -> void
+    # : (Array[untyped], time_range: TimeRange?, live_loader: untyped, history_preparer: untyped, analyzer: untyped, ?version_scope: untyped) -> void
+    def initialize: (Array[untyped], time_range: TimeRange?, live_loader: untyped, history_preparer: untyped, analyzer: untyped, ?version_scope: untyped) -> void
 
     # : () -> Hash[identity, Analysis]
     def call: () -> Hash[identity, Analysis]
@@ -22,6 +22,13 @@ module PaperTrailDiff
     @records: Array[untyped]
 
     @time_range: TimeRange?
+
+    @version_scope: untyped
+
+    # A filter is a callable that narrows the version relation, so it is checked
+    # up front rather than failing partway through a batch.
+    # : (untyped) -> untyped
+    def validated_scope: (untyped) -> untyped
 
     # : () -> Array[untyped]
     def validated_records: () -> Array[untyped]

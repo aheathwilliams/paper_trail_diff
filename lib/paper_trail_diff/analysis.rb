@@ -7,6 +7,8 @@ module PaperTrailDiff
     attr_reader :diff #: Diff
     attr_reader :timeline #: Array[Step]
     attr_reader :activity_timeline #: Array[ActivityStep]?
+    attr_reader :from_snapshot #: RecordSnapshot?
+    attr_reader :to_snapshot #: RecordSnapshot?
 
     # The result for a record whose requested history contains no versions,
     # which is an empty history rather than a failed request.
@@ -17,11 +19,15 @@ module PaperTrailDiff
       new(diff: Diff.new, timeline: timeline, activity_timeline: activity_timeline)
     end
 
-    #: (diff: Diff, timeline: Array[Step], ?activity_timeline: Array[ActivityStep]?) -> void
-    def initialize(diff:, timeline:, activity_timeline: nil)
+    # The reconstructed states the diff was taken between. A report that has to
+    # render unchanged columns needs the whole final state, not only what moved.
+    #: (diff: Diff, timeline: Array[Step], ?activity_timeline: Array[ActivityStep]?, ?from_snapshot: RecordSnapshot?, ?to_snapshot: RecordSnapshot?) -> void
+    def initialize(diff:, timeline:, activity_timeline: nil, from_snapshot: nil, to_snapshot: nil)
       @diff = diff
       @timeline = timeline.dup.freeze
       @activity_timeline = activity_timeline&.dup&.freeze
+      @from_snapshot = from_snapshot
+      @to_snapshot = to_snapshot
       freeze
     end
 

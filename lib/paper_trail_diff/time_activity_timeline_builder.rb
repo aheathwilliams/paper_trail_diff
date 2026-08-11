@@ -24,7 +24,9 @@ module PaperTrailDiff
       Analysis.new(
         diff: Engine.compare(history.first_snapshot, history.last_snapshot),
         timeline: ActivityRootSteps.call(root_versions, history.root_snapshots),
-        activity_timeline: activity_steps(history, closing)
+        activity_timeline: activity_steps(history, closing),
+        from_snapshot: history.first_snapshot,
+        to_snapshot: history.last_snapshot
       )
     end
 

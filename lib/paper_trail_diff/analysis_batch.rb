@@ -6,10 +6,13 @@ module PaperTrailDiff
   # versions and preparing their association history once for the whole batch
   # rather than once per root.
   class AnalysisBatch
-    #: (Array[untyped], time_range: TimeRange?, live_loader: untyped, history_preparer: untyped, analyzer: untyped) -> void
-    def initialize(records, time_range:, live_loader:, history_preparer:, analyzer:)
+    #: (Array[untyped], time_range: TimeRange?, live_loader: untyped, history_preparer: untyped, analyzer: untyped, ?version_scope: untyped) -> void
+    def initialize( # rubocop:disable Metrics/ParameterLists
+      records, time_range:, live_loader:, history_preparer:, analyzer:, version_scope: nil
+    )
       @records = records
       @time_range = time_range
+      @version_scope = validated_scope(version_scope)
       @live_loader = live_loader
       @history_preparer = history_preparer
       @analyzer = analyzer
@@ -18,7 +21,9 @@ module PaperTrailDiff
     #: () -> Hash[identity, Analysis]
     def call
       records = validated_records
-      selected = BatchedRootVersions.new(records, time_range: @time_range).call
+      selected = BatchedRootVersions.new(
+        records, time_range: @time_range, version_scope: @version_scope
+      ).call
       prepare(records, selected)
       records.to_h do |record|
         key = Endpoint.identity(record)
@@ -30,9 +35,19 @@ module PaperTrailDiff
 
     # @rbs @records: Array[untyped]
     # @rbs @time_range: TimeRange?
+    # @rbs @version_scope: untyped
     # @rbs @live_loader: untyped
     # @rbs @history_preparer: untyped
     # @rbs @analyzer: untyped
+
+    # A filter is a callable that narrows the version relation, so it is checked
+    # up front rather than failing partway through a batch.
+    #: (untyped) -> untyped
+    def validated_scope(scope)
+      return scope if scope.nil? || scope.respond_to?(:call)
+
+      raise ConfigurationError, 'version_scope: must respond to call'
+    end
 
     #: () -> Array[untyped]
     def validated_records

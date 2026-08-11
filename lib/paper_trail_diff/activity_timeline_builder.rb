@@ -184,7 +184,9 @@ module PaperTrailDiff
         timeline: ActivityRootSteps.call(root_versions, history.root_snapshots),
         activity_timeline: activity_steps(
           history, events, destroyed_boundary(root_versions), nil
-        )
+        ),
+        from_snapshot: history.first_snapshot,
+        to_snapshot: history.last_snapshot
       )
     end
 
