@@ -7,8 +7,8 @@ module PaperTrailDiff
     # : (tree: AssociationTree, timeline_snapshotter: untyped, activity_snapshotter: untyped, preparer: untyped, activity: bool) -> void
     def initialize: (tree: AssociationTree, timeline_snapshotter: untyped, activity_snapshotter: untyped, preparer: untyped, activity: bool) -> void
 
-    # : (untyped, Array[untyped]) -> Analysis
-    def call: (untyped, Array[untyped]) -> Analysis
+    # : (untyped, RootVersionPlan) -> Analysis
+    def call: (untyped, RootVersionPlan) -> Analysis
 
     private
 
@@ -22,7 +22,7 @@ module PaperTrailDiff
 
     @tree: AssociationTree
 
-    # : (untyped, Array[untyped]) -> Analysis
-    def activity_analysis: (untyped, Array[untyped]) -> Analysis
+    # : (untyped, RootVersionPlan) -> Analysis
+    def activity_analysis: (untyped, RootVersionPlan) -> Analysis
   end
 end

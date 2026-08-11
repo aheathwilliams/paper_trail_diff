@@ -1788,4 +1788,82 @@ RSpec.describe 'PaperTrailDiff association tracking' do
       PaperTrailDiff.diagnose(graph[:before], after, associations: [:missing])
     end.to raise_error(PaperTrailDiff::UnknownAssociationError, /missing/)
   end
+
+  describe 'version_scope over a run of excluded versions' do
+    # Three consecutive excluded versions between two selected ones, so the
+    # excluded run is longer than the single successor each selected mutation is
+    # bounded by. Anything that replays only the reported boundaries goes stale
+    # in the middle of that run.
+    def filtered_gap_history
+      article = nil
+      PaperTrail.request(whodunnit: 'alice') { article = TrackedArticle.create!(title: 'Start') }
+      PaperTrail.request(whodunnit: 'alice') { article.update!(title: 'By Alice') }
+      PaperTrail.request(whodunnit: nil) do
+        article.update!(title: 'System 1')
+        article.comments.create!(body: 'system comment')
+      end
+      PaperTrail.request(whodunnit: nil) { article.update!(title: 'System 2') }
+      PaperTrail.request(whodunnit: nil) { article.update!(title: 'System 3') }
+      PaperTrail.request(whodunnit: 'bob') { article.update!(title: 'By Bob') }
+      PaperTrail.request(whodunnit: nil) { article.update!(title: 'Trailing') }
+      [article, ->(scope) { scope.where.not(whodunnit: nil) }]
+    end
+
+    def titles(steps)
+      steps.map do |step|
+        change = step.diff.attributes['title']
+        change && [change.from, change.to]
+      end
+    end
+
+    it 'reads the state each selected mutation started from, not the one before the run' do
+      article, users = filtered_gap_history
+
+      steps = PaperTrailDiff.timeline(article, from: :first, to: :last, version_scope: users,
+                                               associations: ['comments'])
+
+      expect(steps.map { |step| step.from_version.whodunnit }).to eq(%w[alice alice bob])
+      expect(titles(steps)).to eq([nil, ['Start', 'By Alice'], ['System 3', 'By Bob']])
+    end
+
+    it 'reports the same root timeline whether or not the activity view builds it' do
+      article, users = filtered_gap_history
+
+      plain = PaperTrailDiff.analyze(article, from: :first, to: :last, version_scope: users,
+                                              associations: ['comments'])
+      activity = PaperTrailDiff.analyze(article, from: :first, to: :last, version_scope: users,
+                                                 activity: true, associations: ['comments'])
+
+      # The activity view carries one snapshot forward across every event, so it
+      # has to replay the excluded versions even though it never reports them.
+      expect(titles(activity.timeline)).to eq(titles(plain.timeline))
+      expect(activity.to_snapshot.attributes.fetch('title')).to eq('By Bob')
+    end
+
+    it 'keeps every boundary in the activity sequence the filter spans' do
+      article, users = filtered_gap_history
+
+      steps = PaperTrailDiff.activity_timeline(article, from: :first, to: :last,
+                                                        version_scope: users,
+                                                        associations: ['comments'])
+
+      # A filter narrows where the span starts and ends. Inside it the sequence
+      # stays complete, because dropping a boundary would fold the change it
+      # carried into a neighbouring step and credit it to whoever made that one.
+      expect(titles(steps)).to include(['System 1', 'System 2'], ['System 2', 'System 3'])
+      expect(titles(steps).last).to eq(['System 3', 'By Bob'])
+    end
+
+    it 'excludes filtered-out versions from a windowed timeline it still replays' do
+      article, users = filtered_gap_history
+      versions = PaperTrail::Version.where(item_type: 'TrackedArticle').order(:id).to_a
+      window = versions.fetch(1).created_at..versions.fetch(5).created_at
+
+      steps = PaperTrailDiff.timeline(article, within: window, version_scope: users,
+                                               associations: ['comments'])
+
+      expect(steps.map { |step| step.from_version.whodunnit }).to eq(%w[alice bob])
+      expect(titles(steps)).to eq([['Start', 'By Alice'], ['System 3', 'By Bob']])
+    end
+  end
 end

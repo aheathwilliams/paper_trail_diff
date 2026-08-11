@@ -4,12 +4,14 @@
 module PaperTrailDiff
   # Selects and compares a chronological slice of a record's version history.
   class TimelineBuilder
-    #: (untyped, from: untyped, to: untyped, snapshotter: untyped, ?within: untyped, ?versions: Array[untyped]?, ?version_scope: untyped) -> void
-    def initialize(record, from:, to:, snapshotter:, within: nil, versions: nil, version_scope: nil) # rubocop:disable Metrics/ParameterLists
+    #: (untyped, from: untyped, to: untyped, snapshotter: untyped, ?within: untyped, ?versions: Array[untyped]?, ?version_scope: untyped, ?plan: RootVersionPlan?) -> void
+    def initialize( # rubocop:disable Metrics/ParameterLists
+      record, from:, to:, snapshotter:, within: nil, versions: nil, version_scope: nil, plan: nil
+    )
       @record = record
       @range = TimelineRange.new(
         record, from: from, to: to, within: within,
-                versions: versions, version_scope: version_scope
+                versions: versions, version_scope: version_scope, plan: plan
       )
       @snapshotter = snapshotter
     end
@@ -37,24 +39,20 @@ module PaperTrailDiff
     # @rbs @range: TimelineRange
     # @rbs @snapshotter: untyped
 
-    #: (Array[untyped]) -> [Array[Step], RecordSnapshot?, RecordSnapshot?]
-    def compare_history(versions)
-      return empty_history if versions.empty?
+    #: (RootVersionPlan) -> [Array[Step], RecordSnapshot?, RecordSnapshot?]
+    def compare_history(plan)
+      return empty_history if plan.empty?
 
+      versions = plan.versions
       @snapshotter.prepare(@record, versions) if @snapshotter.respond_to?(:prepare)
-      first_snapshot = @snapshotter.call(versions.first)
-      previous_snapshot = first_snapshot
-      steps = versions.each_cons(2).map do |from_version, to_version|
-        current_snapshot = @snapshotter.call(to_version)
-        step = Step.new(
+      steps = plan.steps.map do |from_version, to_version|
+        Step.new(
           from_version: from_version,
           to_version: to_version,
-          diff: Engine.compare(previous_snapshot, current_snapshot)
+          diff: Engine.compare(@snapshotter.call(from_version), @snapshotter.call(to_version))
         )
-        previous_snapshot = current_snapshot
-        step
       end.freeze
-      [steps, first_snapshot, previous_snapshot]
+      [steps, @snapshotter.call(versions.first), @snapshotter.call(versions.last)]
     end
 
     #: () -> [Array[Step], nil, nil]
@@ -63,9 +61,9 @@ module PaperTrailDiff
       [steps.freeze, nil, nil]
     end
 
-    #: () -> Array[untyped]
+    #: () -> RootVersionPlan
     def selected_versions
-      @range.select
+      @range.select_plan
     end
   end
 end

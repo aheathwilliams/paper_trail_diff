@@ -30,6 +30,10 @@ module PaperTrailDiff
     # : () -> Array[ActivityStep]
     def no_steps: () -> Array[ActivityStep]
 
+    # Every boundary in the span, filtered out or not. A filter narrows where the
+    # span starts and ends, but the sequence inside it stays complete: dropping
+    # boundaries would fold the changes they carried into a neighbouring step and
+    # credit them to whoever made that one.
     # : () -> Array[ActivityStep]
     def build_between_versions: () -> Array[ActivityStep]
 
@@ -67,8 +71,8 @@ module PaperTrailDiff
     # Only the activity view gains the closing removal. The endpoint diff and
     # the root timeline keep their `compare` and `timeline` semantics, under
     # which the state at a destroy version is the state before the deletion.
-    # : (Array[untyped], Array[ActivityEvent], ActivityHistory) -> Analysis
-    def build_analysis: (Array[untyped], Array[ActivityEvent], ActivityHistory) -> Analysis
+    # : (RootVersionPlan, Array[ActivityEvent], ActivityHistory) -> Analysis
+    def build_analysis: (RootVersionPlan, Array[ActivityEvent], ActivityHistory) -> Analysis
 
     # : () -> TimeActivityTimelineBuilder
     def time_builder: () -> TimeActivityTimelineBuilder

@@ -340,24 +340,33 @@ The hook receives the version relation for the range and returns a narrowed one.
 It is accepted by `timeline`, `activity_timeline`, `analyze`, and
 `analyze_many`, with any range form.
 
-It filters *selected mutations only*. The version that follows the last selected
-mutation is still loaded unfiltered, because a version records the state before
-its own event: without the next one, whatever the last selected change produced
-cannot be shown at all. That version is reconstruction context, so its own
-change is never attributed to the selected mutation.
+It filters *selected mutations only*. Versions the filter excludes are still
+loaded, because a version records the state before its own event: without the
+one that follows a selected change, whatever that change produced cannot be
+shown at all. Those extra versions are reconstruction context, so their own
+changes are never attributed to a selected mutation.
 
-Consecutive selected mutations bound each other, so a change made between two of
-them by someone the filter excluded appears inside that step. A filtered
-timeline reports what changed between the selected checkpoints, which is not the
-same as what each selected mutation did in isolation. Only the last one gets a
-dedicated revealing version, because only it has nothing selected after it.
+Each selected mutation is bounded by the version that immediately followed it,
+not by the next selected one. So each step's diff is exactly what that mutation
+did, and it reads the same however many excluded changes happen to follow it:
+
+```
+versions   system → alice → system → bob → system
+reported   alice: what alice changed    bob: what bob changed
+```
 
 Given a user edit followed by a system edit, filtering to user changes yields
 one step running from the user version to the system version, whose diff is
-exactly the user's change. A root with no selected mutation reports an empty
-`Analysis` rather than raising. The hook applies to root versions only;
-`activity: true` still discovers every descendant event between the selected
-boundaries.
+exactly the user's change. A selected mutation that nothing follows yet is not
+reported, since no version records the state it produced — the same blind spot
+an unfiltered timeline has at its `to:` boundary. A root with no selected
+mutation reports an empty `Analysis` rather than raising.
+
+The hook applies to root versions only. Under `activity: true` the filter
+decides where the span starts and ends, and `timeline` within that span reports
+only selected mutations, but `activity_timeline` still lists every boundary
+inside it — dropping one would fold the change it carried into a neighbouring
+step and credit it to whoever made that one.
 
 Omit `within:` to analyze each root's whole recorded history instead, which is
 the batched equivalent of `analyze(record, from: :first, to: :last)`. Explicit

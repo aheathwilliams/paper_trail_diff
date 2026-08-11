@@ -14,16 +14,16 @@ module PaperTrailDiff
 
     #: () -> Array[ActivityStep]
     def build
-      history, _root_versions, closing = history_and_versions
+      history, _plan, closing = history_and_versions
       activity_steps(history, closing)
     end
 
     #: () -> Analysis
     def analyze
-      history, root_versions, closing = history_and_versions
+      history, plan, closing = history_and_versions
       Analysis.new(
         diff: Engine.compare(history.first_snapshot, history.last_snapshot),
-        timeline: ActivityRootSteps.call(root_versions, history.root_snapshots),
+        timeline: ActivityRootSteps.call(plan, history.root_snapshots),
         activity_timeline: activity_steps(history, closing),
         from_snapshot: history.first_snapshot,
         to_snapshot: history.last_snapshot
@@ -37,20 +37,19 @@ module PaperTrailDiff
     # @rbs @tree: AssociationTree
     # @rbs @snapshotter: untyped
 
-    #: () -> [ActivityHistory, Array[untyped], ActivityStep?]
+    #: () -> [ActivityHistory, RootVersionPlan, ActivityStep?]
     def history_and_versions
-      root_versions, context_version = @range.select_with_context(
-        context_required: !@tree.empty?
-      )
-      return [ActivityHistory.empty, root_versions, nil] if root_versions.empty?
+      plan = @range.select_plan(context_required: !@tree.empty?)
+      root_versions = plan.reconstruction_versions
+      return [ActivityHistory.empty, plan, nil] if root_versions.empty?
 
       prepare_history(root_versions)
       events = collect_events(root_versions)
-      selected = selected_events(events, context_version)
-      return [ActivityHistory.empty, root_versions, nil] unless time_events?(selected, events)
+      selected = selected_events(events, plan)
+      return [ActivityHistory.empty, plan, nil] unless time_events?(selected, events)
 
       history = build_history(root_versions, events)
-      [history, root_versions, closing_step(history, selected.last)]
+      [history, plan, closing_step(history, selected.last)]
     end
 
     #: (Array[untyped], Array[ActivityEvent]) -> ActivityHistory
@@ -70,23 +69,18 @@ module PaperTrailDiff
       (history.steps + [closing]).freeze
     end
 
-    # A root version appended only to reveal the last selected mutation sits
-    # inside the window once a filter is in play, but it is context rather than
-    # a reported mutation, so it must not be counted as one.
-    #: (Array[ActivityEvent], untyped) -> Array[ActivityEvent]
-    def selected_events(events, context_version)
+    # Root versions inside the window that the plan does not report are context
+    # rather than mutations: the version appended to reveal the last selected
+    # change, and anything a filter excluded but the replay still walks. Neither
+    # may be counted as a selected mutation. Descendant events are not filtered,
+    # so window membership is the whole test for them.
+    #: (Array[ActivityEvent], RootVersionPlan) -> Array[ActivityEvent]
+    def selected_events(events, plan)
       events.select do |event|
         next false unless @range.include?(event.version)
 
-        !context_event?(event, context_version)
+        !event.root? || plan.mutation?(event.version)
       end
-    end
-
-    #: (ActivityEvent, untyped) -> bool
-    def context_event?(event, context_version)
-      return false unless context_version && event.root?
-
-      event.version.id == context_version.id
     end
 
     # The window's last selected mutation is the root's own destruction, so the

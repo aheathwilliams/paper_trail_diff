@@ -9,10 +9,8 @@ module PaperTrailDiff
     # : (?context_required: bool) -> Array[untyped]
     def select: (?context_required: bool) -> Array[untyped]
 
-    # The second value is the version present only to reveal the last selected
-    # mutation, which a caller reporting mutations must not treat as one.
-    # : (?context_required: bool) -> [Array[untyped], untyped]
-    def select_with_context: (?context_required: bool) -> [ Array[untyped], untyped ]
+    # : (?context_required: bool) -> RootVersionPlan
+    def select_plan: (?context_required: bool) -> RootVersionPlan
 
     private
 

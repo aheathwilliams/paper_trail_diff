@@ -8,9 +8,9 @@ module PaperTrailDiff
     # : (Array[untyped], time_range: TimeRange?, ?version_scope: untyped) -> void
     def initialize: (Array[untyped], time_range: TimeRange?, ?version_scope: untyped) -> void
 
-    # Returns root versions per record identity, in chronological order.
-    # : () -> Hash[Array[String], Array[untyped]]
-    def call: () -> Hash[Array[String], Array[untyped]]
+    # Returns a plan per record identity.
+    # : () -> Hash[Array[String], RootVersionPlan]
+    def call: () -> Hash[Array[String], RootVersionPlan]
 
     private
 
@@ -20,14 +20,14 @@ module PaperTrailDiff
 
     @version_scope: untyped
 
-    # : (untyped, Array[untyped], Hash[Array[String], Array[untyped]]) -> void
-    def select_model: (untyped, Array[untyped], Hash[Array[String], Array[untyped]]) -> void
+    # : (untyped, Array[untyped], Hash[Array[String], RootVersionPlan]) -> void
+    def select_model: (untyped, Array[untyped], Hash[Array[String], RootVersionPlan]) -> void
 
     # : (untyped, Array[untyped]) -> [Hash[String, Array[untyped]], Set[untyped]?, Hash[String, untyped]]
     def model_versions: (untyped, Array[untyped]) -> [ Hash[String, Array[untyped]], Set[untyped]?, Hash[String, untyped] ]
 
-    # : (Array[untyped], Set[untyped]?, untyped) -> Array[untyped]
-    def versions_for: (Array[untyped], Set[untyped]?, untyped) -> Array[untyped]
+    # : (Array[untyped], Set[untyped]?, untyped) -> RootVersionPlan
+    def versions_for: (Array[untyped], Set[untyped]?, untyped) -> RootVersionPlan
 
     # One extra query names the selected mutations without discarding the
     # unfiltered versions the successor lookup still needs.

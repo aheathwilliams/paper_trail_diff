@@ -27,7 +27,8 @@ module PaperTrailDiff
       prepare(records, selected)
       records.to_h do |record|
         key = Endpoint.identity(record)
-        [Support.immutable_copy(key), analysis_for(record, selected.fetch(key, []))]
+        plan = selected.fetch(key, RootVersionPlan.empty)
+        [Support.immutable_copy(key), analysis_for(record, plan)]
       end.freeze
     end
 
@@ -65,11 +66,13 @@ module PaperTrailDiff
     # The roots are preloaded first, because preparation reads their current
     # association state as a fallback and would otherwise walk it one root at a
     # time.
-    #: (Array[untyped], Hash[Array[String], Array[untyped]]) -> void
+    #: (Array[untyped], Hash[Array[String], RootVersionPlan]) -> void
     def prepare(records, selected)
       loaded = @live_loader.call(records)
       records.group_by(&:class).each_value do |grouped|
-        versions = grouped.flat_map { |record| selected.fetch(Endpoint.identity(record), []) }
+        versions = grouped.flat_map do |record|
+          selected.fetch(Endpoint.identity(record), RootVersionPlan.empty).versions
+        end
         next if versions.empty?
 
         roots = grouped.map { |record| loaded.fetch(Endpoint.identity(record), record) }
@@ -79,11 +82,11 @@ module PaperTrailDiff
 
     # A root with no versions in range has nothing to report, which is an empty
     # result rather than a failed request.
-    #: (untyped, Array[untyped]) -> Analysis
-    def analysis_for(record, versions)
-      return Analysis.empty if versions.empty?
+    #: (untyped, RootVersionPlan) -> Analysis
+    def analysis_for(record, plan)
+      return Analysis.empty if plan.empty?
 
-      @analyzer.call(record, versions)
+      @analyzer.call(record, plan)
     end
   end
 end

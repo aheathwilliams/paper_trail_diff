@@ -13,12 +13,12 @@ module PaperTrailDiff
       @version_scope = version_scope
     end
 
-    # Returns root versions per record identity, in chronological order.
-    #: () -> Hash[Array[String], Array[untyped]]
+    # Returns a plan per record identity.
+    #: () -> Hash[Array[String], RootVersionPlan]
     def call
       return {} if @records.empty?
 
-      selected = {} #: Hash[Array[String], Array[untyped]]
+      selected = {} #: Hash[Array[String], RootVersionPlan]
       @records.group_by(&:class).each do |model_class, records|
         select_model(model_class, records, selected)
       end
@@ -31,7 +31,7 @@ module PaperTrailDiff
     # @rbs @time_range: TimeRange?
     # @rbs @version_scope: untyped
 
-    #: (untyped, Array[untyped], Hash[Array[String], Array[untyped]]) -> void
+    #: (untyped, Array[untyped], Hash[Array[String], RootVersionPlan]) -> void
     def select_model(model_class, records, selected)
       ids = records.map(&:id)
       in_range, chosen, trailing = model_versions(model_class, ids)
@@ -54,14 +54,15 @@ module PaperTrailDiff
       ]
     end
 
-    #: (Array[untyped], Set[untyped]?, untyped) -> Array[untyped]
+    #: (Array[untyped], Set[untyped]?, untyped) -> RootVersionPlan
     def versions_for(in_range, chosen, after_range)
       RootVersionSelection.new(
         in_range: in_range,
         selected: chosen ? in_range.select { |version| chosen.include?(version.id) } : in_range,
         after_range: after_range,
-        windowed: !@time_range.nil?
-      ).call.first
+        windowed: !@time_range.nil?,
+        filtered: !@version_scope.nil?
+      ).call
     end
 
     # One extra query names the selected mutations without discarding the

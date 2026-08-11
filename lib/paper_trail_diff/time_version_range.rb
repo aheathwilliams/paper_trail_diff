@@ -13,13 +13,11 @@ module PaperTrailDiff
 
     #: (?context_required: bool) -> Array[untyped]
     def select(context_required: false)
-      select_with_context(context_required: context_required).first
+      select_plan(context_required: context_required).versions
     end
 
-    # The second value is the version present only to reveal the last selected
-    # mutation, which a caller reporting mutations must not treat as one.
-    #: (?context_required: bool) -> [Array[untyped], untyped]
-    def select_with_context(context_required: false)
+    #: (?context_required: bool) -> RootVersionPlan
+    def select_plan(context_required: false)
       relation = versions_relation
       in_range = ordered(@time_range.scope(relation).to_a)
       RootVersionSelection.new(
@@ -28,7 +26,8 @@ module PaperTrailDiff
                                                               in_range),
         after_range: trailing_version(relation),
         windowed: true,
-        context_required: context_required
+        context_required: context_required,
+        filtered: !@version_scope.nil?
       ).call
     end
 

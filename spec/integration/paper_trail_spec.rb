@@ -385,19 +385,30 @@ RSpec.describe PaperTrailDiff do
         .to eq(from: 'Start', to: 'By Alice')
     end
 
-    it 'bounds each selected mutation by the next selected one, not by the next version' do
+    it 'bounds each selected mutation by its own successor, not by the next selected one' do
+      article, _window, users = attributed_history
+      PaperTrail.request(whodunnit: nil) { article.update!(title: 'Trailing') }
+
+      steps = described_class.timeline(article, from: :first, to: :last, version_scope: users)
+
+      # Each selected mutation is reported against the version that immediately
+      # followed it, so the system edit between Alice and Bob is left out rather
+      # than folded into Alice's step. Bounding by the next *selected* version
+      # instead would report Alice as having written 'By system'.
+      expect(steps.map { |step| step.from_version.whodunnit }).to eq(%w[alice bob])
+      expect(steps.map { |step| step.diff.attributes.fetch('title').to_h })
+        .to eq([{ from: 'Start', to: 'By Alice' }, { from: 'By system', to: 'After window' }])
+    end
+
+    it 'omits a selected mutation whose outcome no later version records' do
       article, _window, users = attributed_history
 
       steps = described_class.timeline(article, from: :first, to: :last, version_scope: users)
 
-      # Two selected versions make one step. Consecutive selected boundaries
-      # bound each other, so a change made between them by someone filtered out
-      # is included: this reports what changed between user checkpoints, not
-      # what each user edit did in isolation.
-      expect(steps.map { |step| [step.from_version.whodunnit, step.to_version.whodunnit] })
-        .to eq([%w[alice bob]])
-      expect(steps.fetch(0).diff.attributes.fetch('title').to_h)
-        .to eq(from: 'Start', to: 'By system')
+      # Bob's update is the newest version, so nothing has yet stored the state
+      # it produced. An unfiltered timeline has the same blind spot: `to:` is a
+      # boundary, never a reported mutation.
+      expect(steps.map { |step| step.from_version.whodunnit }).to eq(['alice'])
     end
 
     it 'agrees with the batched form, which selects versions by a different path' do
@@ -408,6 +419,25 @@ RSpec.describe PaperTrailDiff do
 
       expect(single.to_h).to eq(batched.fetch(PaperTrailDiff::Endpoint.identity(article)).to_h)
       expect(single.to_snapshot.attributes.fetch('title')).to eq('By Alice')
+    end
+
+    it 'agrees with the batched form across a run of excluded versions' do
+      article = CoreArticle.create!(title: 'Start', internal_note: 'stable')
+      start_at = PaperTrail::Version.order(:id).first.created_at
+      PaperTrail.request(whodunnit: 'alice') { article.update!(title: 'By Alice') }
+      3.times { |i| PaperTrail.request(whodunnit: nil) { article.update!(title: "System #{i}") } }
+      PaperTrail.request(whodunnit: 'bob') { article.update!(title: 'By Bob') }
+      cutoff = PaperTrail::Version.order(:id).last.created_at
+      PaperTrail.request(whodunnit: nil) { article.update!(title: 'Trailing') }
+      users = ->(scope) { scope.where.not(whodunnit: nil) }
+
+      single = described_class.analyze(article, within: start_at..cutoff, version_scope: users)
+      batched = described_class.analyze_many([article], within: start_at..cutoff,
+                                                        version_scope: users)
+
+      expect(single.to_h).to eq(batched.fetch(PaperTrailDiff::Endpoint.identity(article)).to_h)
+      expect(single.timeline.map { |step| step.diff.attributes.fetch('title').to_h })
+        .to eq([{ from: 'Start', to: 'By Alice' }, { from: 'System 2', to: 'By Bob' }])
     end
 
     it 'rejects a non-callable scope on the single-record path too' do

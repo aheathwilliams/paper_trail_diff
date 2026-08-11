@@ -7,14 +7,16 @@ module PaperTrailDiff
   module ActivityRootSteps
     module_function
 
-    #: (Array[untyped], Hash[Array[untyped], RecordSnapshot?]) -> Array[Step]
-    def call(root_versions, root_snapshots)
-      snapshots = root_versions.map { |version| root_snapshots.fetch(version_key(version)) }
-      root_versions.each_cons(2).with_index.map do |versions, index|
+    #: (RootVersionPlan, Hash[Array[untyped], RecordSnapshot?]) -> Array[Step]
+    def call(plan, root_snapshots)
+      plan.steps.map do |from_version, to_version|
         Step.new(
-          from_version: versions.fetch(0),
-          to_version: versions.fetch(1),
-          diff: Engine.compare(snapshots.fetch(index), snapshots.fetch(index + 1))
+          from_version: from_version,
+          to_version: to_version,
+          diff: Engine.compare(
+            root_snapshots[version_key(from_version)],
+            root_snapshots[version_key(to_version)]
+          )
         )
       end.freeze
     end

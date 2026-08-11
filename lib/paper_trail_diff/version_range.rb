@@ -12,6 +12,28 @@ module PaperTrailDiff
       @version_scope = version_scope
     end
 
+    # Same selection as `select`, but keeping the step pairs a filter implies.
+    #: () -> RootVersionPlan
+    def select_plan_for_range
+      relation = validated_relation
+      select_plan(
+        relation.where(created_at: @from.created_at..@to.created_at),
+        through: @to
+      )
+    end
+
+    #: () -> untyped
+    def validated_relation
+      relation = versions_relation
+      validate_boundary!(@from, relation, boundary: :from)
+      validate_boundary!(@to, relation, boundary: :to)
+      if Support.compare_versions(@from, @to).positive?
+        raise InvalidTimelineRangeError, '`from` version must not follow `to` version'
+      end
+
+      relation
+    end
+
     #: () -> Array[untyped]
     def select
       relation = versions_relation
@@ -52,6 +74,11 @@ module PaperTrailDiff
 
     #: (untyped, ?through: untyped) -> Array[untyped]
     def select_relation(relation, through: nil)
+      select_plan(relation, through: through).versions
+    end
+
+    #: (untyped, ?through: untyped) -> RootVersionPlan
+    def select_plan(relation, through: nil)
       in_range = ordered(relation.to_a.select do |version|
         next false if Support.compare_versions(@from, version).positive?
         next true unless through
@@ -62,8 +89,9 @@ module PaperTrailDiff
         in_range: in_range,
         selected: VersionScopeFilter.new(@version_scope).call(relation, in_range),
         after_range: nil,
-        windowed: false
-      ).call.first
+        windowed: false,
+        filtered: !@version_scope.nil?
+      ).call
     end
 
     #: (Array[untyped]) -> Array[untyped]

@@ -12,19 +12,19 @@ module PaperTrailDiff
   class RootVersionSelection
     INCOMPLETE: ::String
 
-    # : (in_range: Array[untyped], selected: Array[untyped], after_range: untyped, windowed: bool, ?context_required: bool) -> void
-    def initialize: (in_range: Array[untyped], selected: Array[untyped], after_range: untyped, windowed: bool, ?context_required: bool) -> void
+    # : (in_range: Array[untyped], selected: Array[untyped], after_range: untyped, windowed: bool, ?context_required: bool, ?filtered: bool) -> void
+    def initialize: (in_range: Array[untyped], selected: Array[untyped], after_range: untyped, windowed: bool, ?context_required: bool, ?filtered: bool) -> void
 
-    # Returns the versions to reconstruct from, and which of them is present
-    # only as context. A caller that reports mutations needs to tell them apart.
-    # : () -> [Array[untyped], untyped]
-    def call: () -> [ Array[untyped], untyped ]
+    # : () -> RootVersionPlan
+    def call: () -> RootVersionPlan
 
     private
 
     @after_range: untyped
 
     @context_required: bool
+
+    @filtered: bool
 
     @in_range: Array[untyped]
 
@@ -34,8 +34,28 @@ module PaperTrailDiff
 
     # An activity view still needs a root to reconstruct from even when no root
     # version falls inside the window, because descendants may have moved.
-    # : () -> [Array[untyped], untyped]
-    def without_selection: () -> [ Array[untyped], untyped ]
+    # : () -> RootVersionPlan
+    def without_selection: () -> RootVersionPlan
+
+    # Each selected mutation is bounded by the version that reveals it, not by
+    # the next mutation that happened to be selected. Bounding by the next
+    # selection would fold anything filtered out in between into it, so the same
+    # edit would read differently depending on what followed it.
+    # : (untyped) -> RootVersionPlan
+    def filtered_plan: (untyped) -> RootVersionPlan
+
+    # Everything the span passes through, filtered out or not. A replay that
+    # skipped the excluded versions would carry a stale state into the next
+    # reported step, so the two selected mutations either side of a gap would
+    # disagree about what the record looked like between them.
+    # : (Array[untyped]) -> Array[untyped]
+    def spanned: (Array[untyped]) -> Array[untyped]
+
+    # : (Array[untyped]) -> Array[untyped]
+    def chronological: (Array[untyped]) -> Array[untyped]
+
+    # : (untyped) -> untyped
+    def immediate_successor: (untyped) -> untyped
 
     # A version left out by a filter is still the state the last selected change
     # produced, so it is preferred over anything after the range.

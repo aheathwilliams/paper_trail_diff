@@ -22,8 +22,8 @@ module PaperTrailDiff
 
     @tree: AssociationTree
 
-    # : () -> [ActivityHistory, Array[untyped], ActivityStep?]
-    def history_and_versions: () -> [ ActivityHistory, Array[untyped], ActivityStep? ]
+    # : () -> [ActivityHistory, RootVersionPlan, ActivityStep?]
+    def history_and_versions: () -> [ ActivityHistory, RootVersionPlan, ActivityStep? ]
 
     # : (Array[untyped], Array[ActivityEvent]) -> ActivityHistory
     def build_history: (Array[untyped], Array[ActivityEvent]) -> ActivityHistory
@@ -31,14 +31,13 @@ module PaperTrailDiff
     # : (ActivityHistory, ActivityStep?) -> Array[ActivityStep]
     def activity_steps: (ActivityHistory, ActivityStep?) -> Array[ActivityStep]
 
-    # A root version appended only to reveal the last selected mutation sits
-    # inside the window once a filter is in play, but it is context rather than
-    # a reported mutation, so it must not be counted as one.
-    # : (Array[ActivityEvent], untyped) -> Array[ActivityEvent]
-    def selected_events: (Array[ActivityEvent], untyped) -> Array[ActivityEvent]
-
-    # : (ActivityEvent, untyped) -> bool
-    def context_event?: (ActivityEvent, untyped) -> bool
+    # Root versions inside the window that the plan does not report are context
+    # rather than mutations: the version appended to reveal the last selected
+    # change, and anything a filter excluded but the replay still walks. Neither
+    # may be counted as a selected mutation. Descendant events are not filtered,
+    # so window membership is the whole test for them.
+    # : (Array[ActivityEvent], RootVersionPlan) -> Array[ActivityEvent]
+    def selected_events: (Array[ActivityEvent], RootVersionPlan) -> Array[ActivityEvent]
 
     # The window's last selected mutation is the root's own destruction, so the
     # timeline closes on the absence it leaves rather than on a later boundary.

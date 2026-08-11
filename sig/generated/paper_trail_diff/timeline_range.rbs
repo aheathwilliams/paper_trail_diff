@@ -11,8 +11,8 @@ module PaperTrailDiff
 
     attr_reader time_range: TimeRange?
 
-    # : (untyped, from: untyped, to: untyped, within: untyped, ?versions: Array[untyped]?, ?version_scope: untyped) -> void
-    def initialize: (untyped, from: untyped, to: untyped, within: untyped, ?versions: Array[untyped]?, ?version_scope: untyped) -> void
+    # : (untyped, from: untyped, to: untyped, within: untyped, ?versions: Array[untyped]?, ?version_scope: untyped, ?plan: RootVersionPlan?) -> void
+    def initialize: (untyped, from: untyped, to: untyped, within: untyped, ?versions: Array[untyped]?, ?version_scope: untyped, ?plan: RootVersionPlan?) -> void
 
     # A record with no versions has no first or last boundary to resolve, which
     # is an empty history rather than a bad request.
@@ -21,8 +21,10 @@ module PaperTrailDiff
 
     # A batch may have selected these versions already, in which case reselecting
     # them per record would undo the batching.
-    # : (?context_required: bool) -> [Array[untyped], untyped]
-    def select_with_context: (?context_required: bool) -> [ Array[untyped], untyped ]
+    # The plan says which pairs of versions become steps, which a filter can
+    # make different from adjacent pairs of the selected versions.
+    # : (?context_required: bool) -> RootVersionPlan
+    def select_plan: (?context_required: bool) -> RootVersionPlan
 
     # : (?context_required: bool) -> Array[untyped]
     def select: (?context_required: bool) -> Array[untyped]
@@ -39,6 +41,8 @@ module PaperTrailDiff
     private
 
     @from: untyped
+
+    @plan: RootVersionPlan?
 
     @record: untyped
 

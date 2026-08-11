@@ -6,6 +6,13 @@ module PaperTrailDiff
     # : (untyped, from: untyped, to: untyped, ?version_scope: untyped) -> void
     def initialize: (untyped, from: untyped, to: untyped, ?version_scope: untyped) -> void
 
+    # Same selection as `select`, but keeping the step pairs a filter implies.
+    # : () -> RootVersionPlan
+    def select_plan_for_range: () -> RootVersionPlan
+
+    # : () -> untyped
+    def validated_relation: () -> untyped
+
     # : () -> Array[untyped]
     def select: () -> Array[untyped]
 
@@ -27,6 +34,9 @@ module PaperTrailDiff
 
     # : (untyped, ?through: untyped) -> Array[untyped]
     def select_relation: (untyped, ?through: untyped) -> Array[untyped]
+
+    # : (untyped, ?through: untyped) -> RootVersionPlan
+    def select_plan: (untyped, ?through: untyped) -> RootVersionPlan
 
     # : (Array[untyped]) -> Array[untyped]
     def ordered: (Array[untyped]) -> Array[untyped]

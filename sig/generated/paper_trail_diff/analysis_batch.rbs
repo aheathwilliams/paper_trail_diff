@@ -38,12 +38,12 @@ module PaperTrailDiff
     # The roots are preloaded first, because preparation reads their current
     # association state as a fallback and would otherwise walk it one root at a
     # time.
-    # : (Array[untyped], Hash[Array[String], Array[untyped]]) -> void
-    def prepare: (Array[untyped], Hash[Array[String], Array[untyped]]) -> void
+    # : (Array[untyped], Hash[Array[String], RootVersionPlan]) -> void
+    def prepare: (Array[untyped], Hash[Array[String], RootVersionPlan]) -> void
 
     # A root with no versions in range has nothing to report, which is an empty
     # result rather than a failed request.
-    # : (untyped, Array[untyped]) -> Analysis
-    def analysis_for: (untyped, Array[untyped]) -> Analysis
+    # : (untyped, RootVersionPlan) -> Analysis
+    def analysis_for: (untyped, RootVersionPlan) -> Analysis
   end
 end

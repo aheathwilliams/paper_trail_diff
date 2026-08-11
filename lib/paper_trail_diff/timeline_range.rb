@@ -10,10 +10,11 @@ module PaperTrailDiff
     attr_reader :to #: untyped
     attr_reader :time_range #: TimeRange?
 
-    #: (untyped, from: untyped, to: untyped, within: untyped, ?versions: Array[untyped]?, ?version_scope: untyped) -> void
-    def initialize(record, from:, to:, within:, versions: nil, version_scope: nil) # rubocop:disable Metrics/ParameterLists
+    #: (untyped, from: untyped, to: untyped, within: untyped, ?versions: Array[untyped]?, ?version_scope: untyped, ?plan: RootVersionPlan?) -> void
+    def initialize(record, from:, to:, within:, versions: nil, version_scope: nil, plan: nil) # rubocop:disable Metrics/ParameterLists
       @record = record
-      @versions = versions&.freeze
+      @plan = plan
+      @versions = (plan ? plan.versions : versions)&.freeze
       @version_scope = version_scope
       @requested_from = from
       @requested_to = to
@@ -33,14 +34,24 @@ module PaperTrailDiff
 
     # A batch may have selected these versions already, in which case reselecting
     # them per record would undo the batching.
-    #: (?context_required: bool) -> [Array[untyped], untyped]
-    def select_with_context(context_required: false)
-      range = time_range
-      return [select(context_required: context_required), nil] unless range && !unresolved?
+    # The plan says which pairs of versions become steps, which a filter can
+    # make different from adjacent pairs of the selected versions.
+    #: (?context_required: bool) -> RootVersionPlan
+    def select_plan(context_required: false)
+      preselected = @plan
+      return preselected if preselected
 
-      TimeVersionRange.new(
-        @record, time_range: range, version_scope: @version_scope
-      ).select_with_context(context_required: context_required)
+      range = time_range
+      if range
+        return TimeVersionRange.new(
+          @record, time_range: range, version_scope: @version_scope
+        ).select_plan(context_required: context_required)
+      end
+      return RootVersionPlan.empty if unresolved?
+
+      VersionRange.new(
+        @record, from: @from, to: @to, version_scope: @version_scope
+      ).select_plan_for_range
     end
 
     #: (?context_required: bool) -> Array[untyped]
@@ -79,6 +90,7 @@ module PaperTrailDiff
 
     # @rbs @record: untyped
     # @rbs @versions: Array[untyped]?
+    # @rbs @plan: RootVersionPlan?
     # @rbs @version_scope: untyped
     # @rbs @requested_from: untyped
     # @rbs @requested_to: untyped

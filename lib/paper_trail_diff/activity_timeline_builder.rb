@@ -34,10 +34,11 @@ module PaperTrailDiff
         raise InvalidTimelineRangeError, '`to` must be a root PaperTrail version'
       end
 
-      root_versions = @range.select
+      plan = @range.select_plan
+      root_versions = plan.reconstruction_versions
       prepare_history(root_versions)
       events = collect_events(root_versions)
-      build_analysis(root_versions, events, event_history(root_versions, events))
+      build_analysis(plan, events, event_history(root_versions, events))
     end
 
     private
@@ -55,9 +56,13 @@ module PaperTrailDiff
       steps.freeze
     end
 
+    # Every boundary in the span, filtered out or not. A filter narrows where the
+    # span starts and ends, but the sequence inside it stays complete: dropping
+    # boundaries would fold the changes they carried into a neighbouring step and
+    # credit them to whoever made that one.
     #: () -> Array[ActivityStep]
     def build_between_versions
-      root_versions = @range.select
+      root_versions = @range.select_plan.reconstruction_versions
       prepare_history(root_versions)
       events = collect_events(root_versions)
       build_event_steps(root_versions, events)
@@ -177,13 +182,13 @@ module PaperTrailDiff
     # Only the activity view gains the closing removal. The endpoint diff and
     # the root timeline keep their `compare` and `timeline` semantics, under
     # which the state at a destroy version is the state before the deletion.
-    #: (Array[untyped], Array[ActivityEvent], ActivityHistory) -> Analysis
-    def build_analysis(root_versions, events, history)
+    #: (RootVersionPlan, Array[ActivityEvent], ActivityHistory) -> Analysis
+    def build_analysis(plan, events, history)
       Analysis.new(
         diff: Engine.compare(history.first_snapshot, history.last_snapshot),
-        timeline: ActivityRootSteps.call(root_versions, history.root_snapshots),
+        timeline: ActivityRootSteps.call(plan, history.root_snapshots),
         activity_timeline: activity_steps(
-          history, events, destroyed_boundary(root_versions), nil
+          history, events, destroyed_boundary(plan.reconstruction_versions), nil
         ),
         from_snapshot: history.first_snapshot,
         to_snapshot: history.last_snapshot

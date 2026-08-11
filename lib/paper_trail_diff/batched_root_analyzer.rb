@@ -14,17 +14,17 @@ module PaperTrailDiff
       @activity = activity
     end
 
-    #: (untyped, Array[untyped]) -> Analysis
-    def call(record, versions)
+    #: (untyped, RootVersionPlan) -> Analysis
+    def call(record, plan)
       @preparer.call(record.class, historical: true)
-      return activity_analysis(record, versions) if @activity
+      return activity_analysis(record, plan) if @activity
 
       TimelineBuilder.new(
         record,
-        from: versions.first,
-        to: versions.last,
+        from: plan.versions.first,
+        to: plan.versions.last,
         within: nil,
-        versions: versions,
+        plan: plan,
         snapshotter: @timeline_snapshotter
       ).analyze
     end
@@ -37,10 +37,10 @@ module PaperTrailDiff
     # @rbs @preparer: untyped
     # @rbs @activity: bool
 
-    #: (untyped, Array[untyped]) -> Analysis
-    def activity_analysis(record, versions)
+    #: (untyped, RootVersionPlan) -> Analysis
+    def activity_analysis(record, plan)
       range = TimelineRange.new(
-        record, from: versions.first, to: versions.last, within: nil, versions: versions
+        record, from: plan.versions.first, to: plan.versions.last, within: nil, plan: plan
       )
       ActivityTimelineBuilder.new(
         record, range: range, tree: @tree, snapshotter: @activity_snapshotter
