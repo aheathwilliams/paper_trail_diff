@@ -324,10 +324,10 @@ value is the same `Analysis` that `analyze` returns for one record. A root with
 no versions inside the window gets an empty `Analysis` rather than raising, so a
 listing page needs no special case. Root identities must be unique.
 
-### Reporting on a subset of mutations
+### Reporting on a subset of root mutations
 
-`version_scope:` narrows which root versions count as *selected mutations*,
-which is what a "changes made by a user" report needs:
+`version_scope:` narrows which root versions count as *selected mutations*, so a
+checkpoint timeline reports only some of them:
 
 ```ruby
 user_edits = ->(scope) { scope.where.not(whodunnit: nil) }
@@ -339,6 +339,12 @@ PaperTrailDiff.timeline(article, within: window, version_scope: user_edits)
 The hook receives the version relation for the range and returns a narrowed one.
 It is accepted by `timeline`, `activity_timeline`, `analyze`, and
 `analyze_many`, with any range form.
+
+**It sees root versions only.** Someone who edited only comments or tags has no
+root versions to select, so filtering to them yields an empty result even though
+they changed plenty. For "what did this person change?", reach for
+[one person's changes](#reporting-on-one-persons-changes) instead — this hook
+answers the different question of which *root checkpoints* a timeline reports.
 
 It filters *selected mutations only*. Versions the filter excludes are still
 loaded, because a version records the state before its own event: without the
@@ -384,6 +390,49 @@ batches far less.
 
 Roots are supplied as live records, so a root deleted inside the window cannot
 be included; use `activity_timeline` for a history that ends in a deletion.
+
+### Reporting on one person's changes
+
+An activity timeline already carries this. Every boundary in the span becomes a
+step, and a step's diff is exactly what the event at its `from_boundary` did, so
+that boundary's `whodunnit` is who made the change:
+
+<!-- executable:readme-person-changes -->
+```ruby
+steps = PaperTrailDiff.activity_timeline(
+  article, within: window, associations: %i[comments tags]
+)
+
+attributed = steps.reject(&:empty?)
+by_priya = attributed.select { |step| step.from_boundary.whodunnit == "Priya Shah" }
+
+by_priya.first.from_boundary.whodunnit  # "Priya Shah"
+by_priya.first.diff                     # exactly what that one event changed
+
+authors = attributed.group_by { |step| step.from_boundary.whodunnit }
+                    .transform_values(&:length)
+```
+
+This covers descendants, which is what `version_scope:` cannot do. On one demo
+history a contributor who only ever touched comments and authorships has four
+attributed activity steps and *zero* root steps.
+
+Filter in Ruby rather than asking the gem to select fewer versions. Attribution
+is only correct because every boundary is reconstructed: skip one and the
+snapshot carried into the next step is a state the record had already moved
+past, so the change lands on the wrong person. There is nothing to save by
+filtering earlier — the work is the reconstruction, not the comparison — and a
+predicate can say things a version relation cannot, such as several people at
+once or "anyone but the importer".
+
+`reject(&:empty?)` first, because a boundary that changed nothing you selected
+still produces a step. The final event in the range has no boundary after it, so
+what it produced is not shown — the same blind spot `to:` has everywhere else.
+
+For "which of these records did someone touch?" across a listing, note that
+`analyze_many` batches the diff and timeline views but not descendant discovery.
+Querying versions by `whodunnit` and mapping them back to roots yourself will be
+much cheaper than an activity pass per record.
 
 ## Build a root-checkpoint timeline
 

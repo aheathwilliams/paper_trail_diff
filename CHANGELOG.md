@@ -3,6 +3,19 @@
 All notable changes to this project will be documented in this file. The
 project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- Document that `version_scope:` selects root versions only, and that "what did
+  this person change?" is answered by an activity timeline filtered on
+  `step.from_boundary.whodunnit` instead. A step's diff is exactly what the
+  event at that boundary did, so the predicate covers descendant edits, which a
+  root-version filter cannot see at all. Filtering in Ruby rather than selecting
+  fewer versions is also what keeps the attribution correct: every boundary has
+  to be reconstructed, or the snapshot carried into the next step is a state the
+  record had already moved past.
+
 ## [0.6.0] - 2026-08-11
 
 ### Added
