@@ -68,7 +68,7 @@ module PaperTrailDiff
         successor = version.equal?(@selected.last) ? revealing : immediate_successor(version)
         [version, successor] if successor
       end #: Array[[untyped, untyped]]
-      versions = chronological(steps.flatten(1))
+      versions = chronological(steps.flatten(1) + closing_versions)
       RootVersionPlan.new(
         versions: versions,
         steps: steps,
@@ -76,6 +76,15 @@ module PaperTrailDiff
         reconstruction_versions: spanned(versions),
         mutations: @selected
       )
+    end
+
+    # Nothing can follow a destroy, so it never pairs into a step. It is still a
+    # selected mutation, and the activity view closes on the absence it leaves,
+    # so it has to stay a boundary or a filtered report loses the deletion
+    # entirely — the one event it can least afford to drop.
+    #: () -> Array[untyped]
+    def closing_versions
+      terminal_destroy? ? [@selected.last] : []
     end
 
     # Everything the span passes through, filtered out or not. A replay that

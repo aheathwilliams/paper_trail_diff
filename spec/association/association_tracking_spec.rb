@@ -1854,6 +1854,27 @@ RSpec.describe 'PaperTrailDiff association tracking' do
       expect(titles(steps).last).to eq(['System 3', 'By Bob'])
     end
 
+    it 'keeps a selected destruction, which no successor can ever reveal' do
+      article = nil
+      PaperTrail.request(whodunnit: 'alice') { article = TrackedArticle.create!(title: 'Start') }
+      start_at = PaperTrail::Version.order(:id).first.created_at
+      PaperTrail.request(whodunnit: nil) { article.update!(title: 'By system') }
+      PaperTrail.request(whodunnit: 'alice') { article.destroy! }
+      window = start_at..PaperTrail::Version.order(:id).last.created_at
+      users = ->(scope) { scope.where.not(whodunnit: nil) }
+
+      steps = PaperTrailDiff.activity_timeline(article, within: window, version_scope: users,
+                                                        associations: ['comments'])
+
+      # Nothing follows a destroy, so it pairs into no step and the rule that
+      # drops unrevealed mutations would drop it. The absence it leaves is what
+      # it produced, and the activity view can show that.
+      expect(steps.map { |step| step.to_boundary.kind }).to eq(%i[version version destroyed])
+      expect(steps.last.diff.record_presence_change.to).to be_nil
+      expect(steps.last.diff.record_presence_change.from.attributes.fetch('title'))
+        .to eq('By system')
+    end
+
     it 'excludes filtered-out versions from a windowed timeline it still replays' do
       article, users = filtered_gap_history
       versions = PaperTrail::Version.where(item_type: 'TrackedArticle').order(:id).to_a

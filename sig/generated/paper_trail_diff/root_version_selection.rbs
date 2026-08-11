@@ -44,6 +44,13 @@ module PaperTrailDiff
     # : (untyped) -> RootVersionPlan
     def filtered_plan: (untyped) -> RootVersionPlan
 
+    # Nothing can follow a destroy, so it never pairs into a step. It is still a
+    # selected mutation, and the activity view closes on the absence it leaves,
+    # so it has to stay a boundary or a filtered report loses the deletion
+    # entirely — the one event it can least afford to drop.
+    # : () -> Array[untyped]
+    def closing_versions: () -> Array[untyped]
+
     # Everything the span passes through, filtered out or not. A replay that
     # skipped the excluded versions would carry a stale state into the next
     # reported step, so the two selected mutations either side of a gap would
