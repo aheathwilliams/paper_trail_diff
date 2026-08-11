@@ -3,6 +3,27 @@
 All notable changes to this project will be documented in this file. The
 project follows [Semantic Versioning](https://semver.org/).
 
+## [0.7.1] - 2026-08-11
+
+### Fixed
+
+- Load each current endpoint once per call instead of once per request for it,
+  so `close_on: :current` no longer costs a live read per root and
+  `analyze_many` keeps the flat query cost it exists for. A twenty-root batch
+  closing on current state issued 43 queries against the 3 a closed window
+  needs. Every root in one result now also reflects the same instant rather
+  than whenever its turn came.
+
+### Changed
+
+- Name the way out in `IncompleteTimeRangeError`: the message now points at
+  `close_on: :current` and at narrowing the window. Its previous advice — add a
+  checkpoint after the window — cannot be followed by a report about the
+  present, which is the case that raises it most.
+- Correct the `reload_live_endpoints:` documentation, which claimed `timeline`
+  and `analyze` never read live state. They do under `close_on: :current`, and
+  they do not accept the option.
+
 ## [0.7.0] - 2026-08-11
 
 ### Added

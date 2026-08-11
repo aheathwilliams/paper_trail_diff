@@ -10,12 +10,21 @@ module PaperTrailDiff
     # : (tree: AssociationTree, traversal: AssociationTraversal, reload: bool) -> void
     def initialize: (tree: AssociationTree, traversal: AssociationTraversal, reload: bool) -> void
 
+    # Loads each endpoint at most once for the life of this provider, which is
+    # one public call. A batch that resolves every root up front and then asks
+    # again for one of them costs nothing the second time, and every root in the
+    # result reflects the same instant rather than whenever its turn came.
     # : (Array[untyped]) -> Hash[identity, untyped]
     def call: (Array[untyped]) -> Hash[identity, untyped]
 
     private
 
+    @loaded: Hash[identity, untyped]
+
     @loader: untyped
+
+    # : (Array[untyped]) -> Hash[identity, untyped]
+    def known: (Array[untyped]) -> Hash[identity, untyped]
 
     # : (Array[untyped]) -> Hash[Symbol, untyped]
     def payload: (Array[untyped]) -> Hash[Symbol, untyped]

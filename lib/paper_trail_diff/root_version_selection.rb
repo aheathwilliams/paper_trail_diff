@@ -11,7 +11,12 @@ module PaperTrailDiff
   # Both the single-record and the batched selectors resolve this here, because
   # the rule is subtle enough that two copies of it would drift apart.
   class RootVersionSelection
-    INCOMPLETE = 'time range requires a later root version to reconstruct its final change'
+    # An error is a specification, so it names the way out as well as the wall.
+    # A window ending at the present can never gain a later version, which makes
+    # "write a checkpoint afterwards" impossible advice on its own.
+    INCOMPLETE = 'time range requires a later root version to reconstruct its ' \
+                 'final change: pass close_on: :current to end at current state, ' \
+                 'or narrow the window to end before the last recorded version'
 
     #: (in_range: Array[untyped], selected: Array[untyped], after_range: untyped, windowed: bool, ?context_required: bool, ?filtered: bool, ?live_endpoint: untyped) -> void
     def initialize( # rubocop:disable Metrics/ParameterLists

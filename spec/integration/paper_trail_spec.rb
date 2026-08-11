@@ -519,6 +519,28 @@ RSpec.describe PaperTrailDiff do
         .to eq(separately.transform_values { |a| a.timeline.map { |s| s.diff.to_h } })
     end
 
+    it 'loads each root once no matter how many close on current state' do
+      # `analyze_many` exists for a query cost flat in the number of roots.
+      # Closing on current state must not reintroduce a per-root live read: the
+      # batch already resolved every root before any of them is snapshotted.
+      counts = [2, 8].map do |count|
+        CoreArticle.delete_all
+        PaperTrail::Version.delete_all
+        articles, window = open_window_articles(count)
+        sql = []
+        callback = proc do |_name, _start, _finish, _id, payload|
+          sql << payload[:sql] unless payload[:name] == 'SCHEMA' || payload[:cached]
+        end
+
+        ActiveSupport::Notifications.subscribed(callback, 'sql.active_record') do
+          described_class.analyze_many(articles, within: window, close_on: :current)
+        end
+        sql.grep(/FROM "core_articles"/).length
+      end
+
+      expect(counts).to eq([1, 1])
+    end
+
     it 'rejects a closing endpoint the range cannot use' do
       articles, window = open_window_articles(1)
       article = articles.fetch(0)

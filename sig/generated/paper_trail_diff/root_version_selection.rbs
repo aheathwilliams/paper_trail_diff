@@ -10,6 +10,9 @@ module PaperTrailDiff
   # Both the single-record and the batched selectors resolve this here, because
   # the rule is subtle enough that two copies of it would drift apart.
   class RootVersionSelection
+    # An error is a specification, so it names the way out as well as the wall.
+    # A window ending at the present can never gain a later version, which makes
+    # "write a checkpoint afterwards" impossible advice on its own.
     INCOMPLETE: ::String
 
     # : (in_range: Array[untyped], selected: Array[untyped], after_range: untyped, windowed: bool, ?context_required: bool, ?filtered: bool, ?live_endpoint: untyped) -> void

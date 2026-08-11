@@ -187,7 +187,9 @@ module PaperTrailDiff
       return true if terminal_destroy?(selected.last)
       return true if plan.closing_record
 
-      message = 'time range requires a later activity boundary to reconstruct its final change'
+      message = 'time range requires a later activity boundary to reconstruct its ' \
+                'final change: pass close_on: :current to end at current state, ' \
+                'or narrow the window to end before the last recorded boundary'
       raise IncompleteTimeRangeError, message
     end
 

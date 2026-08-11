@@ -242,8 +242,13 @@ must observe one atomic snapshot.
 
 `compare`, `compare_many`, and `activity_timeline(..., to: record)` reload
 current endpoints by default. A caller that already owns a consistent, fully
-preloaded graph may opt out. The option has no effect on `timeline` or
-`analyze`, which are bounded by versions and never read live state:
+preloaded graph may opt out. Each endpoint is loaded once per call, so a batch
+that resolves every root up front and then reads one of them again pays
+nothing the second time, and every root in one result reflects the same instant.
+
+The option is not accepted by `timeline`, `analyze`, or `analyze_many`. Those
+are bounded by versions and read live state only under
+[`close_on: :current`](#reporting-up-to-now), which always reloads:
 
 ```ruby
 orders = Order.where(id: order_ids).preload(line_items: :product).to_a
