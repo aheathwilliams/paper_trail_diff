@@ -23,6 +23,21 @@ module PaperTrailDiff
 
     @preparer: untyped
 
+    # : (Array[[untyped, untyped]]) -> Hash[identity, RecordSnapshot]
+    def prepared_live_snapshots: (Array[[ untyped, untyped ]]) -> Hash[identity, RecordSnapshot]
+
+    # : (untyped) -> bool
+    def symbolic?: (untyped) -> bool
+
+    # A boundary symbol that stayed unresolved means the root has no recorded
+    # history. An absent history is an empty result rather than a failed
+    # request, matching how the timeline APIs answer the same question.
+    # : (Array[[untyped, untyped]], Hash[identity, RecordSnapshot]) -> comparison_results
+    def results: (Array[[ untyped, untyped ]], Hash[identity, RecordSnapshot]) -> comparison_results
+
+    # : (untyped, untyped) -> identity
+    def entry_identity: (untyped, untyped) -> identity
+
     # : (untyped, untyped, Hash[identity, RecordSnapshot]) -> Diff
     def compare: (untyped, untyped, Hash[identity, RecordSnapshot]) -> Diff
 

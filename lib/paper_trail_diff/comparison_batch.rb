@@ -23,18 +23,10 @@ module PaperTrailDiff
 
     #: () -> comparison_results
     def call
-      pairs = comparison_pairs
-      pairs.each { |from, to| Endpoint.validate_pair!(from, to) }
-      ensure_unique_identities!(pairs)
-      prepare_endpoint_classes!(pairs)
-      live_records = load_live_records(pairs.flatten)
-      prepare_historical_batches!(pairs, live_records)
-      live_snapshots = normalize_live_records(live_records)
-
-      pairs.to_h do |from, to|
-        identity = Support.immutable_copy(Endpoint.identity(from))
-        [identity, compare(from, to, live_snapshots)]
-      end.freeze
+      resolved = BatchBoundaryResolver.new(comparison_pairs).call
+      pairs = resolved.reject { |pair| pair.any? { |endpoint| symbolic?(endpoint) } }
+      ensure_unique_identities!(resolved)
+      results(resolved, prepared_live_snapshots(pairs)).freeze
     end
 
     private
@@ -45,6 +37,38 @@ module PaperTrailDiff
     # @rbs @history_preparer: untyped
     # @rbs @historical_snapshotter: untyped
     # @rbs @live_normalizer: untyped
+
+    #: (Array[[untyped, untyped]]) -> Hash[identity, RecordSnapshot]
+    def prepared_live_snapshots(pairs)
+      pairs.each { |from, to| Endpoint.validate_pair!(from, to) }
+      prepare_endpoint_classes!(pairs)
+      live_records = load_live_records(pairs.flatten)
+      prepare_historical_batches!(pairs, live_records)
+      normalize_live_records(live_records)
+    end
+
+    #: (untyped) -> bool
+    def symbolic?(endpoint)
+      BatchBoundaryResolver.symbolic?(endpoint)
+    end
+
+    # A boundary symbol that stayed unresolved means the root has no recorded
+    # history. An absent history is an empty result rather than a failed
+    # request, matching how the timeline APIs answer the same question.
+    #: (Array[[untyped, untyped]], Hash[identity, RecordSnapshot]) -> comparison_results
+    def results(resolved, live_snapshots)
+      resolved.to_h do |from, to|
+        identity = Support.immutable_copy(entry_identity(from, to))
+        next [identity, Diff.new] if symbolic?(from) || symbolic?(to)
+
+        [identity, compare(from, to, live_snapshots)]
+      end
+    end
+
+    #: (untyped, untyped) -> identity
+    def entry_identity(from, to)
+      Endpoint.identity(symbolic?(from) ? to : from)
+    end
 
     #: (untyped, untyped, Hash[identity, RecordSnapshot]) -> Diff
     def compare(from, to, live_snapshots)
@@ -125,7 +149,7 @@ module PaperTrailDiff
 
     #: (Array[[untyped, untyped]]) -> void
     def ensure_unique_identities!(pairs)
-      identities = pairs.map { |from, _to| Endpoint.identity(from) }
+      identities = pairs.map { |from, to| entry_identity(from, to) }
       return if identities.uniq.length == identities.length
 
       raise ConfigurationError, 'comparisons: root identities must be unique'

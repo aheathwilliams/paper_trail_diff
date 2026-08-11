@@ -1,0 +1,62 @@
+# Generated from lib/paper_trail_diff/batch_boundary_resolver.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Resolves `:first` and `:last` endpoints for a whole batch in two queries per
+  # model class. Left to the caller this is a per-root lookup, which reintroduces
+  # exactly the queries a batched comparison exists to remove.
+  class BatchBoundaryResolver
+    BOUNDARIES: untyped
+
+    # : (untyped) -> bool
+    def self.symbolic?: (untyped) -> bool
+
+    # : (Array[[untyped, untyped]]) -> void
+    def initialize: (Array[[ untyped, untyped ]]) -> void
+
+    # Returns the pairs with every resolvable symbol replaced. A symbol that
+    # names history the record does not have is left in place, so the caller can
+    # decide what an absent history means rather than being handed nil.
+    # : () -> Array[[untyped, untyped]]
+    def call: () -> Array[[ untyped, untyped ]]
+
+    private
+
+    @pairs: Array[[ untyped, untyped ]]
+
+    # : (untyped) -> bool
+    def symbolic?: (untyped) -> bool
+
+    # : (untyped, untyped, Hash[Array[String], Hash[Symbol, untyped]]) -> untyped
+    def resolve: (untyped, untyped, Hash[Array[String], Hash[Symbol, untyped]]) -> untyped
+
+    # A symbol carries no identity of its own, so the pair's other endpoint has
+    # to say which record is meant.
+    # : (untyped) -> Array[String]?
+    def anchor_identity: (untyped) -> Array[String]?
+
+    # : () -> Hash[Array[String], Hash[Symbol, untyped]]
+    def boundary_index: () -> Hash[Array[String], Hash[Symbol, untyped]]
+
+    # : () -> Array[[untyped, untyped]]
+    def anchors: () -> Array[[ untyped, untyped ]]
+
+    # : (untyped) -> [untyped, untyped]?
+    def anchor: (untyped) -> [ untyped, untyped ]?
+
+    # : (Hash[Array[String], Hash[Symbol, untyped]], untyped, Array[untyped]) -> void
+    def add_model_boundaries: (Hash[Array[String], Hash[Symbol, untyped]], untyped, Array[untyped]) -> void
+
+    # Two grouped queries name each root's outermost versions, and one more
+    # loads them, whatever the size of the batch.
+    # : (untyped, Array[untyped]) -> [Hash[untyped, untyped], Hash[untyped, untyped], Hash[untyped, untyped]]
+    def boundary_versions: (untyped, Array[untyped]) -> [ Hash[untyped, untyped], Hash[untyped, untyped], Hash[untyped, untyped] ]
+
+    # Grouped keys come back with whatever type the column uses, so match on the
+    # string form rather than assuming integers.
+    # : (Hash[untyped, untyped], untyped) -> untyped
+    def boundary_key: (Hash[untyped, untyped], untyped) -> untyped
+
+    # : (untyped, untyped) -> Array[String]
+    def identity_key: (untyped, untyped) -> Array[String]
+  end
+end
