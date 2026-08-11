@@ -23,7 +23,7 @@ module PaperTrailDiff
       history, root_versions, closing = history_and_versions
       Analysis.new(
         diff: Engine.compare(history.first_snapshot, history.last_snapshot),
-        timeline: root_steps(root_versions, history.root_snapshots),
+        timeline: ActivityRootSteps.call(root_versions, history.root_snapshots),
         activity_timeline: activity_steps(history, closing)
       )
     end
@@ -81,7 +81,7 @@ module PaperTrailDiff
       ActivityStep.new(
         from_boundary: ActivityBoundary.from_version(version),
         to_boundary: ActivityBoundary.destroyed(version),
-        diff: Engine.compare(history.root_snapshots[version_key(version)], nil)
+        diff: Engine.compare(history.root_snapshots[ActivityRootSteps.version_key(version)], nil)
       )
     end
 
@@ -126,25 +126,6 @@ module PaperTrailDiff
       events.any? do |event|
         Support.compare_versions(selected.version, event.version).negative?
       end
-    end
-
-    #: (Array[untyped], Hash[Array[untyped], RecordSnapshot?]) -> Array[Step]
-    def root_steps(root_versions, root_snapshots)
-      snapshots = root_versions.map do |version|
-        root_snapshots.fetch(version_key(version))
-      end
-      root_versions.each_cons(2).with_index.map do |versions, index|
-        Step.new(
-          from_version: versions.fetch(0),
-          to_version: versions.fetch(1),
-          diff: Engine.compare(snapshots.fetch(index), snapshots.fetch(index + 1))
-        )
-      end.freeze
-    end
-
-    #: (untyped) -> Array[untyped]
-    def version_key(version)
-      [version.class.name, version.id]
     end
   end
 end

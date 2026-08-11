@@ -17,6 +17,11 @@ project follows [Semantic Versioning](https://semver.org/).
   destruction, which no later root version can follow, instead of raising
   `IncompleteTimeRangeError` for a range that could never be satisfied. A
   destruction outside the window remains reconstruction context only.
+- Accept `:first` and `:last` as `from:` and `to:` boundaries on `timeline`,
+  `activity_timeline`, and `analyze`, resolved without depending on the order
+  the `versions` association happens to use. A record with no versions resolves
+  to an empty timeline rather than raising, so listing pages need no special
+  case.
 
 ### Removed
 

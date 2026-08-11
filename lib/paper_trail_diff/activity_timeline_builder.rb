@@ -17,6 +17,7 @@ module PaperTrailDiff
     #: () -> Array[ActivityStep]
     def build
       return time_builder.build if @range.time?
+      return no_steps if @range.unresolved?
       return build_to_current if Endpoint.record?(@to)
 
       Endpoint.validate!(@to)
@@ -27,6 +28,7 @@ module PaperTrailDiff
     #: () -> Analysis
     def analyze
       return time_builder.analyze if @range.time?
+      return Analysis.empty if @range.unresolved?
 
       unless Endpoint.version?(@to)
         raise InvalidTimelineRangeError, '`to` must be a root PaperTrail version'
@@ -46,6 +48,12 @@ module PaperTrailDiff
     # @rbs @range: TimelineRange
     # @rbs @tree: AssociationTree
     # @rbs @snapshotter: untyped
+
+    #: () -> Array[ActivityStep]
+    def no_steps
+      steps = [] #: Array[ActivityStep]
+      steps.freeze
+    end
 
     #: () -> Array[ActivityStep]
     def build_between_versions
@@ -171,32 +179,13 @@ module PaperTrailDiff
     # which the state at a destroy version is the state before the deletion.
     #: (Array[untyped], Array[ActivityEvent], ActivityHistory) -> Analysis
     def build_analysis(root_versions, events, history)
-      snapshots = root_versions.map do |version|
-        history.root_snapshots.fetch(version_key(version))
-      end
       Analysis.new(
         diff: Engine.compare(history.first_snapshot, history.last_snapshot),
-        timeline: build_root_steps(root_versions, snapshots),
+        timeline: ActivityRootSteps.call(root_versions, history.root_snapshots),
         activity_timeline: activity_steps(
           history, events, destroyed_boundary(root_versions), nil
         )
       )
-    end
-
-    #: (Array[untyped], Array[RecordSnapshot?]) -> Array[Step]
-    def build_root_steps(root_versions, snapshots)
-      root_versions.each_cons(2).with_index.map do |versions, index|
-        Step.new(
-          from_version: versions.fetch(0),
-          to_version: versions.fetch(1),
-          diff: Engine.compare(snapshots.fetch(index), snapshots.fetch(index + 1))
-        )
-      end.freeze
-    end
-
-    #: (untyped) -> Array[untyped]
-    def version_key(version)
-      [version.class.name, version.id]
     end
 
     #: () -> TimeActivityTimelineBuilder

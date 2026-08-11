@@ -287,8 +287,28 @@ end
 
 ## Build a root-checkpoint timeline
 
-`timeline` accepts two version objects from the supplied record's history. The
-range is inclusive, must be chronological, and produces one `Step` for each
+`timeline` accepts two version objects from the supplied record's history, or
+the symbols `:first` and `:last` when the range is simply the record's whole
+recorded history:
+
+```ruby
+steps = PaperTrailDiff.timeline(article, from: :first, to: :last)
+```
+
+`:first` and `:last` are resolved by the gem, independently of the order the
+`versions` association happens to use, so a caller never has to know it is
+sorted. They work anywhere a version does, including mixed with an explicit
+one (`from: :first, to: some_version`) and on `activity_timeline` and
+`analyze`. A record with no versions has no boundaries to resolve; that is an
+empty history rather than a bad request, so the result is an empty timeline
+instead of an error — which is usually what an index page wants.
+
+Combine `from: :first` with `to: article` for the fullest activity view of a
+live record: the whole recorded history, ending at current state. See
+[activity timelines](#build-an-activity-timeline) for why that end differs from
+`to: :last`.
+
+The range is inclusive, must be chronological, and produces one `Step` for each
 adjacent pair:
 
 ```ruby
@@ -340,7 +360,9 @@ steps.reject(&:empty?)
 ```
 
 Pass the record explicitly as `to:` to include current state without creating a
-final root checkpoint:
+final root checkpoint. This is not the same as `to: :last`: descendant
+mutations recorded after the record's final root version fall outside a
+version-bounded range, so only a live end reports them.
 
 ```ruby
 steps = PaperTrailDiff.activity_timeline(

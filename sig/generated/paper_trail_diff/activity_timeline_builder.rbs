@@ -28,6 +28,9 @@ module PaperTrailDiff
     @tree: AssociationTree
 
     # : () -> Array[ActivityStep]
+    def no_steps: () -> Array[ActivityStep]
+
+    # : () -> Array[ActivityStep]
     def build_between_versions: () -> Array[ActivityStep]
 
     # : () -> Array[ActivityStep]
@@ -66,12 +69,6 @@ module PaperTrailDiff
     # which the state at a destroy version is the state before the deletion.
     # : (Array[untyped], Array[ActivityEvent], ActivityHistory) -> Analysis
     def build_analysis: (Array[untyped], Array[ActivityEvent], ActivityHistory) -> Analysis
-
-    # : (Array[untyped], Array[RecordSnapshot?]) -> Array[Step]
-    def build_root_steps: (Array[untyped], Array[RecordSnapshot?]) -> Array[Step]
-
-    # : (untyped) -> Array[untyped]
-    def version_key: (untyped) -> Array[untyped]
 
     # : () -> TimeActivityTimelineBuilder
     def time_builder: () -> TimeActivityTimelineBuilder

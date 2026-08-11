@@ -1,0 +1,13 @@
+# Generated from lib/paper_trail_diff/activity_root_steps.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Root checkpoint steps recovered from the snapshots an activity pass retained,
+  # so a combined result does not reconstruct the same boundaries twice.
+  module ActivityRootSteps
+    # : (Array[untyped], Hash[Array[untyped], RecordSnapshot?]) -> Array[Step]
+    def self?.call: (Array[untyped], Hash[Array[untyped], RecordSnapshot?]) -> Array[Step]
+
+    # : (untyped) -> Array[untyped]
+    def self?.version_key: (untyped) -> Array[untyped]
+  end
+end

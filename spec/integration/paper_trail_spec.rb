@@ -480,6 +480,46 @@ RSpec.describe PaperTrailDiff do
       expect(steps.last.to_version).to eq(reverted)
     end
 
+    it 'resolves symbolic boundaries to the record own earliest and latest versions' do
+      article, create_version, _draft, _published, reverted = create_history
+
+      symbolic = described_class.timeline(article, from: :first, to: :last)
+      explicit = described_class.timeline(article, from: create_version, to: reverted)
+
+      expect(symbolic.map(&:to_h)).to eq(explicit.map(&:to_h))
+      # Resolved independently of the order the versions association happens to
+      # use, which a caller is free to change.
+      allow(article).to receive(:versions).and_return(article.versions.reorder(id: :desc))
+      expect(described_class.timeline(article, from: :first, to: :last).map(&:to_h))
+        .to eq(explicit.map(&:to_h))
+    end
+
+    it 'treats a record with no versions as an empty history rather than an error' do
+      bare = PaperTrail.request(enabled: false) do
+        CoreArticle.create!(title: 'Untracked', internal_note: 'none')
+      end
+
+      expect(bare.versions).to be_empty
+      expect(described_class.timeline(bare, from: :first, to: :last)).to eq([])
+      expect(described_class.activity_timeline(bare, from: :first, to: :last)).to eq([])
+      analysis = described_class.analyze(bare, from: :first, to: :last, activity: true)
+      expect(analysis.timeline).to eq([])
+      expect(analysis.activity_timeline).to eq([])
+      expect(analysis.diff).to be_empty
+    end
+
+    it 'rejects an unknown boundary symbol and a reversed symbolic range' do
+      article, = create_history
+
+      expect { described_class.timeline(article, from: :beginning, to: :last) }
+        .to raise_error(PaperTrailDiff::InvalidTimelineRangeError, /unsupported boundary/)
+      expect { described_class.timeline(article, from: :last, to: :first) }
+        .to raise_error(PaperTrailDiff::InvalidTimelineRangeError, /must not follow/)
+      window = Time.utc(2030, 1, 1)..Time.utc(2030, 1, 2)
+      expect { described_class.timeline(article, from: :first, within: window) }
+        .to raise_error(PaperTrailDiff::InvalidTimelineRangeError, /cannot be combined/)
+    end
+
     it 'accepts a window that closes on the record being destroyed' do
       article, create_version, draft, published, reverted = create_history
       article.destroy!

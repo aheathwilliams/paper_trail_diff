@@ -53,11 +53,5 @@ module PaperTrailDiff
 
     # : (ActivityEvent, Array[ActivityEvent]) -> bool
     def later_event?: (ActivityEvent, Array[ActivityEvent]) -> bool
-
-    # : (Array[untyped], Hash[Array[untyped], RecordSnapshot?]) -> Array[Step]
-    def root_steps: (Array[untyped], Hash[Array[untyped], RecordSnapshot?]) -> Array[Step]
-
-    # : (untyped) -> Array[untyped]
-    def version_key: (untyped) -> Array[untyped]
   end
 end
