@@ -6,11 +6,12 @@ module PaperTrailDiff
   # queries. Only the range forms that mean the same thing for every root are
   # supported: a shared wall-clock window, or each root's own whole history.
   class BatchedRootVersions
-    #: (Array[untyped], time_range: TimeRange?, ?version_scope: untyped) -> void
-    def initialize(records, time_range:, version_scope: nil)
+    #: (Array[untyped], time_range: TimeRange?, ?version_scope: untyped, ?live_endpoints: Hash[Array[String], untyped]?) -> void
+    def initialize(records, time_range:, version_scope: nil, live_endpoints: nil)
       @records = records
       @time_range = time_range
       @version_scope = version_scope
+      @live_endpoints = live_endpoints
     end
 
     # Returns a plan per record identity.
@@ -30,6 +31,7 @@ module PaperTrailDiff
     # @rbs @records: Array[untyped]
     # @rbs @time_range: TimeRange?
     # @rbs @version_scope: untyped
+    # @rbs @live_endpoints: Hash[Array[String], untyped]?
 
     #: (untyped, Array[untyped], Hash[Array[String], RootVersionPlan]) -> void
     def select_model(model_class, records, selected)
@@ -38,7 +40,8 @@ module PaperTrailDiff
       records.each do |record|
         key = identity(model_class, record.id)
         selected[key] = versions_for(
-          in_range.fetch(record.id.to_s, []), chosen, trailing[record.id.to_s]
+          in_range.fetch(record.id.to_s, []), chosen, trailing[record.id.to_s],
+          live_endpoint(key, record)
         )
       end
     end
@@ -54,15 +57,27 @@ module PaperTrailDiff
       ]
     end
 
-    #: (Array[untyped], Set[untyped]?, untyped) -> RootVersionPlan
-    def versions_for(in_range, chosen, after_range)
+    #: (Array[untyped], Set[untyped]?, untyped, untyped) -> RootVersionPlan
+    def versions_for(in_range, chosen, after_range, live_endpoint)
       RootVersionSelection.new(
         in_range: in_range,
         selected: chosen ? in_range.select { |version| chosen.include?(version.id) } : in_range,
         after_range: after_range,
         windowed: !@time_range.nil?,
-        filtered: !@version_scope.nil?
+        filtered: !@version_scope.nil?,
+        live_endpoint: live_endpoint
       ).call
+    end
+
+    # The batch already loaded every root, so closing on current state reuses
+    # that rather than reading each record again.
+    #: (Array[String], untyped) -> untyped
+    def live_endpoint(key, record)
+      loaded = @live_endpoints
+      return unless loaded
+
+      current = loaded.fetch(key, record)
+      current unless current.destroyed?
     end
 
     # One extra query names the selected mutations without discarding the

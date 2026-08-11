@@ -20,6 +20,10 @@ module PaperTrailDiff
     attr_reader :reconstruction_versions #: Array[untyped]
     attr_reader :steps #: Array[[untyped, untyped]]
     attr_reader :context_version #: untyped
+    # The live record a window closes on when no later version can reveal its
+    # final mutation. It is a boundary, never a version, so it stays out of
+    # `versions` and out of anything that reconstructs from version history.
+    attr_reader :closing_record #: untyped
     # The root versions this plan reports as mutations, which excludes any
     # version present only to reveal what the last of them produced.
     attr_reader :mutations #: Array[untyped]
@@ -43,10 +47,12 @@ module PaperTrailDiff
       end
     end
 
-    #: (versions: Array[untyped], steps: Array[[untyped, untyped]], ?context_version: untyped, ?reconstruction_versions: Array[untyped]?, ?mutations: Array[untyped]?) -> void
-    def initialize(
-      versions:, steps:, context_version: nil, reconstruction_versions: nil, mutations: nil
+    #: (versions: Array[untyped], steps: Array[[untyped, untyped]], ?context_version: untyped, ?reconstruction_versions: Array[untyped]?, ?mutations: Array[untyped]?, ?closing_record: untyped) -> void
+    def initialize( # rubocop:disable Metrics/ParameterLists
+      versions:, steps:, context_version: nil, reconstruction_versions: nil, mutations: nil,
+      closing_record: nil
     )
+      @closing_record = closing_record
       @versions = versions.freeze
       @reconstruction_versions = (reconstruction_versions || versions).freeze
       @steps = steps.freeze
@@ -59,6 +65,13 @@ module PaperTrailDiff
     #: () -> bool
     def empty?
       versions.empty?
+    end
+
+    # What the range's final state is read from, which is the live record when
+    # the window closes on current state and the last version otherwise.
+    #: () -> untyped
+    def final_endpoint
+      @closing_record || @versions.last
     end
 
     #: (untyped) -> bool

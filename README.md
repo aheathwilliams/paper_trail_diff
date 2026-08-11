@@ -628,12 +628,39 @@ version to reveal the final selected mutation. That version is reconstruction
 context, not an additional selected mutation.
 
 If the window contains a relevant mutation but no later root version exists,
-the call raises `PaperTrailDiff::IncompleteTimeRangeError`. Create a root
-checkpoint after the reporting window before running historical analysis. The
-gem does not silently substitute current database state. A root-only window
-with no selected mutation returns a frozen empty timeline. The one exception is
-a window that closes on the root's own destruction, which no later version can
-ever follow; see [closing a destroyed root](#closing-a-destroyed-root).
+the call raises `PaperTrailDiff::IncompleteTimeRangeError`. The gem does not
+silently substitute current database state; pass
+[`close_on: :current`](#reporting-up-to-now) to ask for it, or create a root
+checkpoint after the reporting window. A root-only window with no selected
+mutation returns a frozen empty timeline. The one exception is a window that
+closes on the root's own destruction, which no later version can ever follow;
+see [closing a destroyed root](#closing-a-destroyed-root).
+
+### Reporting up to now
+
+A window whose end is the present has nothing recorded after its final
+mutation, so by default it raises. `close_on: :current` closes it on the live
+record instead:
+
+```ruby
+PaperTrailDiff.analyze_many(
+  articles, within: month_start..Time.current, close_on: :current
+)
+```
+
+It is accepted by `timeline`, `activity_timeline`, `analyze`, and
+`analyze_many`, and only alongside `within:` — a range whose endpoints you gave
+explicitly already says where it ends. The closing step's `to_boundary.kind` is
+`:current` and its `to_version` is `nil`, so read the boundary rather than the
+version on the last step. Under `activity: true` the window runs to the instant
+state is captured rather than to the last root version, so a descendant that
+moved after that version is still reported.
+
+Two things follow from closing on live state. Current state includes changes
+PaperTrail never recorded — an `update_columns` write shows up in that final
+step, attributed to the version that precedes it, because nothing else records
+who made it. And a destroyed root has no current state to close on, so it keeps
+closing on its own destruction as it already did.
 
 Time ranges and explicit `from:`/`to:` endpoints are mutually exclusive.
 Malformed, open-ended, or reversed ranges raise

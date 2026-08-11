@@ -145,7 +145,7 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
     end
 
     # Compares every adjacent reconstructed state in an inclusive version range.
-    #: (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?version_scope: untyped) -> Array[Step]
+    #: (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?version_scope: untyped, ?close_on: Symbol?) -> Array[Step]
     def timeline( # rubocop:disable Metrics/ParameterLists
       record,
       from: nil,
@@ -153,21 +153,23 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
       within: nil,
       associations: [],
       ignore: DEFAULT_IGNORED_ATTRIBUTES,
-      version_scope: nil
+      version_scope: nil,
+      close_on: nil
     )
       PaperTrailAdapter.new(associations: associations, ignore: ignore).timeline(
         record,
         from: from,
         to: to,
         within: within,
-        version_scope: version_scope
+        version_scope: version_scope,
+        close_on: close_on
       )
     end
 
     # Compares adjacent root and selected-descendant activity boundaries.
     # `reload_live_endpoints:` applies only when `to:` is a current record; the
     # other range forms never read live state.
-    #: (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?reload_live_endpoints: bool, ?version_scope: untyped) -> Array[ActivityStep]
+    #: (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?reload_live_endpoints: bool, ?version_scope: untyped, ?close_on: Symbol?) -> Array[ActivityStep]
     def activity_timeline( # rubocop:disable Metrics/ParameterLists
       record,
       from: nil,
@@ -176,7 +178,8 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
       associations: [],
       ignore: DEFAULT_IGNORED_ATTRIBUTES,
       reload_live_endpoints: true,
-      version_scope: nil
+      version_scope: nil,
+      close_on: nil
     )
       PaperTrailAdapter.new(
         associations: associations,
@@ -187,12 +190,13 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
         from: from,
         to: to,
         within: within,
-        version_scope: version_scope
+        version_scope: version_scope,
+        close_on: close_on
       )
     end
 
     # Builds an endpoint diff and root-checkpoint timeline while normalizing each version once.
-    #: (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped) -> Analysis
+    #: (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?) -> Analysis
     def analyze( # rubocop:disable Metrics/ParameterLists
       record,
       from: nil,
@@ -201,7 +205,8 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
       associations: [],
       ignore: DEFAULT_IGNORED_ATTRIBUTES,
       activity: false,
-      version_scope: nil
+      version_scope: nil,
+      close_on: nil
     )
       PaperTrailAdapter.new(associations: associations, ignore: ignore).analyze(
         record,
@@ -209,27 +214,30 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
         to: to,
         within: within,
         activity: activity,
-        version_scope: version_scope
+        version_scope: version_scope,
+        close_on: close_on
       )
     end
 
     # Analyzes many roots over one shared time window, preparing their selected
     # history once for the batch instead of once per record. Roots with no
     # versions in the window return an empty `Analysis`.
-    #: (Array[untyped], ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped) -> Hash[identity, Analysis]
+    #: (Array[untyped], ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?) -> Hash[identity, Analysis]
     def analyze_many( # rubocop:disable Metrics/ParameterLists
       records,
       within: nil,
       associations: [],
       ignore: DEFAULT_IGNORED_ATTRIBUTES,
       activity: false,
-      version_scope: nil
+      version_scope: nil,
+      close_on: nil
     )
       PaperTrailAdapter.new(associations: associations, ignore: ignore).analyze_many(
         records,
         within: within,
         activity: activity,
-        version_scope: version_scope
+        version_scope: version_scope,
+        close_on: close_on
       )
     end
 

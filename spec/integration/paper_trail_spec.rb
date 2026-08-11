@@ -448,6 +448,103 @@ RSpec.describe PaperTrailDiff do
     end
   end
 
+  describe 'close_on: :current' do
+    def open_window_articles(count = 2)
+      articles = count.times.map do |index|
+        article = CoreArticle.create!(title: "Draft #{index}", internal_note: 'stable')
+        article.update!(title: "Published #{index}")
+        article
+      end
+      start_at = PaperTrail::Version.order(:id).first.created_at
+      # An "up to now" report: the window runs past everything recorded, so no
+      # later version can reveal what the last mutation produced.
+      [articles, start_at..(Time.now.utc + 86_400)]
+    end
+
+    it 'closes a timeline on the live record instead of refusing the range' do
+      articles, window = open_window_articles(1)
+      article = articles.fetch(0)
+
+      expect { described_class.timeline(article, within: window) }
+        .to raise_error(PaperTrailDiff::IncompleteTimeRangeError)
+
+      steps = described_class.timeline(article, within: window, close_on: :current)
+
+      expect(steps.map { |step| step.to_boundary.kind }).to eq(%i[version current])
+      expect(steps.last.diff.attributes.fetch('title').to_h)
+        .to eq(from: 'Draft 0', to: 'Published 0')
+      expect(steps.last.to_version).to be_nil
+      expect(steps.last.to_h.fetch(:to_boundary).fetch(:kind)).to eq(:current)
+    end
+
+    it 'reports state the live record holds but no version recorded' do
+      articles, window = open_window_articles(1)
+      article = articles.fetch(0)
+      # PaperTrail never saw this, so only the live record can show it. An
+      # "up to now" window says current state is the endpoint, drift included.
+      CoreArticle.where(id: article.id).update_all(title: 'Edited behind PaperTrail')
+
+      analysis = described_class.analyze(article.reload, within: window, close_on: :current)
+
+      expect(analysis.to_snapshot.attributes.fetch('title')).to eq('Edited behind PaperTrail')
+      expect(analysis.timeline.last.diff.attributes.fetch('title').to)
+        .to eq('Edited behind PaperTrail')
+    end
+
+    it 'batches an open window across roots' do
+      articles, window = open_window_articles(3)
+
+      expect { described_class.analyze_many(articles, within: window) }
+        .to raise_error(PaperTrailDiff::IncompleteTimeRangeError)
+
+      results = described_class.analyze_many(articles, within: window, close_on: :current)
+
+      expect(results.length).to eq(3)
+      expect(results.values.map { |analysis| analysis.to_snapshot.attributes.fetch('title') })
+        .to eq(['Published 0', 'Published 1', 'Published 2'])
+      expect(results.values.map { |analysis| analysis.timeline.last.to_boundary.kind })
+        .to eq(%i[current current current])
+    end
+
+    it 'agrees with analyzing each root separately' do
+      articles, window = open_window_articles(2)
+
+      batched = described_class.analyze_many(articles, within: window, close_on: :current)
+      separately = articles.to_h do |article|
+        [PaperTrailDiff::Endpoint.identity(article),
+         described_class.analyze(article, within: window, close_on: :current)]
+      end
+
+      expect(batched.transform_values { |a| a.timeline.map { |s| s.diff.to_h } })
+        .to eq(separately.transform_values { |a| a.timeline.map { |s| s.diff.to_h } })
+    end
+
+    it 'rejects a closing endpoint the range cannot use' do
+      articles, window = open_window_articles(1)
+      article = articles.fetch(0)
+
+      expect { described_class.timeline(article, from: :first, to: :last, close_on: :current) }
+        .to raise_error(PaperTrailDiff::ConfigurationError, /requires `within`/)
+      expect { described_class.timeline(article, within: window, close_on: :nope) }
+        .to raise_error(PaperTrailDiff::ConfigurationError, /must be :current/)
+    end
+
+    it 'still closes a destroyed root on its own destruction' do
+      article = CoreArticle.create!(title: 'Doomed', internal_note: 'stable')
+      start_at = PaperTrail::Version.order(:id).first.created_at
+      article.update!(title: 'Doomed v2')
+      article.destroy!
+      window = start_at..(Time.now.utc + 86_400)
+
+      steps = described_class.timeline(article, within: window, close_on: :current)
+
+      # A destroyed record has no current state to close on, and its destroy
+      # version already terminates the history.
+      expect(steps.map { |step| step.to_boundary.kind }).to eq(%i[version version])
+      expect(steps.last.to_version.event).to eq('destroy')
+    end
+  end
+
   describe '.analyze_many' do
     def windowed_articles(count)
       articles = count.times.map do |index|

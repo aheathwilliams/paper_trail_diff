@@ -5,8 +5,8 @@ module PaperTrailDiff
   # versions and preparing their association history once for the whole batch
   # rather than once per root.
   class AnalysisBatch
-    # : (Array[untyped], time_range: TimeRange?, live_loader: untyped, history_preparer: untyped, analyzer: untyped, ?version_scope: untyped) -> void
-    def initialize: (Array[untyped], time_range: TimeRange?, live_loader: untyped, history_preparer: untyped, analyzer: untyped, ?version_scope: untyped) -> void
+    # : (Array[untyped], time_range: TimeRange?, live_loader: untyped, history_preparer: untyped, analyzer: untyped, ?version_scope: untyped, ?close_on_current: bool) -> void
+    def initialize: (Array[untyped], time_range: TimeRange?, live_loader: untyped, history_preparer: untyped, analyzer: untyped, ?version_scope: untyped, ?close_on_current: bool) -> void
 
     # : () -> Hash[identity, Analysis]
     def call: () -> Hash[identity, Analysis]
@@ -14,6 +14,8 @@ module PaperTrailDiff
     private
 
     @analyzer: untyped
+
+    @close_on_current: bool
 
     @history_preparer: untyped
 
@@ -38,8 +40,8 @@ module PaperTrailDiff
     # The roots are preloaded first, because preparation reads their current
     # association state as a fallback and would otherwise walk it one root at a
     # time.
-    # : (Array[untyped], Hash[Array[String], RootVersionPlan]) -> void
-    def prepare: (Array[untyped], Hash[Array[String], RootVersionPlan]) -> void
+    # : (Array[untyped], Hash[Array[String], RootVersionPlan], Hash[Array[String], untyped]) -> void
+    def prepare: (Array[untyped], Hash[Array[String], RootVersionPlan], Hash[Array[String], untyped]) -> void
 
     # A root with no versions in range has nothing to report, which is an empty
     # result rather than a failed request.

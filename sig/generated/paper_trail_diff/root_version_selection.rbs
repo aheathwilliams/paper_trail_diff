@@ -12,8 +12,8 @@ module PaperTrailDiff
   class RootVersionSelection
     INCOMPLETE: ::String
 
-    # : (in_range: Array[untyped], selected: Array[untyped], after_range: untyped, windowed: bool, ?context_required: bool, ?filtered: bool) -> void
-    def initialize: (in_range: Array[untyped], selected: Array[untyped], after_range: untyped, windowed: bool, ?context_required: bool, ?filtered: bool) -> void
+    # : (in_range: Array[untyped], selected: Array[untyped], after_range: untyped, windowed: bool, ?context_required: bool, ?filtered: bool, ?live_endpoint: untyped) -> void
+    def initialize: (in_range: Array[untyped], selected: Array[untyped], after_range: untyped, windowed: bool, ?context_required: bool, ?filtered: bool, ?live_endpoint: untyped) -> void
 
     # : () -> RootVersionPlan
     def call: () -> RootVersionPlan
@@ -28,9 +28,17 @@ module PaperTrailDiff
 
     @in_range: Array[untyped]
 
+    @live_endpoint: untyped
+
     @selected: Array[untyped]
 
     @windowed: bool
+
+    # A window reaching past the last recorded version has only the live record
+    # left to show what its final mutation produced. That record is a closing
+    # boundary rather than a selected mutation, so it never joins `versions`.
+    # : (untyped) -> RootVersionPlan
+    def contiguous_plan: (untyped) -> RootVersionPlan
 
     # An activity view still needs a root to reconstruct from even when no root
     # version falls inside the window, because descendants may have moved.
@@ -43,6 +51,9 @@ module PaperTrailDiff
     # edit would read differently depending on what followed it.
     # : (untyped) -> RootVersionPlan
     def filtered_plan: (untyped) -> RootVersionPlan
+
+    # : (Array[[untyped, untyped]], untyped) -> RootVersionPlan
+    def filtered_plan_for: (Array[[ untyped, untyped ]], untyped) -> RootVersionPlan
 
     # Nothing can follow a destroy, so it never pairs into a step. It is still a
     # selected mutation, and the activity view closes on the absence it leaves,

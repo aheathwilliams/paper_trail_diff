@@ -5,14 +5,16 @@ module PaperTrailDiff
   # queries. Only the range forms that mean the same thing for every root are
   # supported: a shared wall-clock window, or each root's own whole history.
   class BatchedRootVersions
-    # : (Array[untyped], time_range: TimeRange?, ?version_scope: untyped) -> void
-    def initialize: (Array[untyped], time_range: TimeRange?, ?version_scope: untyped) -> void
+    # : (Array[untyped], time_range: TimeRange?, ?version_scope: untyped, ?live_endpoints: Hash[Array[String], untyped]?) -> void
+    def initialize: (Array[untyped], time_range: TimeRange?, ?version_scope: untyped, ?live_endpoints: Hash[Array[String], untyped]?) -> void
 
     # Returns a plan per record identity.
     # : () -> Hash[Array[String], RootVersionPlan]
     def call: () -> Hash[Array[String], RootVersionPlan]
 
     private
+
+    @live_endpoints: Hash[Array[String], untyped]?
 
     @records: Array[untyped]
 
@@ -26,8 +28,13 @@ module PaperTrailDiff
     # : (untyped, Array[untyped]) -> [Hash[String, Array[untyped]], Set[untyped]?, Hash[String, untyped]]
     def model_versions: (untyped, Array[untyped]) -> [ Hash[String, Array[untyped]], Set[untyped]?, Hash[String, untyped] ]
 
-    # : (Array[untyped], Set[untyped]?, untyped) -> RootVersionPlan
-    def versions_for: (Array[untyped], Set[untyped]?, untyped) -> RootVersionPlan
+    # : (Array[untyped], Set[untyped]?, untyped, untyped) -> RootVersionPlan
+    def versions_for: (Array[untyped], Set[untyped]?, untyped, untyped) -> RootVersionPlan
+
+    # The batch already loaded every root, so closing on current state reuses
+    # that rather than reading each record again.
+    # : (Array[String], untyped) -> untyped
+    def live_endpoint: (Array[String], untyped) -> untyped
 
     # One extra query names the selected mutations without discarding the
     # unfiltered versions the successor lookup still needs.

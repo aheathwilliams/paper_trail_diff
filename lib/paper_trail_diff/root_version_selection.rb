@@ -13,9 +13,10 @@ module PaperTrailDiff
   class RootVersionSelection
     INCOMPLETE = 'time range requires a later root version to reconstruct its final change'
 
-    #: (in_range: Array[untyped], selected: Array[untyped], after_range: untyped, windowed: bool, ?context_required: bool, ?filtered: bool) -> void
+    #: (in_range: Array[untyped], selected: Array[untyped], after_range: untyped, windowed: bool, ?context_required: bool, ?filtered: bool, ?live_endpoint: untyped) -> void
     def initialize( # rubocop:disable Metrics/ParameterLists
-      in_range:, selected:, after_range:, windowed:, context_required: false, filtered: false
+      in_range:, selected:, after_range:, windowed:, context_required: false, filtered: false,
+      live_endpoint: nil
     )
       @in_range = in_range
       @selected = selected
@@ -23,18 +24,18 @@ module PaperTrailDiff
       @windowed = windowed
       @context_required = context_required
       @filtered = filtered
+      @live_endpoint = live_endpoint
     end
 
     #: () -> RootVersionPlan
     def call
       return without_selection if @selected.empty?
 
-      revealing = revealing_version
-      raise IncompleteTimeRangeError, INCOMPLETE if !revealing && @windowed && !terminal_destroy?
-      return filtered_plan(revealing) if @filtered
+      closing = revealing_version || @live_endpoint
+      raise IncompleteTimeRangeError, INCOMPLETE if !closing && @windowed && !terminal_destroy?
+      return filtered_plan(closing) if @filtered
 
-      versions = revealing ? (@selected + [revealing]) : @selected
-      RootVersionPlan.contiguous(versions, context_version: revealing)
+      contiguous_plan(closing)
     end
 
     private
@@ -45,6 +46,22 @@ module PaperTrailDiff
     # @rbs @windowed: bool
     # @rbs @context_required: bool
     # @rbs @filtered: bool
+    # @rbs @live_endpoint: untyped
+
+    # A window reaching past the last recorded version has only the live record
+    # left to show what its final mutation produced. That record is a closing
+    # boundary rather than a selected mutation, so it never joins `versions`.
+    #: (untyped) -> RootVersionPlan
+    def contiguous_plan(closing)
+      return RootVersionPlan.contiguous(@selected) unless closing
+      unless Endpoint.record?(closing)
+        return RootVersionPlan.contiguous(@selected + [closing], context_version: closing)
+      end
+
+      steps = @selected.each_cons(2).map { |from, to| [from, to] } #: Array[[untyped, untyped]]
+      steps << [@selected.last, closing]
+      RootVersionPlan.new(versions: @selected, steps: steps, closing_record: closing)
+    end
 
     # An activity view still needs a root to reconstruct from even when no root
     # version falls inside the window, because descendants may have moved.
@@ -68,13 +85,20 @@ module PaperTrailDiff
         successor = version.equal?(@selected.last) ? revealing : immediate_successor(version)
         [version, successor] if successor
       end #: Array[[untyped, untyped]]
-      versions = chronological(steps.flatten(1) + closing_versions)
+      filtered_plan_for(steps, revealing)
+    end
+
+    #: (Array[[untyped, untyped]], untyped) -> RootVersionPlan
+    def filtered_plan_for(steps, revealing)
+      live = revealing if Endpoint.record?(revealing)
+      versions = chronological(
+        (steps.flatten(1) + closing_versions).reject { |entry| Endpoint.record?(entry) }
+      )
       RootVersionPlan.new(
-        versions: versions,
-        steps: steps,
-        context_version: revealing,
+        versions: versions, steps: steps,
+        context_version: (revealing unless live),
         reconstruction_versions: spanned(versions),
-        mutations: @selected
+        mutations: @selected, closing_record: live
       )
     end
 

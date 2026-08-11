@@ -6,13 +6,15 @@ module PaperTrailDiff
   # versions and preparing their association history once for the whole batch
   # rather than once per root.
   class AnalysisBatch
-    #: (Array[untyped], time_range: TimeRange?, live_loader: untyped, history_preparer: untyped, analyzer: untyped, ?version_scope: untyped) -> void
+    #: (Array[untyped], time_range: TimeRange?, live_loader: untyped, history_preparer: untyped, analyzer: untyped, ?version_scope: untyped, ?close_on_current: bool) -> void
     def initialize( # rubocop:disable Metrics/ParameterLists
-      records, time_range:, live_loader:, history_preparer:, analyzer:, version_scope: nil
+      records, time_range:, live_loader:, history_preparer:, analyzer:, version_scope: nil,
+      close_on_current: false
     )
       @records = records
       @time_range = time_range
       @version_scope = validated_scope(version_scope)
+      @close_on_current = close_on_current
       @live_loader = live_loader
       @history_preparer = history_preparer
       @analyzer = analyzer
@@ -21,10 +23,12 @@ module PaperTrailDiff
     #: () -> Hash[identity, Analysis]
     def call
       records = validated_records
+      loaded = @live_loader.call(records)
       selected = BatchedRootVersions.new(
-        records, time_range: @time_range, version_scope: @version_scope
+        records, time_range: @time_range, version_scope: @version_scope,
+                 live_endpoints: (loaded if @close_on_current)
       ).call
-      prepare(records, selected)
+      prepare(records, selected, loaded)
       records.to_h do |record|
         key = Endpoint.identity(record)
         plan = selected.fetch(key, RootVersionPlan.empty)
@@ -37,6 +41,7 @@ module PaperTrailDiff
     # @rbs @records: Array[untyped]
     # @rbs @time_range: TimeRange?
     # @rbs @version_scope: untyped
+    # @rbs @close_on_current: bool
     # @rbs @live_loader: untyped
     # @rbs @history_preparer: untyped
     # @rbs @analyzer: untyped
@@ -66,9 +71,8 @@ module PaperTrailDiff
     # The roots are preloaded first, because preparation reads their current
     # association state as a fallback and would otherwise walk it one root at a
     # time.
-    #: (Array[untyped], Hash[Array[String], RootVersionPlan]) -> void
-    def prepare(records, selected)
-      loaded = @live_loader.call(records)
+    #: (Array[untyped], Hash[Array[String], RootVersionPlan], Hash[Array[String], untyped]) -> void
+    def prepare(records, selected, loaded)
       records.group_by(&:class).each_value do |grouped|
         versions = grouped.flat_map do |record|
           selected.fetch(Endpoint.identity(record), RootVersionPlan.empty).versions

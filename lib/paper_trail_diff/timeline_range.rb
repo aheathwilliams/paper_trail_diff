@@ -10,10 +10,11 @@ module PaperTrailDiff
     attr_reader :to #: untyped
     attr_reader :time_range #: TimeRange?
 
-    #: (untyped, from: untyped, to: untyped, within: untyped, ?versions: Array[untyped]?, ?version_scope: untyped, ?plan: RootVersionPlan?) -> void
-    def initialize(record, from:, to:, within:, versions: nil, version_scope: nil, plan: nil) # rubocop:disable Metrics/ParameterLists
+    #: (untyped, from: untyped, to: untyped, within: untyped, ?versions: Array[untyped]?, ?version_scope: untyped, ?plan: RootVersionPlan?, ?live_endpoint: untyped) -> void
+    def initialize(record, from:, to:, within:, versions: nil, version_scope: nil, plan: nil, live_endpoint: nil) # rubocop:disable Metrics/ParameterLists, Layout/LineLength
       @record = record
       @plan = plan
+      @live_endpoint = live_endpoint
       @versions = (plan ? plan.versions : versions)&.freeze
       @version_scope = version_scope
       @requested_from = from
@@ -44,7 +45,8 @@ module PaperTrailDiff
       range = time_range
       if range
         return TimeVersionRange.new(
-          @record, time_range: range, version_scope: @version_scope
+          @record, time_range: range, version_scope: @version_scope,
+                   live_endpoint: @live_endpoint
         ).select_plan(context_required: context_required)
       end
       return RootVersionPlan.empty if unresolved?
@@ -92,6 +94,7 @@ module PaperTrailDiff
     # @rbs @versions: Array[untyped]?
     # @rbs @plan: RootVersionPlan?
     # @rbs @version_scope: untyped
+    # @rbs @live_endpoint: untyped
     # @rbs @requested_from: untyped
     # @rbs @requested_to: untyped
     # @rbs @from: untyped

@@ -1789,6 +1789,62 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     end.to raise_error(PaperTrailDiff::UnknownAssociationError, /missing/)
   end
 
+  describe 'close_on: :current over an open window' do
+    def open_window_article
+      article = TrackedArticle.create!(title: 'Start')
+      start_at = PaperTrail::Version.order(:id).first.created_at
+      article.update!(title: 'Revised')
+      [article, start_at..(Time.now.utc + 86_400)]
+    end
+
+    it 'closes an activity timeline on current state instead of refusing the range' do
+      article, window = open_window_article
+
+      expect { PaperTrailDiff.activity_timeline(article, within: window) }
+        .to raise_error(PaperTrailDiff::IncompleteTimeRangeError)
+
+      steps = PaperTrailDiff.activity_timeline(
+        article, within: window, close_on: :current, associations: ['comments']
+      )
+
+      expect(steps.last.to_boundary.kind).to eq(:current)
+      expect(steps.last.diff.attributes.fetch('title').to_h).to eq(from: 'Start', to: 'Revised')
+    end
+
+    it 'includes a descendant that moved after the last root version' do
+      article, window = open_window_article
+      # Nothing on the root changes after this, so a range ending at the last
+      # root version would not see it at all. A window reaching now must.
+      article.comments.create!(body: 'Added after the final root version')
+
+      steps = PaperTrailDiff.activity_timeline(
+        article, within: window, close_on: :current, associations: ['comments']
+      )
+
+      added = steps.flat_map { |step| step.diff.associations.fetch('comments', nil)&.added || [] }
+      expect(added.map { |record| record.attributes.fetch('body') })
+        .to eq(['Added after the final root version'])
+      expect(steps.last.to_boundary.kind).to eq(:current)
+    end
+
+    it 'gives analyze the same closing boundary through the activity path' do
+      article, window = open_window_article
+
+      analysis = PaperTrailDiff.analyze(
+        article, within: window, close_on: :current, activity: true, associations: ['comments']
+      )
+
+      expect(analysis.activity_timeline.last.to_boundary.kind).to eq(:current)
+      expect(analysis.to_snapshot.attributes.fetch('title')).to eq('Revised')
+      # The record is created inside the window, so the endpoint diff is its
+      # appearance. What matters here is that it ends at live state.
+      expect(analysis.diff.record_presence_change.to.attributes.fetch('title')).to eq('Revised')
+      expect(analysis.timeline.last.to_boundary.kind).to eq(:current)
+      expect(analysis.timeline.last.diff.attributes.fetch('title').to_h)
+        .to eq(from: 'Start', to: 'Revised')
+    end
+  end
+
   describe 'version_scope over a run of excluded versions' do
     # Three consecutive excluded versions between two selected ones, so the
     # excluded run is longer than the single successor each selected mutation is

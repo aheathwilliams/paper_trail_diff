@@ -14,19 +14,23 @@ module PaperTrailDiff
 
     #: () -> Array[ActivityStep]
     def build
-      history, _plan, closing = history_and_versions
+      history, _plan, closing, = history_and_versions
       activity_steps(history, closing)
     end
 
     #: () -> Analysis
     def analyze
-      history, plan, closing = history_and_versions
+      history, plan, closing, closing_snapshot, captured_at = history_and_versions
+      final = closing_snapshot || history.last_snapshot
       Analysis.new(
-        diff: Engine.compare(history.first_snapshot, history.last_snapshot),
-        timeline: ActivityRootSteps.call(plan, history.root_snapshots),
+        diff: Engine.compare(history.first_snapshot, final),
+        timeline: ActivityRootSteps.call(
+          plan, history.root_snapshots,
+          closing_snapshot: closing_snapshot, captured_at: captured_at
+        ),
         activity_timeline: activity_steps(history, closing),
         from_snapshot: history.first_snapshot,
-        to_snapshot: history.last_snapshot
+        to_snapshot: final
       )
     end
 
@@ -37,19 +41,46 @@ module PaperTrailDiff
     # @rbs @tree: AssociationTree
     # @rbs @snapshotter: untyped
 
-    #: () -> [ActivityHistory, RootVersionPlan, ActivityStep?]
+    #: () -> [ActivityHistory, RootVersionPlan, ActivityStep?, RecordSnapshot?, untyped]
     def history_and_versions
       plan = @range.select_plan(context_required: !@tree.empty?)
-      root_versions = plan.reconstruction_versions
-      return [ActivityHistory.empty, plan, nil] if root_versions.empty?
+      return [ActivityHistory.empty, plan, nil, nil, nil] if plan.reconstruction_versions.empty?
 
-      prepare_history(root_versions)
-      events = collect_events(root_versions)
+      # A window closing on current state runs to the instant it is captured,
+      # not to the last root version, or descendants that moved after that
+      # version would be missing from a report that claims to reach now.
+      history_for(plan, plan.closing_record ? Time.now.utc : nil)
+    end
+
+    #: (RootVersionPlan, untyped) -> [ActivityHistory, RootVersionPlan, ActivityStep?, RecordSnapshot?, untyped]
+    def history_for(plan, captured_at)
+      root_versions = plan.reconstruction_versions
+      events = events_through(root_versions, captured_at)
       selected = selected_events(events, plan)
-      return [ActivityHistory.empty, plan, nil] unless time_events?(selected, events)
+      unless time_events?(selected, events, plan)
+        return [ActivityHistory.empty, plan, nil, nil, nil]
+      end
 
       history = build_history(root_versions, events)
-      [history, plan, closing_step(history, selected.last)]
+      snapshot = current_snapshot(plan)
+      closing = closing_step(history, selected.last, plan, captured_at, snapshot)
+      [history, plan, closing, snapshot, captured_at]
+    end
+
+    # One live read serves both the closing activity step and the endpoint the
+    # analysis reports, which would otherwise reconstruct the graph twice.
+    #: (RootVersionPlan) -> RecordSnapshot?
+    def current_snapshot(plan)
+      record = plan.closing_record
+      return unless record
+
+      @snapshotter.call(record, record)
+    end
+
+    #: (Array[untyped], untyped) -> Array[ActivityEvent]
+    def events_through(root_versions, captured_at)
+      prepare_history(root_versions, end_at: captured_at)
+      collect_events(root_versions, range_end: captured_at)
     end
 
     #: (Array[untyped], Array[ActivityEvent]) -> ActivityHistory
@@ -83,17 +114,40 @@ module PaperTrailDiff
       end
     end
 
-    # The window's last selected mutation is the root's own destruction, so the
-    # timeline closes on the absence it leaves rather than on a later boundary.
-    #: (ActivityHistory, ActivityEvent?) -> ActivityStep?
-    def closing_step(history, event)
-      return unless event && terminal_destroy?(event)
+    # A window either closes on the absence its final destruction leaves, or on
+    # current state when it reaches past everything recorded. Both are boundaries
+    # no version can supply.
+    #: (ActivityHistory, ActivityEvent?, RootVersionPlan, untyped, RecordSnapshot?) -> ActivityStep?
+    def closing_step(history, event, plan, captured_at, snapshot)
+      return unless event
+      return destroyed_step(history, event) if terminal_destroy?(event)
+      return unless plan.closing_record
 
+      current_step(history, plan.closing_record, captured_at, snapshot)
+    end
+
+    #: (ActivityHistory, ActivityEvent) -> ActivityStep
+    def destroyed_step(history, event)
       version = event.version
       ActivityStep.new(
         from_boundary: ActivityBoundary.from_version(version),
         to_boundary: ActivityBoundary.destroyed(version),
         diff: Engine.compare(history.root_snapshots[ActivityRootSteps.version_key(version)], nil)
+      )
+    end
+
+    # The last boundary reached is where current state is compared from, which
+    # is the final event rather than the final root version once descendants
+    # have moved since it.
+    #: (ActivityHistory, untyped, untyped, RecordSnapshot?) -> ActivityStep?
+    def current_step(history, record, captured_at, snapshot)
+      previous = history.steps.last&.to_boundary
+      return unless previous
+
+      ActivityStep.new(
+        from_boundary: previous,
+        to_boundary: ActivityBoundary.current(record, captured_at: captured_at),
+        diff: Engine.compare(history.last_snapshot, snapshot)
       )
     end
 
@@ -104,30 +158,34 @@ module PaperTrailDiff
       event.root? && event.version.event.to_s == 'destroy'
     end
 
-    #: (Array[untyped]) -> void
-    def prepare_history(root_versions)
+    #: (Array[untyped], ?end_at: untyped) -> void
+    def prepare_history(root_versions, end_at: nil)
       return unless @snapshotter.respond_to?(:prepare)
 
-      @snapshotter.prepare(@record, root_versions, start_at: @range.begin_time)
+      start_at = @range.begin_time
+      return @snapshotter.prepare(@record, root_versions, start_at: start_at) unless end_at
+
+      @snapshotter.prepare(@record, root_versions, start_at: start_at, end_at: end_at)
     end
 
-    #: (Array[untyped]) -> Array[ActivityEvent]
-    def collect_events(root_versions)
+    #: (Array[untyped], ?range_end: untyped) -> Array[ActivityEvent]
+    def collect_events(root_versions, range_end: nil)
       ActivityVersionCollector.new(
         @record,
         root_versions: root_versions,
         tree: @tree,
         traversal: AssociationTraversal.new(@tree),
         range_start: @range.begin_time,
-        range_end: root_versions.last
+        range_end: range_end || root_versions.last
       ).call
     end
 
-    #: (Array[ActivityEvent], Array[ActivityEvent]) -> bool
-    def time_events?(selected, events)
+    #: (Array[ActivityEvent], Array[ActivityEvent], RootVersionPlan) -> bool
+    def time_events?(selected, events, plan)
       return false if selected.empty?
       return true if later_event?(selected.last, events)
       return true if terminal_destroy?(selected.last)
+      return true if plan.closing_record
 
       message = 'time range requires a later activity boundary to reconstruct its final change'
       raise IncompleteTimeRangeError, message

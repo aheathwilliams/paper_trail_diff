@@ -3,8 +3,8 @@
 module PaperTrailDiff
   # Selects and compares a chronological slice of a record's version history.
   class TimelineBuilder
-    # : (untyped, from: untyped, to: untyped, snapshotter: untyped, ?within: untyped, ?versions: Array[untyped]?, ?version_scope: untyped, ?plan: RootVersionPlan?) -> void
-    def initialize: (untyped, from: untyped, to: untyped, snapshotter: untyped, ?within: untyped, ?versions: Array[untyped]?, ?version_scope: untyped, ?plan: RootVersionPlan?) -> void
+    # : (untyped, from: untyped, to: untyped, snapshotter: untyped, ?within: untyped, ?versions: Array[untyped]?, ?version_scope: untyped, ?plan: RootVersionPlan?, ?live_endpoint: untyped) -> void
+    def initialize: (untyped, from: untyped, to: untyped, snapshotter: untyped, ?within: untyped, ?versions: Array[untyped]?, ?version_scope: untyped, ?plan: RootVersionPlan?, ?live_endpoint: untyped) -> void
 
     # : () -> Array[Step]
     def build: () -> Array[Step]
@@ -22,6 +22,9 @@ module PaperTrailDiff
 
     # : (RootVersionPlan) -> [Array[Step], RecordSnapshot?, RecordSnapshot?]
     def compare_history: (RootVersionPlan) -> [ Array[Step], RecordSnapshot?, RecordSnapshot? ]
+
+    # : (RootVersionPlan) -> Array[Step]
+    def build_steps: (RootVersionPlan) -> Array[Step]
 
     # : () -> [Array[Step], nil, nil]
     def empty_history: () -> [ Array[Step], nil, nil ]

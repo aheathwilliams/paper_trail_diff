@@ -4,11 +4,12 @@
 module PaperTrailDiff
   # Selects in-range root versions plus one later reconstruction boundary.
   class TimeVersionRange
-    #: (untyped, time_range: TimeRange, ?version_scope: untyped) -> void
-    def initialize(record, time_range:, version_scope: nil)
+    #: (untyped, time_range: TimeRange, ?version_scope: untyped, ?live_endpoint: untyped) -> void
+    def initialize(record, time_range:, version_scope: nil, live_endpoint: nil)
       @record = record
       @time_range = time_range
       @version_scope = version_scope
+      @live_endpoint = live_endpoint
     end
 
     #: (?context_required: bool) -> Array[untyped]
@@ -27,7 +28,8 @@ module PaperTrailDiff
         after_range: trailing_version(relation),
         windowed: true,
         context_required: context_required,
-        filtered: !@version_scope.nil?
+        filtered: !@version_scope.nil?,
+        live_endpoint: @live_endpoint
       ).call
     end
 
@@ -36,6 +38,7 @@ module PaperTrailDiff
     # @rbs @record: untyped
     # @rbs @time_range: TimeRange
     # @rbs @version_scope: untyped
+    # @rbs @live_endpoint: untyped
 
     #: () -> untyped
     def versions_relation

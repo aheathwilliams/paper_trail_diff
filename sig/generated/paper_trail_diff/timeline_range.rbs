@@ -11,8 +11,8 @@ module PaperTrailDiff
 
     attr_reader time_range: TimeRange?
 
-    # : (untyped, from: untyped, to: untyped, within: untyped, ?versions: Array[untyped]?, ?version_scope: untyped, ?plan: RootVersionPlan?) -> void
-    def initialize: (untyped, from: untyped, to: untyped, within: untyped, ?versions: Array[untyped]?, ?version_scope: untyped, ?plan: RootVersionPlan?) -> void
+    # : (untyped, from: untyped, to: untyped, within: untyped, ?versions: Array[untyped]?, ?version_scope: untyped, ?plan: RootVersionPlan?, ?live_endpoint: untyped) -> void
+    def initialize: (untyped, from: untyped, to: untyped, within: untyped, ?versions: Array[untyped]?, ?version_scope: untyped, ?plan: RootVersionPlan?, ?live_endpoint: untyped) -> void
 
     # A record with no versions has no first or last boundary to resolve, which
     # is an empty history rather than a bad request.
@@ -41,6 +41,8 @@ module PaperTrailDiff
     private
 
     @from: untyped
+
+    @live_endpoint: untyped
 
     @plan: RootVersionPlan?
 

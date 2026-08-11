@@ -13,8 +13,11 @@ module PaperTrailDiff
 
     attr_reader diff: Diff
 
-    # : (from_version: untyped, to_version: untyped, diff: Diff) -> void
-    def initialize: (from_version: untyped, to_version: untyped, diff: Diff) -> void
+    # `to_version` is nil for the one step that closes on current state, which a
+    # window reaching past the last recorded version has to do. Read
+    # `to_boundary` instead when a caller may have opted into that.
+    # : (from_version: untyped, to_version: untyped, diff: Diff, ?captured_at: untyped) -> void
+    def initialize: (from_version: untyped, to_version: untyped, diff: Diff, ?captured_at: untyped) -> void
 
     # : () -> bool
     def empty?: () -> bool

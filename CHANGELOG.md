@@ -5,6 +5,21 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Accept `close_on: :current` on `timeline`, `activity_timeline`, `analyze`, and
+  `analyze_many`, closing a wall-clock window on the live record when no later
+  root version can reveal its final mutation. A window ending at the present
+  otherwise raises `IncompleteTimeRangeError`, since a version records the state
+  before its own event and nothing follows the last one. The closing step's
+  `to_boundary.kind` is `:current` and its `to_version` is `nil`; `Step#to_h`
+  now carries `to_boundary` so a serialized step still names its endpoint. Only
+  valid alongside `within:`, because an explicit `from:`/`to:` range already
+  says where it ends. Under `activity: true` the window runs to the instant
+  state is captured rather than to the last root version, so a descendant that
+  moved after that version is reported rather than dropped. A destroyed root has
+  no current state to close on and keeps closing on its own destruction.
+
 ### Changed
 
 - Document that `version_scope:` selects root versions only, and that "what did

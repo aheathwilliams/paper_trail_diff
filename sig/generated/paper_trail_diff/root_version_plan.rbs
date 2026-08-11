@@ -23,6 +23,11 @@ module PaperTrailDiff
 
     attr_reader context_version: untyped
 
+    # The live record a window closes on when no later version can reveal its
+    # final mutation. It is a boundary, never a version, so it stays out of
+    # `versions` and out of anything that reconstructs from version history.
+    attr_reader closing_record: untyped
+
     # The root versions this plan reports as mutations, which excludes any
     # version present only to reveal what the last of them produced.
     attr_reader mutations: Array[untyped]
@@ -34,11 +39,16 @@ module PaperTrailDiff
     # : () -> RootVersionPlan
     def self.empty: () -> RootVersionPlan
 
-    # : (versions: Array[untyped], steps: Array[[untyped, untyped]], ?context_version: untyped, ?reconstruction_versions: Array[untyped]?, ?mutations: Array[untyped]?) -> void
-    def initialize: (versions: Array[untyped], steps: Array[[ untyped, untyped ]], ?context_version: untyped, ?reconstruction_versions: Array[untyped]?, ?mutations: Array[untyped]?) -> void
+    # : (versions: Array[untyped], steps: Array[[untyped, untyped]], ?context_version: untyped, ?reconstruction_versions: Array[untyped]?, ?mutations: Array[untyped]?, ?closing_record: untyped) -> void
+    def initialize: (versions: Array[untyped], steps: Array[[ untyped, untyped ]], ?context_version: untyped, ?reconstruction_versions: Array[untyped]?, ?mutations: Array[untyped]?, ?closing_record: untyped) -> void
 
     # : () -> bool
     def empty?: () -> bool
+
+    # What the range's final state is read from, which is the live record when
+    # the window closes on current state and the last version otherwise.
+    # : () -> untyped
+    def final_endpoint: () -> untyped
 
     # : (untyped) -> bool
     def mutation?: (untyped) -> bool

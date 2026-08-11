@@ -3,14 +3,23 @@
 module PaperTrailDiff
   # Gives TimelineBuilder one-argument access to a range-prepared snapshot store.
   class TimelineSnapshotProvider
-    # : (HistoricalSnapshotStore) -> void
-    def initialize: (HistoricalSnapshotStore) -> void
+    # : (HistoricalSnapshotStore, ?live_snapshotter: untyped) -> void
+    def initialize: (HistoricalSnapshotStore, ?live_snapshotter: untyped) -> void
 
     # : (untyped, Array[untyped]) -> void
     def prepare: (untyped, Array[untyped]) -> void
 
+    # A window closing on current state ends at the live record rather than at a
+    # version, which is the one endpoint no version history can reconstruct.
     # : (untyped) -> RecordSnapshot?
     def call: (untyped) -> RecordSnapshot?
+
+    private
+
+    # : (untyped) -> RecordSnapshot?
+    def live_snapshot: (untyped) -> RecordSnapshot?
+
+    @live_snapshotter: untyped
 
     @store: HistoricalSnapshotStore
   end

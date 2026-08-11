@@ -22,8 +22,19 @@ module PaperTrailDiff
 
     @tree: AssociationTree
 
-    # : () -> [ActivityHistory, RootVersionPlan, ActivityStep?]
-    def history_and_versions: () -> [ ActivityHistory, RootVersionPlan, ActivityStep? ]
+    # : () -> [ActivityHistory, RootVersionPlan, ActivityStep?, RecordSnapshot?, untyped]
+    def history_and_versions: () -> [ ActivityHistory, RootVersionPlan, ActivityStep?, RecordSnapshot?, untyped ]
+
+    # : (RootVersionPlan, untyped) -> [ActivityHistory, RootVersionPlan, ActivityStep?, RecordSnapshot?, untyped]
+    def history_for: (RootVersionPlan, untyped) -> [ ActivityHistory, RootVersionPlan, ActivityStep?, RecordSnapshot?, untyped ]
+
+    # One live read serves both the closing activity step and the endpoint the
+    # analysis reports, which would otherwise reconstruct the graph twice.
+    # : (RootVersionPlan) -> RecordSnapshot?
+    def current_snapshot: (RootVersionPlan) -> RecordSnapshot?
+
+    # : (Array[untyped], untyped) -> Array[ActivityEvent]
+    def events_through: (Array[untyped], untyped) -> Array[ActivityEvent]
 
     # : (Array[untyped], Array[ActivityEvent]) -> ActivityHistory
     def build_history: (Array[untyped], Array[ActivityEvent]) -> ActivityHistory
@@ -39,22 +50,32 @@ module PaperTrailDiff
     # : (Array[ActivityEvent], RootVersionPlan) -> Array[ActivityEvent]
     def selected_events: (Array[ActivityEvent], RootVersionPlan) -> Array[ActivityEvent]
 
-    # The window's last selected mutation is the root's own destruction, so the
-    # timeline closes on the absence it leaves rather than on a later boundary.
-    # : (ActivityHistory, ActivityEvent?) -> ActivityStep?
-    def closing_step: (ActivityHistory, ActivityEvent?) -> ActivityStep?
+    # A window either closes on the absence its final destruction leaves, or on
+    # current state when it reaches past everything recorded. Both are boundaries
+    # no version can supply.
+    # : (ActivityHistory, ActivityEvent?, RootVersionPlan, untyped, RecordSnapshot?) -> ActivityStep?
+    def closing_step: (ActivityHistory, ActivityEvent?, RootVersionPlan, untyped, RecordSnapshot?) -> ActivityStep?
+
+    # : (ActivityHistory, ActivityEvent) -> ActivityStep
+    def destroyed_step: (ActivityHistory, ActivityEvent) -> ActivityStep
+
+    # The last boundary reached is where current state is compared from, which
+    # is the final event rather than the final root version once descendants
+    # have moved since it.
+    # : (ActivityHistory, untyped, untyped, RecordSnapshot?) -> ActivityStep?
+    def current_step: (ActivityHistory, untyped, untyped, RecordSnapshot?) -> ActivityStep?
 
     # : (ActivityEvent?) -> bool
     def terminal_destroy?: (ActivityEvent?) -> bool
 
-    # : (Array[untyped]) -> void
-    def prepare_history: (Array[untyped]) -> void
+    # : (Array[untyped], ?end_at: untyped) -> void
+    def prepare_history: (Array[untyped], ?end_at: untyped) -> void
 
-    # : (Array[untyped]) -> Array[ActivityEvent]
-    def collect_events: (Array[untyped]) -> Array[ActivityEvent]
+    # : (Array[untyped], ?range_end: untyped) -> Array[ActivityEvent]
+    def collect_events: (Array[untyped], ?range_end: untyped) -> Array[ActivityEvent]
 
-    # : (Array[ActivityEvent], Array[ActivityEvent]) -> bool
-    def time_events?: (Array[ActivityEvent], Array[ActivityEvent]) -> bool
+    # : (Array[ActivityEvent], Array[ActivityEvent], RootVersionPlan) -> bool
+    def time_events?: (Array[ActivityEvent], Array[ActivityEvent], RootVersionPlan) -> bool
 
     # : (ActivityEvent, Array[ActivityEvent]) -> bool
     def later_event?: (ActivityEvent, Array[ActivityEvent]) -> bool

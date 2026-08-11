@@ -7,6 +7,9 @@ module PaperTrailDiff
   # the only place allowed to know about both PaperTrail and the pure engine.
   # Reconstruction logic lives in the collaborators it wires together.
   class PaperTrailAdapter # rubocop:disable Metrics/ClassLength
+    # The only thing a wall-clock window can close on besides a later version.
+    CLOSE_ON_CURRENT = :current
+
     #: (associations: Array[String | Symbol], ignore: ignore_option, ?reload_live_endpoints: bool) -> void
     def initialize(associations:, ignore:, reload_live_endpoints: true)
       @association_tree = AssociationTree.build(associations)
@@ -50,8 +53,8 @@ module PaperTrailDiff
       end
     end
 
-    #: (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped) -> Array[Step]
-    def timeline(record, from:, to:, within:, version_scope: nil)
+    #: (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped, ?close_on: Symbol?) -> Array[Step]
+    def timeline(record, from:, to:, within:, version_scope: nil, close_on: nil) # rubocop:disable Metrics/ParameterLists
       @traversal_preparer.call(record.class, historical: true)
       TimelineBuilder.new(
         record,
@@ -59,46 +62,47 @@ module PaperTrailDiff
         to: to,
         within: within,
         version_scope: version_scope,
+        live_endpoint: live_endpoint_for(record, close_on, within),
         snapshotter: @timeline_snapshotter
       ).build
     end
 
-    #: (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped) -> Array[ActivityStep]
-    def activity_timeline(record, from:, to:, within:, version_scope: nil)
+    #: (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped, ?close_on: Symbol?) -> Array[ActivityStep]
+    def activity_timeline(record, from:, to:, within:, version_scope: nil, close_on: nil) # rubocop:disable Metrics/ParameterLists
       payload = @instrumentation_payload.merge(model_type: record.class.base_class.name.to_s)
       Instrumentation.instrument('activity_timeline', payload) do
         @traversal_preparer.call(record.class, historical: true)
-        reject_live_habtm_activity!(record.class) if Endpoint.record?(to)
+        live = live_endpoint_for(record, close_on, within)
+        reject_live_habtm_activity!(record.class) if Endpoint.record?(to) || live
         steps = activity_builder(
-          record, from: from, to: to, within: within, version_scope: version_scope
+          record, from: from, to: to, within: within, version_scope: version_scope,
+                  live_endpoint: live
         ).build
         payload[:step_count] = steps.length
         steps
       end
     end
 
-    #: (untyped, from: untyped, to: untyped, within: untyped, ?activity: bool, ?version_scope: untyped) -> Analysis
-    def analyze(record, from:, to:, within:, activity: false, version_scope: nil) # rubocop:disable Metrics/ParameterLists
+    #: (untyped, from: untyped, to: untyped, within: untyped, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?) -> Analysis
+    def analyze(record, from:, to:, within:, activity: false, version_scope: nil, close_on: nil) # rubocop:disable Metrics/ParameterLists
       @traversal_preparer.call(record.class, historical: true)
+      live = live_endpoint_for(record, close_on, within)
       if activity
-        return activity_builder(
-          record, from: from, to: to, within: within, version_scope: version_scope
-        ).analyze
+        return analyze_activity(
+          record, from: from, to: to, within: within,
+                  version_scope: version_scope, live_endpoint: live
+        )
       end
 
       TimelineBuilder.new(
-        record,
-        from: from,
-        to: to,
-        within: within,
-        version_scope: version_scope,
-        snapshotter: @timeline_snapshotter
+        record, from: from, to: to, within: within, version_scope: version_scope,
+                live_endpoint: live, snapshotter: @timeline_snapshotter
       ).analyze
     end
 
     # Analyzes many roots over one shared range, preparing their history once.
-    #: (Array[untyped], within: untyped, ?activity: bool, ?version_scope: untyped) -> Hash[identity, Analysis]
-    def analyze_many(records, within:, activity: false, version_scope: nil)
+    #: (Array[untyped], within: untyped, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?) -> Hash[identity, Analysis]
+    def analyze_many(records, within:, activity: false, version_scope: nil, close_on: nil)
       count = records.is_a?(Array) ? records.length : 0
       payload = @instrumentation_payload.merge(comparison_count: count)
       Instrumentation.instrument('analyze_many', payload) do
@@ -106,6 +110,7 @@ module PaperTrailDiff
           records,
           time_range: within.nil? ? nil : TimeRange.new(within),
           version_scope: version_scope,
+          close_on_current: close_on_current?(close_on, within),
           live_loader: @live_endpoints.method(:call),
           history_preparer: @historical_store.method(:prepare_batch),
           analyzer: batched_root_analyzer(activity)
@@ -127,10 +132,44 @@ module PaperTrailDiff
     # @rbs @timeline_snapshotter: TimelineSnapshotProvider
     # @rbs @activity_snapshotter: ActivitySnapshotProvider
 
+    #: (untyped, from: untyped, to: untyped, within: untyped, version_scope: untyped, live_endpoint: untyped) -> Analysis
+    def analyze_activity(record, from:, to:, within:, version_scope:, live_endpoint:) # rubocop:disable Metrics/ParameterLists
+      reject_live_habtm_activity!(record.class) if live_endpoint
+      activity_builder(
+        record, from: from, to: to, within: within,
+                version_scope: version_scope, live_endpoint: live_endpoint
+      ).analyze
+    end
+
+    # `close_on:` names what ends a wall-clock window, so it is meaningless for a
+    # range whose endpoints the caller already gave explicitly.
+    #: (Symbol?, untyped) -> bool
+    def close_on_current?(close_on, within)
+      return false if close_on.nil?
+      unless close_on == CLOSE_ON_CURRENT
+        raise ConfigurationError, "close_on: must be #{CLOSE_ON_CURRENT.inspect} or nil"
+      end
+      raise ConfigurationError, 'close_on: requires `within`' if within.nil?
+
+      true
+    end
+
+    # A destroyed root has no current state to close on, and its own destroy
+    # version already terminates the history.
+    #: (untyped, Symbol?, untyped) -> untyped
+    def live_endpoint_for(record, close_on, within)
+      return unless close_on_current?(close_on, within)
+      return unless Endpoint.record?(record) && !record.destroyed?
+
+      record
+    end
+
     #: () -> void
     def build_snapshotters
       @historical_store = build_historical_store
-      @timeline_snapshotter = TimelineSnapshotProvider.new(@historical_store)
+      @timeline_snapshotter = TimelineSnapshotProvider.new(
+        @historical_store, live_snapshotter: method(:live_snapshot)
+      )
       @activity_snapshotter = build_activity_snapshotter
     end
 
@@ -173,12 +212,13 @@ module PaperTrailDiff
       )
     end
 
-    #: (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped) -> ActivityTimelineBuilder
-    def activity_builder(record, from:, to:, within:, version_scope: nil)
+    #: (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped, ?live_endpoint: untyped) -> ActivityTimelineBuilder
+    def activity_builder(record, from:, to:, within:, version_scope: nil, live_endpoint: nil) # rubocop:disable Metrics/ParameterLists
       ActivityTimelineBuilder.new(
         record,
         range: TimelineRange.new(
-          record, from: from, to: to, within: within, version_scope: version_scope
+          record, from: from, to: to, within: within, version_scope: version_scope,
+                  live_endpoint: live_endpoint
         ),
         tree: @association_tree,
         snapshotter: @activity_snapshotter

@@ -6,6 +6,9 @@ module PaperTrailDiff
   # the only place allowed to know about both PaperTrail and the pure engine.
   # Reconstruction logic lives in the collaborators it wires together.
   class PaperTrailAdapter
+    # The only thing a wall-clock window can close on besides a later version.
+    CLOSE_ON_CURRENT: ::Symbol
+
     # : (associations: Array[String | Symbol], ignore: ignore_option, ?reload_live_endpoints: bool) -> void
     def initialize: (associations: Array[String | Symbol], ignore: ignore_option, ?reload_live_endpoints: bool) -> void
 
@@ -16,18 +19,18 @@ module PaperTrailDiff
     # : (Array[comparison_input]) -> comparison_results
     def compare_many: (Array[comparison_input]) -> comparison_results
 
-    # : (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped) -> Array[Step]
-    def timeline: (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped) -> Array[Step]
+    # : (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped, ?close_on: Symbol?) -> Array[Step]
+    def timeline: (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped, ?close_on: Symbol?) -> Array[Step]
 
-    # : (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped) -> Array[ActivityStep]
-    def activity_timeline: (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped) -> Array[ActivityStep]
+    # : (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped, ?close_on: Symbol?) -> Array[ActivityStep]
+    def activity_timeline: (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped, ?close_on: Symbol?) -> Array[ActivityStep]
 
-    # : (untyped, from: untyped, to: untyped, within: untyped, ?activity: bool, ?version_scope: untyped) -> Analysis
-    def analyze: (untyped, from: untyped, to: untyped, within: untyped, ?activity: bool, ?version_scope: untyped) -> Analysis
+    # : (untyped, from: untyped, to: untyped, within: untyped, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?) -> Analysis
+    def analyze: (untyped, from: untyped, to: untyped, within: untyped, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?) -> Analysis
 
     # Analyzes many roots over one shared range, preparing their history once.
-    # : (Array[untyped], within: untyped, ?activity: bool, ?version_scope: untyped) -> Hash[identity, Analysis]
-    def analyze_many: (Array[untyped], within: untyped, ?activity: bool, ?version_scope: untyped) -> Hash[identity, Analysis]
+    # : (Array[untyped], within: untyped, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?) -> Hash[identity, Analysis]
+    def analyze_many: (Array[untyped], within: untyped, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?) -> Hash[identity, Analysis]
 
     private
 
@@ -53,6 +56,19 @@ module PaperTrailDiff
 
     @traversal_preparer: TraversalPreparer
 
+    # : (untyped, from: untyped, to: untyped, within: untyped, version_scope: untyped, live_endpoint: untyped) -> Analysis
+    def analyze_activity: (untyped, from: untyped, to: untyped, within: untyped, version_scope: untyped, live_endpoint: untyped) -> Analysis
+
+    # `close_on:` names what ends a wall-clock window, so it is meaningless for a
+    # range whose endpoints the caller already gave explicitly.
+    # : (Symbol?, untyped) -> bool
+    def close_on_current?: (Symbol?, untyped) -> bool
+
+    # A destroyed root has no current state to close on, and its own destroy
+    # version already terminates the history.
+    # : (untyped, Symbol?, untyped) -> untyped
+    def live_endpoint_for: (untyped, Symbol?, untyped) -> untyped
+
     # : () -> void
     def build_snapshotters: () -> void
 
@@ -65,8 +81,8 @@ module PaperTrailDiff
     # : () -> ActivitySnapshotProvider
     def build_activity_snapshotter: () -> ActivitySnapshotProvider
 
-    # : (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped) -> ActivityTimelineBuilder
-    def activity_builder: (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped) -> ActivityTimelineBuilder
+    # : (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped, ?live_endpoint: untyped) -> ActivityTimelineBuilder
+    def activity_builder: (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped, ?live_endpoint: untyped) -> ActivityTimelineBuilder
 
     # : (untyped) -> void
     def reject_live_habtm_activity!: (untyped) -> void
