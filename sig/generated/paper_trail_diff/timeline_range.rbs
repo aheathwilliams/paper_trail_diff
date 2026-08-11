@@ -3,6 +3,8 @@
 module PaperTrailDiff
   # Chooses explicit-version or wall-clock selection for one timeline request.
   class TimelineRange
+    BOUNDARY_SYMBOLS: untyped
+
     attr_reader from: untyped
 
     attr_reader to: untyped
@@ -11,6 +13,11 @@ module PaperTrailDiff
 
     # : (untyped, from: untyped, to: untyped, within: untyped) -> void
     def initialize: (untyped, from: untyped, to: untyped, within: untyped) -> void
+
+    # A record with no versions has no first or last boundary to resolve, which
+    # is an empty history rather than a bad request.
+    # : () -> bool
+    def unresolved?: () -> bool
 
     # : (?context_required: bool) -> Array[untyped]
     def select: (?context_required: bool) -> Array[untyped]
@@ -30,7 +37,29 @@ module PaperTrailDiff
 
     @record: untyped
 
+    @requested_from: untyped
+
+    @requested_to: untyped
+
     @to: untyped
+
+    # : () -> Array[untyped]
+    def empty_versions: () -> Array[untyped]
+
+    # : (untyped) -> bool
+    def symbolic?: (untyped) -> bool
+
+    # Resolving `:first` and `:last` here keeps callers from depending on the
+    # order PaperTrail happens to give its versions association, which a caller
+    # is also free to reorder.
+    # : (untyped) -> untyped
+    def resolve: (untyped) -> untyped
+
+    # : () -> untyped
+    def ordered_versions: () -> untyped
+
+    # : () -> untyped
+    def versions_relation: () -> untyped
 
     # : (untyped) -> TimeRange?
     def build_time_range: (untyped) -> TimeRange?

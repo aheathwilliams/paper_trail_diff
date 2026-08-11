@@ -11,7 +11,10 @@ module PaperTrailDiff
         @habtm_transaction_id = habtm_version.transaction_id
       end
       @version_at = version.created_at
-      @reified_associations = {} #: Hash[Array[untyped], bool]
+      # Keyed on record identity rather than `object_id`, which Ruby may reuse
+      # once an earlier record in the same pass has been collected.
+      reified = {} #: Hash[untyped, Hash[untyped, bool]]
+      @reified_associations = reified.compare_by_identity
     end
 
     #: (untyped, Array[untyped]) -> void
@@ -24,14 +27,14 @@ module PaperTrailDiff
     # @rbs @transaction_id: untyped
     # @rbs @habtm_transaction_id: untyped
     # @rbs @version_at: untyped
-    # @rbs @reified_associations: Hash[Array[untyped], bool]
+    # @rbs @reified_associations: Hash[untyped, Hash[untyped, bool]]
 
     #: (untyped, untyped) -> void
     def reify_association(record, reflection)
-      key = [record.object_id, reflection.name]
-      return if @reified_associations[key]
+      reified = @reified_associations[record] ||= {} #: Hash[untyped, bool]
+      return if reified[reflection.name]
 
-      @reified_associations[key] = true
+      reified[reflection.name] = true
       case reflection.macro
       when :belongs_to
         reifier(:BelongsTo).reify(reflection, record, options, @transaction_id)

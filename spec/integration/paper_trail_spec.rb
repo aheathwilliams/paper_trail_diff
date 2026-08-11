@@ -64,6 +64,28 @@ RSpec.describe PaperTrailDiff do
         .to eq(from: 'changed', to: 'stable')
     end
 
+    it 'rejects two versions given in reverse chronological order' do
+      article, _create, draft, published, = create_history
+
+      expect { described_class.compare(published, draft) }
+        .to raise_error(PaperTrailDiff::ReversedEndpointsError, /chronological order/)
+
+      # Swapping reads the same difference in the other direction.
+      expect(described_class.compare(draft, published).attributes.fetch('title').to_h)
+        .to eq(from: 'Draft', to: 'Published')
+      # A current-record endpoint is self-evidently live, so either side is fine.
+      expect { described_class.compare(article, draft) }.not_to raise_error
+      expect { described_class.compare(draft, draft) }.not_to raise_error
+    end
+
+    it 'rejects a reversed pair in a batched comparison' do
+      _article, _create, draft, published, = create_history
+
+      expect do
+        described_class.compare_many([{ from: published, to: draft }])
+      end.to raise_error(PaperTrailDiff::ReversedEndpointsError, /chronological order/)
+    end
+
     it 'rejects invalid and mismatched current record endpoints' do
       article, _create, draft, = create_history
       other = CoreArticle.create!(title: 'Other', internal_note: 'other')
@@ -458,6 +480,65 @@ RSpec.describe PaperTrailDiff do
       expect(steps.last.to_version).to eq(reverted)
     end
 
+    it 'resolves symbolic boundaries to the record own earliest and latest versions' do
+      article, create_version, _draft, _published, reverted = create_history
+
+      symbolic = described_class.timeline(article, from: :first, to: :last)
+      explicit = described_class.timeline(article, from: create_version, to: reverted)
+
+      expect(symbolic.map(&:to_h)).to eq(explicit.map(&:to_h))
+      # Resolved independently of the order the versions association happens to
+      # use, which a caller is free to change.
+      allow(article).to receive(:versions).and_return(article.versions.reorder(id: :desc))
+      expect(described_class.timeline(article, from: :first, to: :last).map(&:to_h))
+        .to eq(explicit.map(&:to_h))
+    end
+
+    it 'treats a record with no versions as an empty history rather than an error' do
+      bare = PaperTrail.request(enabled: false) do
+        CoreArticle.create!(title: 'Untracked', internal_note: 'none')
+      end
+
+      expect(bare.versions).to be_empty
+      expect(described_class.timeline(bare, from: :first, to: :last)).to eq([])
+      expect(described_class.activity_timeline(bare, from: :first, to: :last)).to eq([])
+      analysis = described_class.analyze(bare, from: :first, to: :last, activity: true)
+      expect(analysis.timeline).to eq([])
+      expect(analysis.activity_timeline).to eq([])
+      expect(analysis.diff).to be_empty
+    end
+
+    it 'rejects an unknown boundary symbol and a reversed symbolic range' do
+      article, = create_history
+
+      expect { described_class.timeline(article, from: :beginning, to: :last) }
+        .to raise_error(PaperTrailDiff::InvalidTimelineRangeError, /unsupported boundary/)
+      expect { described_class.timeline(article, from: :last, to: :first) }
+        .to raise_error(PaperTrailDiff::InvalidTimelineRangeError, /must not follow/)
+      window = Time.utc(2030, 1, 1)..Time.utc(2030, 1, 2)
+      expect { described_class.timeline(article, from: :first, within: window) }
+        .to raise_error(PaperTrailDiff::InvalidTimelineRangeError, /cannot be combined/)
+    end
+
+    it 'accepts a window that closes on the record being destroyed' do
+      article, create_version, draft, published, reverted = create_history
+      article.destroy!
+      destroy_version = PaperTrail::Version
+                        .where(item_type: 'CoreArticle', item_id: article.id).order(:id).last
+      times = timestamp_versions(
+        [create_version, draft, published, reverted, destroy_version]
+      )
+
+      steps = described_class.timeline(article, within: times.first..times.last)
+      selected = [create_version, draft, published, reverted, destroy_version]
+
+      # No later root version can ever exist, so demanding one would reject this
+      # window permanently. The checkpoint timeline still reports edits only.
+      expect(steps.map { |step| [step.from_version.id, step.to_version.id] })
+        .to eq(selected.each_cons(2).map { |from, to| [from.id, to.id] })
+      expect(steps.map { |step| step.to_boundary.kind }).to all(eq(:version))
+    end
+
     it 'returns no steps when a time range contains no root versions' do
       article, create_version, draft, published, reverted = create_history
       times = timestamp_versions([create_version, draft, published, reverted])
@@ -534,6 +615,86 @@ RSpec.describe PaperTrailDiff do
       expect(step.diff.attributes.fetch('internal_note').to_h)
         .to eq(from: 'stable', to: 'changed')
       expect(step.to_h.keys).to eq(%i[from to diff])
+    end
+
+    it 'closes a destroyed root with an explicit removal step' do
+      article, create_version, = create_history
+      final_state = article.attributes.slice('title', 'internal_note')
+      article.destroy!
+      destroy_version = PaperTrail::Version
+                        .where(item_type: 'CoreArticle', item_id: article.id).order(:id).last
+
+      steps = described_class.activity_timeline(
+        article, from: create_version, to: destroy_version
+      )
+      removal = steps.last
+
+      # The boundary built from the destroy version still holds the record,
+      # because a version records the state before its own event.
+      expect(removal.from_boundary.to_h).to include(
+        kind: :version, version_id: destroy_version.id, item_type: 'CoreArticle'
+      )
+      # Identity matches the version boundary it follows, not the current-record
+      # boundary, so the two ends of the removal step agree.
+      expect(removal.to_boundary.to_h).to include(
+        kind: :destroyed, version_id: destroy_version.id, item_type: 'CoreArticle',
+        item_id: destroy_version.item_id
+      )
+      expect(removal.to_boundary.item_id).to eq(removal.from_boundary.item_id)
+      expect(removal.to_boundary).to be_destroyed
+      expect(removal.to_boundary).not_to be_version
+      expect(removal.to_boundary).not_to be_current
+      expect(removal.to_boundary.event).to eq('destroy')
+      # The removed snapshot is the state the record held when it was deleted.
+      change = removal.diff.record_presence_change
+      expect(change.to).to be_nil
+      expect(change.from.attributes).to include(final_state)
+      expect(removal).not_to be_empty
+    end
+
+    it 'closes a destroyed root only once, and leaves a live history unchanged' do
+      article, create_version, _draft, _published, reverted = create_history
+
+      live = described_class.activity_timeline(article, from: create_version, to: reverted)
+      expect(live.map { |step| step.to_boundary.kind }).to all(eq(:version))
+
+      article.destroy!
+      destroy_version = PaperTrail::Version
+                        .where(item_type: 'CoreArticle', item_id: article.id).order(:id).last
+      destroyed = described_class.activity_timeline(
+        article, from: create_version, to: destroy_version
+      )
+      analysis = described_class.analyze(
+        article, from: create_version, to: destroy_version, activity: true
+      )
+
+      expect(destroyed.count { |step| step.to_boundary.destroyed? }).to eq(1)
+      # `analyze` must not disagree with the standalone timeline.
+      expect(analysis.activity_timeline.map(&:to_h)).to eq(destroyed.map(&:to_h))
+      # The endpoint diff and root timeline keep their `compare` semantics.
+      expect(analysis.timeline.map { |step| step.to_boundary.kind }).to all(eq(:version))
+    end
+
+    it 'closes a destroyed root selected by a time window' do
+      article, create_version, draft, published, reverted = create_history
+      article.destroy!
+      destroy_version = PaperTrail::Version
+                        .where(item_type: 'CoreArticle', item_id: article.id).order(:id).last
+      times = timestamp_versions(
+        [create_version, draft, published, reverted, destroy_version]
+      )
+
+      covering = described_class.activity_timeline(article, within: times.first..times.last)
+      trailing_only = described_class.activity_timeline(
+        article, within: times.first..times.fetch(3)
+      )
+
+      expect(covering.last.to_boundary).to be_destroyed
+      expect(covering.count { |step| step.to_boundary.destroyed? }).to eq(1)
+      expect(covering.last.diff.record_presence_change.to).to be_nil
+      # In the shorter window the destroy is only reconstruction context, so it
+      # must not be reported as a selected mutation.
+      expect(trailing_only.map { |step| step.to_boundary.kind }).to all(eq(:version))
     end
 
     it 'rejects an unsaved current boundary and a non-version starting boundary' do

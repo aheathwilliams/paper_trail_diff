@@ -6,6 +6,18 @@ module PaperTrailDiff
     # : (untyped, untyped) -> void
     def self?.validate_pair!: (untyped, untyped) -> void
 
+    # Two versions carry no visible cue about which is earlier, so transposing
+    # them is easy to do by accident and impossible to detect afterwards: the
+    # result is a valid inverse diff and carries no direction of its own. It is
+    # also redundant, because the two orders differ only in which side of each
+    # change is `from`. A current-record endpoint is exempt: it is self-evidently
+    # the live state, so putting it first is a deliberate reverse comparison.
+    # : (untyped, untyped) -> void
+    def self?.validate_order!: (untyped, untyped) -> void
+
+    # : (untyped, untyped) -> bool
+    def self?.reversed_versions?: (untyped, untyped) -> bool
+
     # : (untyped) -> void
     def self?.validate!: (untyped) -> void
 

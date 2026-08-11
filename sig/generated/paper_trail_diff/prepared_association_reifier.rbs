@@ -19,7 +19,7 @@ module PaperTrailDiff
 
     @history: PreparedHistory
 
-    @reified: Hash[Array[untyped], bool]
+    @reified: Hash[untyped, Hash[untyped, bool]]
 
     # : (untyped, untyped) -> void
     def reify_association: (untyped, untyped) -> void

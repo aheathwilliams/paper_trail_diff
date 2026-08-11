@@ -3,6 +3,67 @@
 All notable changes to this project will be documented in this file. The
 project follows [Semantic Versioning](https://semver.org/).
 
+## [0.4.0] - 2026-08-11
+
+### Added
+
+- Close an activity timeline that ends at the root's own `destroy` version with
+  a step into a new `kind: :destroyed` boundary, reporting the record's removal
+  as a `record_presence_change` to `nil`. `ActivityBoundary` gains a
+  `destroyed?` predicate, so consumers branching only on `version?` should
+  handle the third kind. `compare`, `timeline`, and `analyze`'s endpoint diff
+  are unchanged.
+- Accept a `within:` window whose last selected mutation is the root's own
+  destruction, which no later root version can follow, instead of raising
+  `IncompleteTimeRangeError` for a range that could never be satisfied. A
+  destruction outside the window remains reconstruction context only.
+- Accept `:first` and `:last` as `from:` and `to:` boundaries on `timeline`,
+  `activity_timeline`, and `analyze`, resolved without depending on the order
+  the `versions` association happens to use. A record with no versions resolves
+  to an empty timeline rather than raising, so listing pages need no special
+  case.
+
+### Removed
+
+- Reject two version endpoints given in reverse chronological order with the
+  new `PaperTrailDiff::ReversedEndpointsError`, in `compare` and
+  `compare_many`. A transposed pair silently produced the inverse diff, and a
+  result carries no direction that would reveal it. A current-record endpoint
+  may still appear on either side.
+
+### Fixed
+
+- Rebuild prepared scalar state with direct attribute writes so a model that
+  overrides an attribute writer reconstructs the state PaperTrail recorded
+  instead of reapplying the override.
+
+### Changed
+
+- Order collection `added`, `removed`, and `changed` results naturally within
+  one id type instead of by the printed form, so numeric ids sort `2` before
+  `10`. Ordering remains deterministic and total for mixed id types.
+- Resolve a boundary's prepared record state by chronological search and an
+  indexed boundary transaction instead of scanning a record's versions, so
+  timelines over long single-record histories stay linear in their step count.
+- Bound prepared scalar history at the selected range plus one trailing version
+  per identity, instead of every version recorded between the range and the
+  present, so a short range early in a long history no longer pays for the
+  history after it.
+- Document that `timeline` and `analyze(activity: true)` produce the same
+  root-checkpoint steps through different reconstruction strategies, and when
+  each one is cheaper.
+- Borrow a connection through `with_connection` where Active Record provides
+  it, so applications that opt into deprecating permanent checkouts no longer
+  see a deprecation warning from association candidate selection.
+- Identify carried-forward collection snapshots and per-pass reification by
+  an owned serial and by record identity, rather than by `object_id`, which
+  Ruby only guarantees to be unique among live objects.
+- Retain activity-event routes for every event type a timeline visits, rather
+  than only the most recent one, so interleaved descendant types stop
+  rediscovering the same routes.
+- Resolve excluded attributes once per model class and selected path, and key
+  historical child identities instead of rescanning them.
+
 ## [0.3.1] - 2026-08-10
 
 ### Fixed

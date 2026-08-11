@@ -10,7 +10,10 @@ module PaperTrailDiff
       @boundary = boundary
       @habtm_boundary = habtm_boundary
       @fallback = fallback
-      @reified = {} #: Hash[Array[untyped], bool]
+      # Keyed on record identity rather than `object_id`, which Ruby may reuse
+      # once an earlier record in the same pass has been collected.
+      reified = {} #: Hash[untyped, Hash[untyped, bool]]
+      @reified = reified.compare_by_identity
     end
 
     #: (untyped, Array[untyped]) -> void
@@ -24,14 +27,14 @@ module PaperTrailDiff
     # @rbs @boundary: untyped
     # @rbs @habtm_boundary: untyped
     # @rbs @fallback: HistoricalAssociationReifier
-    # @rbs @reified: Hash[Array[untyped], bool]
+    # @rbs @reified: Hash[untyped, Hash[untyped, bool]]
 
     #: (untyped, untyped) -> void
     def reify_association(record, reflection)
-      key = [record.object_id, reflection.name]
-      return if @reified[key]
+      reified = @reified[record] ||= {} #: Hash[untyped, bool]
+      return if reified[reflection.name]
 
-      @reified[key] = true
+      reified[reflection.name] = true
       handled, records = @history.resolve(
         record,
         reflection,

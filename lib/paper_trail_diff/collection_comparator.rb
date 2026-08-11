@@ -142,9 +142,22 @@ module PaperTrailDiff
       identities.sort_by { |identity| sortable_identity(identity) }
     end
 
+    # Identities sort by type first so that mixed id types stay comparable, then
+    # naturally within one type. Ordering by the printed form instead would put
+    # id 10 before id 2, which is deterministic but reads as unsorted wherever a
+    # result is rendered.
     #: (identity) -> Array[untyped]
     def sortable_identity(identity)
-      [identity.fetch(0), identity.fetch(1).inspect]
+      [identity.fetch(0), *sortable_id(identity.fetch(1))]
+    end
+
+    #: (untyped) -> Array[untyped]
+    def sortable_id(id)
+      case id
+      when Numeric then [0, id, '']
+      when String, Symbol then [1, 0, id.to_s]
+      else [2, 0, id.inspect]
+      end
     end
 
     #: (identity) -> void

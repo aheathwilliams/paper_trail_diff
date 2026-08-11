@@ -39,6 +39,8 @@ module PaperTrailDiff
 
     private
 
+    @excluded_attributes: Hash[Array[untyped], Array[String]]
+
     @ignore_policy: IgnorePolicy
 
     @pool: SnapshotPool
@@ -55,8 +57,14 @@ module PaperTrailDiff
     # : (untyped, Array[untyped], String) -> snapshot_attributes
     def normalized_attributes: (untyped, Array[untyped], String) -> snapshot_attributes
 
+    # Every input is fixed for one model class at one selected path, and the
+    # path's structural columns are recorded before its records normalize, so
+    # this is resolved once instead of per record per boundary.
     # : (untyped, Array[untyped], String) -> Array[String]
     def excluded_attributes: (untyped, Array[untyped], String) -> Array[String]
+
+    # : (untyped, Array[untyped], String) -> Array[String]
+    def build_excluded_attributes: (untyped, Array[untyped], String) -> Array[String]
 
     # : (Array[untyped]) -> Array[String]
     def relationship_columns: (Array[untyped]) -> Array[String]

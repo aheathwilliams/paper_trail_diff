@@ -196,3 +196,11 @@ end
 
 class PreparedSpecialDocument < PreparedDocument
 end
+
+# PaperTrail reifies through `[]=`, so a writer override must not be reapplied
+# when prepared state rebuilds the record.
+class PreparedRewrittenDocument < PreparedDocument
+  def name=(value)
+    super("#{value}!")
+  end
+end

@@ -13,6 +13,9 @@ module PaperTrailDiff
     # : (untyped, Hash[untyped, untyped]) -> PreparedRecordState
     def self.from_attributes: (untyped, Hash[untyped, untyped]) -> PreparedRecordState
 
+    # Mirrors PaperTrail's reifier, which writes attributes directly. Mass
+    # assignment would route reconstructed state through application-defined
+    # attribute writers and reify a different record than the version stored.
     # : () -> untyped
     def instantiate: () -> untyped
 
@@ -73,16 +76,25 @@ module PaperTrailDiff
 
     @states: Hash[untyped, PreparedRecordState?]
 
+    @transaction_positions: Hash[untyped, Integer]
+
     @version_positions: Hash[String, Integer]
 
     # : (Integer) -> PreparedRecordState?
     def state_after: (Integer) -> PreparedRecordState?
 
-    # : (untyped, untyped) -> bool
-    def eligible?: (untyped, untyped) -> bool
+    # A version is eligible when it is at or after the boundary, or shares the
+    # boundary's transaction. The first is monotonic over the chronological
+    # list and the second is indexed, so neither rescans a long history once
+    # per boundary.
+    # : (untyped) -> Integer?
+    def boundary_index: (untyped) -> Integer?
 
-    # : (untyped, untyped) -> bool
-    def same_transaction?: (untyped, untyped) -> bool
+    # : (untyped) -> Integer?
+    def transaction_index: (untyped) -> Integer?
+
+    # : () -> Hash[untyped, Integer]
+    def build_transaction_positions: () -> Hash[untyped, Integer]
 
     # : (untyped) -> PreparedRecordState?
     def state_for: (untyped) -> PreparedRecordState?
@@ -90,8 +102,8 @@ module PaperTrailDiff
 
   # Request-scoped scalar history loaded once per model identity.
   class PreparedRecordIndex
-    # : (untyped, ?live_records: Array[untyped]) -> void
-    def initialize: (untyped, ?live_records: Array[untyped]) -> void
+    # : (untyped, ?end_at: untyped, ?live_records: Array[untyped]) -> void
+    def initialize: (untyped, ?end_at: untyped, ?live_records: Array[untyped]) -> void
 
     # : (untyped, Array[untyped]) -> void
     def load: (untyped, Array[untyped]) -> void
@@ -110,6 +122,8 @@ module PaperTrailDiff
 
     private
 
+    @end_time: untyped
+
     @seeded_live_records: Hash[Array[String], untyped]
 
     @series: Hash[Array[String], PreparedRecordSeries]
@@ -117,6 +131,10 @@ module PaperTrailDiff
     @start_time: untyped
 
     @state_loader: PreparedVersionStateLoader
+
+    # Callers bound the range with either a version or a bare timestamp.
+    # : (untyped) -> untyped
+    def boundary_time: (untyped) -> untyped
 
     # : (untyped, untyped) -> Array[String]
     def identity: (untyped, untyped) -> Array[String]
@@ -127,8 +145,23 @@ module PaperTrailDiff
     # : (untyped, untyped, Hash[String, Array[untyped]], Hash[String, untyped]) -> void
     def add_series: (untyped, untyped, Hash[String, Array[untyped]], Hash[String, untyped]) -> void
 
+    # A PaperTrail version is a pre-change snapshot, so the state at the last
+    # selected boundary can only live in the next version after it. One
+    # trailing version per identity is retained, rather than every version
+    # recorded between the requested range and the present.
     # : (untyped, Array[untyped]) -> Array[untyped]
     def versions_for: (untyped, Array[untyped]) -> Array[untyped]
+
+    # In range, or the earliest version after it, resolved in the same query
+    # rather than with a window function or one query per identity.
+    # : (untyped) -> untyped
+    def window_condition: (untyped) -> untyped
+
+    # : (untyped) -> untyped
+    def first_after_range: (untyped) -> untyped
+
+    # : (untyped, untyped) -> untyped
+    def preceding_trailing_version: (untyped, untyped) -> untyped
 
     # : (untyped, Array[untyped]) -> Array[untyped]
     def available_live_records: (untyped, Array[untyped]) -> Array[untyped]

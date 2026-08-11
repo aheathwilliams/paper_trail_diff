@@ -13,7 +13,7 @@ module PaperTrailDiff
 
     @habtm_transaction_id: untyped
 
-    @reified_associations: Hash[Array[untyped], bool]
+    @reified_associations: Hash[untyped, Hash[untyped, bool]]
 
     @transaction_id: untyped
 

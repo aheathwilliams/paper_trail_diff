@@ -25,6 +25,12 @@ module PaperTrailDiff
     # : (untyped, captured_at: untyped) -> ActivityBoundary
     def self.current: (untyped, captured_at: untyped) -> ActivityBoundary
 
+    # The state a `destroy` version leaves behind. A version records the state
+    # before its own event, so the boundary built from a destroy version still
+    # holds the record; this one is the absence that follows it.
+    # : (untyped) -> ActivityBoundary
+    def self.destroyed: (untyped) -> ActivityBoundary
+
     # : (kind: Symbol, version_id: untyped, item_type: untyped, item_id: untyped, recorded_at: untyped, ?event: untyped, ?whodunnit: untyped) -> void
     def initialize: (kind: Symbol, version_id: untyped, item_type: untyped, item_id: untyped, recorded_at: untyped, ?event: untyped, ?whodunnit: untyped) -> void
 
@@ -33,6 +39,9 @@ module PaperTrailDiff
 
     # : () -> bool
     def current?: () -> bool
+
+    # : () -> bool
+    def destroyed?: () -> bool
 
     # : () -> Hash[Symbol, untyped]
     def to_h: () -> Hash[Symbol, untyped]

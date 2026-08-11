@@ -14,27 +14,20 @@ module PaperTrailDiff
 
     private
 
-    @belongs_to_model: untyped
+    @belongs_to_routes: Hash[Array[untyped], Array[Array[untyped]]]
 
-    @belongs_to_path: String?
-
-    @belongs_to_routes: Array[Array[untyped]]?
-
-    @belongs_to_tree: AssociationTree?
-
-    @belongs_to_type: String?
-
-    @collection_model: untyped
-
-    @collection_path: String?
-
-    @collection_routes: Array[Array[untyped]]?
-
-    @collection_tree: AssociationTree?
-
-    @collection_type: String?
+    @collection_routes: Hash[Array[untyped], Array[Array[untyped]]]
 
     @traversal: AssociationTraversal
+
+    # Timelines interleave event types, so every requested combination is
+    # retained. Model, tree, and path are fixed per adapter, leaving one entry
+    # per selected item type.
+    # : (Hash[Array[untyped], Array[Array[untyped]]], untyped, AssociationTree, String, String, Symbol) -> Array[Array[untyped]]
+    def cached: (Hash[Array[untyped], Array[Array[untyped]]], untyped, AssociationTree, String, String, Symbol) -> Array[Array[untyped]]
+
+    # : (Array[untyped]) -> Array[untyped]
+    def cache_key: (Array[untyped]) -> Array[untyped]
 
     # : (Array[Array[untyped]]) -> Array[Array[untyped]]
     def freeze_routes: (Array[Array[untyped]]) -> Array[Array[untyped]]

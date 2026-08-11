@@ -6,8 +6,8 @@ module PaperTrailDiff
     # : (tree: AssociationTree, traversal: AssociationTraversal, normalizer: SnapshotNormalizer, preparer: untyped) -> void
     def initialize: (tree: AssociationTree, traversal: AssociationTraversal, normalizer: SnapshotNormalizer, preparer: untyped) -> void
 
-    # : (untyped, Array[untyped], ?start_at: untyped) -> void
-    def prepare: (untyped, Array[untyped], ?start_at: untyped) -> void
+    # : (untyped, Array[untyped], ?start_at: untyped, ?end_at: untyped) -> void
+    def prepare: (untyped, Array[untyped], ?start_at: untyped, ?end_at: untyped) -> void
 
     # Prepares selected history for several roots of the same model class.
     # : (Array[untyped], Array[untyped]) -> void

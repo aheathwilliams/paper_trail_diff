@@ -21,9 +21,14 @@ module PaperTrailDiff
       state
     end
 
+    # Mirrors PaperTrail's reifier, which writes attributes directly. Mass
+    # assignment would route reconstructed state through application-defined
+    # attribute writers and reify a different record than the version stored.
     #: () -> untyped
     def instantiate
-      @model_class.new(@attributes)
+      record = @model_class.new
+      @attributes.each { |name, value| record[name] = value }
+      record
     end
 
     private
@@ -108,6 +113,7 @@ module PaperTrailDiff
       @version_positions = @versions.each_with_index.to_h do |version, index|
         [version.id.to_s, index]
       end.freeze
+      @transaction_positions = build_transaction_positions
       @live = live
       @state_loader = state_loader
       @states = {} #: Hash[untyped, PreparedRecordState?]
@@ -115,8 +121,8 @@ module PaperTrailDiff
 
     #: (untyped) -> untyped
     def record_before(boundary)
-      version = versions.find { |candidate| eligible?(candidate, boundary) }
-      return state_for(version)&.instantiate if version
+      index = boundary_index(boundary)
+      return state_for(versions.fetch(index))&.instantiate if index
 
       @live&.instantiate
     end
@@ -146,6 +152,7 @@ module PaperTrailDiff
     # @rbs @state_loader: PreparedVersionStateLoader
     # @rbs @states: Hash[untyped, PreparedRecordState?]
     # @rbs @version_positions: Hash[String, Integer]
+    # @rbs @transaction_positions: Hash[untyped, Integer]
 
     #: (Integer) -> PreparedRecordState?
     def state_after(index)
@@ -153,16 +160,41 @@ module PaperTrailDiff
       successor ? state_for(successor) : @live
     end
 
-    #: (untyped, untyped) -> bool
-    def eligible?(version, boundary)
-      version.created_at >= boundary.created_at || same_transaction?(version, boundary)
+    # A version is eligible when it is at or after the boundary, or shares the
+    # boundary's transaction. The first is monotonic over the chronological
+    # list and the second is indexed, so neither rescans a long history once
+    # per boundary.
+    #: (untyped) -> Integer?
+    def boundary_index(boundary)
+      created_at = boundary.created_at
+      chronological = versions.bsearch_index do |candidate|
+        candidate.created_at >= created_at
+      end
+      transactional = transaction_index(boundary)
+      return chronological unless transactional
+      return transactional unless chronological
+
+      [chronological, transactional].min
     end
 
-    #: (untyped, untyped) -> bool
-    def same_transaction?(version, boundary)
+    #: (untyped) -> Integer?
+    def transaction_index(boundary)
       transaction_id = boundary.transaction_id if boundary.respond_to?(:transaction_id)
-      transaction_id && version.respond_to?(:transaction_id) &&
-        version.transaction_id == transaction_id
+      return unless transaction_id
+
+      @transaction_positions[transaction_id]
+    end
+
+    #: () -> Hash[untyped, Integer]
+    def build_transaction_positions
+      positions = {} #: Hash[untyped, Integer]
+      @versions.each_with_index do |version, index|
+        next unless version.respond_to?(:transaction_id)
+
+        transaction_id = version.transaction_id
+        positions[transaction_id] ||= index if transaction_id
+      end
+      positions.freeze
     end
 
     #: (untyped) -> PreparedRecordState?
@@ -185,9 +217,10 @@ module PaperTrailDiff
 
   # Request-scoped scalar history loaded once per model identity.
   class PreparedRecordIndex
-    #: (untyped, ?live_records: Array[untyped]) -> void
-    def initialize(start_at, live_records: [])
-      @start_time = start_at
+    #: (untyped, ?end_at: untyped, ?live_records: Array[untyped]) -> void
+    def initialize(start_at, end_at: nil, live_records: [])
+      @start_time = boundary_time(start_at)
+      @end_time = boundary_time(end_at)
       @seeded_live_records = live_records.to_h do |record|
         [identity(record.class, record.id), record]
       end
@@ -230,9 +263,16 @@ module PaperTrailDiff
     private
 
     # @rbs @start_time: untyped
+    # @rbs @end_time: untyped
     # @rbs @seeded_live_records: Hash[Array[String], untyped]
     # @rbs @state_loader: PreparedVersionStateLoader
     # @rbs @series: Hash[Array[String], PreparedRecordSeries]
+
+    # Callers bound the range with either a version or a bare timestamp.
+    #: (untyped) -> untyped
+    def boundary_time(value)
+      value.respond_to?(:created_at) ? value.created_at : value
+    end
 
     #: (untyped, untyped) -> Array[String]
     def identity(model_class, id)
@@ -254,12 +294,47 @@ module PaperTrailDiff
       )
     end
 
+    # A PaperTrail version is a pre-change snapshot, so the state at the last
+    # selected boundary can only live in the next version after it. One
+    # trailing version per identity is retained, rather than every version
+    # recorded between the requested range and the present.
     #: (untyped, Array[untyped]) -> Array[untyped]
     def versions_for(model_class, ids)
-      model_class.paper_trail.version_class.where(
+      version_class = model_class.paper_trail.version_class
+      scope = version_class.where(
         item_type: model_class.base_class.name,
         item_id: ids
-      ).where('created_at >= ?', @start_time).order(:id).to_a
+      ).where(created_at: @start_time..)
+      scope = scope.where(window_condition(version_class)) if @end_time
+      scope.order(:id).to_a
+    end
+
+    # In range, or the earliest version after it, resolved in the same query
+    # rather than with a window function or one query per identity.
+    #: (untyped) -> untyped
+    def window_condition(version_class)
+      table = version_class.arel_table
+      table[:created_at].lteq(@end_time).or(first_after_range(table))
+    end
+
+    #: (untyped) -> untyped
+    def first_after_range(table)
+      arel = Object.const_get(:Arel) #: untyped
+      later = table.alias('paper_trail_diff_later_versions')
+      arel.const_get(:SelectManager).new
+          .from(later)
+          .project(arel.sql('1'))
+          .where(preceding_trailing_version(table, later))
+          .exists
+          .not
+    end
+
+    #: (untyped, untyped) -> untyped
+    def preceding_trailing_version(table, later)
+      later[:item_type].eq(table[:item_type])
+                       .and(later[:item_id].eq(table[:item_id]))
+                       .and(later[:created_at].gt(@end_time))
+                       .and(later[:created_at].lt(table[:created_at]))
     end
 
     #: (untyped, Array[untyped]) -> Array[untyped]

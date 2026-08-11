@@ -1385,6 +1385,24 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     expect(other_type).to be_frozen
   end
 
+  it 'retains activity routes for every event type an interleaved timeline visits' do
+    tree = PaperTrailDiff::AssociationTree.build(['comments.replies'])
+    finder = PaperTrailDiff::ActivityEventRouteFinder.new(
+      PaperTrailDiff::AssociationTraversal.new(tree)
+    )
+    replies = finder.collection_routes(TrackedArticle, tree, 'TrackedReply')
+    comments = finder.collection_routes(TrackedArticle, tree, 'TrackedComment')
+
+    interleaved = %w[TrackedReply TrackedComment TrackedReply].map do |type|
+      finder.collection_routes(TrackedArticle, tree, type)
+    end
+
+    expect(interleaved).to eq([replies, comments, replies])
+    expect(interleaved.fetch(0)).to equal(replies)
+    expect(interleaved.fetch(1)).to equal(comments)
+    expect(interleaved.fetch(2)).to equal(replies)
+  end
+
   it 'reuses equal immutable nodes and short-circuits shared snapshot comparisons' do
     pool = PaperTrailDiff::SnapshotPool.new
     record = PaperTrailDiff::RecordSnapshot.new(

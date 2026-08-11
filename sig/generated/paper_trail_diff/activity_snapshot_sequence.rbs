@@ -6,8 +6,8 @@ module PaperTrailDiff
     # : (snapshotter: untyped, refresher: untyped, preparer: untyped) -> void
     def initialize: (snapshotter: untyped, refresher: untyped, preparer: untyped) -> void
 
-    # : (untyped, Array[untyped], ?start_at: untyped) -> void
-    def prepare: (untyped, Array[untyped], ?start_at: untyped) -> void
+    # : (untyped, Array[untyped], ?start_at: untyped, ?end_at: untyped) -> void
+    def prepare: (untyped, Array[untyped], ?start_at: untyped, ?end_at: untyped) -> void
 
     # : (untyped, untyped) -> RecordSnapshot?
     def call: (untyped, untyped) -> RecordSnapshot?

@@ -9,6 +9,11 @@ module PaperTrailDiff
 
     attr_reader activity_timeline: Array[ActivityStep]?
 
+    # The result for a record whose requested history contains no versions,
+    # which is an empty history rather than a failed request.
+    # : () -> Analysis
+    def self.empty: () -> Analysis
+
     # : (diff: Diff, timeline: Array[Step], ?activity_timeline: Array[ActivityStep]?) -> void
     def initialize: (diff: Diff, timeline: Array[Step], ?activity_timeline: Array[ActivityStep]?) -> void
 

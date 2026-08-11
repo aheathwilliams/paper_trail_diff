@@ -4,7 +4,7 @@
 module PaperTrailDiff
   # Expands the explicit association tree into a request-scoped PreparedHistory.
   class PreparedHistoryLoader
-    #: (untyped, root_versions: Array[untyped], tree: AssociationTree, traversal: AssociationTraversal, ?root_ids: Array[untyped], ?start_at: untyped, ?live_records: Array[untyped]) -> void
+    #: (untyped, root_versions: Array[untyped], tree: AssociationTree, traversal: AssociationTraversal, ?root_ids: Array[untyped], ?start_at: untyped, ?end_at: untyped, ?live_records: Array[untyped]) -> void
     def initialize( # rubocop:disable Metrics/ParameterLists
       record,
       root_versions:,
@@ -12,13 +12,14 @@ module PaperTrailDiff
       traversal:,
       root_ids: [record.id],
       start_at: root_versions.first.created_at,
+      end_at: nil,
       live_records: []
     )
       @record = record
       @root_ids = root_ids
       @tree = tree
       @traversal = traversal
-      @records = PreparedRecordIndex.new(start_at, live_records: live_records)
+      @records = PreparedRecordIndex.new(start_at, end_at: end_at, live_records: live_records)
       @history = PreparedHistory.new(@records)
       @edges = PreparedEdgeLoader.new(@records, root_versions, start_at: start_at)
       @prepared = {} #: Hash[Array[String], Array[String]]

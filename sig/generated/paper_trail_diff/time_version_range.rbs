@@ -18,6 +18,13 @@ module PaperTrailDiff
     # : () -> untyped
     def versions_relation: () -> untyped
 
+    # A window closing on the record's own destruction needs no later version:
+    # the destroy reveals the preceding mutation and nothing can follow it, so
+    # demanding a checkpoint that can never be written would reject the range
+    # permanently.
+    # : (Array[untyped]) -> bool
+    def terminal_destroy?: (Array[untyped]) -> bool
+
     # : (untyped) -> untyped
     def trailing_version: (untyped) -> untyped
 

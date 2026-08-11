@@ -28,6 +28,9 @@ module PaperTrailDiff
     @tree: AssociationTree
 
     # : () -> Array[ActivityStep]
+    def no_steps: () -> Array[ActivityStep]
+
+    # : () -> Array[ActivityStep]
     def build_between_versions: () -> Array[ActivityStep]
 
     # : () -> Array[ActivityStep]
@@ -42,23 +45,30 @@ module PaperTrailDiff
     # : (Array[untyped], ?range_start: untyped, ?range_end: untyped) -> Array[ActivityEvent]
     def collect_events: (Array[untyped], ?range_start: untyped, ?range_end: untyped) -> Array[ActivityEvent]
 
-    # : (Array[untyped], ?start_at: untyped) -> void
-    def prepare_history: (Array[untyped], ?start_at: untyped) -> void
+    # : (Array[untyped], ?end_at: untyped) -> void
+    def prepare_history: (Array[untyped], ?end_at: untyped) -> void
 
     # : (Array[untyped], Array[ActivityEvent], ?current: untyped, ?final_boundary: ActivityBoundary?, ?final_snapshot: RecordSnapshot?) -> Array[ActivityStep]
     def build_event_steps: (Array[untyped], Array[ActivityEvent], ?current: untyped, ?final_boundary: ActivityBoundary?, ?final_snapshot: RecordSnapshot?) -> Array[ActivityStep]
 
+    # Appends the transition into an explicit closing boundary, which is either
+    # a requested current record or the absence a final root destroy leaves.
+    # : (ActivityHistory, Array[ActivityEvent], ActivityBoundary?, RecordSnapshot?) -> Array[ActivityStep]
+    def activity_steps: (ActivityHistory, Array[ActivityEvent], ActivityBoundary?, RecordSnapshot?) -> Array[ActivityStep]
+
+    # A destroyed root has no later version, but its own event states that
+    # nothing follows it, so the removal can still close the timeline.
+    # : (Array[untyped]) -> ActivityBoundary?
+    def destroyed_boundary: (Array[untyped]) -> ActivityBoundary?
+
     # : (Array[untyped], Array[ActivityEvent], ?current: untyped) -> ActivityHistory
     def event_history: (Array[untyped], Array[ActivityEvent], ?current: untyped) -> ActivityHistory
 
-    # : (Array[untyped], ActivityHistory) -> Analysis
-    def build_analysis: (Array[untyped], ActivityHistory) -> Analysis
-
-    # : (Array[untyped], Array[RecordSnapshot?]) -> Array[Step]
-    def build_root_steps: (Array[untyped], Array[RecordSnapshot?]) -> Array[Step]
-
-    # : (untyped) -> Array[untyped]
-    def version_key: (untyped) -> Array[untyped]
+    # Only the activity view gains the closing removal. The endpoint diff and
+    # the root timeline keep their `compare` and `timeline` semantics, under
+    # which the state at a destroy version is the state before the deletion.
+    # : (Array[untyped], Array[ActivityEvent], ActivityHistory) -> Analysis
+    def build_analysis: (Array[untyped], Array[ActivityEvent], ActivityHistory) -> Analysis
 
     # : () -> TimeActivityTimelineBuilder
     def time_builder: () -> TimeActivityTimelineBuilder

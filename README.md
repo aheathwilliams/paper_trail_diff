@@ -44,12 +44,84 @@ PaperTrail.config.track_associations = true
 All associated models whose historical state is compared must use
 `has_paper_trail`.
 
+## How PaperTrail records state
+
+Almost everything else in this README follows from one property of PaperTrail,
+so it is worth being precise about it first: **a version stores the state that
+existed _before_ the event that created it.** A version is a record of what was
+overwritten, not of what was written.
+
+Take an article created as `"Draft"`, then updated to `"Published"`, then to
+`"Final"`:
+
+```text
+        v1              v2                v3            (no version)
+     "create"        "update"          "update"
+         |               |                 |                 |
+   ──────●───────────────●─────────────────●─────────────────●──────▶ time
+         |               |                 |                 |
+         └─── "Draft" ───┘                 |                 |
+              stored in v2                 |                 |
+                         └─ "Published" ───┘                 |
+                              stored in v3                   |
+                                           └──── "Final" ────┘
+                                             only in the table
+```
+
+Each state is stored by the version at the *end* of the interval it was live
+for. Three consequences run through the rest of this document:
+
+- **A `create` version reifies to `nil`.** Nothing preceded it. Comparing it
+  with a later state reports a structured `record_presence_change` rather than
+  inventing scalar changes.
+- **The newest state has no version at all.** It exists only in the table. A
+  fully historical result therefore needs a version *later* than the last change
+  it should reveal, which is why a `within:` window can raise
+  `IncompleteTimeRangeError`, and why `activity_timeline(..., to: article)`
+  exists for ending at current state instead.
+- **A change is visible between two boundaries**, never "at" one. This is why
+  both timeline APIs return steps rather than events.
+
+The [Quickstart](QUICKSTART.md) walks through the same idea against a real
+console session.
+
+## Choosing an entry point
+
+| You need | Call |
+| --- | --- |
+| The net difference between two endpoints | `compare` |
+| The same, for many records in one pass | `compare_many` |
+| One step per version of the root record | `timeline` |
+| One step per version of the root *or a selected child* | `activity_timeline` |
+| A net difference and a timeline from one history pass | `analyze` |
+
+`timeline` and `activity_timeline` differ only in which recorded versions
+become boundaries. Given an article with two comment edits between two article
+versions:
+
+```text
+recorded versions   A1        C1      C2        A2      A = Article version
+                    |         |       |         |       C = Comment version
+                ────●─────────●───────●─────────●────▶ time
+                    |         |       |         |
+timeline            └───────── 1 step ──────────┘
+                    both comment changes land inside that one step
+
+activity_timeline   └── 1 ────┴── 2 ──┴─── 3 ───┘
+                    each recorded version becomes its own boundary
+```
+
+Both report the same underlying data: a `timeline` step still contains every
+selected association, because it has to describe what changed beneath the root.
+They differ in how finely that change is split, and in what the reconstruction
+costs. That cost trade-off is covered under
+[choosing a reconstruction strategy](#choosing-between-timeline-and-analyzeactivity-true).
+
 ## Compare two endpoints
 
-PaperTrail stores an object's state before each recorded event. `compare`
-accepts two explicit endpoints: each may be a PaperTrail version or a clean,
-persisted model instance representing current database state. It reports only
-their net difference:
+`compare` accepts two explicit endpoints: each may be a PaperTrail version or a
+clean, persisted model instance representing current database state. It reports
+only their net difference:
 
 ```ruby
 diff = PaperTrailDiff.compare(article.versions[1], article.versions[4])
@@ -69,10 +141,21 @@ diff.to_h
 
 Intermediate edits do not affect `compare`. If a title changes and later
 returns to its original value, endpoint comparison reports no title change.
-A `create` version reifies to `nil`; comparing it with a record state produces
-a structured `record_presence_change` instead of fake scalar changes. For
-ordinary updates, `record_presence_change` is `nil`, meaning the root record is
-present at both endpoints; scalar changes remain under `attributes`.
+
+`record_presence_change` reports whether the root record *existed* at each
+endpoint, and is `nil` for the ordinary case where it existed at both. It is
+populated when one endpoint reifies to `nil` — most often a `create` version,
+whose pre-change state is the absence of the record — and it then carries whole
+`RecordSnapshot` values rather than fake scalar changes from `nil`.
+
+Destroying the root record is not reported this way, and the reason follows
+from the [pre-change model](#how-papertrail-records-state): the state *at* a
+`destroy` version is the state immediately before the deletion, so the record
+is still present there. A comparison ending at a `destroy` version reports that
+last edit, not the deletion. Deleting a *selected child* is reported normally,
+as a `removed` member of its parent's collection, and `activity_timeline`
+reports a destroyed root through a
+[closing removal step](#closing-a-destroyed-root).
 
 Pass the record explicitly when the desired endpoint is current state:
 
@@ -84,10 +167,18 @@ diff = PaperTrailDiff.compare(
 )
 ```
 
-Version and record endpoints may appear in either order. Current state is never
-inferred. The record must be persisted, not destroyed, and free of unsaved
-attribute changes. The gem reloads it unscoped before normalization, so stale
-association caches and in-memory edits are not compared. Use a database
+Two version endpoints must be given in chronological order. A transposed pair
+produces the inverse diff, which is easy to do by accident and impossible to
+detect afterwards because a result carries no direction of its own, so it
+raises `PaperTrailDiff::ReversedEndpointsError` instead. Nothing is lost by
+this: the two orders differ only in which side of each change is `from`.
+
+A current-record endpoint is exempt and may appear on either side, because it
+is self-evidently the live state and placing it first is a deliberate reverse
+comparison. Current state is never inferred. The record must be persisted, not
+destroyed, and free of unsaved attribute changes. The gem reloads it unscoped
+before normalization, so stale association caches and in-memory edits are not
+compared. Use a database
 transaction with an appropriate isolation level when several live association
 queries must represent one atomic application snapshot.
 
@@ -96,17 +187,30 @@ preload each explicitly selected live association path across the batch. Each
 entry has the same endpoints and options as `compare`; results are returned in
 input order as a frozen hash keyed by `[item_type, item_id]` strings:
 
+Endpoints are still supplied by the caller, so look them up in bulk too —
+otherwise the per-root queries this API removes come straight back. Two
+queries resolve the earliest version of every root, whatever the batch size:
+
+```ruby
+orders = Order.where(id: order_ids).to_a
+
+earliest_ids = PaperTrail::Version
+  .where(item_type: "Order", item_id: orders.map(&:id))
+  .group(:item_id)
+  .minimum(:id)
+first_versions = PaperTrail::Version
+  .where(id: earliest_ids.values)
+  .index_by(&:item_id)
+```
+
 ```ruby
 diffs = PaperTrailDiff.compare_many(
-  [
-    { from: first_versions.fetch(order_a.id), to: order_a },
-    { from: first_versions.fetch(order_b.id), to: order_b }
-  ],
+  orders.map { |order| { from: first_versions.fetch(order.id), to: order } },
   associations: [:line_items],
   ignore: []
 )
 
-diffs.fetch(["Order", order_a.id.to_s]) # => PaperTrailDiff::Diff
+diffs.fetch(["Order", orders.first.id.to_s]) # => PaperTrailDiff::Diff
 ```
 
 Root identities must be unique within one call. Historical reconstruction for
@@ -125,7 +229,8 @@ must observe one atomic snapshot.
 already owns a consistent, fully preloaded graph may opt out:
 
 ```ruby
-orders = Order.where(id: ids).preload(line_items: :product).to_a
+orders = Order.where(id: order_ids).preload(line_items: :product).to_a
+# `first_versions` is the same bulk endpoint lookup shown above.
 
 diffs = PaperTrailDiff.compare_many(
   orders.map do |order|
@@ -182,8 +287,28 @@ end
 
 ## Build a root-checkpoint timeline
 
-`timeline` accepts two version objects from the supplied record's history. The
-range is inclusive, must be chronological, and produces one `Step` for each
+`timeline` accepts two version objects from the supplied record's history, or
+the symbols `:first` and `:last` when the range is simply the record's whole
+recorded history:
+
+```ruby
+steps = PaperTrailDiff.timeline(article, from: :first, to: :last)
+```
+
+`:first` and `:last` are resolved by the gem, independently of the order the
+`versions` association happens to use, so a caller never has to know it is
+sorted. They work anywhere a version does, including mixed with an explicit
+one (`from: :first, to: some_version`) and on `activity_timeline` and
+`analyze`. A record with no versions has no boundaries to resolve; that is an
+empty history rather than a bad request, so the result is an empty timeline
+instead of an error — which is usually what an index page wants.
+
+Combine `from: :first` with `to: article` for the fullest activity view of a
+live record: the whole recorded history, ending at current state. See
+[activity timelines](#build-an-activity-timeline) for why that end differs from
+`to: :last`.
+
+The range is inclusive, must be chronological, and produces one `Step` for each
 adjacent pair:
 
 ```ruby
@@ -205,7 +330,7 @@ steps.first.to_h
 
 Both timeline types expose `from_boundary`, `to_boundary`, `diff`, and
 `empty?`. A historical boundary has `event`, `whodunnit`, `record`,
-`recorded_at`, `version?`, and `current?` readers. Checkpoint `Step` objects
+`recorded_at`, `version?`, `current?`, and `destroyed?` readers. Checkpoint `Step` objects
 also retain their original `from_version` and `to_version` for callers that
 need custom PaperTrail metadata. Existing `Step#to_h` and
 `ActivityBoundary#to_h` shapes remain unchanged; use the readers for the new
@@ -235,7 +360,9 @@ steps.reject(&:empty?)
 ```
 
 Pass the record explicitly as `to:` to include current state without creating a
-final root checkpoint:
+final root checkpoint. This is not the same as `to: :last`: descendant
+mutations recorded after the record's final root version fall outside a
+version-bounded range, so only a live end reports them.
 
 ```ruby
 steps = PaperTrailDiff.activity_timeline(
@@ -267,6 +394,46 @@ between its version boundary and the next historical or explicit current
 boundary. Passing `to: article` is what removes the need to touch the parent
 after an ordinary versioned child mutation; current state is still never
 implicit.
+
+### Closing a destroyed root
+
+A `destroy` version is the one boundary whose following state needs no later
+version: the event itself says the record is gone. When an activity timeline
+ends at the root's own `destroy` version, it therefore closes with one more
+step, from that version to a `kind: :destroyed` boundary, whose diff is a
+`record_presence_change` from the record's final state to `nil`:
+
+```ruby
+steps = PaperTrailDiff.activity_timeline(
+  article,
+  from: article.versions.first,
+  to: article.versions.last # a destroy version
+)
+
+removal = steps.last
+removal.to_boundary.destroyed?                  # => true
+removal.to_boundary.kind                        # => :destroyed
+removal.diff.record_presence_change.from        # the state it was deleted in
+removal.diff.record_presence_change.to          # => nil
+```
+
+The removal step's `from_boundary` is the ordinary `kind: :version` boundary
+for the same destroy version, since that boundary still holds the record.
+Boundaries therefore have three kinds — `:version`, `:current`, and
+`:destroyed` — so a consumer that branches on `version?` alone should also
+handle `destroyed?`.
+
+`analyze(activity: true)` reports the same closing step in its
+`activity_timeline`. Its `diff` and `timeline` keep their `compare` and
+`timeline` semantics and do not report the deletion.
+
+A `within:` window behaves the same way. A window whose last selected mutation
+is the root's destruction needs no later root version, because none can ever
+exist, so it closes on the removal instead of raising
+`IncompleteTimeRangeError`. When the destruction falls *outside* the window it
+remains ordinary reconstruction context and is not reported as a selected
+mutation. The same relaxation lets the plain `timeline` accept such a window,
+though it still reports only the edits.
 
 Live-ended HABTM activity is rejected with
 `PaperTrailDiff::UnsupportedLiveActivityError`. HABTM join rows have no model
@@ -315,7 +482,9 @@ If the window contains a relevant mutation but no later root version exists,
 the call raises `PaperTrailDiff::IncompleteTimeRangeError`. Create a root
 checkpoint after the reporting window before running historical analysis. The
 gem does not silently substitute current database state. A root-only window
-with no selected mutation returns a frozen empty timeline.
+with no selected mutation returns a frozen empty timeline. The one exception is
+a window that closes on the root's own destruction, which no later version can
+ever follow; see [closing a destroyed root](#closing-a-destroyed-root).
 
 Time ranges and explicit `from:`/`to:` endpoints are mutually exclusive.
 Malformed, open-ended, or reversed ranges raise
@@ -352,6 +521,37 @@ work is performed. `analyze` accepts explicit historical versions or
 `within:`, but not a current-record endpoint; use the standalone
 `activity_timeline(..., to: article)` API when the final boundary must be live.
 
+### Choosing between `timeline` and `analyze(activity: true)`
+
+`analysis.timeline` and `timeline` return the same root-checkpoint steps for the
+same range. They are two reconstruction strategies for one result, not two
+levels of detail: a `timeline` step covers only root version boundaries, but
+each of its snapshots still contains every selected association, because a step
+must report what changed underneath the root as well.
+
+The one behavioural difference is at the edge of a `within:` window. Selected
+descendants can move inside a window that contains no root version at all, so
+the activity form requires a root boundary it can reconstruct from and raises
+`IncompleteTimeRangeError` when there is none. `timeline` has no activity view
+to anchor and returns no steps for that window.
+
+The strategies differ in what that costs:
+
+- `timeline` reconstructs the whole selected graph independently at every root
+  boundary, so it costs roughly *root versions x selected graph size*. It is
+  insensitive to how much descendant activity happened in between.
+- `analyze(activity: true)` reconstructs once and then advances that snapshot
+  through each recorded mutation, so it costs roughly *one reconstruction +
+  total events*. It is insensitive to how wide the selected graph is.
+
+Neither dominates. Reconstructing once per checkpoint wins when a few root
+versions span very heavy descendant churn; advancing incrementally wins when
+the selected graph is wide and descendant activity is comparable to root
+activity. As a rule of thumb, prefer `analyze(activity: true)` when selected
+associations are wide, and `timeline` when descendant events greatly outnumber
+root versions. Measure with `ActiveSupport::Notifications` on a representative
+history rather than a seeded example if the choice matters.
+
 `timeline`, `activity_timeline`, and both forms of `analyze` prepare the selected
 historical range once. The loader walks only the explicit association paths and
 builds an immutable temporal index of scalar states, relationship candidates,
@@ -387,12 +587,13 @@ retain the general comparator and traversal fallback.
 Activity event loading is bounded to the selected range. Association identity
 discovery retains one indexed checkpoint for members present at the starting
 boundary, then considers later association activity and current members; it no
-longer materializes every pre-range association row. Prepared scalar state also
-retains later successor versions for selected identities because a PaperTrail
-version is a pre-change snapshot and may be the only correct state for an
-earlier boundary. Memory therefore scales with relevant selected history, not
-only with the number of returned steps. Keep requested paths and ranges
-intentional. An activity timeline must also emit a diff for every selected
+longer materializes every pre-range association row. Because a PaperTrail
+version is a pre-change snapshot, the state at a range's final boundary can
+live only in the next version after it, so prepared scalar state retains one
+trailing version per selected identity. It does not retain the rest of the
+history recorded after the range, so a short range early in a long history
+costs the same as the same range in a short one. Keep requested paths and
+ranges intentional. An activity timeline must also emit a diff for every selected
 event. Repeated events within one wide collection still copy the frozen records
 array when producing each immutable snapshot, so they can do pointer-copying
 work proportional to the number of events times the collection width even when
@@ -626,6 +827,29 @@ when join attributes or join mutations must appear as first-class history.
 
 ## Result objects
 
+Every level of a result separates the same two kinds of change in the same way:
+
+| | a record appears or disappears | a record stays and its fields change |
+| --- | --- | --- |
+| the root record | `record_presence_change` | `attributes`, `associations` |
+| `has_many`, HABTM | `added`, `removed` | `changed` |
+| `belongs_to`, `has_one` | `relationship` | `changed` |
+
+The left column carries whole `RecordSnapshot` values; the right column carries
+field-level `ValueChange` deltas. That split is deliberate. A record that has
+just appeared has no previous value for any of its fields, so reporting one
+`nil` to value change per attribute would both add noise and blur the
+difference between "this field was edited" and "this record did not exist".
+
+The consequence is that reading a result tree directly means branching on which
+column applies: a created record's state is under
+`record_presence_change.to.attributes`, an edited record's is under
+`attributes`. Consumers that would rather not branch should use
+[`each_entry`](#traverse-result-trees), which flattens both into one stream —
+an edit arrives as `attribute_changed` carrying a `ValueChange`, and a created
+record's fields arrive as `attribute_included` entries carrying values with
+`state: :after`.
+
 The public result types are:
 
 - `PaperTrailDiff::Diff`
@@ -645,7 +869,9 @@ The public result types are:
 - `PaperTrailDiff::DiagnosticIssue`
 
 They expose readers, are frozen after construction, and provide deterministic
-`to_h` output. Structural hash keys are symbols; attribute and association
+`to_h` output. Collection results are ordered by record identity: by type, then
+naturally within one id type, so numeric ids sort `2` before `10`. Mixed or
+unusual id types still order totally rather than raising. Structural hash keys are symbols; attribute and association
 names are strings. Attribute values retain their Ruby types. `RecordChange#record`
 is a `RecordReference` with `type` and `id` readers. `TraversalEntry#record` and
 `#association` return the final components of their corresponding paths. `Step`
@@ -671,6 +897,10 @@ and PT-AT can reconstruct. In particular:
 - HABTM membership is limited to the join snapshots PT-AT recorded in
   `version_associations`; historical target attributes require versioned target
   models, otherwise PT-AT may return live target state;
+- `compare`, `timeline`, and `analyze`'s endpoint diff do not report the root
+  record's destruction, because the state recorded at a `destroy` version is the
+  state before the deletion; `activity_timeline` closes on a `:destroyed`
+  boundary instead, and a selected child's removal is reported by its parent;
 - `timeline` and `analyze` are bounded by root versions; `activity_timeline`
   adds recorded descendant boundaries and may terminate at an explicitly passed
   current record, while a fully historical result still requires a later root

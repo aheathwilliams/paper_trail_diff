@@ -17,14 +17,27 @@ module PaperTrailDiff
 
     @version_class: untyped
 
+    # Only quoting helpers are needed, so the connection is borrowed for the
+    # duration of building the condition rather than checked out permanently,
+    # which Active Record 7.2 and newer can deprecate. Active Record 7.1 has no
+    # `with_connection` and reaches the same connection through the accessor.
+    # : () { (untyped) -> String } -> String
+    def with_connection: () { (untyped) -> String } -> String
+
     # : () -> String
     def candidate_condition: () -> String
 
-    # : (String, String) -> String
-    def activity_condition: (String, String) -> String
+    # : (untyped) -> String
+    def condition_sql: (untyped) -> String
 
-    # : (String, String) -> String
-    def column: (String, String) -> String
+    # : (untyped, String, String) -> Hash[Symbol, String]
+    def quoted_columns: (untyped, String, String) -> Hash[Symbol, String]
+
+    # : (Hash[Symbol, String], String, untyped) -> String
+    def activity_condition: (Hash[Symbol, String], String, untyped) -> String
+
+    # : (untyped, String, String) -> String
+    def column: (untyped, String, String) -> String
 
     # : (String) -> String
     def compact_sql: (String) -> String

@@ -4,6 +4,8 @@
 module PaperTrailDiff
   # Chooses explicit-version or wall-clock selection for one timeline request.
   class TimelineRange
+    BOUNDARY_SYMBOLS = %i[first last].freeze
+
     attr_reader :from #: untyped
     attr_reader :to #: untyped
     attr_reader :time_range #: TimeRange?
@@ -11,11 +13,20 @@ module PaperTrailDiff
     #: (untyped, from: untyped, to: untyped, within: untyped) -> void
     def initialize(record, from:, to:, within:)
       @record = record
-      @from = from
-      @to = to
+      @requested_from = from
+      @requested_to = to
       @time_range = build_time_range(within)
       validate_mode!
+      @from = resolve(from)
+      @to = resolve(to)
       freeze
+    end
+
+    # A record with no versions has no first or last boundary to resolve, which
+    # is an empty history rather than a bad request.
+    #: () -> bool
+    def unresolved?
+      (symbolic?(@requested_from) && @from.nil?) || (symbolic?(@requested_to) && @to.nil?)
     end
 
     #: (?context_required: bool) -> Array[untyped]
@@ -26,6 +37,7 @@ module PaperTrailDiff
           context_required: context_required
         )
       end
+      return empty_versions if unresolved?
 
       VersionRange.new(@record, from: @from, to: @to).select
     end
@@ -49,8 +61,49 @@ module PaperTrailDiff
     private
 
     # @rbs @record: untyped
+    # @rbs @requested_from: untyped
+    # @rbs @requested_to: untyped
     # @rbs @from: untyped
     # @rbs @to: untyped
+
+    #: () -> Array[untyped]
+    def empty_versions
+      versions = [] #: Array[untyped]
+      versions.freeze
+    end
+
+    #: (untyped) -> bool
+    def symbolic?(boundary)
+      boundary.is_a?(Symbol)
+    end
+
+    # Resolving `:first` and `:last` here keeps callers from depending on the
+    # order PaperTrail happens to give its versions association, which a caller
+    # is also free to reorder.
+    #: (untyped) -> untyped
+    def resolve(boundary)
+      return boundary unless symbolic?(boundary)
+
+      unless BOUNDARY_SYMBOLS.include?(boundary)
+        raise InvalidTimelineRangeError,
+              "unsupported boundary: #{boundary.inspect}; use :first, :last, a version, or a record"
+      end
+
+      boundary == :first ? ordered_versions.first : ordered_versions.last
+    end
+
+    #: () -> untyped
+    def ordered_versions
+      versions_relation.reorder(created_at: :asc, id: :asc)
+    end
+
+    #: () -> untyped
+    def versions_relation
+      @record.public_send(@record.class.versions_association_name)
+    rescue NoMethodError => e
+      message = 'record does not expose a PaperTrail version history'
+      raise InvalidTimelineRangeError, message, cause: e
+    end
 
     #: (untyped) -> TimeRange?
     def build_time_range(within)
@@ -60,11 +113,11 @@ module PaperTrailDiff
     #: () -> void
     def validate_mode!
       if time?
-        return if @from.nil? && @to.nil?
+        return if @requested_from.nil? && @requested_to.nil?
 
         raise InvalidTimelineRangeError, '`within` cannot be combined with `from` or `to`'
       end
-      return unless @from.nil? || @to.nil?
+      return unless @requested_from.nil? || @requested_to.nil?
 
       raise InvalidTimelineRangeError, 'provide both `from` and `to`, or provide `within`'
     end

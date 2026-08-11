@@ -19,6 +19,8 @@ module PaperTrailDiff
 
       trailing = trailing_version(relation)
       unless trailing
+        return selected.freeze if terminal_destroy?(selected)
+
         message = 'time range requires a later root version to reconstruct its final change'
         raise IncompleteTimeRangeError, message
       end
@@ -38,6 +40,15 @@ module PaperTrailDiff
     rescue NoMethodError => e
       message = 'record does not expose a PaperTrail version history'
       raise InvalidTimelineRangeError, message, cause: e
+    end
+
+    # A window closing on the record's own destruction needs no later version:
+    # the destroy reveals the preceding mutation and nothing can follow it, so
+    # demanding a checkpoint that can never be written would reject the range
+    # permanently.
+    #: (Array[untyped]) -> bool
+    def terminal_destroy?(versions)
+      versions.last&.event.to_s == 'destroy'
     end
 
     #: (untyped) -> untyped

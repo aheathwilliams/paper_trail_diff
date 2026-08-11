@@ -57,6 +57,30 @@ module PaperTrailDiff
     end
     private_constant :IdentityIndexCache
 
+    # Identifies one snapshot for internal carry-forward. A transition cannot
+    # hold its origin without retaining every earlier snapshot at that path,
+    # and `object_id` is only guaranteed unique among live objects, so Ruby may
+    # hand a collected snapshot's id to a later one.
+    class SerialSequence
+      #: () -> void
+      def initialize
+        @mutex = Mutex.new
+        @counter = 0
+      end
+
+      #: () -> Integer
+      def next_serial
+        @mutex.synchronize { @counter += 1 }
+      end
+
+      # @rbs @mutex: Thread::Mutex
+      # @rbs @counter: Integer
+    end
+    private_constant :SerialSequence
+
+    SERIALS = SerialSequence.new
+    private_constant :SERIALS
+
     class << self
       #: (Symbol) -> bool
       def collection_kind?(kind)
@@ -66,6 +90,7 @@ module PaperTrailDiff
 
     attr_reader :kind #: Symbol
     attr_reader :records #: Array[RecordSnapshot]
+    attr_reader :serial #: Integer
 
     #: (kind: Symbol, records: Array[RecordSnapshot], ?identity_index_cache: untyped, ?transition: CollectionTransition?) -> void
     def initialize(kind:, records:, identity_index_cache: nil, transition: nil)
@@ -80,6 +105,7 @@ module PaperTrailDiff
       @records = records.frozen? ? records : records.dup.freeze
       @identity_index_cache = identity_index_cache || IdentityIndexCache.new
       @transition = transition
+      @serial = SERIALS.next_serial
       freeze
     end
 
