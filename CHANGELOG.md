@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file. The
 project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- Link the demo application from the README now that it is public.
+
 ## [0.8.0] - 2026-08-12
 
 ### Added

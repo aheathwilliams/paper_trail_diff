@@ -29,7 +29,10 @@ which fetches what it needs on first run:
 ruby demo.rb
 ```
 
-Then start with the copyable [Quickstart](QUICKSTART.md).
+Then start with the copyable [Quickstart](QUICKSTART.md), or browse
+[the demo application](https://github.com/aheathwilliams/paper_trail_summary_test_app)
+— a small Rails app that installs a published release and exercises scalar,
+nested, through-association, and HABTM history against it.
 
 ## Installation
 
