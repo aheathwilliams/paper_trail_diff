@@ -21,7 +21,15 @@ available when
 
 Ruby 3.1 or newer and PaperTrail 16 or 17 are supported.
 
-New to the gem? Start with the copyable [Quickstart](QUICKSTART.md).
+New to the gem? Run [`examples/demo.rb`](examples/demo.rb) to see it work in
+about ten seconds — one self-contained file, no application and no migrations,
+which fetches what it needs on first run:
+
+```console
+ruby demo.rb
+```
+
+Then start with the copyable [Quickstart](QUICKSTART.md).
 
 ## Installation
 
@@ -83,7 +91,7 @@ for. Three consequences run through the rest of this document:
   both timeline APIs return steps rather than events.
 
 The [Quickstart](QUICKSTART.md) walks through the same idea against a real
-console session.
+console session, creating the models it uses as it goes.
 
 ## Which models and schemas work
 

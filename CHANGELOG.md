@@ -7,6 +7,12 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Add `examples/demo.rb`, a self-contained tour that needs no application: it
+  builds an in-memory database, writes a small multi-author history, and prints
+  an endpoint diff, a checkpoint timeline, per-person attribution across a
+  nested record, and one person's changes alone. It runs standalone, inside a
+  project, or under `bundle exec`, fetching what it needs on first run.
+
 - Raise `PaperTrailDiff::AmbiguousVersionOrderError` when versions sharing a
   timestamp have ids that cannot order them. Ordering falls back to the id when
   timestamps tie, which recovers the real sequence only while ids increase with
@@ -22,6 +28,10 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Create the models it uses in the quickstart. It declared `has_paper_trail` on
+  an `Article` and then used `Comment` without ever generating either, so
+  following it in a new application failed on a missing table at the first
+  console step.
 - Run `diagnose`'s version-order check whether or not `associations:` are
   selected, so a report never answers `ok?` having inspected nothing. Document
   that `ok?` means no errors among the checks that ran.

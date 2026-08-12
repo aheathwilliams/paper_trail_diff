@@ -4,6 +4,18 @@ This guide gets `paper_trail_diff` running in a Rails application and shows the
 smallest useful examples. Ruby 3.1 or newer and PaperTrail 16 or 17 are
 supported.
 
+Every command and console snippet below is meant to be run in order against a
+scratch application, so nothing here assumes models you already have:
+
+```console
+rails new diff-demo --minimal
+cd diff-demo
+```
+
+**Just want to see it work?** [`examples/demo.rb`](examples/demo.rb) is a single
+self-contained file — no application, no migrations, nothing to undo. Download
+it anywhere and run `ruby demo.rb`; it fetches what it needs on first run.
+
 ## 1. Install the gem
 
 From the Rails application directory:
@@ -20,6 +32,13 @@ for efficient activity analysis, although endpoint comparison is based on
 reified state rather than a PaperTrail changeset.
 
 ## 2. Version a model
+
+Create the model this guide uses, then declare it versioned:
+
+```console
+bin/rails generate model Article title:string
+bin/rails db:migrate
+```
 
 ```ruby
 # app/models/article.rb
@@ -195,8 +214,14 @@ bin/rails db:migrate
 ```
 
 The generator creates `version_associations` and enables
-`PaperTrail.config.track_associations`. Every model whose historical state is
-needed must be versioned:
+`PaperTrail.config.track_associations`. This section also needs a second model:
+
+```console
+bin/rails generate model Comment article:references body:string
+bin/rails db:migrate
+```
+
+Every model whose historical state is needed must be versioned:
 
 ```ruby
 class Article < ApplicationRecord

@@ -29,6 +29,26 @@ Metrics/BlockLength:
   Exclude:
     - "spec/**/*"
     - "*.gemspec"
+    - "examples/**/*"
+
+# The demo is deliberately one file a reader can download and run, so it holds
+# its schema, its models, and its narration together. Layout and lint rules
+# still apply to it; only the rules that would split it up are relaxed.
+# `inherit_mode` so these add to RuboCop's defaults, which already exclude
+# spec/ and test/, rather than replacing them.
+Style/Documentation:
+  inherit_mode:
+    merge:
+      - Exclude
+  Exclude:
+    - "examples/**/*"
+
+Style/OneClassPerFile:
+  inherit_mode:
+    merge:
+      - Exclude
+  Exclude:
+    - "examples/**/*"
 
 Metrics/ClassLength:
   Max: 150
