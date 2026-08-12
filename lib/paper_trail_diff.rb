@@ -169,7 +169,7 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
     # Compares adjacent root and selected-descendant activity boundaries.
     # `reload_live_endpoints:` applies only when `to:` is a current record; the
     # other range forms never read live state.
-    #: (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?reload_live_endpoints: bool, ?version_scope: untyped, ?close_on: Symbol?) -> Array[ActivityStep]
+    #: (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?reload_live_endpoints: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool) -> Array[ActivityStep]
     def activity_timeline( # rubocop:disable Metrics/ParameterLists
       record,
       from: nil,
@@ -179,7 +179,8 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
       ignore: DEFAULT_IGNORED_ATTRIBUTES,
       reload_live_endpoints: true,
       version_scope: nil,
-      close_on: nil
+      close_on: nil,
+      snapshots: false
     )
       PaperTrailAdapter.new(
         associations: associations,
@@ -191,12 +192,13 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
         to: to,
         within: within,
         version_scope: version_scope,
-        close_on: close_on
+        close_on: close_on,
+        snapshots: snapshots
       )
     end
 
     # Builds an endpoint diff and root-checkpoint timeline while normalizing each version once.
-    #: (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?) -> Analysis
+    #: (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool) -> Analysis
     def analyze( # rubocop:disable Metrics/ParameterLists
       record,
       from: nil,
@@ -206,7 +208,8 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
       ignore: DEFAULT_IGNORED_ATTRIBUTES,
       activity: false,
       version_scope: nil,
-      close_on: nil
+      close_on: nil,
+      snapshots: false
     )
       PaperTrailAdapter.new(associations: associations, ignore: ignore).analyze(
         record,
@@ -215,7 +218,8 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
         within: within,
         activity: activity,
         version_scope: version_scope,
-        close_on: close_on
+        close_on: close_on,
+        snapshots: snapshots
       )
     end
 

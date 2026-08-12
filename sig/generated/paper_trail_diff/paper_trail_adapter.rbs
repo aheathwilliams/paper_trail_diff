@@ -22,11 +22,11 @@ module PaperTrailDiff
     # : (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped, ?close_on: Symbol?) -> Array[Step]
     def timeline: (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped, ?close_on: Symbol?) -> Array[Step]
 
-    # : (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped, ?close_on: Symbol?) -> Array[ActivityStep]
-    def activity_timeline: (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped, ?close_on: Symbol?) -> Array[ActivityStep]
+    # : (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool) -> Array[ActivityStep]
+    def activity_timeline: (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool) -> Array[ActivityStep]
 
-    # : (untyped, from: untyped, to: untyped, within: untyped, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?) -> Analysis
-    def analyze: (untyped, from: untyped, to: untyped, within: untyped, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?) -> Analysis
+    # : (untyped, from: untyped, to: untyped, within: untyped, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool) -> Analysis
+    def analyze: (untyped, from: untyped, to: untyped, within: untyped, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool) -> Analysis
 
     # Analyzes many roots over one shared range, preparing their history once.
     # : (Array[untyped], within: untyped, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?) -> Hash[identity, Analysis]
@@ -56,8 +56,8 @@ module PaperTrailDiff
 
     @traversal_preparer: TraversalPreparer
 
-    # : (untyped, from: untyped, to: untyped, within: untyped, version_scope: untyped, live_endpoint: untyped) -> Analysis
-    def analyze_activity: (untyped, from: untyped, to: untyped, within: untyped, version_scope: untyped, live_endpoint: untyped) -> Analysis
+    # : (untyped, from: untyped, to: untyped, within: untyped, version_scope: untyped, live_endpoint: untyped, ?snapshots: bool) -> Analysis
+    def analyze_activity: (untyped, from: untyped, to: untyped, within: untyped, version_scope: untyped, live_endpoint: untyped, ?snapshots: bool) -> Analysis
 
     # `close_on:` names what ends a wall-clock window, so it is meaningless for a
     # range whose endpoints the caller already gave explicitly.
@@ -81,8 +81,8 @@ module PaperTrailDiff
     # : () -> ActivitySnapshotProvider
     def build_activity_snapshotter: () -> ActivitySnapshotProvider
 
-    # : (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped, ?live_endpoint: untyped) -> ActivityTimelineBuilder
-    def activity_builder: (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped, ?live_endpoint: untyped) -> ActivityTimelineBuilder
+    # : (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped, ?live_endpoint: untyped, ?snapshots: bool) -> ActivityTimelineBuilder
+    def activity_builder: (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped, ?live_endpoint: untyped, ?snapshots: bool) -> ActivityTimelineBuilder
 
     # : (untyped) -> void
     def reject_live_habtm_activity!: (untyped) -> void

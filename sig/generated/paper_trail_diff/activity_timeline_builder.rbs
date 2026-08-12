@@ -3,8 +3,8 @@
 module PaperTrailDiff
   # Compares adjacent root and selected-descendant activity boundaries.
   class ActivityTimelineBuilder
-    # : (untyped, range: TimelineRange, tree: AssociationTree, snapshotter: untyped) -> void
-    def initialize: (untyped, range: TimelineRange, tree: AssociationTree, snapshotter: untyped) -> void
+    # : (untyped, range: TimelineRange, tree: AssociationTree, snapshotter: untyped, ?snapshots: bool) -> void
+    def initialize: (untyped, range: TimelineRange, tree: AssociationTree, snapshotter: untyped, ?snapshots: bool) -> void
 
     # : () -> Array[ActivityStep]
     def build: () -> Array[ActivityStep]
@@ -20,6 +20,8 @@ module PaperTrailDiff
     @range: TimelineRange
 
     @record: untyped
+
+    @snapshots: bool
 
     @snapshotter: untyped
 

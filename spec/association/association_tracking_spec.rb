@@ -1789,6 +1789,73 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     end.to raise_error(PaperTrailDiff::UnknownAssociationError, /missing/)
   end
 
+  describe 'snapshots: true on an activity timeline' do
+    def edited_article
+      article = TrackedArticle.create!(title: 'T1')
+      comment = article.comments.create!(body: 'first draft')
+      article.update!(title: 'T2')
+      comment.update!(body: 'second draft')
+      [article, comment]
+    end
+
+    it 'retains the states each step was compared between' do
+      article, = edited_article
+
+      steps = PaperTrailDiff.activity_timeline(
+        article, from: :first, to: article, associations: ['comments'], snapshots: true
+      )
+
+      last = steps.reject(&:empty?).last
+      expect(last.from_snapshot).to be_a(PaperTrailDiff::RecordSnapshot)
+      expect(last.to_snapshot).to be_a(PaperTrailDiff::RecordSnapshot)
+      # The diff names what changed; the snapshot carries the rest of the record,
+      # which is what a renderer needs to say *whose* comment changed.
+      body = last.from_snapshot.associations.fetch('comments').records.first.attributes
+      expect(body.fetch('body')).to eq('first draft')
+    end
+
+    it 'keeps them absent unless asked for, since they hold the whole graph' do
+      article, = edited_article
+
+      steps = PaperTrailDiff.activity_timeline(
+        article, from: :first, to: article, associations: ['comments']
+      )
+
+      expect(steps.map(&:from_snapshot)).to all(be_nil)
+      expect(steps.map(&:to_snapshot)).to all(be_nil)
+    end
+
+    it 'reaches the closing step of a window that ends at current state' do
+      article, = edited_article
+      start_at = PaperTrail::Version.order(:id).first.created_at
+
+      steps = PaperTrailDiff.activity_timeline(
+        article, within: start_at..(Time.now.utc + 86_400), close_on: :current,
+                 associations: ['comments'], snapshots: true
+      )
+
+      closing = steps.last
+      expect(closing.to_boundary.kind).to eq(:current)
+      expect(closing.to_snapshot.attributes.fetch('title')).to eq('T2')
+    end
+
+    it 'reaches the activity timeline analyze builds' do
+      article, = edited_article
+
+      analysis = PaperTrailDiff.analyze(
+        article, from: :first, to: :last, activity: true,
+                 associations: ['comments'], snapshots: true
+      )
+
+      steps = analysis.activity_timeline
+      # The first boundary is the create version, which reifies to nothing
+      # because the record did not exist yet, so a nil there is the answer
+      # rather than a missing one.
+      expect(steps.first.from_snapshot).to be_nil
+      expect(steps.drop(1).map(&:from_snapshot)).to all(be_a(PaperTrailDiff::RecordSnapshot))
+    end
+  end
+
   describe 'close_on: :current over an open window' do
     def open_window_article
       article = TrackedArticle.create!(title: 'Start')

@@ -108,12 +108,35 @@ module PaperTrailDiff
     attr_reader :from_boundary #: ActivityBoundary
     attr_reader :to_boundary #: ActivityBoundary
     attr_reader :diff #: Diff
+    # The reconstructed states this step was compared between, present only when
+    # a caller asked for them. A diff carries what changed; a renderer that has
+    # to name an unchanged field of a changed record needs the whole state, and
+    # rebuilding it from the version table by hand is both slower and easy to
+    # get wrong.
+    attr_reader :from_snapshot #: RecordSnapshot?
+    attr_reader :to_snapshot #: RecordSnapshot?
 
-    #: (from_boundary: ActivityBoundary, to_boundary: ActivityBoundary, diff: Diff) -> void
-    def initialize(from_boundary:, to_boundary:, diff:)
+    # Compares two reconstructed states and keeps them only when asked, which is
+    # every caller's shape: the diff always comes from the pair, the pair itself
+    # is retained on request.
+    #: (from_boundary: ActivityBoundary, to_boundary: ActivityBoundary, from_snapshot: RecordSnapshot?, to_snapshot: RecordSnapshot?, retain: bool) -> ActivityStep
+    def self.between(from_boundary:, to_boundary:, from_snapshot:, to_snapshot:, retain:)
+      new(
+        from_boundary: from_boundary,
+        to_boundary: to_boundary,
+        diff: Engine.compare(from_snapshot, to_snapshot),
+        from_snapshot: (from_snapshot if retain),
+        to_snapshot: (to_snapshot if retain)
+      )
+    end
+
+    #: (from_boundary: ActivityBoundary, to_boundary: ActivityBoundary, diff: Diff, ?from_snapshot: RecordSnapshot?, ?to_snapshot: RecordSnapshot?) -> void
+    def initialize(from_boundary:, to_boundary:, diff:, from_snapshot: nil, to_snapshot: nil)
       @from_boundary = from_boundary
       @to_boundary = to_boundary
       @diff = diff
+      @from_snapshot = from_snapshot
+      @to_snapshot = to_snapshot
       freeze
     end
 

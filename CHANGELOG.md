@@ -7,6 +7,15 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Accept `snapshots: true` on `activity_timeline` and `analyze(activity: true)`,
+  retaining the reconstructed states each step was compared between as
+  `ActivityStep#from_snapshot` and `#to_snapshot`. A diff names what changed; a
+  renderer that has to name an unchanged field of a changed record needed the
+  whole state and had no way to reach it, so consumers were rebuilding it from
+  the version table by hand — slower, and easy to get wrong in ways that stay
+  quiet. The gem already builds these states to compute each diff and discarded
+  them, so the option costs no extra queries. Off by default because each one
+  holds the whole selected graph.
 - Add `examples/demo.rb`, a self-contained tour that needs no application: it
   builds an in-memory database, writes a small multi-author history, and prints
   an endpoint diff, a checkpoint timeline, per-person attribution across a

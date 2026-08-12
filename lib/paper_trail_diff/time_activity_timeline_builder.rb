@@ -4,8 +4,9 @@
 module PaperTrailDiff
   # Builds activity views for mutations selected by a wall-clock range.
   class TimeActivityTimelineBuilder
-    #: (untyped, range: TimelineRange, tree: AssociationTree, snapshotter: untyped) -> void
-    def initialize(record, range:, tree:, snapshotter:)
+    #: (untyped, range: TimelineRange, tree: AssociationTree, snapshotter: untyped, ?snapshots: bool) -> void
+    def initialize(record, range:, tree:, snapshotter:, snapshots: false)
+      @snapshots = snapshots
       @record = record
       @range = range
       @tree = tree
@@ -40,6 +41,7 @@ module PaperTrailDiff
     # @rbs @range: TimelineRange
     # @rbs @tree: AssociationTree
     # @rbs @snapshotter: untyped
+    # @rbs @snapshots: bool
 
     #: () -> [ActivityHistory, RootVersionPlan, ActivityStep?, RecordSnapshot?, untyped]
     def history_and_versions
@@ -89,7 +91,8 @@ module PaperTrailDiff
         root_versions,
         events,
         @snapshotter,
-        include_step: ->(event) { @range.include?(event.version) }
+        include_step: ->(event) { @range.include?(event.version) },
+        snapshots: @snapshots
       ).call
     end
 
@@ -129,10 +132,11 @@ module PaperTrailDiff
     #: (ActivityHistory, ActivityEvent) -> ActivityStep
     def destroyed_step(history, event)
       version = event.version
-      ActivityStep.new(
+      ActivityStep.between(
         from_boundary: ActivityBoundary.from_version(version),
         to_boundary: ActivityBoundary.destroyed(version),
-        diff: Engine.compare(history.root_snapshots[ActivityRootSteps.version_key(version)], nil)
+        from_snapshot: history.root_snapshots[ActivityRootSteps.version_key(version)],
+        to_snapshot: nil, retain: @snapshots
       )
     end
 
@@ -144,10 +148,10 @@ module PaperTrailDiff
       previous = history.steps.last&.to_boundary
       return unless previous
 
-      ActivityStep.new(
+      ActivityStep.between(
         from_boundary: previous,
         to_boundary: ActivityBoundary.current(record, captured_at: captured_at),
-        diff: Engine.compare(history.last_snapshot, snapshot)
+        from_snapshot: history.last_snapshot, to_snapshot: snapshot, retain: @snapshots
       )
     end
 

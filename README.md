@@ -588,6 +588,35 @@ boundary. Passing `to: article` is what removes the need to touch the parent
 after an ordinary versioned child mutation; current state is still never
 implicit.
 
+### Reading the state behind a step
+
+A step's diff carries what changed. A renderer often needs what did *not* — to
+say whose comment was edited, it needs the comment's author, which the diff has
+no reason to mention. `snapshots: true` retains the reconstructed states each
+step was compared between:
+
+```ruby
+steps = PaperTrailDiff.activity_timeline(
+  article, from: :first, to: article, associations: [:comments], snapshots: true
+)
+
+step = steps.reject(&:empty?).last
+step.from_snapshot.associations["comments"].records.first.attributes["author"]
+```
+
+The gem already builds these states to compute each diff and otherwise discards
+them, so asking for them costs no extra queries. Reconstructing them yourself
+from the version table means reimplementing boundary ordering, and getting it
+wrong is quiet rather than loud.
+
+They are off by default because each one holds the whole selected graph, and
+retaining one per step keeps the entire timeline's graph alive. A step whose
+`from_boundary` is a `create` version has a `nil` `from_snapshot`: the record
+did not exist yet, which is the answer rather than a missing one.
+
+`analyze(activity: true, snapshots: true)` populates the same fields on the
+`activity_timeline` it returns.
+
 ### Closing a destroyed root
 
 A `destroy` version is the one boundary whose following state needs no later

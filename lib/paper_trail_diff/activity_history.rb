@@ -26,13 +26,16 @@ module PaperTrailDiff
 
   # Builds activity steps while retaining root snapshots for combined analysis.
   class ActivityHistoryBuilder
-    #: (Array[untyped], Array[ActivityEvent], untyped, ?current: untyped, ?include_step: untyped) -> void
-    def initialize(root_versions, events, snapshotter, current: nil, include_step: nil)
+    #: (Array[untyped], Array[ActivityEvent], untyped, ?current: untyped, ?include_step: untyped, ?snapshots: bool) -> void
+    def initialize( # rubocop:disable Metrics/ParameterLists
+      root_versions, events, snapshotter, current: nil, include_step: nil, snapshots: false
+    )
       @root_versions = root_versions
       @events = events
       @snapshotter = snapshotter
       @current = current
       @include_step = include_step
+      @snapshots = snapshots
     end
 
     #: () -> ActivityHistory
@@ -54,6 +57,7 @@ module PaperTrailDiff
     # @rbs @snapshotter: untyped
     # @rbs @current: untyped
     # @rbs @include_step: untyped
+    # @rbs @snapshots: bool
     # @rbs @steps: Array[ActivityStep]
     # @rbs @root_snapshots: Hash[Array[untyped], RecordSnapshot?]
     # @rbs @first_snapshot: RecordSnapshot?
@@ -110,10 +114,9 @@ module PaperTrailDiff
       previous_boundary = @previous_boundary
       return unless previous_boundary
 
-      @steps << ActivityStep.new(
-        from_boundary: previous_boundary,
-        to_boundary: boundary,
-        diff: Engine.compare(@previous_snapshot, snapshot)
+      @steps << ActivityStep.between(
+        from_boundary: previous_boundary, to_boundary: boundary,
+        from_snapshot: @previous_snapshot, to_snapshot: snapshot, retain: @snapshots
       )
       @selected_last_snapshot = snapshot
     end

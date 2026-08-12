@@ -20,8 +20,8 @@ module PaperTrailDiff
 
   # Builds activity steps while retaining root snapshots for combined analysis.
   class ActivityHistoryBuilder
-    # : (Array[untyped], Array[ActivityEvent], untyped, ?current: untyped, ?include_step: untyped) -> void
-    def initialize: (Array[untyped], Array[ActivityEvent], untyped, ?current: untyped, ?include_step: untyped) -> void
+    # : (Array[untyped], Array[ActivityEvent], untyped, ?current: untyped, ?include_step: untyped, ?snapshots: bool) -> void
+    def initialize: (Array[untyped], Array[ActivityEvent], untyped, ?current: untyped, ?include_step: untyped, ?snapshots: bool) -> void
 
     # : () -> ActivityHistory
     def call: () -> ActivityHistory
@@ -47,6 +47,8 @@ module PaperTrailDiff
     @root_versions: Array[untyped]
 
     @selected_last_snapshot: RecordSnapshot?
+
+    @snapshots: bool
 
     @snapshotter: untyped
 

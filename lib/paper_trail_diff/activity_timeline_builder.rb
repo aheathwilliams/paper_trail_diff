@@ -4,8 +4,9 @@
 module PaperTrailDiff
   # Compares adjacent root and selected-descendant activity boundaries.
   class ActivityTimelineBuilder
-    #: (untyped, range: TimelineRange, tree: AssociationTree, snapshotter: untyped) -> void
-    def initialize(record, range:, tree:, snapshotter:)
+    #: (untyped, range: TimelineRange, tree: AssociationTree, snapshotter: untyped, ?snapshots: bool) -> void
+    def initialize(record, range:, tree:, snapshotter:, snapshots: false)
+      @snapshots = snapshots
       @record = record
       @from = range.from
       @to = range.to
@@ -49,6 +50,7 @@ module PaperTrailDiff
     # @rbs @range: TimelineRange
     # @rbs @tree: AssociationTree
     # @rbs @snapshotter: untyped
+    # @rbs @snapshots: bool
 
     #: () -> Array[ActivityStep]
     def no_steps
@@ -150,10 +152,10 @@ module PaperTrailDiff
       previous_event = events.last
       previous_boundary = ActivityBoundary.from_version(previous_event.version) if previous_event
       if final_boundary && previous_boundary
-        steps << ActivityStep.new(
-          from_boundary: previous_boundary,
-          to_boundary: final_boundary,
-          diff: Engine.compare(history.last_snapshot, final_snapshot)
+        steps << ActivityStep.between(
+          from_boundary: previous_boundary, to_boundary: final_boundary,
+          from_snapshot: history.last_snapshot, to_snapshot: final_snapshot,
+          retain: @snapshots
         )
       end
       steps.freeze
@@ -175,7 +177,8 @@ module PaperTrailDiff
         root_versions,
         events,
         @snapshotter,
-        current: current
+        current: current,
+        snapshots: @snapshots
       ).call
     end
 
@@ -201,7 +204,8 @@ module PaperTrailDiff
         @record,
         range: @range,
         tree: @tree,
-        snapshotter: @snapshotter
+        snapshotter: @snapshotter,
+        snapshots: @snapshots
       )
     end
   end
