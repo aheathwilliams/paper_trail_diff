@@ -5,8 +5,10 @@ require_relative '../support/core_database'
 RSpec.describe PaperTrailDiff do
   before do
     PaperTrail::Version.delete_all
+    UuidVersion.delete_all
     CoreComment.delete_all
     CoreArticle.delete_all
+    UuidKeyedArticle.delete_all
   end
 
   def create_history
@@ -445,6 +447,94 @@ RSpec.describe PaperTrailDiff do
 
       expect { described_class.timeline(article, within: window, version_scope: :nope) }
         .to raise_error(PaperTrailDiff::ConfigurationError, /respond to call/)
+    end
+  end
+
+  describe 'Analysis#to_h(snapshots: true)' do
+    def analyzed_article
+      article = CoreArticle.create!(title: 'S1', internal_note: 'stable')
+      article.update!(title: 'S2')
+      # A version records the state before its own event, so the last one holds
+      # S2 only once a later version exists.
+      article.update!(title: 'S3')
+      described_class.analyze(article, from: :first, to: :last)
+    end
+
+    it 'omits reconstructed endpoint states unless they are asked for' do
+      analysis = analyzed_article
+
+      expect(analysis.to_h.keys).to eq(%i[diff timeline])
+      expect(analysis.to_h(snapshots: true).keys)
+        .to eq(%i[diff timeline from_snapshot to_snapshot])
+    end
+
+    it 'serializes each snapshot as a plain, JSON-safe payload' do
+      payload = analyzed_article.to_h(snapshots: true)
+
+      expect(payload.fetch(:to_snapshot).keys).to eq(%i[type id attributes])
+      expect(payload.fetch(:to_snapshot).fetch(:attributes).fetch('title')).to eq('S2')
+      expect { JSON.generate(payload) }.not_to raise_error
+    end
+
+    it 'reports absent endpoints for an empty analysis' do
+      payload = PaperTrailDiff::Analysis.empty.to_h(snapshots: true)
+
+      expect(payload.fetch(:from_snapshot)).to be_nil
+      expect(payload.fetch(:to_snapshot)).to be_nil
+    end
+  end
+
+  describe 'versions that cannot be ordered' do
+    # Ordering falls back to the id when timestamps tie. That recovers the real
+    # sequence only for ids that increase with insertion, which a UUID does not.
+    def unorderable_history
+      article = UuidKeyedArticle.create!(title: 'u0')
+      article.update!(title: 'u1')
+      article.update!(title: 'u2')
+      # Second-precision timestamps are what a MySQL `datetime` column stores,
+      # so a tie is ordinary rather than exotic.
+      UuidVersion.update_all(created_at: Time.now.utc)
+      article
+    end
+
+    it 'refuses to build a timeline from a sequence it cannot recover' do
+      article = unorderable_history
+
+      expect { described_class.timeline(article, from: :first, to: :last) }
+        .to raise_error(PaperTrailDiff::AmbiguousVersionOrderError, /share the timestamp/)
+    end
+
+    it 'names the two versions and how to make them orderable' do
+      article = unorderable_history
+
+      described_class.timeline(article, from: :first, to: :last)
+    rescue PaperTrailDiff::AmbiguousVersionOrderError => e
+      expect(e.message).to include('sub-second precision')
+      expect(e.message).to include('sequential ids')
+    end
+
+    it 'tolerates tied timestamps when the ids still order them' do
+      article = CoreArticle.create!(title: 't0', internal_note: 'stable')
+      article.update!(title: 't1')
+      article.update!(title: 't2')
+      PaperTrail::Version.where(item_type: 'CoreArticle').update_all(created_at: Time.now.utc)
+
+      steps = described_class.timeline(article, from: :first, to: :last)
+
+      # Autoincrement ids increase with insertion, so the sequence survives.
+      expect(steps.map { |step| step.diff.attributes['title']&.to_h })
+        .to eq([nil, { from: 't0', to: 't1' }])
+    end
+
+    it 'reports the hazard from diagnose before a caller runs into it' do
+      article = unorderable_history
+      versions = UuidVersion.where(item_id: article.id.to_s)
+                            .to_a.sort_by { |version| [version.created_at, version.id] }
+
+      report = described_class.diagnose(versions.first, versions.last)
+
+      expect(report).not_to be_ok
+      expect(report.errors.map(&:code)).to eq([:ambiguous_version_order])
     end
   end
 

@@ -3,8 +3,8 @@
 module PaperTrailDiff
   # Gives TimelineBuilder one-argument access to a range-prepared snapshot store.
   class TimelineSnapshotProvider
-    # : (HistoricalSnapshotStore, ?live_snapshotter: untyped) -> void
-    def initialize: (HistoricalSnapshotStore, ?live_snapshotter: untyped) -> void
+    # : (HistoricalSnapshotStore, live_snapshotter: untyped) -> void
+    def initialize: (HistoricalSnapshotStore, live_snapshotter: untyped) -> void
 
     # : (untyped, Array[untyped]) -> void
     def prepare: (untyped, Array[untyped]) -> void

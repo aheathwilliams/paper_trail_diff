@@ -3,6 +3,34 @@
 All notable changes to this project will be documented in this file. The
 project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- Raise `PaperTrailDiff::AmbiguousVersionOrderError` when versions sharing a
+  timestamp have ids that cannot order them. Ordering falls back to the id when
+  timestamps tie, which recovers the real sequence only while ids increase with
+  insertion; a UUID version id does not, and a MySQL `datetime` column stores
+  whole seconds, so the two together are ordinary rather than exotic. The gem
+  previously returned a plausible-looking timeline with steps in the wrong
+  order and others dropped. `diagnose` reports the same condition as an error
+  so it can be caught before a run rather than after a wrong answer.
+- Document the model and schema shapes the suite covers: single-table
+  inheritance (results are keyed by the base class, so build keys with
+  `Endpoint.identity`), non-integer primary keys, and a custom version class
+  via `has_paper_trail versions: { class_name: }`.
+
+### Changed
+
+- Run `diagnose`'s version-order check whether or not `associations:` are
+  selected, so a report never answers `ok?` having inspected nothing. Document
+  that `ok?` means no errors among the checks that ran.
+
+### Fixed
+
+- Cover `Analysis#to_h(snapshots: true)` with specs. It was shipped in 0.6.0
+  with no test at all.
+
 ## [0.7.1] - 2026-08-11
 
 ### Fixed

@@ -4,8 +4,8 @@
 module PaperTrailDiff
   # Gives TimelineBuilder one-argument access to a range-prepared snapshot store.
   class TimelineSnapshotProvider
-    #: (HistoricalSnapshotStore, ?live_snapshotter: untyped) -> void
-    def initialize(store, live_snapshotter: nil)
+    #: (HistoricalSnapshotStore, live_snapshotter: untyped) -> void
+    def initialize(store, live_snapshotter:)
       @store = store
       @live_snapshotter = live_snapshotter
     end
@@ -28,10 +28,7 @@ module PaperTrailDiff
 
     #: (untyped) -> RecordSnapshot?
     def live_snapshot(record)
-      snapshotter = @live_snapshotter
-      raise InvalidTimelineRangeError, 'live endpoints are unavailable here' unless snapshotter
-
-      snapshotter.call(record)
+      @live_snapshotter.call(record)
     end
 
     # @rbs @store: HistoricalSnapshotStore

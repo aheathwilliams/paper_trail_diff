@@ -29,6 +29,9 @@ module PaperTrailDiff
   # Raised when an in-range mutation has no later root boundary for reconstruction.
   class IncompleteTimeRangeError < InvalidTimelineRangeError; end
 
+  # Raised when versions sharing a timestamp cannot be ordered by their ids.
+  class AmbiguousVersionOrderError < Error; end
+
   # Raised when a requested ActiveRecord association does not exist.
   class UnknownAssociationError < Error; end
 

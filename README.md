@@ -85,6 +85,37 @@ for. Three consequences run through the rest of this document:
 The [Quickstart](QUICKSTART.md) walks through the same idea against a real
 console session.
 
+## Which models and schemas work
+
+Anything `has_paper_trail` tracks, including these, which are covered by the
+test suite rather than assumed:
+
+- **Single-table inheritance.** Results are keyed by the *base* class, matching
+  what PaperTrail writes to `item_type`. Analyzing a `Book < Publication`
+  produces the key `["Publication", "12"]`, so `results.fetch(["Book", ...])`
+  raises `KeyError`. Build keys with `PaperTrailDiff::Endpoint.identity(record)`
+  rather than by hand.
+- **Non-integer primary keys** on the tracked model, such as a UUID column.
+- **A custom version class**, via `has_paper_trail versions: { class_name: }`.
+  Nothing here references `PaperTrail::Version` directly.
+
+### Versions that cannot be ordered
+
+Versions are ordered by `created_at`, falling back to the id when timestamps
+tie. That fallback recovers the real sequence only while ids increase with
+insertion. An autoincrement id does; a **UUID version id does not**.
+
+So two conditions together are unsafe: version ids that are not sequential,
+*and* versions sharing a timestamp — which is ordinary on a MySQL `datetime`
+column, since it stores whole seconds. The order is then unrecoverable, and
+rather than report a plausible-looking history in the wrong order the gem
+raises `PaperTrailDiff::AmbiguousVersionOrderError` naming both versions.
+`diagnose` reports the same condition as an error, so a caller can check before
+running rather than after a surprise.
+
+Either half alone is fine. Sequential ids order tied timestamps correctly, and
+distinct timestamps never reach the fallback.
+
 ## Choosing an entry point
 
 | You need | Call |
@@ -974,6 +1005,12 @@ report.ok?
 report.errors.map(&:code)
 report.warnings.map(&:code)
 ```
+
+`ok?` means no *errors* were found among the checks that ran, not that every
+possible hazard was ruled out. Association checks need `associations:` to have
+something to inspect; without it only the version-order check runs, which is
+why that one runs whether or not associations are selected — an unorderable
+history corrupts a scalar timeline just as thoroughly.
 
 Diagnostics are read-only guidance, not proof that arbitrary old data is
 complete. HABTM endpoints without transaction-backed association snapshots fail

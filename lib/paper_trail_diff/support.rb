@@ -51,6 +51,41 @@ module PaperTrailDiff
       [version.created_at, version.id.to_s.rjust(32, '0')]
     end
 
+    # Ordering falls back to the id whenever timestamps tie, which recovers the
+    # real order only while ids increase with insertion. An autoincrement id
+    # does; a UUID does not, so a tie between UUID-keyed versions is genuinely
+    # unorderable and any timeline built from it would be fiction.
+    #: (Array[untyped]) -> Array[untyped]
+    def chronological_sort(versions)
+      sorted = versions.sort_by { |version| chronological_version_key(version) }
+      ambiguous = ambiguous_pair(sorted)
+      return sorted unless ambiguous
+
+      raise AmbiguousVersionOrderError, ambiguous_message(ambiguous)
+    end
+
+    #: (Array[untyped]) -> Array[untyped]?
+    def ambiguous_pair(sorted)
+      sorted.each_cons(2).find do |left, right|
+        left.created_at == right.created_at &&
+          !(sequential_id?(left.id) && sequential_id?(right.id))
+      end
+    end
+
+    #: (untyped) -> bool
+    def sequential_id?(id)
+      id.is_a?(Integer) || id.to_s.match?(/\A\d+\z/)
+    end
+
+    #: (Array[untyped]) -> String
+    def ambiguous_message(pair)
+      left, right = pair
+      "versions #{left.id.inspect} and #{right.id.inspect} share the timestamp " \
+        "#{left.created_at.inspect} and have ids that do not order them, so their " \
+        'sequence cannot be recovered; record versions at sub-second precision or ' \
+        'with sequential ids'
+    end
+
     #: (untyped, untyped) -> Integer
     def compare_versions(left, right)
       chronological_version_key(left) <=> chronological_version_key(right) ||

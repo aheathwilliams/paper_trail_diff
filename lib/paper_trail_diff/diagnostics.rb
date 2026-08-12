@@ -76,7 +76,11 @@ module PaperTrailDiff
     #: () -> DiagnosticReport
     def call
       model_class = validated_model_class
-      return DiagnosticReport.new(issues: []) if @tree.empty?
+      # Runs whether or not associations are selected: unorderable versions
+      # corrupt a scalar timeline just as surely, and a report that inspected
+      # nothing has no business answering `ok?`.
+      inspect_version_order
+      return DiagnosticReport.new(issues: @issues) if @tree.empty?
 
       unless association_tracking_available?
         add_error(:association_tracking_unavailable, tracking_unavailable_message)
@@ -130,6 +134,31 @@ module PaperTrailDiff
       return if paths.empty?
 
       inspect_transaction_metadata(paths)
+    end
+
+    # Ordering falls back to the id when timestamps tie, which only recovers the
+    # real sequence for ids that increase with insertion. Reported before a run
+    # rather than after a wrong answer.
+    #: () -> void
+    def inspect_version_order
+      pair = Support.ambiguous_pair(ordered_range_versions)
+      return unless pair
+
+      add_error(:ambiguous_version_order, Support.ambiguous_message(pair), nil, pair.first.id)
+    rescue StandardError
+      nil
+    end
+
+    #: () -> Array[untyped]
+    def ordered_range_versions
+      bounds = [@from_version.created_at, @to_version.created_at].compact.sort
+      return [] unless bounds.length == 2
+
+      @from_version.class
+                   .where(item_type: @from_version.item_type, item_id: @from_version.item_id)
+                   .where(created_at: bounds.first..bounds.last)
+                   .to_a
+                   .sort_by { |version| Support.chronological_version_key(version) }
     end
 
     #: (untyped) -> void

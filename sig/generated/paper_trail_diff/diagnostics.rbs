@@ -67,6 +67,15 @@ module PaperTrailDiff
     # : (Array[Array[untyped]]) -> void
     def inspect_habtm: (Array[Array[untyped]]) -> void
 
+    # Ordering falls back to the id when timestamps tie, which only recovers the
+    # real sequence for ids that increase with insertion. Reported before a run
+    # rather than after a wrong answer.
+    # : () -> void
+    def inspect_version_order: () -> void
+
+    # : () -> Array[untyped]
+    def ordered_range_versions: () -> Array[untyped]
+
     # : (untyped) -> void
     def inspect_checkpoint_timestamp: (untyped) -> void
 

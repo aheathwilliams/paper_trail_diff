@@ -109,7 +109,7 @@ module PaperTrailDiff
 
     #: (versions: Array[untyped], live: PreparedRecordState?, ?state_loader: PreparedVersionStateLoader) -> void
     def initialize(versions:, live:, state_loader: PreparedVersionStateLoader.new)
-      @versions = versions.sort_by { |version| Support.chronological_version_key(version) }.freeze
+      @versions = Support.chronological_sort(versions).freeze
       @version_positions = @versions.each_with_index.to_h do |version, index|
         [version.id.to_s, index]
       end.freeze

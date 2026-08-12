@@ -56,7 +56,7 @@ module PaperTrailDiff
 
     #: (Array[untyped]) -> Array[untyped]
     def ordered(versions)
-      versions.sort_by { |version| Support.chronological_version_key(version) }
+      Support.chronological_sort(versions)
     end
   end
 end
