@@ -1,0 +1,39 @@
+# Generated from lib/paper_trail_diff/version_sequence_diagnostics.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Checks the recorded sequence itself, before any question of association
+  # setup: whether the versions can be ordered at all, and whether timestamps
+  # they share hide changes that ordering alone cannot recover.
+  class VersionSequenceDiagnostics
+    # : (untyped, untyped, ?associations_selected: bool) -> void
+    def initialize: (untyped, untyped, ?associations_selected: bool) -> void
+
+    # : () -> Array[DiagnosticIssue]
+    def call: () -> Array[DiagnosticIssue]
+
+    private
+
+    @associations_selected: bool
+
+    @from_version: untyped
+
+    @to_version: untyped
+
+    # Ordering falls back to the id when timestamps tie, which only recovers the
+    # real sequence for ids that increase with insertion. Reported before a run
+    # rather than after a wrong answer.
+    # : (Array[untyped]) -> DiagnosticIssue?
+    def unorderable: (Array[untyped]) -> DiagnosticIssue?
+
+    # Association membership is recorded per version but resolved by timestamp,
+    # so a tie hides any association change across that pair. Unlike an
+    # unorderable sequence this is not always wrong: if nothing associated
+    # changed between them the result is correct, and the gem cannot tell which
+    # it is, because not seeing the change is the symptom. So it warns.
+    # : (Array[untyped]) -> DiagnosticIssue?
+    def tied_timestamps: (Array[untyped]) -> DiagnosticIssue?
+
+    # : () -> Array[untyped]
+    def ordered_range_versions: () -> Array[untyped]
+  end
+end

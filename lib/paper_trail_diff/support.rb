@@ -72,6 +72,15 @@ module PaperTrailDiff
       end
     end
 
+    # Versions sharing a timestamp, whether or not their ids order them. PT-AT
+    # indexes association membership per version but resolves it by timestamp,
+    # so association state cannot be told apart across such a pair even when the
+    # scalar sequence is perfectly recoverable.
+    #: (Array[untyped]) -> Array[untyped]?
+    def tied_timestamp_pair(versions)
+      versions.each_cons(2).find { |left, right| left.created_at == right.created_at }
+    end
+
     #: (untyped) -> bool
     def sequential_id?(id)
       id.is_a?(Integer) || id.to_s.match?(/\A\d+\z/)

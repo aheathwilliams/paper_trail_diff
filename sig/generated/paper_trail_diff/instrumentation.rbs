@@ -6,6 +6,11 @@ module PaperTrailDiff
     # : (String | Symbol, Hash[Symbol, untyped]) { () -> untyped } -> untyped
     def self?.instrument: (String | Symbol, Hash[Symbol, untyped]) { () -> untyped } -> untyped
 
+    # Reports a condition rather than timing work: nothing failed, but the
+    # result may be incomplete and only the application can judge that.
+    # : (String | Symbol, Hash[Symbol, untyped]) -> void
+    def self?.notify: (String | Symbol, Hash[Symbol, untyped]) -> void
+
     # : (association_paths: Array[String], reload_live_endpoints: bool) -> Hash[Symbol, untyped]
     def self?.comparison_payload: (association_paths: Array[String], reload_live_endpoints: bool) -> Hash[Symbol, untyped]
   end

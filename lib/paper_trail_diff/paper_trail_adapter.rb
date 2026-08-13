@@ -33,6 +33,7 @@ module PaperTrailDiff
       payload = @instrumentation_payload.merge(comparison_count: 1)
       Instrumentation.instrument('compare', payload) do
         Endpoint.validate_pair!(from_endpoint, to_endpoint)
+        notify_ambiguous_association_boundary(from_endpoint, to_endpoint)
         Engine.compare(snapshot_for_endpoint(from_endpoint), snapshot_for_endpoint(to_endpoint))
       end
     end
@@ -139,6 +140,27 @@ module PaperTrailDiff
         record, from: from, to: to, within: within, version_scope: version_scope,
                 live_endpoint: live_endpoint, snapshots: snapshots
       ).analyze
+    end
+
+    # Association membership is resolved by timestamp, so endpoints sharing one
+    # cannot be told apart and any association change between them is invisible.
+    # The result may still be correct -- nothing associated may have changed --
+    # and the gem cannot tell which, since not seeing the change is the symptom.
+    # So it reports the condition and leaves the judgement to the application.
+    #: (untyped, untyped) -> void
+    def notify_ambiguous_association_boundary(from_endpoint, to_endpoint)
+      return if @association_tree.empty?
+      return unless Endpoint.version?(from_endpoint) && Endpoint.version?(to_endpoint)
+      return unless from_endpoint.created_at == to_endpoint.created_at
+
+      Instrumentation.notify(
+        'ambiguous_association_boundary',
+        @instrumentation_payload.merge(
+          item_type: from_endpoint.item_type.to_s,
+          version_ids: [from_endpoint.id, to_endpoint.id].freeze,
+          recorded_at: from_endpoint.created_at
+        )
+      )
     end
 
     # `close_on:` names what ends a wall-clock window, so it is meaningless for a

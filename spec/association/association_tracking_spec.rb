@@ -1789,6 +1789,69 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     end.to raise_error(PaperTrailDiff::UnknownAssociationError, /missing/)
   end
 
+  describe 'versions that share a timestamp' do
+    # Association membership is recorded per version but resolved by timestamp,
+    # so a tie makes two boundaries indistinguishable for association purposes
+    # even when their ids order them perfectly.
+    def tied_boundaries
+      article = TrackedArticle.create!(title: 'T')
+      tag = TrackedTag.create!(name: 'Added between the boundaries')
+      before = article.versions.reload.last
+      article.tags << tag
+      article.reload
+      TrackedArticle.transaction { TrackedArticle.find(article.id).paper_trail.save_with_version }
+      after = article.versions.reload.last
+      PaperTrail::Version.where(id: after.id).update_all(created_at: before.created_at)
+      [article, before.reload, after.reload]
+    end
+
+    it 'cannot see an association change across the tie' do
+      _article, before, after = tied_boundaries
+
+      diff = PaperTrailDiff.compare(before, after, associations: ['tags'])
+
+      # Documented limitation rather than desired behaviour: the change is
+      # invisible, so the gem cannot report it as absent either.
+      expect(diff.associations).not_to have_key('tags')
+    end
+
+    it 'reports the condition through instrumentation when associations are selected' do
+      _article, before, after = tied_boundaries
+      events = []
+      callback = proc { |name, _s, _f, _id, payload| events << [name, payload] }
+
+      ActiveSupport::Notifications.subscribed(callback, /paper_trail_diff/) do
+        PaperTrailDiff.compare(before, after, associations: ['tags'])
+      end
+
+      ambiguous = events.select { |name, _| name.start_with?('ambiguous_association_boundary') }
+      expect(ambiguous.length).to eq(1)
+      expect(ambiguous.dig(0, 1, :version_ids)).to eq([before.id, after.id])
+    end
+
+    it 'stays silent when no associations are selected, since nothing can be lost' do
+      _article, before, after = tied_boundaries
+      events = []
+      callback = proc { |name, _s, _f, _id, _payload| events << name }
+
+      ActiveSupport::Notifications.subscribed(callback, /paper_trail_diff/) do
+        PaperTrailDiff.compare(before, after)
+      end
+
+      expect(events.grep(/ambiguous_association_boundary/)).to be_empty
+    end
+
+    it 'warns from diagnose, without failing a comparison that may be correct' do
+      _article, before, after = tied_boundaries
+
+      report = PaperTrailDiff.diagnose(before, after, associations: ['tags'])
+
+      expect(report.warnings.map(&:code)).to include(:tied_version_timestamps)
+      # A tie only *may* hide a change, so it never becomes an error.
+      expect(report).to be_ok
+    end
+  end
+
   describe 'snapshots: true on an activity timeline' do
     def edited_article
       article = TrackedArticle.create!(title: 'T1')

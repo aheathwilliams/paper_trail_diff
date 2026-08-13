@@ -127,6 +127,31 @@ running rather than after a surprise.
 Either half alone is fine. Sequential ids order tied timestamps correctly, and
 distinct timestamps never reach the fallback.
 
+### Association changes across a shared timestamp
+
+Sequential ids recover the *order* of tied versions, but not their association
+state. PT-AT records association membership per version and resolves it by
+timestamp, so two versions sharing one are indistinguishable for that purpose:
+**an association change between them is invisible.** It is not reported as
+absent — the association simply does not appear in the diff.
+
+Unlike an unorderable sequence this is not always wrong. If nothing associated
+changed between the two versions, the result is correct, and the gem cannot
+tell the two cases apart, because not seeing the change is the symptom. So it
+does not raise. Instead:
+
+- `diagnose` reports `:tied_version_timestamps` as a **warning** whenever
+  `associations:` are selected and versions in range share a timestamp.
+- a comparison in that state emits
+  `ambiguous_association_boundary.paper_trail_diff` through ActiveSupport
+  notifications, carrying the two version ids and the shared timestamp. Nothing
+  is logged; subscribe if you want it surfaced.
+
+Writing several versions inside one clock tick is easy to do — a service object
+that touches a record and its children in quick succession will manage it — so
+this is worth checking before trusting an association history. Recording
+versions at sub-second precision separates them.
+
 ## Choosing an entry point
 
 | You need | Call |

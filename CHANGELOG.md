@@ -5,6 +5,18 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Report versions that share a timestamp, which hides any association change
+  between them: PT-AT records membership per version but resolves it by
+  timestamp, so such a pair is indistinguishable even when sequential ids order
+  it correctly. `diagnose` reports `:tied_version_timestamps` as a warning when
+  `associations:` are selected, and a comparison in that state emits
+  `ambiguous_association_boundary.paper_trail_diff`. It warns rather than
+  raising because the result may be perfectly correct — if nothing associated
+  changed, nothing was lost — and the gem cannot distinguish the cases, since
+  not seeing the change is the symptom.
+
 ### Changed
 
 - Link the demo application from the README now that it is public.

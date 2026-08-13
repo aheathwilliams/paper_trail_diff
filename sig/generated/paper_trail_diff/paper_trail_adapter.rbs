@@ -59,6 +59,14 @@ module PaperTrailDiff
     # : (untyped, from: untyped, to: untyped, within: untyped, version_scope: untyped, live_endpoint: untyped, ?snapshots: bool) -> Analysis
     def analyze_activity: (untyped, from: untyped, to: untyped, within: untyped, version_scope: untyped, live_endpoint: untyped, ?snapshots: bool) -> Analysis
 
+    # Association membership is resolved by timestamp, so endpoints sharing one
+    # cannot be told apart and any association change between them is invisible.
+    # The result may still be correct -- nothing associated may have changed --
+    # and the gem cannot tell which, since not seeing the change is the symptom.
+    # So it reports the condition and leaves the judgement to the application.
+    # : (untyped, untyped) -> void
+    def notify_ambiguous_association_boundary: (untyped, untyped) -> void
+
     # `close_on:` names what ends a wall-clock window, so it is meaningless for a
     # range whose endpoints the caller already gave explicitly.
     # : (Symbol?, untyped) -> bool
