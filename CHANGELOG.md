@@ -3,6 +3,17 @@
 All notable changes to this project will be documented in this file. The
 project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- Add `rake release:preflight`, which runs the full gate and then checks
+  everything that must hold before a tag: a clean working tree, a HEAD that
+  matches its upstream, an unused tag, a dated changelog section for the
+  version, and that the version is not already on RubyGems. It reports and
+  never tags, pushes, or publishes. An unreachable RubyGems is reported as
+  unknown rather than treated as "not published".
+
 ## [0.9.0] - 2026-08-14
 
 ### Added
