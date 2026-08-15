@@ -16,6 +16,16 @@ module PaperTrailDiff
 
     @tree: AssociationTree
 
+    # A model PaperTrail never versioned has no history to reconstruct, so a
+    # comparison over it can only ever answer "nothing changed" -- which is a
+    # wrong answer rather than an empty one. Live-to-live comparison reads
+    # current state and is unaffected, so this applies to historical work only.
+    # : (untyped) -> void
+    def ensure_versioned_targets!: (untyped) -> void
+
+    # : (untyped) -> bool
+    def versioned?: (untyped) -> bool
+
     # : () -> void
     def ensure_association_tracking!: () -> void
   end

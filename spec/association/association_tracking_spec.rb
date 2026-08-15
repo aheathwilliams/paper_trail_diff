@@ -673,10 +673,10 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     expect(by_path.fetch('author.comments').through).to eq('articles')
     expect(PaperTrailDiff.association_paths(TrackedArticle).map(&:path))
       .to eq(%w[author authorships comments contributors limited_comments offset_comments
-                owner_comments profile tags])
+                owner_comments profile tags unversioned_attachments])
     expect(PaperTrailDiff.association_paths(TrackedArticle.new).map(&:path))
       .to eq(%w[author authorships comments contributors limited_comments offset_comments
-                owner_comments profile tags])
+                owner_comments profile tags unversioned_attachments])
   end
 
   it 'separates descendant updates into activity timeline steps' do
@@ -1787,6 +1787,63 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     expect do
       PaperTrailDiff.diagnose(graph[:before], after, associations: [:missing])
     end.to raise_error(PaperTrailDiff::UnknownAssociationError, /missing/)
+  end
+
+  describe 'an association whose target is not versioned' do
+    # The case that matters in practice is ActiveStorage: `has_one_attached`
+    # points at models Rails owns and PaperTrail never versions, so there is no
+    # history behind them at all.
+    def article_with_attachment
+      article = TrackedArticle.create!(title: 'Budget plan')
+      article.unversioned_attachments.create!(filename: 'budget-v1.xlsx')
+      article.reload
+      TrackedArticle.transaction { TrackedArticle.find(article.id).paper_trail.save_with_version }
+      before = article.versions.reload.last
+
+      article.unversioned_attachments.first.update!(filename: 'budget-v2.xlsx')
+      article.reload
+      TrackedArticle.transaction { TrackedArticle.find(article.id).paper_trail.save_with_version }
+      [article, before, article.versions.reload.last]
+    end
+
+    it 'refuses rather than reporting that nothing changed' do
+      _article, before, after = article_with_attachment
+
+      # The file was replaced. Without versions there is nothing to read, and
+      # "no change" would be a wrong answer rather than an empty one.
+      expect { PaperTrailDiff.compare(before, after, associations: ['unversioned_attachments']) }
+        .to raise_error(PaperTrailDiff::UnversionedAssociationError,
+                        /UnversionedAttachment is not versioned/)
+    end
+
+    it 'names the way out' do
+      _article, before, after = article_with_attachment
+
+      PaperTrailDiff.compare(before, after, associations: ['unversioned_attachments'])
+    rescue PaperTrailDiff::UnversionedAssociationError => e
+      expect(e.message).to include('has_paper_trail')
+      expect(e.message).to include('mirror the fields you need')
+    end
+
+    it 'reports it from diagnose as an error, so ok? is false' do
+      _article, before, after = article_with_attachment
+
+      report = PaperTrailDiff.diagnose(before, after, associations: ['unversioned_attachments'])
+
+      expect(report).not_to be_ok
+      expect(report.errors.map(&:code)).to include(:unversioned_association_target)
+    end
+
+    it 'still compares live endpoints, which read current state instead' do
+      article, = article_with_attachment
+
+      # Nothing is reconstructed here, so an unversioned target is no obstacle.
+      result = PaperTrailDiff.compare(
+        article, TrackedArticle.find(article.id), associations: ['unversioned_attachments']
+      )
+
+      expect(result).to be_empty
+    end
   end
 
   describe 'versions that share a timestamp' do

@@ -102,6 +102,15 @@ ActiveRecord::Schema.define do
     table.timestamps null: false
   end
 
+  # Deliberately never versioned, standing in for a model the application does
+  # not own -- ActiveStorage's attachment and blob tables being the case that
+  # matters in practice.
+  create_table :unversioned_attachments, force: true do |table|
+    table.string :filename, null: false
+    table.integer :article_id, null: false
+    table.timestamps null: false
+  end
+
   create_table :tracked_tags, force: true do |table|
     table.string :name, null: false
     table.timestamps null: false
@@ -134,6 +143,8 @@ class TrackedArticle < ActiveRecord::Base
   belongs_to :author, class_name: 'TrackedAuthor', optional: true, inverse_of: :articles
   has_one :profile, class_name: 'TrackedProfile', foreign_key: :article_id,
                     inverse_of: :article
+  has_many :unversioned_attachments, class_name: 'UnversionedAttachment',
+                                     foreign_key: :article_id, inverse_of: :article
   has_many :comments, class_name: 'TrackedComment', foreign_key: :article_id,
                       inverse_of: :article
   has_many :limited_comments, -> { order(:id).limit(1) },
@@ -179,6 +190,11 @@ end
 class TrackedReply < ActiveRecord::Base
   belongs_to :comment, class_name: 'TrackedComment', inverse_of: :replies
   has_paper_trail
+end
+
+# No `has_paper_trail`: there is nothing to reconstruct from.
+class UnversionedAttachment < ActiveRecord::Base
+  belongs_to :article, class_name: 'TrackedArticle', inverse_of: :unversioned_attachments
 end
 
 class TrackedTag < ActiveRecord::Base

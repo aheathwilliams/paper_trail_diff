@@ -152,6 +152,55 @@ that touches a record and its children in quick succession will manage it — so
 this is worth checking before trusting an association history. Recording
 versions at sub-second precision separates them.
 
+### ActiveStorage attachments
+
+`has_one_attached` and `has_many_attached` point at `ActiveStorage::Attachment`
+and `ActiveStorage::Blob`, which Rails owns and PaperTrail does not version.
+There is no history behind them, so a historical comparison over those paths
+raises `PaperTrailDiff::UnversionedAssociationError` rather than reporting that
+nothing changed. Adding `has_paper_trail` to Rails' own models does not rescue
+it either: `has_one_attached` is a scoped `has_one`, and reifying it from
+history is ambiguous.
+
+Audit the attachment through a model you own instead. Give it the facts worth
+auditing as ordinary columns, and version it:
+
+```ruby
+class DocumentRevision < ApplicationRecord
+  belongs_to :attachable, polymorphic: true
+  has_one_attached :file
+  has_paper_trail
+
+  # Attaching a file writes to ActiveStorage's tables, not to this record, so
+  # nothing would be versioned without copying the facts across.
+  after_save :record_file_metadata, if: -> { file.attached? }
+
+  def record_file_metadata
+    blob = file.blob
+    return if filename == blob.filename.to_s && checksum == blob.checksum
+
+    update_columns(
+      filename: blob.filename.to_s, content_type: blob.content_type,
+      byte_size: blob.byte_size, checksum: blob.checksum
+    )
+  end
+end
+```
+
+```ruby
+class Article < ApplicationRecord
+  has_many :document_revisions, as: :attachable
+  has_paper_trail
+end
+
+PaperTrailDiff.compare(before, after, associations: [:document_revisions])
+```
+
+The bytes stay in ActiveStorage; the *auditable facts* live where PaperTrail
+can see them. Nothing about the column names matters to this gem — it reports
+whichever columns changed. What matters is that replacing a file writes to a
+versioned record, because attaching one on its own does not.
+
 ## Choosing an entry point
 
 | You need | Call |

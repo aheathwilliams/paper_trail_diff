@@ -175,7 +175,9 @@ module PaperTrailDiff
     def inspect_versioned_model(model_class, path)
       return if model_versioned?(model_class)
 
-      add_warning(
+      # An error rather than a warning: `ok?` must not stay true for a
+      # comparison that cannot work, and this one raises at runtime.
+      add_error(
         :unversioned_association_target,
         "#{model_class.name} does not appear to have PaperTrail enabled",
         path

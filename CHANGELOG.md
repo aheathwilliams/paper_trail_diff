@@ -13,6 +13,17 @@ project follows [Semantic Versioning](https://semver.org/).
   version, and that the version is not already on RubyGems. It reports and
   never tags, pushes, or publishes. An unreachable RubyGems is reported as
   unknown rather than treated as "not published".
+- Raise `PaperTrailDiff::UnversionedAssociationError` when a selected
+  association's target is not versioned and history is being reconstructed.
+  Such a comparison could only ever answer "nothing changed", which is a wrong
+  answer rather than an empty one. Live-to-live comparison reads current state
+  and is unaffected. `diagnose` now reports the same condition as an error
+  rather than a warning, so `ok?` no longer stays true for a comparison that
+  will raise.
+- Document ActiveStorage attachments, which this reaches through:
+  `has_one_attached` points at models Rails owns and PaperTrail never versions,
+  so attachments are audited through a versioned model of your own that mirrors
+  the metadata onto ordinary columns.
 
 ## [0.9.0] - 2026-08-14
 

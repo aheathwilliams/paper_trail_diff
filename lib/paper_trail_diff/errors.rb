@@ -35,6 +35,10 @@ module PaperTrailDiff
   # Raised when a requested ActiveRecord association does not exist.
   class UnknownAssociationError < Error; end
 
+  # Raised when a selected association's target is not versioned, so its history
+  # cannot be reconstructed at all.
+  class UnversionedAssociationError < Error; end
+
   # Raised when a requested association macro is not supported.
   class UnsupportedAssociationError < Error; end
 
