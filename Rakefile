@@ -65,12 +65,14 @@ end
 # Everything that must be true before a release is tagged, in one command that
 # fails loudly. The sequence is easy to get half-right by hand: a dirty tree
 # tags something other than what was tested, an unpushed commit tags code CI
-# never saw, and a heading left at `Unreleased` ships a version with no notes.
+# never saw, a stale generated gemfile means CI tested different dependencies
+# than the Gemfile names, and a heading left at `Unreleased` ships a version
+# with no notes.
 #
 # It deliberately does not tag, push, or publish. Those stay explicit.
 namespace :release do
   desc 'Check everything that must hold before tagging a release'
-  task preflight: :default do
+  task preflight: %i[default verify_gemfiles] do
     require_relative 'lib/paper_trail_diff/version'
     require_relative 'script/release_preflight'
     version = PaperTrailDiff::VERSION
