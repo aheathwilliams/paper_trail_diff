@@ -62,6 +62,16 @@ task :verify_gemfiles do
   sh 'git', 'diff', '--exit-code', '--', 'gemfiles'
 end
 
+# The rest of the gate runs on whatever Ruby is installed, which is rarely the
+# oldest one the gemspec promises to support. Anything resolved at load time and
+# newer than that floor passes here and fails only in CI.
+desc 'Load the library under the oldest Ruby the gemspec supports'
+task :ruby_floor do
+  require_relative 'script/ruby_floor_check'
+
+  abort('Ruby floor check failed.') unless RubyFloorCheck.new('paper_trail_diff.gemspec').call
+end
+
 # Everything that must be true before a release is tagged, in one command that
 # fails loudly. The sequence is easy to get half-right by hand: a dirty tree
 # tags something other than what was tested, an unpushed commit tags code CI
@@ -86,4 +96,4 @@ namespace :release do
   end
 end
 
-task default: %i[spec rubocop typecheck]
+task default: %i[spec rubocop typecheck ruby_floor]
