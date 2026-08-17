@@ -63,17 +63,10 @@ module PaperTrailDiff
       end
 
       relation = scope.all
-      return relation if versioned?(relation.model)
+      return relation if Support.versioned?(relation.model)
 
       raise UnversionedAssociationError,
             "scope: #{relation.model.name} is not versioned, so it has no history to select from"
-    end
-
-    # `paper_trail` is defined on every model, so its presence proves nothing.
-    # Only configured options distinguish a model that called has_paper_trail.
-    #: (untyped) -> bool
-    def versioned?(model_class)
-      model_class.respond_to?(:paper_trail_options) && !model_class.paper_trail_options.nil?
     end
 
     #: (Integer) -> Integer

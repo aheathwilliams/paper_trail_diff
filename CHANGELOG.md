@@ -32,6 +32,17 @@ project follows [Semantic Versioning](https://semver.org/).
   a dependency changed only in the `Gemfile` was one CI never installed: the
   jobs passed having exercised the old version.
 
+### Fixed
+
+- Resolve "does this model record history" through one predicate,
+  `Support.versioned?`. Three copies existed and one of them tested only
+  `respond_to?(:paper_trail)`, which PaperTrail defines on every ActiveRecord
+  model and which therefore answers true for models that never called
+  `has_paper_trail`. Nothing reached that copy with an unversioned model, since
+  the traversal preparer rejects those first, so no released behaviour changed --
+  but the check looked right while being unable to fail, and reading history
+  through it would have raised at the version class rather than at the question.
+
 ## [0.10.0] - 2026-08-15
 
 ### Added

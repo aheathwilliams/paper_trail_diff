@@ -81,6 +81,19 @@ module PaperTrailDiff
       versions.each_cons(2).find { |left, right| left.created_at == right.created_at }
     end
 
+    # Whether a model records history at all.
+    #
+    # PaperTrail defines `paper_trail` on every ActiveRecord model, so asking
+    # whether a class responds to it says nothing -- it is true for models that
+    # never called `has_paper_trail`, and reading history from one of those fails
+    # at the version class rather than at the question. Only configured options
+    # distinguish the two, which is why this lives in one place: the predicate is
+    # easy to write in a form that looks right and always answers true.
+    #: (untyped) -> bool
+    def versioned?(model_class)
+      model_class.respond_to?(:paper_trail_options) && !model_class.paper_trail_options.nil?
+    end
+
     #: (untyped) -> bool
     def sequential_id?(id)
       id.is_a?(Integer) || id.to_s.match?(/\A\d+\z/)

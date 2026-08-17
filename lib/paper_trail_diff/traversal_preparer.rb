@@ -46,7 +46,7 @@ module PaperTrailDiff
 
     #: (untyped) -> bool
     def versioned?(model_class)
-      model_class.respond_to?(:paper_trail_options) && !model_class.paper_trail_options.nil?
+      Support.versioned?(model_class)
     end
 
     #: () -> void

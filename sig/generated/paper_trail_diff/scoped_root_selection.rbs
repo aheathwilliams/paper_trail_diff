@@ -58,11 +58,6 @@ module PaperTrailDiff
     # : (untyped) -> untyped
     def normalize_scope: (untyped) -> untyped
 
-    # `paper_trail` is defined on every model, so its presence proves nothing.
-    # Only configured options distinguish a model that called has_paper_trail.
-    # : (untyped) -> bool
-    def versioned?: (untyped) -> bool
-
     # : (Integer) -> Integer
     def validate_limit: (Integer) -> Integer
 
