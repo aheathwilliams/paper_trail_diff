@@ -24,6 +24,26 @@ project follows [Semantic Versioning](https://semver.org/).
   selection moves into the gem, so the bound on how much work one page can ask
   for moves with it. It refuses rather than truncating, because a report that is
   quietly short is worse than one that fails.
+- Accept `group: :transaction` on `activity_timeline` and `analyze(activity:
+  true)`, reporting one saved transaction as one step. A parent and its
+  children saved together produce a version each, so one deliberate action
+  arrived as several steps, and some of them read as empty even though a change
+  was made at that boundary: a version records the state before its own event,
+  so a child's new value is revealed only by a later version of that child, its
+  destroy version, or the live row, none of which exists yet inside the
+  transaction. The change therefore surfaced a step or more later, folded in
+  with whatever that step carried. A step belongs to the transaction of the
+  event that opens it, since that is the event whose change it reports; a step
+  therefore belongs to its `from_boundary`'s transaction, and consecutive steps
+  sharing one are the parts of a single save. Merging compares the group's
+  outer states rather than combining the diffs between them, so a field set and
+  restored inside one transaction correctly reports as unchanged. Off by
+  default.
+- Expose `ActivityBoundary#transaction_id`.
+- A boundary that records no transaction groups with nothing. PaperTrail leaves
+  the column nil outside a transaction and a custom version class need not
+  carry it at all, so treating those as one shared transaction would merge
+  unrelated history into a single step.
 
 ### Changed
 

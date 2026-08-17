@@ -1366,6 +1366,105 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     expect(unchanged).to equal(previous)
   end
 
+  describe 'grouping a transaction into one activity step' do
+    def transaction_history
+      article = nil
+      PaperTrail.request(whodunnit: 'alice') do
+        article = TrackedArticle.create!(title: 'Draft')
+        article.comments.create!(body: 'First')
+      end
+      PaperTrail.request(whodunnit: 'bob') do
+        ActiveRecord::Base.transaction do
+          article.update!(title: 'Published')
+          article.comments.first.update!(body: 'First, revised')
+          article.comments.create!(body: 'Second')
+        end
+      end
+      article
+    end
+
+    def steps_for(article, **options)
+      PaperTrailDiff.activity_timeline(
+        article, from: :first, to: article, associations: [:comments], **options
+      )
+    end
+
+    # A parent and its children saved together produce a version each, so one
+    # deliberate action arrives as several steps. Some read as empty despite a
+    # change being made there: a child's new value is revealed only by a later
+    # version of that child, its destroy version, or the live row, so inside a
+    # transaction it surfaces a step or more after the boundary that made it.
+    it 'reports one save as one step instead of as its parts' do
+      article = transaction_history
+
+      ungrouped = steps_for(article)
+      grouped = steps_for(article, group: :transaction)
+
+      expect(ungrouped.length).to be > grouped.length
+      merged = grouped.last
+      expect(merged.from_boundary.whodunnit).to eq('bob')
+      expect(merged.diff.attributes.keys).to eq(['title'])
+      expect(merged.diff.associations.keys).to eq(['comments'])
+    end
+
+    it 'leaves separate transactions separate' do
+      article = transaction_history
+
+      grouped = steps_for(article, group: :transaction)
+
+      expect(grouped.map { |step| step.from_boundary.whodunnit }).to eq(%w[alice alice bob])
+    end
+
+    it 'is off unless asked for' do
+      article = transaction_history
+
+      expect(steps_for(article).map(&:empty?)).to include(true)
+      expect(steps_for(article, group: :transaction).map(&:empty?)).to all(be(false))
+    end
+
+    # Merging needs the states either side of the group, which the build must
+    # keep even when the caller did not ask to be given them.
+    it 'does not hand back snapshots the caller did not ask for' do
+      article = transaction_history
+
+      grouped = steps_for(article, group: :transaction)
+      retained = steps_for(article, group: :transaction, snapshots: true)
+
+      expect(grouped.map(&:from_snapshot)).to all(be_nil)
+      expect(retained.map(&:from_snapshot).compact).not_to be_empty
+    end
+
+    # PaperTrail leaves the column nil outside a transaction and a custom
+    # version class need not carry it, so treating nil as a shared transaction
+    # would merge unrelated history into one step.
+    it 'never groups boundaries that record no transaction' do
+      article = transaction_history
+      PaperTrail::Version.update_all(transaction_id: nil)
+
+      grouped = steps_for(article, group: :transaction)
+
+      expect(grouped.length).to eq(steps_for(article).length)
+    end
+
+    # `analyze` bounds its range with versions, so a later root version is what
+    # brings the transaction's own effects inside it.
+    it 'groups the analyze activity view the same way' do
+      article = transaction_history
+      PaperTrail.request(whodunnit: 'carol') { article.update!(title: 'Archived') }
+
+      grouped = PaperTrailDiff.analyze(
+        article, from: :first, to: :last, associations: [:comments],
+                 activity: true, group: :transaction
+      ).activity_timeline
+      ungrouped = PaperTrailDiff.analyze(
+        article, from: :first, to: :last, associations: [:comments], activity: true
+      ).activity_timeline
+
+      expect(grouped.length).to be < ungrouped.length
+      expect(grouped.map { |step| step.from_boundary.whodunnit }).to eq(%w[alice alice bob])
+    end
+  end
+
   it 'analyzes each root whole history when no window is given' do
     articles = 2.times.map do |index|
       article = TrackedArticle.create!(title: "Whole #{index}")

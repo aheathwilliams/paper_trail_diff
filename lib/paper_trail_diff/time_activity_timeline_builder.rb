@@ -4,9 +4,15 @@
 module PaperTrailDiff
   # Builds activity views for mutations selected by a wall-clock range.
   class TimeActivityTimelineBuilder
-    #: (untyped, range: TimelineRange, tree: AssociationTree, snapshotter: untyped, ?snapshots: bool) -> void
-    def initialize(record, range:, tree:, snapshotter:, snapshots: false)
+    include ActivityGrouping
+
+    #: (untyped, range: TimelineRange, tree: AssociationTree, snapshotter: untyped, ?snapshots: bool, ?group: Symbol?) -> void
+    def initialize(record, range:, tree:, snapshotter:, snapshots: false, group: nil) # rubocop:disable Metrics/ParameterLists
       @snapshots = snapshots
+      @group = group
+      # Merging a group compares its outer states, so the snapshots must survive
+      # the build even when the caller did not ask to keep them.
+      @retain = snapshots || grouping?
       @record = record
       @range = range
       @tree = tree
@@ -92,15 +98,14 @@ module PaperTrailDiff
         events,
         @snapshotter,
         include_step: ->(event) { @range.include?(event.version) },
-        snapshots: @snapshots
+        snapshots: @retain
       ).call
     end
 
     #: (ActivityHistory, ActivityStep?) -> Array[ActivityStep]
     def activity_steps(history, closing)
-      return history.steps unless closing
-
-      (history.steps + [closing]).freeze
+      steps = closing ? history.steps + [closing] : history.steps
+      group_steps(steps).freeze
     end
 
     # Root versions inside the window that the plan does not report are context
@@ -136,7 +141,7 @@ module PaperTrailDiff
         from_boundary: ActivityBoundary.from_version(version),
         to_boundary: ActivityBoundary.destroyed(version),
         from_snapshot: history.root_snapshots[ActivityRootSteps.version_key(version)],
-        to_snapshot: nil, retain: @snapshots
+        to_snapshot: nil, retain: @retain
       )
     end
 
@@ -151,7 +156,7 @@ module PaperTrailDiff
       ActivityStep.between(
         from_boundary: previous,
         to_boundary: ActivityBoundary.current(record, captured_at: captured_at),
-        from_snapshot: history.last_snapshot, to_snapshot: snapshot, retain: @snapshots
+        from_snapshot: history.last_snapshot, to_snapshot: snapshot, retain: @retain
       )
     end
 
