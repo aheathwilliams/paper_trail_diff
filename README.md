@@ -354,6 +354,47 @@ argument, are loaded per root; other selected branches remain batched. Callers
 should still use an appropriate database transaction when all live queries
 must observe one atomic snapshot.
 
+### Look inside a JSON column
+
+A `json` or `jsonb` column reifies to one Hash, so an attribute diff can only
+say the blob changed. `nested_changes` says which keys changed:
+
+```ruby
+diff = PaperTrailDiff.compare(from_version, to_version)
+
+PaperTrailDiff.nested_changes(diff.attributes.fetch("config"))
+# => { ["theme"]          => <from "dark" to "light">,
+#      ["limits", "max"]  => <from 10 to 20> }
+```
+
+It reads a column that stores JSON as text as readily as a native one, and also
+takes a bare pair: `PaperTrailDiff.nested_changes(from_value, to_value)`.
+
+Nothing about the attribute diff itself changes. A pair that is not two readable
+structures — text on one side and JSON on the other, or a value that does not
+parse — reports nothing, and the caller still has the whole-value change it
+already had.
+
+Three things about the shape are worth knowing:
+
+**Paths are arrays, not dotted strings.** A JSON key may itself contain a dot, so
+`"a.b"` would be ambiguous between one key and two:
+
+```ruby
+PaperTrailDiff.nested_changes({ "a.b" => 1, "a" => { "b" => 1 } },
+                              { "a.b" => 2, "a" => { "b" => 3 } })
+# => { ["a.b"] => <from 1 to 2>, ["a", "b"] => <from 1 to 3> }
+```
+
+**Arrays are reported whole, not by index.** Their elements carry no identity, so
+an insertion at the front would make every later index look changed. This is the
+same rule the collection comparator follows for records it cannot identify.
+
+**An absent key is not a null one.** `{"a": null}` and `{}` mean different things
+in JSON, and an audit trail that showed them alike would be lying about one of
+them, so a missing key reads as `PaperTrailDiff::NestedComparator::ABSENT`
+rather than `nil`.
+
 ### Reuse already-preloaded current endpoints
 
 `compare`, `compare_many`, and `activity_timeline(..., to: record)` reload

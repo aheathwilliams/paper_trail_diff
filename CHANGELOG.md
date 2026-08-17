@@ -19,6 +19,18 @@ project follows [Semantic Versioning](https://semver.org/).
   intact and the state it held at destruction may have matched. Those roots are
   named rather than dropped, so a page auditing deletions is told where to look
   instead of coming up short without saying so.
+- Add `PaperTrailDiff.nested_changes`, which reports the keys that changed
+  inside an attribute the database stores whole, such as a JSON or jsonb column
+  or one holding JSON as text. An attribute diff could only say the blob
+  changed, leaving the caller to diff it again by hand. Paths are arrays rather
+  than dotted strings, because a JSON key may itself contain a dot. Arrays are
+  reported whole rather than by index, since their elements carry no identity
+  and a list that merely shifted would otherwise look changed throughout. A key
+  that was absent reads as `NestedComparator::ABSENT` rather than nil, because
+  `{"a": null}` and `{}` mean different things in JSON and an audit trail that
+  showed them alike would be lying about one of them. Additive: the existing
+  attribute diff is unchanged, and a pair that is not two readable structures
+  reports nothing.
 - Raise `PaperTrailDiff::BatchLimitExceededError` when a relation selects more
   roots than `limit:` allows. `limit:` is required for `analyze_scope`: root
   selection moves into the gem, so the bound on how much work one page can ask

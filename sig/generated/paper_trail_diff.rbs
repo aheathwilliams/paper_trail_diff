@@ -80,6 +80,27 @@ module PaperTrailDiff
   # Reports known reconstruction hazards without mutating application state.
   # : (untyped, untyped, ?associations: Array[String | Symbol]) -> DiagnosticReport
   def self.diagnose: (untyped, untyped, ?associations: Array[String | Symbol]) -> DiagnosticReport
+
+  # Looks inside an attribute the database stores whole, such as a JSON or
+  # jsonb column, and reports which keys changed.
+  #
+  #   change = diff.attributes.fetch('config')
+  #   PaperTrailDiff.nested_changes(change)
+  #   # => { ['theme'] => <from "dark" to "light">,
+  #   #      ['limits', 'max'] => <from 10 to 20> }
+  #
+  # Accepts the `ValueChange` an attribute diff already produced, or a bare
+  # pair. Returns an empty hash when the pair is not two readable structures,
+  # which is the honest answer: a column that held text on one side and JSON
+  # on the other changed wholesale, and the caller still has that change.
+  #
+  # Paths are arrays because a JSON key may contain a dot. Arrays are reported
+  # whole rather than by index, since their elements carry no identity and a
+  # list that merely shifted would otherwise look changed throughout. A key
+  # that was absent reads as `NestedComparator::ABSENT` rather than nil, which
+  # JSON uses for a present null.
+  # : (untyped, ?untyped) -> Hash[Array[String], ValueChange]
+  def self.nested_changes: (untyped, ?untyped) -> Hash[Array[String], ValueChange]
 end
 
 module PaperTrailDiff

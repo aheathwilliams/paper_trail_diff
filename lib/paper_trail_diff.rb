@@ -24,6 +24,7 @@ require_relative 'paper_trail_diff/snapshot_traversal'
 require_relative 'paper_trail_diff/association_diff_traversal'
 require_relative 'paper_trail_diff/traversal'
 require_relative 'paper_trail_diff/collection_comparator'
+require_relative 'paper_trail_diff/nested_comparator'
 require_relative 'paper_trail_diff/engine'
 require_relative 'paper_trail_diff/historical_association_reifier'
 require_relative 'paper_trail_diff/prepared_record_index'
@@ -317,6 +318,33 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
     #: (untyped, untyped, ?associations: Array[String | Symbol]) -> DiagnosticReport
     def diagnose(from_version, to_version, associations: [])
       HistoryDiagnostics.new(from_version, to_version, associations: associations).call
+    end
+
+    # Looks inside an attribute the database stores whole, such as a JSON or
+    # jsonb column, and reports which keys changed.
+    #
+    #   change = diff.attributes.fetch('config')
+    #   PaperTrailDiff.nested_changes(change)
+    #   # => { ['theme'] => <from "dark" to "light">,
+    #   #      ['limits', 'max'] => <from 10 to 20> }
+    #
+    # Accepts the `ValueChange` an attribute diff already produced, or a bare
+    # pair. Returns an empty hash when the pair is not two readable structures,
+    # which is the honest answer: a column that held text on one side and JSON
+    # on the other changed wholesale, and the caller still has that change.
+    #
+    # Paths are arrays because a JSON key may contain a dot. Arrays are reported
+    # whole rather than by index, since their elements carry no identity and a
+    # list that merely shifted would otherwise look changed throughout. A key
+    # that was absent reads as `NestedComparator::ABSENT` rather than nil, which
+    # JSON uses for a present null.
+    #: (untyped, ?untyped) -> Hash[Array[String], ValueChange]
+    def nested_changes(change, to_value = nil)
+      # Tested by type rather than by responding to `from`: ActiveSupport gives
+      # String#from, so duck-typing here quietly reads a plain string as a pair.
+      return NestedComparator.call(change.from, change.to) if change.is_a?(ValueChange)
+
+      NestedComparator.call(change, to_value)
     end
   end
 end
