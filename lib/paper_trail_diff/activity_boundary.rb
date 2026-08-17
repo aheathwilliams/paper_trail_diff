@@ -12,6 +12,10 @@ module PaperTrailDiff
     attr_reader :event #: String?
     attr_reader :whodunnit #: untyped
     attr_reader :record #: RecordReference
+    # The transaction the version was written in, when PaperTrail recorded one.
+    # Several versions saved together share it, which is what lets a timeline
+    # report one save as one step rather than as its parts.
+    attr_reader :transaction_id #: untyped
 
     class << self
       #: (untyped) -> ActivityBoundary
@@ -23,7 +27,8 @@ module PaperTrailDiff
           item_id: version.item_id,
           recorded_at: version.created_at,
           event: version.event,
-          whodunnit: version.whodunnit
+          whodunnit: version.whodunnit,
+          transaction_id: transaction_id(version)
         )
       end
 
@@ -50,12 +55,21 @@ module PaperTrailDiff
           item_id: version.item_id,
           recorded_at: version.created_at,
           event: version.event,
-          whodunnit: version.whodunnit
+          whodunnit: version.whodunnit,
+          transaction_id: transaction_id(version)
         )
+      end
+
+      # A custom version class need not carry the column, and PaperTrail leaves
+      # it nil outside a transaction. Both read as "no transaction here", which
+      # groups with nothing.
+      #: (untyped) -> untyped
+      def transaction_id(version)
+        version.transaction_id if version.respond_to?(:transaction_id)
       end
     end
 
-    #: (kind: Symbol, version_id: untyped, item_type: untyped, item_id: untyped, recorded_at: untyped, ?event: untyped, ?whodunnit: untyped) -> void
+    #: (kind: Symbol, version_id: untyped, item_type: untyped, item_id: untyped, recorded_at: untyped, ?event: untyped, ?whodunnit: untyped, ?transaction_id: untyped) -> void
     def initialize( # rubocop:disable Metrics/ParameterLists
       kind:,
       version_id:,
@@ -63,7 +77,8 @@ module PaperTrailDiff
       item_id:,
       recorded_at:,
       event: nil,
-      whodunnit: nil
+      whodunnit: nil,
+      transaction_id: nil
     )
       @kind = kind
       @version_id = Support.immutable_copy(version_id)
@@ -72,6 +87,7 @@ module PaperTrailDiff
       @recorded_at = Support.immutable_copy(recorded_at)
       @event = Support.immutable_copy(event&.to_s)
       @whodunnit = Support.immutable_copy(whodunnit)
+      @transaction_id = Support.immutable_copy(transaction_id)
       @record = RecordReference.new(type: @item_type, id: @item_id)
       freeze
     end

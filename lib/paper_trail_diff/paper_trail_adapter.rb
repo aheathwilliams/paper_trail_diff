@@ -68,8 +68,8 @@ module PaperTrailDiff
       ).build
     end
 
-    #: (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool) -> Array[ActivityStep]
-    def activity_timeline(record, from:, to:, within:, version_scope: nil, close_on: nil, snapshots: false) # rubocop:disable Metrics/ParameterLists, Layout/LineLength
+    #: (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?) -> Array[ActivityStep]
+    def activity_timeline(record, from:, to:, within:, version_scope: nil, close_on: nil, snapshots: false, group: nil) # rubocop:disable Metrics/ParameterLists, Layout/LineLength
       payload = @instrumentation_payload.merge(model_type: record.class.base_class.name.to_s)
       Instrumentation.instrument('activity_timeline', payload) do
         @traversal_preparer.call(record.class, historical: true)
@@ -77,21 +77,21 @@ module PaperTrailDiff
         reject_live_habtm_activity!(record.class) if Endpoint.record?(to) || live
         steps = activity_builder(
           record, from: from, to: to, within: within, version_scope: version_scope,
-                  live_endpoint: live, snapshots: snapshots
+                  live_endpoint: live, snapshots: snapshots, group: group
         ).build
         payload[:step_count] = steps.length
         steps
       end
     end
 
-    #: (untyped, from: untyped, to: untyped, within: untyped, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool) -> Analysis
-    def analyze(record, from:, to:, within:, activity: false, version_scope: nil, close_on: nil, snapshots: false) # rubocop:disable Metrics/ParameterLists, Layout/LineLength
+    #: (untyped, from: untyped, to: untyped, within: untyped, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?) -> Analysis
+    def analyze(record, from:, to:, within:, activity: false, version_scope: nil, close_on: nil, snapshots: false, group: nil) # rubocop:disable Metrics/ParameterLists, Layout/LineLength
       @traversal_preparer.call(record.class, historical: true)
       live = live_endpoint_for(record, close_on, within)
       if activity
         return analyze_activity(
           record, from: from, to: to, within: within, version_scope: version_scope,
-                  live_endpoint: live, snapshots: snapshots
+                  live_endpoint: live, snapshots: snapshots, group: group
         )
       end
 
@@ -151,12 +151,12 @@ module PaperTrailDiff
     # @rbs @timeline_snapshotter: TimelineSnapshotProvider
     # @rbs @activity_snapshotter: ActivitySnapshotProvider
 
-    #: (untyped, from: untyped, to: untyped, within: untyped, version_scope: untyped, live_endpoint: untyped, ?snapshots: bool) -> Analysis
-    def analyze_activity(record, from:, to:, within:, version_scope:, live_endpoint:, snapshots: false) # rubocop:disable Metrics/ParameterLists, Layout/LineLength
+    #: (untyped, from: untyped, to: untyped, within: untyped, version_scope: untyped, live_endpoint: untyped, ?snapshots: bool, ?group: Symbol?) -> Analysis
+    def analyze_activity(record, from:, to:, within:, version_scope:, live_endpoint:, snapshots: false, group: nil) # rubocop:disable Metrics/ParameterLists, Layout/LineLength
       reject_live_habtm_activity!(record.class) if live_endpoint
       activity_builder(
         record, from: from, to: to, within: within, version_scope: version_scope,
-                live_endpoint: live_endpoint, snapshots: snapshots
+                live_endpoint: live_endpoint, snapshots: snapshots, group: group
       ).analyze
     end
 
@@ -252,8 +252,8 @@ module PaperTrailDiff
       )
     end
 
-    #: (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped, ?live_endpoint: untyped, ?snapshots: bool) -> ActivityTimelineBuilder
-    def activity_builder(record, from:, to:, within:, version_scope: nil, live_endpoint: nil, snapshots: false) # rubocop:disable Metrics/ParameterLists, Layout/LineLength
+    #: (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped, ?live_endpoint: untyped, ?snapshots: bool, ?group: Symbol?) -> ActivityTimelineBuilder
+    def activity_builder(record, from:, to:, within:, version_scope: nil, live_endpoint: nil, snapshots: false, group: nil) # rubocop:disable Metrics/ParameterLists, Layout/LineLength
       ActivityTimelineBuilder.new(
         record,
         range: TimelineRange.new(
@@ -262,7 +262,8 @@ module PaperTrailDiff
         ),
         tree: @association_tree,
         snapshotter: @activity_snapshotter,
-        snapshots: snapshots
+        snapshots: snapshots,
+        group: group
       )
     end
 

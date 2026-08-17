@@ -4,9 +4,15 @@
 module PaperTrailDiff
   # Compares adjacent root and selected-descendant activity boundaries.
   class ActivityTimelineBuilder
-    #: (untyped, range: TimelineRange, tree: AssociationTree, snapshotter: untyped, ?snapshots: bool) -> void
-    def initialize(record, range:, tree:, snapshotter:, snapshots: false)
+    include ActivityGrouping
+
+    #: (untyped, range: TimelineRange, tree: AssociationTree, snapshotter: untyped, ?snapshots: bool, ?group: Symbol?) -> void
+    def initialize(record, range:, tree:, snapshotter:, snapshots: false, group: nil) # rubocop:disable Metrics/ParameterLists
       @snapshots = snapshots
+      @group = group
+      # Merging a group compares its outer states, so the snapshots must survive
+      # the build even when the caller did not ask to keep them.
+      @retain = snapshots || grouping?
       @record = record
       @from = range.from
       @to = range.to
@@ -155,10 +161,10 @@ module PaperTrailDiff
         steps << ActivityStep.between(
           from_boundary: previous_boundary, to_boundary: final_boundary,
           from_snapshot: history.last_snapshot, to_snapshot: final_snapshot,
-          retain: @snapshots
+          retain: @retain
         )
       end
-      steps.freeze
+      group_steps(steps).freeze
     end
 
     # A destroyed root has no later version, but its own event states that
@@ -178,7 +184,7 @@ module PaperTrailDiff
         events,
         @snapshotter,
         current: current,
-        snapshots: @snapshots
+        snapshots: @retain
       ).call
     end
 
@@ -205,7 +211,8 @@ module PaperTrailDiff
         range: @range,
         tree: @tree,
         snapshotter: @snapshotter,
-        snapshots: @snapshots
+        snapshots: @snapshots,
+        group: @group
       )
     end
   end

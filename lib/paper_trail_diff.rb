@@ -59,6 +59,8 @@ require_relative 'paper_trail_diff/activity_event_snapshot_refresher'
 require_relative 'paper_trail_diff/activity_root_snapshot_refresher'
 require_relative 'paper_trail_diff/branch_snapshot_refresher'
 require_relative 'paper_trail_diff/activity_boundary'
+require_relative 'paper_trail_diff/activity_grouping'
+require_relative 'paper_trail_diff/activity_transaction_grouper'
 require_relative 'paper_trail_diff/step'
 require_relative 'paper_trail_diff/analysis'
 require_relative 'paper_trail_diff/activity_root_steps'
@@ -183,7 +185,8 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
       reload_live_endpoints: true,
       version_scope: nil,
       close_on: nil,
-      snapshots: false
+      snapshots: false,
+      group: nil
     )
       PaperTrailAdapter.new(
         associations: associations,
@@ -196,12 +199,13 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
         within: within,
         version_scope: version_scope,
         close_on: close_on,
+        group: group,
         snapshots: snapshots
       )
     end
 
     # Builds an endpoint diff and root-checkpoint timeline while normalizing each version once.
-    #: (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool) -> Analysis
+    #: (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?) -> Analysis
     def analyze( # rubocop:disable Metrics/ParameterLists
       record,
       from: nil,
@@ -212,7 +216,8 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
       activity: false,
       version_scope: nil,
       close_on: nil,
-      snapshots: false
+      snapshots: false,
+      group: nil
     )
       PaperTrailAdapter.new(associations: associations, ignore: ignore).analyze(
         record,
@@ -222,7 +227,8 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
         activity: activity,
         version_scope: version_scope,
         close_on: close_on,
-        snapshots: snapshots
+        snapshots: snapshots,
+        group: group
       )
     end
 

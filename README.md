@@ -713,6 +713,49 @@ boundary. Passing `to: article` is what removes the need to touch the parent
 after an ordinary versioned child mutation; current state is still never
 implicit.
 
+### Reporting one save as one step
+
+A parent and its children saved together produce a version each, so one
+deliberate action arrives as several steps. `group: :transaction` reports it as
+one:
+
+```ruby
+PaperTrailDiff.activity_timeline(
+  article, from: :first, to: article,
+  associations: [:comments], group: :transaction
+)
+```
+
+Given a single transaction that retitled an article, revised one comment, and
+added another, the ungrouped timeline reports three steps — the title change,
+then a step that reads as empty, then the comment changes. Grouped, it reports
+one step carrying the title *and* the comment changes, credited to whoever made
+the save. Off by default; also accepted by `analyze(activity: true)`.
+
+The middle step reads as empty for a reason worth knowing, because it is the
+same rule the rest of this document turns on. A version records the state
+*before* its own event, so a child's new value is revealed only by something
+later: a further version of that child, its destroy version, or the live row.
+Inside a transaction there is usually none of those yet, so a change made at
+that boundary surfaces a step or more afterwards, folded in with whatever that
+step carried. Nothing is lost — but "when" and "with what" both read wrong.
+
+Two properties this relies on:
+
+**A step belongs to the transaction of the event that opens it.** That is the
+event whose change the step reports, so grouping on the closing boundary instead
+would credit each change to whoever made the next one.
+
+**Merging compares the group's outer states**, rather than combining the diffs
+between them. A field set and then restored inside one transaction has not
+changed, and only comparing the endpoints can say so.
+
+A boundary that records no transaction groups with nothing. PaperTrail leaves
+`transaction_id` nil outside a transaction, and a custom version class need not
+carry the column at all; treating those as one shared transaction would merge
+unrelated history into a single step. `ActivityBoundary#transaction_id` exposes
+what a boundary recorded.
+
 ### Reading the state behind a step
 
 A step's diff carries what changed. A renderer often needs what did *not* — to

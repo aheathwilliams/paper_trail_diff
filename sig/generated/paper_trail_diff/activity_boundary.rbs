@@ -19,6 +19,11 @@ module PaperTrailDiff
 
     attr_reader record: RecordReference
 
+    # The transaction the version was written in, when PaperTrail recorded one.
+    # Several versions saved together share it, which is what lets a timeline
+    # report one save as one step rather than as its parts.
+    attr_reader transaction_id: untyped
+
     # : (untyped) -> ActivityBoundary
     def self.from_version: (untyped) -> ActivityBoundary
 
@@ -31,8 +36,14 @@ module PaperTrailDiff
     # : (untyped) -> ActivityBoundary
     def self.destroyed: (untyped) -> ActivityBoundary
 
-    # : (kind: Symbol, version_id: untyped, item_type: untyped, item_id: untyped, recorded_at: untyped, ?event: untyped, ?whodunnit: untyped) -> void
-    def initialize: (kind: Symbol, version_id: untyped, item_type: untyped, item_id: untyped, recorded_at: untyped, ?event: untyped, ?whodunnit: untyped) -> void
+    # A custom version class need not carry the column, and PaperTrail leaves
+    # it nil outside a transaction. Both read as "no transaction here", which
+    # groups with nothing.
+    # : (untyped) -> untyped
+    def self.transaction_id: (untyped) -> untyped
+
+    # : (kind: Symbol, version_id: untyped, item_type: untyped, item_id: untyped, recorded_at: untyped, ?event: untyped, ?whodunnit: untyped, ?transaction_id: untyped) -> void
+    def initialize: (kind: Symbol, version_id: untyped, item_type: untyped, item_id: untyped, recorded_at: untyped, ?event: untyped, ?whodunnit: untyped, ?transaction_id: untyped) -> void
 
     # : () -> bool
     def version?: () -> bool
