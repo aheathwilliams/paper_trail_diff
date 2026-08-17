@@ -25,17 +25,15 @@ module PaperTrailDiff
   # window. `where(status: 'published')` selects what is published now, which is
   # not the same set as what was published while the window was open.
   class ScopedRootSelection
-    class Result < Data
-      attr_reader records(): untyped
+    # A plain class rather than Data.define, which arrived in Ruby 3.2 while this
+    # gem supports 3.1.
+    class Result
+      attr_reader records: Array[untyped]
 
-      attr_reader unreachable(): untyped
+      attr_reader unreachable: Array[Array[String]]
 
-      def self.new: (untyped records, untyped unreachable) -> instance
-                  | (records: untyped, unreachable: untyped) -> instance
-
-      def self.members: () -> [ :records, :unreachable ]
-
-      def members: () -> [ :records, :unreachable ]
+      # : (records: Array[untyped], unreachable: Array[Array[String]]) -> void
+      def initialize: (records: Array[untyped], unreachable: Array[Array[String]]) -> void
     end
 
     # : (untyped, time_range: TimeRange?, limit: Integer) -> void
