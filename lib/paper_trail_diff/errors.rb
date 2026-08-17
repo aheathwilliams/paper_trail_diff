@@ -32,6 +32,10 @@ module PaperTrailDiff
   # Raised when versions sharing a timestamp cannot be ordered by their ids.
   class AmbiguousVersionOrderError < Error; end
 
+  # Raised when a relation selects more roots than the batch was told to analyze.
+  # Truncating instead would hand back a report that is short without saying so.
+  class BatchLimitExceededError < Error; end
+
   # Raised when a requested ActiveRecord association does not exist.
   class UnknownAssociationError < Error; end
 

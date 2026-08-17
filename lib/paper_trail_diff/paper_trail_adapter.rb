@@ -119,6 +119,24 @@ module PaperTrailDiff
       end
     end
 
+    # Selects the roots from a relation before running the ordinary batch, so a
+    # caller reporting on a population does not have to rediscover which of its
+    # members changed. The roots the relation could not reach come back named
+    # rather than dropped -- see `PaperTrailDiff.analyze_scope`.
+    #: (untyped, limit: Integer?, within: untyped, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?) -> ScopedAnalysis
+    def analyze_scope(scope, limit:, within:, activity: false, version_scope: nil, close_on: nil) # rubocop:disable Metrics/ParameterLists
+      raise ConfigurationError, 'limit: is required when selecting roots by scope' if limit.nil?
+
+      selection = ScopedRootSelection.new(
+        scope, time_range: within.nil? ? nil : TimeRange.new(within), limit: limit
+      ).call
+      ScopedAnalysis.new(
+        analyses: analyze_many(selection.records, within: within, activity: activity,
+                                                  version_scope: version_scope, close_on: close_on),
+        unreachable: selection.unreachable
+      )
+    end
+
     private
 
     # @rbs @association_tree: AssociationTree

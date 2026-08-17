@@ -1384,6 +1384,32 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     expect(PaperTrailDiff.analyze_many([], associations: [:comments])).to eq({})
   end
 
+  it 'selects roots from a relation and reports the ones it cannot reach' do
+    kept = TrackedArticle.create!(title: 'Scoped kept')
+    kept.update!(title: 'Scoped kept v2')
+    kept.comments.create!(body: 'Kept comment')
+    kept.update!(title: 'Scoped kept v3')
+    doomed = TrackedArticle.create!(title: 'Scoped doomed')
+    doomed.comments.create!(body: 'Doomed comment')
+    doomed.update!(title: 'Scoped doomed v2')
+    doomed.destroy!
+
+    analyses, unreachable = PaperTrailDiff.analyze_scope(
+      TrackedArticle.where("title LIKE 'Scoped %'"), limit: 100, associations: [:comments]
+    )
+    by_hand = PaperTrailDiff.analyze_many([kept], associations: [:comments])
+
+    # A destroyed root is reported rather than analyzed, because `analyze_many`
+    # requires live state it no longer has -- the same rule, made visible.
+    expect(unreachable).to eq([['TrackedArticle', doomed.id.to_s]])
+    expect(analyses.transform_values(&:to_h)).to eq(by_hand.transform_values(&:to_h))
+    # Proves the selected associations reached the batch: the comment was added
+    # between two root versions, so the step spanning it reports the addition.
+    added = analyses.values.first.timeline.filter_map { |step| step.diff.associations['comments'] }
+    expect(added.flat_map { |diff| diff.added.map { |snapshot| snapshot.attributes['body'] } })
+      .to eq(['Kept comment'])
+  end
+
   it 'compares a batch whose root has no recorded history as empty' do
     tracked = TrackedArticle.create!(title: 'Tracked')
     tracked.comments.create!(body: 'Comment')

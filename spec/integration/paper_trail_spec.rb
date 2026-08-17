@@ -33,6 +33,15 @@ RSpec.describe PaperTrailDiff do
     count
   end
 
+  def query_count(&block)
+    count = 0
+    callback = proc do |_name, _start, _finish, _id, payload|
+      count += 1 unless payload[:name] == 'SCHEMA' || payload[:cached]
+    end
+    ActiveSupport::Notifications.subscribed(callback, 'sql.active_record', &block)
+    count
+  end
+
   def timestamp_versions(versions, start_at: Time.utc(2030, 1, 1))
     versions.each_with_index.map do |version, index|
       timestamp = start_at + (index * 3600)
@@ -772,6 +781,171 @@ RSpec.describe PaperTrailDiff do
         .to raise_error(PaperTrailDiff::ConfigurationError, /must be an array/)
       expect { described_class.analyze_many([Object.new], within: window) }
         .to raise_error(PaperTrailDiff::InvalidEndpointError)
+    end
+  end
+
+  describe '.analyze_scope' do
+    # A window open at the present end, which is what a reporting page asks for,
+    # so every example here closes on current state.
+    def scoped_history
+      start_at = Time.now.utc - 3600
+      kept = CoreArticle.create!(title: 'keep me', internal_note: 'stable')
+      skipped = CoreArticle.create!(title: 'skip me', internal_note: 'stable')
+      doomed = CoreArticle.create!(title: 'keep me doomed', internal_note: 'stable')
+      [kept, skipped, doomed].each { |article| article.update!(internal_note: 'changed') }
+      doomed.destroy!
+      [kept, skipped, doomed, start_at..(Time.now.utc + 3600)]
+    end
+
+    def kept_scope
+      CoreArticle.where("title LIKE 'keep me%'")
+    end
+
+    # The live closing boundary stamps `recorded_at` with the instant it was
+    # taken, which differs between two sequential calls, so agreement is checked
+    # on the changes each reported rather than on that timestamp.
+    def reported_changes(analyses)
+      analyses.transform_values do |analysis|
+        [analysis.diff.to_h, analysis.timeline.map { |step| step.diff.to_h }]
+      end
+    end
+
+    it 'selects the same roots the caller would have assembled by hand' do
+      kept, _skipped, _doomed, window = scoped_history
+
+      scoped = described_class.analyze_scope(kept_scope, within: window, limit: 100,
+                                                         close_on: :current)
+      by_hand = described_class.analyze_many(kept_scope.to_a, within: window,
+                                                              close_on: :current)
+
+      expect(scoped.analyses.keys).to eq([PaperTrailDiff::Endpoint.identity(kept)])
+      expect(reported_changes(scoped.analyses)).to eq(reported_changes(by_hand))
+    end
+
+    it 'destructures into analyses and unreachable roots' do
+      _kept, _skipped, doomed, window = scoped_history
+
+      analyses, unreachable = described_class.analyze_scope(
+        kept_scope, within: window, limit: 100, close_on: :current
+      )
+
+      expect(analyses).to be_a(Hash)
+      expect(unreachable).to eq([['CoreArticle', doomed.id.to_s]])
+    end
+
+    # The distinction the return value exists to make: a root the relation
+    # excluded was excluded on purpose, while a root with no live row could not
+    # be tested against the relation at all. Reporting both the same way would
+    # bury the second in the first.
+    it 'separates roots it filtered out from roots it could not reach' do
+      _kept, skipped, doomed, window = scoped_history
+
+      analyses, unreachable = described_class.analyze_scope(
+        kept_scope, within: window, limit: 100, close_on: :current
+      )
+      reached = analyses.keys + unreachable
+
+      expect(unreachable).to eq([['CoreArticle', doomed.id.to_s]])
+      expect(reached).not_to include(['CoreArticle', skipped.id.to_s])
+    end
+
+    it 'reports a destroyed root even when the relation carries no conditions' do
+      _kept, _skipped, doomed, window = scoped_history
+
+      analyses, unreachable = described_class.analyze_scope(
+        CoreArticle, within: window, limit: 100, close_on: :current
+      )
+
+      expect(analyses.length).to eq(2)
+      expect(unreachable).to eq([['CoreArticle', doomed.id.to_s]])
+    end
+
+    it 'refuses an oversized page rather than truncating it' do
+      *_roots, window = scoped_history
+
+      expect do
+        described_class.analyze_scope(CoreArticle, within: window, limit: 1, close_on: :current)
+      end.to raise_error(PaperTrailDiff::BatchLimitExceededError, /more than 1/)
+    end
+
+    it 'keeps the query cost flat in the number of roots' do
+      *_roots, window = scoped_history
+      20.times do |index|
+        CoreArticle.create!(title: "keep me #{index}", internal_note: 'stable')
+                   .update!(internal_note: 'changed')
+      end
+
+      counts = [1, 21].map do |root_count|
+        ids = kept_scope.limit(root_count).pluck(:id)
+        query_count do
+          described_class.analyze_scope(CoreArticle.where(id: ids), within: window,
+                                                                    limit: 100, close_on: :current)
+        end
+      end
+
+      expect(counts.uniq.length).to eq(1)
+    end
+
+    it 'passes the version filter and associations through to the batch' do
+      kept, _skipped, _doomed, window = scoped_history
+      PaperTrail.request(whodunnit: nil) { kept.update!(internal_note: 'by nobody') }
+      PaperTrail.request(whodunnit: 'alice') { kept.update!(internal_note: 'by alice') }
+      named = ->(versions) { versions.where.not(whodunnit: nil) }
+
+      options = { within: window, close_on: :current, version_scope: named }
+      scoped = described_class.analyze_scope(kept_scope, limit: 100, **options)
+      by_hand = described_class.analyze_many(kept_scope.to_a, **options)
+
+      expect(reported_changes(scoped.analyses)).to eq(reported_changes(by_hand))
+    end
+
+    # No window means each root's whole history, so a root destroyed at any
+    # point is still a candidate and still cannot be reached.
+    it 'covers each root whole history when no window is given' do
+      kept, _skipped, doomed, = scoped_history
+
+      analyses, unreachable = described_class.analyze_scope(kept_scope, limit: 100)
+
+      expect(analyses.keys).to eq([PaperTrailDiff::Endpoint.identity(kept)])
+      expect(unreachable).to eq([['CoreArticle', doomed.id.to_s]])
+    end
+
+    it 'returns nothing for a window no root changed in' do
+      scoped_history
+      quiet = (Time.now.utc + 7200)..(Time.now.utc + 10_800)
+
+      analyses, unreachable = described_class.analyze_scope(CoreArticle, within: quiet, limit: 100)
+
+      expect(analyses).to eq({})
+      expect(unreachable).to eq([])
+    end
+
+    it 'is reachable through analyze_many, which rejects being given both forms' do
+      kept, _skipped, doomed, window = scoped_history
+
+      analyses, unreachable = described_class.analyze_many(
+        scope: kept_scope, within: window, limit: 100, close_on: :current
+      )
+
+      expect(analyses.keys).to eq([PaperTrailDiff::Endpoint.identity(kept)])
+      expect(unreachable).to eq([['CoreArticle', doomed.id.to_s]])
+      expect { described_class.analyze_many([kept], scope: kept_scope, limit: 1) }
+        .to raise_error(PaperTrailDiff::ConfigurationError, /not both/)
+      expect { described_class.analyze_many(within: window) }
+        .to raise_error(PaperTrailDiff::ConfigurationError, /pass records or scope/)
+    end
+
+    it 'rejects a missing limit, an unusable limit, and an unusable scope' do
+      *_roots, window = scoped_history
+
+      expect { described_class.analyze_scope(CoreArticle, within: window, limit: nil) }
+        .to raise_error(PaperTrailDiff::ConfigurationError, /limit: is required/)
+      expect { described_class.analyze_scope(CoreArticle, within: window, limit: 0) }
+        .to raise_error(PaperTrailDiff::ConfigurationError, /positive Integer/)
+      expect { described_class.analyze_scope(:nope, limit: 5) }
+        .to raise_error(PaperTrailDiff::ConfigurationError, /relation or model class/)
+      expect { described_class.analyze_scope(CoreComment, limit: 5) }
+        .to raise_error(PaperTrailDiff::UnversionedAssociationError, /not versioned/)
     end
   end
 

@@ -32,6 +32,13 @@ module PaperTrailDiff
     # : (Array[untyped], within: untyped, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?) -> Hash[identity, Analysis]
     def analyze_many: (Array[untyped], within: untyped, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?) -> Hash[identity, Analysis]
 
+    # Selects the roots from a relation before running the ordinary batch, so a
+    # caller reporting on a population does not have to rediscover which of its
+    # members changed. The roots the relation could not reach come back named
+    # rather than dropped -- see `PaperTrailDiff.analyze_scope`.
+    # : (untyped, limit: Integer?, within: untyped, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?) -> ScopedAnalysis
+    def analyze_scope: (untyped, limit: Integer?, within: untyped, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?) -> ScopedAnalysis
+
     private
 
     @activity_snapshotter: ActivitySnapshotProvider

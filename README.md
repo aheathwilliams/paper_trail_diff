@@ -445,6 +445,54 @@ value is the same `Analysis` that `analyze` returns for one record. A root with
 no versions inside the window gets an empty `Analysis` rather than raising, so a
 listing page needs no special case. Root identities must be unique.
 
+### Letting a relation choose the roots
+
+Assembling that array means querying `versions` for which roots moved, filtering,
+and loading the records — the same selection this gem already performs.
+`analyze_scope` does it for you:
+
+```ruby
+analyses, unreachable = PaperTrailDiff.analyze_scope(
+  Order.where(status: "open"),
+  within: Time.zone.parse("2026-08-01")...Time.zone.parse("2026-09-01"),
+  associations: [:line_items],
+  limit: 500
+)
+```
+
+`analyses` is the same frozen hash `analyze_many` returns. It is also available
+as `PaperTrailDiff.analyze_many(scope: ..., limit: ...)`, and it accepts a model
+class (`Order`) as readily as a relation. Every other option — `within:`,
+`version_scope:`, `associations:`, `ignore:`, `activity:`, `close_on:` — behaves
+exactly as it does for `analyze_many`, and the query cost stays flat in the
+number of roots.
+
+Two things to know before using it.
+
+**`limit:` is required, and exceeding it raises.** Selection moves into the gem
+here, so the bound on how much work one page can ask for has to move with it. It
+refuses rather than truncating, because an audit report that is quietly short is
+worse than one that fails.
+
+**`unreachable` names roots the relation could not reach.** A relation's
+conditions are evaluated against the live table, so a root destroyed during the
+window cannot be tested against them at all — its history is intact, and the
+state it held when it was destroyed may well have matched:
+
+```ruby
+unreachable # => [["Order", "412"]]
+```
+
+These are reported rather than dropped so that a page auditing deletions is told
+where to look instead of silently coming up short. `analyze_many` requires live
+records by design, so to analyze those roots reach for `activity_timeline`, which
+reads history without needing current state.
+
+Note also that a relation selects on **current** state, not on state during the
+window. `where(status: "open")` means open *now*, which is a different set from
+what was open while the window was open. If you need the historical population,
+select on the version history instead and pass the records.
+
 ### Reporting on a subset of root mutations
 
 `version_scope:` narrows which root versions count as *selected mutations*, so a
