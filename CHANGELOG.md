@@ -5,12 +5,43 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Add `PaperTrailDiff.analyze_scope`, which selects the roots to analyze from an
+  ActiveRecord relation or model class instead of an array the caller assembled,
+  in a fixed number of queries. Also reachable as
+  `PaperTrailDiff.analyze_many(scope: ..., limit: ...)`. Every other option
+  behaves as it does for `analyze_many`.
+- `analyze_scope` returns a `ScopedAnalysis`, which destructures into the usual
+  analyses hash and the roots the relation could not reach. A relation's
+  conditions are evaluated against the live table, so a root destroyed during
+  the window cannot be tested against them at all, even though its history is
+  intact and the state it held at destruction may have matched. Those roots are
+  named rather than dropped, so a page auditing deletions is told where to look
+  instead of coming up short without saying so.
+- Raise `PaperTrailDiff::BatchLimitExceededError` when a relation selects more
+  roots than `limit:` allows. `limit:` is required for `analyze_scope`: root
+  selection moves into the gem, so the bound on how much work one page can ask
+  for moves with it. It refuses rather than truncating, because a report that is
+  quietly short is worse than one that fails.
+
 ### Changed
 
 - Check that the generated Appraisal gemfiles match the `Gemfile`, in CI and in
   `rake release:preflight`. Every other job runs against a generated gemfile, so
   a dependency changed only in the `Gemfile` was one CI never installed: the
   jobs passed having exercised the old version.
+
+### Fixed
+
+- Resolve "does this model record history" through one predicate,
+  `Support.versioned?`. Three copies existed and one of them tested only
+  `respond_to?(:paper_trail)`, which PaperTrail defines on every ActiveRecord
+  model and which therefore answers true for models that never called
+  `has_paper_trail`. Nothing reached that copy with an unversioned model, since
+  the traversal preparer rejects those first, so no released behaviour changed --
+  but the check looked right while being unable to fail, and reading history
+  through it would have raised at the version class rather than at the question.
 
 ## [0.10.0] - 2026-08-15
 

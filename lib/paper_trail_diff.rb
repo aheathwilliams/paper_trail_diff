@@ -63,6 +63,8 @@ require_relative 'paper_trail_diff/step'
 require_relative 'paper_trail_diff/analysis'
 require_relative 'paper_trail_diff/activity_root_steps'
 require_relative 'paper_trail_diff/analysis_batch'
+require_relative 'paper_trail_diff/scoped_analysis'
+require_relative 'paper_trail_diff/scoped_root_selection'
 require_relative 'paper_trail_diff/batched_root_analyzer'
 require_relative 'paper_trail_diff/version_range'
 require_relative 'paper_trail_diff/version_sequence_diagnostics'
@@ -227,9 +229,17 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
     # Analyzes many roots over one shared time window, preparing their selected
     # history once for the batch instead of once per record. Roots with no
     # versions in the window return an empty `Analysis`.
-    #: (Array[untyped], ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?) -> Hash[identity, Analysis]
+    #
+    # Pass `records` to analyze a list you assembled, which returns a Hash keyed
+    # by identity. Pass `scope:` with a `limit:` to have the roots selected for
+    # you from a relation, which returns a `ScopedAnalysis` -- the same Hash,
+    # plus the roots the relation could not reach. See `analyze_scope` for why
+    # that second collection exists.
+    #: (?Array[untyped]?, ?scope: untyped, ?limit: Integer?, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?) -> (Hash[identity, Analysis] | ScopedAnalysis)
     def analyze_many( # rubocop:disable Metrics/ParameterLists
-      records,
+      records = nil,
+      scope: nil,
+      limit: nil,
       within: nil,
       associations: [],
       ignore: DEFAULT_IGNORED_ATTRIBUTES,
@@ -237,12 +247,57 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
       version_scope: nil,
       close_on: nil
     )
-      PaperTrailAdapter.new(associations: associations, ignore: ignore).analyze_many(
-        records,
-        within: within,
-        activity: activity,
-        version_scope: version_scope,
-        close_on: close_on
+      adapter = PaperTrailAdapter.new(associations: associations, ignore: ignore)
+      if scope
+        raise ConfigurationError, 'pass either records or scope:, not both' unless records.nil?
+
+        return adapter.analyze_scope(scope, limit: limit, within: within, activity: activity,
+                                            version_scope: version_scope, close_on: close_on)
+      end
+      raise ConfigurationError, 'pass records or scope:' if records.nil?
+
+      adapter.analyze_many(records, within: within, activity: activity,
+                                    version_scope: version_scope, close_on: close_on)
+    end
+
+    # Analyzes every root the relation reaches whose history moved inside the
+    # window, selecting them in a fixed number of queries rather than making the
+    # caller rediscover them.
+    #
+    # `limit:` is required and exceeding it raises. Selection moves into the gem
+    # here, so the bound on how much work a page can ask for has to move with
+    # it, and a truncated audit report is worse than a refused one.
+    #
+    # Returns a `ScopedAnalysis`, which destructures:
+    #
+    #   analyses, unreachable = PaperTrailDiff.analyze_scope(
+    #     Article.where(status: 'published'), within: july, limit: 500
+    #   )
+    #
+    # `unreachable` names roots that changed in the window but have no live row
+    # left. A relation's conditions are evaluated against the live table, so a
+    # destroyed root cannot be tested against them at all -- its history is
+    # intact and the state it held at destruction may well have matched. Those
+    # roots are reported rather than dropped so that a page auditing deletions
+    # is told where to look instead of quietly coming up short.
+    #
+    # Note also that a relation selects on current state, not on state during
+    # the window: `where(status: 'published')` means published *now*, which is a
+    # different set from what was published while the window was open.
+    #: (untyped, limit: Integer?, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?) -> ScopedAnalysis
+    def analyze_scope( # rubocop:disable Metrics/ParameterLists
+      scope,
+      limit:,
+      within: nil,
+      associations: [],
+      ignore: DEFAULT_IGNORED_ATTRIBUTES,
+      activity: false,
+      version_scope: nil,
+      close_on: nil
+    )
+      PaperTrailAdapter.new(associations: associations, ignore: ignore).analyze_scope(
+        scope, limit: limit, within: within, activity: activity,
+               version_scope: version_scope, close_on: close_on
       )
     end
 

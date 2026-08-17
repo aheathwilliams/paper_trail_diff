@@ -129,7 +129,7 @@ module PaperTrailDiff
 
     #: (untyped) -> bool
     def versioned?(model_class)
-      model_class.respond_to?(:paper_trail)
+      Support.versioned?(model_class)
     end
 
     #: (untyped, untyped) -> Array[String]
