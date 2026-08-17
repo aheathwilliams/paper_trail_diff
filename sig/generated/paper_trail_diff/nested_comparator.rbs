@@ -1,0 +1,68 @@
+# Generated from lib/paper_trail_diff/nested_comparator.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Compares the inside of a value a database column holds whole.
+  #
+  # A JSON or jsonb column reifies to one Hash, so an ordinary attribute diff
+  # can only say that the blob changed. This says which keys changed, leaving
+  # the surrounding diff untouched.
+  #
+  # Three decisions worth knowing about.
+  #
+  # Paths are arrays, not dotted strings. A JSON key may contain a dot -- host
+  # names and locales routinely do -- and joining would make `a.b` ambiguous
+  # between one key and two.
+  #
+  # Arrays are leaves. Their elements carry no identity, so an insertion at the
+  # front makes every later index look changed; reporting "element 2 changed"
+  # would be confidently wrong about a list that merely shifted. The whole array
+  # is reported as one change, which is the same rule the collection comparator
+  # follows for records it cannot identify.
+  #
+  # An absent key is not a null one. `{"a": null}` and `{}` mean different
+  # things in JSON and an audit trail that conflated them would be lying about
+  # one of them, so absence is its own value rather than nil.
+  class NestedComparator
+    # Stands in for a key that was not there at all.
+    ABSENT: untyped
+
+    def inspect: () -> untyped
+
+    def to_s: () -> untyped
+
+    # : (untyped, untyped) -> Hash[Array[String], ValueChange]
+    def self.call: (untyped, untyped) -> Hash[Array[String], ValueChange]
+
+    # : (untyped, untyped) -> void
+    def initialize: (untyped, untyped) -> void
+
+    # Returns the changed paths, or an empty hash when the pair is not two
+    # structures this can look inside. An empty result therefore means "nothing
+    # to report at this depth", and the caller still has the whole-value change.
+    # : () -> Hash[Array[String], ValueChange]
+    def call: () -> Hash[Array[String], ValueChange]
+
+    private
+
+    @from_value: untyped
+
+    @to_value: untyped
+
+    # Both sides have to be readable as a Hash for a nested answer to mean
+    # anything. A column that held text on one side and JSON on the other
+    # changed wholesale, and saying so is the accurate report.
+    # : () -> [Hash[untyped, untyped]?, Hash[untyped, untyped]?]
+    def structures: () -> [ Hash[untyped, untyped]?, Hash[untyped, untyped]? ]
+
+    # : (untyped) -> Hash[untyped, untyped]?
+    def structure: (untyped) -> Hash[untyped, untyped]?
+
+    # : (Hash[untyped, untyped], Hash[untyped, untyped], Array[String], Hash[Array[String], ValueChange]) -> void
+    def walk: (Hash[untyped, untyped], Hash[untyped, untyped], Array[String], Hash[Array[String], ValueChange]) -> void
+
+    # Sorted so a report reads the same twice, and stringified because a hash
+    # loaded from JSON and one built in Ruby can key the same field differently.
+    # : (Hash[untyped, untyped], Hash[untyped, untyped]) -> Array[untyped]
+    def keys: (Hash[untyped, untyped], Hash[untyped, untyped]) -> Array[untyped]
+  end
+end
