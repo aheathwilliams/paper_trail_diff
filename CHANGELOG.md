@@ -3,6 +3,15 @@
 All notable changes to this project will be documented in this file. The
 project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- Check that the generated Appraisal gemfiles match the `Gemfile`, in CI and in
+  `rake release:preflight`. Every other job runs against a generated gemfile, so
+  a dependency changed only in the `Gemfile` was one CI never installed: the
+  jobs passed having exercised the old version.
+
 ## [0.10.0] - 2026-08-15
 
 ### Added

@@ -8,13 +8,22 @@ updates:
       development-dependencies:
         patterns:
           - "*"
+    # `update-types: version-update:semver-major` did not hold steep back: PR #5
+    # proposed ~> 1.10 -> ~> 2.0 anyway. Explicit version ranges are honoured
+    # whether an update is classified as a version bump or a requirement bump,
+    # so both entries state the boundary directly.
     ignore:
       - dependency-name: simplecov
-        update-types:
-          - version-update:semver-major
+        versions:
+          - ">= 1.0"
+      # steep 2.0 requires Ruby >= 3.2 and pulls rbs ~> 4.0; this gem supports
+      # Ruby 3.1. rbs 4 also retyped Array#to_h's block return as
+      # Hash::_Pair[K, V] rather than a [K, V] tuple, which costs the tuple hint
+      # on array literals and fails `steep check` in 11 files. Lift this once
+      # Ruby 3.1 support is dropped.
       - dependency-name: steep
-        update-types:
-          - version-update:semver-major
+        versions:
+          - ">= 2.0"
 
   - package-ecosystem: github-actions
     directory: "/"
