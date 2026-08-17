@@ -17,6 +17,27 @@ permissions:
   contents: read
 
 jobs:
+  # Every other job runs against a generated gemfile rather than the Gemfile,
+  # so a dependency changed only in the Gemfile is one CI never installs. This
+  # job is the only one that uses the Gemfile itself, which is what lets it
+  # notice.
+  gemfiles:
+    name: Appraisal gemfiles in sync
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.4'
+          bundler-cache: true
+
+      - name: Verify the generated gemfiles match the Gemfile
+        run: bundle exec rake verify_gemfiles
+
   quality:
     name: Ruby ${{ matrix.ruby }} / PaperTrail ${{ matrix.paper_trail }}
     runs-on: ubuntu-latest

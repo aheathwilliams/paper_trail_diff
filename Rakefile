@@ -48,6 +48,20 @@ task typecheck: :verify_signatures do
   sh 'bundle', 'exec', 'steep', 'check'
 end
 
+# The gemfiles under gemfiles/ are generated from this Gemfile, and CI runs
+# every job against them rather than against the Gemfile itself. So a change
+# made only to the Gemfile is a change CI never executes: the jobs pass, but
+# they pass on the old dependency. Regenerating and diffing turns that silent
+# divergence into a failure that names the file to commit.
+#
+# Must run under the root Gemfile. Under a generated gemfile, Appraisal would
+# read that as the base and write it back over itself.
+desc 'Regenerate the Appraisal gemfiles and verify that they are committed'
+task :verify_gemfiles do
+  sh 'bundle', 'exec', 'appraisal', 'generate'
+  sh 'git', 'diff', '--exit-code', '--', 'gemfiles'
+end
+
 # Everything that must be true before a release is tagged, in one command that
 # fails loudly. The sequence is easy to get half-right by hand: a dirty tree
 # tags something other than what was tested, an unpushed commit tags code CI
