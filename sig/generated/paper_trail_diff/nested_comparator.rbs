@@ -13,11 +13,11 @@ module PaperTrailDiff
   # names and locales routinely do -- and joining would make `a.b` ambiguous
   # between one key and two.
   #
-  # Arrays are leaves. Their elements carry no identity, so an insertion at the
-  # front makes every later index look changed; reporting "element 2 changed"
-  # would be confidently wrong about a list that merely shifted. The whole array
-  # is reported as one change, which is the same rule the collection comparator
-  # follows for records it cannot identify.
+  # Arrays are reported by membership, not by position -- see ArrayChange. Their
+  # elements carry no identity, so an insertion at the front makes every later
+  # index look changed, and one insertion reads as several edits. What is added
+  # and removed can be answered without claiming any pairing; what cannot is the
+  # same elements in a new order, so that is named rather than passed over.
   #
   # An absent key is not a null one. `{"a": null}` and `{}` mean different
   # things in JSON and an audit trail that conflated them would be lying about
@@ -30,8 +30,8 @@ module PaperTrailDiff
 
     def to_s: () -> untyped
 
-    # : (untyped, untyped) -> Hash[Array[String], ValueChange]
-    def self.call: (untyped, untyped) -> Hash[Array[String], ValueChange]
+    # : (untyped, untyped) -> nested_changes
+    def self.call: (untyped, untyped) -> nested_changes
 
     # : (untyped, untyped) -> void
     def initialize: (untyped, untyped) -> void
@@ -39,8 +39,8 @@ module PaperTrailDiff
     # Returns the changed paths, or an empty hash when the pair is not two
     # structures this can look inside. An empty result therefore means "nothing
     # to report at this depth", and the caller still has the whole-value change.
-    # : () -> Hash[Array[String], ValueChange]
-    def call: () -> Hash[Array[String], ValueChange]
+    # : () -> nested_changes
+    def call: () -> nested_changes
 
     private
 
@@ -57,8 +57,13 @@ module PaperTrailDiff
     # : (untyped) -> Hash[untyped, untyped]?
     def structure: (untyped) -> Hash[untyped, untyped]?
 
-    # : (Hash[untyped, untyped], Hash[untyped, untyped], Array[String], Hash[Array[String], ValueChange]) -> void
-    def walk: (Hash[untyped, untyped], Hash[untyped, untyped], Array[String], Hash[Array[String], ValueChange]) -> void
+    # : (Hash[untyped, untyped], Hash[untyped, untyped], Array[String], nested_changes) -> void
+    def walk: (Hash[untyped, untyped], Hash[untyped, untyped], Array[String], nested_changes) -> void
+
+    # Two arrays are a membership change; anything else is a change to the
+    # value as a whole, including an array facing something that is not one.
+    # : (untyped, untyped) -> nested_change
+    def change_for: (untyped, untyped) -> nested_change
 
     # Sorted so a report reads the same twice, and stringified because a hash
     # loaded from JSON and one built in Ruby can key the same field differently.

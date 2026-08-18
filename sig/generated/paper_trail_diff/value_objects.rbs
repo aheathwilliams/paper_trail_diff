@@ -14,6 +14,51 @@ module PaperTrailDiff
     def to_h: () -> Hash[Symbol, untyped]
   end
 
+  # A change to an array inside a value the database stores whole, reported by
+  # membership rather than by position.
+  #
+  # Position would be the obvious thing to report and the wrong one: elements
+  # here carry no identity, so inserting at the front makes every later index
+  # look changed, and one insertion is described as several edits. Membership is
+  # answerable without claiming any pairing -- "gained \"saturn v\"" is true
+  # whether the array is a set, a queue, or a ranked list.
+  #
+  # That leaves one case membership cannot see, so it is named rather than
+  # hidden: the same elements in a different order. `reordered?` says so.
+  #
+  # An element that is itself a Hash or Array is reported whole. Saying which
+  # field of which object changed would require pairing before-elements with
+  # after-elements, and nothing in the value licenses that pairing.
+  class ArrayChange
+    attr_reader from: Array[untyped]
+
+    attr_reader to: Array[untyped]
+
+    attr_reader added: Array[untyped]
+
+    attr_reader removed: Array[untyped]
+
+    # : (from: Array[untyped], to: Array[untyped]) -> void
+    def initialize: (from: Array[untyped], to: Array[untyped]) -> void
+
+    # Elements of `left` with no counterpart left in `right`, matching by value
+    # and respecting duplicates, so ["a", "a"] -> ["a"] reports one removal
+    # rather than none.
+    # : (Array[untyped], Array[untyped]) -> Array[untyped]
+    def self.surplus: (Array[untyped], Array[untyped]) -> Array[untyped]
+
+    # Same elements, different sequence. Only meaningful for a change that was
+    # recorded at all, which this only is when the two sides differ.
+    # : () -> bool
+    def reordered?: () -> bool
+
+    # : () -> bool
+    def empty?: () -> bool
+
+    # : () -> Hash[Symbol, untyped]
+    def to_h: () -> Hash[Symbol, untyped]
+  end
+
   # Attribute and nested-association changes for a record whose identity did not change.
   class RecordChange
     attr_reader record: RecordReference

@@ -3,6 +3,23 @@
 All notable changes to this project will be documented in this file. The
 project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- Report an array inside a JSON column by membership rather than as one opaque
+  value. `nested_changes` now returns a `PaperTrailDiff::ArrayChange` for a pair
+  of arrays, carrying `added`, `removed` and `reordered?` alongside the whole
+  `from` and `to` it already had. Position is deliberately not reported:
+  elements carry no identity, so an insertion at the front makes every later
+  index look changed and one insertion reads as several edits. Membership is
+  answerable without claiming any pairing. Matching is by value and respects
+  duplicates, so `["a", "a"]` to `["a"]` reports one removal. The one thing
+  membership cannot see -- the same elements in a new order -- is named rather
+  than passed over. An element that is itself an object is reported whole,
+  since saying which of its fields changed would require pairing before- and
+  after-elements that nothing in the value licenses.
+
 ## [0.11.0] - 2026-08-18
 
 ### Added

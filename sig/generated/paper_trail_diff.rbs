@@ -99,8 +99,8 @@ module PaperTrailDiff
   # list that merely shifted would otherwise look changed throughout. A key
   # that was absent reads as `NestedComparator::ABSENT` rather than nil, which
   # JSON uses for a present null.
-  # : (untyped, ?untyped) -> Hash[Array[String], ValueChange]
-  def self.nested_changes: (untyped, ?untyped) -> Hash[Array[String], ValueChange]
+  # : (untyped, ?untyped) -> nested_changes
+  def self.nested_changes: (untyped, ?untyped) -> nested_changes
 end
 
 module PaperTrailDiff
@@ -113,6 +113,10 @@ module PaperTrailDiff
   type association_diff = ToOneAssociationDiff | CollectionAssociationDiff
 
   type association_diffs = Hash[String, association_diff]
+
+  type nested_change = ValueChange | ArrayChange
+
+  type nested_changes = Hash[Array[String], nested_change]
 
   type association_snapshots = Hash[String, AssociationSnapshot]
 

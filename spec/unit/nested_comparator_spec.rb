@@ -33,13 +33,6 @@ RSpec.describe PaperTrailDiff::NestedComparator do
     expect(result.fetch(['added'])[:from]).to be(described_class::ABSENT)
   end
 
-  # Elements carry no identity, so an insertion at the front would make every
-  # later index look changed.
-  it 'reports an array whole instead of by index' do
-    expect(changes({ 'l' => %w[a b c] }, { 'l' => %w[z a b c] }))
-      .to eq(['l'] => { from: %w[a b c], to: %w[z a b c] })
-  end
-
   # Host names and locales routinely contain dots, so a joined path could not
   # say which of these two changed.
   it 'keeps a dotted key distinct from a nested one' do
@@ -50,6 +43,78 @@ RSpec.describe PaperTrailDiff::NestedComparator do
 
     expect(result.fetch(['a.b'])).to eq(from: 1, to: 2)
     expect(result.fetch(%w[a b])).to eq(from: 1, to: 3)
+  end
+
+  describe 'arrays' do
+    def array_change(from_value, to_value)
+      described_class.call({ 'k' => from_value }, { 'k' => to_value }).fetch(['k'])
+    end
+
+    # Position would be the obvious thing to report and the wrong one: an
+    # insertion at the front makes every later index look changed, so one
+    # insertion would read as several edits.
+    it 'reports what was added and removed rather than what moved' do
+      change = array_change(%w[apollo nasa], %w[saturn apollo nasa])
+
+      expect(change).to be_a(PaperTrailDiff::ArrayChange)
+      expect(change.added).to eq(['saturn'])
+      expect(change.removed).to eq([])
+      expect(change.reordered?).to be(false)
+    end
+
+    it 'reports a removal' do
+      change = array_change(%w[a b c], %w[a c])
+
+      expect(change.removed).to eq(['b'])
+      expect(change.added).to eq([])
+    end
+
+    it 'reports an exchange as both an addition and a removal' do
+      change = array_change(%w[a b], %w[a z])
+
+      expect(change.added).to eq(['z'])
+      expect(change.removed).to eq(['b'])
+    end
+
+    # Membership cannot see this, so it is named rather than passed over.
+    it 'names a reordering, which membership alone cannot show' do
+      change = array_change(%w[a b c], %w[c a b])
+
+      expect(change.reordered?).to be(true)
+      expect(change.added).to eq([])
+      expect(change.removed).to eq([])
+      expect(change.from).to eq(%w[a b c])
+      expect(change.to).to eq(%w[c a b])
+    end
+
+    it 'respects duplicates rather than treating the array as a set' do
+      expect(array_change(%w[a a b], %w[a b]).removed).to eq(['a'])
+      expect(array_change(%w[a b], %w[a a b]).added).to eq(['a'])
+    end
+
+    # Saying which field of which object changed would need a pairing of
+    # before-elements with after-elements that nothing in the value licenses.
+    it 'reports an element that is itself a structure whole' do
+      change = array_change([{ 'id' => 1 }], [{ 'id' => 1 }, { 'id' => 2 }])
+
+      expect(change.added).to eq([{ 'id' => 2 }])
+      expect(change.removed).to eq([])
+    end
+
+    it 'falls back to a plain value change when only one side is an array' do
+      expect(array_change(%w[a], 'a')).to be_a(PaperTrailDiff::ValueChange)
+    end
+
+    it 'serializes membership alongside the whole values' do
+      expect(array_change(%w[a b], %w[b a]).to_h).to eq(
+        from: %w[a b], to: %w[b a], added: [], removed: [], reordered: true
+      )
+    end
+
+    it 'is frozen, and reports equal arrays as no change at all' do
+      expect(array_change(%w[a b], %w[b a])).to be_frozen
+      expect(described_class.call({ 'k' => %w[a b] }, { 'k' => %w[a b] })).to eq({})
+    end
   end
 
   it 'reports nothing when the two sides are not both readable structures' do
