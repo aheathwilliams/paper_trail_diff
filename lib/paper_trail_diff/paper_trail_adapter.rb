@@ -123,17 +123,19 @@ module PaperTrailDiff
     # caller reporting on a population does not have to rediscover which of its
     # members changed. The roots the relation could not reach come back named
     # rather than dropped -- see `PaperTrailDiff.analyze_scope`.
-    #: (untyped, limit: Integer?, within: untyped, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?) -> ScopedAnalysis
-    def analyze_scope(scope, limit:, within:, activity: false, version_scope: nil, close_on: nil) # rubocop:disable Metrics/ParameterLists
+    #: (untyped, limit: Integer?, within: untyped, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?historical_filter: untyped) -> ScopedAnalysis
+    def analyze_scope(scope, limit:, within:, activity: false, version_scope: nil, close_on: nil, historical_filter: nil) # rubocop:disable Metrics/ParameterLists, Layout/LineLength
       raise ConfigurationError, 'limit: is required when selecting roots by scope' if limit.nil?
 
       selection = ScopedRootSelection.new(
-        scope, time_range: within.nil? ? nil : TimeRange.new(within), limit: limit
+        scope, time_range: within.nil? ? nil : TimeRange.new(within), limit: limit,
+               historical_filter: historical_filter
       ).call
       ScopedAnalysis.new(
         analyses: analyze_many(selection.records, within: within, activity: activity,
                                                   version_scope: version_scope, close_on: close_on),
-        unreachable: selection.unreachable
+        unreachable: selection.unreachable,
+        roots: selection.records
       )
     end
 

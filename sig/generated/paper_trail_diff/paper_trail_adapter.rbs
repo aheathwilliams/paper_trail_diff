@@ -36,8 +36,8 @@ module PaperTrailDiff
     # caller reporting on a population does not have to rediscover which of its
     # members changed. The roots the relation could not reach come back named
     # rather than dropped -- see `PaperTrailDiff.analyze_scope`.
-    # : (untyped, limit: Integer?, within: untyped, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?) -> ScopedAnalysis
-    def analyze_scope: (untyped, limit: Integer?, within: untyped, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?) -> ScopedAnalysis
+    # : (untyped, limit: Integer?, within: untyped, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?historical_filter: untyped) -> ScopedAnalysis
+    def analyze_scope: (untyped, limit: Integer?, within: untyped, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?historical_filter: untyped) -> ScopedAnalysis
 
     private
 
