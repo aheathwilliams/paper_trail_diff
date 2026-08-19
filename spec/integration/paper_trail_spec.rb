@@ -955,6 +955,10 @@ RSpec.describe PaperTrailDiff do
         ->(state) { state.internal_note == 'review' }
       end
 
+      def was_review_or_wanted
+        ->(state) { %w[review wanted].include?(state.internal_note) }
+      end
+
       it 'selects what the record was, where a relation selects what it is now' do
         left, joined, _doomed, window = moving_population
 
@@ -997,6 +1001,52 @@ RSpec.describe PaperTrailDiff do
 
         expect(result.analyses).to eq({})
         expect(result.unreachable).to eq([])
+      end
+
+      # The filter cannot run in SQL, so answering it means reconstructing --
+      # which is the one thing `limit:` exists to bound. Reading the whole
+      # population to build a result that is about to be refused is the failure
+      # this guards.
+      it 'reconstructs in proportion to the limit, not to the population' do
+        start_at = Time.now.utc - 3600
+        60.times do |index|
+          CoreArticle.create!(title: "bulk #{index}", internal_note: 'wanted')
+                     .update!(title: "bulk #{index} v2")
+        end
+        window = start_at..(Time.now.utc + 3600)
+
+        reconstructed = 0
+        counting = lambda do |state|
+          reconstructed += 1
+          state.internal_note == 'wanted'
+        end
+
+        expect do
+          described_class.analyze_scope(CoreArticle, within: window, limit: 5,
+                                                     close_on: :current,
+                                                     historical_filter: counting)
+        end.to raise_error(PaperTrailDiff::BatchLimitExceededError, /matched more than 5/)
+        expect(reconstructed).to be <= 10
+      end
+
+      # The early exit must refuse rather than stop scanning: breaking would end
+      # the pass while later candidates could still have been selected, handing
+      # back a quietly short report instead of an error.
+      it 'refuses rather than returning a short result when matches are destroyed' do
+        start_at = Time.now.utc - 3600
+        doomed = 6.times.map do |index|
+          article = CoreArticle.create!(title: "gone #{index}", internal_note: 'wanted')
+          article.update!(title: "gone #{index} v2")
+          article
+        end
+        doomed.each(&:destroy!)
+        window = start_at..(Time.now.utc + 3600)
+
+        expect do
+          described_class.analyze_scope(CoreArticle, within: window, limit: 2,
+                                                     close_on: :current,
+                                                     historical_filter: was_review_or_wanted)
+        end.to raise_error(PaperTrailDiff::BatchLimitExceededError)
       end
 
       it 'rejects a filter that cannot be called' do

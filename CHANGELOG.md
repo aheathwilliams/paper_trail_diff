@@ -22,7 +22,12 @@ project follows [Semantic Versioning](https://semver.org/).
   state it held at the end -- but `analyze_many` still requires live records, so
   a destroyed root that matches is reported in `unreachable` rather than
   analyzed. One that does not match is excluded outright, where previously every
-  destroyed candidate was reported.
+  destroyed candidate was reported. `limit:` bounds the reconstruction the
+  filter requires as well as the analyses it produces: candidates are rebuilt in
+  passes and the call refuses as soon as more than `limit:` roots have matched,
+  rather than reading a whole population to assemble a result it is about to
+  refuse. It refuses rather than stopping the scan, because ending early while
+  later candidates could still match would hand back a quietly short report.
 - Expose `ScopedAnalysis#roots`, the live records the selection loaded. The gem
   already had them, and withholding them only made a caller query the same rows
   again to attach its own presentation data. `roots` and `unreachable` stay

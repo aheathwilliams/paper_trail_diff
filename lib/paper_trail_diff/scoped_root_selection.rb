@@ -26,6 +26,12 @@ module PaperTrailDiff
   # window. `where(status: 'published')` selects what is published now, which is
   # not the same set as what was published while the window was open.
   class ScopedRootSelection
+    # How many candidates are reconstructed per pass when a historical filter is
+    # given. Large enough that an ordinary population is one or two queries,
+    # small enough that an oversized one is abandoned early rather than read
+    # whole.
+    CANDIDATE_BATCH = 250
+
     # A plain class rather than Data.define, which arrived in Ruby 3.2 while this
     # gem supports 3.1.
     class Result
@@ -110,12 +116,37 @@ module PaperTrailDiff
     # visible only if something later recorded it.
     #: (Array[String]) -> Array[String]
     def historically_matching(candidates)
-      reconstructed_states(candidates).filter_map do |id, states|
-        id if states.any? { |state| @historical_filter.call(state) }
+      matched = [] #: Array[String]
+      candidates.each_slice(CANDIDATE_BATCH) do |slice|
+        states = reconstructed_states(slice)
+        slice.each do |id|
+          next unless states.fetch(id, []).any? { |state| @historical_filter.call(state) }
+
+          matched << id
+          # Stop the moment the answer is known to exceed what was asked for.
+          # Continuing would reconstruct the rest of the population to build a
+          # result that is going to be refused anyway. Raising here rather than
+          # breaking is what keeps the early exit honest: a break would end the
+          # scan while later candidates might still have been selected, and the
+          # caller would get a quietly short report instead of a refusal.
+          raise_over_limit if matched.length > @limit
+        end
       end
+      matched
     end
 
-    # One query for every candidate's in-window versions, reified in id order.
+    #: () -> void
+    def raise_over_limit
+      raise BatchLimitExceededError,
+            "historical_filter: matched more than #{@limit} roots; narrow the window " \
+            'or the filter, or raise limit: to the population you intend to analyze'
+    end
+
+    # One query per slice rather than one for the whole population: the filter
+    # can only be answered by reconstructing, so the work is bounded by reading
+    # in passes and stopping as soon as the limit decides the outcome.
+    #
+    # One query for the slice's in-window versions, reified in id order.
     # A create version reifies to nil -- the record did not exist yet, so there
     # is no state for the filter to judge -- and is dropped rather than passed
     # along as a nil the caller would have to guard.
