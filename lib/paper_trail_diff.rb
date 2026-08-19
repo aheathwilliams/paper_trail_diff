@@ -92,6 +92,8 @@ require_relative 'paper_trail_diff/paper_trail_adapter'
 #     type attribute_changes = Hash[String, ValueChange]
 #     type association_diff = ToOneAssociationDiff | CollectionAssociationDiff
 #     type association_diffs = Hash[String, association_diff]
+#     type nested_change = ValueChange | ArrayChange
+#     type nested_changes = Hash[Array[String], nested_change]
 #     type association_snapshots = Hash[String, AssociationSnapshot]
 #     type identity = Array[untyped]
 #     type comparison_input = Hash[String | Symbol, untyped]
@@ -344,7 +346,7 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
     # list that merely shifted would otherwise look changed throughout. A key
     # that was absent reads as `NestedComparator::ABSENT` rather than nil, which
     # JSON uses for a present null.
-    #: (untyped, ?untyped) -> Hash[Array[String], ValueChange]
+    #: (untyped, ?untyped) -> nested_changes
     def nested_changes(change, to_value = nil)
       # Tested by type rather than by responding to `from`: ActiveSupport gives
       # String#from, so duck-typing here quietly reads a plain string as a pair.

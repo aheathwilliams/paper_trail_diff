@@ -386,9 +386,30 @@ PaperTrailDiff.nested_changes({ "a.b" => 1, "a" => { "b" => 1 } },
 # => { ["a.b"] => <from 1 to 2>, ["a", "b"] => <from 1 to 3> }
 ```
 
-**Arrays are reported whole, not by index.** Their elements carry no identity, so
-an insertion at the front would make every later index look changed. This is the
-same rule the collection comparator follows for records it cannot identify.
+**Arrays are reported by membership, not by position.** Elements carry no
+identity, so an insertion at the front would make every later index look
+changed — one insertion described as several edits. An `ArrayChange` says what
+was added and removed, matching by value and respecting duplicates:
+
+```ruby
+change = PaperTrailDiff.nested_changes(
+  { "keywords" => %w[apollo nasa] },
+  { "keywords" => %w[saturn apollo nasa] }
+).fetch(["keywords"])
+
+change.added      # => ["saturn"]
+change.removed    # => []
+change.reordered? # => false
+change.from       # => ["apollo", "nasa"]   (the whole values remain)
+```
+
+Membership cannot see one thing, so it is named rather than passed over: the
+same elements in a new order report `reordered?` as true with nothing added or
+removed.
+
+An element that is itself an object is reported whole. Saying which field of
+which object changed would need a pairing of before-elements with
+after-elements, and nothing in the value licenses that pairing.
 
 **An absent key is not a null one.** `{"a": null}` and `{}` mean different things
 in JSON, and an audit trail that showed them alike would be lying about one of

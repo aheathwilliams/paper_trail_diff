@@ -16,11 +16,11 @@ module PaperTrailDiff
   # names and locales routinely do -- and joining would make `a.b` ambiguous
   # between one key and two.
   #
-  # Arrays are leaves. Their elements carry no identity, so an insertion at the
-  # front makes every later index look changed; reporting "element 2 changed"
-  # would be confidently wrong about a list that merely shifted. The whole array
-  # is reported as one change, which is the same rule the collection comparator
-  # follows for records it cannot identify.
+  # Arrays are reported by membership, not by position -- see ArrayChange. Their
+  # elements carry no identity, so an insertion at the front makes every later
+  # index look changed, and one insertion reads as several edits. What is added
+  # and removed can be answered without claiming any pairing; what cannot is the
+  # same elements in a new order, so that is named rather than passed over.
   #
   # An absent key is not a null one. `{"a": null}` and `{}` mean different
   # things in JSON and an audit trail that conflated them would be lying about
@@ -32,7 +32,7 @@ module PaperTrailDiff
     def ABSENT.to_s = 'absent'
     ABSENT.freeze
 
-    #: (untyped, untyped) -> Hash[Array[String], ValueChange]
+    #: (untyped, untyped) -> nested_changes
     def self.call(from_value, to_value)
       new(from_value, to_value).call
     end
@@ -46,12 +46,12 @@ module PaperTrailDiff
     # Returns the changed paths, or an empty hash when the pair is not two
     # structures this can look inside. An empty result therefore means "nothing
     # to report at this depth", and the caller still has the whole-value change.
-    #: () -> Hash[Array[String], ValueChange]
+    #: () -> nested_changes
     def call
       from_structure, to_structure = structures
       return {} unless from_structure && to_structure
 
-      changes = {} #: Hash[Array[String], ValueChange]
+      changes = {} #: nested_changes
       walk(from_structure, to_structure, [], changes)
       changes.freeze
     end
@@ -82,19 +82,30 @@ module PaperTrailDiff
       parsed if parsed.is_a?(Hash)
     end
 
-    #: (Hash[untyped, untyped], Hash[untyped, untyped], Array[String], Hash[Array[String], ValueChange]) -> void
+    #: (Hash[untyped, untyped], Hash[untyped, untyped], Array[String], nested_changes) -> void
     def walk(from_hash, to_hash, path, changes)
       keys(from_hash, to_hash).each do |key|
         from_item = from_hash.key?(key) ? from_hash[key] : ABSENT
         to_item = to_hash.key?(key) ? to_hash[key] : ABSENT
         next if from_item == to_item
 
-        here = [*path, key.to_s]
+        here = [*path, key.to_s].freeze
         if from_item.is_a?(Hash) && to_item.is_a?(Hash)
           walk(from_item, to_item, here, changes)
         else
-          changes[here.freeze] = ValueChange.new(from: from_item, to: to_item)
+          changes[here] = change_for(from_item, to_item)
         end
+      end
+    end
+
+    # Two arrays are a membership change; anything else is a change to the
+    # value as a whole, including an array facing something that is not one.
+    #: (untyped, untyped) -> nested_change
+    def change_for(from_item, to_item)
+      if from_item.is_a?(Array) && to_item.is_a?(Array)
+        ArrayChange.new(from: from_item, to: to_item)
+      else
+        ValueChange.new(from: from_item, to: to_item)
       end
     end
 
