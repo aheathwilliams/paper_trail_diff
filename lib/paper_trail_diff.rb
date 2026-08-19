@@ -117,7 +117,7 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
     has_and_belongs_to_many
   ].freeze
 
-  class << self
+  class << self # rubocop:disable Metrics/ClassLength
     # Compares net state between explicit PaperTrail-version or current-record endpoints.
     #: (untyped, untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?reload_live_endpoints: bool) -> Diff
     def compare(
@@ -293,7 +293,7 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
     # Note also that a relation selects on current state, not on state during
     # the window: `where(status: 'published')` means published *now*, which is a
     # different set from what was published while the window was open.
-    #: (untyped, limit: Integer?, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?) -> ScopedAnalysis
+    #: (untyped, limit: Integer?, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?historical_filter: untyped) -> ScopedAnalysis
     def analyze_scope( # rubocop:disable Metrics/ParameterLists
       scope,
       limit:,
@@ -302,11 +302,13 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
       ignore: DEFAULT_IGNORED_ATTRIBUTES,
       activity: false,
       version_scope: nil,
-      close_on: nil
+      close_on: nil,
+      historical_filter: nil
     )
       PaperTrailAdapter.new(associations: associations, ignore: ignore).analyze_scope(
         scope, limit: limit, within: within, activity: activity,
-               version_scope: version_scope, close_on: close_on
+               version_scope: version_scope, close_on: close_on,
+               historical_filter: historical_filter
       )
     end
 

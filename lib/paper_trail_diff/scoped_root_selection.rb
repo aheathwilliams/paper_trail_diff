@@ -40,16 +40,18 @@ module PaperTrailDiff
       end
     end
 
-    #: (untyped, time_range: TimeRange?, limit: Integer) -> void
-    def initialize(scope, time_range:, limit:)
+    #: (untyped, time_range: TimeRange?, limit: Integer, ?historical_filter: untyped) -> void
+    def initialize(scope, time_range:, limit:, historical_filter: nil)
       @scope = normalize_scope(scope)
       @time_range = time_range
       @limit = validate_limit(limit)
+      @historical_filter = validate_filter(historical_filter)
     end
 
     #: () -> Result
     def call
       candidates = versioned_ids
+      candidates = historically_matching(candidates) if @historical_filter && candidates.any?
       return Result.new(records: [], unreachable: []) if candidates.empty?
 
       live = live_ids(candidates)
@@ -64,6 +66,7 @@ module PaperTrailDiff
     # @rbs @scope: untyped
     # @rbs @time_range: TimeRange?
     # @rbs @limit: Integer
+    # @rbs @historical_filter: untyped
 
     # Accepts a model class as readily as a relation: `Article` and
     # `Article.where(...)` both name a population, and `all` is what makes them
@@ -79,6 +82,51 @@ module PaperTrailDiff
 
       raise UnversionedAssociationError,
             "scope: #{relation.model.name} is not versioned, so it has no history to select from"
+    end
+
+    # A historical filter is a callable judging one reconstructed state, so it
+    # is checked up front rather than failing partway through a population.
+    #: (untyped) -> untyped
+    def validate_filter(filter)
+      return filter if filter.nil? || filter.respond_to?(:call)
+
+      raise ConfigurationError, 'historical_filter: must respond to call'
+    end
+
+    # Which candidates held a state the filter accepts at some boundary inside
+    # the window. This is the answer a relation cannot give: a relation reads
+    # the live row, so it cannot speak for a record that has since changed out
+    # of the population, nor for one that no longer exists at all.
+    #
+    # A record matches if it matched at *any* in-window boundary, not only at
+    # the ends. "Category 10 during July" is most naturally read as "was 10 at
+    # some point in July", and a record that was 10 only mid-month would be
+    # missed by either endpoint alone.
+    #
+    # What the filter sees is governed by the same rule as everything else
+    # here: a version records the state before its own event, so these are the
+    # states the record held *entering* each recorded change inside the window.
+    # A value the record took on with its last in-window change is therefore
+    # visible only if something later recorded it.
+    #: (Array[String]) -> Array[String]
+    def historically_matching(candidates)
+      reconstructed_states(candidates).filter_map do |id, states|
+        id if states.any? { |state| @historical_filter.call(state) }
+      end
+    end
+
+    # One query for every candidate's in-window versions, reified in id order.
+    # A create version reifies to nil -- the record did not exist yet, so there
+    # is no state for the filter to judge -- and is dropped rather than passed
+    # along as a nil the caller would have to guard.
+    #: (Array[String]) -> Hash[String, Array[untyped]]
+    def reconstructed_states(candidates)
+      relation = version_class.where(item_type: item_type, item_id: candidates)
+      range = @time_range
+      relation = range.scope(relation) if range
+      relation.reorder(created_at: :asc, id: :asc)
+              .group_by { |version| version.item_id.to_s }
+              .transform_values { |versions| versions.filter_map(&:reify) }
     end
 
     #: (Integer) -> Integer

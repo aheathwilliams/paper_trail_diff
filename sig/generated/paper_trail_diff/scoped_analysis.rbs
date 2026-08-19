@@ -16,9 +16,17 @@ module PaperTrailDiff
 
     attr_reader unreachable: Array[Array[String]]
 
-    # : (analyses: Hash[Array[String], Analysis], unreachable: Array[Array[String]]) -> void
-    def initialize: (analyses: Hash[Array[String], Analysis], unreachable: Array[Array[String]]) -> void
+    # The live records the selection loaded, in the order it loaded them. The
+    # gem already has them; withholding them only makes a caller query the same
+    # rows again to attach its own presentation data. A destroyed root has no
+    # record to hand back, so `roots` and `unreachable` stay complementary.
+    attr_reader roots: Array[untyped]
 
+    # : (analyses: Hash[Array[String], Analysis], unreachable: Array[Array[String]], ?roots: Array[untyped]) -> void
+    def initialize: (analyses: Hash[Array[String], Analysis], unreachable: Array[Array[String]], ?roots: Array[untyped]) -> void
+
+    # Two elements, not three: `roots` is reached by name so that existing
+    # destructuring keeps working.
     # : () -> [Hash[Array[String], Analysis], Array[Array[String]]]
     def to_ary: () -> [ Hash[Array[String], Analysis], Array[Array[String]] ]
   end

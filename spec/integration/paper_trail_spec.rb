@@ -935,6 +935,118 @@ RSpec.describe PaperTrailDiff do
         .to raise_error(PaperTrailDiff::ConfigurationError, /pass records or scope/)
     end
 
+    describe 'historical_filter:' do
+      # The population a relation cannot describe: one root left it after the
+      # window, another joined it after the window, and a third was destroyed
+      # inside it. Only the first was ever what the report is asking about.
+      def moving_population
+        start_at = Time.now.utc - 3600
+        left = CoreArticle.create!(title: 'left after', internal_note: 'review')
+        left.update!(internal_note: 'approved')
+        joined = CoreArticle.create!(title: 'joined after', internal_note: 'draft')
+        joined.update!(internal_note: 'review')
+        doomed = CoreArticle.create!(title: 'doomed', internal_note: 'review')
+        doomed.update!(title: 'doomed again')
+        doomed.destroy!
+        [left, joined, doomed, start_at..(Time.now.utc + 3600)]
+      end
+
+      def was_review
+        ->(state) { state.internal_note == 'review' }
+      end
+
+      it 'selects what the record was, where a relation selects what it is now' do
+        left, joined, _doomed, window = moving_population
+
+        by_relation = described_class.analyze_scope(
+          CoreArticle.where(internal_note: 'review'), within: window,
+                                                      limit: 100, close_on: :current
+        )
+        historically = described_class.analyze_scope(
+          CoreArticle, within: window, limit: 100, close_on: :current,
+                       historical_filter: was_review
+        )
+
+        # The relation finds the root that only joined the population later.
+        expect(by_relation.analyses.keys).to eq([PaperTrailDiff::Endpoint.identity(joined)])
+        # The filter finds the one that actually was `review` inside the window.
+        expect(historically.analyses.keys).to eq([PaperTrailDiff::Endpoint.identity(left)])
+      end
+
+      # The gap this closes: a relation reads the live table, so it can say
+      # nothing at all about a root that no longer has a row. Reconstruction
+      # can, because the destroy version carries the state it held at the end.
+      it 'judges a destroyed root, and still reports it as unreachable' do
+        _left, _joined, doomed, window = moving_population
+
+        result = described_class.analyze_scope(
+          CoreArticle, within: window, limit: 100, close_on: :current,
+                       historical_filter: was_review
+        )
+
+        expect(result.unreachable).to eq([['CoreArticle', doomed.id.to_s]])
+      end
+
+      it 'excludes a destroyed root the filter rejects, rather than reporting every one' do
+        *_roots, window = moving_population
+
+        result = described_class.analyze_scope(
+          CoreArticle, within: window, limit: 100, close_on: :current,
+                       historical_filter: ->(state) { state.internal_note == 'never used' }
+        )
+
+        expect(result.analyses).to eq({})
+        expect(result.unreachable).to eq([])
+      end
+
+      it 'rejects a filter that cannot be called' do
+        *_roots, window = moving_population
+
+        expect do
+          described_class.analyze_scope(CoreArticle, within: window, limit: 100,
+                                                     historical_filter: :nope)
+        end.to raise_error(PaperTrailDiff::ConfigurationError, /must respond to call/)
+      end
+    end
+
+    describe '#roots' do
+      it 'hands back the records it loaded, so a caller need not query them again' do
+        kept, _skipped, _doomed, window = scoped_history
+
+        result = described_class.analyze_scope(kept_scope, within: window, limit: 100,
+                                                           close_on: :current)
+
+        expect(result.roots.map(&:id)).to eq([kept.id])
+        expect(result.roots).to all(be_a(CoreArticle))
+        expect(result.roots).to be_frozen
+      end
+
+      # Every candidate is in exactly one of the two, which is what makes the
+      # pair usable as a report of the whole population.
+      it 'stays complementary to unreachable' do
+        _kept, _skipped, doomed, window = scoped_history
+
+        result = described_class.analyze_scope(CoreArticle, within: window, limit: 100,
+                                                            close_on: :current)
+
+        expect(result.roots.map { |root| PaperTrailDiff::Endpoint.identity(root) })
+          .not_to include(['CoreArticle', doomed.id.to_s])
+        expect(result.roots.length + result.unreachable.length)
+          .to eq(result.analyses.length + result.unreachable.length)
+      end
+
+      it 'leaves destructuring two wide, so existing callers are unaffected' do
+        *_roots, window = scoped_history
+
+        analyses, unreachable = described_class.analyze_scope(CoreArticle, within: window,
+                                                                           limit: 100,
+                                                                           close_on: :current)
+
+        expect(analyses).to be_a(Hash)
+        expect(unreachable).to be_a(Array)
+      end
+    end
+
     it 'rejects a missing limit, an unusable limit, and an unusable scope' do
       *_roots, window = scoped_history
 

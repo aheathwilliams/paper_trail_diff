@@ -3,6 +3,32 @@
 All notable changes to this project will be documented in this file. The
 project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- Accept `historical_filter:` on `analyze_scope`, selecting roots by the state
+  they held during the window rather than by the row they have now. A relation
+  reads the live table, so it answers "reports whose category is 10 today", not
+  "reports whose category was 10 during July" -- and it cannot speak at all for
+  a root that has since been destroyed. The filter is a callable given each
+  state a root held at a boundary inside the window, and a root is selected if
+  it matched at *any* of them: a value held only mid-window would be missed by
+  either endpoint alone. What it sees follows the same rule as everything else
+  here, since a version records the state before its own event: these are the
+  states the root held entering each recorded change, so a value taken on with
+  the last in-window change is visible only if something later recorded it. A
+  destroyed root can now be judged, because its destroy version carries the
+  state it held at the end -- but `analyze_many` still requires live records, so
+  a destroyed root that matches is reported in `unreachable` rather than
+  analyzed. One that does not match is excluded outright, where previously every
+  destroyed candidate was reported.
+- Expose `ScopedAnalysis#roots`, the live records the selection loaded. The gem
+  already had them, and withholding them only made a caller query the same rows
+  again to attach its own presentation data. `roots` and `unreachable` stay
+  complementary, and destructuring remains two wide so existing callers are
+  unaffected.
+
 ## [0.12.0] - 2026-08-19
 
 ### Changed

@@ -66,8 +66,8 @@ module PaperTrailDiff
   # Note also that a relation selects on current state, not on state during
   # the window: `where(status: 'published')` means published *now*, which is a
   # different set from what was published while the window was open.
-  # : (untyped, limit: Integer?, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?) -> ScopedAnalysis
-  def self.analyze_scope: (untyped, limit: Integer?, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?) -> ScopedAnalysis
+  # : (untyped, limit: Integer?, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?historical_filter: untyped) -> ScopedAnalysis
+  def self.analyze_scope: (untyped, limit: Integer?, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?historical_filter: untyped) -> ScopedAnalysis
 
   # Returns the association macros this release can normalize.
   # : () -> Array[Symbol]
