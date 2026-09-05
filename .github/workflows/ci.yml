@@ -101,7 +101,7 @@ jobs:
             image: mcr.microsoft.com/mssql/server:2022-latest
             port: 1433
             url: sqlserver://sa:PaperTrail_Test2026@127.0.0.1:1433/paper_trail_diff_test
-            health: /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P PaperTrail_Test2026 -C -Q "SELECT 1" -b
+            health: /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P PaperTrail_Test2026 -C -Q 'SELECT 1' -b
 
     services:
       database:
@@ -120,7 +120,7 @@ jobs:
         ports:
           - ${{ matrix.port }}:${{ matrix.port }}
         options: >-
-          --health-cmd '${{ matrix.health }}'
+          --health-cmd "${{ matrix.health }}"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 20
