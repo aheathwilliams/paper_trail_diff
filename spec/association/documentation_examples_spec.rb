@@ -36,7 +36,7 @@ RSpec.describe 'association documentation examples' do
         session: 'quickstart-activity',
         context: context
       )
-    end.to output(/TrackedArticle #\d+\n/).to_stdout
+    end.to output(/TrackedComment #\d+\n/).to_stdout
     steps = context.local_variable_get(:steps)
     expect(steps.reject(&:empty?)).not_to be_empty
   end
@@ -85,6 +85,6 @@ RSpec.describe 'association documentation examples' do
   end
 
   def readme_path
-    File.expand_path('../../README.md', __dir__)
+    File.expand_path('../../docs/reference.md', __dir__)
   end
 end

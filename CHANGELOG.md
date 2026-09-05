@@ -15,6 +15,9 @@ project follows [Semantic Versioning](https://semver.org/).
 - Batch activity analysis now uses the same completeness checks as single-record
   time windows. Callers may receive `IncompleteTimeRangeError` for a range that
   previously returned an incomplete report.
+- Separate the recipe-based README from the full API reference and architecture
+  notes. Clarify relation pagination, the independent safety ceiling, and the
+  unpaginated `unreachable` collection.
 
 ### Fixed
 
