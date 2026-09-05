@@ -150,13 +150,13 @@ module PaperTrailDiff
     # have moved since it.
     #: (ActivityHistory, untyped, untyped, RecordSnapshot?) -> ActivityStep?
     def current_step(history, record, captured_at, snapshot)
-      previous = history.steps.last&.to_boundary
+      previous = history.last_boundary
       return unless previous
 
       ActivityStep.between(
         from_boundary: previous,
         to_boundary: ActivityBoundary.current(record, captured_at: captured_at),
-        from_snapshot: history.last_snapshot, to_snapshot: snapshot, retain: @retain
+        from_snapshot: history.last_event_snapshot, to_snapshot: snapshot, retain: @retain
       )
     end
 

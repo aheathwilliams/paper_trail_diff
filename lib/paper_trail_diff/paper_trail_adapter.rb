@@ -86,6 +86,7 @@ module PaperTrailDiff
 
     #: (untyped, from: untyped, to: untyped, within: untyped, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?) -> Analysis
     def analyze(record, from:, to:, within:, activity: false, version_scope: nil, close_on: nil, snapshots: false, group: nil) # rubocop:disable Metrics/ParameterLists, Layout/LineLength
+      ActivityGrouping.validate!(group, activity: activity, snapshots: snapshots)
       @traversal_preparer.call(record.class, historical: true)
       live = live_endpoint_for(record, close_on, within)
       if activity
@@ -102,8 +103,9 @@ module PaperTrailDiff
     end
 
     # Analyzes many roots over one shared range, preparing their history once.
-    #: (Array[untyped], within: untyped, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?) -> Hash[identity, Analysis]
-    def analyze_many(records, within:, activity: false, version_scope: nil, close_on: nil)
+    #: (Array[untyped], within: untyped, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?) -> Hash[identity, Analysis]
+    def analyze_many(records, within:, activity: false, version_scope: nil, close_on: nil, snapshots: false, group: nil) # rubocop:disable Metrics/ParameterLists, Layout/LineLength
+      ActivityGrouping.validate!(group, activity: activity, snapshots: snapshots)
       count = records.is_a?(Array) ? records.length : 0
       payload = @instrumentation_payload.merge(comparison_count: count)
       Instrumentation.instrument('analyze_many', payload) do
@@ -114,7 +116,8 @@ module PaperTrailDiff
           close_on_current: close_on_current?(close_on, within),
           live_loader: @live_endpoints.method(:call),
           history_preparer: @historical_store.method(:prepare_batch),
-          analyzer: batched_root_analyzer(activity)
+          analyzer: batched_root_analyzer(activity, within: within, snapshots: snapshots,
+                                                    group: group)
         ).call
       end
     end
@@ -123,16 +126,19 @@ module PaperTrailDiff
     # caller reporting on a population does not have to rediscover which of its
     # members changed. The roots the relation could not reach come back named
     # rather than dropped -- see `PaperTrailDiff.analyze_scope`.
-    #: (untyped, limit: Integer?, within: untyped, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?) -> ScopedAnalysis
-    def analyze_scope(scope, limit:, within:, activity: false, version_scope: nil, close_on: nil) # rubocop:disable Metrics/ParameterLists
+    #: (untyped, limit: Integer?, within: untyped, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?) -> ScopedAnalysis
+    def analyze_scope(scope, limit:, within:, activity: false, version_scope: nil, close_on: nil, snapshots: false, group: nil) # rubocop:disable Metrics/ParameterLists, Layout/LineLength
       raise ConfigurationError, 'limit: is required when selecting roots by scope' if limit.nil?
+
+      ActivityGrouping.validate!(group, activity: activity, snapshots: snapshots)
 
       selection = ScopedRootSelection.new(
         scope, time_range: within.nil? ? nil : TimeRange.new(within), limit: limit
       ).call
       ScopedAnalysis.new(
         analyses: analyze_many(selection.records, within: within, activity: activity,
-                                                  version_scope: version_scope, close_on: close_on),
+                                                  version_scope: version_scope, close_on: close_on,
+                                                  snapshots: snapshots, group: group),
         unreachable: selection.unreachable
       )
     end
@@ -153,7 +159,7 @@ module PaperTrailDiff
 
     #: (untyped, from: untyped, to: untyped, within: untyped, version_scope: untyped, live_endpoint: untyped, ?snapshots: bool, ?group: Symbol?) -> Analysis
     def analyze_activity(record, from:, to:, within:, version_scope:, live_endpoint:, snapshots: false, group: nil) # rubocop:disable Metrics/ParameterLists, Layout/LineLength
-      reject_live_habtm_activity!(record.class) if live_endpoint
+      reject_live_habtm_activity!(record.class) if live_endpoint || Endpoint.record?(to)
       activity_builder(
         record, from: from, to: to, within: within, version_scope: version_scope,
                 live_endpoint: live_endpoint, snapshots: snapshots, group: group
@@ -213,14 +219,14 @@ module PaperTrailDiff
       @activity_snapshotter = build_activity_snapshotter
     end
 
-    #: (bool) -> BatchedRootAnalyzer
-    def batched_root_analyzer(activity)
+    #: (bool, within: untyped, snapshots: bool, group: Symbol?) -> BatchedRootAnalyzer
+    def batched_root_analyzer(activity, within:, snapshots:, group:)
       BatchedRootAnalyzer.new(
         tree: @association_tree,
         timeline_snapshotter: @timeline_snapshotter,
         activity_snapshotter: @activity_snapshotter,
         preparer: @traversal_preparer.method(:call),
-        activity: activity
+        activity: activity, within: within, snapshots: snapshots, group: group
       )
     end
 

@@ -5,8 +5,24 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Reject `snapshots: true` without `activity: true` on analysis methods, matching
+  validation of `group:`. Previously the option was silently ignored.
+- Honor `version_scope:` on current-record-ended activity timelines. Previously
+  that path silently dropped the filter. As with time windows, an excluded later
+  version can supply the closing historical state instead of current state.
+- Batch activity analysis now uses the same completeness checks as single-record
+  time windows. Callers may receive `IncompleteTimeRangeError` for a range that
+  previously returned an incomplete report.
+
 ### Fixed
 
+- Preserve the reporting window and live closing state in batch activity
+  analysis. Single-record, batch, and scoped results now agree rather than
+  omitting the latest update or reporting a live root as removed.
+- Report a lone creation or update in an activity window closing on current
+  state, even when no preceding step exists.
 - Copy mutable descendants of shallow-frozen containers into immutable results.
   Freeze nested diff paths and empty nested results as well.
 - Match string and symbol keys consistently in nested object diffs, and reject
@@ -14,7 +30,22 @@ project follows [Semantic Versioning](https://semver.org/).
   a change. Ordinary whole-value comparison remains available for such data.
 - Replace the absent-key sentinel's singleton methods with a typed value class
   so Steep no longer logs internal errors. Fail the type-check gate on internal
-  errors even when Steep exits successfully.
+  errors even when Steep exits successfully, and check public API call examples
+  to catch missing signature keywords such as `activity_timeline`'s `group:`.
+
+### Added
+
+- Accept explicit current-record `to:` endpoints on `timeline` and `analyze`,
+  matching `activity_timeline`. Historical versus live state remains explicit.
+- Accept `group:` and `snapshots:` on `analyze_many` and `analyze_scope` for
+  activity analysis. Invalid grouping and grouping without `activity: true`
+  raise `ConfigurationError` instead of being silently ignored.
+- Expose `source_boundary` on both step types to identify the event whose change
+  is reported. For a transaction group it identifies the first event.
+- Add opt-in `metadata: true` serialization on boundaries, steps, and analyses
+  for actor, event, transaction ID, and record reference. Default shapes are
+  unchanged. `ActivityStep#to_h(snapshots: true)` serializes retained states;
+  `Analysis#to_h(snapshots: true)` also includes retained activity states.
 
 ## [0.12.0] - 2026-08-19
 

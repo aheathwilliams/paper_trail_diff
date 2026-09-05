@@ -6,18 +6,15 @@ module PaperTrailDiff
     # : (untyped, from: untyped, to: untyped, ?version_scope: untyped) -> void
     def initialize: (untyped, from: untyped, to: untyped, ?version_scope: untyped) -> void
 
-    # Same selection as `select`, but keeping the step pairs a filter implies.
+    # Keep both reconstruction boundaries and the step pairs a filter implies.
     # : () -> RootVersionPlan
     def select_plan_for_range: () -> RootVersionPlan
 
     # : () -> untyped
     def validated_relation: () -> untyped
 
-    # : () -> Array[untyped]
-    def select: () -> Array[untyped]
-
-    # : () -> Array[untyped]
-    def select_through_latest: () -> Array[untyped]
+    # : (untyped) -> RootVersionPlan
+    def select_plan_through_current: (untyped) -> RootVersionPlan
 
     private
 
@@ -32,11 +29,8 @@ module PaperTrailDiff
     # : () -> untyped
     def versions_relation: () -> untyped
 
-    # : (untyped, ?through: untyped) -> Array[untyped]
-    def select_relation: (untyped, ?through: untyped) -> Array[untyped]
-
-    # : (untyped, ?through: untyped) -> RootVersionPlan
-    def select_plan: (untyped, ?through: untyped) -> RootVersionPlan
+    # : (untyped, ?through: untyped, ?live_endpoint: untyped) -> RootVersionPlan
+    def select_plan: (untyped, ?through: untyped, ?live_endpoint: untyped) -> RootVersionPlan
 
     # : (Array[untyped]) -> Array[untyped]
     def ordered: (Array[untyped]) -> Array[untyped]

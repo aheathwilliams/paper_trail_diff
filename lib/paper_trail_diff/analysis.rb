@@ -34,10 +34,15 @@ module PaperTrailDiff
     # Reconstructed endpoint states are opt-in, because they carry the whole
     # selected graph whether or not anything changed, which dwarfs the rest of
     # the payload for a wide graph.
-    #: (?snapshots: bool) -> Hash[Symbol, untyped]
-    def to_h(snapshots: false)
-      value = { diff: diff.to_h, timeline: Support.serialize(timeline) }
-      value[:activity_timeline] = Support.serialize(activity_timeline) if activity_timeline
+    #: (?snapshots: bool, ?metadata: bool) -> Hash[Symbol, untyped]
+    def to_h(snapshots: false, metadata: false)
+      value = { diff: diff.to_h, timeline: timeline.map { |step| step.to_h(metadata: metadata) } }
+      activity = activity_timeline
+      if activity
+        value[:activity_timeline] = activity.map do |step|
+          step.to_h(metadata: metadata, snapshots: snapshots)
+        end
+      end
       return value unless snapshots
 
       value.merge(

@@ -117,7 +117,7 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
     has_and_belongs_to_many
   ].freeze
 
-  class << self
+  class << self # rubocop:disable Metrics/ClassLength
     # Compares net state between explicit PaperTrail-version or current-record endpoints.
     #: (untyped, untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?reload_live_endpoints: bool) -> Diff
     def compare(
@@ -177,7 +177,7 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
     # Compares adjacent root and selected-descendant activity boundaries.
     # `reload_live_endpoints:` applies only when `to:` is a current record; the
     # other range forms never read live state.
-    #: (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?reload_live_endpoints: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool) -> Array[ActivityStep]
+    #: (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?reload_live_endpoints: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?) -> Array[ActivityStep]
     def activity_timeline( # rubocop:disable Metrics/ParameterLists
       record,
       from: nil,
@@ -244,7 +244,7 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
     # you from a relation, which returns a `ScopedAnalysis` -- the same Hash,
     # plus the roots the relation could not reach. See `analyze_scope` for why
     # that second collection exists.
-    #: (?Array[untyped]?, ?scope: untyped, ?limit: Integer?, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?) -> (Hash[identity, Analysis] | ScopedAnalysis)
+    #: (?Array[untyped]?, ?scope: untyped, ?limit: Integer?, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?) -> (Hash[identity, Analysis] | ScopedAnalysis)
     def analyze_many( # rubocop:disable Metrics/ParameterLists
       records = nil,
       scope: nil,
@@ -254,19 +254,23 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
       ignore: DEFAULT_IGNORED_ATTRIBUTES,
       activity: false,
       version_scope: nil,
-      close_on: nil
+      close_on: nil,
+      snapshots: false,
+      group: nil
     )
       adapter = PaperTrailAdapter.new(associations: associations, ignore: ignore)
       if scope
         raise ConfigurationError, 'pass either records or scope:, not both' unless records.nil?
 
         return adapter.analyze_scope(scope, limit: limit, within: within, activity: activity,
-                                            version_scope: version_scope, close_on: close_on)
+                                            version_scope: version_scope, close_on: close_on,
+                                            snapshots: snapshots, group: group)
       end
       raise ConfigurationError, 'pass records or scope:' if records.nil?
 
       adapter.analyze_many(records, within: within, activity: activity,
-                                    version_scope: version_scope, close_on: close_on)
+                                    version_scope: version_scope, close_on: close_on,
+                                    snapshots: snapshots, group: group)
     end
 
     # Analyzes every root the relation reaches whose history moved inside the
@@ -293,7 +297,7 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
     # Note also that a relation selects on current state, not on state during
     # the window: `where(status: 'published')` means published *now*, which is a
     # different set from what was published while the window was open.
-    #: (untyped, limit: Integer?, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?) -> ScopedAnalysis
+    #: (untyped, limit: Integer?, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?) -> ScopedAnalysis
     def analyze_scope( # rubocop:disable Metrics/ParameterLists
       scope,
       limit:,
@@ -302,11 +306,13 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
       ignore: DEFAULT_IGNORED_ATTRIBUTES,
       activity: false,
       version_scope: nil,
-      close_on: nil
+      close_on: nil,
+      snapshots: false,
+      group: nil
     )
       PaperTrailAdapter.new(associations: associations, ignore: ignore).analyze_scope(
         scope, limit: limit, within: within, activity: activity,
-               version_scope: version_scope, close_on: close_on
+               version_scope: version_scope, close_on: close_on, snapshots: snapshots, group: group
       )
     end
 

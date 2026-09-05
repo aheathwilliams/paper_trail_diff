@@ -33,14 +33,21 @@ module PaperTrailDiff
       diff.empty?
     end
 
-    #: () -> Hash[Symbol, untyped]
-    def to_h
-      {
+    # The root event whose change this step reports.
+    #: () -> ActivityBoundary
+    def source_boundary = from_boundary
+
+    #: (?metadata: bool) -> Hash[Symbol, untyped]
+    def to_h(metadata: false)
+      value = {
         from_version_id: from_version.id,
         to_version_id: to_version&.id,
-        to_boundary: to_boundary.to_h,
+        to_boundary: to_boundary.to_h(metadata: metadata),
         diff: diff.to_h
       }
+      return value unless metadata
+
+      value.merge(from_boundary: from_boundary.to_h(metadata: true))
     end
   end
 end
