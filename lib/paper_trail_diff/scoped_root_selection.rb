@@ -106,14 +106,53 @@ module PaperTrailDiff
       base_class.unscoped.where(primary_key => candidates).pluck(primary_key).map(&:to_s)
     end
 
-    # Loading one past the limit is what turns an oversized page into an error
-    # rather than a silently truncated report.
+    # Deduplicate records rather than adding SQL DISTINCT: an otherwise valid
+    # relation may order by joined columns or select a PostgreSQL json column.
+    # Read bounded pages until the relation ends or too many unique roots appear.
     #: (Array[String]) -> Array[untyped]
     def selected_records(live)
       return [] if live.empty?
 
-      records = @scope.where(primary_key => live).limit(@limit + 1).to_a
-      return records.freeze unless records.length > @limit
+      records = {} #: Hash[untyped, untyped]
+      consumed = 0
+      loop do
+        page = record_page(live, consumed)
+        page.each { |record| records[record.id] ||= record }
+        reject_oversized!(records.length)
+        break if page.length < @limit + 1
+
+        consumed += page.length
+      end
+      records.values.freeze
+    end
+
+    #: (Array[String], Integer) -> Array[untyped]
+    def record_page(live, consumed)
+      count = page_limit(consumed)
+      return [] if count.zero?
+
+      ordered_scope.where(primary_key => live)
+                   .offset((@scope.offset_value || 0) + consumed).limit(count).to_a
+    end
+
+    # Preserve explicit ordering: SQL Server rejects duplicate ORDER BY columns,
+    # even when the extra ordering would only have served as a tie-breaker.
+    #: () -> untyped
+    def ordered_scope
+      return @scope unless @scope.order_values.empty?
+
+      @scope.order(primary_key => :asc)
+    end
+
+    #: (Integer) -> Integer
+    def page_limit(consumed)
+      remaining = @scope.limit_value
+      [remaining ? remaining - consumed : @limit + 1, @limit + 1].min
+    end
+
+    #: (Integer) -> void
+    def reject_oversized!(count)
+      return unless count > @limit
 
       raise BatchLimitExceededError,
             "scope: selected more than #{@limit} roots; narrow the window or the " \

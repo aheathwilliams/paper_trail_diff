@@ -274,12 +274,11 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
     end
 
     # Analyzes every root the relation reaches whose history moved inside the
-    # window, selecting them in a fixed number of queries rather than making the
-    # caller rediscover them.
+    # window. Joined duplicates are read in bounded pages and analyzed once.
     #
     # `limit:` is required and exceeding it raises. Selection moves into the gem
-    # here, so the bound on how much work a page can ask for has to move with
-    # it, and a truncated audit report is worse than a refused one.
+    # here. The relation's own limit/offset select the live page; this separate
+    # ceiling rejects too many unique roots rather than truncating that page.
     #
     # Returns a `ScopedAnalysis`, which destructures:
     #
@@ -288,7 +287,8 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
     #   )
     #
     # `unreachable` names roots that changed in the window but have no live row
-    # left. A relation's conditions are evaluated against the live table, so a
+    # left, independently of the live page's pagination and safety ceiling.
+    # A relation's conditions are evaluated against the live table, so a
     # destroyed root cannot be tested against them at all -- its history is
     # intact and the state it held at destruction may well have matched. Those
     # roots are reported rather than dropped so that a page auditing deletions

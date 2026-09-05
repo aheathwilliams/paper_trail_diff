@@ -249,7 +249,7 @@ RSpec.describe PaperTrailDiff do
       end
 
       expect(results.transform_values(&:to_h)).to eq(expected)
-      expect(sql.grep(/FROM "core_articles"/).length).to eq(1)
+      expect(sql.grep(/FROM #{Regexp.escape(CoreArticle.quoted_table_name)}/).length).to eq(1)
       expect(results).to be_frozen
       expect(results.keys).to all(be_frozen)
     end
@@ -271,8 +271,8 @@ RSpec.describe PaperTrailDiff do
       end
 
       expect(results.values).to all(be_empty)
-      expect(sql.grep(/FROM "core_articles"/).length).to eq(1)
-      expect(sql.grep(/FROM "core_comments"/).length).to eq(1)
+      expect(sql.grep(/FROM #{Regexp.escape(CoreArticle.quoted_table_name)}/).length).to eq(1)
+      expect(sql.grep(/FROM #{Regexp.escape(CoreComment.quoted_table_name)}/).length).to eq(1)
     end
 
     it 'reuses fully preloaded endpoints without live-record queries' do
@@ -634,7 +634,7 @@ RSpec.describe PaperTrailDiff do
         ActiveSupport::Notifications.subscribed(callback, 'sql.active_record') do
           described_class.analyze_many(articles, within: window, close_on: :current)
         end
-        sql.grep(/FROM "core_articles"/).length
+        sql.grep(/FROM #{Regexp.escape(CoreArticle.quoted_table_name)}/).length
       end
 
       expect(counts).to eq([1, 1])

@@ -80,6 +80,79 @@ jobs:
       - name: Run specs, linting, and type checking
         run: bundle exec rake
 
+  databases:
+    name: ${{ matrix.database }} / Ruby 4.0 / PaperTrail 17
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - database: PostgreSQL 17
+            image: postgres:17
+            port: 5432
+            url: postgresql://paper_trail_diff:test@127.0.0.1:5432/paper_trail_diff_test
+            health: pg_isready -U paper_trail_diff -d paper_trail_diff_test
+          - database: MySQL 8.4
+            image: mysql:8.4
+            port: 3306
+            url: mysql2://paper_trail_diff:test@127.0.0.1:3306/paper_trail_diff_test
+            health: mysqladmin ping -h 127.0.0.1 -ptest
+          - database: SQL Server 2022
+            image: mcr.microsoft.com/mssql/server:2022-latest
+            port: 1433
+            url: sqlserver://sa:PaperTrail_Test2026@127.0.0.1:1433/paper_trail_diff_test
+            health: /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P PaperTrail_Test2026 -C -Q "SELECT 1" -b
+
+    services:
+      database:
+        image: ${{ matrix.image }}
+        env:
+          POSTGRES_USER: paper_trail_diff
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: paper_trail_diff_test
+          MYSQL_ROOT_PASSWORD: test
+          MYSQL_DATABASE: paper_trail_diff_test
+          MYSQL_USER: paper_trail_diff
+          MYSQL_PASSWORD: test
+          ACCEPT_EULA: Y
+          MSSQL_PID: Developer
+          MSSQL_SA_PASSWORD: PaperTrail_Test2026
+        ports:
+          - ${{ matrix.port }}:${{ matrix.port }}
+        options: >-
+          --health-cmd '${{ matrix.health }}'
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      BUNDLE_GEMFILE: gemfiles/paper_trail_17.gemfile
+      BUNDLE_WITH: database_adapters
+      PAPER_TRAIL_DIFF_DATABASE_URL: ${{ matrix.url }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Install database client libraries
+        run: sudo apt-get update && sudo apt-get install -y libpq-dev default-libmysqlclient-dev freetds-dev
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '4.0'
+          bundler-cache: true
+
+      - name: Create SQL Server test database
+        if: matrix.database == 'SQL Server 2022'
+        run: >-
+          docker exec ${{ job.services.database.id }}
+          /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P PaperTrail_Test2026
+          -C -Q 'CREATE DATABASE paper_trail_diff_test' -b
+
+      - name: Run core and association suites
+        run: bundle exec rake spec
+
   windows:
     name: Windows Ruby ${{ matrix.ruby }} / PaperTrail ${{ matrix.paper_trail }}
     runs-on: windows-latest

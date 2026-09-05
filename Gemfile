@@ -15,3 +15,9 @@ gem 'simplecov', '~> 0.22.0', require: false
 gem 'sqlite3', '~> 2.0'
 gem 'steep', '~> 1.10', require: false
 gem 'tzinfo-data', require: false
+
+group :database_adapters, optional: true do
+  gem 'activerecord-sqlserver-adapter', '>= 7.1', '< 8.2', require: false
+  gem 'mysql2', '~> 0.5', require: false
+  gem 'pg', '~> 1.5', require: false
+end

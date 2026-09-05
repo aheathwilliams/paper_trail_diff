@@ -23,6 +23,9 @@ project follows [Semantic Versioning](https://semver.org/).
   omitting the latest update or reporting a live root as removed.
 - Report a lone creation or update in an activity window closing on current
   state, even when no preceding step exists.
+- Count unique roots from joined relations against the safety limit, preserving
+  relation pagination and ordering without injecting SQL `DISTINCT`. This also
+  permits ordering by joined columns on PostgreSQL and SQL Server.
 - Copy mutable descendants of shallow-frozen containers into immutable results.
   Freeze nested diff paths and empty nested results as well.
 - Match string and symbol keys consistently in nested object diffs, and reject
@@ -35,6 +38,10 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Run core and association suites against PostgreSQL 17, MySQL 8.4, and SQL Server
+  2022 in CI, alongside the existing SQLite Ruby/PaperTrail matrix. Database
+  adapters are optional development dependencies; the gem's dependencies are
+  unchanged.
 - Accept explicit current-record `to:` endpoints on `timeline` and `analyze`,
   matching `activity_timeline`. Historical versus live state remains explicit.
 - Accept `group:` and `snapshots:` on `analyze_many` and `analyze_scope` for
