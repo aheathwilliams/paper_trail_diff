@@ -1,6 +1,32 @@
 # frozen_string_literal: true
 
 RSpec.describe PaperTrailDiff::NestedComparator do
+  it 'matches Ruby symbol keys to JSON string keys at every depth' do
+    expect(changes({ outer: { count: 1 } }, { 'outer' => { 'count' => 2 } }))
+      .to eq(%w[outer count] => { from: 1, to: 2 })
+    expect(described_class.call({ a: 1 }, { 'a' => 1 })).to be_empty
+  end
+
+  it 'rejects ambiguous normalized keys instead of overwriting a change' do
+    expect { described_class.call({ a: 1, 'a' => 2 }, { a: 3 }) }
+      .to raise_error(PaperTrailDiff::AmbiguousNestedKeyError, /duplicate.*a/)
+  end
+
+  it 'keeps the whole-value diff available when nested keys are ambiguous' do
+    before = PaperTrailDiff::RecordSnapshot.new(
+      type: 'Example', id: 1, attributes: { config: { a: 1, 'a' => 2 } }
+    )
+    after = PaperTrailDiff::RecordSnapshot.new(
+      type: 'Example', id: 1, attributes: { config: { a: 3 } }
+    )
+    diff = PaperTrailDiff::Engine.compare(before, after)
+
+    expect(diff.to_h.fetch(:attributes).fetch('config'))
+      .to eq(from: { a: 1, 'a' => 2 }, to: { a: 3 })
+    expect { PaperTrailDiff.nested_changes(diff.attributes.fetch('config')) }
+      .to raise_error(PaperTrailDiff::AmbiguousNestedKeyError)
+  end
+
   def changes(from_value, to_value)
     described_class.call(from_value, to_value).transform_values(&:to_h)
   end

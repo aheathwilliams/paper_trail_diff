@@ -3,6 +3,19 @@
 All notable changes to this project will be documented in this file. The
 project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- Copy mutable descendants of shallow-frozen containers into immutable results.
+  Freeze nested diff paths and empty nested results as well.
+- Match string and symbol keys consistently in nested object diffs, and reject
+  normalized-key collisions with `AmbiguousNestedKeyError` instead of overwriting
+  a change. Ordinary whole-value comparison remains available for such data.
+- Replace the absent-key sentinel's singleton methods with a typed value class
+  so Steep no longer logs internal errors. Fail the type-check gate on internal
+  errors even when Steep exits successfully.
+
 ## [0.12.0] - 2026-08-19
 
 ### Changed

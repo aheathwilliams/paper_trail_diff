@@ -24,11 +24,15 @@ module PaperTrailDiff
   # one of them, so absence is its own value rather than nil.
   class NestedComparator
     # Stands in for a key that was not there at all.
+    class Absent
+      # : () -> String
+      def inspect: () -> String
+
+      # : () -> String
+      def to_s: () -> String
+    end
+
     ABSENT: untyped
-
-    def inspect: () -> untyped
-
-    def to_s: () -> untyped
 
     # : (untyped, untyped) -> nested_changes
     def self.call: (untyped, untyped) -> nested_changes
@@ -59,6 +63,9 @@ module PaperTrailDiff
 
     # : (Hash[untyped, untyped], Hash[untyped, untyped], Array[String], nested_changes) -> void
     def walk: (Hash[untyped, untyped], Hash[untyped, untyped], Array[String], nested_changes) -> void
+
+    # : (Hash[untyped, untyped]) -> Hash[String, untyped]
+    def normalize_keys: (Hash[untyped, untyped]) -> Hash[String, untyped]
 
     # Two arrays are a membership change; anything else is a change to the
     # value as a whole, including an array facing something that is not one.

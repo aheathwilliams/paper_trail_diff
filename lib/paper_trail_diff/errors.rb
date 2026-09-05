@@ -8,6 +8,9 @@ module PaperTrailDiff
   # Raised when a public option has an invalid type, key, value, or path.
   class ConfigurationError < Error; end
 
+  # Raised when nested data keys cannot be represented by unique string paths.
+  class AmbiguousNestedKeyError < Error; end
+
   # Raised when compare endpoints do not belong to the same PaperTrail item.
   class VersionMismatchError < Error; end
 
