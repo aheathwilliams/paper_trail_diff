@@ -249,7 +249,7 @@ RSpec.describe PaperTrailDiff do
       end
 
       expect(results.transform_values(&:to_h)).to eq(expected)
-      expect(sql.grep(/FROM "core_articles"/).length).to eq(1)
+      expect(sql.grep(/FROM #{Regexp.escape(CoreArticle.quoted_table_name)}/).length).to eq(1)
       expect(results).to be_frozen
       expect(results.keys).to all(be_frozen)
     end
@@ -271,8 +271,8 @@ RSpec.describe PaperTrailDiff do
       end
 
       expect(results.values).to all(be_empty)
-      expect(sql.grep(/FROM "core_articles"/).length).to eq(1)
-      expect(sql.grep(/FROM "core_comments"/).length).to eq(1)
+      expect(sql.grep(/FROM #{Regexp.escape(CoreArticle.quoted_table_name)}/).length).to eq(1)
+      expect(sql.grep(/FROM #{Regexp.escape(CoreComment.quoted_table_name)}/).length).to eq(1)
     end
 
     it 'reuses fully preloaded endpoints without live-record queries' do
@@ -634,7 +634,7 @@ RSpec.describe PaperTrailDiff do
         ActiveSupport::Notifications.subscribed(callback, 'sql.active_record') do
           described_class.analyze_many(articles, within: window, close_on: :current)
         end
-        sql.grep(/FROM "core_articles"/).length
+        sql.grep(/FROM #{Regexp.escape(CoreArticle.quoted_table_name)}/).length
       end
 
       expect(counts).to eq([1, 1])
@@ -1015,6 +1015,12 @@ RSpec.describe PaperTrailDiff do
         end
         window = start_at..(Time.now.utc + 3600)
 
+        reified = 0
+        allow_any_instance_of(CoreArticle.paper_trail.version_class)
+          .to receive(:reify).and_wrap_original do |method, *args, **kwargs|
+            reified += 1
+            method.call(*args, **kwargs)
+          end
         reconstructed = 0
         counting = lambda do |state|
           reconstructed += 1
@@ -1026,7 +1032,10 @@ RSpec.describe PaperTrailDiff do
                                                      close_on: :current,
                                                      historical_filter: counting)
         end.to raise_error(PaperTrailDiff::BatchLimitExceededError, /matched more than 5/)
-        expect(reconstructed).to be <= 10
+        expect(reconstructed).to eq(6)
+        # Each visited root has a nil create state and one update state. The
+        # rest of the batch must not be reified before the limit refuses it.
+        expect(reified).to eq(12)
       end
 
       # The early exit must refuse rather than stop scanning: breaking would end
@@ -1047,6 +1056,38 @@ RSpec.describe PaperTrailDiff do
                                                      close_on: :current,
                                                      historical_filter: was_review_or_wanted)
         end.to raise_error(PaperTrailDiff::BatchLimitExceededError)
+      end
+
+      it 'preserves activity options through the scoped analyze_many alias' do
+        left, _joined, _doomed, window = moving_population
+        result = described_class.analyze_many(
+          scope: CoreArticle, within: window, limit: 100, close_on: :current,
+          historical_filter: was_review, activity: true, snapshots: true, group: :transaction
+        )
+
+        expect(result.roots.map(&:id)).to eq([left.id])
+        steps = result.analyses.values.first.activity_timeline
+        expect(steps).not_to be_empty
+        expect(steps.last.to_snapshot).not_to be_nil
+      end
+
+      it 'rejects a historical filter on an explicit record list' do
+        left, _joined, _doomed, window = moving_population
+        expect do
+          described_class.analyze_many([left], within: window, historical_filter: was_review)
+        end.to raise_error(PaperTrailDiff::ConfigurationError, /requires scope/)
+      end
+
+      it 'matches a value held only at an intermediate boundary' do
+        root = CoreArticle.create!(title: 'initial', internal_note: 'draft')
+        root.update!(internal_note: 'review')
+        root.update!(internal_note: 'approved')
+        root.update!(title: 'final')
+        result = described_class.analyze_scope(
+          CoreArticle, within: (Time.now.utc - 3600)..(Time.now.utc + 3600),
+                       limit: 100, close_on: :current, historical_filter: was_review
+        )
+        expect(result.roots.map(&:id)).to eq([root.id])
       end
 
       it 'rejects a filter that cannot be called' do

@@ -12,7 +12,7 @@ module PaperTrailDiff
       @version_scope = version_scope
     end
 
-    # Same selection as `select`, but keeping the step pairs a filter implies.
+    # Keep both reconstruction boundaries and the step pairs a filter implies.
     #: () -> RootVersionPlan
     def select_plan_for_range
       relation = validated_relation
@@ -34,26 +34,12 @@ module PaperTrailDiff
       relation
     end
 
-    #: () -> Array[untyped]
-    def select
+    #: (untyped) -> RootVersionPlan
+    def select_plan_through_current(current)
+      Endpoint.validate_pair!(@record, current)
       relation = versions_relation
       validate_boundary!(@from, relation, boundary: :from)
-      validate_boundary!(@to, relation, boundary: :to)
-      if Support.compare_versions(@from, @to).positive?
-        raise InvalidTimelineRangeError, '`from` version must not follow `to` version'
-      end
-
-      select_relation(
-        relation.where(created_at: @from.created_at..@to.created_at),
-        through: @to
-      )
-    end
-
-    #: () -> Array[untyped]
-    def select_through_latest
-      relation = versions_relation
-      validate_boundary!(@from, relation, boundary: :from)
-      select_relation(relation.where(created_at: @from.created_at..))
+      select_plan(relation.where(created_at: @from.created_at..), live_endpoint: current)
     end
 
     private
@@ -72,13 +58,8 @@ module PaperTrailDiff
       raise InvalidTimelineRangeError, message, cause: e
     end
 
-    #: (untyped, ?through: untyped) -> Array[untyped]
-    def select_relation(relation, through: nil)
-      select_plan(relation, through: through).versions
-    end
-
-    #: (untyped, ?through: untyped) -> RootVersionPlan
-    def select_plan(relation, through: nil)
+    #: (untyped, ?through: untyped, ?live_endpoint: untyped) -> RootVersionPlan
+    def select_plan(relation, through: nil, live_endpoint: nil)
       in_range = ordered(relation.to_a.select do |version|
         next false if Support.compare_versions(@from, version).positive?
         next true unless through
@@ -90,7 +71,7 @@ module PaperTrailDiff
         selected: VersionScopeFilter.new(@version_scope).call(relation, in_range),
         after_range: nil,
         windowed: false,
-        filtered: !@version_scope.nil?
+        filtered: !@version_scope.nil?, live_endpoint: live_endpoint
       ).call
     end
 

@@ -94,12 +94,15 @@ module PaperTrailDiff
     # can only be answered by reconstructing, so the work is bounded by reading
     # in passes and stopping as soon as the limit decides the outcome.
     #
-    # One query for the slice's in-window versions, reified in id order.
-    # A create version reifies to nil -- the record did not exist yet, so there
-    # is no state for the filter to judge -- and is dropped rather than passed
-    # along as a nil the caller would have to guard.
+    # One query for the slice's in-window versions. Reification happens lazily
+    # as each root is judged; absent create states are not passed to the filter.
     # : (Array[String]) -> Hash[String, Array[untyped]]
-    def reconstructed_states: (Array[String]) -> Hash[String, Array[untyped]]
+    def candidate_versions: (Array[String]) -> Hash[String, Array[untyped]]
+
+    # Reify only as the predicate consumes each root; eagerly reconstructing a
+    # whole slice defeats the limit even when only a few roots are requested.
+    # : (Array[untyped]) -> bool
+    def historically_matches?: (Array[untyped]) -> bool
 
     # : (Integer) -> Integer
     def validate_limit: (Integer) -> Integer
@@ -115,10 +118,25 @@ module PaperTrailDiff
     # : (Array[String]) -> Array[String]
     def live_ids: (Array[String]) -> Array[String]
 
-    # Loading one past the limit is what turns an oversized page into an error
-    # rather than a silently truncated report.
+    # Deduplicate records rather than adding SQL DISTINCT: an otherwise valid
+    # relation may order by joined columns or select a PostgreSQL json column.
+    # Read bounded pages until the relation ends or too many unique roots appear.
     # : (Array[String]) -> Array[untyped]
     def selected_records: (Array[String]) -> Array[untyped]
+
+    # : (Array[String], Integer) -> Array[untyped]
+    def record_page: (Array[String], Integer) -> Array[untyped]
+
+    # Preserve explicit ordering: SQL Server rejects duplicate ORDER BY columns,
+    # even when the extra ordering would only have served as a tie-breaker.
+    # : () -> untyped
+    def ordered_scope: () -> untyped
+
+    # : (Integer) -> Integer
+    def page_limit: (Integer) -> Integer
+
+    # : (Integer) -> void
+    def reject_oversized!: (Integer) -> void
 
     # : (String) -> Array[String]
     def identity: (String) -> Array[String]

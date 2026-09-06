@@ -177,7 +177,7 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
     # Compares adjacent root and selected-descendant activity boundaries.
     # `reload_live_endpoints:` applies only when `to:` is a current record; the
     # other range forms never read live state.
-    #: (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?reload_live_endpoints: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool) -> Array[ActivityStep]
+    #: (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?reload_live_endpoints: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?) -> Array[ActivityStep]
     def activity_timeline( # rubocop:disable Metrics/ParameterLists
       record,
       from: nil,
@@ -244,7 +244,7 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
     # you from a relation, which returns a `ScopedAnalysis` -- the same Hash,
     # plus the roots the relation could not reach. See `analyze_scope` for why
     # that second collection exists.
-    #: (?Array[untyped]?, ?scope: untyped, ?limit: Integer?, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?) -> (Hash[identity, Analysis] | ScopedAnalysis)
+    #: (?Array[untyped]?, ?scope: untyped, ?limit: Integer?, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?historical_filter: untyped) -> (Hash[identity, Analysis] | ScopedAnalysis)
     def analyze_many( # rubocop:disable Metrics/ParameterLists
       records = nil,
       scope: nil,
@@ -254,28 +254,34 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
       ignore: DEFAULT_IGNORED_ATTRIBUTES,
       activity: false,
       version_scope: nil,
-      close_on: nil
+      close_on: nil,
+      snapshots: false,
+      group: nil,
+      historical_filter: nil
     )
       adapter = PaperTrailAdapter.new(associations: associations, ignore: ignore)
       if scope
         raise ConfigurationError, 'pass either records or scope:, not both' unless records.nil?
 
         return adapter.analyze_scope(scope, limit: limit, within: within, activity: activity,
-                                            version_scope: version_scope, close_on: close_on)
+                                            version_scope: version_scope, close_on: close_on,
+                                            snapshots: snapshots, group: group,
+                                            historical_filter: historical_filter)
       end
       raise ConfigurationError, 'pass records or scope:' if records.nil?
+      raise ConfigurationError, 'historical_filter: requires scope:' unless historical_filter.nil?
 
       adapter.analyze_many(records, within: within, activity: activity,
-                                    version_scope: version_scope, close_on: close_on)
+                                    version_scope: version_scope, close_on: close_on,
+                                    snapshots: snapshots, group: group)
     end
 
     # Analyzes every root the relation reaches whose history moved inside the
-    # window, selecting them in a fixed number of queries rather than making the
-    # caller rediscover them.
+    # window. Joined duplicates are read in bounded pages and analyzed once.
     #
     # `limit:` is required and exceeding it raises. Selection moves into the gem
-    # here, so the bound on how much work a page can ask for has to move with
-    # it, and a truncated audit report is worse than a refused one.
+    # here. The relation's own limit/offset select the live page; this separate
+    # ceiling rejects too many unique roots rather than truncating that page.
     #
     # Returns a `ScopedAnalysis`, which destructures:
     #
@@ -284,7 +290,8 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
     #   )
     #
     # `unreachable` names roots that changed in the window but have no live row
-    # left. A relation's conditions are evaluated against the live table, so a
+    # left, independently of the live page's pagination and safety ceiling.
+    # A relation's conditions are evaluated against the live table, so a
     # destroyed root cannot be tested against them at all -- its history is
     # intact and the state it held at destruction may well have matched. Those
     # roots are reported rather than dropped so that a page auditing deletions
@@ -293,7 +300,7 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
     # Note also that a relation selects on current state, not on state during
     # the window: `where(status: 'published')` means published *now*, which is a
     # different set from what was published while the window was open.
-    #: (untyped, limit: Integer?, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?historical_filter: untyped) -> ScopedAnalysis
+    #: (untyped, limit: Integer?, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?historical_filter: untyped) -> ScopedAnalysis
     def analyze_scope( # rubocop:disable Metrics/ParameterLists
       scope,
       limit:,
@@ -303,11 +310,13 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
       activity: false,
       version_scope: nil,
       close_on: nil,
+      snapshots: false,
+      group: nil,
       historical_filter: nil
     )
       PaperTrailAdapter.new(associations: associations, ignore: ignore).analyze_scope(
         scope, limit: limit, within: within, activity: activity,
-               version_scope: version_scope, close_on: close_on,
+               version_scope: version_scope, close_on: close_on, snapshots: snapshots, group: group,
                historical_filter: historical_filter
       )
     end

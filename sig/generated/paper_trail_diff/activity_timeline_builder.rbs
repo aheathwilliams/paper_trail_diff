@@ -44,6 +44,14 @@ module PaperTrailDiff
     # : () -> Array[ActivityStep]
     def build_to_current: () -> Array[ActivityStep]
 
+    # : () -> Analysis
+    def analyze_current: () -> Analysis
+
+    # The explicit live endpoint and a batch's live closing endpoint use the
+    # same selected plan. A version filter can close earlier, on its successor.
+    # : () -> [RootVersionPlan, Array[ActivityEvent], ActivityHistory, RecordSnapshot?, ActivityBoundary?]
+    def current_history: () -> [ RootVersionPlan, Array[ActivityEvent], ActivityHistory, RecordSnapshot?, ActivityBoundary? ]
+
     # : () -> [RecordSnapshot?, untyped]
     def capture_current: () -> [ RecordSnapshot?, untyped ]
 
@@ -55,9 +63,6 @@ module PaperTrailDiff
 
     # : (Array[untyped], ?end_at: untyped) -> void
     def prepare_history: (Array[untyped], ?end_at: untyped) -> void
-
-    # : (Array[untyped], Array[ActivityEvent], ?current: untyped, ?final_boundary: ActivityBoundary?, ?final_snapshot: RecordSnapshot?) -> Array[ActivityStep]
-    def build_event_steps: (Array[untyped], Array[ActivityEvent], ?current: untyped, ?final_boundary: ActivityBoundary?, ?final_snapshot: RecordSnapshot?) -> Array[ActivityStep]
 
     # Appends the transition into an explicit closing boundary, which is either
     # a requested current record or the absence a final root destroy leaves.

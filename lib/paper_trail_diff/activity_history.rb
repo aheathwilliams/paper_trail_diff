@@ -8,13 +8,17 @@ module PaperTrailDiff
     attr_reader :root_snapshots #: Hash[Array[untyped], RecordSnapshot?]
     attr_reader :first_snapshot #: RecordSnapshot?
     attr_reader :last_snapshot #: RecordSnapshot?
+    attr_reader :last_boundary #: ActivityBoundary?
+    attr_reader :last_event_snapshot #: RecordSnapshot?
 
-    #: (steps: Array[ActivityStep], root_snapshots: Hash[Array[untyped], RecordSnapshot?], first_snapshot: RecordSnapshot?, last_snapshot: RecordSnapshot?) -> void
-    def initialize(steps:, root_snapshots:, first_snapshot:, last_snapshot:)
+    #: (steps: Array[ActivityStep], root_snapshots: Hash[Array[untyped], RecordSnapshot?], first_snapshot: RecordSnapshot?, last_snapshot: RecordSnapshot?, ?last_boundary: ActivityBoundary?, ?last_event_snapshot: RecordSnapshot?) -> void
+    def initialize(steps:, root_snapshots:, first_snapshot:, last_snapshot:, last_boundary: nil, last_event_snapshot: nil) # rubocop:disable Metrics/ParameterLists, Layout/LineLength
       @steps = steps.freeze
       @root_snapshots = root_snapshots.freeze
       @first_snapshot = first_snapshot
       @last_snapshot = last_snapshot
+      @last_boundary = last_boundary
+      @last_event_snapshot = last_event_snapshot
       freeze
     end
 
@@ -46,7 +50,9 @@ module PaperTrailDiff
         steps: @steps,
         root_snapshots: @root_snapshots,
         first_snapshot: @first_snapshot,
-        last_snapshot: final_snapshot
+        last_snapshot: final_snapshot,
+        last_boundary: @previous_boundary,
+        last_event_snapshot: @previous_snapshot
       )
     end
 

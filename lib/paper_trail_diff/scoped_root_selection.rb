@@ -118,9 +118,9 @@ module PaperTrailDiff
     def historically_matching(candidates)
       matched = [] #: Array[String]
       candidates.each_slice(CANDIDATE_BATCH) do |slice|
-        states = reconstructed_states(slice)
+        versions = candidate_versions(slice)
         slice.each do |id|
-          next unless states.fetch(id, []).any? { |state| @historical_filter.call(state) }
+          next unless historically_matches?(versions.fetch(id, []))
 
           matched << id
           # Stop the moment the answer is known to exceed what was asked for.
@@ -146,18 +146,25 @@ module PaperTrailDiff
     # can only be answered by reconstructing, so the work is bounded by reading
     # in passes and stopping as soon as the limit decides the outcome.
     #
-    # One query for the slice's in-window versions, reified in id order.
-    # A create version reifies to nil -- the record did not exist yet, so there
-    # is no state for the filter to judge -- and is dropped rather than passed
-    # along as a nil the caller would have to guard.
+    # One query for the slice's in-window versions. Reification happens lazily
+    # as each root is judged; absent create states are not passed to the filter.
     #: (Array[String]) -> Hash[String, Array[untyped]]
-    def reconstructed_states(candidates)
+    def candidate_versions(candidates)
       relation = version_class.where(item_type: item_type, item_id: candidates)
       range = @time_range
       relation = range.scope(relation) if range
       relation.reorder(created_at: :asc, id: :asc)
               .group_by { |version| version.item_id.to_s }
-              .transform_values { |versions| versions.filter_map(&:reify) }
+    end
+
+    # Reify only as the predicate consumes each root; eagerly reconstructing a
+    # whole slice defeats the limit even when only a few roots are requested.
+    #: (Array[untyped]) -> bool
+    def historically_matches?(versions)
+      versions.any? do |version|
+        state = version.reify(dup: true)
+        state && @historical_filter.call(state)
+      end
     end
 
     #: (Integer) -> Integer
@@ -185,14 +192,53 @@ module PaperTrailDiff
       base_class.unscoped.where(primary_key => candidates).pluck(primary_key).map(&:to_s)
     end
 
-    # Loading one past the limit is what turns an oversized page into an error
-    # rather than a silently truncated report.
+    # Deduplicate records rather than adding SQL DISTINCT: an otherwise valid
+    # relation may order by joined columns or select a PostgreSQL json column.
+    # Read bounded pages until the relation ends or too many unique roots appear.
     #: (Array[String]) -> Array[untyped]
     def selected_records(live)
       return [] if live.empty?
 
-      records = @scope.where(primary_key => live).limit(@limit + 1).to_a
-      return records.freeze unless records.length > @limit
+      records = {} #: Hash[untyped, untyped]
+      consumed = 0
+      loop do
+        page = record_page(live, consumed)
+        page.each { |record| records[record.id] ||= record }
+        reject_oversized!(records.length)
+        break if page.length < @limit + 1
+
+        consumed += page.length
+      end
+      records.values.freeze
+    end
+
+    #: (Array[String], Integer) -> Array[untyped]
+    def record_page(live, consumed)
+      count = page_limit(consumed)
+      return [] if count.zero?
+
+      ordered_scope.where(primary_key => live)
+                   .offset((@scope.offset_value || 0) + consumed).limit(count).to_a
+    end
+
+    # Preserve explicit ordering: SQL Server rejects duplicate ORDER BY columns,
+    # even when the extra ordering would only have served as a tie-breaker.
+    #: () -> untyped
+    def ordered_scope
+      return @scope unless @scope.order_values.empty?
+
+      @scope.order(primary_key => :asc)
+    end
+
+    #: (Integer) -> Integer
+    def page_limit(consumed)
+      remaining = @scope.limit_value
+      [remaining ? remaining - consumed : @limit + 1, @limit + 1].min
+    end
+
+    #: (Integer) -> void
+    def reject_oversized!(count)
+      return unless count > @limit
 
       raise BatchLimitExceededError,
             "scope: selected more than #{@limit} roots; narrow the window or the " \

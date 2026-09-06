@@ -27,10 +27,16 @@ module PaperTrailDiff
   # one of them, so absence is its own value rather than nil.
   class NestedComparator
     # Stands in for a key that was not there at all.
-    ABSENT = Object.new
-    def ABSENT.inspect = '#<PaperTrailDiff absent>'
-    def ABSENT.to_s = 'absent'
-    ABSENT.freeze
+    class Absent
+      #: () -> String
+      def inspect = '#<PaperTrailDiff absent>'
+
+      #: () -> String
+      def to_s = 'absent'
+    end
+    private_constant :Absent
+
+    ABSENT = Absent.new.freeze
 
     #: (untyped, untyped) -> nested_changes
     def self.call(from_value, to_value)
@@ -49,9 +55,9 @@ module PaperTrailDiff
     #: () -> nested_changes
     def call
       from_structure, to_structure = structures
-      return {} unless from_structure && to_structure
-
       changes = {} #: nested_changes
+      return changes.freeze unless from_structure && to_structure
+
       walk(from_structure, to_structure, [], changes)
       changes.freeze
     end
@@ -84,9 +90,11 @@ module PaperTrailDiff
 
     #: (Hash[untyped, untyped], Hash[untyped, untyped], Array[String], nested_changes) -> void
     def walk(from_hash, to_hash, path, changes)
+      from_hash = normalize_keys(from_hash)
+      to_hash = normalize_keys(to_hash)
       keys(from_hash, to_hash).each do |key|
-        from_item = from_hash.key?(key) ? from_hash[key] : ABSENT
-        to_item = to_hash.key?(key) ? to_hash[key] : ABSENT
+        from_item = from_hash.fetch(key, ABSENT)
+        to_item = to_hash.fetch(key, ABSENT)
         next if from_item == to_item
 
         here = [*path, key.to_s].freeze
@@ -96,6 +104,20 @@ module PaperTrailDiff
           changes[here] = change_for(from_item, to_item)
         end
       end
+    end
+
+    #: (Hash[untyped, untyped]) -> Hash[String, untyped]
+    def normalize_keys(hash)
+      normalized = {} #: Hash[String, untyped]
+      hash.each do |key, value|
+        name = key.to_s
+        if normalized.key?(name)
+          raise AmbiguousNestedKeyError, "duplicate nested key after normalization: #{name.inspect}"
+        end
+
+        normalized[name] = value
+      end
+      normalized
     end
 
     # Two arrays are a membership change; anything else is a change to the

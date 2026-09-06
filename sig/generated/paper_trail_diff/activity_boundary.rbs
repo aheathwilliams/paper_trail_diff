@@ -54,8 +54,8 @@ module PaperTrailDiff
     # : () -> bool
     def destroyed?: () -> bool
 
-    # : () -> Hash[Symbol, untyped]
-    def to_h: () -> Hash[Symbol, untyped]
+    # : (?metadata: bool) -> Hash[Symbol, untyped]
+    def to_h: (?metadata: bool) -> Hash[Symbol, untyped]
   end
 
   # One adjacent transition in a descendant-aware activity timeline.
@@ -87,7 +87,12 @@ module PaperTrailDiff
     # : () -> bool
     def empty?: () -> bool
 
-    # : () -> Hash[Symbol, untyped]
-    def to_h: () -> Hash[Symbol, untyped]
+    # The event whose change this step reports. For a transaction group, this
+    # is the first event in the group, not necessarily its only actor or record.
+    # : () -> ActivityBoundary
+    def source_boundary: () -> ActivityBoundary
+
+    # : (?metadata: bool, ?snapshots: bool) -> Hash[Symbol, untyped]
+    def to_h: (?metadata: bool, ?snapshots: bool) -> Hash[Symbol, untyped]
   end
 end

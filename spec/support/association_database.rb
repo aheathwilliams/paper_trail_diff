@@ -1,14 +1,13 @@
 # frozen_string_literal: true
 
-require 'active_record'
-require 'sqlite3'
+require_relative 'database_connection'
 require 'paper_trail-association_tracking'
 
 PaperTrail.config.track_associations = true
 PaperTrail::Version.include(PaperTrailAssociationTracking::VersionConcern)
 
 # PT-AT reconstructs associations by timestamp and is nondeterministic when
-# SQLite stores multiple versions at the same instant. Keep test-created
+# the database stores multiple versions at the same instant. Keep test-created
 # versions strictly ordered without sleeps or production-side clock changes.
 module AssociationSpecVersionClock
   class << self
@@ -33,10 +32,6 @@ if defined?(RSpec)
     config.before { AssociationSpecVersionClock.reset! }
   end
 end
-
-ActiveRecord::Base.establish_connection(adapter: 'sqlite3', database: ':memory:')
-ActiveRecord::Migration.verbose = false
-ActiveRecord.yaml_column_permitted_classes = [Symbol, Time]
 
 ActiveRecord::Schema.define do
   create_table :versions, force: true do |table|

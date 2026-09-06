@@ -164,8 +164,25 @@ The half-open range selects the mutations recorded by `draft_version` and
 `published_version`. The excluded `final_version` is still used as the trailing
 boundary needed to reveal the last selected mutation. PaperTrail versions are
 pre-change snapshots, so a range containing mutations must have a later root
-version. The gem raises `PaperTrailDiff::IncompleteTimeRangeError` instead of
-assuming that the current record is the missing endpoint.
+version. The gem raises `PaperTrailDiff::IncompleteTimeRangeError` unless you explicitly
+allow current state as the missing endpoint with `close_on: :current`, shown below.
+
+### Report through now
+
+For a report that includes the latest saved change, use an explicit live ending:
+
+<!-- executable:quickstart-current-window -->
+```ruby
+current_steps = PaperTrailDiff.timeline(
+  article, within: 1.day.ago..Time.current, close_on: :current
+)
+```
+
+The same window options work on `activity_timeline`, `analyze`, `analyze_many`,
+and `analyze_scope`. Current state can include changes after a requested window
+end, so keep a later historical checkpoint for reproducible historical reports.
+For an explicit range, all single-record timeline methods accept
+`from: :first, to: article` instead.
 
 ## 6. Choose the right API
 
@@ -176,6 +193,8 @@ assuming that the current record is the missing endpoint.
 | One step per root-record version | `timeline` |
 | Steps for root and selected child versions | `activity_timeline` |
 | Net diff and timelines from one history pass | `analyze` |
+| A report for an array of records | `analyze_many` |
+| A report selected by a relation | `analyze_scope` |
 
 `timeline` is a root-checkpoint timeline. A child change becomes visible at the
 next root boundary. `activity_timeline` can make a versioned child change its
@@ -279,7 +298,7 @@ steps = PaperTrailDiff.activity_timeline(
 )
 
 steps.reject(&:empty?).each do |step|
-  boundary = step.to_boundary
+  boundary = step.source_boundary
   puts "#{boundary.item_type} ##{boundary.item_id}"
 end
 ```
@@ -305,7 +324,8 @@ the gem the historical context needed to expose the final child mutation.
 
 - PaperTrail stores pre-change snapshots. The current record is not represented
   by `versions.last`; pass the record explicitly when current state is wanted.
-- A `within:` window containing mutations needs a later root checkpoint. The
+- A historical `within:` window containing mutations needs a later root checkpoint.
+  Use `close_on: :current` explicitly for a report through now. The
   trailing version is reconstruction context and may appear as a step's ending
   boundary even though its own mutation is outside the window.
 - `ignore:` replaces the default list. Include `updated_at` yourself when using
@@ -318,8 +338,9 @@ the gem the historical context needed to expose the final child mutation.
   or can no longer reconstruct.
 
 For performance guidance, HABTM limitations, diagnostics, discovery, path-aware
-ignore rules, and complete result shapes, continue with the
-[README](README.md).
+ignore rules, and complete result shapes, see the
+[API reference](docs/reference.md). For complete activity-feed and batch-report
+recipes, including deleted records, see the [README](README.md).
 
 Upstream setup references:
 [PaperTrail installation](https://github.com/paper-trail-gem/paper_trail#1b-installation)

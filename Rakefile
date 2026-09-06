@@ -45,7 +45,9 @@ end
 
 desc 'Verify generated signatures and run Steep'
 task typecheck: :verify_signatures do
-  sh 'bundle', 'exec', 'steep', 'check'
+  require_relative 'script/steep_check'
+
+  abort('Steep failed or encountered an internal error.') unless SteepCheck.call
 end
 
 # The gemfiles under gemfiles/ are generated from this Gemfile, and CI runs

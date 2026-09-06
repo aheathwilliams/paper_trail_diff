@@ -6,6 +6,9 @@ module PaperTrailDiff
   # window -- but a transaction has to collapse the same way in both, or the
   # same history would read differently depending on how it was asked for.
   module ActivityGrouping
+    # : (Symbol?, ?activity: bool, ?snapshots: bool) -> void
+    def self.validate!: (Symbol?, ?activity: bool, ?snapshots: bool) -> void
+
     private
 
     # : () -> bool

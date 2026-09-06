@@ -26,7 +26,7 @@ module PaperTrailDiff
     # Reconstructed endpoint states are opt-in, because they carry the whole
     # selected graph whether or not anything changed, which dwarfs the rest of
     # the payload for a wide graph.
-    # : (?snapshots: bool) -> Hash[Symbol, untyped]
-    def to_h: (?snapshots: bool) -> Hash[Symbol, untyped]
+    # : (?snapshots: bool, ?metadata: bool) -> Hash[Symbol, untyped]
+    def to_h: (?snapshots: bool, ?metadata: bool) -> Hash[Symbol, untyped]
   end
 end

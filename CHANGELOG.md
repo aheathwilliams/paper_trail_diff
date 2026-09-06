@@ -5,34 +5,65 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Reject `snapshots: true` without `activity: true` on analysis methods, matching
+  validation of `group:`. Previously the option was silently ignored.
+- Honor `version_scope:` on current-record-ended activity timelines. Previously
+  that path silently dropped the filter. As with time windows, an excluded later
+  version can supply the closing historical state instead of current state.
+- Batch activity analysis now uses the same completeness checks as single-record
+  time windows. Callers may receive `IncompleteTimeRangeError` for a range that
+  previously returned an incomplete report.
+- Separate the recipe-based README from the full API reference and architecture
+  notes. Clarify relation pagination, the independent safety ceiling, and the
+  unpaginated `unreachable` collection.
+
+### Fixed
+
+- Preserve the reporting window and live closing state in batch activity
+  analysis. Single-record, batch, and scoped results now agree rather than
+  omitting the latest update or reporting a live root as removed.
+- Report a lone creation or update in an activity window closing on current
+  state, even when no preceding step exists.
+- Count unique roots from joined relations against the safety limit, preserving
+  relation pagination and ordering without injecting SQL `DISTINCT`. This also
+  permits ordering by joined columns on PostgreSQL and SQL Server.
+- Copy mutable descendants of shallow-frozen containers into immutable results.
+  Freeze nested diff paths and empty nested results as well.
+- Match string and symbol keys consistently in nested object diffs, and reject
+  normalized-key collisions with `AmbiguousNestedKeyError` instead of overwriting
+  a change. Ordinary whole-value comparison remains available for such data.
+- Replace the absent-key sentinel's singleton methods with a typed value class
+  so Steep no longer logs internal errors. Fail the type-check gate on internal
+  errors even when Steep exits successfully, and check public API call examples
+  to catch missing signature keywords such as `activity_timeline`'s `group:`.
+
 ### Added
 
-- Accept `historical_filter:` on `analyze_scope`, selecting roots by the state
-  they held during the window rather than by the row they have now. A relation
-  reads the live table, so it answers "reports whose category is 10 today", not
-  "reports whose category was 10 during July" -- and it cannot speak at all for
-  a root that has since been destroyed. The filter is a callable given each
-  state a root held at a boundary inside the window, and a root is selected if
-  it matched at *any* of them: a value held only mid-window would be missed by
-  either endpoint alone. What it sees follows the same rule as everything else
-  here, since a version records the state before its own event: these are the
-  states the root held entering each recorded change, so a value taken on with
-  the last in-window change is visible only if something later recorded it. A
-  destroyed root can now be judged, because its destroy version carries the
-  state it held at the end -- but `analyze_many` still requires live records, so
-  a destroyed root that matches is reported in `unreachable` rather than
-  analyzed. One that does not match is excluded outright, where previously every
-  destroyed candidate was reported. `limit:` bounds the reconstruction the
-  filter requires as well as the analyses it produces: candidates are rebuilt in
-  passes and the call refuses as soon as more than `limit:` roots have matched,
-  rather than reading a whole population to assemble a result it is about to
-  refuse. It refuses rather than stopping the scan, because ending early while
-  later candidates could still match would hand back a quietly short report.
-- Expose `ScopedAnalysis#roots`, the live records the selection loaded. The gem
-  already had them, and withholding them only made a caller query the same rows
-  again to attach its own presentation data. `roots` and `unreachable` stay
-  complementary, and destructuring remains two wide so existing callers are
-  unaffected.
+- Add `historical_filter:` to scoped analysis and its `analyze_many(scope:)`
+  alias. The predicate sees reified root states at recorded in-window boundaries;
+  matching deleted roots remain in `unreachable`. With this option, `limit:`
+  bounds matching candidates, including deleted ones, before live relation filters.
+- Expose `ScopedAnalysis#roots`, a frozen collection of the selected live model
+  instances, so consumers can attach presentation data without reloading them.
+
+
+- Run core and association suites against PostgreSQL 17, MySQL 8.4, and SQL Server
+  2022 in CI, alongside the existing SQLite Ruby/PaperTrail matrix. Database
+  adapters are optional development dependencies; the gem's dependencies are
+  unchanged.
+- Accept explicit current-record `to:` endpoints on `timeline` and `analyze`,
+  matching `activity_timeline`. Historical versus live state remains explicit.
+- Accept `group:` and `snapshots:` on `analyze_many` and `analyze_scope` for
+  activity analysis. Invalid grouping and grouping without `activity: true`
+  raise `ConfigurationError` instead of being silently ignored.
+- Expose `source_boundary` on both step types to identify the event whose change
+  is reported. For a transaction group it identifies the first event.
+- Add opt-in `metadata: true` serialization on boundaries, steps, and analyses
+  for actor, event, transaction ID, and record reference. Default shapes are
+  unchanged. `ActivityStep#to_h(snapshots: true)` serializes retained states;
+  `Analysis#to_h(snapshots: true)` also includes retained activity states.
 
 ## [0.12.0] - 2026-08-19
 

@@ -46,6 +46,10 @@ RSpec.describe 'core documentation examples' do
       [%w[Draft Published], %w[Published Final]]
     )
 
+    run_quickstart('quickstart-current-window', context)
+    expect(context.local_variable_get(:current_steps).last.diff.attributes.fetch('title').to)
+      .to eq('Archived')
+
     timestamp_quickstart_versions(context)
     run_quickstart('quickstart-time-range', context)
     expect(documented_title_changes(context, variable: :ranged_steps)).to eq(
@@ -121,6 +125,6 @@ RSpec.describe 'core documentation examples' do
   end
 
   def readme_path
-    File.expand_path('../../README.md', __dir__)
+    File.expand_path('../../docs/reference.md', __dir__)
   end
 end
