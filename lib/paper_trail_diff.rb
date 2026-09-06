@@ -244,7 +244,7 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
     # you from a relation, which returns a `ScopedAnalysis` -- the same Hash,
     # plus the roots the relation could not reach. See `analyze_scope` for why
     # that second collection exists.
-    #: (?Array[untyped]?, ?scope: untyped, ?limit: Integer?, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?) -> (Hash[identity, Analysis] | ScopedAnalysis)
+    #: (?Array[untyped]?, ?scope: untyped, ?limit: Integer?, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?historical_filter: untyped) -> (Hash[identity, Analysis] | ScopedAnalysis)
     def analyze_many( # rubocop:disable Metrics/ParameterLists
       records = nil,
       scope: nil,
@@ -256,7 +256,8 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
       version_scope: nil,
       close_on: nil,
       snapshots: false,
-      group: nil
+      group: nil,
+      historical_filter: nil
     )
       adapter = PaperTrailAdapter.new(associations: associations, ignore: ignore)
       if scope
@@ -264,9 +265,11 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
 
         return adapter.analyze_scope(scope, limit: limit, within: within, activity: activity,
                                             version_scope: version_scope, close_on: close_on,
-                                            snapshots: snapshots, group: group)
+                                            snapshots: snapshots, group: group,
+                                            historical_filter: historical_filter)
       end
       raise ConfigurationError, 'pass records or scope:' if records.nil?
+      raise ConfigurationError, 'historical_filter: requires scope:' unless historical_filter.nil?
 
       adapter.analyze_many(records, within: within, activity: activity,
                                     version_scope: version_scope, close_on: close_on,
@@ -297,7 +300,7 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
     # Note also that a relation selects on current state, not on state during
     # the window: `where(status: 'published')` means published *now*, which is a
     # different set from what was published while the window was open.
-    #: (untyped, limit: Integer?, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?) -> ScopedAnalysis
+    #: (untyped, limit: Integer?, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?historical_filter: untyped) -> ScopedAnalysis
     def analyze_scope( # rubocop:disable Metrics/ParameterLists
       scope,
       limit:,
@@ -308,11 +311,13 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
       version_scope: nil,
       close_on: nil,
       snapshots: false,
-      group: nil
+      group: nil,
+      historical_filter: nil
     )
       PaperTrailAdapter.new(associations: associations, ignore: ignore).analyze_scope(
         scope, limit: limit, within: within, activity: activity,
-               version_scope: version_scope, close_on: close_on, snapshots: snapshots, group: group
+               version_scope: version_scope, close_on: close_on, snapshots: snapshots, group: group,
+               historical_filter: historical_filter
       )
     end
 

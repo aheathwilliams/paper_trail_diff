@@ -493,7 +493,7 @@ analyses, unreachable = PaperTrailDiff.analyze_scope(
 
 `analyses` is the same frozen hash `analyze_many` returns. Prefer `analyze_scope` for relations and `analyze_many(records)` for an array. The compatibility alias `PaperTrailDiff.analyze_many(scope: ..., limit: ...)` remains available, and it accepts a model
 class (`Order`) as readily as a relation. Every other option — `within:`,
-`version_scope:`, `associations:`, `ignore:`, `activity:`, `close_on:`, `group:`, `snapshots:` — behaves
+`version_scope:`, `associations:`, `ignore:`, `activity:`, `close_on:`, `group:`, `snapshots:`, `historical_filter:` — behaves
 exactly as it does for `analyze_many`. Ordinary root selection uses a fixed number
 of queries; joined duplicates can require additional bounded query pages.
 
@@ -508,6 +508,18 @@ It never truncates the selection to that ceiling. Candidate selection can still
 scan a large history, so narrow the reporting window for large populations.
 Provide a deterministic order for pagination, including a root-ID tie-breaker
 when needed. With no explicit order, selection uses ascending root IDs.
+
+**`roots` exposes the selected live records** in relation order, avoiding an
+extra lookup for application presentation. The array is frozen; its ActiveRecord
+instances are mutable. Existing two-value destructuring is unchanged.
+
+**`historical_filter:` optionally selects recorded root states.** See the
+[historical selection recipe](../README.md#3-report-across-records-for-a-time-window) for boundary
+semantics and its matching-candidate ceiling. The predicate runs on reified
+in-window pre-event states, independently of `version_scope:`. It does not inspect
+current state or traverse associations. Matching missing roots remain in
+`unreachable`, and with this option they count toward `limit:` before the live
+relation is applied.
 
 **`unreachable` names roots the relation could not reach.** A relation's
 conditions are evaluated against the live table, so a root destroyed during the

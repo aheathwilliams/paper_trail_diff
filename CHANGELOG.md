@@ -41,6 +41,14 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Add `historical_filter:` to scoped analysis and its `analyze_many(scope:)`
+  alias. The predicate sees reified root states at recorded in-window boundaries;
+  matching deleted roots remain in `unreachable`. With this option, `limit:`
+  bounds matching candidates, including deleted ones, before live relation filters.
+- Expose `ScopedAnalysis#roots`, a frozen collection of the selected live model
+  instances, so consumers can attach presentation data without reloading them.
+
+
 - Run core and association suites against PostgreSQL 17, MySQL 8.4, and SQL Server
   2022 in CI, alongside the existing SQLite Ruby/PaperTrail matrix. Database
   adapters are optional development dependencies; the gem's dependencies are

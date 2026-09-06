@@ -39,8 +39,8 @@ module PaperTrailDiff
   # you from a relation, which returns a `ScopedAnalysis` -- the same Hash,
   # plus the roots the relation could not reach. See `analyze_scope` for why
   # that second collection exists.
-  # : (?Array[untyped]?, ?scope: untyped, ?limit: Integer?, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?) -> (Hash[identity, Analysis] | ScopedAnalysis)
-  def self.analyze_many: (?Array[untyped]?, ?scope: untyped, ?limit: Integer?, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?) -> (Hash[identity, Analysis] | ScopedAnalysis)
+  # : (?Array[untyped]?, ?scope: untyped, ?limit: Integer?, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?historical_filter: untyped) -> (Hash[identity, Analysis] | ScopedAnalysis)
+  def self.analyze_many: (?Array[untyped]?, ?scope: untyped, ?limit: Integer?, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?historical_filter: untyped) -> (Hash[identity, Analysis] | ScopedAnalysis)
 
   # Analyzes every root the relation reaches whose history moved inside the
   # window. Joined duplicates are read in bounded pages and analyzed once.
@@ -66,8 +66,8 @@ module PaperTrailDiff
   # Note also that a relation selects on current state, not on state during
   # the window: `where(status: 'published')` means published *now*, which is a
   # different set from what was published while the window was open.
-  # : (untyped, limit: Integer?, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?) -> ScopedAnalysis
-  def self.analyze_scope: (untyped, limit: Integer?, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?) -> ScopedAnalysis
+  # : (untyped, limit: Integer?, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?historical_filter: untyped) -> ScopedAnalysis
+  def self.analyze_scope: (untyped, limit: Integer?, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?historical_filter: untyped) -> ScopedAnalysis
 
   # Returns the association macros this release can normalize.
   # : () -> Array[Symbol]

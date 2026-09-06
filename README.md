@@ -137,6 +137,36 @@ A relation filters **current** rows. `Article.where(status: "open")` means open
 now, not open during the window. Deleted candidates cannot be tested against those
 conditions and are returned separately in `unreachable`.
 
+To select by recorded historical root state, add a predicate:
+
+```ruby
+report = PaperTrailDiff.analyze_scope(
+  Article.all, within: window, limit: 100, close_on: :current,
+  historical_filter: ->(state) { state.status == "review" }
+)
+report.roots # the selected live model instances, in relation order
+```
+
+The predicate receives reified root records at in-window version boundaries,
+without traversing associations. Create boundaries are absent and skipped. A match
+at any of those boundaries selects a candidate. This tests recorded pre-event
+states: it does not inspect the final live state, even with `close_on: :current`,
+or states recorded only outside the window. It is not a continuous-time query.
+`version_scope:` filters analysis events; it does not narrow predicate evaluation.
+
+The relation still filters live rows. Matching deleted candidates remain in
+`unreachable`. With `historical_filter:`, the safety ceiling applies to all
+matching candidates, including missing roots, before the live relation's filters
+and pagination. Reification stops when that ceiling is exceeded; scanning many
+nonmatches or a root with a long history can still be expensive. Narrow the window
+and predicate accordingly. Without this option, the existing live-root ceiling
+and unpaginated missing-root behavior remain unchanged.
+
+`roots` is a frozen array, but its ActiveRecord instances remain mutable for
+ordinary application use. Changing them does not change the immutable analysis
+snapshots. The scoped `analyze_many(scope: ...)` alias accepts the same predicate;
+explicit record lists do not.
+
 A deletion audit should inspect that collection explicitly. The destroy version
 contains the last record state and can provide a historical root for an activity
 query. Records removed without a destroy version remain explicitly unavailable:
