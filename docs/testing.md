@@ -7,6 +7,10 @@ mise exec -- bundle install
 mise exec -- bundle exec rake
 ```
 
+For reporting workloads, query counts, reconstruction cost, and memory readings,
+see [Reporting performance](performance.md). Those measurements run separately
+from the correctness suite and have no timing-based CI gate.
+
 CI keeps the Ruby 3.1–4.0 and PaperTrail 16/17 compatibility matrix on SQLite,
 including Windows runs. Separate Linux jobs run both core and association suites
 on PostgreSQL 17, MySQL 8.4, and SQL Server 2022 with Ruby 4.0 and PaperTrail 17.
