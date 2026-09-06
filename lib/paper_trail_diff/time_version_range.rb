@@ -12,11 +12,6 @@ module PaperTrailDiff
       @live_endpoint = live_endpoint
     end
 
-    #: (?context_required: bool) -> Array[untyped]
-    def select(context_required: false)
-      select_plan(context_required: context_required).versions
-    end
-
     #: (?context_required: bool) -> RootVersionPlan
     def select_plan(context_required: false)
       relation = versions_relation

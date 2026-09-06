@@ -8,6 +8,7 @@ module PaperTrailDiff
 
     #: (untyped, range: TimelineRange, tree: AssociationTree, snapshotter: untyped, ?snapshots: bool, ?group: Symbol?) -> void
     def initialize(record, range:, tree:, snapshotter:, snapshots: false, group: nil) # rubocop:disable Metrics/ParameterLists
+      ActivityGrouping.validate!(group)
       @snapshots = snapshots
       @group = group
       # Merging a group compares its outer states, so the snapshots must survive
@@ -36,10 +37,7 @@ module PaperTrailDiff
     def analyze
       return time_builder.analyze if @range.time?
       return Analysis.empty if @range.unresolved?
-
-      unless Endpoint.version?(@to)
-        raise InvalidTimelineRangeError, '`to` must be a root PaperTrail version'
-      end
+      return analyze_current if Endpoint.record?(@to)
 
       plan = @range.select_plan
       root_versions = plan.reconstruction_versions
@@ -73,25 +71,46 @@ module PaperTrailDiff
       root_versions = @range.select_plan.reconstruction_versions
       prepare_history(root_versions)
       events = collect_events(root_versions)
-      build_event_steps(root_versions, events)
+      history = event_history(root_versions, events)
+      activity_steps(history, events, destroyed_boundary(root_versions), nil)
     end
 
     #: () -> Array[ActivityStep]
     def build_to_current
-      validate_current_range!
-      current_snapshot, captured_at = capture_current
-      root_versions = VersionRange.new(@record, from: @from, to: @from).select_through_latest
-      # Descendants can move after the last root version, so the prepared range
-      # ends at the captured instant rather than at that version.
-      prepare_history(root_versions, end_at: captured_at)
-      events = collect_events(root_versions, range_end: captured_at)
-      build_event_steps(
-        root_versions,
-        events,
-        current: @to,
-        final_boundary: ActivityBoundary.current(@to, captured_at: captured_at),
-        final_snapshot: current_snapshot
+      _plan, events, history, snapshot, boundary = current_history
+      activity_steps(history, events, boundary, snapshot)
+    end
+
+    #: () -> Analysis
+    def analyze_current
+      plan, events, history, snapshot, boundary = current_history
+      final = boundary ? snapshot : history.last_snapshot
+      Analysis.new(
+        diff: Engine.compare(history.first_snapshot, final),
+        timeline: ActivityRootSteps.call(
+          plan, history.root_snapshots, closing_snapshot: snapshot,
+                                        captured_at: boundary&.recorded_at
+        ),
+        activity_timeline: activity_steps(history, events, boundary, snapshot),
+        from_snapshot: history.first_snapshot, to_snapshot: final
       )
+    end
+
+    # The explicit live endpoint and a batch's live closing endpoint use the
+    # same selected plan. A version filter can close earlier, on its successor.
+    #: () -> [RootVersionPlan, Array[ActivityEvent], ActivityHistory, RecordSnapshot?, ActivityBoundary?]
+    def current_history
+      validate_current_range!
+      plan = @range.select_plan
+      return [plan, [], ActivityHistory.empty, nil, nil] if plan.empty?
+
+      snapshot, captured_at = capture_current if plan.closing_record
+      versions = plan.reconstruction_versions
+      prepare_history(versions, end_at: captured_at)
+      events = collect_events(versions, range_end: captured_at || versions.last)
+      history = event_history(versions, events, current: plan.closing_record)
+      boundary = ActivityBoundary.current(@to, captured_at: captured_at) if plan.closing_record
+      [plan, events, history, snapshot, boundary]
     end
 
     #: () -> [RecordSnapshot?, untyped]
@@ -131,23 +150,6 @@ module PaperTrailDiff
       return @snapshotter.prepare(@record, root_versions) unless end_at
 
       @snapshotter.prepare(@record, root_versions, end_at: end_at)
-    end
-
-    #: (Array[untyped], Array[ActivityEvent], ?current: untyped, ?final_boundary: ActivityBoundary?, ?final_snapshot: RecordSnapshot?) -> Array[ActivityStep]
-    def build_event_steps(
-      root_versions,
-      events,
-      current: nil,
-      final_boundary: nil,
-      final_snapshot: nil
-    )
-      history = event_history(root_versions, events, current: current)
-      activity_steps(
-        history,
-        events,
-        final_boundary || destroyed_boundary(root_versions),
-        final_snapshot
-      )
     end
 
     # Appends the transition into an explicit closing boundary, which is either

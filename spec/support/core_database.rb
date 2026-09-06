@@ -1,12 +1,7 @@
 # frozen_string_literal: true
 
-require 'active_record'
+require_relative 'database_connection'
 require 'securerandom'
-require 'sqlite3'
-
-ActiveRecord::Base.establish_connection(adapter: 'sqlite3', database: ':memory:')
-ActiveRecord::Migration.verbose = false
-ActiveRecord.yaml_column_permitted_classes = [Symbol, Time]
 
 ActiveRecord::Schema.define do
   create_table :versions, force: true do |table|

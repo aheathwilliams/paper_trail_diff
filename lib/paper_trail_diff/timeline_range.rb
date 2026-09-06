@@ -10,12 +10,11 @@ module PaperTrailDiff
     attr_reader :to #: untyped
     attr_reader :time_range #: TimeRange?
 
-    #: (untyped, from: untyped, to: untyped, within: untyped, ?versions: Array[untyped]?, ?version_scope: untyped, ?plan: RootVersionPlan?, ?live_endpoint: untyped) -> void
-    def initialize(record, from:, to:, within:, versions: nil, version_scope: nil, plan: nil, live_endpoint: nil) # rubocop:disable Metrics/ParameterLists, Layout/LineLength
+    #: (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped, ?plan: RootVersionPlan?, ?live_endpoint: untyped) -> void
+    def initialize(record, from:, to:, within:, version_scope: nil, plan: nil, live_endpoint: nil) # rubocop:disable Metrics/ParameterLists
       @record = record
       @plan = plan
       @live_endpoint = live_endpoint
-      @versions = (plan ? plan.versions : versions)&.freeze
       @version_scope = version_scope
       @requested_from = from
       @requested_to = to
@@ -49,27 +48,7 @@ module PaperTrailDiff
                    live_endpoint: @live_endpoint
         ).select_plan(context_required: context_required)
       end
-      return RootVersionPlan.empty if unresolved?
-
-      VersionRange.new(
-        @record, from: @from, to: @to, version_scope: @version_scope
-      ).select_plan_for_range
-    end
-
-    #: (?context_required: bool) -> Array[untyped]
-    def select(context_required: false)
-      preselected = @versions
-      return preselected if preselected
-
-      range = time_range
-      if range
-        return TimeVersionRange.new(
-          @record, time_range: range, version_scope: @version_scope
-        ).select(context_required: context_required)
-      end
-      return empty_versions if unresolved?
-
-      VersionRange.new(@record, from: @from, to: @to, version_scope: @version_scope).select
+      explicit_plan
     end
 
     #: () -> bool
@@ -91,7 +70,6 @@ module PaperTrailDiff
     private
 
     # @rbs @record: untyped
-    # @rbs @versions: Array[untyped]?
     # @rbs @plan: RootVersionPlan?
     # @rbs @version_scope: untyped
     # @rbs @live_endpoint: untyped
@@ -100,10 +78,17 @@ module PaperTrailDiff
     # @rbs @from: untyped
     # @rbs @to: untyped
 
-    #: () -> Array[untyped]
-    def empty_versions
-      versions = [] #: Array[untyped]
-      versions.freeze
+    #: () -> RootVersionPlan
+    def explicit_plan
+      return RootVersionPlan.empty if unresolved?
+      if Endpoint.record?(@to)
+        return VersionRange.new(@record, from: @from, to: @from, version_scope: @version_scope)
+                           .select_plan_through_current(@to)
+      end
+
+      VersionRange.new(
+        @record, from: @from, to: @to, version_scope: @version_scope
+      ).select_plan_for_range
     end
 
     #: (untyped) -> bool

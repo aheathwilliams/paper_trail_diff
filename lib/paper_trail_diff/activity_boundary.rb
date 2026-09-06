@@ -107,15 +107,19 @@ module PaperTrailDiff
       kind == :destroyed
     end
 
-    #: () -> Hash[Symbol, untyped]
-    def to_h
-      {
+    #: (?metadata: bool) -> Hash[Symbol, untyped]
+    def to_h(metadata: false)
+      value = {
         kind: kind,
         version_id: version_id,
         item_type: item_type,
         item_id: item_id,
         recorded_at: recorded_at
       }
+      return value unless metadata
+
+      value.merge(event: event, whodunnit: whodunnit, transaction_id: transaction_id,
+                  record: record.to_h)
     end
   end
 
@@ -161,13 +165,21 @@ module PaperTrailDiff
       diff.empty?
     end
 
-    #: () -> Hash[Symbol, untyped]
-    def to_h
-      {
-        from: from_boundary.to_h,
-        to: to_boundary.to_h,
+    # The event whose change this step reports. For a transaction group, this
+    # is the first event in the group, not necessarily its only actor or record.
+    #: () -> ActivityBoundary
+    def source_boundary = from_boundary
+
+    #: (?metadata: bool, ?snapshots: bool) -> Hash[Symbol, untyped]
+    def to_h(metadata: false, snapshots: false)
+      value = {
+        from: from_boundary.to_h(metadata: metadata),
+        to: to_boundary.to_h(metadata: metadata),
         diff: diff.to_h
       }
+      return value unless snapshots
+
+      value.merge(from_snapshot: from_snapshot&.to_h, to_snapshot: to_snapshot&.to_h)
     end
   end
 end

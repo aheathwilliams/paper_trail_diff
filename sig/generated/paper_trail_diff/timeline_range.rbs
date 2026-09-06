@@ -11,8 +11,8 @@ module PaperTrailDiff
 
     attr_reader time_range: TimeRange?
 
-    # : (untyped, from: untyped, to: untyped, within: untyped, ?versions: Array[untyped]?, ?version_scope: untyped, ?plan: RootVersionPlan?, ?live_endpoint: untyped) -> void
-    def initialize: (untyped, from: untyped, to: untyped, within: untyped, ?versions: Array[untyped]?, ?version_scope: untyped, ?plan: RootVersionPlan?, ?live_endpoint: untyped) -> void
+    # : (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped, ?plan: RootVersionPlan?, ?live_endpoint: untyped) -> void
+    def initialize: (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped, ?plan: RootVersionPlan?, ?live_endpoint: untyped) -> void
 
     # A record with no versions has no first or last boundary to resolve, which
     # is an empty history rather than a bad request.
@@ -25,9 +25,6 @@ module PaperTrailDiff
     # make different from adjacent pairs of the selected versions.
     # : (?context_required: bool) -> RootVersionPlan
     def select_plan: (?context_required: bool) -> RootVersionPlan
-
-    # : (?context_required: bool) -> Array[untyped]
-    def select: (?context_required: bool) -> Array[untyped]
 
     # : () -> bool
     def time?: () -> bool
@@ -56,10 +53,8 @@ module PaperTrailDiff
 
     @version_scope: untyped
 
-    @versions: Array[untyped]?
-
-    # : () -> Array[untyped]
-    def empty_versions: () -> Array[untyped]
+    # : () -> RootVersionPlan
+    def explicit_plan: () -> RootVersionPlan
 
     # : (untyped) -> bool
     def symbolic?: (untyped) -> bool

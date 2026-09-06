@@ -11,8 +11,12 @@ module PaperTrailDiff
 
     attr_reader last_snapshot: RecordSnapshot?
 
-    # : (steps: Array[ActivityStep], root_snapshots: Hash[Array[untyped], RecordSnapshot?], first_snapshot: RecordSnapshot?, last_snapshot: RecordSnapshot?) -> void
-    def initialize: (steps: Array[ActivityStep], root_snapshots: Hash[Array[untyped], RecordSnapshot?], first_snapshot: RecordSnapshot?, last_snapshot: RecordSnapshot?) -> void
+    attr_reader last_boundary: ActivityBoundary?
+
+    attr_reader last_event_snapshot: RecordSnapshot?
+
+    # : (steps: Array[ActivityStep], root_snapshots: Hash[Array[untyped], RecordSnapshot?], first_snapshot: RecordSnapshot?, last_snapshot: RecordSnapshot?, ?last_boundary: ActivityBoundary?, ?last_event_snapshot: RecordSnapshot?) -> void
+    def initialize: (steps: Array[ActivityStep], root_snapshots: Hash[Array[untyped], RecordSnapshot?], first_snapshot: RecordSnapshot?, last_snapshot: RecordSnapshot?, ?last_boundary: ActivityBoundary?, ?last_event_snapshot: RecordSnapshot?) -> void
 
     # : () -> ActivityHistory
     def self.empty: () -> ActivityHistory

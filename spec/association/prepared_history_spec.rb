@@ -95,7 +95,7 @@ RSpec.describe PaperTrailDiff::PreparedHistory do
       article,
       from: before,
       to: after
-    ).select
+    ).select_plan_for_range.versions
     history = PaperTrailDiff::PreparedHistoryLoader.new(
       article,
       root_versions: root_versions,
@@ -170,7 +170,7 @@ RSpec.describe PaperTrailDiff::PreparedHistory do
       article,
       from: before,
       to: after
-    ).select
+    ).select_plan_for_range.versions
     history = PaperTrailDiff::PreparedHistoryLoader.new(
       article,
       root_versions: root_versions,

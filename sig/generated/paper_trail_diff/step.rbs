@@ -22,7 +22,11 @@ module PaperTrailDiff
     # : () -> bool
     def empty?: () -> bool
 
-    # : () -> Hash[Symbol, untyped]
-    def to_h: () -> Hash[Symbol, untyped]
+    # The root event whose change this step reports.
+    # : () -> ActivityBoundary
+    def source_boundary: () -> ActivityBoundary
+
+    # : (?metadata: bool) -> Hash[Symbol, untyped]
+    def to_h: (?metadata: bool) -> Hash[Symbol, untyped]
   end
 end

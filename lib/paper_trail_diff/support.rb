@@ -8,15 +8,13 @@ module PaperTrailDiff
 
     #: (untyped) -> untyped
     def immutable_copy(value)
-      return value if value.frozen?
-
       case value
       when Hash
         immutable_hash(value)
       when Array
         value.map { |item| immutable_copy(item) }.freeze
       else
-        duplicate_and_freeze(value)
+        value.frozen? ? value : duplicate_and_freeze(value)
       end
     end
 

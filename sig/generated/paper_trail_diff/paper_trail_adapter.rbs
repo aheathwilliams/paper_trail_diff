@@ -29,15 +29,15 @@ module PaperTrailDiff
     def analyze: (untyped, from: untyped, to: untyped, within: untyped, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?) -> Analysis
 
     # Analyzes many roots over one shared range, preparing their history once.
-    # : (Array[untyped], within: untyped, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?) -> Hash[identity, Analysis]
-    def analyze_many: (Array[untyped], within: untyped, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?) -> Hash[identity, Analysis]
+    # : (Array[untyped], within: untyped, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?) -> Hash[identity, Analysis]
+    def analyze_many: (Array[untyped], within: untyped, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?) -> Hash[identity, Analysis]
 
     # Selects the roots from a relation before running the ordinary batch, so a
     # caller reporting on a population does not have to rediscover which of its
     # members changed. The roots the relation could not reach come back named
     # rather than dropped -- see `PaperTrailDiff.analyze_scope`.
-    # : (untyped, limit: Integer?, within: untyped, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?) -> ScopedAnalysis
-    def analyze_scope: (untyped, limit: Integer?, within: untyped, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?) -> ScopedAnalysis
+    # : (untyped, limit: Integer?, within: untyped, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?) -> ScopedAnalysis
+    def analyze_scope: (untyped, limit: Integer?, within: untyped, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?) -> ScopedAnalysis
 
     private
 
@@ -87,8 +87,8 @@ module PaperTrailDiff
     # : () -> void
     def build_snapshotters: () -> void
 
-    # : (bool) -> BatchedRootAnalyzer
-    def batched_root_analyzer: (bool) -> BatchedRootAnalyzer
+    # : (bool, within: untyped, snapshots: bool, group: Symbol?) -> BatchedRootAnalyzer
+    def batched_root_analyzer: (bool, within: untyped, snapshots: bool, group: Symbol?) -> BatchedRootAnalyzer
 
     # : () -> HistoricalSnapshotStore
     def build_historical_store: () -> HistoricalSnapshotStore
