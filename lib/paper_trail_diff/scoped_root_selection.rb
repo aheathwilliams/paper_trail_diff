@@ -26,6 +26,9 @@ module PaperTrailDiff
   # window. `where(status: 'published')` selects what is published now, which is
   # not the same set as what was published while the window was open.
   class ScopedRootSelection
+    PAGE_SIZE = 250
+    private_constant :PAGE_SIZE
+
     # A plain class rather than Data.define, which arrived in Ruby 3.2 while this
     # gem supports 3.1.
     class Result
@@ -127,7 +130,7 @@ module PaperTrailDiff
         page = record_page(live, consumed)
         page.each { |record| records[record.id] ||= record }
         reject_oversized!(records.length)
-        break if page.length < @limit + 1
+        break if page.length < PAGE_SIZE
 
         consumed += page.length
       end
@@ -155,7 +158,7 @@ module PaperTrailDiff
     #: (Integer) -> Integer
     def page_limit(consumed)
       remaining = @scope.limit_value
-      [remaining ? remaining - consumed : @limit + 1, @limit + 1].min
+      [remaining ? remaining - consumed : PAGE_SIZE, PAGE_SIZE].min
     end
 
     #: (Integer) -> void

@@ -47,7 +47,9 @@ RSpec.describe 'scoped root selection' do
     older = CoreArticle.create!(title: 'Older', internal_note: 'stable')
     recent = CoreArticle.create!(title: 'Recent', internal_note: 'stable')
     older.comments.create!(body: 'Earlier', created_at: Time.utc(2030, 1, 1))
-    7.times { recent.comments.create!(body: 'Later', created_at: Time.utc(2031, 1, 1)) }
+    CoreComment.insert_all!(Array.new(257) do
+      { article_id: recent.id, body: 'Later', created_at: Time.utc(2031, 1, 1) }
+    end)
     scope = CoreArticle.joins(:comments).order('core_comments.created_at DESC')
 
     expect(analyze(scope, limit: 2).analyses.keys)
@@ -68,6 +70,24 @@ RSpec.describe 'scoped root selection' do
 
     expect(analyze(scope, limit: 1).analyses.keys)
       .to eq([PaperTrailDiff::Endpoint.identity(articles[1])])
+  end
+
+  it 'reads duplicate-heavy joins in bounded pages independent of the safety ceiling' do
+    article = CoreArticle.create!(title: 'Repeated', internal_note: 'stable')
+    CoreComment.insert_all!(Array.new(1000) { { article_id: article.id, body: 'Match' } })
+    pages = []
+    callback = lambda do |*args|
+      payload = args.last
+      pages << payload[:sql] if payload[:name] == 'CoreArticle Load'
+    end
+    selection = PaperTrailDiff::ScopedRootSelection.new(
+      CoreArticle.joins(:comments), time_range: nil, limit: 5
+    )
+
+    result = ActiveSupport::Notifications.subscribed(callback, 'sql.active_record') { selection.call }
+
+    expect(result.records.map(&:id)).to eq([article.id])
+    expect(pages.length).to eq(5) # Four 250-row pages, then an empty page.
   end
 
   it 'keeps unreachable roots separate from the requested live page' do

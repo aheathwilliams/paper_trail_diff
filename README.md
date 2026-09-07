@@ -212,6 +212,8 @@ exceeding it raises `BatchLimitExceededError`. It does not shorten the selection
 window. It is not the deleted portion of the live page. The ceiling does not bound
 that list or all candidate-selection work; narrow large windows. Duplicate joined
 rows can require additional query pages before the safety check is decided.
+Selection reads at most 250 rows per query, independently of `limit:`, and checks
+the unique-root ceiling after each page. The relation's own limit still applies.
 
 If you already have the records, use `analyze_many(records, **options)` to get an
 identity-keyed hash. Both batch methods accept `group:` and `snapshots:` with
