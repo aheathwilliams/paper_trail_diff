@@ -89,4 +89,15 @@ RSpec.describe 'bounded event reconstruction' do
     expect(series.record_after(version)).to eq([true, nil])
     expect(series.record_after(instance_double(PaperTrail::Version, id: -1))).to eq([false, nil])
   end
+
+  it 'discovers belongs-to identities without constructing historical owners' do
+    author = TrackedAuthor.create!(name: 'Author')
+    3.times { seed.update!(author: author) }
+    expect_any_instance_of(PaperTrail::Version).not_to receive(:reify)
+    expect_any_instance_of(PaperTrailDiff::PreparedRecordState).not_to receive(:instantiate)
+
+    result = PaperTrailDiff.report(TrackedArticle, since: Time.now.utc - 3600,
+                                                   limit: 10, associations: [:author])
+    expect(result.analyses.length).to eq(3)
+  end
 end

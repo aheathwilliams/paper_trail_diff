@@ -144,9 +144,14 @@ module PaperTrailDiff
 
     #: () -> Array[untyped]
     def records
-      version_records = versions.filter_map { |version| state_for(version)&.instantiate }
+      states.map(&:instantiate)
+    end
+
+    #: () -> Array[PreparedRecordState]
+    def states
+      recorded = versions.filter_map { |version| state_for(version) }
       live = @live
-      live ? [*version_records, live.instantiate] : version_records
+      live ? [*recorded, live] : recorded
     end
 
     #: (untyped) -> [Hash[untyped, untyped], Hash[untyped, untyped]]?
@@ -303,6 +308,17 @@ module PaperTrailDiff
       ids.flat_map { |id| @series.fetch(identity(model_class, id)).records }
     end
 
+    #: (untyped, Array[untyped], String) -> Array[untyped]
+    def attribute_values_for(model_class, ids, name)
+      plain_reader = generated_reader?(model_class, name)
+      ids.flat_map do |id|
+        @series.fetch(identity(model_class, id)).states.map do |state|
+          direct = @direct_loader.complete(state) if plain_reader
+          direct ? direct.attributes[name] : state.instantiate.public_send(name)
+        end
+      end
+    end
+
     #: (untyped, untyped) -> Array[untyped]
     def versions_for_id(model_class, id)
       @series.fetch(identity(model_class, id)).versions
@@ -314,6 +330,12 @@ module PaperTrailDiff
     end
 
     private
+
+    #: (untyped, String) -> bool
+    def generated_reader?(model, name)
+      model.define_attribute_methods
+      model.instance_method(name).owner.name.to_s.end_with?('GeneratedAttributeMethods')
+    end
 
     # @rbs @start_time: untyped
     # @rbs @end_time: untyped

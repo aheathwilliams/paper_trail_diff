@@ -72,6 +72,9 @@ module PaperTrailDiff
     # : () -> Array[untyped]
     def records: () -> Array[untyped]
 
+    # : () -> Array[PreparedRecordState]
+    def states: () -> Array[PreparedRecordState]
+
     # : (untyped) -> [Hash[untyped, untyped], Hash[untyped, untyped]]?
     def transition: (untyped) -> [ Hash[untyped, untyped], Hash[untyped, untyped] ]?
 
@@ -133,6 +136,9 @@ module PaperTrailDiff
     # : (untyped, Array[untyped]) -> Array[untyped]
     def records_for: (untyped, Array[untyped]) -> Array[untyped]
 
+    # : (untyped, Array[untyped], String) -> Array[untyped]
+    def attribute_values_for: (untyped, Array[untyped], String) -> Array[untyped]
+
     # : (untyped, untyped) -> Array[untyped]
     def versions_for_id: (untyped, untyped) -> Array[untyped]
 
@@ -140,6 +146,9 @@ module PaperTrailDiff
     def loaded?: (untyped, untyped) -> bool
 
     private
+
+    # : (untyped, String) -> bool
+    def generated_reader?: (untyped, String) -> bool
 
     @direct_loader: DirectRecordStateLoader
 

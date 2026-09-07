@@ -50,6 +50,10 @@ module PaperTrailDiff
     def belongs_to_groups(owner_class, owner_ids, reflection)
       key = scalar_foreign_key(reflection)
       return {} unless key
+      unless reflection.polymorphic?
+        return group_for(reflection.klass,
+                         @records.attribute_values_for(owner_class, owner_ids, key))
+      end
 
       grouped = {} #: Hash[String, Hash[Symbol, untyped]]
       @records.records_for(owner_class, owner_ids).each do |owner|

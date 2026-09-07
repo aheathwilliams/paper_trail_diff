@@ -21,6 +21,21 @@ RSpec.describe PaperTrailDiff::PreparedRecordIndex do
       raise('PaperTrail did not create the requested boundary version')
   end
 
+  it 'preserves custom readers when extracting historical association keys' do
+    stub_const('ReaderPreparedDocument', Class.new(PreparedDocument) do
+      def name
+        "read:#{self[:name]}"
+      end
+    end)
+    document = ReaderPreparedDocument.create!(name: 'Before')
+    document.update!(name: 'After')
+    index = described_class.new(Time.now.utc - 3600)
+    index.load(ReaderPreparedDocument, [document.id])
+
+    expect(index.attribute_values_for(ReaderPreparedDocument, [document.id], 'name'))
+      .to eq(['read:Before', 'read:After'])
+  end
+
   it 'uses the first future pre-change state and then the live fallback' do
     article = TrackedArticle.create!(title: 'Temporal index')
     author = TrackedAuthor.create!(name: 'Before')
