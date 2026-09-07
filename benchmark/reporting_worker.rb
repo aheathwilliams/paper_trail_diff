@@ -32,6 +32,11 @@ outcome = if result.is_a?(Exception)
               raise 'unexpected selected population'
             end
 
+            if workload.name == 'deleted_roots' &&
+               result.deleted.compact.length != workload.root_count
+              raise 'unexpected deleted population'
+            end
+
             { outcome: 'ok', selected_roots: result.roots.length,
               unreachable: result.unreachable.length }
           end

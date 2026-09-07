@@ -29,7 +29,8 @@ validate the selected root count; the refusal scenario must raise
 
 Each article has a title, status, and 1 KiB body, using PaperTrail's default YAML
 serializer. Except for the long-history case, each has one create and five update
-versions. The window includes all seeded versions and uses `close_on: :current`.
+versions; `deleted_roots` adds a destroy event. The window includes all seeded
+versions and uses `close_on: :current`.
 There are no associations. The fixture has an `(item_type, item_id)` version
 index; a different schema, serializer, database, or graph needs its own run.
 
@@ -41,6 +42,9 @@ index; a different schema, serializer, database, or graph needs its own run.
 | `sparse_matches` | 100 / 1,000 roots | Historical status matches one root in every 100 |
 | `no_matches` | 100 / 1,000 roots | Historical status matches no recorded state |
 | `limit_refusal` | 100 / 1,000 roots | Every non-nil historical state matches; `limit: 5` refuses the sixth root |
+| `attribute_no_matches` | 100 / 1,000 roots | Attribute hash matches no recorded state, without candidate reification |
+| `attribute_sparse_matches` | 100 / 1,000 roots | Attribute hash matches one root in every 100 |
+| `deleted_roots` | 100 / 500 roots | Batched missing roots with retained activity snapshots |
 
 ## Baseline: 2026-09-06
 
@@ -103,7 +107,10 @@ SQLite database. The raw process high-water RSS also includes startup and seedin
 it is not an isolated peak for the report. RSS fields are unavailable off Linux.
 The measurements should not be interpreted as exact per-request memory budgets.
 
-## Findings and next optimization targets
+## Findings from the original baseline
+
+The findings below describe the original revision. The follow-up measurements
+and remaining limitations are recorded after this section.
 
 1. **Reconstruction deserves attention before query-count tuning.** Default
    analysis keeps the same query count as population/history grows, but reifies
@@ -159,3 +166,93 @@ baseline; it provides a repeatable comparison for a subsequent focused change.
 Do not enforce these workstation timings as CI thresholds. Re-run matching
 workloads before and after an optimization, compare structural counts as well
 as timing and memory, and validate the existing correctness suites separately.
+
+## Follow-up: batched reporting, 2026-09-07 UTC
+
+Runtime revision `fb076a4ebde62f45d639088d0bd6f843ce0879f8` addresses duplicate
+checkpoint reconstruction, repeated association event discovery, and the test
+app's per-deleted-root history loop. `report(scope, since:, limit:)` supplies
+recent activity through the current saved ending. `include_deleted: true`
+returns missing-root analyses in a separate batch with the requested graph.
+The same combined root ceiling is checked before either population is analyzed.
+
+Historical attribute hashes read recorded scalar state without reifying every
+candidate. Arbitrary callables retain their earlier semantics and reconstruction
+cost, with a default `max_filter_versions: 10_000` ceiling on loaded candidate
+versions across batches. One extra row detects overflow before evaluating that
+batch. This is separate from the matched-root ceiling.
+
+Association regression tests compare one and five roots for live activity and
+deleted activity, and exercise through-association events. The test app also
+checks that adding deleted articles with children does not add per-article
+queries. These tests establish query growth for their requested graphs; the
+timings below remain root-only measurements.
+
+The [54 follow-up samples](../benchmark/results/reporting-after-2026-09-07.json)
+use the same runtime versions, workstation, schema, and measurement procedure
+as the baseline. No test suite or app server ran alongside them. Each row gives
+the median of three fresh processes, with the elapsed-time range in parentheses.
+Query, reify, and AR instantiation counts were identical within each set of three.
+Memory uses the same definitions and limitations as the baseline.
+
+| Scenario | Size | Total ms (range) | Queries | Reify calls | Retained Ruby MiB | RSS after MiB |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `many_roots` | 100 | 157.1 (154.3–179.1) | 6 | 600 | 3.02 | 84.5 |
+| `many_roots` | 500 | 839.7 (804.8–843.8) | 6 | 3,000 | 14.98 | 142.6 |
+| `retained_activity` | 100 | 254.4 (250.4–275.8) | 6 | 600 | 4.18 | 98.7 |
+| `retained_activity` | 500 | 1,344.7 (1,320.1–1,599.8) | 6 | 3,000 | 20.75 | 160.0 |
+| `long_history` | 1,000 | 280.9 (256.1–307.8) | 6 | 1,001 | 4.02 | 111.1 |
+| `long_history` | 5,000 | 1,392.0 (1,364.1–1,409.8) | 6 | 5,001 | 19.92 | 170.9 |
+| `sparse_matches` | 100 | 94.6 (91.3–100.4) | 7 | 602 | 0.07 | 91.9 |
+| `sparse_matches` | 1,000 | 844.2 (835.6–962.9) | 10 | 6,020 | 0.33 | 164.8 |
+| `no_matches` | 100 | 85.3 (81.7–92.4) | 2 | 600 | 0.01 | 94.6 |
+| `no_matches` | 1,000 | 869.3 (798.8–909.7) | 5 | 6,000 | 0.01 | 165.4 |
+| `limit_refusal` | 100 | 10.9 (10.2–11.0) | 2 | 12 | 0.01 | 70.3 |
+| `limit_refusal` | 1,000 | 32.2 (30.5–33.4) | 2 | 12 | 0.01 | 81.1 |
+| `attribute_no_matches` | 100 | 89.9 (83.0–120.9) | 2 | 0 | 0.01 | 91.7 |
+| `attribute_no_matches` | 1,000 | 680.3 (680.2–721.8) | 5 | 0 | 0.01 | 164.7 |
+| `attribute_sparse_matches` | 100 | 82.6 (74.6–86.8) | 7 | 6 | 0.07 | 91.7 |
+| `attribute_sparse_matches` | 1,000 | 759.7 (742.8–762.1) | 10 | 60 | 0.33 | 166.3 |
+| `deleted_roots` | 100 | 340.4 (304.0–364.2) | 5 | 700 | 4.44 | 103.1 |
+| `deleted_roots` | 500 | 1,506.4 (1,487.2–1,585.5) | 5 | 3,500 | 22.08 | 164.9 |
+
+At 500 roots, default analysis is about 43% faster than the baseline and reifies
+each checkpoint once instead of twice. Its retained Ruby memory barely changes;
+this is primarily a reconstruction improvement, not a result-memory reduction.
+The 1,000-root attribute no-match case avoids all 6,000 candidate reifications but
+still spends 680 ms reading and deserializing states. Its RSS remains comparable
+to the callable case. Avoiding reification alone does not eliminate scan cost.
+
+The refusal case regressed: at 1,000 candidates it takes 32.2 ms versus 17.7 ms,
+with median SQL time rising from 8.6 to 24.0 ms. Both runs instantiate 1,500 version
+records and make 12 reify calls. The new loading ceiling remains useful, but this
+query deserves further tuning; the change is not a speedup for every workload.
+Deleted history has no original timed counterpart here. Its five queries at both
+100 and 500 roots demonstrate batching; output reconstruction still scales.
+
+### Remaining performance limits
+
+- **Reification still scales with requested root history.** Caching eliminates
+  repeated reconstruction of the same checkpoint, but normalizing each requested
+  root state still reifies it. This is linear Ruby work even where SQL queries
+  are batched. The new facade does not make arbitrarily large histories cheap.
+- **Callable predicates can still be expensive or issue N+1 queries.** Prefer
+  attribute hashes for batch reports. The version-loading budget cannot control
+  queries, network calls, or CPU work inside application callbacks. Hash predicates
+  still deserialize candidate states and are not SQL-indexed historical searches.
+- **Advanced association fallbacks can still query per record.** Scoped or
+  default-scoped paths and other graphs that need PT-AT fallback reconstruction
+  must be measured before being offered in a large report. The flat-query tests
+  do not establish a guarantee for every association configuration.
+- **Limits are not streaming.** Candidate identities are still selected up front;
+  a small root ceiling can load a full 250-candidate version batch, subject to the
+  separate version budget. Requested analysis history and retained snapshots
+  still consume memory proportional to the data involved.
+- **Selection semantics are unchanged.** Historical filters test recorded
+  pre-event states, not continuous-time membership. Scope selection needs a root
+  version in the window; child-only edits do not select an otherwise quiet root.
+
+The next performance work should measure representative association graphs and
+fallbacks, then decide which paths can be batched further or should be restricted
+in reporting. A graph-wide selector for child-only activity needs its own bounded
+query design, rather than a per-root discovery loop.

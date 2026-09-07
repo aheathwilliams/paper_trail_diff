@@ -8,7 +8,7 @@ module ReportingBenchmark
   # Seeds genuine PaperTrail history in a process-local database, never an app database.
   class Workload
     CASES = %w[many_roots retained_activity long_history sparse_matches no_matches
-               limit_refusal].freeze
+               limit_refusal attribute_no_matches attribute_sparse_matches deleted_roots].freeze
 
     attr_reader :name, :size
 
@@ -42,13 +42,15 @@ module ReportingBenchmark
     end
 
     def expected_roots
-      return 0 if name == 'no_matches'
-      return (size + 99) / 100 if name == 'sparse_matches'
+      return 0 if %w[no_matches attribute_no_matches deleted_roots].include?(name)
+      return (size + 99) / 100 if name.end_with?('sparse_matches')
 
       root_count
     end
 
     def limit
+      return root_count if name == 'deleted_roots'
+
       name == 'limit_refusal' ? 5 : [expected_roots, 1].max
     end
 
@@ -72,20 +74,26 @@ module ReportingBenchmark
     end
 
     def seed_root(index)
-      status = name == 'sparse_matches' && (index % 100).zero? ? 'review' : 'draft'
+      status = name.end_with?('sparse_matches') && (index % 100).zero? ? 'review' : 'draft'
       root = BenchmarkArticle.create!(title: "Article #{index}", status: status, body: 'x' * 1024)
       updates_per_root.times { |update| root.update!(title: "Article #{index} v#{update}") }
+      root.destroy! if name == 'deleted_roots'
     end
 
     def options
       result = { within: Time.at(0).utc..(Time.now.utc + 60), limit: limit, close_on: :current }
       result.merge!(activity: true, snapshots: true) if name == 'retained_activity'
+      if name == 'deleted_roots'
+        result.merge!(activity: true, snapshots: true,
+                      include_deleted: true)
+      end
       result[:historical_filter] = predicate if predicate
       result
     end
 
     def predicate
       return ->(_state) { true } if name == 'limit_refusal'
+      return { status: 'review' } if name.start_with?('attribute_')
       return unless %w[sparse_matches no_matches].include?(name)
 
       ->(state) { state.status == 'review' }

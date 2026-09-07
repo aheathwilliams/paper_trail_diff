@@ -137,6 +137,10 @@ A relation filters **current** rows. `Article.where(status: "open")` means open
 now, not open during the window. Deleted candidates cannot be tested against those
 conditions and are returned separately in `unreachable`.
 
+Selection requires a root version inside the window. Requested child activity
+is included for those roots; a child-only edit does not select an otherwise quiet
+root. This is not a graph-wide change search.
+
 For a reproducible historical window, use `analyze_scope(..., within: window)`.
 To select by recorded historical root state, prefer an attribute hash:
 

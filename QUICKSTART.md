@@ -182,6 +182,8 @@ report.deleted # missing identity => Analysis, or nil without destroy history
 
 Deleted roots use a separate batch with the same requested associations. The
 limit covers both populations. Omit `include_deleted:` when only live rows matter.
+Roots need a version inside the window to be selected; child-only activity does
+not select an otherwise quiet root.
 
 For a report that includes the latest saved change, use an explicit live ending:
 

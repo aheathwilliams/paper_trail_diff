@@ -8,7 +8,9 @@ require 'time'
 
 scenarios = { 'many_roots' => [100, 500], 'retained_activity' => [100, 500],
               'long_history' => [1000, 5000], 'sparse_matches' => [100, 1000],
-              'no_matches' => [100, 1000], 'limit_refusal' => [100, 1000] }
+              'no_matches' => [100, 1000], 'limit_refusal' => [100, 1000],
+              'attribute_no_matches' => [100, 1000], 'attribute_sparse_matches' => [100, 1000],
+              'deleted_roots' => [100, 500] }
 options = { samples: 3 }
 OptionParser.new do |parser|
   parser.banner = 'Usage: bundle exec ruby benchmark/reporting.rb [options]'

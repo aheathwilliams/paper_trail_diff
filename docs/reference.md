@@ -505,6 +505,10 @@ for finite historical windows or checkpoint-only output.
 
 Things to know before using scoped reporting:
 
+**Selection starts from root versions in the window.** Selected child activity is
+included after root selection; child-only edits do not select an otherwise quiet
+root. `report` preserves this `analyze_scope` selection contract.
+
 **`limit:` is a separate safety ceiling.** The relation's own `limit`, `offset`,
 and order define the live selection. `Order.limit(2)` requests up to two roots;
 with a plain SQL join, pagination applies to joined rows and may repeat roots.
@@ -547,6 +551,10 @@ loads these histories together using the requested association graph; callers
 should not loop over identities to query/reify them. With this option, live and
 missing roots together must fit `limit:` before analysis starts. Array-based
 `analyze_many` continues to require live records.
+
+Deleted analyses retain the ordinary root-checkpoint semantics: a destroy
+version's snapshot is the state before deletion. Use `activity_timeline` for the
+deletion event itself, whose after snapshot is nil when snapshots are retained.
 
 `unreachable` is unpaginated and independent of the relation's live page.
 Without `include_deleted: true` or historical filtering, it is outside the root
