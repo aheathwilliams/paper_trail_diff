@@ -16,6 +16,11 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Scope selection reads at most 250 joined rows per query independently of the
+  unique-root safety limit, reducing round trips for duplicate-heavy joins.
+- Missing prepared activity registration raises an explanatory configuration
+  error instead of a bare hash lookup error.
+
 - Plain historical root and direct-child snapshots now normalize typed recorded
   attributes without constructing historical ActiveRecord instances. Models with
   initialization callbacks, custom types/defaults, or default scopes retain the

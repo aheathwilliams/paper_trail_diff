@@ -66,7 +66,12 @@ module PaperTrailDiff
 
     #: (untyped) -> Array[untyped]
     def node_ids(model)
-      @nodes.fetch(model.base_class.name.to_s)
+      name = model.base_class.name.to_s
+      @nodes.fetch(name) do
+        raise ConfigurationError,
+              "prepared activity graph is missing #{name}; " \
+              'register the model before collecting activity'
+      end
     end
 
     #: (untyped, untyped) -> untyped

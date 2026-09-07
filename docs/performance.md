@@ -19,7 +19,7 @@ latency guarantee or a comparison of SQL dialects.
 ## Direct reconstruction follow-up: 2026-09-07
 
 Implementation: `1b6b1b9`, followed by belongs-to discovery fix `f6a4ae2`.
-[Raw measurements](../benchmark/results/direct-reconstruction-2026-09-07.json)
+[Raw measurements](https://github.com/aheathwilliams/paper_trail_diff/blob/c799d0e/benchmark/results/direct-reconstruction-2026-09-07.json)
 include all samples, typed parity checks and query origins. Timing runs overlapped
 development checks, so they do not establish a controlled speedup.
 
@@ -51,7 +51,8 @@ instantiate historical records. There is no blanket no-N+1 guarantee.
 
 Production parity matches PaperTrail for STI, enum, decimal, date, boolean, JSON
 and serialized values, including missing fields supplied by callbacks/default
-scopes through the compatibility fallback. Reproduce these checks with:
+scopes through the compatibility fallback. From a repository checkout (benchmark
+scripts are not included in the installed gem), reproduce these checks with:
 
 ```console
 PTD_PRODUCTION=1 mise exec -- bundle exec ruby benchmark/investigation/scalar_parity.rb
@@ -105,7 +106,7 @@ ActiveRecord 8.1.3.1, PaperTrail 17.0.0, SQLite 3.53.2, Linux x86-64 on WSL2
 WSL system memory. No test suite or app server ran alongside the final
 samples. This is a developer workstation, not an isolated benchmark host.
 
-The [raw samples](../benchmark/results/reporting-2026-09-06.json) include runtime
+The [raw samples](https://github.com/aheathwilliams/paper_trail_diff/blob/c799d0e/benchmark/results/reporting-2026-09-06.json) include runtime
 versions, allocations, SQL duration, query-cache hits, record instantiation,
 reification counts, and memory readings. Times below are medians of three fresh
 processes; the range is the minimum–maximum. Query and instantiation counts were identical across each set of three samples.
@@ -238,7 +239,7 @@ checks that adding deleted articles with children does not add per-article
 queries. These tests establish query growth for their requested graphs; the
 timings below remain root-only measurements.
 
-The [54 follow-up samples](../benchmark/results/reporting-after-2026-09-07.json)
+The [54 follow-up samples](https://github.com/aheathwilliams/paper_trail_diff/blob/c799d0e/benchmark/results/reporting-after-2026-09-07.json)
 use the same runtime versions, workstation, schema, and measurement procedure
 as the baseline. No test suite or app server ran alongside them. Each row gives
 the median of three fresh processes, with the elapsed-time range in parentheses.

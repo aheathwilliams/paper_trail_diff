@@ -10,7 +10,7 @@ application callbacks.
 
 The probes and prototypes live under `benchmark/investigation/`. They do not
 change `lib/`; experimental patches apply only inside their subprocesses.
-The [raw evidence](../benchmark/results/reconstruction-investigation-2026-09-07.json)
+The [raw evidence](https://github.com/aheathwilliams/paper_trail_diff/blob/c799d0e/benchmark/results/reconstruction-investigation-2026-09-07.json)
 records structural counts, query origins, scalar timings, and parity results.
 
 ## Query growth
@@ -183,7 +183,8 @@ that arbitrary consumer code becomes query-free.
 
 ## Reproduce
 
-These commands use disposable in-memory data and do not modify application tables:
+Run these from a repository checkout; benchmark scripts are not included in the
+installed gem. They use disposable in-memory data and do not modify application tables:
 
 ```console
 mise exec -- bundle exec ruby benchmark/investigation/reconstruction.rb comments_without_changes 20
