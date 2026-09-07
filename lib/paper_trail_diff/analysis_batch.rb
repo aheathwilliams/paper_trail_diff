@@ -75,13 +75,20 @@ module PaperTrailDiff
     def prepare(records, selected, loaded)
       records.group_by(&:class).each_value do |grouped|
         versions = grouped.flat_map do |record|
-          selected.fetch(Endpoint.identity(record), RootVersionPlan.empty).versions
+          selected.fetch(Endpoint.identity(record), RootVersionPlan.empty).reconstruction_versions
         end
         next if versions.empty?
 
         roots = grouped.map { |record| loaded.fetch(Endpoint.identity(record), record) }
-        @history_preparer.call(roots, versions)
+        @history_preparer.call(roots, versions, **preparation_range(versions))
       end
+    end
+
+    #: (Array[untyped]) -> Hash[Symbol, untyped]
+    def preparation_range(versions)
+      last = versions.map(&:created_at).max
+      end_at = [last, @time_range&.end_time, (Time.now.utc if @close_on_current)].compact.max
+      { start_at: @time_range&.begin_time || versions.map(&:created_at).min, end_at: end_at }
     end
 
     # A root with no versions in range has nothing to report, which is an empty

@@ -4,6 +4,8 @@
 module PaperTrailDiff
   # Batched record states and relationship candidates for one activity range.
   class PreparedHistory
+    attr_reader :activity_index #: PreparedActivityIndex?
+
     DIRECT_RESOLVERS = {
       belongs_to: :resolve_belongs_to,
       has_one: :resolve_children,
@@ -12,9 +14,10 @@ module PaperTrailDiff
     }.freeze
     private_constant :DIRECT_RESOLVERS
 
-    #: (PreparedRecordIndex) -> void
-    def initialize(records)
+    #: (PreparedRecordIndex, ?activity_index: PreparedActivityIndex?) -> void
+    def initialize(records, activity_index: nil)
       @records = records
+      @activity_index = activity_index
       @edges = {} #: Hash[Array[String], Hash[String, Hash[Symbol, untyped]]]
       @unsupported = {} #: Hash[Array[String], bool]
       @habtm = {} #: Hash[Array[String], Hash[String, Array[untyped]]]
@@ -24,7 +27,7 @@ module PaperTrailDiff
     def merge_edge(owner_class, reflection, groups)
       key = edge_key(owner_class, reflection)
       empty = {} #: Hash[String, Hash[Symbol, untyped]]
-      @edges[key] = merge_groups(@edges.fetch(key, empty), groups)
+      @edges[key] = Support.merge_record_groups(@edges.fetch(key, empty), groups)
     end
 
     #: (untyped, untyped) -> Hash[String, Hash[Symbol, untyped]]
@@ -217,11 +220,6 @@ module PaperTrailDiff
     #: (untyped, untyped) -> Array[String]
     def edge_key(owner_class, reflection)
       [owner_class.base_class.name.to_s, reflection.name.to_s]
-    end
-
-    #: (Hash[String, Hash[Symbol, untyped]], Hash[String, Hash[Symbol, untyped]]) -> Hash[String, Hash[Symbol, untyped]]
-    def merge_groups(existing, incoming)
-      Support.merge_record_groups(existing, incoming)
     end
   end
 end

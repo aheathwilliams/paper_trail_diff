@@ -109,15 +109,14 @@ and record reference; default serialization remains compact.
 ## 3. Report across records for a time window
 
 This recipe works without association tracking. Add `associations:` when needed.
-For a report through now, explicitly allow the current record to supply a missing
-final historical boundary:
+For recent activity through now, use `report`. It selects activity output and
+the current saved ending, so callers do not need to supply PaperTrail boundaries:
 
 <!-- executable:recipe-report -->
 ```ruby
 window = 1.day.ago..Time.current
-report = PaperTrailDiff.analyze_scope(
-  Article.all, within: window, limit: 100,
-  close_on: :current, activity: true
+report = PaperTrailDiff.report(
+  Article.all, since: window.begin, limit: 100, include_deleted: true
 )
 
 rows = report.analyses.map do |identity, analysis|
@@ -130,25 +129,30 @@ rows = report.analyses.map do |identity, analysis|
   }
 end
 
-report.unreachable # IDs whose live rows are gone; these were not analyzed
+report.unreachable # IDs whose live rows are gone
+report.deleted     # Separate identity => Analysis (nil when no destroy history exists)
 ```
 
 A relation filters **current** rows. `Article.where(status: "open")` means open
 now, not open during the window. Deleted candidates cannot be tested against those
 conditions and are returned separately in `unreachable`.
 
-To select by recorded historical root state, add a predicate:
+For a reproducible historical window, use `analyze_scope(..., within: window)`.
+To select by recorded historical root state, prefer an attribute hash:
 
 ```ruby
 report = PaperTrailDiff.analyze_scope(
   Article.all, within: window, limit: 100, close_on: :current,
-  historical_filter: ->(state) { state.status == "review" }
+  historical_filter: { status: "review" }, max_filter_versions: 10_000
 )
 report.roots # the selected live model instances, in relation order
 ```
 
-The predicate receives reified root records at in-window version boundaries,
-without traversing associations. Create boundaries are absent and skipped. A match
+The hash checks typed recorded attributes without reifying candidate records.
+All keys must match using Ruby equality; unknown or unrecorded attributes raise
+instead of being treated as nil. A callable remains available for advanced
+model-specific predicates, but it reifies states and application code may issue
+queries. Create boundaries are absent and skipped. A match
 at any of those boundaries selects a candidate. This tests recorded pre-event
 states: it does not inspect the final live state, even with `close_on: :current`,
 or states recorded only outside the window. It is not a continuous-time query.
@@ -157,41 +161,36 @@ or states recorded only outside the window. It is not a continuous-time query.
 The relation still filters live rows. Matching deleted candidates remain in
 `unreachable`. With `historical_filter:`, the safety ceiling applies to all
 matching candidates, including missing roots, before the live relation's filters
-and pagination. Reification stops when that ceiling is exceeded; scanning many
-nonmatches or a root with a long history can still be expensive. Narrow the window
-and predicate accordingly. Without this option, the existing live-root ceiling
-and unpaginated missing-root behavior remain unchanged.
+and pagination. Matching stops when that ceiling is exceeded. A separate
+`max_filter_versions:` ceiling defaults to 10,000 candidate versions loaded across
+all batches. Exceeding it raises `FilterLimitExceededError` before that batch is
+evaluated; a query loads at most one extra row to detect overflow. This bounds
+loading even when nothing matches. It does not bound arbitrary callback queries
+or subsequent analysis. Without a historical filter, this version budget is unused.
 
 `roots` is a frozen array, but its ActiveRecord instances remain mutable for
 ordinary application use. Changing them does not change the immutable analysis
 snapshots. The scoped `analyze_many(scope: ...)` alias accepts the same predicate;
 explicit record lists do not.
 
-A deletion audit should inspect that collection explicitly. The destroy version
-contains the last record state and can provide a historical root for an activity
-query. Records removed without a destroy version remain explicitly unavailable:
+Pass `include_deleted: true` to analyze missing roots in a separate batch with
+exactly the requested association paths. The option counts live and missing roots
+together against `limit:` before analysis; it never silently truncates deletions.
+It is off by default because current SQL conditions cannot establish whether a
+deleted row matched. Missing rows without destroy history remain unavailable:
 
 <!-- executable:recipe-deleted -->
 ```ruby
-unavailable = []
-deleted_activity = report.unreachable.to_h do |identity|
-  type, id = identity
-  version = Article.paper_trail.version_class
-    .where(item_type: type, item_id: id, event: "destroy")
-    .reorder(created_at: :desc, id: :desc).first
-  root = version&.reify
-  if root
-    [identity, PaperTrailDiff.activity_timeline(root, within: window)]
-  else
-    unavailable << identity
-    [identity, nil]
-  end
+unavailable = report.deleted.select { |_identity, analysis| analysis.nil? }.keys
+deleted_activity = report.deleted.transform_values do |analysis|
+  analysis&.activity_timeline
 end
 ```
 
-This explicit fallback costs work per deleted root. Do not treat `unreachable` as
-proof that a deleted record matched your relation's conditions. A filtered report
-needs an application-level decision about those historical records.
+This performs no application-level version queries or reification. `unreachable`
+continues to name all missing candidates, including those in `deleted`; it does
+not prove that they matched the live relation's conditions. With historical
+filtering, only matching missing candidates are included.
 
 A relation's existing order, offset, and limit define the live selection. For
 example, `Article.limit(2)` requests up to two live roots. With a plain SQL join,
@@ -200,7 +199,7 @@ Repeated roots are analyzed once, in order of first appearance.
 Use a deterministic order for pagination, adding the root's ID as a tie-breaker
 when sorting values can repeat. With no explicit order, roots are ordered by ID.
 
-The separate `limit:` option is a safety ceiling on unique selected live roots;
+Without `include_deleted: true`, `limit:` is a ceiling on unique selected live roots;
 exceeding it raises `BatchLimitExceededError`. It does not shorten the selection.
 `unreachable` is a separate, unpaginated list of missing roots with history in the
 window. It is not the deleted portion of the live page. The ceiling does not bound
@@ -226,6 +225,7 @@ otherwise they raise `ConfigurationError`.
 | Net diff and checkpoint steps together | `analyze(record, ...)` | `Analysis` |
 | Also include the activity feed | `analyze(record, activity: true, ...)` | `Analysis` |
 | Analyze supplied records | `analyze_many(records, ...)` | Hash of `Analysis` |
+| Recent activity through now | `report(scope, since: ..., limit: ...)` | `ScopedAnalysis` |
 | Select records from a relation | `analyze_scope(relation, limit: ..., ...)` | `ScopedAnalysis` |
 
 All three single-record timeline methods accept `from: :first, to: record` for

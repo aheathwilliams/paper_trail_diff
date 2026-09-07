@@ -4,15 +4,17 @@
 module PaperTrailDiff
   # Collects root and selected-descendant versions relevant to one root history range.
   class ActivityVersionCollector
-    #: (untyped, root_versions: Array[untyped], tree: AssociationTree, traversal: AssociationTraversal, ?range_start: untyped, ?range_end: untyped) -> void
+    #: (untyped, root_versions: Array[untyped], tree: AssociationTree, traversal: AssociationTraversal, ?range_start: untyped, ?range_end: untyped, ?prepared: PreparedActivityIndex?) -> void
     def initialize( # rubocop:disable Metrics/ParameterLists
       record,
       root_versions:,
       tree:,
       traversal:,
       range_start: root_versions.first,
-      range_end: root_versions.last
+      range_end: root_versions.last,
+      prepared: nil
     )
+      @prepared = prepared
       @record = record
       @root_versions = root_versions
       @tree = tree
@@ -32,6 +34,7 @@ module PaperTrailDiff
 
     private
 
+    # @rbs @prepared: PreparedActivityIndex?
     # @rbs @record: untyped
     # @rbs @root_versions: Array[untyped]
     # @rbs @tree: AssociationTree
@@ -59,7 +62,7 @@ module PaperTrailDiff
         @registry.add(group.fetch(:versions), branch: branch)
         next if subtree.empty?
 
-        child_path = join_path(path, reflection.name.to_s)
+        child_path = Support.association_path(path, reflection.name.to_s)
         collect_tree(group.fetch(:model), group.fetch(:ids), subtree,
                      path: child_path, branch: branch)
       end
@@ -97,6 +100,10 @@ module PaperTrailDiff
 
     #: (untyped, Array[untyped], untyped) -> Hash[String, untyped]
     def belongs_to_groups(parent_class, parent_versions, reflection)
+      if (prepared = @prepared)
+        rows = prepared.association_rows(parent_class, parent_versions, reflection)
+        return identity_groups(rows, reflection)
+      end
       rows = parent_class.paper_trail.version_association_class.where(
         version_id: parent_versions.map(&:id),
         foreign_key_name: reflection.foreign_key.to_s
@@ -106,9 +113,12 @@ module PaperTrailDiff
 
     #: (untyped, Array[untyped], untyped) -> Hash[String, untyped]
     def direct_child_groups(parent_class, parent_ids, reflection)
-      item_ids = ActivityChildCandidateLoader.new(
-        parent_class, parent_ids, reflection, @range
-      ).call
+      item_ids = if (prepared = @prepared)
+                   prepared.child_ids(parent_class, parent_ids, reflection, @range)
+                 else
+                   ActivityChildCandidateLoader.new(parent_class, parent_ids, reflection,
+                                                    @range).call
+                 end
       return {} if item_ids.empty?
 
       { reflection.klass.name => group(reflection.klass, item_ids) }
@@ -116,6 +126,11 @@ module PaperTrailDiff
 
     #: (untyped, Array[untyped], untyped) -> Hash[String, untyped]
     def habtm_groups(parent_class, parent_versions, reflection)
+      if (prepared = @prepared)
+        rows = prepared.association_rows(parent_class, parent_versions, reflection,
+                                         transactions: true)
+        return identity_groups(rows, reflection)
+      end
       transaction_ids = parent_versions.filter_map do |version|
         version.transaction_id if version.respond_to?(:transaction_id)
       end
@@ -162,13 +177,17 @@ module PaperTrailDiff
     def versions_for(model_class, ids)
       return [] if ids.empty?
 
+      if (prepared = @prepared)
+        return prepared.versions(model_class, ids).select { |version| @range.include?(version) }
+      end
+
       version_class = model_class.paper_trail.version_class
       @range.scope(
         version_class.where(
           item_type: model_class.base_class.name,
           item_id: ids
         )
-      ).to_a.select { |version| in_range?(version) }
+      ).to_a.select { |version| @range.include?(version) }
     end
 
     #: (untyped, untyped) -> untyped
@@ -178,16 +197,6 @@ module PaperTrailDiff
       Object.const_get(row.foreign_type.to_s) unless row.foreign_type.to_s.empty?
     rescue NameError
       nil
-    end
-
-    #: (untyped) -> bool
-    def in_range?(version)
-      @range.include?(version)
-    end
-
-    #: (String, String) -> String
-    def join_path(parent, name)
-      parent.empty? ? name : "#{parent}.#{name}"
     end
   end
 end

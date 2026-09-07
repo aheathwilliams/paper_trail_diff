@@ -497,7 +497,13 @@ class (`Order`) as readily as a relation. Every other option — `within:`,
 exactly as it does for `analyze_many`. Ordinary root selection uses a fixed number
 of queries; joined duplicates can require additional bounded query pages.
 
-Two things to know before using it.
+For the common recent-activity case, `report(scope, since:, limit:)` is equivalent
+to `analyze_scope` with `within: since..Time.now.utc`, `activity: true`, and
+`close_on: :current`. It accepts association paths, ignores, snapshot retention,
+grouping, deleted-history inclusion, and historical filtering. Use `analyze_scope`
+for finite historical windows or checkpoint-only output.
+
+Things to know before using scoped reporting:
 
 **`limit:` is a separate safety ceiling.** The relation's own `limit`, `offset`,
 and order define the live selection. `Order.limit(2)` requests up to two roots;
@@ -515,8 +521,11 @@ instances are mutable. Existing two-value destructuring is unchanged.
 
 **`historical_filter:` optionally selects recorded root states.** See the
 [historical selection recipe](../README.md#3-report-across-records-for-a-time-window) for boundary
-semantics and its matching-candidate ceiling. The predicate runs on reified
-in-window pre-event states, independently of `version_scope:`. It does not inspect
+semantics and its matching-candidate ceiling. An attribute hash checks typed recorded values directly, without reification;
+a callable receives reified in-window pre-event states. Both are independent of
+`version_scope:`. `max_filter_versions:` defaults to 10,000 loaded candidate
+versions across all batches and raises `FilterLimitExceededError` on overflow.
+Unknown/unrecorded hash attributes raise rather than matching an implicit nil. It does not inspect
 current state or traverse associations. Matching missing roots remain in
 `unreachable`, and with this option they count toward `limit:` before the live
 relation is applied.
@@ -531,18 +540,23 @@ unreachable # => [["Order", "412"]]
 ```
 
 These are reported rather than dropped so that a page auditing deletions is told
-where to look instead of silently coming up short. `analyze_many` requires live
-records by design, so to analyze those roots reach for `activity_timeline`, which
-reads history without needing current state.
+where to look instead of silently coming up short. Set `include_deleted: true`
+on `report` or `analyze_scope` to get a separate frozen `deleted` hash mapping
+identities to analyses, with nil for identities lacking destroy history. The gem
+loads these histories together using the requested association graph; callers
+should not loop over identities to query/reify them. With this option, live and
+missing roots together must fit `limit:` before analysis starts. Array-based
+`analyze_many` continues to require live records.
 
-`unreachable` is unpaginated and independent of both the relation's live page and
-the safety ceiling. It is not the deleted portion of that page and does not prove
+`unreachable` is unpaginated and independent of the relation's live page.
+Without `include_deleted: true` or historical filtering, it is outside the root
+safety ceiling. It is not the deleted portion of that page and does not prove
 that those deleted roots matched the relation's conditions.
 
 Note also that a relation selects on **current** state, not on state during the
 window. `where(status: "open")` means open *now*, which is a different set from
 what was open while the window was open. If you need the historical population,
-select on the version history instead and pass the records.
+use the documented historical filter with its recorded-state semantics.
 
 ### Reporting on a subset of root mutations
 
@@ -650,9 +664,11 @@ still produces a step. The final event in the range has no boundary after it, so
 what it produced is not shown — the same blind spot `to:` has everywhere else.
 
 For "which of these records did someone touch?" across a listing, note that
-`analyze_many` batches the diff and timeline views but not descendant discovery.
-Querying versions by `whodunnit` and mapping them back to roots yourself will be
-much cheaper than an activity pass per record.
+batch analysis shares descendant event discovery across its prepared graph.
+Avoid calling an activity method once per root; use `report` or
+`analyze_many(..., activity: true)` so selection and preparation can be shared.
+Scoped/default-scoped association fallbacks and arbitrary application callbacks
+can still query individually; measure those advanced paths in your application.
 
 ## Build a root-checkpoint timeline
 

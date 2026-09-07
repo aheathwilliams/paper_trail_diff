@@ -1,0 +1,44 @@
+# Generated from lib/paper_trail_diff/deleted_analysis_batch.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Analyzes missing roots together without pretending that they have live rows.
+  class DeletedAnalysisBatch
+    # : (untyped, identities: Array[Array[String]], time_range: TimeRange?, analyzer: untyped, history_preparer: untyped, ?version_scope: untyped) -> void
+    def initialize: (untyped, identities: Array[Array[String]], time_range: TimeRange?, analyzer: untyped, history_preparer: untyped, ?version_scope: untyped) -> void
+
+    # : () -> Hash[Array[String], Analysis?]
+    def call: () -> Hash[Array[String], Analysis?]
+
+    private
+
+    # : (Hash[Array[String], Analysis]) -> Hash[Array[String], Analysis?]
+    def with_unavailable: (Hash[Array[String], Analysis]) -> Hash[Array[String], Analysis?]
+
+    @analyzer: untyped
+
+    @history_preparer: untyped
+
+    @identities: Array[Array[String]]
+
+    @model: untyped
+
+    @time_range: TimeRange?
+
+    @version_scope: untyped
+
+    # These records supply identity and model metadata only. Every reported
+    # value comes from the batched historical plan; no per-root reify or live
+    # lookup is needed to get into the comparison engine.
+    # : () -> Array[untyped]
+    def historical_roots: () -> Array[untyped]
+
+    # : () -> Array[untyped]
+    def destroy_versions: () -> Array[untyped]
+
+    # : (Array[untyped]) -> Hash[Symbol, untyped]
+    def preparation_range: (Array[untyped]) -> Hash[Symbol, untyped]
+
+    # : (Array[untyped], Hash[Array[String], RootVersionPlan]) -> void
+    def prepare: (Array[untyped], Hash[Array[String], RootVersionPlan]) -> void
+  end
+end

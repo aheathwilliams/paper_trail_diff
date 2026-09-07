@@ -43,6 +43,9 @@ module PaperTrailDiff
     # : (Array[untyped], Hash[Array[String], RootVersionPlan], Hash[Array[String], untyped]) -> void
     def prepare: (Array[untyped], Hash[Array[String], RootVersionPlan], Hash[Array[String], untyped]) -> void
 
+    # : (Array[untyped]) -> Hash[Symbol, untyped]
+    def preparation_range: (Array[untyped]) -> Hash[Symbol, untyped]
+
     # A root with no versions in range has nothing to report, which is an empty
     # result rather than a failed request.
     # : (untyped, RootVersionPlan) -> Analysis

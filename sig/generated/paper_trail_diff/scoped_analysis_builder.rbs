@@ -1,0 +1,22 @@
+# Generated from lib/paper_trail_diff/scoped_analysis_builder.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Selects both populations and checks their shared ceiling before analysis.
+  class ScopedAnalysisBuilder
+    # : (untyped, limit: Integer?, within: untyped, historical_filter: untyped, max_filter_versions: Integer, include_deleted: bool, analyzer: untyped, deleted_analyzer: untyped) -> void
+    def initialize: (untyped, limit: Integer?, within: untyped, historical_filter: untyped, max_filter_versions: Integer, include_deleted: bool, analyzer: untyped, deleted_analyzer: untyped) -> void
+
+    # : () -> ScopedAnalysis
+    def call: () -> ScopedAnalysis
+
+    @analyzer: untyped
+
+    @deleted_analyzer: untyped
+
+    @include_deleted: bool
+
+    @limit: Integer
+
+    @selection: ScopedRootSelection
+  end
+end

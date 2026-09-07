@@ -1,0 +1,53 @@
+# Generated from lib/paper_trail_diff/historical_filter.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Selects recorded pre-event states with an explicit ceiling on version loading.
+  class HistoricalFilter
+    DEFAULT_VERSION_LIMIT: ::Integer
+
+    CANDIDATE_BATCH: ::Integer
+
+    # : (untyped, predicate: untyped, time_range: TimeRange?, limit: Integer, max_versions: Integer) -> void
+    def initialize: (untyped, predicate: untyped, time_range: TimeRange?, limit: Integer, max_versions: Integer) -> void
+
+    # : (Array[String]) -> Array[String]
+    def call: (Array[String]) -> Array[String]
+
+    private
+
+    @limit: Integer
+
+    @loaded: Integer
+
+    @max_versions: Integer
+
+    @model: untyped
+
+    @predicate: untyped
+
+    @state_loader: PreparedVersionStateLoader
+
+    @time_range: TimeRange?
+
+    # : (untyped) -> untyped
+    def validate_predicate: (untyped) -> untyped
+
+    # : (untyped) -> Integer
+    def validate_budget: (untyped) -> Integer
+
+    # : (Array[String]) -> Hash[String, Array[untyped]]
+    def candidate_versions: (Array[String]) -> Hash[String, Array[untyped]]
+
+    # : (Integer) -> void
+    def account_versions!: (Integer) -> void
+
+    # : (untyped) -> bool
+    def matches?: (untyped) -> bool
+
+    # : (untyped) -> bool
+    def attributes_match?: (untyped) -> bool
+
+    # : () -> void
+    def reject_root_limit!: () -> void
+  end
+end

@@ -117,6 +117,9 @@ module PaperTrailDiff
     # : (untyped, Array[untyped]) -> Array[untyped]
     def records_for: (untyped, Array[untyped]) -> Array[untyped]
 
+    # : (untyped, untyped) -> Array[untyped]
+    def versions_for_id: (untyped, untyped) -> Array[untyped]
+
     # : (untyped, untyped) -> bool
     def loaded?: (untyped, untyped) -> bool
 

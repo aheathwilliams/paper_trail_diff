@@ -255,6 +255,11 @@ module PaperTrailDiff
       ids.flat_map { |id| @series.fetch(identity(model_class, id)).records }
     end
 
+    #: (untyped, untyped) -> Array[untyped]
+    def versions_for_id(model_class, id)
+      @series.fetch(identity(model_class, id)).versions
+    end
+
     #: (untyped, untyped) -> bool
     def loaded?(model_class, id)
       @series.key?(identity(model_class, id))

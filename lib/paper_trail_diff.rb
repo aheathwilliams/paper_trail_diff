@@ -28,6 +28,7 @@ require_relative 'paper_trail_diff/nested_comparator'
 require_relative 'paper_trail_diff/engine'
 require_relative 'paper_trail_diff/historical_association_reifier'
 require_relative 'paper_trail_diff/prepared_record_index'
+require_relative 'paper_trail_diff/prepared_activity_index'
 require_relative 'paper_trail_diff/prepared_history'
 require_relative 'paper_trail_diff/version_association_candidate_scope'
 require_relative 'paper_trail_diff/prepared_edge_loader'
@@ -66,8 +67,11 @@ require_relative 'paper_trail_diff/step'
 require_relative 'paper_trail_diff/analysis'
 require_relative 'paper_trail_diff/activity_root_steps'
 require_relative 'paper_trail_diff/analysis_batch'
+require_relative 'paper_trail_diff/deleted_analysis_batch'
 require_relative 'paper_trail_diff/scoped_analysis'
+require_relative 'paper_trail_diff/historical_filter'
 require_relative 'paper_trail_diff/scoped_root_selection'
+require_relative 'paper_trail_diff/scoped_analysis_builder'
 require_relative 'paper_trail_diff/batched_root_analyzer'
 require_relative 'paper_trail_diff/version_range'
 require_relative 'paper_trail_diff/version_sequence_diagnostics'
@@ -98,6 +102,10 @@ require_relative 'paper_trail_diff/paper_trail_adapter'
 #     type identity = Array[untyped]
 #     type comparison_input = Hash[String | Symbol, untyped]
 #     type comparison_results = Hash[identity, Diff]
+#     type report_options = {
+#       within: untyped, activity: bool, version_scope: untyped,
+#       close_on: Symbol?, snapshots: bool, group: Symbol?
+#     }
 #     type ignore_option = Array[String | Symbol] | Hash[String | Symbol, untyped]
 #     type reference_key = :type | :id | "type" | "id"
 #     type traversal_context = :change | :included_state
@@ -244,7 +252,7 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
     # you from a relation, which returns a `ScopedAnalysis` -- the same Hash,
     # plus the roots the relation could not reach. See `analyze_scope` for why
     # that second collection exists.
-    #: (?Array[untyped]?, ?scope: untyped, ?limit: Integer?, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?historical_filter: untyped) -> (Hash[identity, Analysis] | ScopedAnalysis)
+    #: (?Array[untyped]?, ?scope: untyped, ?limit: Integer?, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?historical_filter: untyped, ?max_filter_versions: Integer, ?include_deleted: bool) -> (Hash[identity, Analysis] | ScopedAnalysis)
     def analyze_many( # rubocop:disable Metrics/ParameterLists
       records = nil,
       scope: nil,
@@ -257,7 +265,9 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
       close_on: nil,
       snapshots: false,
       group: nil,
-      historical_filter: nil
+      historical_filter: nil,
+      max_filter_versions: HistoricalFilter::DEFAULT_VERSION_LIMIT,
+      include_deleted: false
     )
       adapter = PaperTrailAdapter.new(associations: associations, ignore: ignore)
       if scope
@@ -266,10 +276,11 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
         return adapter.analyze_scope(scope, limit: limit, within: within, activity: activity,
                                             version_scope: version_scope, close_on: close_on,
                                             snapshots: snapshots, group: group,
-                                            historical_filter: historical_filter)
+                                            historical_filter: historical_filter,
+                                            max_filter_versions: max_filter_versions,
+                                            include_deleted: include_deleted)
       end
-      raise ConfigurationError, 'pass records or scope:' if records.nil?
-      raise ConfigurationError, 'historical_filter: requires scope:' unless historical_filter.nil?
+      records = validate_record_batch!(records, historical_filter, include_deleted)
 
       adapter.analyze_many(records, within: within, activity: activity,
                                     version_scope: version_scope, close_on: close_on,
@@ -300,7 +311,7 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
     # Note also that a relation selects on current state, not on state during
     # the window: `where(status: 'published')` means published *now*, which is a
     # different set from what was published while the window was open.
-    #: (untyped, limit: Integer?, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?historical_filter: untyped) -> ScopedAnalysis
+    #: (untyped, limit: Integer?, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?historical_filter: untyped, ?max_filter_versions: Integer, ?include_deleted: bool) -> ScopedAnalysis
     def analyze_scope( # rubocop:disable Metrics/ParameterLists
       scope,
       limit:,
@@ -312,14 +323,45 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
       close_on: nil,
       snapshots: false,
       group: nil,
-      historical_filter: nil
+      historical_filter: nil,
+      max_filter_versions: HistoricalFilter::DEFAULT_VERSION_LIMIT,
+      include_deleted: false
     )
       PaperTrailAdapter.new(associations: associations, ignore: ignore).analyze_scope(
         scope, limit: limit, within: within, activity: activity,
                version_scope: version_scope, close_on: close_on, snapshots: snapshots, group: group,
-               historical_filter: historical_filter
+               historical_filter: historical_filter, max_filter_versions: max_filter_versions,
+               include_deleted: include_deleted
       )
     end
+
+    # Recent root and selected-child activity through the current saved state.
+    # Historical windows remain explicit on analyze_scope; this entry point is
+    # deliberately named for a report through now rather than an as-of query.
+    #: (untyped, since: untyped, limit: Integer, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?snapshots: bool, ?group: Symbol?, ?include_deleted: bool, ?historical_filter: untyped, ?max_filter_versions: Integer) -> ScopedAnalysis
+    def report( # rubocop:disable Metrics/ParameterLists
+      scope, since:, limit:, associations: [], ignore: DEFAULT_IGNORED_ATTRIBUTES,
+      snapshots: false, group: nil, include_deleted: false, historical_filter: nil,
+      max_filter_versions: HistoricalFilter::DEFAULT_VERSION_LIMIT
+    )
+      analyze_scope(
+        scope,
+        within: since..Time.now.utc, limit: limit, associations: associations,
+        ignore: ignore, activity: true, close_on: :current, snapshots: snapshots, group: group,
+        include_deleted: include_deleted, historical_filter: historical_filter,
+        max_filter_versions: max_filter_versions
+      )
+    end
+
+    #: (Array[untyped]?, untyped, bool) -> Array[untyped]
+    def validate_record_batch!(records, historical_filter, include_deleted)
+      raise ConfigurationError, 'pass records or scope:' if records.nil?
+      raise ConfigurationError, 'historical_filter: requires scope:' unless historical_filter.nil?
+      raise ConfigurationError, 'include_deleted: requires scope:' if include_deleted
+
+      records
+    end
+    private :validate_record_batch!
 
     # Returns the association macros this release can normalize.
     #: () -> Array[Symbol]

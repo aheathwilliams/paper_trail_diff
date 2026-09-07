@@ -169,6 +169,20 @@ allow current state as the missing endpoint with `close_on: :current`, shown bel
 
 ### Report through now
 
+For recent activity across a relation, `report` supplies the window ending and
+activity options for you:
+
+```ruby
+report = PaperTrailDiff.report(
+  Article.all, since: 1.day.ago, limit: 100, include_deleted: true
+)
+report.analyses # live identity => Analysis
+report.deleted # missing identity => Analysis, or nil without destroy history
+```
+
+Deleted roots use a separate batch with the same requested associations. The
+limit covers both populations. Omit `include_deleted:` when only live rows matter.
+
 For a report that includes the latest saved change, use an explicit live ending:
 
 <!-- executable:quickstart-current-window -->
@@ -195,6 +209,7 @@ For an explicit range, all single-record timeline methods accept
 | Net diff and timelines from one history pass | `analyze` |
 | A report for an array of records | `analyze_many` |
 | A report selected by a relation | `analyze_scope` |
+| Recent activity through now | `report` |
 
 `timeline` is a root-checkpoint timeline. A child change becomes visible at the
 next root boundary. `activity_timeline` can make a versioned child change its

@@ -20,7 +20,10 @@ module PaperTrailDiff
       @tree = tree
       @traversal = traversal
       @records = PreparedRecordIndex.new(start_at, end_at: end_at, live_records: live_records)
-      @history = PreparedHistory.new(@records)
+      activity = PreparedActivityIndex.new(
+        @records, root_versions, start_at: start_at, end_at: end_at || root_versions.last.created_at
+      )
+      @history = PreparedHistory.new(@records, activity_index: activity)
       @edges = PreparedEdgeLoader.new(@records, root_versions, start_at: start_at)
       @prepared = {} #: Hash[Array[String], Array[String]]
     end
@@ -44,6 +47,7 @@ module PaperTrailDiff
 
     #: (untyped, Array[untyped], AssociationTree, path: String) -> void
     def load_node(model_class, ids, tree, path:)
+      @history.activity_index&.register(model_class, ids)
       @traversal.reflections_for(model_class, tree, path: path).each do |reflection|
         subtree = tree.child(reflection.name)
         next unless subtree
@@ -119,7 +123,12 @@ module PaperTrailDiff
 
     #: (Hash[String, Hash[Symbol, untyped]]) -> void
     def load_groups(groups)
-      groups.each_value { |group| load_records(group.fetch(:model), group.fetch(:ids)) }
+      groups.each_value do |group|
+        model = group.fetch(:model)
+        ids = group.fetch(:ids)
+        @history.activity_index&.register(model, ids)
+        load_records(model, ids)
+      end
     end
 
     #: (untyped, Array[untyped]) -> void

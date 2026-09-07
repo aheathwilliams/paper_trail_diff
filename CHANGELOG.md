@@ -5,7 +5,20 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- `report(scope, since:, limit:)` for recent activity through current saved state.
+- `include_deleted: true` on scoped reporting, returning separate batched
+  `deleted` analyses (nil when destroy history is unavailable) and enforcing a
+  combined live/missing root ceiling.
+- Attribute hashes for `historical_filter:` that inspect typed recorded values
+  without reifying candidate records. Existing callable semantics are preserved.
+
 ### Changed
+
+- Historical filtering now caps candidate version loading at 10,000 by default.
+  `max_filter_versions:` can explicitly change that ceiling; overflow raises
+  `FilterLimitExceededError` before the over-budget batch is evaluated.
 
 - Reject `snapshots: true` without `activity: true` on analysis methods, matching
   validation of `group:`. Previously the option was silently ignored.
@@ -20,6 +33,12 @@ project follows [Semantic Versioning](https://semver.org/).
   unpaginated `unreachable` collection.
 
 ### Fixed
+
+- Reuse each checkpoint snapshot within one root analysis instead of reifying
+  shared endpoints repeatedly; release that cache before analyzing the next root.
+- Share association activity discovery and prepared history across batch roots,
+  including through-association intermediates and the complete reporting window.
+  Standard live and deleted activity reports no longer add discovery queries per root.
 
 - Preserve the reporting window and live closing state in batch activity
   analysis. Single-record, batch, and scoped results now agree rather than

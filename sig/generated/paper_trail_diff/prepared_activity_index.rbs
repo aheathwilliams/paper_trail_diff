@@ -1,0 +1,56 @@
+# Generated from lib/paper_trail_diff/prepared_activity_index.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Shares association event discovery across every root in a prepared graph.
+  class PreparedActivityIndex
+    # : (PreparedRecordIndex, Array[untyped], start_at: untyped, end_at: untyped) -> void
+    def initialize: (PreparedRecordIndex, Array[untyped], start_at: untyped, end_at: untyped) -> void
+
+    # : (untyped, Array[untyped]) -> void
+    def register: (untyped, Array[untyped]) -> void
+
+    # : (untyped, Array[untyped]) -> Array[untyped]
+    def versions: (untyped, Array[untyped]) -> Array[untyped]
+
+    # : (untyped, Array[untyped], untyped, ActivityRange) -> Array[untyped]
+    def child_ids: (untyped, Array[untyped], untyped, ActivityRange) -> Array[untyped]
+
+    # : (untyped, Array[untyped], untyped, ?transactions: bool) -> Array[untyped]
+    def association_rows: (untyped, Array[untyped], untyped, ?transactions: bool) -> Array[untyped]
+
+    private
+
+    @children: Hash[Array[String], untyped]
+
+    @nodes: Hash[String, Array[untyped]]
+
+    @range: ActivityRange
+
+    @records: PreparedRecordIndex
+
+    @roots: Hash[Array[String], Array[untyped]]
+
+    @rows: Hash[Array[String], Hash[String, Array[untyped]]]
+
+    # : (untyped, Array[untyped], untyped, ActivityRange) -> Array[untyped]
+    def historical_ids: (untyped, Array[untyped], untyped, ActivityRange) -> Array[untyped]
+
+    # : (untyped) -> Array[untyped]
+    def node_ids: (untyped) -> Array[untyped]
+
+    # : (untyped, untyped) -> untyped
+    def child_rows: (untyped, untyped) -> untyped
+
+    # Mirrors VersionAssociationCandidateScope's before-window rule. The loaded
+    # series includes changes to other owners too, so an old membership cannot
+    # survive a later pre-window reassignment just because that owner is absent.
+    # : (untyped, Array[untyped], ActivityRange) -> bool
+    def eligible_child?: (untyped, Array[untyped], ActivityRange) -> bool
+
+    # : (untyped, untyped, bool) -> Hash[String, Array[untyped]]
+    def load_association_rows: (untyped, untyped, bool) -> Hash[String, Array[untyped]]
+
+    # : (Array[untyped], bool) -> Array[untyped]
+    def version_ids: (Array[untyped], bool) -> Array[untyped]
+  end
+end

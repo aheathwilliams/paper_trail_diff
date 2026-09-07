@@ -3,10 +3,12 @@
 module PaperTrailDiff
   # Batched record states and relationship candidates for one activity range.
   class PreparedHistory
+    attr_reader activity_index: PreparedActivityIndex?
+
     DIRECT_RESOLVERS: untyped
 
-    # : (PreparedRecordIndex) -> void
-    def initialize: (PreparedRecordIndex) -> void
+    # : (PreparedRecordIndex, ?activity_index: PreparedActivityIndex?) -> void
+    def initialize: (PreparedRecordIndex, ?activity_index: PreparedActivityIndex?) -> void
 
     # : (untyped, untyped, Hash[String, Hash[Symbol, untyped]]) -> void
     def merge_edge: (untyped, untyped, Hash[String, Hash[Symbol, untyped]]) -> void
@@ -92,8 +94,5 @@ module PaperTrailDiff
 
     # : (untyped, untyped) -> Array[String]
     def edge_key: (untyped, untyped) -> Array[String]
-
-    # : (Hash[String, Hash[Symbol, untyped]], Hash[String, Hash[Symbol, untyped]]) -> Hash[String, Hash[Symbol, untyped]]
-    def merge_groups: (Hash[String, Hash[Symbol, untyped]], Hash[String, Hash[Symbol, untyped]]) -> Hash[String, Hash[Symbol, untyped]]
   end
 end

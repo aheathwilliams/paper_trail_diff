@@ -3,8 +3,8 @@
 module PaperTrailDiff
   # Optional full/partial snapshot operations consumed by the activity sequence.
   class ActivitySnapshotProvider
-    # : (snapshotter: untyped, refresher: untyped, preparer: untyped) -> void
-    def initialize: (snapshotter: untyped, refresher: untyped, preparer: untyped) -> void
+    # : (snapshotter: untyped, refresher: untyped, preparer: untyped, ?activity_index: untyped) -> void
+    def initialize: (snapshotter: untyped, refresher: untyped, preparer: untyped, ?activity_index: untyped) -> void
 
     # : (untyped, Array[untyped], ?start_at: untyped, ?end_at: untyped) -> void
     def prepare: (untyped, Array[untyped], ?start_at: untyped, ?end_at: untyped) -> void
@@ -17,6 +17,11 @@ module PaperTrailDiff
 
     # : (untyped, untyped, RecordSnapshot?, event: ActivityEvent) -> RecordSnapshot?
     def advance_root: (untyped, untyped, RecordSnapshot?, event: ActivityEvent) -> RecordSnapshot?
+
+    # : () -> PreparedActivityIndex?
+    def activity_index: () -> PreparedActivityIndex?
+
+    @activity_index: untyped
 
     @preparer: untyped
 

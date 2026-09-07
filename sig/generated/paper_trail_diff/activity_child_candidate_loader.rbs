@@ -9,6 +9,14 @@ module PaperTrailDiff
     # : () -> Array[untyped]
     def call: () -> Array[untyped]
 
+    # One shared query retains the owner and timestamp needed to partition a
+    # batch's candidates back into each root's exact activity range.
+    # : () -> Array[Array[untyped]]
+    def historical_rows: () -> Array[Array[untyped]]
+
+    # : () -> Array[Array[untyped]]
+    def current_pairs: () -> Array[Array[untyped]]
+
     private
 
     @parent_class: untyped

@@ -126,26 +126,38 @@ module PaperTrailDiff
     # caller reporting on a population does not have to rediscover which of its
     # members changed. The roots the relation could not reach come back named
     # rather than dropped -- see `PaperTrailDiff.analyze_scope`.
-    #: (untyped, limit: Integer?, within: untyped, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?historical_filter: untyped) -> ScopedAnalysis
-    def analyze_scope(scope, limit:, within:, activity: false, version_scope: nil, close_on: nil, snapshots: false, group: nil, historical_filter: nil) # rubocop:disable Metrics/ParameterLists, Layout/LineLength
-      raise ConfigurationError, 'limit: is required when selecting roots by scope' if limit.nil?
-
+    #: (untyped, limit: Integer?, within: untyped, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?historical_filter: untyped, ?max_filter_versions: Integer, ?include_deleted: bool) -> ScopedAnalysis
+    def analyze_scope(scope, limit:, within:, activity: false, version_scope: nil, close_on: nil, snapshots: false, group: nil, historical_filter: nil, max_filter_versions: HistoricalFilter::DEFAULT_VERSION_LIMIT, include_deleted: false) # rubocop:disable Metrics/ParameterLists, Layout/LineLength
       ActivityGrouping.validate!(group, activity: activity, snapshots: snapshots)
-
-      selection = ScopedRootSelection.new(
-        scope, time_range: within.nil? ? nil : TimeRange.new(within), limit: limit,
-               historical_filter: historical_filter
+      # @type var options: report_options
+      options = { within: within, activity: activity, version_scope: version_scope,
+                  close_on: close_on, snapshots: snapshots, group: group }
+      ScopedAnalysisBuilder.new(
+        scope, limit: limit, within: within, historical_filter: historical_filter,
+               max_filter_versions: max_filter_versions, include_deleted: include_deleted,
+               analyzer: ->(records) { analyze_many(records, **options, within: within) },
+               deleted_analyzer: lambda { |identities|
+                 analyze_deleted(scope.all.model, identities, options)
+               }
       ).call
-      ScopedAnalysis.new(
-        analyses: analyze_many(selection.records, within: within, activity: activity,
-                                                  version_scope: version_scope, close_on: close_on,
-                                                  snapshots: snapshots, group: group),
-        unreachable: selection.unreachable,
-        roots: selection.records
-      )
     end
 
     private
+
+    #: (untyped, Array[Array[String]], Hash[Symbol, untyped]) -> Hash[Array[String], Analysis?]
+    def analyze_deleted(model, identities, options)
+      within = options.fetch(:within)
+      analyzer = batched_root_analyzer(
+        options.fetch(:activity), within: within, snapshots: options.fetch(:snapshots),
+                                  group: options.fetch(:group)
+      )
+      DeletedAnalysisBatch.new(
+        model, identities: identities, time_range: within.nil? ? nil : TimeRange.new(within),
+               version_scope: options.fetch(:version_scope),
+               history_preparer: @historical_store.method(:prepare_deleted_batch),
+               analyzer: analyzer
+      ).call
+    end
 
     # @rbs @association_tree: AssociationTree
     # @rbs @live_endpoints: LiveEndpointProvider
@@ -256,7 +268,8 @@ module PaperTrailDiff
       ActivitySnapshotProvider.new(
         snapshotter: method(:snapshot_at),
         refresher: refresher,
-        preparer: @historical_store.method(:prepare)
+        preparer: @historical_store.method(:prepare),
+        activity_index: @historical_store.method(:activity_index)
       )
     end
 

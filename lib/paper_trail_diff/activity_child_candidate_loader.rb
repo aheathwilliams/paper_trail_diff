@@ -17,6 +17,25 @@ module PaperTrailDiff
       historical_ids | current_ids
     end
 
+    # One shared query retains the owner and timestamp needed to partition a
+    # batch's candidates back into each root's exact activity range.
+    #: () -> Array[Array[untyped]]
+    def historical_rows
+      version_class = @parent_class.paper_trail.version_class
+      versions = version_class.arel_table
+      associations = @parent_class.paper_trail.version_association_class.arel_table
+      candidate_scope(version_class).call(historical_relation(version_class)).distinct.pluck(
+        associations[:foreign_key_id], versions[:item_id], versions[:created_at], versions[:event]
+      )
+    end
+
+    #: () -> Array[Array[untyped]]
+    def current_pairs
+      relation = @reflection.klass.base_class.unscoped.where(@reflection.foreign_key => @parent_ids)
+      relation = relation.where(@reflection.type => parent_types) if @reflection.options[:as]
+      relation.distinct.pluck(@reflection.foreign_key, @reflection.klass.primary_key)
+    end
+
     private
 
     # @rbs @parent_class: untyped

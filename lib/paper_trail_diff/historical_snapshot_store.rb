@@ -24,8 +24,13 @@ module PaperTrailDiff
       end_at: root_versions.last.created_at
     )
       return if @tree.empty?
+
       # A batched preparation already covers these roots.
-      return if root_versions.any? { |v| @prepared_histories.key?(context_key(v)) }
+      batched = root_versions.find { |version| @prepared_histories.key?(context_key(version)) }
+      if batched
+        @prepared_history = @prepared_histories.fetch(context_key(batched))
+        return
+      end
 
       @prepared_history = PreparedHistoryLoader.new(
         record,
@@ -37,13 +42,22 @@ module PaperTrailDiff
       ).call
     end
 
-    #: (Array[untyped], Array[untyped]) -> void
-    def prepare_batch(records, root_versions)
+    #: (Array[untyped], Array[untyped], ?start_at: untyped, ?end_at: untyped) -> void
+    def prepare_batch(records, root_versions, start_at: nil, end_at: nil)
       return if @tree.empty? || records.empty? || root_versions.empty?
 
       Instrumentation.instrument('prepare_history', batch_payload(records, root_versions)) do
-        register_batch(records, root_versions)
+        register_batch(records, root_versions, start_at: start_at, end_at: end_at)
       end
+    end
+
+    # Missing roots have no live graph to collect. Reading their associations
+    # here would issue a query per root and seed nonexistent rows as live state.
+    #: (Array[untyped], Array[untyped], ?start_at: untyped, ?end_at: untyped) -> void
+    def prepare_deleted_batch(records, root_versions, start_at: nil, end_at: nil)
+      return if @tree.empty? || records.empty? || root_versions.empty?
+
+      register_batch(records, root_versions, live_records: [], start_at: start_at, end_at: end_at)
     end
 
     #: (untyped, untyped) -> RecordSnapshot?
@@ -100,6 +114,11 @@ module PaperTrailDiff
       )
     end
 
+    #: () -> PreparedActivityIndex?
+    def activity_index
+      @prepared_history&.activity_index
+    end
+
     #: (untyped) -> [Hash[untyped, untyped], Hash[untyped, untyped]]?
     def record_transition(version)
       history = @prepared_history
@@ -126,25 +145,22 @@ module PaperTrailDiff
 
     #: (Array[untyped], Array[untyped]) -> Hash[Symbol, untyped]
     def batch_payload(records, root_versions)
-      {
-        root_count: records.length,
-        version_count: root_versions.length,
-        model_type: records.first.class.base_class.name.to_s,
-        batched: true
-      }
+      { root_count: records.length, version_count: root_versions.length,
+        model_type: records.first.class.base_class.name.to_s, batched: true }
     end
 
-    #: (Array[untyped], Array[untyped]) -> void
-    def register_batch(records, root_versions)
+    #: (Array[untyped], Array[untyped], ?live_records: Array[untyped], ?start_at: untyped, ?end_at: untyped) -> void
+    def register_batch(records, root_versions, live_records: @live_graph_collector.call(records),
+                       start_at: nil, end_at: nil)
       history = PreparedHistoryLoader.new(
         records.first,
         root_ids: records.map(&:id),
         root_versions: root_versions,
-        start_at: root_versions.map(&:created_at).min,
-        end_at: root_versions.map(&:created_at).max,
+        start_at: start_at || root_versions.map(&:created_at).min,
+        end_at: end_at || root_versions.map(&:created_at).max,
         tree: @tree,
         traversal: @traversal,
-        live_records: @live_graph_collector.call(records)
+        live_records: live_records
       ).call
       root_versions.each { |version| @prepared_histories[context_key(version)] = history }
     end
@@ -188,12 +204,7 @@ module PaperTrailDiff
 
     #: (untyped, untyped) -> Array[untyped]
     def snapshot_key(root_endpoint, context_endpoint)
-      [
-        root_endpoint.class.name,
-        root_endpoint.id,
-        context_endpoint.class.name,
-        context_endpoint.id
-      ]
+      context_key(root_endpoint) + context_key(context_endpoint)
     end
   end
 end

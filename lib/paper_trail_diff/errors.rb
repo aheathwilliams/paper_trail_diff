@@ -39,6 +39,9 @@ module PaperTrailDiff
   # Truncating instead would hand back a report that is short without saying so.
   class BatchLimitExceededError < Error; end
 
+  # Historical candidate loading exceeded its explicitly bounded work budget.
+  class FilterLimitExceededError < Error; end
+
   # Raised when a requested ActiveRecord association does not exist.
   class UnknownAssociationError < Error; end
 
