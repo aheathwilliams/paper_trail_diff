@@ -51,7 +51,7 @@ module PaperTrailDiff
     def reify_has_many(record, reflection)
       if reflection.options[:through]
         reify_association(record, reflection.through_reflection)
-        reifier(:HasManyThrough).reify(reflection, record, options, @transaction_id)
+        reify_through(record, reflection)
         return
       end
 
@@ -63,6 +63,31 @@ module PaperTrailDiff
         @transaction_id,
         version_table
       )
+    end
+
+    # PT-AT's collection-source helper reifies every has_many on each join
+    # record. Walk only the requested source instead, including nested throughs.
+    #: (untyped, untyped) -> void
+    def reify_through(record, reflection)
+      source = reflection.source_reflection
+      if source.belongs_to?
+        reifier(:HasManyThrough).reify(reflection, record, options, @transaction_id)
+        return
+      end
+
+      members = through_members(record, reflection, source)
+      association = record.association(reflection.name)
+      association.target = members.uniq { |member| [member.class.base_class.name, member.id] }
+      association.loaded!
+    end
+
+    #: (untyped, untyped, untyped) -> Array[untyped]
+    def through_members(record, reflection, source)
+      joins = Array(record.public_send(reflection.through_reflection.name)) #: Array[untyped]
+      joins.flat_map do |join|
+        reify_association(join, source)
+        Array(join.public_send(source.name))
+      end
     end
 
     #: (untyped, untyped) -> void
