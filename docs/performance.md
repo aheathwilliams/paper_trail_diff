@@ -16,6 +16,49 @@ The benchmark exercises `analyze_scope` with genuine PaperTrail history. It is
 a local SQLite baseline for finding work inside the gem, not a production
 latency guarantee or a comparison of SQL dialects.
 
+## Direct reconstruction follow-up: 2026-09-07
+
+Implementation: `1b6b1b9`, followed by belongs-to discovery fix `f6a4ae2`.
+[Raw measurements](../benchmark/results/direct-reconstruction-2026-09-07.json)
+include all samples, typed parity checks and query origins. Timing runs overlapped
+development checks, so they do not establish a controlled speedup.
+
+| Probe | SQL at 1 / 5 / 20 roots | Historical reify / prepared-instance calls |
+| --- | --- | --- |
+| Scalar activity | 6 / 6 / 6 | 0 / 0 |
+| Direct comments activity | 12 / 12 / 12 | 0 / 0 |
+| Comments without changesets | 12 / 12 / 12 | 0 / 0 |
+| Direct comments checkpoints | 10 / 10 / 10 | 0 / 0 |
+| Belongs-to activity | 9 / 9 / 9 | 0 / 0 |
+
+Live records and version rows still instantiate when loaded in batches. Zero
+historical instances does not mean zero allocation or constant total CPU cost.
+The missing-changeset case previously used 15 / 27 / 72 queries. Limited,
+owner-scoped, default-scoped and collection-source through paths now refuse
+before report SQL by default. With explicit opt-in, the five-root through probe
+used 199 queries and 75 reify calls, but no unrelated authorship loads.
+
+Three diagnostic samples at 500 roots had median 742.3 ms for checkpoints and
+1,365.5 ms for retained activity; each used six SQL queries and zero reifications.
+One root with 5,000 updates had median 1,154.2 ms and zero reifications. Retained
+Ruby memory was about 15.0, 20.8 and 19.9 MiB respectively. These timings do not
+establish a retained-activity improvement.
+
+A querying initialization callback still produced 10 / 26 / 86 queries, and a
+querying historical predicate produced 8 / 12 / 27. Custom behavior, polymorphic
+or advanced graph reconstruction, and non-leaf activity fallbacks may still
+instantiate historical records. There is no blanket no-N+1 guarantee.
+
+Production parity matches PaperTrail for STI, enum, decimal, date, boolean, JSON
+and serialized values, including missing fields supplied by callbacks/default
+scopes through the compatibility fallback. Reproduce these checks with:
+
+```console
+PTD_PRODUCTION=1 mise exec -- bundle exec ruby benchmark/investigation/scalar_parity.rb
+mise exec -- bundle exec ruby benchmark/investigation/reconstruction.rb comments_without_changes 20
+PTD_PROBE_ALLOW_EXPENSIVE=1 mise exec -- bundle exec ruby benchmark/investigation/reconstruction.rb through_has_many 5
+```
+
 ## Reproduce
 
 From a repository checkout:

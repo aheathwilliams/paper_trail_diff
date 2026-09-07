@@ -66,7 +66,13 @@ PaperTrailDiff::HistoricalAssociationReifier.prepend(Module.new do
     super(record, reflections)
   end
 end)
-ActiveRecord::Base.after_initialize { counts[:model_initializations] += 1 }
+# Observe construction without adding callbacks that would disable the plain-state path.
+construction_trace = TracePoint.new(:call) do |event|
+  if event.defined_class == ActiveRecord::Core &&
+     %i[initialize init_with_attributes].include?(event.method_id)
+    counts[:model_initializations] += 1
+  end
+end
 
 association = { 'comments' => :comments, 'comments_without_changes' => :comments,
                 'checkpoints' => :comments, 'belongs_to' => :author,
@@ -75,6 +81,7 @@ association = { 'comments' => :comments, 'comments_without_changes' => :comments
                 'through_has_many' => :comments }[scenario]
 options = { since: Time.now.utc - 3600, limit: size, snapshots: true,
             associations: Array(association) }
+options[:allow_expensive] = true if ENV['PTD_PROBE_ALLOW_EXPENSIVE'] == '1'
 options[:historical_filter] = ->(state) { state.comments.exists? } if scenario == 'callable'
 model = scenario == 'through_has_many' ? TrackedAuthor : TrackedArticle
 statements = Hash.new(0)
@@ -95,6 +102,7 @@ error = nil
 GC.start
 started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
 begin
+  construction_trace.enable
   ActiveSupport::Notifications.subscribed(callback, 'sql.active_record') do
     result = ActiveRecord::Base.uncached do
       if scenario == 'checkpoints'
@@ -109,6 +117,8 @@ begin
   end
 rescue PaperTrailDiff::Error, ActiveRecord::ActiveRecordError => e
   error = { type: e.class.name, message: e.message }
+ensure
+  construction_trace.disable
 end
 elapsed = (Process.clock_gettime(Process::CLOCK_MONOTONIC) - started) * 1000
 if result && result.roots.length != size

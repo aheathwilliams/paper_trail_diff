@@ -41,7 +41,11 @@ results = cases.map do |model|
   stored = version.object_deserialized.except('unrecorded')
   version.update_column(:object, PaperTrail.serializer.dump(stored))
   expected = normalizer.call(version.reify(dup: true), reifier: nil)
-  actual = ScalarSnapshotSpike.snapshot(version, normalizer)
+  actual = if ENV['PTD_PRODUCTION'] == '1'
+             PaperTrailDiff.analyze(record, from: version, to: record).from_snapshot
+           else
+             ScalarSnapshotSpike.snapshot(version, normalizer)
+           end
   differing = expected.attributes.keys.union(actual.attributes.keys).reject do |key|
     expected.attributes[key] == actual.attributes[key]
   end
