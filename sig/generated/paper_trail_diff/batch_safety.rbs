@@ -1,0 +1,24 @@
+# Generated from lib/paper_trail_diff/batch_safety.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Refuses known per-record association loading before a batch reconstructs it.
+  class BatchSafety
+    # : (AssociationTraversal, allow_expensive: bool) -> void
+    def initialize: (AssociationTraversal, allow_expensive: bool) -> void
+
+    # : (untyped, ?historical: bool) -> void
+    def call: (untyped, ?historical: bool) -> void
+
+    private
+
+    @allow_expensive: bool
+
+    @traversal: AssociationTraversal
+
+    # : (untyped, String, bool) -> void
+    def check: (untyped, String, bool) -> void
+
+    # : (untyped, bool) -> String?
+    def reason_for: (untyped, bool) -> String?
+  end
+end

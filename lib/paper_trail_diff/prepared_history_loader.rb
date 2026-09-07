@@ -17,6 +17,7 @@ module PaperTrailDiff
     )
       @record = record
       @root_ids = root_ids
+      @root_versions = root_versions
       @tree = tree
       @traversal = traversal
       @records = PreparedRecordIndex.new(start_at, end_at: end_at, live_records: live_records)
@@ -30,6 +31,7 @@ module PaperTrailDiff
 
     #: () -> PreparedHistory
     def call
+      @records.seed(@record.class, @root_ids, @root_versions)
       load_node(@record.class, @root_ids, @tree, path: '')
       @history
     end
@@ -38,6 +40,7 @@ module PaperTrailDiff
 
     # @rbs @record: untyped
     # @rbs @root_ids: Array[untyped]
+    # @rbs @root_versions: Array[untyped]
     # @rbs @tree: AssociationTree
     # @rbs @traversal: AssociationTraversal
     # @rbs @records: PreparedRecordIndex

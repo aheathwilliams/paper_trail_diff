@@ -252,7 +252,8 @@ RSpec.describe 'PaperTrailDiff association tracking' do
       [identity, diff.to_h]
     end
 
-    actual = PaperTrailDiff.compare_many(comparisons, associations: associations)
+    actual = PaperTrailDiff.compare_many(comparisons, associations: associations,
+                                                      allow_expensive: true)
 
     expect(actual.transform_values(&:to_h)).to eq(expected)
     expect(actual.values).to all(satisfy do |diff|

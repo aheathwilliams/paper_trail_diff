@@ -1,0 +1,42 @@
+# Generated from lib/paper_trail_diff/direct_record_state_loader.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Completes plain recorded state without invoking model initialization or writers.
+  # Decline model behavior whose values require an actual ActiveRecord instance.
+  class DirectRecordStateLoader
+    # : () -> void
+    def initialize: () -> void
+
+    # : (untyped) -> PreparedRecordState?
+    def call: (untyped) -> PreparedRecordState?
+
+    # : (PreparedRecordState) -> PreparedRecordState?
+    def complete: (PreparedRecordState) -> PreparedRecordState?
+
+    private
+
+    @defaults: Hash[untyped, Hash[untyped, untyped]]
+
+    @loader: PreparedVersionStateLoader
+
+    @supported: Hash[untyped, bool]
+
+    # : (untyped) -> bool
+    def supported?: (untyped) -> bool
+
+    # : (untyped) -> bool
+    def plain_model?: (untyped) -> bool
+
+    # : (untyped) -> bool
+    def plain_attributes?: (untyped) -> bool
+
+    # : (untyped) -> bool
+    def application_defaults?: (untyped) -> bool
+
+    # : (untyped) -> bool
+    def encrypted?: (untyped) -> bool
+
+    # : (untyped) -> bool
+    def framework_class?: (untyped) -> bool
+  end
+end

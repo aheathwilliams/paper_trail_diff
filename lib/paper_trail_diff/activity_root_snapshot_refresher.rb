@@ -38,6 +38,7 @@ module PaperTrailDiff
 
       changes = @changeset.call(version, model_class)
       return [false, nil] unless changes.respond_to?(:each)
+      return [false, nil] if changes.empty?
 
       branches = branches_to_refresh(model_class, changes)
       partial = nil #: RecordSnapshot?

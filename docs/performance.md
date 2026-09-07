@@ -6,8 +6,11 @@ reconstruction are therefore design concerns. A small SQL query count alone
 does not establish that a batch API meets that purpose.
 
 The [follow-up reconstruction investigation](reconstruction-investigation.md)
-measures remaining N+1 paths, including child activity without changesets and
-through/scoped association fallbacks, and tests direct-snapshot prototypes.
+records the pre-fix N+1 paths and direct-snapshot experiments. Production now uses
+prepared event successors even without changesets, and directly normalizes plain
+root/direct-child states. Scoped and collection-source through batch paths require
+`allow_expensive: true`; that opt-in can still cause N+1 work. Model callbacks,
+custom types and callable predicates also remain outside a flat-query guarantee.
 
 The benchmark exercises `analyze_scope` with genuine PaperTrail history. It is
 a local SQLite baseline for finding work inside the gem, not a production
@@ -236,17 +239,18 @@ Deleted history has no original timed counterpart here. Its five queries at both
 
 ### Remaining performance limits
 
-- **Reification still scales with requested root history.** Caching eliminates
-  repeated reconstruction of the same checkpoint, but normalizing each requested
-  root state still reifies it. This is linear Ruby work even where SQL queries
-  are batched. The new facade does not make arbitrarily large histories cheap.
+- **Reconstruction still scales with requested history.** Plain roots and direct
+  children avoid historical AR objects, but decoding and comparing their recorded
+  states remains linear work. Compatibility fallbacks still construct records.
+  Arbitrarily large histories are not cheap.
 - **Callable predicates can still be expensive or issue N+1 queries.** Prefer
   attribute hashes for batch reports. The version-loading budget cannot control
   queries, network calls, or CPU work inside application callbacks. Hash predicates
   still deserialize candidate states and are not SQL-indexed historical searches.
 - **Advanced association fallbacks can still query per record.** Scoped or
   default-scoped paths and other graphs that need PT-AT fallback reconstruction
-  must be measured before being offered in a large report. The flat-query tests
+  require explicit `allow_expensive: true` for batch APIs and must be measured
+  before being offered in a large report. The flat-query tests
   do not establish a guarantee for every association configuration.
 - **Limits are not streaming.** Candidate identities are still selected up front;
   a small root ceiling can load a full 250-candidate version batch, subject to the
@@ -256,7 +260,6 @@ Deleted history has no original timed counterpart here. Its five queries at both
   pre-event states, not continuous-time membership. Scope selection needs a root
   version in the window; child-only edits do not select an otherwise quiet root.
 
-The next performance work should measure representative association graphs and
-fallbacks, then decide which paths can be batched further or should be restricted
-in reporting. A graph-wide selector for child-only activity needs its own bounded
-query design, rather than a per-root discovery loop.
+Further batching of advanced association fallbacks needs temporal parity tests,
+especially around ownership changes. A graph-wide selector for child-only activity
+also needs its own bounded query design.

@@ -3,6 +3,9 @@
 Structured diffs and activity feeds for [PaperTrail](https://github.com/paper-trail-gem/paper_trail).
 Compare states, see who changed a record and its children, or report across a collection.
 Results are Ruby value objects and hashes, ready for your own UI or JSON response.
+Batch methods reject known per-record association fallbacks by default. Use
+`allow_expensive: true` only when accepting those costs; see the
+[batch API reference](docs/reference.md).
 
 ```ruby
 diff = PaperTrailDiff.compare(previous_version, article, associations: [:comments])

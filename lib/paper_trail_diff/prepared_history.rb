@@ -10,13 +10,14 @@ module PaperTrailDiff
       belongs_to: :resolve_belongs_to,
       has_one: :resolve_children,
       has_many: :resolve_children,
-      has_and_belongs_to_many: :resolve_habtm
+      has_and_belongs_to_many: :habtm_records
     }.freeze
     private_constant :DIRECT_RESOLVERS
 
     #: (PreparedRecordIndex, ?activity_index: PreparedActivityIndex?) -> void
     def initialize(records, activity_index: nil)
       @records = records
+      @state_reader = PreparedStateAssociationReader.new(records, method(:edge))
       @activity_index = activity_index
       @edges = {} #: Hash[Array[String], Hash[String, Hash[Symbol, untyped]]]
       @unsupported = {} #: Hash[Array[String], bool]
@@ -51,6 +52,16 @@ module PaperTrailDiff
       @records.transition(model_class, id, version)
     end
 
+    #: (untyped, untyped, untyped, ?direct: bool) -> [bool, untyped]
+    def record_after(model_class, id, version, direct: false)
+      @records.record_after(model_class, id, version, direct: direct)
+    end
+
+    #: (PreparedRecordState, untyped, untyped) -> [bool, Array[PreparedRecordState]]
+    def snapshot_states(owner, reflection, boundary)
+      @state_reader.call(owner, reflection, boundary)
+    end
+
     #: (untyped, untyped, untyped, habtm_boundary: untyped) -> [bool, Array[untyped]]
     def resolve(record, reflection, boundary, habtm_boundary:)
       return [false, []] unless supported?(record.class, reflection)
@@ -66,6 +77,7 @@ module PaperTrailDiff
     private
 
     # @rbs @records: PreparedRecordIndex
+    # @rbs @state_reader: PreparedStateAssociationReader
     # @rbs @edges: Hash[Array[String], Hash[String, Hash[Symbol, untyped]]]
     # @rbs @unsupported: Hash[Array[String], bool]
     # @rbs @habtm: Hash[Array[String], Hash[String, Array[untyped]]]
@@ -73,12 +85,7 @@ module PaperTrailDiff
     #: (untyped, untyped) -> bool
     def supported?(owner_class, reflection)
       !@unsupported[edge_key(owner_class, reflection)] &&
-        reflection.scope.nil? && !default_scoped?(reflection.klass)
-    end
-
-    #: (untyped) -> bool
-    def default_scoped?(model_class)
-      model_class.default_scopes?
+        reflection.scope.nil? && !reflection.klass.default_scopes?
     end
 
     #: (untyped, untyped, untyped, untyped) -> Array[untyped]?
@@ -95,11 +102,6 @@ module PaperTrailDiff
     #: (untyped, untyped, untyped, untyped) -> Array[untyped]
     def resolve_children(record, reflection, boundary, _habtm_boundary)
       child_records(record, reflection, boundary)
-    end
-
-    #: (untyped, untyped, untyped, untyped) -> Array[untyped]?
-    def resolve_habtm(record, reflection, boundary, habtm_boundary)
-      habtm_records(record, reflection, boundary, habtm_boundary)
     end
 
     #: (untyped, untyped, untyped) -> Array[untyped]?

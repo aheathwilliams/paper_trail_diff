@@ -62,6 +62,13 @@ module PaperTrailDiff
     # : (untyped) -> untyped
     def record_before: (untyped) -> untyped
 
+    # : (untyped) -> PreparedRecordState?
+    def state_before: (untyped) -> PreparedRecordState?
+
+    # A handled nil is known absence, not permission to query the current row.
+    # : (untyped, ?direct: bool) -> [bool, untyped]
+    def record_after: (untyped, ?direct: bool) -> [ bool, untyped ]
+
     # : () -> Array[untyped]
     def records: () -> Array[untyped]
 
@@ -108,11 +115,20 @@ module PaperTrailDiff
     # : (untyped, Array[untyped]) -> void
     def load: (untyped, Array[untyped]) -> void
 
+    # : (untyped, Array[untyped], Array[untyped]) -> void
+    def seed: (untyped, Array[untyped], Array[untyped]) -> void
+
     # : (untyped, untyped, untyped) -> untyped
     def record_before: (untyped, untyped, untyped) -> untyped
 
+    # : (untyped, untyped, untyped) -> [bool, PreparedRecordState?]
+    def snapshot_state_before: (untyped, untyped, untyped) -> [ bool, PreparedRecordState? ]
+
     # : (untyped, untyped, untyped) -> [Hash[untyped, untyped], Hash[untyped, untyped]]?
     def transition: (untyped, untyped, untyped) -> [ Hash[untyped, untyped], Hash[untyped, untyped] ]?
+
+    # : (untyped, untyped, untyped, ?direct: bool) -> [bool, untyped]
+    def record_after: (untyped, untyped, untyped, ?direct: bool) -> [ bool, untyped ]
 
     # : (untyped, Array[untyped]) -> Array[untyped]
     def records_for: (untyped, Array[untyped]) -> Array[untyped]
@@ -124,6 +140,10 @@ module PaperTrailDiff
     def loaded?: (untyped, untyped) -> bool
 
     private
+
+    @direct_loader: DirectRecordStateLoader
+
+    @direct_states: Hash[PreparedRecordState, PreparedRecordState?]
 
     @end_time: untyped
 

@@ -10,11 +10,12 @@ module PaperTrailDiff
     # The only thing a wall-clock window can close on besides a later version.
     CLOSE_ON_CURRENT = :current
 
-    #: (associations: Array[String | Symbol], ignore: ignore_option, ?reload_live_endpoints: bool) -> void
-    def initialize(associations:, ignore:, reload_live_endpoints: true)
+    #: (associations: Array[String | Symbol], ignore: ignore_option, ?reload_live_endpoints: bool, ?allow_expensive: bool) -> void
+    def initialize(associations:, ignore:, reload_live_endpoints: true, allow_expensive: false)
       @association_tree = AssociationTree.build(associations)
       @ignore_policy = IgnorePolicy.build(ignore, association_paths: @association_tree.paths)
       @traversal = AssociationTraversal.new(@association_tree)
+      @batch_safety = BatchSafety.new(@traversal, allow_expensive: allow_expensive)
       @traversal_preparer = TraversalPreparer.new(tree: @association_tree, traversal: @traversal)
       @live_endpoints = LiveEndpointProvider.new(
         tree: @association_tree, traversal: @traversal, reload: reload_live_endpoints
@@ -46,7 +47,7 @@ module PaperTrailDiff
       Instrumentation.instrument('compare_many', payload) do
         ComparisonBatch.new(
           comparisons,
-          live_loader: @live_endpoints.method(:call), preparer: @traversal_preparer.method(:call),
+          live_loader: @live_endpoints, preparer: method(:prepare_batch_model),
           history_preparer: @historical_store.method(:prepare_batch),
           historical_snapshotter: method(:historical_snapshot),
           live_normalizer: method(:normalize_live_snapshot)
@@ -114,7 +115,7 @@ module PaperTrailDiff
           time_range: within.nil? ? nil : TimeRange.new(within),
           version_scope: version_scope,
           close_on_current: close_on_current?(close_on, within),
-          live_loader: @live_endpoints.method(:call),
+          live_loader: method(:load_batch_endpoints),
           history_preparer: @historical_store.method(:prepare_batch),
           analyzer: batched_root_analyzer(activity, within: within, snapshots: snapshots,
                                                     group: group)
@@ -129,6 +130,7 @@ module PaperTrailDiff
     #: (untyped, limit: Integer?, within: untyped, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?historical_filter: untyped, ?max_filter_versions: Integer, ?include_deleted: bool) -> ScopedAnalysis
     def analyze_scope(scope, limit:, within:, activity: false, version_scope: nil, close_on: nil, snapshots: false, group: nil, historical_filter: nil, max_filter_versions: HistoricalFilter::DEFAULT_VERSION_LIMIT, include_deleted: false) # rubocop:disable Metrics/ParameterLists, Layout/LineLength
       ActivityGrouping.validate!(group, activity: activity, snapshots: snapshots)
+      @batch_safety.call(scope.all.model) if scope.respond_to?(:all) && scope.respond_to?(:where)
       # @type var options: report_options
       options = { within: within, activity: activity, version_scope: version_scope,
                   close_on: close_on, snapshots: snapshots, group: group }
@@ -143,6 +145,20 @@ module PaperTrailDiff
     end
 
     private
+
+    #: (Array[untyped]) -> Hash[identity, untyped]
+    def load_batch_endpoints(records)
+      records.map(&:class).uniq.each { |model| @batch_safety.call(model) }
+      @live_endpoints.call(records)
+    end
+
+    #: (untyped, historical: bool) -> void
+    def prepare_batch_model(model, historical:)
+      @batch_safety.call(model, historical: historical)
+      @traversal_preparer.call(model, historical: historical)
+    end
+
+    # @rbs @batch_safety: BatchSafety
 
     #: (untyped, Array[Array[String]], Hash[Symbol, untyped]) -> Hash[Array[String], Analysis?]
     def analyze_deleted(model, identities, options)
@@ -263,11 +279,11 @@ module PaperTrailDiff
         full_snapshotter: method(:snapshot_at),
         partial_snapshotter: @historical_store.method(:custom),
         association_reader: @historical_store.method(:association_reader),
-        record_transition: @historical_store.method(:record_transition)
+        record_transition: @historical_store.method(:record_transition),
+        prepared_record_after: @historical_store.method(:record_after)
       )
       ActivitySnapshotProvider.new(
-        snapshotter: method(:snapshot_at),
-        refresher: refresher,
+        snapshotter: method(:snapshot_at), refresher: refresher,
         preparer: @historical_store.method(:prepare),
         activity_index: @historical_store.method(:activity_index)
       )

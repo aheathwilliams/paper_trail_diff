@@ -37,7 +37,14 @@ module PaperTrailDiff
     # : (untyped, tree: AssociationTree, path: String) -> snapshot_attributes
     def attributes_for: (untyped, tree: AssociationTree, path: String) -> snapshot_attributes
 
+    # Same exclusions as AR normalization, applied to an already typed state.
+    # : (PreparedRecordState, tree: AssociationTree, path: String, ?incoming: untyped, ?associations: snapshot_associations) -> RecordSnapshot
+    def from_state: (PreparedRecordState, tree: AssociationTree, path: String, ?incoming: untyped, ?associations: snapshot_associations) -> RecordSnapshot
+
     private
+
+    # : (String, RecordSnapshot) -> RecordSnapshot
+    def pool_state: (String, RecordSnapshot) -> RecordSnapshot
 
     @excluded_attributes: Hash[Array[untyped], Array[String]]
 

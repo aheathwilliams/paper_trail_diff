@@ -35,6 +35,9 @@ module PaperTrailDiff
     # : (untyped) -> [Hash[untyped, untyped], Hash[untyped, untyped]]?
     def record_transition: (untyped) -> [ Hash[untyped, untyped], Hash[untyped, untyped] ]?
 
+    # : (untyped, ?direct: bool) -> [bool, untyped]
+    def record_after: (untyped, ?direct: bool) -> [ bool, untyped ]
+
     private
 
     @live_graph_collector: LiveGraphCollector
@@ -44,6 +47,8 @@ module PaperTrailDiff
     @prepared_histories: Hash[Array[untyped], PreparedHistory]
 
     @prepared_history: PreparedHistory?
+
+    @prepared_snapshotter: PreparedSnapshotBuilder
 
     @preparer: untyped
 

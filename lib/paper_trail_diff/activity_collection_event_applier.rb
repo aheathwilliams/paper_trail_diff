@@ -30,9 +30,10 @@ module PaperTrailDiff
     )
       fallback_record = [] #: Array[untyped]
       endpoints = [root_endpoint, context_endpoint]
+      direct = routes.all? { |route| route.last.fetch(2).empty? }
       snapshot = routes.reduce(previous) do |current, route|
         apply_route(
-          current, route, version, delta, fallback_record, normalizer, endpoints
+          current, route, version, delta, fallback_record, normalizer, endpoints, direct: direct
         )
       end
       [true, snapshot]
@@ -45,12 +46,12 @@ module PaperTrailDiff
     # @rbs @route_updater: ActivityCollectionRouteUpdater
     # @rbs @relationship: ActivityRelationship
 
-    #: (RecordSnapshot, Array[untyped], untyped, ActivitySnapshotDelta?, Array[untyped], SnapshotNormalizer, Array[untyped]) -> RecordSnapshot
+    #: (RecordSnapshot, Array[untyped], untyped, ActivitySnapshotDelta?, Array[untyped], SnapshotNormalizer, Array[untyped], ?direct: bool) -> RecordSnapshot
     def apply_route( # rubocop:disable Metrics/ParameterLists
-      snapshot, route, version, delta, fallback_record, normalizer, endpoints
+      snapshot, route, version, delta, fallback_record, normalizer, endpoints, direct: false
     )
       record, replacement = route_event_state(
-        snapshot, route, version, delta, fallback_record, normalizer, endpoints
+        snapshot, route, version, delta, fallback_record, normalizer, endpoints, direct: direct
       )
       change = ActivityCollectionRouteChange.new(
         route: route,
@@ -81,14 +82,16 @@ module PaperTrailDiff
       end
     end
 
-    #: (RecordSnapshot, Array[untyped], untyped, ActivitySnapshotDelta?, Array[untyped], SnapshotNormalizer, Array[untyped]) -> [untyped, RecordSnapshot?]
+    #: (RecordSnapshot, Array[untyped], untyped, ActivitySnapshotDelta?, Array[untyped], SnapshotNormalizer, Array[untyped], ?direct: bool) -> [untyped, RecordSnapshot?]
     def route_event_state( # rubocop:disable Metrics/ParameterLists
-      snapshot, route, version, delta, fallback_record, normalizer, endpoints
+      snapshot, route, version, delta, fallback_record, normalizer, endpoints, direct: false
     )
       existing = existing_delta_record(snapshot, route, version, delta) if delta
       return [delta, delta.apply(existing)] if delta && existing
 
-      fallback_record << @record_resolver.record_after(version) if fallback_record.empty?
+      if fallback_record.empty?
+        fallback_record << @record_resolver.record_after(version, direct: direct)
+      end
       record = fallback_record.first
       return [record, nil] unless record
 

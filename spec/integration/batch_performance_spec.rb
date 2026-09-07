@@ -8,7 +8,7 @@ RSpec.describe 'batch reconstruction cost' do
     CoreArticle.delete_all
   end
 
-  it 'reconstructs each checkpoint once and preserves every adjacent change' do
+  it 'normalizes plain checkpoints without reifying and preserves every adjacent change' do
     articles = 3.times.map do |index|
       article = CoreArticle.create!(title: "Root #{index}", internal_note: 'stable')
       4.times { |step| article.update!(title: "Root #{index} v#{step}") }
@@ -25,8 +25,7 @@ RSpec.describe 'batch reconstruction cost' do
       articles, within: (Time.now.utc - 3600)..(Time.now.utc + 60), close_on: :current
     )
 
-    expect(calls.length).to eq(15)
-    expect(calls.values).to all(eq(1))
+    expect(calls).to be_empty
     articles.each_with_index do |article, index|
       analysis = report.fetch(PaperTrailDiff::Endpoint.identity(article))
       expect(analysis.timeline.length).to eq(5)
@@ -53,7 +52,7 @@ RSpec.describe 'batch reconstruction cost' do
                version_scope: ->(versions) { versions.where(id: chosen.map(&:id)) }
     )
 
-    expect(calls.values).to all(eq(1))
+    expect(calls).to be_empty
     expect(analysis.timeline.map { |step| step.diff.attributes.fetch('title').to })
       .to eq(%w[first third])
   end

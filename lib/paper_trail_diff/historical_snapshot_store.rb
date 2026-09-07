@@ -10,6 +10,7 @@ module PaperTrailDiff
       @traversal = traversal
       @normalizer = normalizer
       @preparer = preparer
+      @prepared_snapshotter = PreparedSnapshotBuilder.new(traversal)
       @live_graph_collector = LiveGraphCollector.new(tree: tree, traversal: traversal)
       @snapshots = {} #: Hash[Array[untyped], RecordSnapshot?]
       @prepared_history = nil #: PreparedHistory?
@@ -127,12 +128,19 @@ module PaperTrailDiff
       history.record_transition(Endpoint.model_class(version), version.item_id, version)
     end
 
+    #: (untyped, ?direct: bool) -> [bool, untyped]
+    def record_after(version, direct: false)
+      @prepared_history&.record_after(Endpoint.model_class(version), version.item_id, version,
+                                      direct: direct) || [false, nil]
+    end
+
     private
 
     # @rbs @tree: AssociationTree
     # @rbs @traversal: AssociationTraversal
     # @rbs @normalizer: SnapshotNormalizer
     # @rbs @preparer: untyped
+    # @rbs @prepared_snapshotter: PreparedSnapshotBuilder
     # @rbs @live_graph_collector: LiveGraphCollector
     # @rbs @snapshots: Hash[Array[untyped], RecordSnapshot?]
     # @rbs @prepared_history: PreparedHistory?
@@ -170,27 +178,24 @@ module PaperTrailDiff
       model_class = Endpoint.model_class(root_version)
       @preparer.call(model_class, historical: true)
       @traversal.ensure_habtm_history!(model_class, root_version)
-      record = root_version.reify(dup: true)
-      normalize(
-        record,
-        context_version,
-        tree: tree,
-        normalizer: normalizer,
-        habtm_version: root_version
+      handled, snapshot = @prepared_snapshotter.call(
+        root_version, context_version, tree: tree, normalizer: normalizer,
+                                       history: @prepared_histories[context_key(context_version)] ||
+                                         @prepared_history
       )
+      return snapshot if handled
+
+      record = root_version.reify(dup: true)
+      normalize(record, context_version, tree: tree, normalizer: normalizer,
+                                         habtm_version: root_version)
     end
 
     #: (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer) -> RecordSnapshot?
     def snapshot_from_live_root(root_record, context_version, tree:, normalizer:)
       record = Endpoint.reload_record(root_record)
       @preparer.call(record.class, historical: true)
-      normalize(
-        record,
-        context_version,
-        tree: tree,
-        normalizer: normalizer,
-        habtm_version: context_version
-      )
+      normalize(record, context_version, tree: tree, normalizer: normalizer,
+                                         habtm_version: context_version)
     end
 
     #: (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer, habtm_version: untyped) -> RecordSnapshot?

@@ -16,6 +16,19 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Plain historical root and direct-child snapshots now normalize typed recorded
+  attributes without constructing historical ActiveRecord instances. Models with
+  initialization callbacks, custom types/defaults, or default scopes retain the
+  compatible reconstruction path.
+- Batch methods reject scoped associations, default-scoped targets, and historical
+  through associations with collection sources by default. Pass
+  `allow_expensive: true` to explicitly accept their per-record costs.
+- Activity without changesets uses prepared successor states instead of querying
+  the next version/current record for each event. Empty changesets no longer hide
+  root changes until a later child event.
+- Through reconstruction visits only the requested source association; it no
+  longer asks PT-AT to reconstruct unrelated intermediate collections.
+
 - Historical filtering now caps candidate version loading at 10,000 by default.
   `max_filter_versions:` can explicitly change that ceiling; overflow raises
   `FilterLimitExceededError` before the over-budget batch is evaluated.

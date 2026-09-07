@@ -4,10 +4,12 @@
 module PaperTrailDiff
   # Dispatches safe descendant events to focused immutable snapshot appliers.
   class ActivityEventSnapshotRefresher
-    #: (traversal: AssociationTraversal, pool: SnapshotPool, components: untyped, ?association_reader: untyped, ?record_transition: untyped) -> void
-    def initialize(traversal:, pool:, components:, association_reader: nil, record_transition: nil)
+    #: (traversal: AssociationTraversal, pool: SnapshotPool, components: untyped, ?association_reader: untyped, ?record_transition: untyped, ?prepared_record_after: untyped) -> void
+    def initialize(traversal:, pool:, components:, association_reader: nil, record_transition: nil, prepared_record_after: nil) # rubocop:disable Layout/LineLength, Metrics/ParameterLists
       @components = components
-      @record_resolver = ActivityEventRecordResolver.new(record_transition: record_transition)
+      @record_resolver = ActivityEventRecordResolver.new(
+        record_transition: record_transition, prepared_record_after: prepared_record_after
+      )
       @route_finder = ActivityEventRouteFinder.new(traversal)
       @relationship = ActivityRelationship.new
       configure_appliers(pool, association_reader)
@@ -99,7 +101,7 @@ module PaperTrailDiff
 
     #: (untyped) -> untyped
     def record_after(version)
-      @record_resolver.record_after(version)
+      @record_resolver.record_after(version, direct: true)
     end
 
     #: (untyped, untyped) -> untyped

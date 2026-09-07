@@ -9,8 +9,8 @@ module PaperTrailDiff
     # The only thing a wall-clock window can close on besides a later version.
     CLOSE_ON_CURRENT: ::Symbol
 
-    # : (associations: Array[String | Symbol], ignore: ignore_option, ?reload_live_endpoints: bool) -> void
-    def initialize: (associations: Array[String | Symbol], ignore: ignore_option, ?reload_live_endpoints: bool) -> void
+    # : (associations: Array[String | Symbol], ignore: ignore_option, ?reload_live_endpoints: bool, ?allow_expensive: bool) -> void
+    def initialize: (associations: Array[String | Symbol], ignore: ignore_option, ?reload_live_endpoints: bool, ?allow_expensive: bool) -> void
 
     # : (untyped, untyped) -> Diff
     def compare: (untyped, untyped) -> Diff
@@ -40,6 +40,14 @@ module PaperTrailDiff
     def analyze_scope: (untyped, limit: Integer?, within: untyped, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?historical_filter: untyped, ?max_filter_versions: Integer, ?include_deleted: bool) -> ScopedAnalysis
 
     private
+
+    # : (Array[untyped]) -> Hash[identity, untyped]
+    def load_batch_endpoints: (Array[untyped]) -> Hash[identity, untyped]
+
+    # : (untyped, historical: bool) -> void
+    def prepare_batch_model: (untyped, historical: bool) -> void
+
+    @batch_safety: BatchSafety
 
     # : (untyped, Array[Array[String]], Hash[Symbol, untyped]) -> Hash[Array[String], Analysis?]
     def analyze_deleted: (untyped, Array[Array[String]], Hash[Symbol, untyped]) -> Hash[Array[String], Analysis?]

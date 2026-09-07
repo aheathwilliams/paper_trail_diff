@@ -25,6 +25,12 @@ module PaperTrailDiff
     # : (untyped, untyped, untyped) -> [Hash[untyped, untyped], Hash[untyped, untyped]]?
     def record_transition: (untyped, untyped, untyped) -> [ Hash[untyped, untyped], Hash[untyped, untyped] ]?
 
+    # : (untyped, untyped, untyped, ?direct: bool) -> [bool, untyped]
+    def record_after: (untyped, untyped, untyped, ?direct: bool) -> [ bool, untyped ]
+
+    # : (PreparedRecordState, untyped, untyped) -> [bool, Array[PreparedRecordState]]
+    def snapshot_states: (PreparedRecordState, untyped, untyped) -> [ bool, Array[PreparedRecordState] ]
+
     # : (untyped, untyped, untyped, habtm_boundary: untyped) -> [bool, Array[untyped]]
     def resolve: (untyped, untyped, untyped, habtm_boundary: untyped) -> [ bool, Array[untyped] ]
 
@@ -36,13 +42,12 @@ module PaperTrailDiff
 
     @records: PreparedRecordIndex
 
+    @state_reader: PreparedStateAssociationReader
+
     @unsupported: Hash[Array[String], bool]
 
     # : (untyped, untyped) -> bool
     def supported?: (untyped, untyped) -> bool
-
-    # : (untyped) -> bool
-    def default_scoped?: (untyped) -> bool
 
     # : (untyped, untyped, untyped, untyped) -> Array[untyped]?
     def direct_records: (untyped, untyped, untyped, untyped) -> Array[untyped]?
@@ -52,9 +57,6 @@ module PaperTrailDiff
 
     # : (untyped, untyped, untyped, untyped) -> Array[untyped]
     def resolve_children: (untyped, untyped, untyped, untyped) -> Array[untyped]
-
-    # : (untyped, untyped, untyped, untyped) -> Array[untyped]?
-    def resolve_habtm: (untyped, untyped, untyped, untyped) -> Array[untyped]?
 
     # : (untyped, untyped, untyped) -> Array[untyped]?
     def belongs_to_records: (untyped, untyped, untyped) -> Array[untyped]?

@@ -121,10 +121,25 @@ module PaperTrailDiff
 
     #: (untyped) -> untyped
     def record_before(boundary)
-      index = boundary_index(boundary)
-      return state_for(versions.fetch(index))&.instantiate if index
+      state_before(boundary)&.instantiate
+    end
 
-      @live&.instantiate
+    #: (untyped) -> PreparedRecordState?
+    def state_before(boundary)
+      index = boundary_index(boundary)
+      return state_for(versions.fetch(index)) if index
+
+      @live
+    end
+
+    # A handled nil is known absence, not permission to query the current row.
+    #: (untyped, ?direct: bool) -> [bool, untyped]
+    def record_after(version, direct: false)
+      index = @version_positions[version.id.to_s]
+      return [false, nil] unless index
+
+      state = state_after(index)
+      [true, direct ? state : state&.instantiate]
     end
 
     #: () -> Array[untyped]
@@ -200,6 +215,7 @@ module PaperTrailDiff
     #: (untyped) -> PreparedRecordState?
     def state_for(version)
       return @states[version.id] if @states.key?(version.id)
+      return @states[version.id] = nil unless version.object
 
       prepared = @state_loader.call(version)
       return @states[version.id] = prepared if prepared
@@ -226,6 +242,8 @@ module PaperTrailDiff
       end
       @state_loader = PreparedVersionStateLoader.new
       @series = {} #: Hash[Array[String], PreparedRecordSeries]
+      @direct_loader = DirectRecordStateLoader.new
+      @direct_states = {} #: Hash[PreparedRecordState, PreparedRecordState?]
     end
 
     #: (untyped, Array[untyped]) -> void
@@ -240,14 +258,44 @@ module PaperTrailDiff
       missing.each { |id| add_series(model_class, id, versions, live) }
     end
 
+    #: (untyped, Array[untyped], Array[untyped]) -> void
+    def seed(model_class, ids, versions)
+      grouped = versions.group_by { |version| version.item_id.to_s }
+      live = available_live_records(model_class, ids).to_h { |record| [record.id.to_s, record] }
+      ids.each { |id| add_series(model_class, id, grouped, live) }
+    end
+
     #: (untyped, untyped, untyped) -> untyped
     def record_before(model_class, id, boundary)
       @series.fetch(identity(model_class, id)).record_before(boundary)
     end
 
+    #: (untyped, untyped, untyped) -> [bool, PreparedRecordState?]
+    def snapshot_state_before(model_class, id, boundary)
+      series = @series[identity(model_class, id)]
+      return [false, nil] unless series
+
+      state = series.state_before(boundary)
+      return [true, nil] unless state
+
+      @direct_states[state] = @direct_loader.complete(state) unless @direct_states.key?(state)
+      prepared = @direct_states[state]
+      [!prepared.nil?, prepared]
+    end
+
     #: (untyped, untyped, untyped) -> [Hash[untyped, untyped], Hash[untyped, untyped]]?
     def transition(model_class, id, version)
       @series[identity(model_class, id)]&.transition(version)
+    end
+
+    #: (untyped, untyped, untyped, ?direct: bool) -> [bool, untyped]
+    def record_after(model_class, id, version, direct: false)
+      handled, state = @series[identity(model_class, id)]&.record_after(version, direct: direct)
+      return [false, nil] unless handled
+      return [true, state] unless direct && state
+
+      prepared = @direct_loader.complete(state)
+      [!prepared.nil?, prepared]
     end
 
     #: (untyped, Array[untyped]) -> Array[untyped]
@@ -272,6 +320,8 @@ module PaperTrailDiff
     # @rbs @seeded_live_records: Hash[Array[String], untyped]
     # @rbs @state_loader: PreparedVersionStateLoader
     # @rbs @series: Hash[Array[String], PreparedRecordSeries]
+    # @rbs @direct_loader: DirectRecordStateLoader
+    # @rbs @direct_states: Hash[PreparedRecordState, PreparedRecordState?]
 
     # Callers bound the range with either a version or a bare timestamp.
     #: (untyped) -> untyped

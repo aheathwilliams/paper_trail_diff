@@ -76,11 +76,36 @@ module PaperTrailDiff
     # Normalizes scalar attributes without traversing or loading associations.
     #: (untyped, tree: AssociationTree, path: String) -> snapshot_attributes
     def attributes_for(record, tree:, path:)
+      if record.is_a?(PreparedRecordState)
+        return from_state(record, tree: tree,
+                                  path: path).attributes
+      end
+
       reflections = reflections_for(record, tree, path)
       normalized_attributes(record, reflections, path)
     end
 
+    # Same exclusions as AR normalization, applied to an already typed state.
+    #: (PreparedRecordState, tree: AssociationTree, path: String, ?incoming: untyped, ?associations: snapshot_associations) -> RecordSnapshot
+    def from_state(state, tree:, path:, incoming: nil, associations: {})
+      model = state.model_class
+      @structural_columns[path] ||= @traversal.incoming_relationship_columns(incoming) if incoming
+      reflections = @traversal.reflections_for(model, tree, path: path)
+      excluded = @excluded_attributes[[model, path]] ||=
+        build_excluded_attributes(model, reflections, path)
+      snapshot = RecordSnapshot.new(
+        type: model.name, id: state.attributes[model.primary_key],
+        attributes: state.attributes.except(*excluded), associations: associations
+      )
+      pool_state(path, snapshot)
+    end
+
     private
+
+    #: (String, RecordSnapshot) -> RecordSnapshot
+    def pool_state(path, snapshot)
+      path.empty? ? snapshot : @pool.record(path, snapshot)
+    end
 
     # @rbs @tree: AssociationTree
     # @rbs @ignore_policy: IgnorePolicy

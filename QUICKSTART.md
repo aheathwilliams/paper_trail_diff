@@ -213,6 +213,11 @@ For an explicit range, all single-record timeline methods accept
 | A report selected by a relation | `analyze_scope` |
 | Recent activity through now | `report` |
 
+Batch methods reject scoped association paths and expensive historical through
+paths with `UnsupportedBatchPathError`. Start with plain direct associations;
+`allow_expensive: true` explicitly opts into fallback costs. Application callbacks
+and callable predicates can still issue queries of their own.
+
 `timeline` is a root-checkpoint timeline. A child change becomes visible at the
 next root boundary. `activity_timeline` can make a versioned child change its
 own boundary and can end at an explicitly supplied current record.

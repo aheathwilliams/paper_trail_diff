@@ -497,6 +497,21 @@ class (`Order`) as readily as a relation. Every other option — `within:`,
 exactly as it does for `analyze_many`. Ordinary root selection uses a fixed number
 of queries; joined duplicates can require additional bounded query pages.
 
+`compare_many`, `analyze_many`, `analyze_scope`, and `report` default to
+`allow_expensive: false`. They raise `UnsupportedBatchPathError` for association
+scopes (including limits and owner-dependent scopes), default-scoped targets,
+and historical through paths whose source is not `belongs_to`. The error names
+the path. Remove that path or pass `allow_expensive: true` to accept per-record
+reconstruction explicitly. Single-record methods retain these associations.
+This guard checks known association fallbacks, not arbitrary application code:
+callbacks, custom types and callable historical predicates can still perform SQL.
+
+Plain recorded attributes are normalized without historical AR construction when
+their types/defaults and requested direct edges support it. Initialization
+callbacks, custom attribute types/defaults, virtual attributes and default scopes
+retain compatible model reconstruction. The output remains immutable snapshots;
+the optimization does not change the public return types.
+
 For the common recent-activity case, `report(scope, since:, limit:)` is equivalent
 to `analyze_scope` with `within: since..Time.now.utc`, `activity: true`, and
 `close_on: :current`. It accepts association paths, ignores, snapshot retention,
