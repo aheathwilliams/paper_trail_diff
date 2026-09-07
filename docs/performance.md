@@ -5,6 +5,10 @@ per-record queries and reification. Both database round trips and repeated Ruby
 reconstruction are therefore design concerns. A small SQL query count alone
 does not establish that a batch API meets that purpose.
 
+The [follow-up reconstruction investigation](reconstruction-investigation.md)
+measures remaining N+1 paths, including child activity without changesets and
+through/scoped association fallbacks, and tests direct-snapshot prototypes.
+
 The benchmark exercises `analyze_scope` with genuine PaperTrail history. It is
 a local SQLite baseline for finding work inside the gem, not a production
 latency guarantee or a comparison of SQL dialects.
