@@ -1,6 +1,21 @@
 # API reference
 
-Start with the [three reporting recipes](../README.md) or the [Rails quickstart](../QUICKSTART.md).
+Start with the [three examples](../README.md) or the [Rails quickstart](../QUICKSTART.md).
+This reference covers all options, including cases you may not need when getting started.
+
+## Terms used in this reference
+
+The gem accepts PaperTrail versions from `record.versions` and saved ActiveRecord
+objects. Some sections use shorter names for these concepts:
+
+| Term | Meaning |
+| --- | --- |
+| Root record | The record you ask about, such as the article in `timeline(article, ...)` |
+| Child or descendant | An associated record you include with `associations:`, such as a comment or reply |
+| Endpoint or boundary | A version, record, or time used to identify a compared state or event |
+| Checkpoint | A saved version of the record; `record.paper_trail.save_with_version` can create one without an attribute change |
+| Snapshot | A read-only copy of a record's compared data, returned by this gem rather than an ActiveRecord object |
+| Identity | A key containing the model's base-class name and ID string, such as `["Article", "42"]` |
 
 ## Installation
 
@@ -10,7 +25,10 @@ Add the gem to your bundle:
 gem "paper_trail_diff"
 ```
 
-For association history, also add and configure PT-AT using its migrations:
+For association history, also install the optional
+`paper_trail-association_tracking` plugin (PT-AT). Follow the
+[quickstart setup](../QUICKSTART.md#8-add-association-history-when-needed) for its
+migrations and initializer:
 
 ```ruby
 gem "paper_trail-association_tracking"
@@ -25,10 +43,10 @@ All associated models whose historical state is compared must use
 
 ## How PaperTrail records state
 
-The historical endpoint rules in this reference follows from one property of PaperTrail,
-so it is worth being precise about it first: **a version stores the state that
-existed _before_ the event that created it.** A version is a record of what was
-overwritten, not of what was written.
+PaperTrail's `version.reify` builds the record as it was **before** that version's
+event. Passing a version to this gem uses the same earlier state. Passing a
+saved ActiveRecord object uses its current database values. You do not need to
+call `reify` yourself.
 
 Take an article created as `"Draft"`, then updated to `"Published"`, then to
 `"Final"`:
@@ -538,16 +556,40 @@ when needed. With no explicit order, selection uses ascending root IDs.
 extra lookup for application presentation. The array is frozen; its ActiveRecord
 instances are mutable. Existing two-value destructuring is unchanged.
 
-**`historical_filter:` optionally selects recorded root states.** See the
-[historical selection recipe](../README.md#3-report-across-records-for-a-time-window) for boundary
-semantics and its matching-candidate ceiling. An attribute hash checks typed recorded values directly, without reification;
-a callable receives reified in-window pre-event states. Both are independent of
-`version_scope:`. `max_filter_versions:` defaults to 10,000 loaded candidate
-versions across all batches and raises `FilterLimitExceededError` on overflow.
-Unknown/unrecorded hash attributes raise rather than matching an implicit nil. It does not inspect
-current state or traverse associations. Matching missing roots remain in
-`unreachable`, and with this option they count toward `limit:` before the live
-relation is applied.
+**`historical_filter:` selects by earlier recorded values.** For example, to find
+articles with a version that stored the title `"Published"`:
+
+```ruby
+report = PaperTrailDiff.report(
+  Article.all, since: 1.day.ago, limit: 100,
+  historical_filter: { title: "Published" }, max_filter_versions: 10_000
+)
+```
+
+The hash checks the values in each version recorded inside the window. All keys
+must match using Ruby equality. It reads typed values without calling `reify`.
+Unknown or unrecorded attributes raise instead of matching `nil`. For custom
+checks, pass a callable; it receives reified records and can incur additional
+queries through application code.
+
+A match in any eligible version selects the record. Creation versions have no
+earlier record and are skipped. The filter does not test current values, even
+with `close_on: :current`, or versions outside the window. It does not search
+associations or establish whether a value held continuously over a period.
+`version_scope:` filters the reported events, not the versions tested here.
+
+The relation still filters current rows. Matching deleted records remain in
+`unreachable`. With a historical filter, all matching records count toward
+`limit:` **before** the relation's current-state filters and pagination, including
+records that no longer exist. Matching stops if that ceiling is exceeded.
+
+`max_filter_versions:` limits candidate versions loaded across batches; its
+default is 10,000. Overflow raises `FilterLimitExceededError` before evaluating
+the over-budget batch. At most one extra row is loaded to detect overflow.
+This limits loading even when nothing matches. It does not limit queries inside
+callables or the later analysis work, and is unused without `historical_filter:`.
+The scoped `analyze_many(scope: ...)` alias accepts this option; an explicit
+array of records does not.
 
 **`unreachable` names roots the relation could not reach.** A relation's
 conditions are evaluated against the live table, so a root destroyed during the

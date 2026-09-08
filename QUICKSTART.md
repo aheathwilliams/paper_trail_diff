@@ -1,11 +1,16 @@
 # Quickstart
 
-This guide gets `paper_trail_diff` running in a Rails application and shows the
-smallest useful examples. Ruby 3.1 or newer and PaperTrail 16 or 17 are
-supported.
+This guide sets up PaperTrail, saves a few versions of an article, and reads
+its changes with `paper_trail_diff`. You need Ruby, Bundler, and Rails installed.
+The gem supports Ruby 3.1+ with PaperTrail 16 or 17; your Rails and PaperTrail
+versions may require a newer Ruby.
 
-Every command and console snippet below is meant to be run in order against a
-scratch application, so nothing here assumes models you already have:
+Already using PaperTrail? Skip the setup and use your own model in
+[Create a little history](#3-create-a-little-history).
+
+Otherwise, start with a new Rails application. Run the following examples in
+order. Commands run in your terminal; Ruby examples run in the Rails console
+unless a file path is shown:
 
 ```console
 rails new diff-demo --minimal
@@ -27,13 +32,14 @@ bin/rails db:migrate
 ```
 
 Skip the generator if the application already has a PaperTrail `versions`
-table. The `object_changes` column created by `--with-changes` is recommended
-for efficient activity analysis, although endpoint comparison is based on
-reified state rather than a PaperTrail changeset.
+table. `--with-changes` adds `object_changes`, which PaperTrail uses for
+`version.changeset`. Keep it if you want PaperTrail to store the changed values
+for each event. This gem can also compare the full earlier records saved in
+PaperTrail's `object` column.
 
 ## 2. Version a model
 
-Create the model this guide uses, then declare it versioned:
+Create an article model and tell PaperTrail to track its changes:
 
 ```console
 bin/rails generate model Article title:string
@@ -47,7 +53,7 @@ class Article < ApplicationRecord
 end
 ```
 
-Restart the Rails console after changing the Gemfile or an initializer.
+Restart the Rails console after changing dependencies, model configuration, or an initializer.
 
 ## 3. Create a little history
 
@@ -64,8 +70,8 @@ article.update!(title: "Final")
 published_version = article.versions.last
 ```
 
-The variable names are intentional. PaperTrail versions contain the state
-*before* their event:
+PaperTrail saves the record's values **before** each change. Its public
+`reify` method builds an earlier record from a version:
 
 ```ruby
 draft_version.reify.title     # => "Draft"
@@ -93,13 +99,18 @@ diff.to_h
 # }
 ```
 
-`compare` reports only the net difference between its endpoints. It does not
-report intermediate changes.
+Pass the PaperTrail versions themselves to `compare`; you do not need to call
+`reify` first. The result has one entry per changed attribute, with `from` and
+`to` values. Unchanged attributes are left out.
+
+`compare` reports the net difference between the two records. For every change
+in between, use `timeline`, shown below. Reading a diff does not save or modify
+any record.
 
 ### Compare a version with current state
 
-Pass the persisted record explicitly when the second endpoint should be the
-current database state:
+Pass `article` instead of a second version to compare with its current saved
+values:
 
 <!-- executable:quickstart-current -->
 ```ruby
@@ -108,12 +119,13 @@ diff = PaperTrailDiff.compare(published_version, article)
 diff.attributes["title"].to # => "Final"
 ```
 
-The record must be persisted, not destroyed, and have no unsaved changes.
-Current state is never inferred automatically.
+The article must still exist in the database and have no unsaved changes.
+The gem reloads it before comparing. `article.versions.last` is different: it
+contains the values from before the latest recorded change.
 
-## 5. Build a checkpoint timeline
+## 5. Read changes between versions
 
-Create one more historical endpoint:
+Save another change so PaperTrail records the previous title, `"Final"`:
 
 <!-- executable:quickstart-timeline-state -->
 ```ruby
@@ -121,7 +133,7 @@ article.update!(title: "Archived")
 final_version = article.versions.last # reifies to "Final"
 ```
 
-Then compare every adjacent root version:
+Read the changes between each pair of article versions:
 
 <!-- executable:quickstart-timeline -->
 ```ruby
@@ -140,13 +152,12 @@ end
 visible_steps = steps.reject(&:empty?)
 ```
 
-Empty steps remain in the timeline. Filter them only when the application's
-display does not need every version boundary.
+Each item in `steps` has a `diff`, just like the comparison above. Steps with
+no reported changes are kept; `reject(&:empty?)` removes them for display.
 
-### Select mutations by time
+### Select changes by time
 
-Use `within:` when the application has a reporting window rather than saved
-endpoint versions:
+Use `within:` to choose changes by their PaperTrail version's `created_at`:
 
 <!-- executable:quickstart-time-range -->
 ```ruby
@@ -160,32 +171,38 @@ end
 # => [["Draft", "Published"], ["Published", "Final"]]
 ```
 
-The half-open range selects the mutations recorded by `draft_version` and
-`published_version`. The excluded `final_version` is still used as the trailing
-boundary needed to reveal the last selected mutation. PaperTrail versions are
-pre-change snapshots, so a range containing mutations must have a later root
-version. The gem raises `PaperTrailDiff::IncompleteTimeRangeError` unless you explicitly
-allow current state as the missing endpoint with `close_on: :current`, shown below.
+Ruby's `...` excludes the end of the range. Here the selected versions are
+`draft_version` and `published_version`. The gem also reads `final_version` to
+find the values after the last selected change.
+
+That extra version matters: each PaperTrail version stores the values **before**
+its own change. If no later article version exists, the gem raises
+`PaperTrailDiff::IncompleteTimeRangeError`. For a report through now, allow it
+to use the current saved article with `close_on: :current`, as shown next.
 
 ### Report through now
 
-For recent activity across a relation, `report` supplies the window ending and
-activity options for you:
+To report on many articles, pass a model or ActiveRecord relation to `report`.
+It includes changes from `since:` through now:
 
 ```ruby
 report = PaperTrailDiff.report(
   Article.all, since: 1.day.ago, limit: 100, include_deleted: true
 )
-report.analyses # live identity => Analysis
-report.deleted # missing identity => Analysis, or nil without destroy history
+report.analyses # Hash: [model name, ID string] => report for an existing record
+report.deleted # Same keys for deleted records; nil if no destroy version was saved
+report.analyses.each_value { |analysis| analysis.diff.to_h }
 ```
 
-Deleted roots use a separate batch with the same requested associations. The
-limit covers both populations. Omit `include_deleted:` when only live rows matter.
-Roots need a version inside the window to be selected; child-only activity does
-not select an otherwise quiet root.
+`limit: 100` is a safety ceiling. If more than 100 existing and deleted articles
+are selected, the call raises instead of returning a partial report. Omit
+`include_deleted:` if you only need articles that still exist.
 
-For a report that includes the latest saved change, use an explicit live ending:
+An article needs its own PaperTrail version in the time window to be selected.
+Editing a comment alone does not select its article. A relation's `where`
+conditions check current values; they cannot check a deleted article's values.
+
+For one article, you can read changes through its current saved state this way:
 
 <!-- executable:quickstart-current-window -->
 ```ruby
@@ -195,34 +212,38 @@ current_steps = PaperTrailDiff.timeline(
 ```
 
 The same window options work on `activity_timeline`, `analyze`, `analyze_many`,
-and `analyze_scope`. Current state can include changes after a requested window
-end, so keep a later historical checkpoint for reproducible historical reports.
-For an explicit range, all single-record timeline methods accept
-`from: :first, to: article` instead.
+and `analyze_scope`. Use `close_on: :current` for a report through now: today's
+record may include changes made after the end of a past window. For a report
+that should stay the same when the article changes again, use recorded versions
+and make sure an article version exists after the window.
 
-## 6. Choose the right API
+To read all versions through now without choosing dates, use
+`from: :first, to: article`.
+
+## 6. Choose a method
 
 | Need | Call |
 | --- | --- |
-| Net difference between two endpoints | `compare` |
-| Net differences for many current records | `compare_many` |
-| One step per root-record version | `timeline` |
-| Steps for root and selected child versions | `activity_timeline` |
-| Net diff and timelines from one history pass | `analyze` |
+| Net difference between two versions, or a version and current record | `compare` |
+| Net differences for a list of `{ from:, to: }` pairs | `compare_many` |
+| Changes between successive versions of one record | `timeline` |
+| Activity for a record and its requested associations | `activity_timeline` |
+| Net difference and version timeline together | `analyze` |
 | A report for an array of records | `analyze_many` |
 | A report selected by a relation | `analyze_scope` |
 | Recent activity through now | `report` |
 
-Batch methods reject scoped association paths and expensive historical through
-paths with `UnsupportedBatchPathError`. Start with plain direct associations;
-`allow_expensive: true` explicitly opts into fallback costs. Application callbacks
-and callable predicates can still issue queries of their own.
+Use the batch methods for many records so they can share database queries.
+Some scoped associations and `has_many :through` histories still need queries
+for each record. Batch calls reject those with `UnsupportedBatchPathError`.
+The error names the association. `allow_expensive: true` permits that extra work;
+see the [performance guide](docs/performance.md) before using it in a large report.
 
-`timeline` is a root-checkpoint timeline. A child change becomes visible at the
-next root boundary. `activity_timeline` can make a versioned child change its
-own boundary and can end at an explicitly supplied current record.
+When associations are included, `timeline` compares their values at the article's
+versions. `activity_timeline` also reports the comments' own version events, even
+when the article was not edited. The next section on associations shows this.
 
-## 7. Ignore noise fields
+## 7. Choose fields to ignore
 
 `updated_at` is ignored by default. Passing `ignore:` replaces that default:
 
@@ -237,16 +258,16 @@ PaperTrailDiff.compare(
 PaperTrailDiff.compare(
   draft_version,
   published_version,
-  ignore: [] # compare every available scalar attribute
+  ignore: [] # include updated_at too
 )
 ```
 
-See the main README for exact path-specific ignore rules.
+See the [API reference](docs/reference.md) to ignore different fields on different associations.
 
 ## 8. Add association history when needed
 
-Associations are optional. Add PT-AT only when the application needs historical
-association reconstruction:
+To compare an article's earlier comments, install the optional
+`paper_trail-association_tracking` plugin (called PT-AT in the reference):
 
 ```console
 bundle add paper_trail-association_tracking
@@ -255,14 +276,18 @@ bin/rails db:migrate
 ```
 
 The generator creates `version_associations` and enables
-`PaperTrail.config.track_associations`. This section also needs a second model:
+`PaperTrail.config.track_associations` in an initializer. If your application
+already has that initializer, check that it contains
+`PaperTrail.config.track_associations = true`.
+
+Add a comment model:
 
 ```console
 bin/rails generate model Comment article:references body:string
 bin/rails db:migrate
 ```
 
-Every model whose historical state is needed must be versioned:
+Add `has_paper_trail` to both models so their earlier values are recorded:
 
 ```ruby
 class Article < ApplicationRecord
@@ -276,7 +301,14 @@ class Comment < ApplicationRecord
 end
 ```
 
-Take an explicit root checkpoint before the example change:
+The article option `synchronize_version_creation_timestamp: false` lets
+manually saved versions record the time they were taken. Restart the console
+after this setup and reload your article with `article = Article.first!`.
+
+Use PaperTrail's `paper_trail.save_with_version` to save an article version even
+though none of its attributes changed. That gives the comparison a starting
+point before adding the comment. The transaction also records the information
+needed for association history:
 
 <!-- executable:quickstart-association -->
 ```ruby
@@ -298,7 +330,7 @@ diff.associations["comments"].added.first.attributes["body"]
 # => "First comment"
 ```
 
-Nested paths are explicit and bounded:
+If your models also define `replies` and `author`, name those associations to include them:
 
 ```ruby
 diff = PaperTrailDiff.compare(
@@ -308,7 +340,7 @@ diff = PaperTrailDiff.compare(
 )
 ```
 
-To see versioned child events without touching the article after each change:
+To show the comment creation as its own activity step, without updating the article:
 
 <!-- executable:quickstart-activity -->
 ```ruby
@@ -320,47 +352,44 @@ steps = PaperTrailDiff.activity_timeline(
 )
 
 steps.reject(&:empty?).each do |step|
-  boundary = step.source_boundary
-  puts "#{boundary.item_type} ##{boundary.item_id}"
+  source = step.source_boundary
+  puts "#{source.item_type} ##{source.item_id}"
 end
 ```
 
-Use a later transaction-backed root checkpoint instead of `to: current` when
-the result must remain reproducible after the database changes again.
+`source_boundary` describes the version responsible for a step. Its `item_type`
+and `item_id` are PaperTrail's model name and record ID. It also exposes the
+version's `whodunnit` and `event`. See the README for a feed using these values.
 
-For a historical reporting window, replace `from:` and `to:` with `within:`:
+To keep the result fixed after later edits, save another article version with
+`paper_trail.save_with_version` inside a transaction, then pass that version
+instead of `to: current`.
 
-```ruby
-steps = PaperTrailDiff.activity_timeline(
-  article,
-  within: report_start...report_end,
-  associations: ["comments"]
-)
-```
-
-This selects versioned comment activity directly, even if the article had no
-mutation during the window. Take a root checkpoint after `report_end`; it gives
-the gem the historical context needed to expose the final child mutation.
+You can also pass `within: start_time...end_time`. This single-article method
+includes comment changes even if the article was not edited in that period.
+Save an article version after the end time so the gem can read the result of
+the final comment change. Unlike this method, a relation-based `report` needs
+an article version in the window to select that article.
 
 ## 9. Common surprises
 
-- PaperTrail stores pre-change snapshots. The current record is not represented
-  by `versions.last`; pass the record explicitly when current state is wanted.
-- A historical `within:` window containing mutations needs a later root checkpoint.
-  Use `close_on: :current` explicitly for a report through now. The
-  trailing version is reconstruction context and may appear as a step's ending
-  boundary even though its own mutation is outside the window.
+- `article.versions.last.reify` gives the article **before** its latest recorded
+  change. Pass `article` to read the current saved values.
+- PaperTrail's creation version returns `nil` from `reify`. There was no record
+  before creation; the diff reports the record being added.
+- A historical `within:` window needs a later article version to read the values
+  after the last selected change. Use `close_on: :current` for reports through now.
 - `ignore:` replaces the default list. Include `updated_at` yourself when using
   a custom list and you still want it ignored.
 - Historical associations require PT-AT to be installed, loaded, migrated, and
   enabled. Restart the console after setup.
-- Only requested association paths are traversed. The gem never recursively
-  discovers the whole model graph.
+- Only the associations listed in `associations:` are included. Asking for
+  comments does not automatically include every association on each comment.
 - Historical output cannot contain data that PaperTrail or PT-AT did not record
   or can no longer reconstruct.
 
-For performance guidance, HABTM limitations, diagnostics, discovery, path-aware
-ignore rules, and complete result shapes, see the
+For association support, performance, error handling, ignore rules, and all
+available result methods, see the
 [API reference](docs/reference.md). For complete activity-feed and batch-report
 recipes, including deleted records, see the [README](README.md).
 
