@@ -1411,10 +1411,12 @@ and PT-AT can reconstruct. In particular:
 - HABTM membership is limited to the join snapshots PT-AT recorded in
   `version_associations`; historical target attributes require versioned target
   models, otherwise PT-AT may return live target state;
-- `compare`, `timeline`, and `analyze`'s endpoint diff do not report the root
-  record's destruction, because the state recorded at a `destroy` version is the
-  state before the deletion; `activity_timeline` closes on a `:destroyed`
-  boundary instead, and a selected child's removal is reported by its parent;
+- `compare`, `timeline`, and the endpoint diff of an `analyze` range ending at
+  an explicit `destroy` version do not report the root record's destruction,
+  because the state recorded at a `destroy` version is the state before the
+  deletion; a `within:` window closing on the destruction ends its diff at
+  absence, `activity_timeline` closes on a `:destroyed` boundary, and a
+  selected child's removal is reported by its parent;
 - `timeline` and `analyze` are bounded by root versions; `activity_timeline`
   adds recorded descendant boundaries and may terminate at an explicitly passed
   current record, while a fully historical result still requires a later root
@@ -1428,7 +1430,12 @@ and PT-AT can reconstruct. In particular:
   `paper_trail_diff` respects PT-AT's configured reification error behavior;
 - deeper paths require more historical reconstruction and database work, so
   callers should select only the branches they need;
-- no implicit or unbounded recursive association traversal is performed.
+- no implicit or unbounded recursive association traversal is performed;
+- versions are ordered by `created_at`, which PaperTrail takes from the
+  application server's clock, with the version id breaking only exact ties. A
+  clock stepped backwards, or skew between servers writing the same history,
+  records later changes with earlier timestamps and reorders them; keep server
+  clocks synchronized by slewing rather than stepping.
 
 Review the [PaperTrail version semantics](https://github.com/paper-trail-gem/paper_trail#3-working-with-versions)
 and [PT-AT limitations](https://github.com/westonganger/paper_trail-association_tracking#limitations)

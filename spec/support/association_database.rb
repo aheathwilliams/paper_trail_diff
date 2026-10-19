@@ -18,6 +18,9 @@ module AssociationSpecVersionClock
     def next(timestamp)
       current = timestamp || Time.now.utc
       current = @last + Rational(1, 1_000_000) if @last && current <= @last
+      # A bumped timestamp may run ahead of the clock; keep later readings,
+      # such as a report's window end, after it.
+      MonotonicTestClock.advance_past(current)
       @last = current
     end
   end

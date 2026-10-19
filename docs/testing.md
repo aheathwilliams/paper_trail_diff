@@ -17,6 +17,18 @@ on PostgreSQL 17, MySQL 8.4, and SQL Server 2022 with Ruby 4.0 and PaperTrail 17
 The SQL jobs exercise the same regressions, including joined-column ordering,
 duplicate roots, pagination, and historical association reconstruction.
 
+## Test clock
+
+The specs build time windows from `Time.now` around versions they have just
+written, so they need a clock that never runs backwards. Virtualized hosts,
+WSL2 in particular, step the wall clock back by hundreds of milliseconds when
+they resynchronize, which made window-based specs fail at random.
+`spec/support/monotonic_clock.rb` therefore makes `Time.now` strictly
+increasing, in whole microseconds, for the test process. ActiveRecord
+timestamps, PaperTrail's `created_at`, and windows built from `Time.now` all
+read it, so they stay consistent however the host clock moves. It affects only
+the test process; the gem itself reads the ordinary clock.
+
 ## Other databases locally
 
 Install the adapter's client development libraries first. On Debian/Ubuntu,

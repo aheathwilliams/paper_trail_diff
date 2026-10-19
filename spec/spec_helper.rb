@@ -2,6 +2,8 @@
 
 $LOAD_PATH.unshift File.expand_path('../lib', __dir__)
 
+require_relative 'support/monotonic_clock'
+
 require 'simplecov'
 
 coverage_name = ENV.fetch('PAPER_TRAIL_DIFF_COVERAGE', 'core')
