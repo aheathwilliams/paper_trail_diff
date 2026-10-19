@@ -58,6 +58,8 @@ module PaperTrailDiff
 
     #: () -> Result
     def call
+      return database_selection if @historical_filter.nil? && comparable_keys?
+
       candidates = versioned_ids
       candidates = @historical_filter.call(candidates) if @historical_filter && candidates.any?
       return Result.new(records: [], unreachable: []) if candidates.empty?
@@ -75,6 +77,46 @@ module PaperTrailDiff
     # @rbs @time_range: TimeRange?
     # @rbs @limit: Integer
     # @rbs @historical_filter: untyped
+
+    # Leaves the candidate set in the database. Plucking every root changed in
+    # the window would cost memory and a statement proportional to all activity
+    # in the window -- not to the relation or `limit:` -- so a report on one
+    # record could read every id in a busy table. A subquery keeps the work
+    # bounded by what the relation and the deletions actually contain.
+    #: () -> Result
+    def database_selection
+      candidates = window_versions.select(:item_id)
+      Result.new(
+        records: selected_records(candidates),
+        unreachable: missing_ids.map { |id| identity(id) }.freeze
+      )
+    end
+
+    # Comparing the two columns in SQL needs them to share a type: PostgreSQL
+    # rejects an integer key against a string item_id outright.
+    #: () -> bool
+    def comparable_keys?
+      return false unless primary_key.is_a?(String)
+
+      item_id = version_class.columns_hash['item_id']&.type
+      key = base_class.columns_hash[primary_key]&.type
+      !item_id.nil? && item_id == key
+    end
+
+    # Changed in the window but without a row, found with an anti-join instead
+    # of comparing two plucked lists.
+    #: () -> Array[String]
+    def missing_ids
+      live = base_class.unscoped.select(primary_key)
+      window_versions.where.not(item_id: live).distinct.pluck(:item_id).map(&:to_s).uniq.sort
+    end
+
+    #: () -> untyped
+    def window_versions
+      relation = version_class.where(item_type: item_type)
+      range = @time_range
+      range ? range.scope(relation) : relation
+    end
 
     # Accepts a model class as readily as a relation: `Article` and
     # `Article.where(...)` both name a population, and `all` is what makes them
@@ -104,25 +146,24 @@ module PaperTrailDiff
     # version table alone so that it does not depend on rows still existing.
     #: () -> Array[String]
     def versioned_ids
-      relation = version_class.where(item_type: item_type)
-      range = @time_range
-      relation = range.scope(relation) if range
-      relation.distinct.pluck(:item_id).map(&:to_s).uniq
+      window_versions.distinct.pluck(:item_id).map(&:to_s).uniq
     end
 
     # Which of those candidates still have a row, asked without the relation's
     # conditions so that "filtered out" and "no longer exists" stay separable.
     #: (Array[String]) -> Array[String]
     def live_ids(candidates)
-      base_class.unscoped.where(primary_key => candidates).pluck(primary_key).map(&:to_s)
+      candidates.each_slice(PAGE_SIZE).flat_map do |slice|
+        base_class.unscoped.where(primary_key => slice).pluck(primary_key).map(&:to_s)
+      end
     end
 
     # Deduplicate records rather than adding SQL DISTINCT: an otherwise valid
     # relation may order by joined columns or select a PostgreSQL json column.
     # Read bounded pages until the relation ends or too many unique roots appear.
-    #: (Array[String]) -> Array[untyped]
+    #: (untyped) -> Array[untyped]
     def selected_records(live)
-      return [] if live.empty?
+      return [] if live.is_a?(Array) && live.empty?
 
       records = {} #: Hash[untyped, untyped]
       consumed = 0
@@ -137,12 +178,14 @@ module PaperTrailDiff
       records.values.freeze
     end
 
-    #: (Array[String], Integer) -> Array[untyped]
+    #: (untyped, Integer) -> Array[untyped]
     def record_page(live, consumed)
       count = page_limit(consumed)
       return [] if count.zero?
 
-      ordered_scope.where(primary_key => live)
+      # An id list or a candidate subquery; both read the same way in SQL.
+      conditions = { primary_key => live } #: Hash[untyped, untyped]
+      ordered_scope.where(conditions)
                    .offset((@scope.offset_value || 0) + consumed).limit(count).to_a
     end
 

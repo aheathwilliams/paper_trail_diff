@@ -41,6 +41,9 @@ module PaperTrailDiff
 
     private
 
+    # : (Array[comparison_input], preparer: untyped) -> ComparisonBatch
+    def comparison_batch: (Array[comparison_input], preparer: untyped) -> ComparisonBatch
+
     # : (Array[untyped]) -> Hash[identity, untyped]
     def load_batch_endpoints: (Array[untyped]) -> Hash[identity, untyped]
 

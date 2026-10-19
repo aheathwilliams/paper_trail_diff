@@ -35,7 +35,14 @@ module PaperTrailDiff
       Instrumentation.instrument('compare', payload) do
         Endpoint.validate_pair!(from_endpoint, to_endpoint)
         notify_ambiguous_association_boundary(from_endpoint, to_endpoint)
-        Engine.compare(snapshot_for_endpoint(from_endpoint), snapshot_for_endpoint(to_endpoint))
+        if @association_tree.empty?
+          Engine.compare(snapshot_for_endpoint(from_endpoint), snapshot_for_endpoint(to_endpoint))
+        else
+          # Prepared history orders versions that share a timestamp; reading
+          # associations straight from PT-AT would resolve them by time alone.
+          comparison_batch([{ from: from_endpoint, to: to_endpoint }],
+                           preparer: @traversal_preparer.method(:call)).call.values.fetch(0)
+        end
       end
     end
 
@@ -45,13 +52,7 @@ module PaperTrailDiff
       count = comparisons.is_a?(Array) ? comparisons.length : 0
       payload = @instrumentation_payload.merge(comparison_count: count)
       Instrumentation.instrument('compare_many', payload) do
-        ComparisonBatch.new(
-          comparisons,
-          live_loader: @live_endpoints, preparer: method(:prepare_batch_model),
-          history_preparer: @historical_store.method(:prepare_batch),
-          historical_snapshotter: method(:historical_snapshot),
-          live_normalizer: method(:normalize_live_snapshot)
-        ).call
+        comparison_batch(comparisons, preparer: method(:prepare_batch_model)).call
       end
     end
 
@@ -145,6 +146,17 @@ module PaperTrailDiff
     end
 
     private
+
+    #: (Array[comparison_input], preparer: untyped) -> ComparisonBatch
+    def comparison_batch(comparisons, preparer:)
+      ComparisonBatch.new(
+        comparisons,
+        live_loader: @live_endpoints, preparer: preparer,
+        history_preparer: @historical_store.method(:prepare_batch),
+        historical_snapshotter: method(:historical_snapshot),
+        live_normalizer: method(:normalize_live_snapshot)
+      )
+    end
 
     #: (Array[untyped]) -> Hash[identity, untyped]
     def load_batch_endpoints(records)

@@ -1,0 +1,36 @@
+# Generated from lib/paper_trail_diff/stored_time_precision.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Matches time values to the precision PaperTrail actually stored.
+  #
+  # PaperTrail's JSON serializer, and a `json` or `jsonb` object column, write
+  # times through ActiveSupport's JSON encoder, which keeps only
+  # `ActiveSupport::JSON::Encoding.time_precision` fractional digits
+  # (milliseconds by default). The live row keeps the database's precision, so
+  # comparing the two would report every timestamp as changed even though
+  # nothing was edited. Truncating every side to the stored precision is
+  # idempotent, so values that came from history are unaffected and only the
+  # digits history could never have held are dropped.
+  module StoredTimePrecision
+    NANOSECOND_DIGITS: ::Integer
+
+    JSON_COLUMN_TYPES: untyped
+
+    # Fractional digits a model's history keeps for times, or nil when the
+    # history is stored losslessly.
+    # : (untyped) -> Integer?
+    def self?.digits: (untyped) -> Integer?
+
+    # : (Hash[untyped, untyped], Integer?) -> Hash[untyped, untyped]
+    def self?.apply: (Hash[untyped, untyped], Integer?) -> Hash[untyped, untyped]
+
+    # : (untyped, Integer) -> untyped
+    def self?.truncate: (untyped, Integer) -> untyped
+
+    # : (untyped) -> bool
+    def self?.json_history?: (untyped) -> bool
+
+    # : () -> bool
+    def self?.json_serializer?: () -> bool
+  end
+end

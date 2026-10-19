@@ -115,28 +115,44 @@ distinct timestamps never reach the fallback.
 
 ### Association changes across a shared timestamp
 
-Sequential ids recover the *order* of tied versions, but not their association
-state. PT-AT records association membership per version and resolves it by
-timestamp, so two versions sharing one are indistinguishable for that purpose:
-**an association change between them is invisible.** It is not reported as
-absent — the association simply does not appear in the diff.
+PT-AT records association membership per version but resolves it by
+timestamp, so on its own it cannot tell apart versions that share one. The gem
+therefore reconstructs supported association paths from prepared history,
+which places each associated version before or after a boundary by
+`created_at` and then by version id — the same order the activity timeline
+uses. `compare`, `compare_many`, `timeline`, `analyze`, and the batch methods
+all read association state this way, so a burst of writes within one clock
+tick, or a database storing whole seconds, still yields the recorded sequence.
 
-Unlike an unorderable sequence this is not always wrong. If nothing associated
-changed between the two versions, the result is correct, and the gem cannot
-tell the two cases apart, because not seeing the change is the symptom. So it
-does not raise. Instead:
+The id fallback has the same limit as above: a tie between versions whose ids
+are not sequential, or that live in different version tables, cannot be
+ordered, and the gem raises `PaperTrailDiff::AmbiguousVersionOrderError`
+rather than guess which side of the boundary the change belongs on.
+
+Paths that fall back to PT-AT's own reifier — scoped associations, unversioned
+targets, and the other shapes listed under
+[reconstruction](architecture.md) — still resolve membership by timestamp
+alone. For those:
 
 - `diagnose` reports `:tied_version_timestamps` as a **warning** whenever
   `associations:` are selected and versions in range share a timestamp.
-- a comparison in that state emits
+- a comparison between two versions sharing a timestamp emits
   `ambiguous_association_boundary.paper_trail_diff` through ActiveSupport
   notifications, carrying the two version ids and the shared timestamp. Nothing
   is logged; subscribe if you want it surfaced.
 
-Writing several versions inside one clock tick is easy to do — a service object
-that touches a record and its children in quick succession will manage it — so
-this is worth checking before trusting an association history. Recording
-versions at sub-second precision separates them.
+Recording versions at sub-second precision avoids the question entirely.
+
+### History stored as JSON
+
+PaperTrail's JSON serializer, and a `json` or `jsonb` `object` column, store
+times at `ActiveSupport::JSON::Encoding.time_precision` fractional digits
+(milliseconds by default), while the live row keeps the database's precision.
+When a model's history is stored this way the gem truncates every time value it
+compares — historical and live alike — to that precision, so an untouched
+timestamp is not reported as changed. A change smaller than the stored
+precision was never recorded and cannot be reported. YAML history is compared
+at full precision.
 
 ### ActiveStorage attachments
 
@@ -609,9 +625,12 @@ should not loop over identities to query/reify them. With this option, live and
 missing roots together must fit `limit:` before analysis starts. Array-based
 `analyze_many` continues to require live records.
 
-Deleted analyses retain the ordinary root-checkpoint semantics: a destroy
-version's snapshot is the state before deletion. Use `activity_timeline` for the
-deletion event itself, whose after snapshot is nil when snapshots are retained.
+A deleted analysis's window closes on the deletion, so its `diff` and
+`to_snapshot` end at absence: a root that existed before the window reports a
+`record_presence_change` to nil, and one created and deleted inside the window
+reports no net change. Its `timeline` keeps root-checkpoint semantics and lists
+only the edits; use `activity_timeline` for the deletion event itself, whose
+after snapshot is nil when snapshots are retained.
 
 `unreachable` is unpaginated and independent of the relation's live page.
 Without `include_deleted: true` or historical filtering, it is outside the root
@@ -954,13 +973,16 @@ Boundaries therefore have three kinds — `:version`, `:current`, and
 handle `destroyed?`.
 
 `analyze(activity: true)` reports the same closing step in its
-`activity_timeline`. Its `diff` and `timeline` keep their `compare` and
-`timeline` semantics and do not report the deletion.
+`activity_timeline`. When the range ends at an explicit destroy version, its
+`diff` and `timeline` keep their `compare` and `timeline` semantics and do not
+report the deletion.
 
 A `within:` window behaves the same way. A window whose last selected mutation
 is the root's destruction needs no later root version, because none can ever
 exist, so it closes on the removal instead of raising
-`IncompleteTimeRangeError`. When the destruction falls *outside* the window it
+`IncompleteTimeRangeError`. Like a window closing on current state, the
+analysis's `diff` and `to_snapshot` then end at that closing state, which is
+absence. When the destruction falls *outside* the window it
 remains ordinary reconstruction context and is not reported as a selected
 mutation. The same relaxation lets the plain `timeline` accept such a window,
 though it still reports only the edits.

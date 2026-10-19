@@ -83,6 +83,11 @@ module PaperTrailDiff
     # : () -> untyped
     def revealing_version: () -> untyped
 
+    # A window with nothing after its last selected mutation can only close on
+    # that mutation being the record's destruction.
+    # : (untyped) -> bool
+    def closes_on_destroy?: (untyped) -> bool
+
     # A range closing on the record's own destruction needs no later version:
     # nothing can follow it, so demanding one would reject the range forever.
     # : () -> bool

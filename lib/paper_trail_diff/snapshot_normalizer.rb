@@ -131,7 +131,7 @@ module PaperTrailDiff
     def normalized_attributes(record, reflections, path)
       attributes = record.attributes.dup
       excluded_attributes(record, reflections, path).each { |name| attributes.delete(name) }
-      attributes
+      StoredTimePrecision.apply(attributes, StoredTimePrecision.digits(record.class))
     end
 
     # Every input is fixed for one model class at one selected path, and the

@@ -28,7 +28,7 @@ module PaperTrailDiff
     #: () -> Analysis
     def analyze
       history, plan, closing, closing_snapshot, captured_at = history_and_versions
-      final = closing_snapshot || history.last_snapshot
+      final = plan.closes_on_destroy ? nil : closing_snapshot || history.last_snapshot
       Analysis.new(
         diff: Engine.compare(history.first_snapshot, final),
         timeline: ActivityRootSteps.call(

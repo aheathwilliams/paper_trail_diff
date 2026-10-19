@@ -20,6 +20,27 @@ project follows [Semantic Versioning](https://semver.org/).
   unique-root safety limit, reducing round trips for duplicate-heavy joins.
 - Missing prepared activity registration raises an explanatory configuration
   error instead of a bare hash lookup error.
+- Scope selection keeps the window's candidate roots in a database subquery when
+  `versions.item_id` and the model's primary key share a column type, instead of
+  plucking every root changed in the window. A narrow relation over a busy
+  window no longer costs memory and SQL proportional to all activity in it.
+  `unreachable` identities are now sorted.
+- `compare` with `associations:` reads association state from prepared history,
+  like `compare_many`, instead of PT-AT's timestamp-only point reifier.
+
+### Fixed
+
+- Histories stored with PaperTrail's JSON serializer or a `json`/`jsonb` object
+  column no longer report every timestamp as changed when compared with the live
+  record. Times are compared at the precision the history stored.
+- Association state at a boundary sharing its timestamp with other versions is
+  ordered by version id, so `compare`, `compare_many`, and `timeline` no longer
+  attribute same-instant association changes to the wrong side of a boundary.
+  Ties that ids cannot order raise `AmbiguousVersionOrderError`.
+- Analyses whose time window closes on the root's destruction end their `diff`
+  and `to_snapshot` at absence in both activity and checkpoint mode. A root
+  created and deleted inside the window previously read as added, and one
+  deleted in a checkpoint-mode window read as unchanged.
 
 - Plain historical root and direct-child snapshots now normalize typed recorded
   attributes without constructing historical ActiveRecord instances. Models with

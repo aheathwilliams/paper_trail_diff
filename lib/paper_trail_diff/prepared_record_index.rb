@@ -10,7 +10,7 @@ module PaperTrailDiff
     #: (untyped) -> void
     def initialize(record)
       @model_class = record.class
-      @attributes = Support.immutable_copy(record.attributes)
+      @attributes = stored_attributes(record.class, record.attributes)
       freeze
     end
 
@@ -36,8 +36,17 @@ module PaperTrailDiff
     #: (untyped, Hash[untyped, untyped]) -> void
     def initialize_attributes(model_class, attributes)
       @model_class = model_class
-      @attributes = Support.immutable_copy(attributes)
+      @attributes = stored_attributes(model_class, attributes)
       freeze
+    end
+
+    # A live fallback and a version decoded from history must agree on what
+    # the stored history could represent, or the gap between them reads as a
+    # change.
+    #: (untyped, Hash[untyped, untyped]) -> Hash[untyped, untyped]
+    def stored_attributes(model_class, attributes)
+      digits = StoredTimePrecision.digits(model_class)
+      Support.immutable_copy(StoredTimePrecision.apply(attributes, digits))
     end
   end
 
@@ -184,11 +193,15 @@ module PaperTrailDiff
     # boundary's transaction. The first is monotonic over the chronological
     # list and the second is indexed, so neither rescans a long history once
     # per boundary.
+    #
+    # "At or after" is decided by the version order rather than the timestamp
+    # alone. A version written in the same instant as the boundary but before
+    # it already took effect there; reading its pre-change state would put the
+    # boundary on the wrong side of a change it follows.
     #: (untyped) -> Integer?
     def boundary_index(boundary)
-      created_at = boundary.created_at
       chronological = versions.bsearch_index do |candidate|
-        candidate.created_at >= created_at
+        VersionBoundary.at_or_after?(candidate, boundary)
       end
       transactional = transaction_index(boundary)
       return chronological unless transactional

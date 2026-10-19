@@ -54,6 +54,27 @@ module PaperTrailDiff
 
     @time_range: TimeRange?
 
+    # Leaves the candidate set in the database. Plucking every root changed in
+    # the window would cost memory and a statement proportional to all activity
+    # in the window -- not to the relation or `limit:` -- so a report on one
+    # record could read every id in a busy table. A subquery keeps the work
+    # bounded by what the relation and the deletions actually contain.
+    # : () -> Result
+    def database_selection: () -> Result
+
+    # Comparing the two columns in SQL needs them to share a type: PostgreSQL
+    # rejects an integer key against a string item_id outright.
+    # : () -> bool
+    def comparable_keys?: () -> bool
+
+    # Changed in the window but without a row, found with an anti-join instead
+    # of comparing two plucked lists.
+    # : () -> Array[String]
+    def missing_ids: () -> Array[String]
+
+    # : () -> untyped
+    def window_versions: () -> untyped
+
     # Accepts a model class as readily as a relation: `Article` and
     # `Article.where(...)` both name a population, and `all` is what makes them
     # the same kind of thing.
@@ -77,11 +98,11 @@ module PaperTrailDiff
     # Deduplicate records rather than adding SQL DISTINCT: an otherwise valid
     # relation may order by joined columns or select a PostgreSQL json column.
     # Read bounded pages until the relation ends or too many unique roots appear.
-    # : (Array[String]) -> Array[untyped]
-    def selected_records: (Array[String]) -> Array[untyped]
+    # : (untyped) -> Array[untyped]
+    def selected_records: (untyped) -> Array[untyped]
 
-    # : (Array[String], Integer) -> Array[untyped]
-    def record_page: (Array[String], Integer) -> Array[untyped]
+    # : (untyped, Integer) -> Array[untyped]
+    def record_page: (untyped, Integer) -> Array[untyped]
 
     # Preserve explicit ordering: SQL Server rejects duplicate ORDER BY columns,
     # even when the extra ordering would only have served as a tie-breaker.
