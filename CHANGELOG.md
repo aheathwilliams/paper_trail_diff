@@ -3,6 +3,18 @@
 All notable changes to this project will be documented in this file. The
 project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Development
+
+- Mutation testing gives each mutation 60 seconds instead of mutant's 5-second
+  default. Mutant counts a timeout as a kill, so mutations no spec caught were
+  reported as caught; with the longer limit, 123 surface in
+  `CollectionComparator` and `CollectionIdentityIndex`.
+- The full mutation run moves to a nightly workflow that runs only when `main`
+  has an untested commit, so a later push no longer cancels it. Pull requests
+  still mutate the methods they change.
+
 ## [0.13.0] - 2026-10-28
 
 ### Breaking changes
