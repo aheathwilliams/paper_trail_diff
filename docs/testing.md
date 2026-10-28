@@ -39,11 +39,19 @@ variant here when a bug turns out to depend on a schema or configuration.
 
 ## Mutation testing
 
-[Mutant](https://github.com/mbj/mutant) changes the comparison code one
-expression at a time and expects a spec to fail each time. A change that every
-spec still passes is behavior nothing checks. `mutant.yml` lists the classes it
-mutates: `Engine`, `CollectionComparator`, `CollectionIdentityIndex`, and
-`NestedComparator`, which decide what counts as a change.
+[Mutant](https://github.com/mbj/mutant) changes the library one expression at
+a time and expects a spec to fail each time. A change that every spec still
+passes is behavior nothing checks. `mutant.yml` lists the classes it mutates:
+
+- what counts as a change: `Engine`, `CollectionComparator`,
+  `CollectionIdentityIndex`, and `NestedComparator`;
+- which columns are compared: `SnapshotNormalizer` and `SnapshotPool`;
+- which history a range or filter reads: `TimelineRange`, `RootVersionPlan`,
+  and `HistoricalFilter`.
+
+The specs for the classes that read the database use tables of their own
+(`spec/support/filter_database.rb`, `spec/support/normalizer_database.rb`), so
+they run in both the core and the association suite.
 
 Mutant does not run every spec for every mutation. It runs the specs whose
 description names the mutated class (`RSpec.describe PaperTrailDiff::Engine`),

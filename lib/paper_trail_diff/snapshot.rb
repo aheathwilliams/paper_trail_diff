@@ -171,7 +171,11 @@ module PaperTrailDiff
 
     #: (type: String, id: untyped, attributes: snapshot_attributes, ?associations: snapshot_associations) -> void
     def initialize(type:, id:, attributes:, associations: {})
-      @type = Support.immutable_copy(type.to_s)
+      unless type.is_a?(String)
+        raise ArgumentError, "record type must be a String, not #{type.inspect}"
+      end
+
+      @type = Support.immutable_copy(type)
       @id = Support.immutable_copy(id)
       @identity = [@type, @id].freeze
       @attributes = normalize_hash(attributes)

@@ -37,7 +37,7 @@ module PaperTrailDiff
 
     #: (untyped) -> untyped
     def trailing_version(relation)
-      @time_range.trailing_scope(relation).reorder(created_at: :asc, id: :asc).first
+      VersionQuery.chronological(@time_range.trailing_scope(relation)).first
     end
 
     #: (Array[untyped]) -> Array[untyped]

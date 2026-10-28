@@ -19,7 +19,8 @@ module PaperTrailDiff
     def initialize: (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped, ?plan: RootVersionPlan?, ?live_endpoint: untyped) -> void
 
     # A record with no versions has no first boundary to resolve, which
-    # is an empty history rather than a bad request.
+    # is an empty history rather than a bad request. Both endpoints are
+    # required, so only `:first` can resolve to nothing; a window has none.
     # : () -> bool
     def unresolved?: () -> bool
 

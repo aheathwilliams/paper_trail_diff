@@ -2,9 +2,17 @@
 # rbs_inline: enabled
 
 module PaperTrailDiff
-  # Arel conditions shared by the version queries that need one row per item.
+  # Query pieces shared by version lookups.
   module VersionQuery
     module_function
+
+    # Oldest first. Ids break ties between versions written in the same
+    # instant, and the timestamp comes first because ids need not follow time:
+    # a UUID key does not.
+    #: (untyped) -> untyped
+    def chronological(relation)
+      relation.reorder(created_at: :asc, id: :asc)
+    end
 
     # Keeps each item's earliest version among those the block also accepts:
     # no other version of the same item that the block accepts is earlier. A

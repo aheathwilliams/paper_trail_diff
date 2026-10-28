@@ -125,7 +125,7 @@ module PaperTrailDiff
 
     #: (untyped) -> Array[untyped]
     def ordered(relation)
-      relation.reorder(created_at: :asc, id: :asc).to_a
+      VersionQuery.chronological(relation).to_a
     end
 
     #: (untyped, untyped) -> Array[String]

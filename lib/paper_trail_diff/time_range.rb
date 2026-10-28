@@ -53,8 +53,7 @@ module PaperTrailDiff
       first_after = VersionQuery.no_earlier_version(table) do |earlier|
         after_end(earlier[:created_at])
       end
-      versions = trailing_scope(relation).where(first_after)
-                                         .reorder(created_at: :asc, id: :asc).to_a
+      versions = VersionQuery.chronological(trailing_scope(relation).where(first_after)).to_a
       first = {} #: Hash[String, untyped]
       versions.each { |version| first[version.item_id.to_s] ||= version }
       first

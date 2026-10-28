@@ -73,6 +73,13 @@ module PaperTrailDiff
     # : () -> Array[untyped]
     def default_mutations: () -> Array[untyped]
 
+    # A Set only makes the lookup in `mutation?` fast; an Array would answer the
+    # same, which is why mutant leaves this alone.
+    # mutant:disable
+    # : (Array[untyped]) -> Set[Array[untyped]]
+    def key_set: (Array[untyped]) -> Set[Array[untyped]]
+
+    # By class name, so a version still matches after its class is reloaded.
     # : (untyped) -> Array[untyped]
     def key: (untyped) -> Array[untyped]
   end

@@ -30,10 +30,11 @@ module PaperTrailDiff
     end
 
     # A record with no versions has no first boundary to resolve, which
-    # is an empty history rather than a bad request.
+    # is an empty history rather than a bad request. Both endpoints are
+    # required, so only `:first` can resolve to nothing; a window has none.
     #: () -> bool
     def unresolved?
-      (symbolic?(@requested_from) && @from.nil?) || (symbolic?(@requested_to) && @to.nil?)
+      !time? && (@from.nil? || @to.nil?)
     end
 
     # A batch may have selected these versions already, in which case reselecting
@@ -97,7 +98,7 @@ module PaperTrailDiff
 
     #: (untyped) -> bool
     def symbolic?(boundary)
-      boundary.is_a?(Symbol)
+      boundary.instance_of?(Symbol)
     end
 
     # Resolving `:first` here keeps callers from depending on the
@@ -118,7 +119,7 @@ module PaperTrailDiff
 
     #: () -> untyped
     def ordered_versions
-      Endpoint.versions(@record).reorder(created_at: :asc, id: :asc)
+      VersionQuery.chronological(Endpoint.versions(@record))
     end
 
     #: (untyped) -> TimeRange?

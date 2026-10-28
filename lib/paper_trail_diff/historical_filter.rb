@@ -69,7 +69,7 @@ module PaperTrailDiff
 
     #: (untyped) -> Integer
     def validate_budget(value)
-      return value if value.is_a?(Integer) && value.positive?
+      return value if value.instance_of?(Integer) && value.positive?
 
       raise ConfigurationError, 'max_filter_versions: must be a positive Integer'
     end
@@ -80,13 +80,13 @@ module PaperTrailDiff
                                                         item_id: ids)
       range = @time_range
       relation = range.scope(relation) if range
-      versions = relation.reorder(created_at: :asc, id: :asc)
-                         .limit(@max_versions - @loaded + 1).to_a
+      # One past the remaining budget is enough to know it was exceeded.
+      versions = VersionQuery.chronological(relation).limit(@max_versions - @loaded + 1)
       account_versions!(versions.length)
       versions.group_by { |version| version.item_id.to_s }
     end
 
-    #: (Array[untyped], untyped) -> bool
+    #: (Array[untyped], untyped) -> boolish
     def held?(versions, closing)
       return true if versions.any? { |version| matches?(version) }
       return false unless closing
@@ -97,9 +97,7 @@ module PaperTrailDiff
     # What each candidate held after its last change in the window.
     #: (Array[String], Hash[String, Array[untyped]]) -> Hash[String, untyped]
     def closing_states(ids, versions)
-      open = ids.reject { |id| versions.fetch(id, []).last&.event.to_s == 'destroy' }
-      return {} if open.empty?
-
+      open = ids.reject { |id| versions.fetch(id, []).last&.event == 'destroy' }
       trailing = trailing_versions(open)
       trailing.merge(live_records(open - trailing.keys))
     end
@@ -118,15 +116,12 @@ module PaperTrailDiff
 
     #: (Array[String]) -> Hash[String, untyped]
     def live_records(ids)
-      return {} if ids.empty?
-
-      @model.base_class.unscoped.where(@model.primary_key => ids).to_a
-            .to_h { |record| [record.id.to_s, record] }
+      @model.unscoped.where(@model.primary_key => ids).to_h { |record| [record.id.to_s, record] }
     end
 
-    #: (untyped) -> bool
+    #: (untyped) -> boolish
     def record_matches?(record)
-      return !!@predicate.call(record) unless @predicate.is_a?(Hash)
+      return @predicate.call(record) unless @predicate.instance_of?(Hash)
 
       @predicate.all? { |name, expected| record.attributes.fetch(name) == expected }
     end
@@ -141,16 +136,16 @@ module PaperTrailDiff
             'narrow the window or explicitly increase the version budget'
     end
 
-    #: (untyped) -> bool
+    #: (untyped) -> boolish
     def matches?(version)
-      if @predicate.is_a?(Hash)
+      if @predicate.instance_of?(Hash)
         return false unless version.object
 
         return attributes_match?(version)
       end
 
       state = version.reify(dup: true)
-      !!(state && @predicate.call(state))
+      state && @predicate.call(state)
     end
 
     #: (untyped) -> bool
@@ -167,7 +162,7 @@ module PaperTrailDiff
                 "historical_filter: #{name} was not recorded in version #{version.id}"
         end
 
-        state.model_class.type_for_attribute(name).cast(state.attributes.fetch(name)) == expected
+        state.attributes.fetch(name) == expected
       end
     end
 

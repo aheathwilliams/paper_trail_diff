@@ -64,9 +64,10 @@ module PaperTrailDiff
 
     #: () -> Array[untyped]
     def destroy_versions
-      versions = @model.paper_trail.version_class.where(
+      destroys = @model.paper_trail.version_class.where(
         item_type: @model.base_class.name, item_id: @identities.map(&:last), event: 'destroy'
-      ).reorder(created_at: :asc, id: :asc)
+      )
+      versions = VersionQuery.chronological(destroys)
       versions.group_by { |version| version.item_id.to_s }.values.map do |history|
         Support.chronological_sort(history).last
       end
