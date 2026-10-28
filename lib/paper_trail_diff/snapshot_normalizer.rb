@@ -152,7 +152,21 @@ module PaperTrailDiff
       primary_keys = primary_keys.map { |key| key.to_s } # rubocop:disable Style/SymbolProc
       ignored = @ignore_policy.attributes_for(path)
       structural = @structural_columns.fetch(path, [])
-      (primary_keys + ignored + relationship_columns(reflections) + structural).uniq.freeze
+      (primary_keys + ignored + skipped_columns(model_class) +
+        relationship_columns(reflections) + structural).uniq.freeze
+    end
+
+    # `has_paper_trail skip:` columns are never written to a version, so history
+    # holds only their defaults. Compared with a live row they would report a
+    # change nobody recorded.
+    #: (untyped) -> Array[String]
+    def skipped_columns(model_class)
+      return [] unless Support.versioned?(model_class)
+
+      entries = Array(model_class.paper_trail_options[:skip]) #: Array[untyped]
+      entries.flat_map do |entry|
+        entry.is_a?(Hash) ? entry.keys.map(&:to_s) : [entry.to_s]
+      end
     end
 
     #: (Array[untyped]) -> Array[String]

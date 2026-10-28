@@ -73,6 +73,12 @@ module PaperTrailDiff
     # : (untyped, Array[untyped], String) -> Array[String]
     def build_excluded_attributes: (untyped, Array[untyped], String) -> Array[String]
 
+    # `has_paper_trail skip:` columns are never written to a version, so history
+    # holds only their defaults. Compared with a live row they would report a
+    # change nobody recorded.
+    # : (untyped) -> Array[String]
+    def skipped_columns: (untyped) -> Array[String]
+
     # : (Array[untyped]) -> Array[String]
     def relationship_columns: (Array[untyped]) -> Array[String]
 
