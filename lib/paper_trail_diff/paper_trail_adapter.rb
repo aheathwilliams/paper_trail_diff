@@ -113,9 +113,9 @@ module PaperTrailDiff
       Instrumentation.instrument('analyze_many', payload) do
         AnalysisBatch.new(
           records,
-          time_range: within.nil? ? nil : TimeRange.new(within),
-          version_scope: version_scope,
+          time_range: within.nil? ? nil : TimeRange.new(within), version_scope: version_scope,
           close_on_current: close_on_current?(close_on, within),
+          context_required: activity && !@association_tree.empty?,
           live_loader: method(:load_batch_endpoints),
           history_preparer: @historical_store.method(:prepare_batch),
           analyzer: batched_root_analyzer(activity, within: within, snapshots: snapshots,

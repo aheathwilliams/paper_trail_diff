@@ -5,8 +5,8 @@ module PaperTrailDiff
   # versions and preparing their association history once for the whole batch
   # rather than once per root.
   class AnalysisBatch
-    # : (Array[untyped], time_range: TimeRange?, live_loader: untyped, history_preparer: untyped, analyzer: untyped, ?version_scope: untyped, ?close_on_current: bool) -> void
-    def initialize: (Array[untyped], time_range: TimeRange?, live_loader: untyped, history_preparer: untyped, analyzer: untyped, ?version_scope: untyped, ?close_on_current: bool) -> void
+    # : (Array[untyped], time_range: TimeRange?, live_loader: untyped, history_preparer: untyped, analyzer: untyped, ?version_scope: untyped, ?close_on_current: bool, ?context_required: bool) -> void
+    def initialize: (Array[untyped], time_range: TimeRange?, live_loader: untyped, history_preparer: untyped, analyzer: untyped, ?version_scope: untyped, ?close_on_current: bool, ?context_required: bool) -> void
 
     # : () -> Hash[identity, Analysis]
     def call: () -> Hash[identity, Analysis]
@@ -16,6 +16,8 @@ module PaperTrailDiff
     @analyzer: untyped
 
     @close_on_current: bool
+
+    @context_required: bool
 
     @history_preparer: untyped
 
@@ -47,7 +49,8 @@ module PaperTrailDiff
     def preparation_range: (Array[untyped]) -> Hash[Symbol, untyped]
 
     # A root with no versions in range has nothing to report, which is an empty
-    # result rather than a failed request.
+    # result rather than a failed request -- unless an activity view closes it
+    # on current state, where its descendants may still have moved.
     # : (untyped, RootVersionPlan) -> Analysis
     def analysis_for: (untyped, RootVersionPlan) -> Analysis
   end

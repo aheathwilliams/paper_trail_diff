@@ -37,6 +37,12 @@ project follows [Semantic Versioning](https://semver.org/).
 - Columns listed in `has_paper_trail skip:` are left out of snapshots. PaperTrail
   never stores them, so comparing history with the live record reported them
   as changed from their default.
+- An activity window in which only selected associations changed now honors
+  `close_on: :current`. It previously raised `IncompleteTimeRangeError` with a
+  message asking for the option that had been passed.
+- `analyze_many(..., activity: true)` reports association activity for a root
+  that has no version of its own in the window, matching `analyze` for the
+  same record. It previously returned an empty analysis.
 - Histories stored with PaperTrail's JSON serializer or a `json`/`jsonb` object
   column no longer report every timestamp as changed when compared with the live
   record. Times are compared at the precision the history stored.

@@ -6,12 +6,13 @@ module PaperTrailDiff
   # versions and preparing their association history once for the whole batch
   # rather than once per root.
   class AnalysisBatch
-    #: (Array[untyped], time_range: TimeRange?, live_loader: untyped, history_preparer: untyped, analyzer: untyped, ?version_scope: untyped, ?close_on_current: bool) -> void
+    #: (Array[untyped], time_range: TimeRange?, live_loader: untyped, history_preparer: untyped, analyzer: untyped, ?version_scope: untyped, ?close_on_current: bool, ?context_required: bool) -> void
     def initialize( # rubocop:disable Metrics/ParameterLists
       records, time_range:, live_loader:, history_preparer:, analyzer:, version_scope: nil,
-      close_on_current: false
+      close_on_current: false, context_required: false
     )
       @records = records
+      @context_required = context_required
       @time_range = time_range
       @version_scope = validated_scope(version_scope)
       @close_on_current = close_on_current
@@ -26,7 +27,8 @@ module PaperTrailDiff
       loaded = @live_loader.call(records)
       selected = BatchedRootVersions.new(
         records, time_range: @time_range, version_scope: @version_scope,
-                 live_endpoints: (loaded if @close_on_current)
+                 live_endpoints: (loaded if @close_on_current),
+                 context_required: @context_required
       ).call
       prepare(records, selected, loaded)
       records.to_h do |record|
@@ -42,6 +44,7 @@ module PaperTrailDiff
     # @rbs @time_range: TimeRange?
     # @rbs @version_scope: untyped
     # @rbs @close_on_current: bool
+    # @rbs @context_required: bool
     # @rbs @live_loader: untyped
     # @rbs @history_preparer: untyped
     # @rbs @analyzer: untyped
@@ -92,10 +95,11 @@ module PaperTrailDiff
     end
 
     # A root with no versions in range has nothing to report, which is an empty
-    # result rather than a failed request.
+    # result rather than a failed request -- unless an activity view closes it
+    # on current state, where its descendants may still have moved.
     #: (untyped, RootVersionPlan) -> Analysis
     def analysis_for(record, plan)
-      return Analysis.empty if plan.empty?
+      return Analysis.empty if plan.empty? && !plan.closing_record
 
       @analyzer.call(record, plan)
     end

@@ -49,6 +49,15 @@ module PaperTrailDiff
         steps = [] #: Array[[untyped, untyped]]
         new(versions: versions, steps: steps)
       end
+
+      # No root version to report or replay: only descendants moved, and the
+      # live record is the root's state throughout.
+      #: (untyped) -> RootVersionPlan
+      def closing_on(record)
+        versions = [] #: Array[untyped]
+        steps = [] #: Array[[untyped, untyped]]
+        new(versions: versions, steps: steps, closing_record: record)
+      end
     end
 
     #: (versions: Array[untyped], steps: Array[[untyped, untyped]], ?context_version: untyped, ?reconstruction_versions: Array[untyped]?, ?mutations: Array[untyped]?, ?closing_record: untyped, ?closes_on_destroy: bool) -> void

@@ -6,9 +6,13 @@ module PaperTrailDiff
   # queries. Only the range forms that mean the same thing for every root are
   # supported: a shared wall-clock window, or each root's own whole history.
   class BatchedRootVersions
-    #: (Array[untyped], time_range: TimeRange?, ?version_scope: untyped, ?live_endpoints: Hash[Array[String], untyped]?) -> void
-    def initialize(records, time_range:, version_scope: nil, live_endpoints: nil)
+    #: (Array[untyped], time_range: TimeRange?, ?version_scope: untyped, ?live_endpoints: Hash[Array[String], untyped]?, ?context_required: bool) -> void
+    def initialize(records, time_range:, version_scope: nil, live_endpoints: nil,
+                   context_required: false)
       @records = records
+      # An activity view needs a root to reconstruct from even in a window with
+      # no root version, exactly as a single-record activity timeline does.
+      @context_required = context_required
       @time_range = time_range
       @version_scope = version_scope
       @live_endpoints = live_endpoints
@@ -32,6 +36,7 @@ module PaperTrailDiff
     # @rbs @time_range: TimeRange?
     # @rbs @version_scope: untyped
     # @rbs @live_endpoints: Hash[Array[String], untyped]?
+    # @rbs @context_required: bool
 
     #: (untyped, Array[untyped], Hash[Array[String], RootVersionPlan]) -> void
     def select_model(model_class, records, selected)
@@ -64,6 +69,7 @@ module PaperTrailDiff
         selected: chosen ? in_range.select { |version| chosen.include?(version.id) } : in_range,
         after_range: after_range,
         windowed: !@time_range.nil?,
+        context_required: @context_required,
         filtered: !@version_scope.nil?,
         live_endpoint: live_endpoint
       ).call

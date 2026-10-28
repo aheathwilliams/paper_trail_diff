@@ -44,6 +44,11 @@ module PaperTrailDiff
     # : () -> RootVersionPlan
     def self.empty: () -> RootVersionPlan
 
+    # No root version to report or replay: only descendants moved, and the
+    # live record is the root's state throughout.
+    # : (untyped) -> RootVersionPlan
+    def self.closing_on: (untyped) -> RootVersionPlan
+
     # : (versions: Array[untyped], steps: Array[[untyped, untyped]], ?context_version: untyped, ?reconstruction_versions: Array[untyped]?, ?mutations: Array[untyped]?, ?closing_record: untyped, ?closes_on_destroy: bool) -> void
     def initialize: (versions: Array[untyped], steps: Array[[ untyped, untyped ]], ?context_version: untyped, ?reconstruction_versions: Array[untyped]?, ?mutations: Array[untyped]?, ?closing_record: untyped, ?closes_on_destroy: bool) -> void
 

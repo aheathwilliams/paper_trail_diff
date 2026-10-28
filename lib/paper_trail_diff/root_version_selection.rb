@@ -67,13 +67,16 @@ module PaperTrailDiff
     end
 
     # An activity view still needs a root to reconstruct from even when no root
-    # version falls inside the window, because descendants may have moved.
+    # version falls inside the window, because descendants may have moved. With
+    # no later version, a window closing on current state reads the root from
+    # the live record, which is then its state throughout the window.
     #: () -> RootVersionPlan
     def without_selection
       return RootVersionPlan.empty unless @context_required
       if @after_range
         return RootVersionPlan.contiguous([@after_range], context_version: @after_range)
       end
+      return RootVersionPlan.closing_on(@live_endpoint) if @live_endpoint
 
       raise IncompleteTimeRangeError, INCOMPLETE
     end
