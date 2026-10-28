@@ -37,7 +37,14 @@ module PaperTrailDiff
     # : (untyped, tree: AssociationTree, path: String) -> snapshot_attributes
     def attributes_for: (untyped, tree: AssociationTree, path: String) -> snapshot_attributes
 
+    # Same exclusions as AR normalization, applied to an already typed state.
+    # : (PreparedRecordState, tree: AssociationTree, path: String, ?incoming: untyped, ?associations: snapshot_associations) -> RecordSnapshot
+    def from_state: (PreparedRecordState, tree: AssociationTree, path: String, ?incoming: untyped, ?associations: snapshot_associations) -> RecordSnapshot
+
     private
+
+    # : (String, RecordSnapshot) -> RecordSnapshot
+    def pool_state: (String, RecordSnapshot) -> RecordSnapshot
 
     @excluded_attributes: Hash[Array[untyped], Array[String]]
 
@@ -65,6 +72,12 @@ module PaperTrailDiff
 
     # : (untyped, Array[untyped], String) -> Array[String]
     def build_excluded_attributes: (untyped, Array[untyped], String) -> Array[String]
+
+    # `has_paper_trail skip:` columns are never written to a version, so history
+    # holds only their defaults. Compared with a live row they would report a
+    # change nobody recorded.
+    # : (untyped) -> Array[String]
+    def skipped_columns: (untyped) -> Array[String]
 
     # : (Array[untyped]) -> Array[String]
     def relationship_columns: (Array[untyped]) -> Array[String]

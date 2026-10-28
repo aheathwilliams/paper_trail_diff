@@ -5,11 +5,17 @@ module PaperTrailDiff
   class ActivityEventRecordResolver
     RECORD_AFTER_HANDLERS: untyped
 
-    # : (?record_transition: untyped) -> void
-    def initialize: (?record_transition: untyped) -> void
+    # : (?record_transition: untyped, ?prepared_record_after: untyped) -> void
+    def initialize: (?record_transition: untyped, ?prepared_record_after: untyped) -> void
+
+    # : (untyped, ?direct: bool) -> untyped
+    def record_after: (untyped, ?direct: bool) -> untyped
+
+    # : (untyped) -> [bool, untyped]
+    def direct_after: (untyped) -> [ bool, untyped ]
 
     # : (untyped) -> untyped
-    def record_after: (untyped) -> untyped
+    def fallback_record_after: (untyped) -> untyped
 
     # : (untyped) -> ActivitySnapshotDelta?
     def snapshot_delta: (untyped) -> ActivitySnapshotDelta?
@@ -30,7 +36,17 @@ module PaperTrailDiff
 
     private
 
+    @direct_loader: DirectRecordStateLoader
+
+    @prepared_record_after: untyped
+
     @record_transition: untyped
+
+    # : (untyped) -> PreparedRecordState?
+    def direct_record_after: (untyped) -> PreparedRecordState?
+
+    # : (untyped) -> untyped
+    def prepared_changeset: (untyped) -> untyped
 
     # : (untyped, untyped) -> Hash[untyped, untyped]
     def after_attributes: (untyped, untyped) -> Hash[untyped, untyped]

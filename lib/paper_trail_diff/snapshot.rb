@@ -184,6 +184,15 @@ module PaperTrailDiff
       RecordReference.new(type: type, id: id)
     end
 
+    # A copy holding a different state for one association.
+    #: (String, AssociationSnapshot) -> RecordSnapshot
+    def with_association(name, association)
+      self.class.new(
+        type: type, id: id, attributes: attributes,
+        associations: associations.merge(name => association)
+      )
+    end
+
     #: () -> Hash[Symbol, untyped]
     def to_h
       value = {

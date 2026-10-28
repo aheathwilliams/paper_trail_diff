@@ -44,7 +44,9 @@ module PaperTrailDiff
     def contiguous_plan: (untyped) -> RootVersionPlan
 
     # An activity view still needs a root to reconstruct from even when no root
-    # version falls inside the window, because descendants may have moved.
+    # version falls inside the window, because descendants may have moved. With
+    # no later version, a window closing on current state reads the root from
+    # the live record, which is then its state throughout the window.
     # : () -> RootVersionPlan
     def without_selection: () -> RootVersionPlan
 
@@ -82,6 +84,11 @@ module PaperTrailDiff
     # produced, so it is preferred over anything after the range.
     # : () -> untyped
     def revealing_version: () -> untyped
+
+    # A window with nothing after its last selected mutation can only close on
+    # that mutation being the record's destruction.
+    # : (untyped) -> bool
+    def closes_on_destroy?: (untyped) -> bool
 
     # A range closing on the record's own destruction needs no later version:
     # nothing can follow it, so demanding one would reject the range forever.

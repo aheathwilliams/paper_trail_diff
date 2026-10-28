@@ -202,8 +202,8 @@ RSpec.describe 'diff traversal' do
         association_included record_included attribute_included
       ]
     )
-    expect(created.map(&:state).compact).to all(eq(:after))
-    expect(destroyed.map(&:state).compact).to all(eq(:before))
+    expect(created.filter_map(&:state)).to all(eq(:after))
+    expect(destroyed.filter_map(&:state)).to all(eq(:before))
     expect(created.first.value.to_h[:to]).to include(type: 'Article', id: 1)
     expect(created.fetch(1).record_path).to eq([])
     expect(created.fetch(4).record_path.map(&:type)).to eq(['Comment'])

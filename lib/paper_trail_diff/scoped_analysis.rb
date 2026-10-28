@@ -20,15 +20,19 @@ module PaperTrailDiff
     # rows again to attach its own presentation data. A destroyed root has no
     # record to hand back, so `roots` and `unreachable` stay complementary.
     attr_reader :roots #: Array[untyped]
+    # Requested missing-root analyses, kept separate because live SQL conditions
+    # cannot prove which deleted rows matched. nil means no destroy history.
+    attr_reader :deleted #: Hash[Array[String], Analysis?]
 
-    #: (analyses: Hash[Array[String], Analysis], unreachable: Array[Array[String]], ?roots: Array[untyped]) -> void
-    def initialize(analyses:, unreachable:, roots: [])
+    #: (analyses: Hash[Array[String], Analysis], unreachable: Array[Array[String]], ?roots: Array[untyped], ?deleted: Hash[Array[String], Analysis?]) -> void
+    def initialize(analyses:, unreachable:, roots: [], deleted: {})
       @analyses = analyses
       @unreachable = Support.immutable_copy(unreachable)
       # Not deep-copied: these are the caller's own model instances, and
       # freezing them would make an ordinary `record.title` on a lazy attribute
       # fail. The array itself is frozen so the collection cannot be reshaped.
       @roots = roots.dup.freeze
+      @deleted = Support.immutable_copy(deleted)
       freeze
     end
 

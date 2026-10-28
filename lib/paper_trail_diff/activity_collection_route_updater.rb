@@ -28,7 +28,7 @@ module PaperTrailDiff
           membership_preserved: membership_preserved
         )
       )
-      updated_snapshot = replace_association(snapshot, name, updated_association)
+      updated_snapshot = snapshot.with_association(name, updated_association)
       parent_path = depth.zero? ? '' : change.route.fetch(depth - 1).fetch(3)
       updated_snapshot = @pool.record(parent_path, updated_snapshot) unless parent_path.empty?
       [updated_snapshot, true]
@@ -113,16 +113,6 @@ module PaperTrailDiff
 
       owner_id = @relationship.owner_id(membership_record, reflection, state: :after)
       association.position_for_id(owner_id)
-    end
-
-    #: (RecordSnapshot, String, AssociationSnapshot) -> RecordSnapshot
-    def replace_association(snapshot, name, association)
-      RecordSnapshot.new(
-        type: snapshot.type,
-        id: snapshot.id,
-        attributes: snapshot.attributes,
-        associations: snapshot.associations.merge(name => association)
-      )
     end
   end
 end

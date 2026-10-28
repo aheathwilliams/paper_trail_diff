@@ -7,12 +7,77 @@ mise exec -- bundle install
 mise exec -- bundle exec rake
 ```
 
+The default task runs the core specs without PT-AT loaded, the association specs
+in a separate process, RuboCop (with the rubocop-performance and rubocop-rspec
+plugins), generated-signature verification, and Steep.
+Ruby blocks in the README, quickstart, and API reference marked with
+`<!-- executable:... -->` run inside those specs, so documented examples stay
+correct.
+
+For reporting workloads, query counts, reconstruction cost, and memory readings,
+see [Reporting performance](performance.md). Those measurements run separately
+from the correctness suite and have no timing-based CI gate.
+
 CI keeps the Ruby 3.1–4.0 and PaperTrail 16/17 compatibility matrix on SQLite,
 including Windows runs. Separate Linux jobs run both core and association suites
 on PostgreSQL 17, MySQL 8.4, and SQL Server 2019 and 2022 with Ruby 4.0 and
 PaperTrail 17.
 The SQL jobs exercise the same regressions, including joined-column ordering,
 duplicate roots, pagination, and historical association reconstruction.
+
+## Consistency checks
+
+`spec/association/consistency_spec.rb` and `spec/integration/consistency_spec.rb`
+build seeded, generated histories: root edits, checkpoints, and child creates,
+edits, and deletes. For each one they check that every route to the same answer
+agrees: `analyze`, `analyze_many`, and `analyze_scope`; checkpoint and activity
+modes; `compare` and `timeline` against `analyze`; and that activity steps
+chain into the final state. They run over random windows as well as the whole
+history, with integer and string `versions.item_id`, YAML and JSON history, and
+a `has_paper_trail skip:` column. When one fails, its seed reproduces it. Add a
+variant here when a bug turns out to depend on a schema or configuration.
+
+## Mutation testing
+
+[Mutant](https://github.com/mbj/mutant) changes the comparison code one
+expression at a time and expects a spec to fail each time. A change that every
+spec still passes is behavior nothing checks. `mutant.yml` lists the classes it
+mutates: `Engine`, `CollectionComparator`, `CollectionIdentityIndex`, and
+`NestedComparator`, which decide what counts as a change. It runs the
+association suite, which reaches all of their paths.
+
+Mutant needs Ruby 3.3 or newer, so it has its own bundle:
+
+```console
+BUNDLE_GEMFILE=gemfiles/mutant.gemfile mise exec -- bundle install
+mise exec -- bundle exec rake mutant
+```
+
+Pass a subject to mutate one class, and `--since main` to mutate only what a
+branch changed:
+
+```console
+BUNDLE_GEMFILE=gemfiles/mutant.gemfile mise exec -- bundle exec mutant run 'PaperTrailDiff::Engine*'
+BUNDLE_GEMFILE=gemfiles/mutant.gemfile mise exec -- bundle exec mutant run --since main
+```
+
+When a mutation survives, either add the spec that would catch it, or, if the
+mutated code means the same thing, simplify the code to that form. Reserve a
+`mutant:disable` comment for a method whose mutations all mean the same thing,
+and say why next to it. Mutant forks a worker per CPU; `spec/support/mutant_hooks.rb`
+gives each worker its own copy of the SQLite fixture database.
+
+## Test clock
+
+The specs build time windows from `Time.now` around versions they have just
+written, so they need a clock that never runs backwards. Virtualized hosts,
+WSL2 in particular, step the wall clock back by hundreds of milliseconds when
+they resynchronize, which made window-based specs fail at random.
+`spec/support/monotonic_clock.rb` therefore makes `Time.now` strictly
+increasing, in whole microseconds, for the test process. ActiveRecord
+timestamps, PaperTrail's `created_at`, and windows built from `Time.now` all
+read it, so they stay consistent however the host clock moves. It affects only
+the test process; the gem itself reads the ordinary clock.
 
 ## Other databases locally
 
@@ -65,3 +130,17 @@ before running Steep. Unstaged generated changes therefore fail the gate even
 when they are correct. Review and stage matching source/signature changes before
 running the complete gate. The Steep wrapper also fails on internal errors even
 if Steep returns exit status zero.
+
+## Releasing
+
+Tags matching `v*` publish through RubyGems trusted publishing. Never add a
+long-lived RubyGems API key. Before tagging:
+
+1. Update `PaperTrailDiff::VERSION` and replace `Unreleased` in the changelog
+   with that version and the release date.
+2. Run `mise exec -- bundle exec rake release:preflight`. It runs the full gate,
+   checks that the tree is clean and pushed, that the Appraisal gemfiles are
+   current, and that the changelog names the version, then builds the gem. It
+   does not tag, push, or publish.
+3. Configure the RubyGems trusted publisher for `release.yml` and the `release`
+   environment.

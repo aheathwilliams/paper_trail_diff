@@ -1,0 +1,33 @@
+# Generated from lib/paper_trail_diff/prepared_state_association_reader.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Reads plain direct edges without creating AR records for their members.
+  class PreparedStateAssociationReader
+    # : (PreparedRecordIndex, untyped) -> void
+    def initialize: (PreparedRecordIndex, untyped) -> void
+
+    # : (PreparedRecordState, untyped, untyped) -> [bool, Array[PreparedRecordState]]
+    def call: (PreparedRecordState, untyped, untyped) -> [ bool, Array[PreparedRecordState] ]
+
+    private
+
+    @edges: untyped
+
+    @records: PreparedRecordIndex
+
+    # : (untyped) -> bool
+    def supported?: (untyped) -> bool
+
+    # : (PreparedRecordState, untyped, untyped) -> [bool, Array[PreparedRecordState]]
+    def children: (PreparedRecordState, untyped, untyped) -> [ bool, Array[PreparedRecordState] ]
+
+    # : (untyped, PreparedRecordState) -> Array[untyped]
+    def ids_for: (untyped, PreparedRecordState) -> Array[untyped]
+
+    # : (PreparedRecordState, PreparedRecordState, untyped) -> bool
+    def member?: (PreparedRecordState, PreparedRecordState, untyped) -> bool
+
+    # : (PreparedRecordState, untyped, untyped) -> bool
+    def matching_type?: (PreparedRecordState, untyped, untyped) -> bool
+  end
+end

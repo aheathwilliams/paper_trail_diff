@@ -92,6 +92,18 @@ module PaperTrailDiff
       model_class.respond_to?(:paper_trail_options) && !model_class.paper_trail_options.nil?
     end
 
+    # `versions.item_id` is often a string column -- PaperTrail's setup for UUID
+    # keys -- while the model's own key is an integer. An id read from history
+    # is cast to the key's type, or the same record read once from history and
+    # once from its live row would count as two.
+    #: (untyped, untyped) -> untyped
+    def record_id(model_class, id)
+      key = model_class.primary_key
+      return id if id.nil? || !key.is_a?(String)
+
+      model_class.type_for_attribute(key).cast(id)
+    end
+
     #: (untyped) -> bool
     def sequential_id?(id)
       id.is_a?(Integer) || id.to_s.match?(/\A\d+\z/)

@@ -36,6 +36,8 @@ module PaperTrailDiff
 
     #: (untyped, untyped, state: Symbol) -> untyped
     def event_attribute(record, name, state:)
+      return record.attributes[name.to_s] if record.is_a?(PreparedRecordState)
+
       if record.is_a?(ActivitySnapshotDelta)
         return state == :before ? record.before_value(name) : record.after_value(name)
       end

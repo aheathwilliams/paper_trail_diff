@@ -37,17 +37,15 @@ module PaperTrailDiff
     #: () -> ActivityBoundary
     def source_boundary = from_boundary
 
+    # The same shape as `ActivityStep#to_h`, so a consumer reads both step
+    # types alike; each boundary carries its own `version_id`.
     #: (?metadata: bool) -> Hash[Symbol, untyped]
     def to_h(metadata: false)
-      value = {
-        from_version_id: from_version.id,
-        to_version_id: to_version&.id,
-        to_boundary: to_boundary.to_h(metadata: metadata),
+      {
+        from: from_boundary.to_h(metadata: metadata),
+        to: to_boundary.to_h(metadata: metadata),
         diff: diff.to_h
       }
-      return value unless metadata
-
-      value.merge(from_boundary: from_boundary.to_h(metadata: true))
     end
   end
 end

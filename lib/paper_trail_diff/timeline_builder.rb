@@ -48,7 +48,8 @@ module PaperTrailDiff
       versions = plan.versions
       @snapshotter.prepare(@record, versions) if @snapshotter.respond_to?(:prepare)
       steps = build_steps(plan)
-      [steps, @snapshotter.call(versions.first), @snapshotter.call(plan.final_endpoint)]
+      final = plan.closes_on_destroy ? nil : @snapshotter.call(plan.final_endpoint)
+      [steps, @snapshotter.call(versions.first), final]
     end
 
     #: (RootVersionPlan) -> Array[Step]

@@ -26,11 +26,8 @@ module PaperTrailDiff
   # window. `where(status: 'published')` selects what is published now, which is
   # not the same set as what was published while the window was open.
   class ScopedRootSelection
-    # How many candidates are reconstructed per pass when a historical filter is
-    # given. Large enough that an ordinary population is one or two queries,
-    # small enough that an oversized one is abandoned early rather than read
-    # whole.
-    CANDIDATE_BATCH = 250
+    PAGE_SIZE = 250
+    private_constant :PAGE_SIZE
 
     # A plain class rather than Data.define, which arrived in Ruby 3.2 while this
     # gem supports 3.1.
@@ -46,18 +43,25 @@ module PaperTrailDiff
       end
     end
 
-    #: (untyped, time_range: TimeRange?, limit: Integer, ?historical_filter: untyped) -> void
-    def initialize(scope, time_range:, limit:, historical_filter: nil)
+    #: (untyped, time_range: TimeRange?, limit: Integer, ?historical_filter: untyped, ?max_filter_versions: Integer) -> void
+    def initialize(scope, time_range:, limit:, historical_filter: nil,
+                   max_filter_versions: HistoricalFilter::DEFAULT_VERSION_LIMIT)
       @scope = normalize_scope(scope)
       @time_range = time_range
       @limit = validate_limit(limit)
-      @historical_filter = validate_filter(historical_filter)
+      @historical_filter = unless historical_filter.nil?
+                             HistoricalFilter.new(base_class, predicate: historical_filter,
+                                                              time_range: time_range, limit: @limit,
+                                                              max_versions: max_filter_versions)
+                           end
     end
 
     #: () -> Result
     def call
+      return database_selection if @historical_filter.nil? && comparable_keys?
+
       candidates = versioned_ids
-      candidates = historically_matching(candidates) if @historical_filter && candidates.any?
+      candidates = @historical_filter.call(candidates) if @historical_filter && candidates.any?
       return Result.new(records: [], unreachable: []) if candidates.empty?
 
       live = live_ids(candidates)
@@ -73,6 +77,46 @@ module PaperTrailDiff
     # @rbs @time_range: TimeRange?
     # @rbs @limit: Integer
     # @rbs @historical_filter: untyped
+
+    # Leaves the candidate set in the database. Plucking every root changed in
+    # the window would cost memory and a statement proportional to all activity
+    # in the window -- not to the relation or `limit:` -- so a report on one
+    # record could read every id in a busy table. A subquery keeps the work
+    # bounded by what the relation and the deletions actually contain.
+    #: () -> Result
+    def database_selection
+      candidates = window_versions.select(:item_id)
+      Result.new(
+        records: selected_records(candidates),
+        unreachable: missing_ids.map { |id| identity(id) }.freeze
+      )
+    end
+
+    # Comparing the two columns in SQL needs them to share a type: PostgreSQL
+    # rejects an integer key against a string item_id outright.
+    #: () -> bool
+    def comparable_keys?
+      return false unless primary_key.is_a?(String)
+
+      item_id = version_class.columns_hash['item_id']&.type
+      key = base_class.columns_hash[primary_key]&.type
+      !item_id.nil? && item_id == key
+    end
+
+    # Changed in the window but without a row, found with an anti-join instead
+    # of comparing two plucked lists.
+    #: () -> Array[String]
+    def missing_ids
+      live = base_class.unscoped.select(primary_key)
+      window_versions.where.not(item_id: live).distinct.pluck(:item_id).map(&:to_s).uniq.sort
+    end
+
+    #: () -> untyped
+    def window_versions
+      relation = version_class.where(item_type: item_type)
+      range = @time_range
+      range ? range.scope(relation) : relation
+    end
 
     # Accepts a model class as readily as a relation: `Article` and
     # `Article.where(...)` both name a population, and `all` is what makes them
@@ -90,83 +134,6 @@ module PaperTrailDiff
             "scope: #{relation.model.name} is not versioned, so it has no history to select from"
     end
 
-    # A historical filter is a callable judging one reconstructed state, so it
-    # is checked up front rather than failing partway through a population.
-    #: (untyped) -> untyped
-    def validate_filter(filter)
-      return filter if filter.nil? || filter.respond_to?(:call)
-
-      raise ConfigurationError, 'historical_filter: must respond to call'
-    end
-
-    # Which candidates held a state the filter accepts at some boundary inside
-    # the window. This is the answer a relation cannot give: a relation reads
-    # the live row, so it cannot speak for a record that has since changed out
-    # of the population, nor for one that no longer exists at all.
-    #
-    # A record matches if it matched at *any* in-window boundary, not only at
-    # the ends. "Category 10 during July" is most naturally read as "was 10 at
-    # some point in July", and a record that was 10 only mid-month would be
-    # missed by either endpoint alone.
-    #
-    # What the filter sees is governed by the same rule as everything else
-    # here: a version records the state before its own event, so these are the
-    # states the record held *entering* each recorded change inside the window.
-    # A value the record took on with its last in-window change is therefore
-    # visible only if something later recorded it.
-    #: (Array[String]) -> Array[String]
-    def historically_matching(candidates)
-      matched = [] #: Array[String]
-      candidates.each_slice(CANDIDATE_BATCH) do |slice|
-        versions = candidate_versions(slice)
-        slice.each do |id|
-          next unless historically_matches?(versions.fetch(id, []))
-
-          matched << id
-          # Stop the moment the answer is known to exceed what was asked for.
-          # Continuing would reconstruct the rest of the population to build a
-          # result that is going to be refused anyway. Raising here rather than
-          # breaking is what keeps the early exit honest: a break would end the
-          # scan while later candidates might still have been selected, and the
-          # caller would get a quietly short report instead of a refusal.
-          raise_over_limit if matched.length > @limit
-        end
-      end
-      matched
-    end
-
-    #: () -> void
-    def raise_over_limit
-      raise BatchLimitExceededError,
-            "historical_filter: matched more than #{@limit} roots; narrow the window " \
-            'or the filter, or raise limit: to the population you intend to analyze'
-    end
-
-    # One query per slice rather than one for the whole population: the filter
-    # can only be answered by reconstructing, so the work is bounded by reading
-    # in passes and stopping as soon as the limit decides the outcome.
-    #
-    # One query for the slice's in-window versions. Reification happens lazily
-    # as each root is judged; absent create states are not passed to the filter.
-    #: (Array[String]) -> Hash[String, Array[untyped]]
-    def candidate_versions(candidates)
-      relation = version_class.where(item_type: item_type, item_id: candidates)
-      range = @time_range
-      relation = range.scope(relation) if range
-      relation.reorder(created_at: :asc, id: :asc)
-              .group_by { |version| version.item_id.to_s }
-    end
-
-    # Reify only as the predicate consumes each root; eagerly reconstructing a
-    # whole slice defeats the limit even when only a few roots are requested.
-    #: (Array[untyped]) -> bool
-    def historically_matches?(versions)
-      versions.any? do |version|
-        state = version.reify(dup: true)
-        state && @historical_filter.call(state)
-      end
-    end
-
     #: (Integer) -> Integer
     def validate_limit(limit)
       return limit if limit.is_a?(Integer) && limit.positive?
@@ -179,25 +146,24 @@ module PaperTrailDiff
     # version table alone so that it does not depend on rows still existing.
     #: () -> Array[String]
     def versioned_ids
-      relation = version_class.where(item_type: item_type)
-      range = @time_range
-      relation = range.scope(relation) if range
-      relation.distinct.pluck(:item_id).map(&:to_s).uniq
+      window_versions.distinct.pluck(:item_id).map(&:to_s).uniq
     end
 
     # Which of those candidates still have a row, asked without the relation's
     # conditions so that "filtered out" and "no longer exists" stay separable.
     #: (Array[String]) -> Array[String]
     def live_ids(candidates)
-      base_class.unscoped.where(primary_key => candidates).pluck(primary_key).map(&:to_s)
+      candidates.each_slice(PAGE_SIZE).flat_map do |slice|
+        base_class.unscoped.where(primary_key => slice).pluck(primary_key).map(&:to_s)
+      end
     end
 
     # Deduplicate records rather than adding SQL DISTINCT: an otherwise valid
     # relation may order by joined columns or select a PostgreSQL json column.
     # Read bounded pages until the relation ends or too many unique roots appear.
-    #: (Array[String]) -> Array[untyped]
+    #: (untyped) -> Array[untyped]
     def selected_records(live)
-      return [] if live.empty?
+      return [] if live.is_a?(Array) && live.empty?
 
       records = {} #: Hash[untyped, untyped]
       consumed = 0
@@ -205,19 +171,21 @@ module PaperTrailDiff
         page = record_page(live, consumed)
         page.each { |record| records[record.id] ||= record }
         reject_oversized!(records.length)
-        break if page.length < @limit + 1
+        break if page.length < PAGE_SIZE
 
         consumed += page.length
       end
       records.values.freeze
     end
 
-    #: (Array[String], Integer) -> Array[untyped]
+    #: (untyped, Integer) -> Array[untyped]
     def record_page(live, consumed)
       count = page_limit(consumed)
       return [] if count.zero?
 
-      ordered_scope.where(primary_key => live)
+      # An id list or a candidate subquery; both read the same way in SQL.
+      conditions = { primary_key => live } #: Hash[untyped, untyped]
+      ordered_scope.where(conditions)
                    .offset((@scope.offset_value || 0) + consumed).limit(count).to_a
     end
 
@@ -233,7 +201,7 @@ module PaperTrailDiff
     #: (Integer) -> Integer
     def page_limit(consumed)
       remaining = @scope.limit_value
-      [remaining ? remaining - consumed : @limit + 1, @limit + 1].min
+      [remaining ? remaining - consumed : PAGE_SIZE, PAGE_SIZE].min
     end
 
     #: (Integer) -> void

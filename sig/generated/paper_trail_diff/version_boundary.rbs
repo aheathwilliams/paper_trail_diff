@@ -1,0 +1,23 @@
+# Generated from lib/paper_trail_diff/version_boundary.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Places one version relative to another on the recorded timeline.
+  module VersionBoundary
+    # Whether `candidate` was recorded at or after `boundary`. Versions sharing
+    # a timestamp are ordered by id, which reflects insertion order only for
+    # sequential ids in one version table; any other tie cannot be ordered, and
+    # guessing would place a change on an arbitrary side of the boundary. A
+    # bare instant has no position among same-time versions, so it keeps them.
+    # : (untyped, untyped) -> bool
+    def self?.at_or_after?: (untyped, untyped) -> bool
+
+    # : (untyped) -> bool
+    def self?.version_record?: (untyped) -> bool
+
+    # : (untyped, untyped) -> bool
+    def self?.same_version?: (untyped, untyped) -> bool
+
+    # : (untyped, untyped) -> bool
+    def self?.orderable_tie?: (untyped, untyped) -> bool
+  end
+end

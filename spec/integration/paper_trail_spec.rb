@@ -97,8 +97,8 @@ RSpec.describe PaperTrailDiff do
       end.to raise_error(PaperTrailDiff::ReversedEndpointsError, /chronological order/)
     end
 
-    it 'resolves :first and :last endpoints for a whole batch' do
-      endpoints = 3.times.map do |index|
+    it 'resolves :first endpoints for a whole batch' do
+      endpoints = Array.new(3) do |index|
         article = CoreArticle.create!(title: "Draft #{index}", internal_note: 'stable')
         article.update!(title: "Published #{index}")
         article
@@ -129,7 +129,7 @@ RSpec.describe PaperTrailDiff do
       expect(results.fetch(PaperTrailDiff::Endpoint.identity(article))).not_to be_empty
 
       # A symbol carries no identity, so something must anchor it.
-      expect { described_class.compare_many([{ from: :first, to: :last }]) }
+      expect { described_class.compare_many([{ from: :first, to: :first }]) }
         .to raise_error(PaperTrailDiff::ConfigurationError, /name a record/)
       expect { described_class.compare_many([{ from: :beginning, to: article }]) }
         .to raise_error(PaperTrailDiff::ConfigurationError, /unsupported boundary/)
@@ -230,7 +230,7 @@ RSpec.describe PaperTrailDiff do
 
   describe '.compare_many' do
     it 'matches individual comparisons and batches current root loading' do
-      endpoints = 3.times.map do |index|
+      endpoints = Array.new(3) do |index|
         article = CoreArticle.create!(title: "Draft #{index}", internal_note: 'stable')
         article.update!(title: "Published #{index}")
         [article.versions.reload.last, article]
@@ -255,7 +255,7 @@ RSpec.describe PaperTrailDiff do
     end
 
     it 'preloads the selected live association once for the whole batch' do
-      articles = 3.times.map do |index|
+      articles = Array.new(3) do |index|
         article = CoreArticle.create!(title: "Article #{index}", internal_note: 'stable')
         article.comments.create!(body: "Comment #{index}")
         article
@@ -276,7 +276,7 @@ RSpec.describe PaperTrailDiff do
     end
 
     it 'reuses fully preloaded endpoints without live-record queries' do
-      articles = 3.times.map do |index|
+      articles = Array.new(3) do |index|
         article = CoreArticle.create!(title: "Preloaded #{index}", internal_note: 'stable')
         article.comments.create!(body: "Comment #{index}")
         article
@@ -400,7 +400,7 @@ RSpec.describe PaperTrailDiff do
       article, _window, users = attributed_history
       PaperTrail.request(whodunnit: nil) { article.update!(title: 'Trailing') }
 
-      steps = described_class.timeline(article, from: :first, to: :last, version_scope: users)
+      steps = described_class.timeline(article, version_scope: users)
 
       # Each selected mutation is reported against the version that immediately
       # followed it, so the system edit between Alice and Bob is left out rather
@@ -411,15 +411,20 @@ RSpec.describe PaperTrailDiff do
         .to eq([{ from: 'Start', to: 'By Alice' }, { from: 'By system', to: 'After window' }])
     end
 
-    it 'omits a selected mutation whose outcome no later version records' do
+    it 'reads the newest selected mutation from current state unless a version ends the range' do
       article, _window, users = attributed_history
+      bobs_version = article.versions.reload.last
 
-      steps = described_class.timeline(article, from: :first, to: :last, version_scope: users)
+      through_now = described_class.timeline(article, version_scope: users)
+      through_version = described_class.timeline(article, from: :first, to: bobs_version,
+                                                          version_scope: users)
 
-      # Bob's update is the newest version, so nothing has yet stored the state
-      # it produced. An unfiltered timeline has the same blind spot: `to:` is a
+      # Bob's update is the newest version, so only the live record holds what it
+      # produced. A range ending at a version has no such state: `to:` is a
       # boundary, never a reported mutation.
-      expect(steps.map { |step| step.from_version.whodunnit }).to eq(['alice'])
+      expect(through_now.map { |step| step.from_version.whodunnit }).to eq(%w[alice bob])
+      expect(through_now.last.to_boundary.kind).to eq(:current)
+      expect(through_version.map { |step| step.from_version.whodunnit }).to eq(['alice'])
     end
 
     it 'agrees with the batched form, which selects versions by a different path' do
@@ -463,10 +468,8 @@ RSpec.describe PaperTrailDiff do
     def analyzed_article
       article = CoreArticle.create!(title: 'S1', internal_note: 'stable')
       article.update!(title: 'S2')
-      # A version records the state before its own event, so the last one holds
-      # S2 only once a later version exists.
       article.update!(title: 'S3')
-      described_class.analyze(article, from: :first, to: :last)
+      described_class.analyze(article)
     end
 
     it 'omits reconstructed endpoint states unless they are asked for' do
@@ -481,7 +484,7 @@ RSpec.describe PaperTrailDiff do
       payload = analyzed_article.to_h(snapshots: true)
 
       expect(payload.fetch(:to_snapshot).keys).to eq(%i[type id attributes])
-      expect(payload.fetch(:to_snapshot).fetch(:attributes).fetch('title')).to eq('S2')
+      expect(payload.fetch(:to_snapshot).fetch(:attributes).fetch('title')).to eq('S3')
       expect { JSON.generate(payload) }.not_to raise_error
     end
 
@@ -509,14 +512,14 @@ RSpec.describe PaperTrailDiff do
     it 'refuses to build a timeline from a sequence it cannot recover' do
       article = unorderable_history
 
-      expect { described_class.timeline(article, from: :first, to: :last) }
+      expect { described_class.timeline(article) }
         .to raise_error(PaperTrailDiff::AmbiguousVersionOrderError, /share the timestamp/)
     end
 
     it 'names the two versions and how to make them orderable' do
       article = unorderable_history
 
-      described_class.timeline(article, from: :first, to: :last)
+      described_class.timeline(article)
     rescue PaperTrailDiff::AmbiguousVersionOrderError => e
       expect(e.message).to include('sub-second precision')
       expect(e.message).to include('sequential ids')
@@ -528,11 +531,11 @@ RSpec.describe PaperTrailDiff do
       article.update!(title: 't2')
       PaperTrail::Version.where(item_type: 'CoreArticle').update_all(created_at: Time.now.utc)
 
-      steps = described_class.timeline(article, from: :first, to: :last)
+      steps = described_class.timeline(article)
 
       # Autoincrement ids increase with insertion, so the sequence survives.
       expect(steps.map { |step| step.diff.attributes['title']&.to_h })
-        .to eq([nil, { from: 't0', to: 't1' }])
+        .to eq([nil, { from: 't0', to: 't1' }, { from: 't1', to: 't2' }])
     end
 
     it 'reports the hazard from diagnose before a caller runs into it' do
@@ -549,31 +552,32 @@ RSpec.describe PaperTrailDiff do
 
   describe 'close_on: :current' do
     def open_window_articles(count = 2)
-      articles = count.times.map do |index|
+      articles = Array.new(count) do |index|
         article = CoreArticle.create!(title: "Draft #{index}", internal_note: 'stable')
         article.update!(title: "Published #{index}")
         article
       end
       start_at = PaperTrail::Version.order(:id).first.created_at
-      # An "up to now" report: the window runs past everything recorded, so no
-      # later version can reveal what the last mutation produced.
+      # An "up to now" report: the window runs past everything recorded, so only
+      # the live record can reveal what the last mutation produced.
       [articles, start_at..(Time.now.utc + 86_400)]
     end
 
-    it 'closes a timeline on the live record instead of refusing the range' do
+    it 'closes a timeline on the live record by default, as close_on: :current asks' do
       articles, window = open_window_articles(1)
       article = articles.fetch(0)
 
-      expect { described_class.timeline(article, within: window) }
-        .to raise_error(PaperTrailDiff::IncompleteTimeRangeError)
+      summary = ->(steps) { steps.map { |step| [step.to_boundary.kind, step.diff.to_h] } }
+      expect(summary.call(described_class.timeline(article, within: window, close_on: :current)))
+        .to eq(summary.call(described_class.timeline(article, within: window)))
 
-      steps = described_class.timeline(article, within: window, close_on: :current)
+      steps = described_class.timeline(article, within: window)
 
       expect(steps.map { |step| step.to_boundary.kind }).to eq(%i[version current])
       expect(steps.last.diff.attributes.fetch('title').to_h)
         .to eq(from: 'Draft 0', to: 'Published 0')
       expect(steps.last.to_version).to be_nil
-      expect(steps.last.to_h.fetch(:to_boundary).fetch(:kind)).to eq(:current)
+      expect(steps.last.to_h.fetch(:to)).to include(kind: :current, version_id: nil)
     end
 
     it 'reports state the live record holds but no version recorded' do
@@ -593,10 +597,7 @@ RSpec.describe PaperTrailDiff do
     it 'batches an open window across roots' do
       articles, window = open_window_articles(3)
 
-      expect { described_class.analyze_many(articles, within: window) }
-        .to raise_error(PaperTrailDiff::IncompleteTimeRangeError)
-
-      results = described_class.analyze_many(articles, within: window, close_on: :current)
+      results = described_class.analyze_many(articles, within: window)
 
       expect(results.length).to eq(3)
       expect(results.values.map { |analysis| analysis.to_snapshot.attributes.fetch('title') })
@@ -644,7 +645,7 @@ RSpec.describe PaperTrailDiff do
       articles, window = open_window_articles(1)
       article = articles.fetch(0)
 
-      expect { described_class.timeline(article, from: :first, to: :last, close_on: :current) }
+      expect { described_class.timeline(article, from: :first, to: article, close_on: :current) }
         .to raise_error(PaperTrailDiff::ConfigurationError, /requires `within`/)
       expect { described_class.timeline(article, within: window, close_on: :nope) }
         .to raise_error(PaperTrailDiff::ConfigurationError, /must be :current/)
@@ -668,7 +669,7 @@ RSpec.describe PaperTrailDiff do
 
   describe '.analyze_many' do
     def windowed_articles(count)
-      articles = count.times.map do |index|
+      articles = Array.new(count) do |index|
         article = CoreArticle.create!(title: "Draft #{index}", internal_note: 'stable')
         article.update!(title: "Published #{index}")
         article
@@ -920,25 +921,20 @@ RSpec.describe PaperTrailDiff do
       expect(unreachable).to eq([])
     end
 
-    it 'is reachable through analyze_many, which rejects being given both forms' do
-      kept, _skipped, doomed, window = scoped_history
+    it 'takes a relation only through analyze_scope; analyze_many takes an array' do
+      kept, = scoped_history
 
-      analyses, unreachable = described_class.analyze_many(
-        scope: kept_scope, within: window, limit: 100, close_on: :current
-      )
-
-      expect(analyses.keys).to eq([PaperTrailDiff::Endpoint.identity(kept)])
-      expect(unreachable).to eq([['CoreArticle', doomed.id.to_s]])
       expect { described_class.analyze_many([kept], scope: kept_scope, limit: 1) }
-        .to raise_error(PaperTrailDiff::ConfigurationError, /not both/)
-      expect { described_class.analyze_many(within: window) }
-        .to raise_error(PaperTrailDiff::ConfigurationError, /pass records or scope/)
+        .to raise_error(ArgumentError, /unknown keywords?: :scope/)
+      expect { described_class.analyze_many(kept_scope) }
+        .to raise_error(PaperTrailDiff::ConfigurationError, /must be an array/)
     end
 
     describe 'historical_filter:' do
-      # The population a relation cannot describe: one root left it after the
-      # window, another joined it after the window, and a third was destroyed
-      # inside it. Only the first was ever what the report is asking about.
+      # The population a relation cannot describe: one root left it during the
+      # window, another joined it during the window, and a third was destroyed
+      # inside it. A relation sees only who is in it now; the filter sees who
+      # was in it at any point in the window.
       def moving_population
         start_at = Time.now.utc - 3600
         left = CoreArticle.create!(title: 'left after', internal_note: 'review')
@@ -971,10 +967,11 @@ RSpec.describe PaperTrailDiff do
                        historical_filter: was_review
         )
 
-        # The relation finds the root that only joined the population later.
+        # The relation finds only the root that is `review` now.
         expect(by_relation.analyses.keys).to eq([PaperTrailDiff::Endpoint.identity(joined)])
-        # The filter finds the one that actually was `review` inside the window.
-        expect(historically.analyses.keys).to eq([PaperTrailDiff::Endpoint.identity(left)])
+        # The filter also finds the one that was `review` earlier in the window.
+        expect(historically.analyses.keys)
+          .to eq([left, joined].map { |root| PaperTrailDiff::Endpoint.identity(root) })
       end
 
       # The gap this closes: a relation reads the live table, so it can say
@@ -1043,7 +1040,7 @@ RSpec.describe PaperTrailDiff do
       # back a quietly short report instead of an error.
       it 'refuses rather than returning a short result when matches are destroyed' do
         start_at = Time.now.utc - 3600
-        doomed = 6.times.map do |index|
+        doomed = Array.new(6) do |index|
           article = CoreArticle.create!(title: "gone #{index}", internal_note: 'wanted')
           article.update!(title: "gone #{index} v2")
           article
@@ -1058,14 +1055,14 @@ RSpec.describe PaperTrailDiff do
         end.to raise_error(PaperTrailDiff::BatchLimitExceededError)
       end
 
-      it 'preserves activity options through the scoped analyze_many alias' do
-        left, _joined, _doomed, window = moving_population
-        result = described_class.analyze_many(
-          scope: CoreArticle, within: window, limit: 100, close_on: :current,
-          historical_filter: was_review, activity: true, snapshots: true, group: :transaction
+      it 'preserves activity options alongside the filter' do
+        left, joined, _doomed, window = moving_population
+        result = described_class.analyze_scope(
+          CoreArticle, within: window, limit: 100, historical_filter: was_review,
+                       activity: true, snapshots: true, group: :transaction
         )
 
-        expect(result.roots.map(&:id)).to eq([left.id])
+        expect(result.roots.map(&:id)).to eq([left.id, joined.id])
         steps = result.analyses.values.first.activity_timeline
         expect(steps).not_to be_empty
         expect(steps.last.to_snapshot).not_to be_nil
@@ -1075,7 +1072,7 @@ RSpec.describe PaperTrailDiff do
         left, _joined, _doomed, window = moving_population
         expect do
           described_class.analyze_many([left], within: window, historical_filter: was_review)
-        end.to raise_error(PaperTrailDiff::ConfigurationError, /requires scope/)
+        end.to raise_error(ArgumentError, /historical_filter/)
       end
 
       it 'matches a value held only at an intermediate boundary' do
@@ -1166,10 +1163,8 @@ RSpec.describe PaperTrailDiff do
           { from: 'Published', to: 'Draft' }
         ]
       )
-      expect(steps.first.to_h).to include(
-        from_version_id: draft.id,
-        to_version_id: published.id
-      )
+      expect(steps.first.to_h.fetch(:from)).to include(kind: :version, version_id: draft.id)
+      expect(steps.first.to_h.fetch(:to)).to include(kind: :version, version_id: published.id)
       expect(steps.first.from_boundary.record.to_h).to eq(
         type: 'CoreArticle', id: article.id.to_s
       )
@@ -1307,18 +1302,40 @@ RSpec.describe PaperTrailDiff do
       expect(steps.last.to_version).to eq(reverted)
     end
 
-    it 'resolves symbolic boundaries to the record own earliest and latest versions' do
+    it 'resolves :first to the record own earliest version' do
       article, create_version, _draft, _published, reverted = create_history
 
-      symbolic = described_class.timeline(article, from: :first, to: :last)
+      symbolic = described_class.timeline(article, from: :first, to: reverted)
       explicit = described_class.timeline(article, from: create_version, to: reverted)
 
       expect(symbolic.map(&:to_h)).to eq(explicit.map(&:to_h))
       # Resolved independently of the order the versions association happens to
       # use, which a caller is free to change.
       allow(article).to receive(:versions).and_return(article.versions.reorder(id: :desc))
-      expect(described_class.timeline(article, from: :first, to: :last).map(&:to_h))
+      expect(described_class.timeline(article, from: :first, to: reverted).map(&:to_h))
         .to eq(explicit.map(&:to_h))
+    end
+
+    it 'defaults to the whole history through current state' do
+      article, = create_history
+      article.update!(title: 'Latest')
+
+      defaulted = described_class.timeline(article)
+      explicit = described_class.timeline(article, from: :first, to: article)
+
+      expect(defaulted.map { |step| step.diff.to_h }).to eq(explicit.map { |step| step.diff.to_h })
+      expect(defaulted.last.diff.attributes.fetch('title').to).to eq('Latest')
+      expect(described_class.analyze(article).to_snapshot.attributes.fetch('title'))
+        .to eq('Latest')
+    end
+
+    it 'rejects :last, which left out the latest change' do
+      article, = create_history
+
+      expect { described_class.timeline(article, from: :first, to: :last) }
+        .to raise_error(PaperTrailDiff::InvalidTimelineRangeError, /omit `to:`/)
+      expect { described_class.compare_many([{ from: :last, to: article }]) }
+        .to raise_error(PaperTrailDiff::ConfigurationError, /omit `to:`/)
     end
 
     it 'treats a record with no versions as an empty history rather than an error' do
@@ -1327,9 +1344,9 @@ RSpec.describe PaperTrailDiff do
       end
 
       expect(bare.versions).to be_empty
-      expect(described_class.timeline(bare, from: :first, to: :last)).to eq([])
-      expect(described_class.activity_timeline(bare, from: :first, to: :last)).to eq([])
-      analysis = described_class.analyze(bare, from: :first, to: :last, activity: true)
+      expect(described_class.timeline(bare)).to eq([])
+      expect(described_class.activity_timeline(bare)).to eq([])
+      analysis = described_class.analyze(bare, activity: true)
       expect(analysis.timeline).to eq([])
       expect(analysis.activity_timeline).to eq([])
       expect(analysis.diff).to be_empty
@@ -1338,9 +1355,9 @@ RSpec.describe PaperTrailDiff do
     it 'rejects an unknown boundary symbol and a reversed symbolic range' do
       article, = create_history
 
-      expect { described_class.timeline(article, from: :beginning, to: :last) }
+      expect { described_class.timeline(article, from: :beginning) }
         .to raise_error(PaperTrailDiff::InvalidTimelineRangeError, /unsupported boundary/)
-      expect { described_class.timeline(article, from: :last, to: :first) }
+      expect { described_class.timeline(article, from: article.versions.last, to: :first) }
         .to raise_error(PaperTrailDiff::InvalidTimelineRangeError, /must not follow/)
       window = Time.utc(2030, 1, 1)..Time.utc(2030, 1, 2)
       expect { described_class.timeline(article, from: :first, within: window) }
@@ -1379,12 +1396,10 @@ RSpec.describe PaperTrailDiff do
       expect(steps).to be_frozen
     end
 
-    it 'rejects invalid, mixed, and historically incomplete time ranges' do
+    it 'rejects invalid and mixed time ranges, and closes an open one on current state' do
       article, create_version, draft, published, reverted = create_history
       times = timestamp_versions([create_version, draft, published, reverted])
 
-      expect { described_class.timeline(article) }
-        .to raise_error(PaperTrailDiff::InvalidTimelineRangeError, /provide both/)
       expect do
         described_class.timeline(
           article,
@@ -1397,8 +1412,8 @@ RSpec.describe PaperTrailDiff do
         .to raise_error(PaperTrailDiff::InvalidTimeRangeError, /time-like/)
       expect { described_class.timeline(article, within: times.fetch(2)..times.fetch(1)) }
         .to raise_error(PaperTrailDiff::InvalidTimeRangeError, /must not follow/)
-      expect { described_class.timeline(article, within: times.last..times.last) }
-        .to raise_error(PaperTrailDiff::IncompleteTimeRangeError, /later root version/)
+      expect(described_class.timeline(article, within: times.last..times.last)
+                            .last.to_boundary.kind).to eq(:current)
     end
   end
 

@@ -10,15 +10,39 @@ module PaperTrailDiff
     }.freeze
     private_constant :RECORD_AFTER_HANDLERS
 
-    #: (?record_transition: untyped) -> void
-    def initialize(record_transition: nil)
+    #: (?record_transition: untyped, ?prepared_record_after: untyped) -> void
+    def initialize(record_transition: nil, prepared_record_after: nil)
       @record_transition = record_transition
+      @prepared_record_after = prepared_record_after
+      @direct_loader = DirectRecordStateLoader.new
+    end
+
+    #: (untyped, ?direct: bool) -> untyped
+    def record_after(version, direct: false)
+      return if version.event.to_s == 'destroy'
+
+      if direct
+        handled, state = direct_after(version)
+        return state if handled
+      end
+
+      handled, prepared = @prepared_record_after&.call(version)
+      return prepared if handled
+
+      fallback_record_after(version)
+    end
+
+    #: (untyped) -> [bool, untyped]
+    def direct_after(version)
+      handled, state = @prepared_record_after&.call(version, direct: true)
+      return [true, state] if handled
+
+      state = direct_record_after(version)
+      [!state.nil?, state]
     end
 
     #: (untyped) -> untyped
-    def record_after(version)
-      return if version.event.to_s == 'destroy'
-
+    def fallback_record_after(version)
       changed_record = changed_record_after(version)
       return changed_record if changed_record
 
@@ -70,18 +94,54 @@ module PaperTrailDiff
     # +version.item+, which would issue one live-record query per event.
     #: (untyped, untyped) -> untyped
     def deserialized_changeset(version, model_class)
-      return unless model_class && version.class.column_names.include?('object_changes')
+      return unless model_class
+      unless version.class.column_names.include?('object_changes')
+        return prepared_changeset(version)
+      end
 
       paper_trail = Object.const_get(:PaperTrail) #: untyped
       adapter = paper_trail.config.object_changes_adapter
       return adapter.load_changeset(version) if adapter.respond_to?(:load_changeset)
 
-      standard_changeset(paper_trail, version, model_class)
+      changes = standard_changeset(paper_trail, version, model_class)
+      changes.empty? ? prepared_changeset(version) : changes
     end
 
     private
 
     # @rbs @record_transition: untyped
+    # @rbs @prepared_record_after: untyped
+    # @rbs @direct_loader: DirectRecordStateLoader
+
+    #: (untyped) -> PreparedRecordState?
+    def direct_record_after(version)
+      model = Endpoint.model_class(version)
+      changes = deserialized_changeset(version, model)
+      return unless changes.respond_to?(:each) && !changes.empty?
+
+      before = if version.object
+                 @direct_loader.call(version)
+               else
+                 PreparedRecordState.from_attributes(
+                   model, {}
+                 )
+               end
+      return unless before
+
+      attributes = before.attributes.merge(after_attributes(changes, model))
+      @direct_loader.complete(PreparedRecordState.from_attributes(model, attributes))
+    end
+
+    #: (untyped) -> untyped
+    def prepared_changeset(version)
+      transition = @record_transition&.call(version)
+      return {} unless transition
+
+      before, after = transition
+      (before.keys | after.keys).filter_map do |name|
+        [name, [before[name], after[name]]] unless before[name] == after[name]
+      end.to_h
+    end
 
     #: (untyped, untyped) -> Hash[untyped, untyped]
     def after_attributes(changes, model_class)

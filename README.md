@@ -1,46 +1,51 @@
 # paper_trail_diff
 
-Structured diffs and activity feeds for [PaperTrail](https://github.com/paper-trail-gem/paper_trail).
-Compare states, see who changed a record and its children, or report across a collection.
-Results are Ruby value objects and hashes, ready for your own UI or JSON response.
+Compare past and present records using the history saved by
+[PaperTrail](https://github.com/paper-trail-gem/paper_trail). Show changed fields,
+include changes to associated records, or build a report for many records.
+Results are Ruby objects with methods for reading the changes and `to_h` for
+turning them into hashes. The gem does not generate display text or save changes.
 
-```ruby
-diff = PaperTrailDiff.compare(previous_version, article, associations: [:comments])
-diff.attributes["title"].to
-diff.associations["comments"].added
-```
-
-Ruby 3.1+ and PaperTrail 16 or 17 are supported. Association history additionally
-requires [paper_trail-association_tracking](https://github.com/westonganger/paper_trail-association_tracking)
-(PT-AT). Only the association paths you request are traversed.
-
-> **Experimental:** AI-assisted coding tools made significant contributions to
-> this project. Validate results against your application's history before relying
-> on them. Missing versions or unrecorded changes cannot be reconstructed.
+If you already use `has_paper_trail` and `record.versions`, you can pass those
+versions directly to this gem. You do not need to call `reify` yourself.
 
 ## Get started
 
-```ruby
-# Gemfile
-gem "paper_trail_diff"
+Add the gem to your Rails application:
+
+```console
+bundle add paper_trail_diff
 ```
 
-Follow the [Rails quickstart](QUICKSTART.md) for models, migrations, and optional
-association setup. To try it without a Rails application, download
-[examples/demo.rb](examples/demo.rb) and run `ruby demo.rb`; it installs its own dependencies.
-The [demo application](https://github.com/aheathwilliams/paper_trail_summary_test_app)
-shows the gem in a Rails UI.
+Already have a model with `has_paper_trail`? Try the comparison below.
+Otherwise, follow the [Rails quickstart](QUICKSTART.md) to set up PaperTrail
+and create your first comparison.
 
-The recipes below use the versioned `Article` and `Comment` models from the quickstart.
+To try it without Rails, download [examples/demo.rb](examples/demo.rb) and run
+`ruby demo.rb`. It installs its dependencies on the first run. The
+[demo application](https://github.com/aheathwilliams/paper_trail_summary_test_app)
+shows reports in a Rails UI.
 
-## 1. Compare a previous state with the current record
+Ruby 3.1+ and PaperTrail 16 or 17 are supported, subject to
+[PaperTrail's Ruby and ActiveRecord requirements](https://github.com/paper-trail-gem/paper_trail#1a-compatibility).
+Comparing association history also requires
+[paper_trail-association_tracking](https://github.com/westonganger/paper_trail-association_tracking),
+an optional PaperTrail plugin. The quickstart includes its setup.
+
+> **Experimental:** AI-assisted coding tools made significant contributions to
+> this project. Check results against your application's history before relying
+> on them. Changes that were never recorded cannot be recovered.
+
+## 1. Compare an earlier version with the current record
+
+This example assumes an `Article` model with a `title` column and `has_paper_trail`:
 
 <!-- executable:recipe-compare -->
 ```ruby
 article = Article.create!(title: "Draft")
 article.update!(title: "Published")
 
-# The update's version contains the state before that update.
+# PaperTrail stores the values from BEFORE the update.
 before = article.versions.last
 diff = PaperTrailDiff.compare(before, article)
 
@@ -48,26 +53,43 @@ diff.attributes.fetch("title").to_h
 # => { from: "Draft", to: "Published" }
 ```
 
-`compare` reports the net change. An edit followed by a revert has no net change.
-Pass a second version instead of `article` when both endpoints should be historical.
-A `create` version represents absence, so comparing it with the record reports
-`diff.record_presence_change` rather than individual attribute edits.
+PaperTrail's `version.reify` returns the record as it was before that version's
+change. Passing a version to `compare` uses that same earlier state. Passing
+`article` uses its current saved values. Pass two versions to compare two
+historical states.
 
-Add `associations: ["comments.replies"]` to include an explicitly selected subtree.
-Use `diff.each_change` to walk a nested result without implementing your own traversal:
+PaperTrail's `version.changeset` describes one recorded change. `compare`
+describes the net difference between the two states you choose. If a field
+changes and then changes back, there is no net difference for that field. To
+see every change instead, use `PaperTrailDiff.timeline(article)`, which covers
+the article's whole history through its current saved values.
+
+An attribute appears in `diff.attributes` only when it changed. `diff.empty?`
+tells you whether anything changed. A PaperTrail `create` version has no earlier
+record (`reify` returns `nil`), so comparing it with the current record reports
+`diff.record_presence_change`, meaning the record was added.
+
+To include comments, add `associations: [:comments]`. If comments have replies,
+`associations: ["comments.replies"]` includes those too. Associated models must
+also use `has_paper_trail`, and association tracking must be enabled.
+
+For nested results, `each_change` lets you read changes without walking every
+association yourself:
 
 ```ruby
 diff.each_change do |entry|
-  entry.kind              # :attribute_changed, :record_added, ...
-  entry.association_path  # ["comments", "replies"]
-  entry.value             # the structured change or snapshot
+  entry.kind              # e.g. :attribute_changed or :record_added
+  entry.association_path  # e.g. ["comments", "replies"]
+  entry.value             # the changed values or the added/removed record's data
 end
 ```
 
-## 2. Build an activity feed showing who changed what
+## 2. Show who changed a record and its comments
 
-This recipe requires PT-AT and versioned comments. The explicit record endpoint
-includes the newest saved state and child activity after the last parent version.
+This example requires the association setup in the quickstart. PaperTrail's
+`whodunnit` records who made a change; here we set it with `PaperTrail.request`.
+The timeline covers the article's whole history, including comment changes made
+after the article's last version.
 
 <!-- executable:recipe-activity -->
 ```ruby
@@ -80,8 +102,7 @@ PaperTrail.request(whodunnit: "alice") do
 end
 
 steps = PaperTrailDiff.activity_timeline(
-  article, from: :first, to: article,
-  associations: [:comments], group: :transaction, snapshots: true
+  article, associations: [:comments], group: :transaction, snapshots: true
 )
 
 feed = steps.reject(&:empty?).map do |step|
@@ -95,34 +116,38 @@ end
 payload = steps.map { |step| step.to_h(metadata: true) }
 ```
 
-`source_boundary` identifies the event whose change a step reports. `to_boundary`
-is the state that reveals that change and may belong to a different person or model.
-For a transaction group, the source is its **first** event; its metadata does not
-claim that all grouped events have the same actor or record. Omit `group:` when
-individual version events and their attribution matter.
+Each step contains a `diff`. `source_boundary` describes the PaperTrail version
+responsible for that change, including its `whodunnit`, `event`, `item_type`,
+and `item_id`. Its `recorded_at` is the version's `created_at`.
+Use this source information for attribution: the version used to read the
+resulting state, exposed as `to_boundary`, may have been saved by someone else.
 
-`snapshots: true` retains the compared states for renderers that need unchanged
-fields too. It adds no reconstruction queries. Serialize retained states with
-`step.to_h(snapshots: true)`. `metadata: true` includes actor, event, transaction ID,
-and record reference; default serialization remains compact.
+`group: :transaction` combines changes from one database transaction. Its source
+information comes from the first event in that group. Omit `group:` if you need
+to attribute each version separately.
 
-## 3. Report across records for a time window
+`snapshots: true` also keeps copies of the compared records' data, including
+unchanged fields. These read-only copies are called snapshots. Access them as
+`step.from_snapshot` and `step.to_snapshot`, or include them in a hash with
+`step.to_h(snapshots: true)`. Keeping them uses more memory. Omit the option if
+changed values are enough. `metadata: true` adds event and author information
+to the hash.
 
-This recipe works without association tracking. Add `associations:` when needed.
-For a report through now, explicitly allow the current record to supply a missing
-final historical boundary:
+## 3. Report on records changed since a given time
+
+Use `report` with a model or ActiveRecord relation. It includes activity from
+`since:` through the current saved state. Association tracking is only needed
+if you also pass `associations:`.
 
 <!-- executable:recipe-report -->
 ```ruby
-window = 1.day.ago..Time.current
-report = PaperTrailDiff.analyze_scope(
-  Article.all, within: window, limit: 100,
-  close_on: :current, activity: true
+report = PaperTrailDiff.report(
+  Article.all, since: 1.day.ago, limit: 100, include_deleted: true
 )
 
 rows = report.analyses.map do |identity, analysis|
   {
-    record: identity,                 # ["Article", "42"]
+    record: identity,                 # ["Article", "42"]: model name and ID
     changes: analysis.diff.to_h,
     activity: analysis.activity_timeline.reject(&:empty?).map do |step|
       step.to_h(metadata: true)
@@ -130,127 +155,90 @@ rows = report.analyses.map do |identity, analysis|
   }
 end
 
-report.unreachable # IDs whose live rows are gone; these were not analyzed
+report.unreachable # Model names and IDs for records no longer in the database
+report.deleted     # Reports for those records, or nil when destroy history is missing
 ```
 
-A relation filters **current** rows. `Article.where(status: "open")` means open
-now, not open during the window. Deleted candidates cannot be tested against those
-conditions and are returned separately in `unreachable`.
+`report.analyses` is a hash of reports for records that still exist. Each key is
+`[model_name, id_as_a_string]`. Each value has the net `diff` and an
+`activity_timeline`. `report.roots` returns the selected ActiveRecord objects.
 
-To select by recorded historical root state, add a predicate:
-
-```ruby
-report = PaperTrailDiff.analyze_scope(
-  Article.all, within: window, limit: 100, close_on: :current,
-  historical_filter: ->(state) { state.status == "review" }
-)
-report.roots # the selected live model instances, in relation order
-```
-
-The predicate receives reified root records at in-window version boundaries,
-without traversing associations. Create boundaries are absent and skipped. A match
-at any of those boundaries selects a candidate. This tests recorded pre-event
-states: it does not inspect the final live state, even with `close_on: :current`,
-or states recorded only outside the window. It is not a continuous-time query.
-`version_scope:` filters analysis events; it does not narrow predicate evaluation.
-
-The relation still filters live rows. Matching deleted candidates remain in
-`unreachable`. With `historical_filter:`, the safety ceiling applies to all
-matching candidates, including missing roots, before the live relation's filters
-and pagination. Reification stops when that ceiling is exceeded; scanning many
-nonmatches or a root with a long history can still be expensive. Narrow the window
-and predicate accordingly. Without this option, the existing live-root ceiling
-and unpaginated missing-root behavior remain unchanged.
-
-`roots` is a frozen array, but its ActiveRecord instances remain mutable for
-ordinary application use. Changing them does not change the immutable analysis
-snapshots. The scoped `analyze_many(scope: ...)` alias accepts the same predicate;
-explicit record lists do not.
-
-A deletion audit should inspect that collection explicitly. The destroy version
-contains the last record state and can provide a historical root for an activity
-query. Records removed without a destroy version remain explicitly unavailable:
+`include_deleted: true` also builds reports from PaperTrail's destroy versions.
+Read them from `report.deleted` using the same keys:
 
 <!-- executable:recipe-deleted -->
 ```ruby
-unavailable = []
-deleted_activity = report.unreachable.to_h do |identity|
-  type, id = identity
-  version = Article.paper_trail.version_class
-    .where(item_type: type, item_id: id, event: "destroy")
-    .reorder(created_at: :desc, id: :desc).first
-  root = version&.reify
-  if root
-    [identity, PaperTrailDiff.activity_timeline(root, within: window)]
-  else
-    unavailable << identity
-    [identity, nil]
-  end
+unavailable = report.deleted.select { |_identity, analysis| analysis.nil? }.keys
+deleted_activity = report.deleted.transform_values do |analysis|
+  analysis&.activity_timeline
 end
 ```
 
-This explicit fallback costs work per deleted root. Do not treat `unreachable` as
-proof that a deleted record matched your relation's conditions. A filtered report
-needs an application-level decision about those historical records.
+The results are already computed; you do not need to query or reify each deleted
+record. Omit `include_deleted:` if you only need records that still exist.
 
-A relation's existing order, offset, and limit define the live selection. For
-example, `Article.limit(2)` requests up to two live roots. With a plain SQL join,
-that relation's pagination applies to joined rows, which may repeat a root.
-Repeated roots are analyzed once, in order of first appearance.
-Use a deterministic order for pagination, adding the root's ID as a tie-breaker
-when sorting values can repeat. With no explicit order, roots are ordered by ID.
+Three selection rules matter:
 
-The separate `limit:` option is a safety ceiling on unique selected live roots;
-exceeding it raises `BatchLimitExceededError`. It does not shorten the selection.
-`unreachable` is a separate, unpaginated list of missing roots with history in the
-window. It is not the deleted portion of the live page. The ceiling does not bound
-that list or all candidate-selection work; narrow large windows. Duplicate joined
-rows can require additional query pages before the safety check is decided.
+- The record itself needs a PaperTrail version in the time window. For example,
+  editing only a comment does not select its article. Comment activity is included
+  for selected articles when you request `associations: [:comments]`.
+- A relation such as `Article.where(status: "open")` checks today's values.
+  It cannot establish whether deleted articles matched that condition. Deleted
+  records are therefore listed separately.
+- `limit: 100` is a safety ceiling, not pagination. Selecting too many records
+  raises `BatchLimitExceededError`. With `include_deleted: true`, both existing
+  and deleted records count toward it. Use a narrower relation or time window,
+  or deliberately raise the ceiling.
 
-If you already have the records, use `analyze_many(records, **options)` to get an
-identity-keyed hash. Both batch methods accept `group:` and `snapshots:` with
-`activity: true`. The older `analyze_many(scope: ..., limit: ...)` alias remains
-supported and returns `ScopedAnalysis`.
+Use the relation's `order`, `offset`, and `limit` to choose a page, for example
+`Article.order(:id).limit(20)`. Joined rows can repeat a record; each record is
+analyzed once. See the [reporting reference](docs/reference.md#which-records-are-selected)
+for pagination, deleted records, and selecting by past values with
+`historical_filter:`.
 
-`group:` and `snapshots: true` require `activity: true` on analysis methods;
-otherwise they raise `ConfigurationError`.
+For a fixed past window, use `analyze_scope(Article.all, within: start_time...end_time,
+limit: 100)`.
 
-## Choose the output you need
+## Choose a method
 
-| Task | Method | Result |
-| --- | --- | --- |
-| Net change between two states | `compare(before, after)` | `Diff` |
-| Net changes for supplied endpoint pairs | `compare_many(pairs)` | Hash of `Diff` |
-| Steps at parent-record checkpoints | `timeline(record, ...)` | Array of `Step` |
-| Steps including selected child events | `activity_timeline(record, ...)` | Array of `ActivityStep` |
-| Net diff and checkpoint steps together | `analyze(record, ...)` | `Analysis` |
-| Also include the activity feed | `analyze(record, activity: true, ...)` | `Analysis` |
-| Analyze supplied records | `analyze_many(records, ...)` | Hash of `Analysis` |
-| Select records from a relation | `analyze_scope(relation, limit: ..., ...)` | `ScopedAnalysis` |
+| What you need | Method |
+| --- | --- |
+| Net difference between two versions, or a version and the current record | `compare(from, to)` |
+| The same for a list of `{ from:, to: }` pairs, one per record | `compare_many(pairs)` |
+| Each change to one record, version by version | `timeline(record)` |
+| Each change to one record and its chosen associations, with who made it | `activity_timeline(record, associations: ...)` |
+| Net difference and timeline together | `analyze(record)` |
+| The same, plus the activity timeline | `analyze(record, activity: true)` |
+| Analyses for an array of records | `analyze_many(records)` |
+| Analyses for the records a relation selects, over a time window | `analyze_scope(scope, within:, limit:)` |
+| Recent activity through now, for the records a relation selects | `report(scope, since:, limit:)` |
 
-All three single-record timeline methods accept `from: :first, to: record` for
-history through current state, or two versions for historical endpoints.
-`:last` means the last stored **pre-change** state; it does not mean current state.
-For time windows, use `within:`. Add `close_on: :current` only when a live closing
-state is appropriate. It can include state after the window's end; a reproducible
-historical report needs a later recorded boundary instead.
+`timeline`, `activity_timeline`, and `analyze` cover the whole history through
+the current saved record by default. Narrow them with `from:` and `to:`
+(versions) or `within:` (a time range). See
+[choosing a range](docs/reference.md#choosing-a-range).
 
-A record with no stored versions has an empty explicit `:first`/`:last` history.
-A lone creation is a presence change. Destroyed roots gain a closing removal step
-in activity timelines; endpoint diffs retain PaperTrail's pre-destruction state.
+## Performance and defaults
 
-## Defaults and further reading
+Use the batch methods for reports instead of calling `reify` or a single-record
+method inside a loop. They share history loading across records. Ordinary
+record and direct-association histories can be read without creating a model
+instance for every historical state.
 
-- `updated_at` is ignored by default. `ignore:` replaces that list.
-- Live endpoints must be saved, clean records. They are reloaded by default.
-- Empty steps are retained; use `reject(&:empty?)` for a visible activity feed.
-- Historical associations require installed, enabled PT-AT and versioned targets.
-- Multiple database queries are not automatically one isolated snapshot.
+Some associations still need per-record queries. Batch methods reject scoped
+associations and certain `has_many :through` histories by default with
+`UnsupportedBatchPathError`. The error names the association. Remove it from
+`associations:`, or pass `allow_expensive: true` if you accept that cost.
+Callbacks and callable historical filters can also issue queries. See the
+[performance guide](docs/performance.md) for measured behavior and limitations.
 
-See the [API reference](docs/reference.md) for nested JSON changes, ignore rules,
-association support, diagnostics, result shapes, and historical limitations.
-[Reconstruction and performance](docs/architecture.md) explains batching and
-indexing for applications that need to tune their queries.
+- `updated_at` is ignored. Passing `ignore:` replaces the default list.
+- Records passed as current state must be saved and have no unsaved changes.
+  They are reloaded from the database.
+- Empty timeline steps are kept. Use `reject(&:empty?)` to hide them in a feed.
+- Only the associations you name are included.
+- Historical data cannot be recovered if PaperTrail did not record it.
 
-For development checks and database coverage, see [testing](docs/testing.md).
-See [CHANGELOG.md](CHANGELOG.md) for changes and [LICENSE](LICENSE) for the MIT license.
+See the [API reference](docs/reference.md) for all options and result methods,
+[testing](docs/testing.md) for development checks, and
+[CHANGELOG.md](CHANGELOG.md) for changes. Licensed under the [MIT license](LICENSE).

@@ -1,0 +1,1661 @@
+{
+  "library_revision": "4cd54d641b71dc96181969217e0a206dd749a917",
+  "recorded_at": "2026-09-07T14:28:40Z",
+  "runtime": {
+    "ruby": "ruby 4.0.1 (2026-01-13 revision e04267a14b) +PRISM [x86_64-linux]",
+    "active_record": "8.1.3.1",
+    "paper_trail": "17.0.0",
+    "association_tracking": "2.3.0",
+    "sqlite": "3.53.2"
+  },
+  "notes": [
+    "SQLite in memory; growth probes trace SQL stacks, so their times are not latency benchmarks.",
+    "Scalar cost: three fresh processes per mode; full output parity checked after timing.",
+    "Prototypes only; runtime library unchanged.",
+    "A preliminary sweep aborted on an unidentified selected-root count mismatch; the final complete sweep passed. The preliminary mismatch was not diagnosed."
+  ],
+  "growth": {
+    "samples": [
+      {
+        "scenario": "scalar",
+        "roots": 1,
+        "elapsed_ms": 4.913,
+        "counts": {
+          "queries": 6,
+          "model_initializations": 7,
+          "reify": 3
+        },
+        "unique_reified_versions": 2,
+        "repeated_reify_calls": 1,
+        "repeated_present_reify_calls": 1,
+        "statements": {
+          "PaperTrail::Version Pluck": 1,
+          "TrackedArticle Pluck": 1,
+          "TrackedArticle Load": 2,
+          "PaperTrail::Version Load": 2
+        },
+        "query_origins": {
+          "lib/paper_trail_diff/scoped_root_selection.rb:107:in 'PaperTrailDiff::ScopedRootSelection#versioned_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:114:in 'PaperTrailDiff::ScopedRootSelection#live_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:143:in 'PaperTrailDiff::ScopedRootSelection#record_page'": 1,
+          "lib/paper_trail_diff/live_endpoint_batch_loader.rb:31:in 'PaperTrailDiff::LiveEndpointBatchLoader#load_group'": 1,
+          "lib/paper_trail_diff/batched_root_versions.rb:156:in 'PaperTrailDiff::BatchedRootVersions#ordered'": 2
+        },
+        "error": null,
+        "prepared_through": false,
+        "equivalent_output": null
+      },
+      {
+        "scenario": "scalar",
+        "roots": 5,
+        "elapsed_ms": 11.695,
+        "counts": {
+          "queries": 6,
+          "model_initializations": 35,
+          "reify": 15
+        },
+        "unique_reified_versions": 10,
+        "repeated_reify_calls": 5,
+        "repeated_present_reify_calls": 5,
+        "statements": {
+          "PaperTrail::Version Pluck": 1,
+          "TrackedArticle Pluck": 1,
+          "TrackedArticle Load": 2,
+          "PaperTrail::Version Load": 2
+        },
+        "query_origins": {
+          "lib/paper_trail_diff/scoped_root_selection.rb:107:in 'PaperTrailDiff::ScopedRootSelection#versioned_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:114:in 'PaperTrailDiff::ScopedRootSelection#live_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:143:in 'PaperTrailDiff::ScopedRootSelection#record_page'": 1,
+          "lib/paper_trail_diff/live_endpoint_batch_loader.rb:31:in 'PaperTrailDiff::LiveEndpointBatchLoader#load_group'": 1,
+          "lib/paper_trail_diff/batched_root_versions.rb:156:in 'PaperTrailDiff::BatchedRootVersions#ordered'": 2
+        },
+        "error": null,
+        "prepared_through": false,
+        "equivalent_output": null
+      },
+      {
+        "scenario": "scalar",
+        "roots": 20,
+        "elapsed_ms": 28.393,
+        "counts": {
+          "queries": 6,
+          "model_initializations": 140,
+          "reify": 60
+        },
+        "unique_reified_versions": 40,
+        "repeated_reify_calls": 20,
+        "repeated_present_reify_calls": 20,
+        "statements": {
+          "PaperTrail::Version Pluck": 1,
+          "TrackedArticle Pluck": 1,
+          "TrackedArticle Load": 2,
+          "PaperTrail::Version Load": 2
+        },
+        "query_origins": {
+          "lib/paper_trail_diff/scoped_root_selection.rb:107:in 'PaperTrailDiff::ScopedRootSelection#versioned_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:114:in 'PaperTrailDiff::ScopedRootSelection#live_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:143:in 'PaperTrailDiff::ScopedRootSelection#record_page'": 1,
+          "lib/paper_trail_diff/live_endpoint_batch_loader.rb:31:in 'PaperTrailDiff::LiveEndpointBatchLoader#load_group'": 1,
+          "lib/paper_trail_diff/batched_root_versions.rb:156:in 'PaperTrailDiff::BatchedRootVersions#ordered'": 2
+        },
+        "error": null,
+        "prepared_through": false,
+        "equivalent_output": null
+      },
+      {
+        "scenario": "comments",
+        "roots": 1,
+        "elapsed_ms": 19.08,
+        "counts": {
+          "queries": 12,
+          "model_initializations": 14,
+          "reify": 5
+        },
+        "unique_reified_versions": 4,
+        "repeated_reify_calls": 1,
+        "repeated_present_reify_calls": 1,
+        "statements": {
+          "PaperTrail::Version Pluck": 1,
+          "TrackedArticle Pluck": 1,
+          "TrackedArticle Load": 2,
+          "TrackedComment Load": 1,
+          "PaperTrail::Version Load": 3,
+          "PaperTrail::VersionAssociation Pluck": 2,
+          "TrackedComment Pluck": 2
+        },
+        "query_origins": {
+          "lib/paper_trail_diff/scoped_root_selection.rb:107:in 'PaperTrailDiff::ScopedRootSelection#versioned_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:114:in 'PaperTrailDiff::ScopedRootSelection#live_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:143:in 'PaperTrailDiff::ScopedRootSelection#record_page'": 1,
+          "lib/paper_trail_diff/live_endpoint_batch_loader.rb:31:in 'PaperTrailDiff::LiveEndpointBatchLoader#load_group'": 1,
+          "lib/paper_trail_diff/live_endpoint_batch_loader.rb:84:in 'PaperTrailDiff::LiveEndpointBatchLoader#preload_batch'": 1,
+          "lib/paper_trail_diff/batched_root_versions.rb:156:in 'PaperTrailDiff::BatchedRootVersions#ordered'": 2,
+          "lib/paper_trail_diff/prepared_edge_loader.rb:108:in 'PaperTrailDiff::PreparedEdgeLoader#historical_child_ids'": 1,
+          "lib/paper_trail_diff/prepared_edge_loader.rb:139:in 'PaperTrailDiff::PreparedEdgeLoader#live_child_ids'": 1,
+          "lib/paper_trail_diff/prepared_record_index.rb:314:in 'PaperTrailDiff::PreparedRecordIndex#versions_for'": 1,
+          "lib/paper_trail_diff/activity_child_candidate_loader.rb:27:in 'PaperTrailDiff::ActivityChildCandidateLoader#historical_rows'": 1,
+          "lib/paper_trail_diff/activity_child_candidate_loader.rb:36:in 'PaperTrailDiff::ActivityChildCandidateLoader#current_pairs'": 1
+        },
+        "error": null,
+        "prepared_through": false,
+        "equivalent_output": null
+      },
+      {
+        "scenario": "comments",
+        "roots": 5,
+        "elapsed_ms": 28.105,
+        "counts": {
+          "queries": 12,
+          "model_initializations": 70,
+          "reify": 25
+        },
+        "unique_reified_versions": 20,
+        "repeated_reify_calls": 5,
+        "repeated_present_reify_calls": 5,
+        "statements": {
+          "PaperTrail::Version Pluck": 1,
+          "TrackedArticle Pluck": 1,
+          "TrackedArticle Load": 2,
+          "TrackedComment Load": 1,
+          "PaperTrail::Version Load": 3,
+          "PaperTrail::VersionAssociation Pluck": 2,
+          "TrackedComment Pluck": 2
+        },
+        "query_origins": {
+          "lib/paper_trail_diff/scoped_root_selection.rb:107:in 'PaperTrailDiff::ScopedRootSelection#versioned_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:114:in 'PaperTrailDiff::ScopedRootSelection#live_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:143:in 'PaperTrailDiff::ScopedRootSelection#record_page'": 1,
+          "lib/paper_trail_diff/live_endpoint_batch_loader.rb:31:in 'PaperTrailDiff::LiveEndpointBatchLoader#load_group'": 1,
+          "lib/paper_trail_diff/live_endpoint_batch_loader.rb:84:in 'PaperTrailDiff::LiveEndpointBatchLoader#preload_batch'": 1,
+          "lib/paper_trail_diff/batched_root_versions.rb:156:in 'PaperTrailDiff::BatchedRootVersions#ordered'": 2,
+          "lib/paper_trail_diff/prepared_edge_loader.rb:108:in 'PaperTrailDiff::PreparedEdgeLoader#historical_child_ids'": 1,
+          "lib/paper_trail_diff/prepared_edge_loader.rb:139:in 'PaperTrailDiff::PreparedEdgeLoader#live_child_ids'": 1,
+          "lib/paper_trail_diff/prepared_record_index.rb:314:in 'PaperTrailDiff::PreparedRecordIndex#versions_for'": 1,
+          "lib/paper_trail_diff/activity_child_candidate_loader.rb:27:in 'PaperTrailDiff::ActivityChildCandidateLoader#historical_rows'": 1,
+          "lib/paper_trail_diff/activity_child_candidate_loader.rb:36:in 'PaperTrailDiff::ActivityChildCandidateLoader#current_pairs'": 1
+        },
+        "error": null,
+        "prepared_through": false,
+        "equivalent_output": null
+      },
+      {
+        "scenario": "comments",
+        "roots": 20,
+        "elapsed_ms": 77.218,
+        "counts": {
+          "queries": 12,
+          "model_initializations": 280,
+          "reify": 100
+        },
+        "unique_reified_versions": 80,
+        "repeated_reify_calls": 20,
+        "repeated_present_reify_calls": 20,
+        "statements": {
+          "PaperTrail::Version Pluck": 1,
+          "TrackedArticle Pluck": 1,
+          "TrackedArticle Load": 2,
+          "TrackedComment Load": 1,
+          "PaperTrail::Version Load": 3,
+          "PaperTrail::VersionAssociation Pluck": 2,
+          "TrackedComment Pluck": 2
+        },
+        "query_origins": {
+          "lib/paper_trail_diff/scoped_root_selection.rb:107:in 'PaperTrailDiff::ScopedRootSelection#versioned_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:114:in 'PaperTrailDiff::ScopedRootSelection#live_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:143:in 'PaperTrailDiff::ScopedRootSelection#record_page'": 1,
+          "lib/paper_trail_diff/live_endpoint_batch_loader.rb:31:in 'PaperTrailDiff::LiveEndpointBatchLoader#load_group'": 1,
+          "lib/paper_trail_diff/live_endpoint_batch_loader.rb:84:in 'PaperTrailDiff::LiveEndpointBatchLoader#preload_batch'": 1,
+          "lib/paper_trail_diff/batched_root_versions.rb:156:in 'PaperTrailDiff::BatchedRootVersions#ordered'": 2,
+          "lib/paper_trail_diff/prepared_edge_loader.rb:108:in 'PaperTrailDiff::PreparedEdgeLoader#historical_child_ids'": 1,
+          "lib/paper_trail_diff/prepared_edge_loader.rb:139:in 'PaperTrailDiff::PreparedEdgeLoader#live_child_ids'": 1,
+          "lib/paper_trail_diff/prepared_record_index.rb:314:in 'PaperTrailDiff::PreparedRecordIndex#versions_for'": 1,
+          "lib/paper_trail_diff/activity_child_candidate_loader.rb:27:in 'PaperTrailDiff::ActivityChildCandidateLoader#historical_rows'": 1,
+          "lib/paper_trail_diff/activity_child_candidate_loader.rb:36:in 'PaperTrailDiff::ActivityChildCandidateLoader#current_pairs'": 1
+        },
+        "error": null,
+        "prepared_through": false,
+        "equivalent_output": null
+      },
+      {
+        "scenario": "checkpoints",
+        "roots": 1,
+        "elapsed_ms": 13.383,
+        "counts": {
+          "queries": 10,
+          "model_initializations": 16,
+          "reify": 3,
+          "prepared_instances": 4
+        },
+        "unique_reified_versions": 3,
+        "repeated_reify_calls": 0,
+        "repeated_present_reify_calls": 0,
+        "statements": {
+          "PaperTrail::Version Pluck": 1,
+          "TrackedArticle Pluck": 1,
+          "TrackedArticle Load": 2,
+          "TrackedComment Load": 1,
+          "PaperTrail::Version Load": 3,
+          "PaperTrail::VersionAssociation Pluck": 1,
+          "TrackedComment Pluck": 1
+        },
+        "query_origins": {
+          "lib/paper_trail_diff/scoped_root_selection.rb:107:in 'PaperTrailDiff::ScopedRootSelection#versioned_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:114:in 'PaperTrailDiff::ScopedRootSelection#live_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:143:in 'PaperTrailDiff::ScopedRootSelection#record_page'": 1,
+          "lib/paper_trail_diff/live_endpoint_batch_loader.rb:31:in 'PaperTrailDiff::LiveEndpointBatchLoader#load_group'": 1,
+          "lib/paper_trail_diff/live_endpoint_batch_loader.rb:84:in 'PaperTrailDiff::LiveEndpointBatchLoader#preload_batch'": 1,
+          "lib/paper_trail_diff/batched_root_versions.rb:156:in 'PaperTrailDiff::BatchedRootVersions#ordered'": 2,
+          "lib/paper_trail_diff/prepared_edge_loader.rb:108:in 'PaperTrailDiff::PreparedEdgeLoader#historical_child_ids'": 1,
+          "lib/paper_trail_diff/prepared_edge_loader.rb:139:in 'PaperTrailDiff::PreparedEdgeLoader#live_child_ids'": 1,
+          "lib/paper_trail_diff/prepared_record_index.rb:314:in 'PaperTrailDiff::PreparedRecordIndex#versions_for'": 1
+        },
+        "error": null,
+        "prepared_through": false,
+        "equivalent_output": null
+      },
+      {
+        "scenario": "checkpoints",
+        "roots": 5,
+        "elapsed_ms": 20.028,
+        "counts": {
+          "queries": 10,
+          "model_initializations": 80,
+          "reify": 15,
+          "prepared_instances": 20
+        },
+        "unique_reified_versions": 15,
+        "repeated_reify_calls": 0,
+        "repeated_present_reify_calls": 0,
+        "statements": {
+          "PaperTrail::Version Pluck": 1,
+          "TrackedArticle Pluck": 1,
+          "TrackedArticle Load": 2,
+          "TrackedComment Load": 1,
+          "PaperTrail::Version Load": 3,
+          "PaperTrail::VersionAssociation Pluck": 1,
+          "TrackedComment Pluck": 1
+        },
+        "query_origins": {
+          "lib/paper_trail_diff/scoped_root_selection.rb:107:in 'PaperTrailDiff::ScopedRootSelection#versioned_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:114:in 'PaperTrailDiff::ScopedRootSelection#live_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:143:in 'PaperTrailDiff::ScopedRootSelection#record_page'": 1,
+          "lib/paper_trail_diff/live_endpoint_batch_loader.rb:31:in 'PaperTrailDiff::LiveEndpointBatchLoader#load_group'": 1,
+          "lib/paper_trail_diff/live_endpoint_batch_loader.rb:84:in 'PaperTrailDiff::LiveEndpointBatchLoader#preload_batch'": 1,
+          "lib/paper_trail_diff/batched_root_versions.rb:156:in 'PaperTrailDiff::BatchedRootVersions#ordered'": 2,
+          "lib/paper_trail_diff/prepared_edge_loader.rb:108:in 'PaperTrailDiff::PreparedEdgeLoader#historical_child_ids'": 1,
+          "lib/paper_trail_diff/prepared_edge_loader.rb:139:in 'PaperTrailDiff::PreparedEdgeLoader#live_child_ids'": 1,
+          "lib/paper_trail_diff/prepared_record_index.rb:314:in 'PaperTrailDiff::PreparedRecordIndex#versions_for'": 1
+        },
+        "error": null,
+        "prepared_through": false,
+        "equivalent_output": null
+      },
+      {
+        "scenario": "checkpoints",
+        "roots": 20,
+        "elapsed_ms": 44.231,
+        "counts": {
+          "queries": 10,
+          "model_initializations": 320,
+          "reify": 60,
+          "prepared_instances": 80
+        },
+        "unique_reified_versions": 60,
+        "repeated_reify_calls": 0,
+        "repeated_present_reify_calls": 0,
+        "statements": {
+          "PaperTrail::Version Pluck": 1,
+          "TrackedArticle Pluck": 1,
+          "TrackedArticle Load": 2,
+          "TrackedComment Load": 1,
+          "PaperTrail::Version Load": 3,
+          "PaperTrail::VersionAssociation Pluck": 1,
+          "TrackedComment Pluck": 1
+        },
+        "query_origins": {
+          "lib/paper_trail_diff/scoped_root_selection.rb:107:in 'PaperTrailDiff::ScopedRootSelection#versioned_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:114:in 'PaperTrailDiff::ScopedRootSelection#live_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:143:in 'PaperTrailDiff::ScopedRootSelection#record_page'": 1,
+          "lib/paper_trail_diff/live_endpoint_batch_loader.rb:31:in 'PaperTrailDiff::LiveEndpointBatchLoader#load_group'": 1,
+          "lib/paper_trail_diff/live_endpoint_batch_loader.rb:84:in 'PaperTrailDiff::LiveEndpointBatchLoader#preload_batch'": 1,
+          "lib/paper_trail_diff/batched_root_versions.rb:156:in 'PaperTrailDiff::BatchedRootVersions#ordered'": 2,
+          "lib/paper_trail_diff/prepared_edge_loader.rb:108:in 'PaperTrailDiff::PreparedEdgeLoader#historical_child_ids'": 1,
+          "lib/paper_trail_diff/prepared_edge_loader.rb:139:in 'PaperTrailDiff::PreparedEdgeLoader#live_child_ids'": 1,
+          "lib/paper_trail_diff/prepared_record_index.rb:314:in 'PaperTrailDiff::PreparedRecordIndex#versions_for'": 1
+        },
+        "error": null,
+        "prepared_through": false,
+        "equivalent_output": null
+      },
+      {
+        "scenario": "belongs_to",
+        "roots": 1,
+        "elapsed_ms": 12.648,
+        "counts": {
+          "queries": 10,
+          "model_initializations": 19,
+          "reify": 5,
+          "prepared_instances": 4
+        },
+        "unique_reified_versions": 2,
+        "repeated_reify_calls": 3,
+        "repeated_present_reify_calls": 1,
+        "statements": {
+          "PaperTrail::Version Pluck": 1,
+          "TrackedArticle Pluck": 1,
+          "TrackedArticle Load": 2,
+          "TrackedAuthor Load": 1,
+          "PaperTrail::Version Load": 4,
+          "PaperTrail::VersionAssociation Load": 1
+        },
+        "query_origins": {
+          "lib/paper_trail_diff/scoped_root_selection.rb:107:in 'PaperTrailDiff::ScopedRootSelection#versioned_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:114:in 'PaperTrailDiff::ScopedRootSelection#live_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:143:in 'PaperTrailDiff::ScopedRootSelection#record_page'": 1,
+          "lib/paper_trail_diff/live_endpoint_batch_loader.rb:31:in 'PaperTrailDiff::LiveEndpointBatchLoader#load_group'": 1,
+          "lib/paper_trail_diff/live_endpoint_batch_loader.rb:84:in 'PaperTrailDiff::LiveEndpointBatchLoader#preload_batch'": 1,
+          "lib/paper_trail_diff/batched_root_versions.rb:156:in 'PaperTrailDiff::BatchedRootVersions#ordered'": 2,
+          "lib/paper_trail_diff/prepared_record_index.rb:314:in 'PaperTrailDiff::PreparedRecordIndex#versions_for'": 2,
+          "lib/paper_trail_diff/prepared_activity_index.rb:102:in 'PaperTrailDiff::PreparedActivityIndex#load_association_rows'": 1
+        },
+        "error": null,
+        "prepared_through": false,
+        "equivalent_output": null
+      },
+      {
+        "scenario": "belongs_to",
+        "roots": 5,
+        "elapsed_ms": 21.637,
+        "counts": {
+          "queries": 10,
+          "model_initializations": 95,
+          "reify": 25,
+          "prepared_instances": 20
+        },
+        "unique_reified_versions": 10,
+        "repeated_reify_calls": 15,
+        "repeated_present_reify_calls": 5,
+        "statements": {
+          "PaperTrail::Version Pluck": 1,
+          "TrackedArticle Pluck": 1,
+          "TrackedArticle Load": 2,
+          "TrackedAuthor Load": 1,
+          "PaperTrail::Version Load": 4,
+          "PaperTrail::VersionAssociation Load": 1
+        },
+        "query_origins": {
+          "lib/paper_trail_diff/scoped_root_selection.rb:107:in 'PaperTrailDiff::ScopedRootSelection#versioned_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:114:in 'PaperTrailDiff::ScopedRootSelection#live_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:143:in 'PaperTrailDiff::ScopedRootSelection#record_page'": 1,
+          "lib/paper_trail_diff/live_endpoint_batch_loader.rb:31:in 'PaperTrailDiff::LiveEndpointBatchLoader#load_group'": 1,
+          "lib/paper_trail_diff/live_endpoint_batch_loader.rb:84:in 'PaperTrailDiff::LiveEndpointBatchLoader#preload_batch'": 1,
+          "lib/paper_trail_diff/batched_root_versions.rb:156:in 'PaperTrailDiff::BatchedRootVersions#ordered'": 2,
+          "lib/paper_trail_diff/prepared_record_index.rb:314:in 'PaperTrailDiff::PreparedRecordIndex#versions_for'": 2,
+          "lib/paper_trail_diff/prepared_activity_index.rb:102:in 'PaperTrailDiff::PreparedActivityIndex#load_association_rows'": 1
+        },
+        "error": null,
+        "prepared_through": false,
+        "equivalent_output": null
+      },
+      {
+        "scenario": "belongs_to",
+        "roots": 20,
+        "elapsed_ms": 54.776,
+        "counts": {
+          "queries": 10,
+          "model_initializations": 380,
+          "reify": 100,
+          "prepared_instances": 80
+        },
+        "unique_reified_versions": 40,
+        "repeated_reify_calls": 60,
+        "repeated_present_reify_calls": 20,
+        "statements": {
+          "PaperTrail::Version Pluck": 1,
+          "TrackedArticle Pluck": 1,
+          "TrackedArticle Load": 2,
+          "TrackedAuthor Load": 1,
+          "PaperTrail::Version Load": 4,
+          "PaperTrail::VersionAssociation Load": 1
+        },
+        "query_origins": {
+          "lib/paper_trail_diff/scoped_root_selection.rb:107:in 'PaperTrailDiff::ScopedRootSelection#versioned_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:114:in 'PaperTrailDiff::ScopedRootSelection#live_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:143:in 'PaperTrailDiff::ScopedRootSelection#record_page'": 1,
+          "lib/paper_trail_diff/live_endpoint_batch_loader.rb:31:in 'PaperTrailDiff::LiveEndpointBatchLoader#load_group'": 1,
+          "lib/paper_trail_diff/live_endpoint_batch_loader.rb:84:in 'PaperTrailDiff::LiveEndpointBatchLoader#preload_batch'": 1,
+          "lib/paper_trail_diff/batched_root_versions.rb:156:in 'PaperTrailDiff::BatchedRootVersions#ordered'": 2,
+          "lib/paper_trail_diff/prepared_record_index.rb:314:in 'PaperTrailDiff::PreparedRecordIndex#versions_for'": 2,
+          "lib/paper_trail_diff/prepared_activity_index.rb:102:in 'PaperTrailDiff::PreparedActivityIndex#load_association_rows'": 1
+        },
+        "error": null,
+        "prepared_through": false,
+        "equivalent_output": null
+      },
+      {
+        "scenario": "limited",
+        "roots": 1,
+        "elapsed_ms": 12.616,
+        "counts": {
+          "queries": 16,
+          "model_initializations": 19,
+          "reify": 4,
+          "fallback_reflections": 1
+        },
+        "unique_reified_versions": 3,
+        "repeated_reify_calls": 1,
+        "repeated_present_reify_calls": 1,
+        "statements": {
+          "PaperTrail::Version Pluck": 1,
+          "TrackedArticle Pluck": 1,
+          "TrackedArticle Load": 2,
+          "TrackedComment Load": 3,
+          "PaperTrail::Version Load": 4,
+          "PaperTrail::VersionAssociation Pluck": 2,
+          "TrackedComment Pluck": 2,
+          "PaperTrail::VersionAssociation Load": 1
+        },
+        "query_origins": {
+          "lib/paper_trail_diff/scoped_root_selection.rb:107:in 'PaperTrailDiff::ScopedRootSelection#versioned_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:114:in 'PaperTrailDiff::ScopedRootSelection#live_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:143:in 'PaperTrailDiff::ScopedRootSelection#record_page'": 1,
+          "lib/paper_trail_diff/live_endpoint_batch_loader.rb:31:in 'PaperTrailDiff::LiveEndpointBatchLoader#load_group'": 1,
+          "lib/paper_trail_diff/live_endpoint_batch_loader.rb:106:in 'block in PaperTrailDiff::LiveEndpointBatchLoader#load_individually'": 1,
+          "lib/paper_trail_diff/batched_root_versions.rb:156:in 'PaperTrailDiff::BatchedRootVersions#ordered'": 2,
+          "lib/paper_trail_diff/prepared_edge_loader.rb:108:in 'PaperTrailDiff::PreparedEdgeLoader#historical_child_ids'": 1,
+          "lib/paper_trail_diff/prepared_edge_loader.rb:139:in 'PaperTrailDiff::PreparedEdgeLoader#live_child_ids'": 1,
+          "lib/paper_trail_diff/prepared_record_index.rb:314:in 'PaperTrailDiff::PreparedRecordIndex#versions_for'": 1,
+          "lib/paper_trail_diff/prepared_record_index.rb:359:in 'PaperTrailDiff::PreparedRecordIndex#live_records_for'": 1,
+          "lib/paper_trail_diff/activity_child_candidate_loader.rb:27:in 'PaperTrailDiff::ActivityChildCandidateLoader#historical_rows'": 1,
+          "lib/paper_trail_diff/activity_child_candidate_loader.rb:36:in 'PaperTrailDiff::ActivityChildCandidateLoader#current_pairs'": 1,
+          "lib/paper_trail_association_tracking/reifiers/has_many.rb:112:in 'Enumerable#map'": 1,
+          "lib/paper_trail_association_tracking/reifiers/has_many.rb:88:in 'Enumerable#inject'": 1,
+          "lib/paper_trail_association_tracking/reifiers/has_many.rb:18:in 'PaperTrailAssociationTracking::Reifiers::HasMany.reify'": 1
+        },
+        "error": null,
+        "prepared_through": false,
+        "equivalent_output": null
+      },
+      {
+        "scenario": "limited",
+        "roots": 5,
+        "elapsed_ms": 33.331,
+        "counts": {
+          "queries": 32,
+          "model_initializations": 95,
+          "reify": 20,
+          "fallback_reflections": 5
+        },
+        "unique_reified_versions": 15,
+        "repeated_reify_calls": 5,
+        "repeated_present_reify_calls": 5,
+        "statements": {
+          "PaperTrail::Version Pluck": 1,
+          "TrackedArticle Pluck": 1,
+          "TrackedArticle Load": 2,
+          "TrackedComment Load": 11,
+          "PaperTrail::Version Load": 8,
+          "PaperTrail::VersionAssociation Pluck": 2,
+          "TrackedComment Pluck": 2,
+          "PaperTrail::VersionAssociation Load": 5
+        },
+        "query_origins": {
+          "lib/paper_trail_diff/scoped_root_selection.rb:107:in 'PaperTrailDiff::ScopedRootSelection#versioned_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:114:in 'PaperTrailDiff::ScopedRootSelection#live_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:143:in 'PaperTrailDiff::ScopedRootSelection#record_page'": 1,
+          "lib/paper_trail_diff/live_endpoint_batch_loader.rb:31:in 'PaperTrailDiff::LiveEndpointBatchLoader#load_group'": 1,
+          "lib/paper_trail_diff/live_endpoint_batch_loader.rb:106:in 'block in PaperTrailDiff::LiveEndpointBatchLoader#load_individually'": 5,
+          "lib/paper_trail_diff/batched_root_versions.rb:156:in 'PaperTrailDiff::BatchedRootVersions#ordered'": 2,
+          "lib/paper_trail_diff/prepared_edge_loader.rb:108:in 'PaperTrailDiff::PreparedEdgeLoader#historical_child_ids'": 1,
+          "lib/paper_trail_diff/prepared_edge_loader.rb:139:in 'PaperTrailDiff::PreparedEdgeLoader#live_child_ids'": 1,
+          "lib/paper_trail_diff/prepared_record_index.rb:314:in 'PaperTrailDiff::PreparedRecordIndex#versions_for'": 1,
+          "lib/paper_trail_diff/prepared_record_index.rb:359:in 'PaperTrailDiff::PreparedRecordIndex#live_records_for'": 1,
+          "lib/paper_trail_diff/activity_child_candidate_loader.rb:27:in 'PaperTrailDiff::ActivityChildCandidateLoader#historical_rows'": 1,
+          "lib/paper_trail_diff/activity_child_candidate_loader.rb:36:in 'PaperTrailDiff::ActivityChildCandidateLoader#current_pairs'": 1,
+          "lib/paper_trail_association_tracking/reifiers/has_many.rb:112:in 'Enumerable#map'": 5,
+          "lib/paper_trail_association_tracking/reifiers/has_many.rb:88:in 'Enumerable#inject'": 5,
+          "lib/paper_trail_association_tracking/reifiers/has_many.rb:18:in 'PaperTrailAssociationTracking::Reifiers::HasMany.reify'": 5
+        },
+        "error": null,
+        "prepared_through": false,
+        "equivalent_output": null
+      },
+      {
+        "scenario": "limited",
+        "roots": 20,
+        "elapsed_ms": 116.078,
+        "counts": {
+          "queries": 92,
+          "model_initializations": 380,
+          "reify": 80,
+          "fallback_reflections": 20
+        },
+        "unique_reified_versions": 60,
+        "repeated_reify_calls": 20,
+        "repeated_present_reify_calls": 20,
+        "statements": {
+          "PaperTrail::Version Pluck": 1,
+          "TrackedArticle Pluck": 1,
+          "TrackedArticle Load": 2,
+          "TrackedComment Load": 41,
+          "PaperTrail::Version Load": 23,
+          "PaperTrail::VersionAssociation Pluck": 2,
+          "TrackedComment Pluck": 2,
+          "PaperTrail::VersionAssociation Load": 20
+        },
+        "query_origins": {
+          "lib/paper_trail_diff/scoped_root_selection.rb:107:in 'PaperTrailDiff::ScopedRootSelection#versioned_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:114:in 'PaperTrailDiff::ScopedRootSelection#live_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:143:in 'PaperTrailDiff::ScopedRootSelection#record_page'": 1,
+          "lib/paper_trail_diff/live_endpoint_batch_loader.rb:31:in 'PaperTrailDiff::LiveEndpointBatchLoader#load_group'": 1,
+          "lib/paper_trail_diff/live_endpoint_batch_loader.rb:106:in 'block in PaperTrailDiff::LiveEndpointBatchLoader#load_individually'": 20,
+          "lib/paper_trail_diff/batched_root_versions.rb:156:in 'PaperTrailDiff::BatchedRootVersions#ordered'": 2,
+          "lib/paper_trail_diff/prepared_edge_loader.rb:108:in 'PaperTrailDiff::PreparedEdgeLoader#historical_child_ids'": 1,
+          "lib/paper_trail_diff/prepared_edge_loader.rb:139:in 'PaperTrailDiff::PreparedEdgeLoader#live_child_ids'": 1,
+          "lib/paper_trail_diff/prepared_record_index.rb:314:in 'PaperTrailDiff::PreparedRecordIndex#versions_for'": 1,
+          "lib/paper_trail_diff/prepared_record_index.rb:359:in 'PaperTrailDiff::PreparedRecordIndex#live_records_for'": 1,
+          "lib/paper_trail_diff/activity_child_candidate_loader.rb:27:in 'PaperTrailDiff::ActivityChildCandidateLoader#historical_rows'": 1,
+          "lib/paper_trail_diff/activity_child_candidate_loader.rb:36:in 'PaperTrailDiff::ActivityChildCandidateLoader#current_pairs'": 1,
+          "lib/paper_trail_association_tracking/reifiers/has_many.rb:112:in 'Enumerable#map'": 20,
+          "lib/paper_trail_association_tracking/reifiers/has_many.rb:88:in 'Enumerable#inject'": 20,
+          "lib/paper_trail_association_tracking/reifiers/has_many.rb:18:in 'PaperTrailAssociationTracking::Reifiers::HasMany.reify'": 20
+        },
+        "error": null,
+        "prepared_through": false,
+        "equivalent_output": null
+      },
+      {
+        "scenario": "owner",
+        "roots": 1,
+        "elapsed_ms": 13.05,
+        "counts": {
+          "queries": 16,
+          "model_initializations": 18,
+          "reify": 5,
+          "fallback_reflections": 1
+        },
+        "unique_reified_versions": 4,
+        "repeated_reify_calls": 1,
+        "repeated_present_reify_calls": 1,
+        "statements": {
+          "PaperTrail::Version Pluck": 1,
+          "TrackedArticle Pluck": 1,
+          "TrackedArticle Load": 2,
+          "TrackedComment Load": 3,
+          "PaperTrail::Version Load": 4,
+          "PaperTrail::VersionAssociation Pluck": 2,
+          "TrackedComment Pluck": 2,
+          "PaperTrail::VersionAssociation Load": 1
+        },
+        "query_origins": {
+          "lib/paper_trail_diff/scoped_root_selection.rb:107:in 'PaperTrailDiff::ScopedRootSelection#versioned_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:114:in 'PaperTrailDiff::ScopedRootSelection#live_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:143:in 'PaperTrailDiff::ScopedRootSelection#record_page'": 1,
+          "lib/paper_trail_diff/live_endpoint_batch_loader.rb:31:in 'PaperTrailDiff::LiveEndpointBatchLoader#load_group'": 1,
+          "lib/paper_trail_diff/live_endpoint_batch_loader.rb:106:in 'block in PaperTrailDiff::LiveEndpointBatchLoader#load_individually'": 1,
+          "lib/paper_trail_diff/batched_root_versions.rb:156:in 'PaperTrailDiff::BatchedRootVersions#ordered'": 2,
+          "lib/paper_trail_diff/prepared_edge_loader.rb:108:in 'PaperTrailDiff::PreparedEdgeLoader#historical_child_ids'": 1,
+          "lib/paper_trail_diff/prepared_edge_loader.rb:139:in 'PaperTrailDiff::PreparedEdgeLoader#live_child_ids'": 1,
+          "lib/paper_trail_diff/prepared_record_index.rb:314:in 'PaperTrailDiff::PreparedRecordIndex#versions_for'": 1,
+          "lib/paper_trail_diff/prepared_record_index.rb:359:in 'PaperTrailDiff::PreparedRecordIndex#live_records_for'": 1,
+          "lib/paper_trail_diff/activity_child_candidate_loader.rb:27:in 'PaperTrailDiff::ActivityChildCandidateLoader#historical_rows'": 1,
+          "lib/paper_trail_diff/activity_child_candidate_loader.rb:36:in 'PaperTrailDiff::ActivityChildCandidateLoader#current_pairs'": 1,
+          "lib/paper_trail_association_tracking/reifiers/has_many.rb:112:in 'Enumerable#map'": 1,
+          "lib/paper_trail_association_tracking/reifiers/has_many.rb:88:in 'Enumerable#inject'": 1,
+          "lib/paper_trail_association_tracking/reifiers/has_many.rb:18:in 'PaperTrailAssociationTracking::Reifiers::HasMany.reify'": 1
+        },
+        "error": null,
+        "prepared_through": false,
+        "equivalent_output": null
+      },
+      {
+        "scenario": "owner",
+        "roots": 5,
+        "elapsed_ms": 31.402,
+        "counts": {
+          "queries": 32,
+          "model_initializations": 90,
+          "reify": 25,
+          "fallback_reflections": 5
+        },
+        "unique_reified_versions": 20,
+        "repeated_reify_calls": 5,
+        "repeated_present_reify_calls": 5,
+        "statements": {
+          "PaperTrail::Version Pluck": 1,
+          "TrackedArticle Pluck": 1,
+          "TrackedArticle Load": 2,
+          "TrackedComment Load": 11,
+          "PaperTrail::Version Load": 8,
+          "PaperTrail::VersionAssociation Pluck": 2,
+          "TrackedComment Pluck": 2,
+          "PaperTrail::VersionAssociation Load": 5
+        },
+        "query_origins": {
+          "lib/paper_trail_diff/scoped_root_selection.rb:107:in 'PaperTrailDiff::ScopedRootSelection#versioned_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:114:in 'PaperTrailDiff::ScopedRootSelection#live_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:143:in 'PaperTrailDiff::ScopedRootSelection#record_page'": 1,
+          "lib/paper_trail_diff/live_endpoint_batch_loader.rb:31:in 'PaperTrailDiff::LiveEndpointBatchLoader#load_group'": 1,
+          "lib/paper_trail_diff/live_endpoint_batch_loader.rb:106:in 'block in PaperTrailDiff::LiveEndpointBatchLoader#load_individually'": 5,
+          "lib/paper_trail_diff/batched_root_versions.rb:156:in 'PaperTrailDiff::BatchedRootVersions#ordered'": 2,
+          "lib/paper_trail_diff/prepared_edge_loader.rb:108:in 'PaperTrailDiff::PreparedEdgeLoader#historical_child_ids'": 1,
+          "lib/paper_trail_diff/prepared_edge_loader.rb:139:in 'PaperTrailDiff::PreparedEdgeLoader#live_child_ids'": 1,
+          "lib/paper_trail_diff/prepared_record_index.rb:314:in 'PaperTrailDiff::PreparedRecordIndex#versions_for'": 1,
+          "lib/paper_trail_diff/prepared_record_index.rb:359:in 'PaperTrailDiff::PreparedRecordIndex#live_records_for'": 1,
+          "lib/paper_trail_diff/activity_child_candidate_loader.rb:27:in 'PaperTrailDiff::ActivityChildCandidateLoader#historical_rows'": 1,
+          "lib/paper_trail_diff/activity_child_candidate_loader.rb:36:in 'PaperTrailDiff::ActivityChildCandidateLoader#current_pairs'": 1,
+          "lib/paper_trail_association_tracking/reifiers/has_many.rb:112:in 'Enumerable#map'": 5,
+          "lib/paper_trail_association_tracking/reifiers/has_many.rb:88:in 'Enumerable#inject'": 5,
+          "lib/paper_trail_association_tracking/reifiers/has_many.rb:18:in 'PaperTrailAssociationTracking::Reifiers::HasMany.reify'": 5
+        },
+        "error": null,
+        "prepared_through": false,
+        "equivalent_output": null
+      },
+      {
+        "scenario": "owner",
+        "roots": 20,
+        "elapsed_ms": 106.552,
+        "counts": {
+          "queries": 92,
+          "model_initializations": 360,
+          "reify": 100,
+          "fallback_reflections": 20
+        },
+        "unique_reified_versions": 80,
+        "repeated_reify_calls": 20,
+        "repeated_present_reify_calls": 20,
+        "statements": {
+          "PaperTrail::Version Pluck": 1,
+          "TrackedArticle Pluck": 1,
+          "TrackedArticle Load": 2,
+          "TrackedComment Load": 41,
+          "PaperTrail::Version Load": 23,
+          "PaperTrail::VersionAssociation Pluck": 2,
+          "TrackedComment Pluck": 2,
+          "PaperTrail::VersionAssociation Load": 20
+        },
+        "query_origins": {
+          "lib/paper_trail_diff/scoped_root_selection.rb:107:in 'PaperTrailDiff::ScopedRootSelection#versioned_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:114:in 'PaperTrailDiff::ScopedRootSelection#live_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:143:in 'PaperTrailDiff::ScopedRootSelection#record_page'": 1,
+          "lib/paper_trail_diff/live_endpoint_batch_loader.rb:31:in 'PaperTrailDiff::LiveEndpointBatchLoader#load_group'": 1,
+          "lib/paper_trail_diff/live_endpoint_batch_loader.rb:106:in 'block in PaperTrailDiff::LiveEndpointBatchLoader#load_individually'": 20,
+          "lib/paper_trail_diff/batched_root_versions.rb:156:in 'PaperTrailDiff::BatchedRootVersions#ordered'": 2,
+          "lib/paper_trail_diff/prepared_edge_loader.rb:108:in 'PaperTrailDiff::PreparedEdgeLoader#historical_child_ids'": 1,
+          "lib/paper_trail_diff/prepared_edge_loader.rb:139:in 'PaperTrailDiff::PreparedEdgeLoader#live_child_ids'": 1,
+          "lib/paper_trail_diff/prepared_record_index.rb:314:in 'PaperTrailDiff::PreparedRecordIndex#versions_for'": 1,
+          "lib/paper_trail_diff/prepared_record_index.rb:359:in 'PaperTrailDiff::PreparedRecordIndex#live_records_for'": 1,
+          "lib/paper_trail_diff/activity_child_candidate_loader.rb:27:in 'PaperTrailDiff::ActivityChildCandidateLoader#historical_rows'": 1,
+          "lib/paper_trail_diff/activity_child_candidate_loader.rb:36:in 'PaperTrailDiff::ActivityChildCandidateLoader#current_pairs'": 1,
+          "lib/paper_trail_association_tracking/reifiers/has_many.rb:112:in 'Enumerable#map'": 20,
+          "lib/paper_trail_association_tracking/reifiers/has_many.rb:88:in 'Enumerable#inject'": 20,
+          "lib/paper_trail_association_tracking/reifiers/has_many.rb:18:in 'PaperTrailAssociationTracking::Reifiers::HasMany.reify'": 20
+        },
+        "error": null,
+        "prepared_through": false,
+        "equivalent_output": null
+      },
+      {
+        "scenario": "default_scope",
+        "roots": 1,
+        "elapsed_ms": 20.111,
+        "counts": {
+          "queries": 15,
+          "model_initializations": 20,
+          "reify": 3,
+          "fallback_reflections": 1
+        },
+        "unique_reified_versions": 2,
+        "repeated_reify_calls": 1,
+        "repeated_present_reify_calls": 1,
+        "statements": {
+          "PaperTrail::Version Pluck": 1,
+          "TrackedArticle Pluck": 1,
+          "TrackedArticle Load": 2,
+          "TrackedComment Load": 2,
+          "PaperTrail::Version Load": 4,
+          "PaperTrail::VersionAssociation Pluck": 2,
+          "TrackedComment Pluck": 2,
+          "PaperTrail::VersionAssociation Load": 1
+        },
+        "query_origins": {
+          "lib/paper_trail_diff/scoped_root_selection.rb:107:in 'PaperTrailDiff::ScopedRootSelection#versioned_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:114:in 'PaperTrailDiff::ScopedRootSelection#live_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:143:in 'PaperTrailDiff::ScopedRootSelection#record_page'": 1,
+          "lib/paper_trail_diff/live_endpoint_batch_loader.rb:31:in 'PaperTrailDiff::LiveEndpointBatchLoader#load_group'": 1,
+          "lib/paper_trail_diff/live_endpoint_batch_loader.rb:84:in 'PaperTrailDiff::LiveEndpointBatchLoader#preload_batch'": 1,
+          "lib/paper_trail_diff/batched_root_versions.rb:156:in 'PaperTrailDiff::BatchedRootVersions#ordered'": 2,
+          "lib/paper_trail_diff/prepared_edge_loader.rb:108:in 'PaperTrailDiff::PreparedEdgeLoader#historical_child_ids'": 1,
+          "lib/paper_trail_diff/prepared_edge_loader.rb:139:in 'PaperTrailDiff::PreparedEdgeLoader#live_child_ids'": 1,
+          "lib/paper_trail_diff/prepared_record_index.rb:314:in 'PaperTrailDiff::PreparedRecordIndex#versions_for'": 1,
+          "lib/paper_trail_diff/activity_child_candidate_loader.rb:27:in 'PaperTrailDiff::ActivityChildCandidateLoader#historical_rows'": 1,
+          "lib/paper_trail_diff/activity_child_candidate_loader.rb:36:in 'PaperTrailDiff::ActivityChildCandidateLoader#current_pairs'": 1,
+          "lib/paper_trail_association_tracking/reifiers/has_many.rb:112:in 'Enumerable#map'": 1,
+          "lib/paper_trail_association_tracking/reifiers/has_many.rb:88:in 'Enumerable#inject'": 1,
+          "lib/paper_trail_association_tracking/reifiers/has_many.rb:18:in 'PaperTrailAssociationTracking::Reifiers::HasMany.reify'": 1
+        },
+        "error": null,
+        "prepared_through": false,
+        "equivalent_output": null
+      },
+      {
+        "scenario": "default_scope",
+        "roots": 5,
+        "elapsed_ms": 34.764,
+        "counts": {
+          "queries": 27,
+          "model_initializations": 100,
+          "reify": 15,
+          "fallback_reflections": 5
+        },
+        "unique_reified_versions": 10,
+        "repeated_reify_calls": 5,
+        "repeated_present_reify_calls": 5,
+        "statements": {
+          "PaperTrail::Version Pluck": 1,
+          "TrackedArticle Pluck": 1,
+          "TrackedArticle Load": 2,
+          "TrackedComment Load": 6,
+          "PaperTrail::Version Load": 8,
+          "PaperTrail::VersionAssociation Pluck": 2,
+          "TrackedComment Pluck": 2,
+          "PaperTrail::VersionAssociation Load": 5
+        },
+        "query_origins": {
+          "lib/paper_trail_diff/scoped_root_selection.rb:107:in 'PaperTrailDiff::ScopedRootSelection#versioned_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:114:in 'PaperTrailDiff::ScopedRootSelection#live_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:143:in 'PaperTrailDiff::ScopedRootSelection#record_page'": 1,
+          "lib/paper_trail_diff/live_endpoint_batch_loader.rb:31:in 'PaperTrailDiff::LiveEndpointBatchLoader#load_group'": 1,
+          "lib/paper_trail_diff/live_endpoint_batch_loader.rb:84:in 'PaperTrailDiff::LiveEndpointBatchLoader#preload_batch'": 1,
+          "lib/paper_trail_diff/batched_root_versions.rb:156:in 'PaperTrailDiff::BatchedRootVersions#ordered'": 2,
+          "lib/paper_trail_diff/prepared_edge_loader.rb:108:in 'PaperTrailDiff::PreparedEdgeLoader#historical_child_ids'": 1,
+          "lib/paper_trail_diff/prepared_edge_loader.rb:139:in 'PaperTrailDiff::PreparedEdgeLoader#live_child_ids'": 1,
+          "lib/paper_trail_diff/prepared_record_index.rb:314:in 'PaperTrailDiff::PreparedRecordIndex#versions_for'": 1,
+          "lib/paper_trail_diff/activity_child_candidate_loader.rb:27:in 'PaperTrailDiff::ActivityChildCandidateLoader#historical_rows'": 1,
+          "lib/paper_trail_diff/activity_child_candidate_loader.rb:36:in 'PaperTrailDiff::ActivityChildCandidateLoader#current_pairs'": 1,
+          "lib/paper_trail_association_tracking/reifiers/has_many.rb:112:in 'Enumerable#map'": 5,
+          "lib/paper_trail_association_tracking/reifiers/has_many.rb:88:in 'Enumerable#inject'": 5,
+          "lib/paper_trail_association_tracking/reifiers/has_many.rb:18:in 'PaperTrailAssociationTracking::Reifiers::HasMany.reify'": 5
+        },
+        "error": null,
+        "prepared_through": false,
+        "equivalent_output": null
+      },
+      {
+        "scenario": "default_scope",
+        "roots": 20,
+        "elapsed_ms": 122.964,
+        "counts": {
+          "queries": 72,
+          "model_initializations": 400,
+          "reify": 60,
+          "fallback_reflections": 20
+        },
+        "unique_reified_versions": 40,
+        "repeated_reify_calls": 20,
+        "repeated_present_reify_calls": 20,
+        "statements": {
+          "PaperTrail::Version Pluck": 1,
+          "TrackedArticle Pluck": 1,
+          "TrackedArticle Load": 2,
+          "TrackedComment Load": 21,
+          "PaperTrail::Version Load": 23,
+          "PaperTrail::VersionAssociation Pluck": 2,
+          "TrackedComment Pluck": 2,
+          "PaperTrail::VersionAssociation Load": 20
+        },
+        "query_origins": {
+          "lib/paper_trail_diff/scoped_root_selection.rb:107:in 'PaperTrailDiff::ScopedRootSelection#versioned_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:114:in 'PaperTrailDiff::ScopedRootSelection#live_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:143:in 'PaperTrailDiff::ScopedRootSelection#record_page'": 1,
+          "lib/paper_trail_diff/live_endpoint_batch_loader.rb:31:in 'PaperTrailDiff::LiveEndpointBatchLoader#load_group'": 1,
+          "lib/paper_trail_diff/live_endpoint_batch_loader.rb:84:in 'PaperTrailDiff::LiveEndpointBatchLoader#preload_batch'": 1,
+          "lib/paper_trail_diff/batched_root_versions.rb:156:in 'PaperTrailDiff::BatchedRootVersions#ordered'": 2,
+          "lib/paper_trail_diff/prepared_edge_loader.rb:108:in 'PaperTrailDiff::PreparedEdgeLoader#historical_child_ids'": 1,
+          "lib/paper_trail_diff/prepared_edge_loader.rb:139:in 'PaperTrailDiff::PreparedEdgeLoader#live_child_ids'": 1,
+          "lib/paper_trail_diff/prepared_record_index.rb:314:in 'PaperTrailDiff::PreparedRecordIndex#versions_for'": 1,
+          "lib/paper_trail_diff/activity_child_candidate_loader.rb:27:in 'PaperTrailDiff::ActivityChildCandidateLoader#historical_rows'": 1,
+          "lib/paper_trail_diff/activity_child_candidate_loader.rb:36:in 'PaperTrailDiff::ActivityChildCandidateLoader#current_pairs'": 1,
+          "lib/paper_trail_association_tracking/reifiers/has_many.rb:112:in 'Enumerable#map'": 20,
+          "lib/paper_trail_association_tracking/reifiers/has_many.rb:88:in 'Enumerable#inject'": 20,
+          "lib/paper_trail_association_tracking/reifiers/has_many.rb:18:in 'PaperTrailAssociationTracking::Reifiers::HasMany.reify'": 20
+        },
+        "error": null,
+        "prepared_through": false,
+        "equivalent_output": null
+      },
+      {
+        "scenario": "through_has_many",
+        "roots": 1,
+        "elapsed_ms": 74.337,
+        "counts": {
+          "queries": 122,
+          "model_initializations": 131,
+          "reify": 31,
+          "fallback_reflections": 7
+        },
+        "unique_reified_versions": 7,
+        "repeated_reify_calls": 24,
+        "repeated_present_reify_calls": 20,
+        "statements": {
+          "PaperTrail::Version Pluck": 1,
+          "TrackedAuthor Pluck": 1,
+          "TrackedAuthor Load": 2,
+          "TrackedArticle Load": 9,
+          "TrackedComment Load": 25,
+          "PaperTrail::Version Load": 33,
+          "PaperTrail::VersionAssociation Pluck": 4,
+          "TrackedArticle Pluck": 2,
+          "TrackedComment Pluck": 2,
+          "PaperTrail::VersionAssociation Load": 37,
+          "TrackedAuthorship Load": 6
+        },
+        "query_origins": {
+          "lib/paper_trail_diff/scoped_root_selection.rb:107:in 'PaperTrailDiff::ScopedRootSelection#versioned_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:114:in 'PaperTrailDiff::ScopedRootSelection#live_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:143:in 'PaperTrailDiff::ScopedRootSelection#record_page'": 1,
+          "lib/paper_trail_diff/live_endpoint_batch_loader.rb:31:in 'PaperTrailDiff::LiveEndpointBatchLoader#load_group'": 1,
+          "lib/paper_trail_diff/live_endpoint_batch_loader.rb:84:in 'PaperTrailDiff::LiveEndpointBatchLoader#preload_batch'": 2,
+          "lib/paper_trail_diff/batched_root_versions.rb:156:in 'PaperTrailDiff::BatchedRootVersions#ordered'": 2,
+          "lib/paper_trail_diff/prepared_edge_loader.rb:108:in 'PaperTrailDiff::PreparedEdgeLoader#historical_child_ids'": 2,
+          "lib/paper_trail_diff/prepared_edge_loader.rb:139:in 'PaperTrailDiff::PreparedEdgeLoader#live_child_ids'": 2,
+          "lib/paper_trail_diff/prepared_record_index.rb:314:in 'PaperTrailDiff::PreparedRecordIndex#versions_for'": 2,
+          "lib/paper_trail_diff/prepared_record_index.rb:359:in 'PaperTrailDiff::PreparedRecordIndex#live_records_for'": 1,
+          "lib/paper_trail_diff/activity_child_candidate_loader.rb:27:in 'PaperTrailDiff::ActivityChildCandidateLoader#historical_rows'": 2,
+          "lib/paper_trail_diff/activity_child_candidate_loader.rb:36:in 'PaperTrailDiff::ActivityChildCandidateLoader#current_pairs'": 2,
+          "lib/paper_trail_association_tracking/reifiers/has_many.rb:112:in 'Enumerable#map'": 37,
+          "lib/paper_trail_association_tracking/reifiers/has_many.rb:88:in 'Enumerable#inject'": 22,
+          "lib/paper_trail_association_tracking/reifiers/has_many.rb:18:in 'PaperTrailAssociationTracking::Reifiers::HasMany.reify'": 37,
+          "lib/paper_trail_association_tracking/reifiers/has_many_through.rb:116:in 'Enumerable#map'": 7
+        },
+        "error": null,
+        "prepared_through": false,
+        "equivalent_output": null
+      },
+      {
+        "scenario": "through_has_many",
+        "roots": 5,
+        "elapsed_ms": 312.494,
+        "counts": {
+          "queries": 534,
+          "model_initializations": 655,
+          "reify": 155,
+          "fallback_reflections": 35
+        },
+        "unique_reified_versions": 35,
+        "repeated_reify_calls": 120,
+        "repeated_present_reify_calls": 100,
+        "statements": {
+          "PaperTrail::Version Pluck": 1,
+          "TrackedAuthor Pluck": 1,
+          "TrackedAuthor Load": 2,
+          "TrackedArticle Load": 37,
+          "TrackedComment Load": 121,
+          "PaperTrail::Version Load": 149,
+          "PaperTrail::VersionAssociation Pluck": 4,
+          "TrackedArticle Pluck": 2,
+          "TrackedComment Pluck": 2,
+          "PaperTrail::VersionAssociation Load": 185,
+          "TrackedAuthorship Load": 30
+        },
+        "query_origins": {
+          "lib/paper_trail_diff/scoped_root_selection.rb:107:in 'PaperTrailDiff::ScopedRootSelection#versioned_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:114:in 'PaperTrailDiff::ScopedRootSelection#live_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:143:in 'PaperTrailDiff::ScopedRootSelection#record_page'": 1,
+          "lib/paper_trail_diff/live_endpoint_batch_loader.rb:31:in 'PaperTrailDiff::LiveEndpointBatchLoader#load_group'": 1,
+          "lib/paper_trail_diff/live_endpoint_batch_loader.rb:84:in 'PaperTrailDiff::LiveEndpointBatchLoader#preload_batch'": 2,
+          "lib/paper_trail_diff/batched_root_versions.rb:156:in 'PaperTrailDiff::BatchedRootVersions#ordered'": 2,
+          "lib/paper_trail_diff/prepared_edge_loader.rb:108:in 'PaperTrailDiff::PreparedEdgeLoader#historical_child_ids'": 2,
+          "lib/paper_trail_diff/prepared_edge_loader.rb:139:in 'PaperTrailDiff::PreparedEdgeLoader#live_child_ids'": 2,
+          "lib/paper_trail_diff/prepared_record_index.rb:314:in 'PaperTrailDiff::PreparedRecordIndex#versions_for'": 2,
+          "lib/paper_trail_diff/prepared_record_index.rb:359:in 'PaperTrailDiff::PreparedRecordIndex#live_records_for'": 1,
+          "lib/paper_trail_diff/activity_child_candidate_loader.rb:27:in 'PaperTrailDiff::ActivityChildCandidateLoader#historical_rows'": 2,
+          "lib/paper_trail_diff/activity_child_candidate_loader.rb:36:in 'PaperTrailDiff::ActivityChildCandidateLoader#current_pairs'": 2,
+          "lib/paper_trail_association_tracking/reifiers/has_many.rb:112:in 'Enumerable#map'": 185,
+          "lib/paper_trail_association_tracking/reifiers/has_many.rb:88:in 'Enumerable#inject'": 110,
+          "lib/paper_trail_association_tracking/reifiers/has_many.rb:18:in 'PaperTrailAssociationTracking::Reifiers::HasMany.reify'": 185,
+          "lib/paper_trail_association_tracking/reifiers/has_many_through.rb:116:in 'Enumerable#map'": 35
+        },
+        "error": null,
+        "prepared_through": false,
+        "equivalent_output": null
+      },
+      {
+        "scenario": "through_has_many",
+        "roots": 20,
+        "elapsed_ms": 1235.133,
+        "counts": {
+          "queries": 2079,
+          "model_initializations": 2620,
+          "reify": 620,
+          "fallback_reflections": 140
+        },
+        "unique_reified_versions": 140,
+        "repeated_reify_calls": 480,
+        "repeated_present_reify_calls": 400,
+        "statements": {
+          "PaperTrail::Version Pluck": 1,
+          "TrackedAuthor Pluck": 1,
+          "TrackedAuthor Load": 2,
+          "TrackedArticle Load": 142,
+          "TrackedComment Load": 481,
+          "PaperTrail::Version Load": 584,
+          "PaperTrail::VersionAssociation Pluck": 4,
+          "TrackedArticle Pluck": 2,
+          "TrackedComment Pluck": 2,
+          "PaperTrail::VersionAssociation Load": 740,
+          "TrackedAuthorship Load": 120
+        },
+        "query_origins": {
+          "lib/paper_trail_diff/scoped_root_selection.rb:107:in 'PaperTrailDiff::ScopedRootSelection#versioned_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:114:in 'PaperTrailDiff::ScopedRootSelection#live_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:143:in 'PaperTrailDiff::ScopedRootSelection#record_page'": 1,
+          "lib/paper_trail_diff/live_endpoint_batch_loader.rb:31:in 'PaperTrailDiff::LiveEndpointBatchLoader#load_group'": 1,
+          "lib/paper_trail_diff/live_endpoint_batch_loader.rb:84:in 'PaperTrailDiff::LiveEndpointBatchLoader#preload_batch'": 2,
+          "lib/paper_trail_diff/batched_root_versions.rb:156:in 'PaperTrailDiff::BatchedRootVersions#ordered'": 2,
+          "lib/paper_trail_diff/prepared_edge_loader.rb:108:in 'PaperTrailDiff::PreparedEdgeLoader#historical_child_ids'": 2,
+          "lib/paper_trail_diff/prepared_edge_loader.rb:139:in 'PaperTrailDiff::PreparedEdgeLoader#live_child_ids'": 2,
+          "lib/paper_trail_diff/prepared_record_index.rb:314:in 'PaperTrailDiff::PreparedRecordIndex#versions_for'": 2,
+          "lib/paper_trail_diff/prepared_record_index.rb:359:in 'PaperTrailDiff::PreparedRecordIndex#live_records_for'": 1,
+          "lib/paper_trail_diff/activity_child_candidate_loader.rb:27:in 'PaperTrailDiff::ActivityChildCandidateLoader#historical_rows'": 2,
+          "lib/paper_trail_diff/activity_child_candidate_loader.rb:36:in 'PaperTrailDiff::ActivityChildCandidateLoader#current_pairs'": 2,
+          "lib/paper_trail_association_tracking/reifiers/has_many.rb:112:in 'Enumerable#map'": 740,
+          "lib/paper_trail_association_tracking/reifiers/has_many.rb:88:in 'Enumerable#inject'": 440,
+          "lib/paper_trail_association_tracking/reifiers/has_many.rb:18:in 'PaperTrailAssociationTracking::Reifiers::HasMany.reify'": 740,
+          "lib/paper_trail_association_tracking/reifiers/has_many_through.rb:116:in 'Enumerable#map'": 140
+        },
+        "error": null,
+        "prepared_through": false,
+        "equivalent_output": null
+      },
+      {
+        "scenario": "callback",
+        "roots": 1,
+        "elapsed_ms": 5.684,
+        "counts": {
+          "queries": 10,
+          "model_initializations": 7,
+          "reify": 3
+        },
+        "unique_reified_versions": 2,
+        "repeated_reify_calls": 1,
+        "repeated_present_reify_calls": 1,
+        "statements": {
+          "PaperTrail::Version Pluck": 1,
+          "TrackedArticle Pluck": 1,
+          "TrackedArticle Load": 2,
+          "TrackedTag Count": 4,
+          "PaperTrail::Version Load": 2
+        },
+        "query_origins": {
+          "lib/paper_trail_diff/scoped_root_selection.rb:107:in 'PaperTrailDiff::ScopedRootSelection#versioned_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:114:in 'PaperTrailDiff::ScopedRootSelection#live_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:143:in 'PaperTrailDiff::ScopedRootSelection#record_page'": 2,
+          "lib/paper_trail_diff/live_endpoint_batch_loader.rb:31:in 'PaperTrailDiff::LiveEndpointBatchLoader#load_group'": 2,
+          "lib/paper_trail_diff/batched_root_versions.rb:156:in 'PaperTrailDiff::BatchedRootVersions#ordered'": 2,
+          "lib/paper_trail_association_tracking/reifier.rb:18:in 'PaperTrailAssociationTracking::Reifier::ClassMethods#reify'": 2
+        },
+        "error": null,
+        "prepared_through": false,
+        "equivalent_output": null
+      },
+      {
+        "scenario": "callback",
+        "roots": 5,
+        "elapsed_ms": 14.874,
+        "counts": {
+          "queries": 26,
+          "model_initializations": 35,
+          "reify": 15
+        },
+        "unique_reified_versions": 10,
+        "repeated_reify_calls": 5,
+        "repeated_present_reify_calls": 5,
+        "statements": {
+          "PaperTrail::Version Pluck": 1,
+          "TrackedArticle Pluck": 1,
+          "TrackedArticle Load": 2,
+          "TrackedTag Count": 20,
+          "PaperTrail::Version Load": 2
+        },
+        "query_origins": {
+          "lib/paper_trail_diff/scoped_root_selection.rb:107:in 'PaperTrailDiff::ScopedRootSelection#versioned_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:114:in 'PaperTrailDiff::ScopedRootSelection#live_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:143:in 'PaperTrailDiff::ScopedRootSelection#record_page'": 6,
+          "lib/paper_trail_diff/live_endpoint_batch_loader.rb:31:in 'PaperTrailDiff::LiveEndpointBatchLoader#load_group'": 6,
+          "lib/paper_trail_diff/batched_root_versions.rb:156:in 'PaperTrailDiff::BatchedRootVersions#ordered'": 2,
+          "lib/paper_trail_association_tracking/reifier.rb:18:in 'PaperTrailAssociationTracking::Reifier::ClassMethods#reify'": 10
+        },
+        "error": null,
+        "prepared_through": false,
+        "equivalent_output": null
+      },
+      {
+        "scenario": "callback",
+        "roots": 20,
+        "elapsed_ms": 48.183,
+        "counts": {
+          "queries": 86,
+          "model_initializations": 140,
+          "reify": 60
+        },
+        "unique_reified_versions": 40,
+        "repeated_reify_calls": 20,
+        "repeated_present_reify_calls": 20,
+        "statements": {
+          "PaperTrail::Version Pluck": 1,
+          "TrackedArticle Pluck": 1,
+          "TrackedArticle Load": 2,
+          "TrackedTag Count": 80,
+          "PaperTrail::Version Load": 2
+        },
+        "query_origins": {
+          "lib/paper_trail_diff/scoped_root_selection.rb:107:in 'PaperTrailDiff::ScopedRootSelection#versioned_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:114:in 'PaperTrailDiff::ScopedRootSelection#live_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:143:in 'PaperTrailDiff::ScopedRootSelection#record_page'": 21,
+          "lib/paper_trail_diff/live_endpoint_batch_loader.rb:31:in 'PaperTrailDiff::LiveEndpointBatchLoader#load_group'": 21,
+          "lib/paper_trail_diff/batched_root_versions.rb:156:in 'PaperTrailDiff::BatchedRootVersions#ordered'": 2,
+          "lib/paper_trail_association_tracking/reifier.rb:18:in 'PaperTrailAssociationTracking::Reifier::ClassMethods#reify'": 40
+        },
+        "error": null,
+        "prepared_through": false,
+        "equivalent_output": null
+      },
+      {
+        "scenario": "callable",
+        "roots": 1,
+        "elapsed_ms": 6.156,
+        "counts": {
+          "queries": 8,
+          "model_initializations": 11,
+          "reify": 5
+        },
+        "unique_reified_versions": 2,
+        "repeated_reify_calls": 3,
+        "repeated_present_reify_calls": 2,
+        "statements": {
+          "PaperTrail::Version Pluck": 1,
+          "PaperTrail::Version Load": 3,
+          "TrackedComment Exists?": 1,
+          "TrackedArticle Pluck": 1,
+          "TrackedArticle Load": 2
+        },
+        "query_origins": {
+          "lib/paper_trail_diff/scoped_root_selection.rb:107:in 'PaperTrailDiff::ScopedRootSelection#versioned_ids'": 1,
+          "lib/paper_trail_diff/historical_filter.rb:77:in 'PaperTrailDiff::HistoricalFilter#candidate_versions'": 1,
+          "lib/paper_trail_diff/historical_filter.rb:101:in 'PaperTrailDiff::HistoricalFilter#matches?'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:114:in 'PaperTrailDiff::ScopedRootSelection#live_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:143:in 'PaperTrailDiff::ScopedRootSelection#record_page'": 1,
+          "lib/paper_trail_diff/live_endpoint_batch_loader.rb:31:in 'PaperTrailDiff::LiveEndpointBatchLoader#load_group'": 1,
+          "lib/paper_trail_diff/batched_root_versions.rb:156:in 'PaperTrailDiff::BatchedRootVersions#ordered'": 2
+        },
+        "error": null,
+        "prepared_through": false,
+        "equivalent_output": null
+      },
+      {
+        "scenario": "callable",
+        "roots": 5,
+        "elapsed_ms": 15.871,
+        "counts": {
+          "queries": 12,
+          "model_initializations": 55,
+          "reify": 25
+        },
+        "unique_reified_versions": 10,
+        "repeated_reify_calls": 15,
+        "repeated_present_reify_calls": 10,
+        "statements": {
+          "PaperTrail::Version Pluck": 1,
+          "PaperTrail::Version Load": 3,
+          "TrackedComment Exists?": 5,
+          "TrackedArticle Pluck": 1,
+          "TrackedArticle Load": 2
+        },
+        "query_origins": {
+          "lib/paper_trail_diff/scoped_root_selection.rb:107:in 'PaperTrailDiff::ScopedRootSelection#versioned_ids'": 1,
+          "lib/paper_trail_diff/historical_filter.rb:77:in 'PaperTrailDiff::HistoricalFilter#candidate_versions'": 1,
+          "lib/paper_trail_diff/historical_filter.rb:101:in 'PaperTrailDiff::HistoricalFilter#matches?'": 5,
+          "lib/paper_trail_diff/scoped_root_selection.rb:114:in 'PaperTrailDiff::ScopedRootSelection#live_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:143:in 'PaperTrailDiff::ScopedRootSelection#record_page'": 1,
+          "lib/paper_trail_diff/live_endpoint_batch_loader.rb:31:in 'PaperTrailDiff::LiveEndpointBatchLoader#load_group'": 1,
+          "lib/paper_trail_diff/batched_root_versions.rb:156:in 'PaperTrailDiff::BatchedRootVersions#ordered'": 2
+        },
+        "error": null,
+        "prepared_through": false,
+        "equivalent_output": null
+      },
+      {
+        "scenario": "callable",
+        "roots": 20,
+        "elapsed_ms": 41.9,
+        "counts": {
+          "queries": 27,
+          "model_initializations": 220,
+          "reify": 100
+        },
+        "unique_reified_versions": 40,
+        "repeated_reify_calls": 60,
+        "repeated_present_reify_calls": 40,
+        "statements": {
+          "PaperTrail::Version Pluck": 1,
+          "PaperTrail::Version Load": 3,
+          "TrackedComment Exists?": 20,
+          "TrackedArticle Pluck": 1,
+          "TrackedArticle Load": 2
+        },
+        "query_origins": {
+          "lib/paper_trail_diff/scoped_root_selection.rb:107:in 'PaperTrailDiff::ScopedRootSelection#versioned_ids'": 1,
+          "lib/paper_trail_diff/historical_filter.rb:77:in 'PaperTrailDiff::HistoricalFilter#candidate_versions'": 1,
+          "lib/paper_trail_diff/historical_filter.rb:101:in 'PaperTrailDiff::HistoricalFilter#matches?'": 20,
+          "lib/paper_trail_diff/scoped_root_selection.rb:114:in 'PaperTrailDiff::ScopedRootSelection#live_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:143:in 'PaperTrailDiff::ScopedRootSelection#record_page'": 1,
+          "lib/paper_trail_diff/live_endpoint_batch_loader.rb:31:in 'PaperTrailDiff::LiveEndpointBatchLoader#load_group'": 1,
+          "lib/paper_trail_diff/batched_root_versions.rb:156:in 'PaperTrailDiff::BatchedRootVersions#ordered'": 2
+        },
+        "error": null,
+        "prepared_through": false,
+        "equivalent_output": null
+      },
+      {
+        "scenario": "without_changes",
+        "roots": 1,
+        "elapsed_ms": 5.515,
+        "counts": {
+          "queries": 6,
+          "model_initializations": 6,
+          "reify": 2
+        },
+        "unique_reified_versions": 2,
+        "repeated_reify_calls": 0,
+        "repeated_present_reify_calls": 0,
+        "statements": {
+          "PaperTrail::Version Pluck": 1,
+          "TrackedArticle Pluck": 1,
+          "TrackedArticle Load": 2,
+          "PaperTrail::Version Load": 2
+        },
+        "query_origins": {
+          "lib/paper_trail_diff/scoped_root_selection.rb:107:in 'PaperTrailDiff::ScopedRootSelection#versioned_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:114:in 'PaperTrailDiff::ScopedRootSelection#live_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:143:in 'PaperTrailDiff::ScopedRootSelection#record_page'": 1,
+          "lib/paper_trail_diff/live_endpoint_batch_loader.rb:31:in 'PaperTrailDiff::LiveEndpointBatchLoader#load_group'": 1,
+          "lib/paper_trail_diff/batched_root_versions.rb:156:in 'PaperTrailDiff::BatchedRootVersions#ordered'": 2
+        },
+        "error": null,
+        "prepared_through": false,
+        "equivalent_output": null
+      },
+      {
+        "scenario": "without_changes",
+        "roots": 5,
+        "elapsed_ms": 9.252,
+        "counts": {
+          "queries": 6,
+          "model_initializations": 30,
+          "reify": 10
+        },
+        "unique_reified_versions": 10,
+        "repeated_reify_calls": 0,
+        "repeated_present_reify_calls": 0,
+        "statements": {
+          "PaperTrail::Version Pluck": 1,
+          "TrackedArticle Pluck": 1,
+          "TrackedArticle Load": 2,
+          "PaperTrail::Version Load": 2
+        },
+        "query_origins": {
+          "lib/paper_trail_diff/scoped_root_selection.rb:107:in 'PaperTrailDiff::ScopedRootSelection#versioned_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:114:in 'PaperTrailDiff::ScopedRootSelection#live_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:143:in 'PaperTrailDiff::ScopedRootSelection#record_page'": 1,
+          "lib/paper_trail_diff/live_endpoint_batch_loader.rb:31:in 'PaperTrailDiff::LiveEndpointBatchLoader#load_group'": 1,
+          "lib/paper_trail_diff/batched_root_versions.rb:156:in 'PaperTrailDiff::BatchedRootVersions#ordered'": 2
+        },
+        "error": null,
+        "prepared_through": false,
+        "equivalent_output": null
+      },
+      {
+        "scenario": "without_changes",
+        "roots": 20,
+        "elapsed_ms": 22.424,
+        "counts": {
+          "queries": 6,
+          "model_initializations": 120,
+          "reify": 40
+        },
+        "unique_reified_versions": 40,
+        "repeated_reify_calls": 0,
+        "repeated_present_reify_calls": 0,
+        "statements": {
+          "PaperTrail::Version Pluck": 1,
+          "TrackedArticle Pluck": 1,
+          "TrackedArticle Load": 2,
+          "PaperTrail::Version Load": 2
+        },
+        "query_origins": {
+          "lib/paper_trail_diff/scoped_root_selection.rb:107:in 'PaperTrailDiff::ScopedRootSelection#versioned_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:114:in 'PaperTrailDiff::ScopedRootSelection#live_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:143:in 'PaperTrailDiff::ScopedRootSelection#record_page'": 1,
+          "lib/paper_trail_diff/live_endpoint_batch_loader.rb:31:in 'PaperTrailDiff::LiveEndpointBatchLoader#load_group'": 1,
+          "lib/paper_trail_diff/batched_root_versions.rb:156:in 'PaperTrailDiff::BatchedRootVersions#ordered'": 2
+        },
+        "error": null,
+        "prepared_through": false,
+        "equivalent_output": null
+      },
+      {
+        "scenario": "comments_without_changes",
+        "roots": 1,
+        "elapsed_ms": 16.098,
+        "counts": {
+          "queries": 15,
+          "model_initializations": 14,
+          "reify": 5
+        },
+        "unique_reified_versions": 5,
+        "repeated_reify_calls": 0,
+        "repeated_present_reify_calls": 0,
+        "statements": {
+          "PaperTrail::Version Pluck": 1,
+          "TrackedArticle Pluck": 1,
+          "TrackedArticle Load": 2,
+          "TrackedComment Load": 2,
+          "PaperTrail::Version Load": 5,
+          "PaperTrail::VersionAssociation Pluck": 2,
+          "TrackedComment Pluck": 2
+        },
+        "query_origins": {
+          "lib/paper_trail_diff/scoped_root_selection.rb:107:in 'PaperTrailDiff::ScopedRootSelection#versioned_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:114:in 'PaperTrailDiff::ScopedRootSelection#live_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:143:in 'PaperTrailDiff::ScopedRootSelection#record_page'": 1,
+          "lib/paper_trail_diff/live_endpoint_batch_loader.rb:31:in 'PaperTrailDiff::LiveEndpointBatchLoader#load_group'": 1,
+          "lib/paper_trail_diff/live_endpoint_batch_loader.rb:84:in 'PaperTrailDiff::LiveEndpointBatchLoader#preload_batch'": 1,
+          "lib/paper_trail_diff/batched_root_versions.rb:156:in 'PaperTrailDiff::BatchedRootVersions#ordered'": 2,
+          "lib/paper_trail_diff/prepared_edge_loader.rb:108:in 'PaperTrailDiff::PreparedEdgeLoader#historical_child_ids'": 1,
+          "lib/paper_trail_diff/prepared_edge_loader.rb:139:in 'PaperTrailDiff::PreparedEdgeLoader#live_child_ids'": 1,
+          "lib/paper_trail_diff/prepared_record_index.rb:314:in 'PaperTrailDiff::PreparedRecordIndex#versions_for'": 1,
+          "lib/paper_trail_diff/activity_child_candidate_loader.rb:27:in 'PaperTrailDiff::ActivityChildCandidateLoader#historical_rows'": 1,
+          "lib/paper_trail_diff/activity_child_candidate_loader.rb:36:in 'PaperTrailDiff::ActivityChildCandidateLoader#current_pairs'": 1,
+          "lib/paper_trail_diff/activity_event_record_resolver.rb:25:in 'PaperTrailDiff::ActivityEventRecordResolver#record_after'": 2,
+          "lib/paper_trail_diff/activity_event_record_resolver.rb:31:in 'PaperTrailDiff::ActivityEventRecordResolver#record_after'": 1
+        },
+        "error": null,
+        "prepared_through": false,
+        "equivalent_output": null
+      },
+      {
+        "scenario": "comments_without_changes",
+        "roots": 5,
+        "elapsed_ms": 29.216,
+        "counts": {
+          "queries": 27,
+          "model_initializations": 70,
+          "reify": 25
+        },
+        "unique_reified_versions": 25,
+        "repeated_reify_calls": 0,
+        "repeated_present_reify_calls": 0,
+        "statements": {
+          "PaperTrail::Version Pluck": 1,
+          "TrackedArticle Pluck": 1,
+          "TrackedArticle Load": 2,
+          "TrackedComment Load": 6,
+          "PaperTrail::Version Load": 13,
+          "PaperTrail::VersionAssociation Pluck": 2,
+          "TrackedComment Pluck": 2
+        },
+        "query_origins": {
+          "lib/paper_trail_diff/scoped_root_selection.rb:107:in 'PaperTrailDiff::ScopedRootSelection#versioned_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:114:in 'PaperTrailDiff::ScopedRootSelection#live_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:143:in 'PaperTrailDiff::ScopedRootSelection#record_page'": 1,
+          "lib/paper_trail_diff/live_endpoint_batch_loader.rb:31:in 'PaperTrailDiff::LiveEndpointBatchLoader#load_group'": 1,
+          "lib/paper_trail_diff/live_endpoint_batch_loader.rb:84:in 'PaperTrailDiff::LiveEndpointBatchLoader#preload_batch'": 1,
+          "lib/paper_trail_diff/batched_root_versions.rb:156:in 'PaperTrailDiff::BatchedRootVersions#ordered'": 2,
+          "lib/paper_trail_diff/prepared_edge_loader.rb:108:in 'PaperTrailDiff::PreparedEdgeLoader#historical_child_ids'": 1,
+          "lib/paper_trail_diff/prepared_edge_loader.rb:139:in 'PaperTrailDiff::PreparedEdgeLoader#live_child_ids'": 1,
+          "lib/paper_trail_diff/prepared_record_index.rb:314:in 'PaperTrailDiff::PreparedRecordIndex#versions_for'": 1,
+          "lib/paper_trail_diff/activity_child_candidate_loader.rb:27:in 'PaperTrailDiff::ActivityChildCandidateLoader#historical_rows'": 1,
+          "lib/paper_trail_diff/activity_child_candidate_loader.rb:36:in 'PaperTrailDiff::ActivityChildCandidateLoader#current_pairs'": 1,
+          "lib/paper_trail_diff/activity_event_record_resolver.rb:25:in 'PaperTrailDiff::ActivityEventRecordResolver#record_after'": 10,
+          "lib/paper_trail_diff/activity_event_record_resolver.rb:31:in 'PaperTrailDiff::ActivityEventRecordResolver#record_after'": 5
+        },
+        "error": null,
+        "prepared_through": false,
+        "equivalent_output": null
+      },
+      {
+        "scenario": "comments_without_changes",
+        "roots": 20,
+        "elapsed_ms": 89.249,
+        "counts": {
+          "queries": 72,
+          "model_initializations": 280,
+          "reify": 100
+        },
+        "unique_reified_versions": 100,
+        "repeated_reify_calls": 0,
+        "repeated_present_reify_calls": 0,
+        "statements": {
+          "PaperTrail::Version Pluck": 1,
+          "TrackedArticle Pluck": 1,
+          "TrackedArticle Load": 2,
+          "TrackedComment Load": 21,
+          "PaperTrail::Version Load": 43,
+          "PaperTrail::VersionAssociation Pluck": 2,
+          "TrackedComment Pluck": 2
+        },
+        "query_origins": {
+          "lib/paper_trail_diff/scoped_root_selection.rb:107:in 'PaperTrailDiff::ScopedRootSelection#versioned_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:114:in 'PaperTrailDiff::ScopedRootSelection#live_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:143:in 'PaperTrailDiff::ScopedRootSelection#record_page'": 1,
+          "lib/paper_trail_diff/live_endpoint_batch_loader.rb:31:in 'PaperTrailDiff::LiveEndpointBatchLoader#load_group'": 1,
+          "lib/paper_trail_diff/live_endpoint_batch_loader.rb:84:in 'PaperTrailDiff::LiveEndpointBatchLoader#preload_batch'": 1,
+          "lib/paper_trail_diff/batched_root_versions.rb:156:in 'PaperTrailDiff::BatchedRootVersions#ordered'": 2,
+          "lib/paper_trail_diff/prepared_edge_loader.rb:108:in 'PaperTrailDiff::PreparedEdgeLoader#historical_child_ids'": 1,
+          "lib/paper_trail_diff/prepared_edge_loader.rb:139:in 'PaperTrailDiff::PreparedEdgeLoader#live_child_ids'": 1,
+          "lib/paper_trail_diff/prepared_record_index.rb:314:in 'PaperTrailDiff::PreparedRecordIndex#versions_for'": 1,
+          "lib/paper_trail_diff/activity_child_candidate_loader.rb:27:in 'PaperTrailDiff::ActivityChildCandidateLoader#historical_rows'": 1,
+          "lib/paper_trail_diff/activity_child_candidate_loader.rb:36:in 'PaperTrailDiff::ActivityChildCandidateLoader#current_pairs'": 1,
+          "lib/paper_trail_diff/activity_event_record_resolver.rb:25:in 'PaperTrailDiff::ActivityEventRecordResolver#record_after'": 40,
+          "lib/paper_trail_diff/activity_event_record_resolver.rb:31:in 'PaperTrailDiff::ActivityEventRecordResolver#record_after'": 20
+        },
+        "error": null,
+        "prepared_through": false,
+        "equivalent_output": null
+      }
+    ],
+    "prepared_through": [
+      {
+        "scenario": "through_has_many",
+        "roots": 1,
+        "elapsed_ms": 22.794,
+        "counts": {
+          "queries": 19,
+          "model_initializations": 36,
+          "reify": 11,
+          "prepared_instances": 15
+        },
+        "unique_reified_versions": 5,
+        "repeated_reify_calls": 6,
+        "repeated_present_reify_calls": 6,
+        "statements": {
+          "PaperTrail::Version Pluck": 1,
+          "TrackedAuthor Pluck": 1,
+          "TrackedAuthor Load": 2,
+          "TrackedArticle Load": 2,
+          "TrackedComment Load": 1,
+          "PaperTrail::Version Load": 4,
+          "PaperTrail::VersionAssociation Pluck": 4,
+          "TrackedArticle Pluck": 2,
+          "TrackedComment Pluck": 2
+        },
+        "query_origins": {
+          "lib/paper_trail_diff/scoped_root_selection.rb:107:in 'PaperTrailDiff::ScopedRootSelection#versioned_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:114:in 'PaperTrailDiff::ScopedRootSelection#live_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:143:in 'PaperTrailDiff::ScopedRootSelection#record_page'": 1,
+          "lib/paper_trail_diff/live_endpoint_batch_loader.rb:31:in 'PaperTrailDiff::LiveEndpointBatchLoader#load_group'": 1,
+          "lib/paper_trail_diff/live_endpoint_batch_loader.rb:84:in 'PaperTrailDiff::LiveEndpointBatchLoader#preload_batch'": 2,
+          "lib/paper_trail_diff/batched_root_versions.rb:156:in 'PaperTrailDiff::BatchedRootVersions#ordered'": 2,
+          "lib/paper_trail_diff/prepared_edge_loader.rb:108:in 'PaperTrailDiff::PreparedEdgeLoader#historical_child_ids'": 2,
+          "lib/paper_trail_diff/prepared_edge_loader.rb:139:in 'PaperTrailDiff::PreparedEdgeLoader#live_child_ids'": 2,
+          "lib/paper_trail_diff/prepared_record_index.rb:314:in 'PaperTrailDiff::PreparedRecordIndex#versions_for'": 2,
+          "lib/paper_trail_diff/prepared_record_index.rb:359:in 'PaperTrailDiff::PreparedRecordIndex#live_records_for'": 1,
+          "lib/paper_trail_diff/activity_child_candidate_loader.rb:27:in 'PaperTrailDiff::ActivityChildCandidateLoader#historical_rows'": 2,
+          "lib/paper_trail_diff/activity_child_candidate_loader.rb:36:in 'PaperTrailDiff::ActivityChildCandidateLoader#current_pairs'": 2
+        },
+        "error": null,
+        "prepared_through": true,
+        "equivalent_output": true
+      },
+      {
+        "scenario": "through_has_many",
+        "roots": 5,
+        "elapsed_ms": 42.029,
+        "counts": {
+          "queries": 19,
+          "model_initializations": 180,
+          "reify": 55,
+          "prepared_instances": 75
+        },
+        "unique_reified_versions": 25,
+        "repeated_reify_calls": 30,
+        "repeated_present_reify_calls": 30,
+        "statements": {
+          "PaperTrail::Version Pluck": 1,
+          "TrackedAuthor Pluck": 1,
+          "TrackedAuthor Load": 2,
+          "TrackedArticle Load": 2,
+          "TrackedComment Load": 1,
+          "PaperTrail::Version Load": 4,
+          "PaperTrail::VersionAssociation Pluck": 4,
+          "TrackedArticle Pluck": 2,
+          "TrackedComment Pluck": 2
+        },
+        "query_origins": {
+          "lib/paper_trail_diff/scoped_root_selection.rb:107:in 'PaperTrailDiff::ScopedRootSelection#versioned_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:114:in 'PaperTrailDiff::ScopedRootSelection#live_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:143:in 'PaperTrailDiff::ScopedRootSelection#record_page'": 1,
+          "lib/paper_trail_diff/live_endpoint_batch_loader.rb:31:in 'PaperTrailDiff::LiveEndpointBatchLoader#load_group'": 1,
+          "lib/paper_trail_diff/live_endpoint_batch_loader.rb:84:in 'PaperTrailDiff::LiveEndpointBatchLoader#preload_batch'": 2,
+          "lib/paper_trail_diff/batched_root_versions.rb:156:in 'PaperTrailDiff::BatchedRootVersions#ordered'": 2,
+          "lib/paper_trail_diff/prepared_edge_loader.rb:108:in 'PaperTrailDiff::PreparedEdgeLoader#historical_child_ids'": 2,
+          "lib/paper_trail_diff/prepared_edge_loader.rb:139:in 'PaperTrailDiff::PreparedEdgeLoader#live_child_ids'": 2,
+          "lib/paper_trail_diff/prepared_record_index.rb:314:in 'PaperTrailDiff::PreparedRecordIndex#versions_for'": 2,
+          "lib/paper_trail_diff/prepared_record_index.rb:359:in 'PaperTrailDiff::PreparedRecordIndex#live_records_for'": 1,
+          "lib/paper_trail_diff/activity_child_candidate_loader.rb:27:in 'PaperTrailDiff::ActivityChildCandidateLoader#historical_rows'": 2,
+          "lib/paper_trail_diff/activity_child_candidate_loader.rb:36:in 'PaperTrailDiff::ActivityChildCandidateLoader#current_pairs'": 2
+        },
+        "error": null,
+        "prepared_through": true,
+        "equivalent_output": true
+      },
+      {
+        "scenario": "through_has_many",
+        "roots": 20,
+        "elapsed_ms": 129.88,
+        "counts": {
+          "queries": 19,
+          "model_initializations": 720,
+          "reify": 220,
+          "prepared_instances": 300
+        },
+        "unique_reified_versions": 100,
+        "repeated_reify_calls": 120,
+        "repeated_present_reify_calls": 120,
+        "statements": {
+          "PaperTrail::Version Pluck": 1,
+          "TrackedAuthor Pluck": 1,
+          "TrackedAuthor Load": 2,
+          "TrackedArticle Load": 2,
+          "TrackedComment Load": 1,
+          "PaperTrail::Version Load": 4,
+          "PaperTrail::VersionAssociation Pluck": 4,
+          "TrackedArticle Pluck": 2,
+          "TrackedComment Pluck": 2
+        },
+        "query_origins": {
+          "lib/paper_trail_diff/scoped_root_selection.rb:107:in 'PaperTrailDiff::ScopedRootSelection#versioned_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:114:in 'PaperTrailDiff::ScopedRootSelection#live_ids'": 1,
+          "lib/paper_trail_diff/scoped_root_selection.rb:143:in 'PaperTrailDiff::ScopedRootSelection#record_page'": 1,
+          "lib/paper_trail_diff/live_endpoint_batch_loader.rb:31:in 'PaperTrailDiff::LiveEndpointBatchLoader#load_group'": 1,
+          "lib/paper_trail_diff/live_endpoint_batch_loader.rb:84:in 'PaperTrailDiff::LiveEndpointBatchLoader#preload_batch'": 2,
+          "lib/paper_trail_diff/batched_root_versions.rb:156:in 'PaperTrailDiff::BatchedRootVersions#ordered'": 2,
+          "lib/paper_trail_diff/prepared_edge_loader.rb:108:in 'PaperTrailDiff::PreparedEdgeLoader#historical_child_ids'": 2,
+          "lib/paper_trail_diff/prepared_edge_loader.rb:139:in 'PaperTrailDiff::PreparedEdgeLoader#live_child_ids'": 2,
+          "lib/paper_trail_diff/prepared_record_index.rb:314:in 'PaperTrailDiff::PreparedRecordIndex#versions_for'": 2,
+          "lib/paper_trail_diff/prepared_record_index.rb:359:in 'PaperTrailDiff::PreparedRecordIndex#live_records_for'": 1,
+          "lib/paper_trail_diff/activity_child_candidate_loader.rb:27:in 'PaperTrailDiff::ActivityChildCandidateLoader#historical_rows'": 2,
+          "lib/paper_trail_diff/activity_child_candidate_loader.rb:36:in 'PaperTrailDiff::ActivityChildCandidateLoader#current_pairs'": 2
+        },
+        "error": null,
+        "prepared_through": true,
+        "equivalent_output": true
+      }
+    ]
+  },
+  "scalar_cost": [
+    {
+      "elapsed_ms": 934.608,
+      "queries": 6,
+      "cached_queries": 0,
+      "sql_ms": 17.135,
+      "instantiated_records": 4000,
+      "reifications": 3000,
+      "allocated_objects": 581884,
+      "retained_ruby_bytes": 15704792,
+      "rss_before_kib": 76396,
+      "rss_after_kib": 148592,
+      "process_peak_rss_kib": 148592,
+      "model_initializations": 3500,
+      "mode": "baseline",
+      "size": 500,
+      "equivalent_output": true,
+      "sample": 1
+    },
+    {
+      "elapsed_ms": 937.045,
+      "queries": 6,
+      "cached_queries": 0,
+      "sql_ms": 15.433,
+      "instantiated_records": 4000,
+      "reifications": 3000,
+      "allocated_objects": 581884,
+      "retained_ruby_bytes": 15704792,
+      "rss_before_kib": 77180,
+      "rss_after_kib": 150480,
+      "process_peak_rss_kib": 150480,
+      "model_initializations": 3500,
+      "mode": "baseline",
+      "size": 500,
+      "equivalent_output": true,
+      "sample": 2
+    },
+    {
+      "elapsed_ms": 941.675,
+      "queries": 6,
+      "cached_queries": 0,
+      "sql_ms": 14.678,
+      "instantiated_records": 4000,
+      "reifications": 3000,
+      "allocated_objects": 581884,
+      "retained_ruby_bytes": 15704792,
+      "rss_before_kib": 75836,
+      "rss_after_kib": 148612,
+      "process_peak_rss_kib": 148612,
+      "model_initializations": 3500,
+      "mode": "baseline",
+      "size": 500,
+      "equivalent_output": true,
+      "sample": 3
+    },
+    {
+      "elapsed_ms": 702.102,
+      "queries": 6,
+      "cached_queries": 0,
+      "sql_ms": 15.471,
+      "instantiated_records": 4000,
+      "reifications": 0,
+      "allocated_objects": 520398,
+      "retained_ruby_bytes": 15705352,
+      "rss_before_kib": 77124,
+      "rss_after_kib": 129332,
+      "process_peak_rss_kib": 129332,
+      "model_initializations": 1000,
+      "mode": "direct",
+      "size": 500,
+      "equivalent_output": true,
+      "sample": 1
+    },
+    {
+      "elapsed_ms": 678.401,
+      "queries": 6,
+      "cached_queries": 0,
+      "sql_ms": 15.852,
+      "instantiated_records": 4000,
+      "reifications": 0,
+      "allocated_objects": 520396,
+      "retained_ruby_bytes": 15705352,
+      "rss_before_kib": 75928,
+      "rss_after_kib": 128088,
+      "process_peak_rss_kib": 128088,
+      "model_initializations": 1000,
+      "mode": "direct",
+      "size": 500,
+      "equivalent_output": true,
+      "sample": 2
+    },
+    {
+      "elapsed_ms": 715.619,
+      "queries": 6,
+      "cached_queries": 0,
+      "sql_ms": 17.587,
+      "instantiated_records": 4000,
+      "reifications": 0,
+      "allocated_objects": 520397,
+      "retained_ruby_bytes": 15705352,
+      "rss_before_kib": 76572,
+      "rss_after_kib": 128504,
+      "process_peak_rss_kib": 128504,
+      "model_initializations": 1000,
+      "mode": "direct",
+      "size": 500,
+      "equivalent_output": true,
+      "sample": 3
+    }
+  ],
+  "scalar_parity": [
+    {
+      "model": "BenchmarkArticle",
+      "equal": true,
+      "different_attributes": [],
+      "expected": {},
+      "actual": {}
+    },
+    {
+      "model": "SpikeSpecialArticle",
+      "equal": true,
+      "different_attributes": [],
+      "expected": {},
+      "actual": {}
+    },
+    {
+      "model": "SpikeCallbackArticle",
+      "equal": false,
+      "different_attributes": [
+        "unrecorded"
+      ],
+      "expected": {
+        "unrecorded": "callback value"
+      },
+      "actual": {
+        "unrecorded": "column default"
+      }
+    },
+    {
+      "model": "SpikeScopedArticle",
+      "equal": false,
+      "different_attributes": [
+        "unrecorded"
+      ],
+      "expected": {
+        "unrecorded": "scope value"
+      },
+      "actual": {
+        "unrecorded": "column default"
+      }
+    }
+  ],
+  "experimental_association_suite": {
+    "examples": 209,
+    "failures": 1,
+    "failing_example": "spec/association/prepared_history_spec.rb:53",
+    "reason": "Historical author.comments membership differs after an ownership change."
+  },
+  "unmodified_association_suite": {
+    "examples": 209,
+    "failures": 0
+  }
+}

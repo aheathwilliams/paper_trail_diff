@@ -4,8 +4,9 @@
 module PaperTrailDiff
   # Optional full/partial snapshot operations consumed by the activity sequence.
   class ActivitySnapshotProvider
-    #: (snapshotter: untyped, refresher: untyped, preparer: untyped) -> void
-    def initialize(snapshotter:, refresher:, preparer:)
+    #: (snapshotter: untyped, refresher: untyped, preparer: untyped, ?activity_index: untyped) -> void
+    def initialize(snapshotter:, refresher:, preparer:, activity_index: nil)
+      @activity_index = activity_index
       @snapshotter = snapshotter
       @refresher = refresher
       @preparer = preparer
@@ -55,6 +56,12 @@ module PaperTrailDiff
       )
     end
 
+    #: () -> PreparedActivityIndex?
+    def activity_index
+      @activity_index&.call
+    end
+
+    # @rbs @activity_index: untyped
     # @rbs @snapshotter: untyped
     # @rbs @refresher: untyped
     # @rbs @preparer: untyped

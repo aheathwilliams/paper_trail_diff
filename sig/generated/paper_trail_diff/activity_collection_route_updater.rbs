@@ -37,8 +37,5 @@ module PaperTrailDiff
 
     # : (AssociationSnapshot, untyped, ActivityCollectionRouteChange) -> Integer?
     def nested_owner_position: (AssociationSnapshot, untyped, ActivityCollectionRouteChange) -> Integer?
-
-    # : (RecordSnapshot, String, AssociationSnapshot) -> RecordSnapshot
-    def replace_association: (RecordSnapshot, String, AssociationSnapshot) -> RecordSnapshot
   end
 end

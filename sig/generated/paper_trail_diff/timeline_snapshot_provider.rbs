@@ -21,6 +21,8 @@ module PaperTrailDiff
 
     @live_snapshotter: untyped
 
+    @snapshots: Hash[Array[untyped], RecordSnapshot?]
+
     @store: HistoricalSnapshotStore
   end
 end

@@ -126,6 +126,7 @@ module PaperTrailDiff
 
       Endpoint.validate_pair!(@from, @to)
       Endpoint.validate_pair!(@record, @to)
+      AssociationTraversal.new(@tree).reject_live_habtm_activity!(@record.class)
     end
 
     #: (Array[untyped], ?range_start: untyped, ?range_end: untyped) -> Array[ActivityEvent]
@@ -139,6 +140,7 @@ module PaperTrailDiff
         root_versions: root_versions,
         tree: @tree,
         traversal: AssociationTraversal.new(@tree),
+        prepared: (@snapshotter.activity_index if @snapshotter.respond_to?(:activity_index)),
         range_start: range_start,
         range_end: range_end
       ).call

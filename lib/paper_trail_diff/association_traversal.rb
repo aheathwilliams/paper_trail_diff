@@ -4,6 +4,17 @@
 module PaperTrailDiff
   # Resolves and validates ActiveRecord reflections for a bounded association tree.
   class AssociationTraversal
+    # The class a `belongs_to` points at for this record, reading a polymorphic
+    # type column when there is one. Nil when that type names no class.
+    #: (untyped, untyped) -> untyped
+    def self.belongs_to_target(reflection, record)
+      return reflection.klass unless reflection.polymorphic?
+
+      Object.const_get(record.public_send(reflection.foreign_type).to_s)
+    rescue NameError
+      nil
+    end
+
     #: (AssociationTree) -> void
     def initialize(tree)
       @tree = tree
@@ -35,6 +46,18 @@ module PaperTrailDiff
       selected_reflections(model_class).filter_map do |path, reflection|
         path if habtm_reflection?(reflection)
       end.freeze
+    end
+
+    # HABTM join rows have no versions of their own, so membership changes
+    # cannot be split into events once a range runs past the last root version
+    # into live state.
+    #: (untyped) -> void
+    def reject_live_habtm_activity!(model_class)
+      paths = habtm_paths(model_class)
+      return if paths.empty?
+
+      message = "live-ended activity cannot reconstruct HABTM event boundaries: #{paths.join(', ')}"
+      raise UnsupportedLiveActivityError, message
     end
 
     #: (untyped, AssociationTree, path: String) -> Array[untyped]

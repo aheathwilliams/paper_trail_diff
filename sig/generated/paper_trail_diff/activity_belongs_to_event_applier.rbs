@@ -29,9 +29,6 @@ module PaperTrailDiff
     # : (Array[RecordSnapshot], untyped, RecordSnapshot?) -> [Array[RecordSnapshot], bool]
     def replace_existing_target: (Array[RecordSnapshot], untyped, RecordSnapshot?) -> [ Array[RecordSnapshot], bool ]
 
-    # : (RecordSnapshot, String, AssociationSnapshot) -> RecordSnapshot
-    def replace_association: (RecordSnapshot, String, AssociationSnapshot) -> RecordSnapshot
-
     # : (untyped, RecordSnapshot?) -> String
     def replacement_type: (untyped, RecordSnapshot?) -> String
 

@@ -10,11 +10,12 @@ module PaperTrailDiff
     # The only thing a wall-clock window can close on besides a later version.
     CLOSE_ON_CURRENT = :current
 
-    #: (associations: Array[String | Symbol], ignore: ignore_option, ?reload_live_endpoints: bool) -> void
-    def initialize(associations:, ignore:, reload_live_endpoints: true)
+    #: (associations: Array[String | Symbol], ignore: ignore_option, ?reload_live_endpoints: bool, ?allow_expensive: bool) -> void
+    def initialize(associations:, ignore:, reload_live_endpoints: true, allow_expensive: false)
       @association_tree = AssociationTree.build(associations)
       @ignore_policy = IgnorePolicy.build(ignore, association_paths: @association_tree.paths)
       @traversal = AssociationTraversal.new(@association_tree)
+      @batch_safety = BatchSafety.new(@traversal, allow_expensive: allow_expensive)
       @traversal_preparer = TraversalPreparer.new(tree: @association_tree, traversal: @traversal)
       @live_endpoints = LiveEndpointProvider.new(
         tree: @association_tree, traversal: @traversal, reload: reload_live_endpoints
@@ -34,7 +35,14 @@ module PaperTrailDiff
       Instrumentation.instrument('compare', payload) do
         Endpoint.validate_pair!(from_endpoint, to_endpoint)
         notify_ambiguous_association_boundary(from_endpoint, to_endpoint)
-        Engine.compare(snapshot_for_endpoint(from_endpoint), snapshot_for_endpoint(to_endpoint))
+        if @association_tree.empty?
+          Engine.compare(snapshot_for_endpoint(from_endpoint), snapshot_for_endpoint(to_endpoint))
+        else
+          # Prepared history orders versions that share a timestamp; reading
+          # associations straight from PT-AT would resolve them by time alone.
+          comparison_batch([{ from: from_endpoint, to: to_endpoint }],
+                           preparer: @traversal_preparer.method(:call)).call.values.fetch(0)
+        end
       end
     end
 
@@ -44,19 +52,14 @@ module PaperTrailDiff
       count = comparisons.is_a?(Array) ? comparisons.length : 0
       payload = @instrumentation_payload.merge(comparison_count: count)
       Instrumentation.instrument('compare_many', payload) do
-        ComparisonBatch.new(
-          comparisons,
-          live_loader: @live_endpoints.method(:call), preparer: @traversal_preparer.method(:call),
-          history_preparer: @historical_store.method(:prepare_batch),
-          historical_snapshotter: method(:historical_snapshot),
-          live_normalizer: method(:normalize_live_snapshot)
-        ).call
+        comparison_batch(comparisons, preparer: method(:prepare_batch_model)).call
       end
     end
 
     #: (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped, ?close_on: Symbol?) -> Array[Step]
     def timeline(record, from:, to:, within:, version_scope: nil, close_on: nil) # rubocop:disable Metrics/ParameterLists
       @traversal_preparer.call(record.class, historical: true)
+      from, to = default_range(record, from, to, within)
       TimelineBuilder.new(
         record,
         from: from,
@@ -73,8 +76,8 @@ module PaperTrailDiff
       payload = @instrumentation_payload.merge(model_type: record.class.base_class.name.to_s)
       Instrumentation.instrument('activity_timeline', payload) do
         @traversal_preparer.call(record.class, historical: true)
+        from, to = default_range(record, from, to, within)
         live = live_endpoint_for(record, close_on, within)
-        reject_live_habtm_activity!(record.class) if Endpoint.record?(to) || live
         steps = activity_builder(
           record, from: from, to: to, within: within, version_scope: version_scope,
                   live_endpoint: live, snapshots: snapshots, group: group
@@ -88,6 +91,7 @@ module PaperTrailDiff
     def analyze(record, from:, to:, within:, activity: false, version_scope: nil, close_on: nil, snapshots: false, group: nil) # rubocop:disable Metrics/ParameterLists, Layout/LineLength
       ActivityGrouping.validate!(group, activity: activity, snapshots: snapshots)
       @traversal_preparer.call(record.class, historical: true)
+      from, to = default_range(record, from, to, within)
       live = live_endpoint_for(record, close_on, within)
       if activity
         return analyze_activity(
@@ -111,10 +115,10 @@ module PaperTrailDiff
       Instrumentation.instrument('analyze_many', payload) do
         AnalysisBatch.new(
           records,
-          time_range: within.nil? ? nil : TimeRange.new(within),
-          version_scope: version_scope,
-          close_on_current: close_on_current?(close_on, within),
-          live_loader: @live_endpoints.method(:call),
+          time_range: within.nil? ? nil : TimeRange.new(within), version_scope: version_scope,
+          close_on_current: close_on_current?(close_on, within) || within.nil?,
+          context_required: activity && !@association_tree.empty?,
+          live_loader: method(:load_batch_endpoints),
           history_preparer: @historical_store.method(:prepare_batch),
           analyzer: batched_root_analyzer(activity, within: within, snapshots: snapshots,
                                                     group: group)
@@ -126,26 +130,64 @@ module PaperTrailDiff
     # caller reporting on a population does not have to rediscover which of its
     # members changed. The roots the relation could not reach come back named
     # rather than dropped -- see `PaperTrailDiff.analyze_scope`.
-    #: (untyped, limit: Integer?, within: untyped, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?historical_filter: untyped) -> ScopedAnalysis
-    def analyze_scope(scope, limit:, within:, activity: false, version_scope: nil, close_on: nil, snapshots: false, group: nil, historical_filter: nil) # rubocop:disable Metrics/ParameterLists, Layout/LineLength
-      raise ConfigurationError, 'limit: is required when selecting roots by scope' if limit.nil?
-
+    #: (untyped, limit: Integer?, within: untyped, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?historical_filter: untyped, ?max_filter_versions: Integer, ?include_deleted: bool) -> ScopedAnalysis
+    def analyze_scope(scope, limit:, within:, activity: false, version_scope: nil, close_on: nil, snapshots: false, group: nil, historical_filter: nil, max_filter_versions: HistoricalFilter::DEFAULT_VERSION_LIMIT, include_deleted: false) # rubocop:disable Metrics/ParameterLists, Layout/LineLength
       ActivityGrouping.validate!(group, activity: activity, snapshots: snapshots)
-
-      selection = ScopedRootSelection.new(
-        scope, time_range: within.nil? ? nil : TimeRange.new(within), limit: limit,
-               historical_filter: historical_filter
+      @batch_safety.call(scope.all.model) if scope.respond_to?(:all) && scope.respond_to?(:where)
+      # @type var options: report_options
+      options = { within: within, activity: activity, version_scope: version_scope,
+                  close_on: close_on, snapshots: snapshots, group: group }
+      ScopedAnalysisBuilder.new(
+        scope, limit: limit, within: within, historical_filter: historical_filter,
+               max_filter_versions: max_filter_versions, include_deleted: include_deleted,
+               analyzer: ->(records) { analyze_many(records, **options, within: within) },
+               deleted_analyzer: lambda { |identities|
+                 analyze_deleted(scope.all.model, identities, options)
+               }
       ).call
-      ScopedAnalysis.new(
-        analyses: analyze_many(selection.records, within: within, activity: activity,
-                                                  version_scope: version_scope, close_on: close_on,
-                                                  snapshots: snapshots, group: group),
-        unreachable: selection.unreachable,
-        roots: selection.records
-      )
     end
 
     private
+
+    #: (Array[comparison_input], preparer: untyped) -> ComparisonBatch
+    def comparison_batch(comparisons, preparer:)
+      ComparisonBatch.new(
+        comparisons,
+        live_loader: @live_endpoints, preparer: preparer,
+        history_preparer: @historical_store.method(:prepare_batch),
+        historical_snapshotter: method(:historical_snapshot),
+        live_normalizer: method(:normalize_live_snapshot)
+      )
+    end
+
+    #: (Array[untyped]) -> Hash[identity, untyped]
+    def load_batch_endpoints(records)
+      records.map(&:class).uniq.each { |model| @batch_safety.call(model) }
+      @live_endpoints.call(records)
+    end
+
+    #: (untyped, historical: bool) -> void
+    def prepare_batch_model(model, historical:)
+      @batch_safety.call(model, historical: historical)
+      @traversal_preparer.call(model, historical: historical)
+    end
+
+    # @rbs @batch_safety: BatchSafety
+
+    #: (untyped, Array[Array[String]], Hash[Symbol, untyped]) -> Hash[Array[String], Analysis?]
+    def analyze_deleted(model, identities, options)
+      within = options.fetch(:within)
+      analyzer = batched_root_analyzer(
+        options.fetch(:activity), within: within, snapshots: options.fetch(:snapshots),
+                                  group: options.fetch(:group)
+      )
+      DeletedAnalysisBatch.new(
+        model, identities: identities, time_range: within.nil? ? nil : TimeRange.new(within),
+               version_scope: options.fetch(:version_scope),
+               history_preparer: @historical_store.method(:prepare_deleted_batch),
+               analyzer: analyzer
+      ).call
+    end
 
     # @rbs @association_tree: AssociationTree
     # @rbs @live_endpoints: LiveEndpointProvider
@@ -161,7 +203,6 @@ module PaperTrailDiff
 
     #: (untyped, from: untyped, to: untyped, within: untyped, version_scope: untyped, live_endpoint: untyped, ?snapshots: bool, ?group: Symbol?) -> Analysis
     def analyze_activity(record, from:, to:, within:, version_scope:, live_endpoint:, snapshots: false, group: nil) # rubocop:disable Metrics/ParameterLists, Layout/LineLength
-      reject_live_habtm_activity!(record.class) if live_endpoint || Endpoint.record?(to)
       activity_builder(
         record, from: from, to: to, within: within, version_scope: version_scope,
                 live_endpoint: live_endpoint, snapshots: snapshots, group: group
@@ -189,25 +230,38 @@ module PaperTrailDiff
       )
     end
 
-    # `close_on:` names what ends a wall-clock window, so it is meaningless for a
-    # range whose endpoints the caller already gave explicitly.
+    # A window with nothing recorded after its last change ends at the live
+    # record, which holds the state that change produced -- whether the window
+    # ended a moment ago or long before. `close_on: :current` asked for this
+    # before it was the default and is still accepted. It names what ends a
+    # wall-clock window, so it is meaningless for explicit endpoints.
     #: (Symbol?, untyped) -> bool
     def close_on_current?(close_on, within)
-      return false if close_on.nil?
-      unless close_on == CLOSE_ON_CURRENT
+      unless close_on.nil? || close_on == CLOSE_ON_CURRENT
         raise ConfigurationError, "close_on: must be #{CLOSE_ON_CURRENT.inspect} or nil"
       end
-      raise ConfigurationError, 'close_on: requires `within`' if within.nil?
+      raise ConfigurationError, 'close_on: requires `within`' if close_on && within.nil?
 
-      true
+      !within.nil?
     end
 
-    # A destroyed root has no current state to close on, and its own destroy
-    # version already terminates the history.
+    # With neither a window nor endpoints, a range is the record's whole
+    # history through its current saved state; a missing endpoint takes that
+    # side of the same default.
+    #: (untyped, untyped, untyped, untyped) -> [untyped, untyped]
+    def default_range(record, from, to, within)
+      return [from, to] unless within.nil?
+
+      [from.nil? ? :first : from, to.nil? ? record : to]
+    end
+
+    # Only a saved row has current state to close on. A destroyed root's own
+    # destroy version already terminates its history, and a reified or unsaved
+    # instance stands for a state that is not in the table.
     #: (untyped, Symbol?, untyped) -> untyped
     def live_endpoint_for(record, close_on, within)
       return unless close_on_current?(close_on, within)
-      return unless Endpoint.record?(record) && !record.destroyed?
+      return unless Endpoint.record?(record) && record.persisted?
 
       record
     end
@@ -251,12 +305,13 @@ module PaperTrailDiff
         full_snapshotter: method(:snapshot_at),
         partial_snapshotter: @historical_store.method(:custom),
         association_reader: @historical_store.method(:association_reader),
-        record_transition: @historical_store.method(:record_transition)
+        record_transition: @historical_store.method(:record_transition),
+        prepared_record_after: @historical_store.method(:record_after)
       )
       ActivitySnapshotProvider.new(
-        snapshotter: method(:snapshot_at),
-        refresher: refresher,
-        preparer: @historical_store.method(:prepare)
+        snapshotter: method(:snapshot_at), refresher: refresher,
+        preparer: @historical_store.method(:prepare),
+        activity_index: @historical_store.method(:activity_index)
       )
     end
 
@@ -273,15 +328,6 @@ module PaperTrailDiff
         snapshots: snapshots,
         group: group
       )
-    end
-
-    #: (untyped) -> void
-    def reject_live_habtm_activity!(model_class)
-      paths = @traversal.habtm_paths(model_class)
-      return if paths.empty?
-
-      message = "live-ended activity cannot reconstruct HABTM event boundaries: #{paths.join(', ')}"
-      raise UnsupportedLiveActivityError, message
     end
 
     #: (untyped) -> RecordSnapshot?

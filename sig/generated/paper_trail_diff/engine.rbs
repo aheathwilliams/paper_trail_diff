@@ -18,6 +18,8 @@ module PaperTrailDiff
     # : (AssociationSnapshot?, AssociationSnapshot?) -> void
     private def self.validate_association_kinds!: (AssociationSnapshot?, AssociationSnapshot?) -> void
 
+    # Kinds are symbols, so `!=`, `equal?`, and `eql?` all agree here.
+    # mutant:disable
     # : (AssociationSnapshot?, AssociationSnapshot?) -> bool
     private def self.kinds_differ?: (AssociationSnapshot?, AssociationSnapshot?) -> bool
 
@@ -36,7 +38,7 @@ module PaperTrailDiff
     # : (AssociationSnapshot, AssociationSnapshot) -> CollectionAssociationDiff
     private def self.compare_collection: (AssociationSnapshot, AssociationSnapshot) -> CollectionAssociationDiff
 
-    # : (RecordSnapshot?, RecordSnapshot?) -> bool
-    private def self.same_identity?: (RecordSnapshot?, RecordSnapshot?) -> bool
+    # : (RecordSnapshot?, RecordSnapshot?) -> boolish
+    private def self.same_identity?: (RecordSnapshot?, RecordSnapshot?) -> boolish
   end
 end

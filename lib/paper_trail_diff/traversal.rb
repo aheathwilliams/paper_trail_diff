@@ -73,7 +73,7 @@ module PaperTrailDiff
     def each_change(&receiver)
       return enum_for(:each_change) unless receiver
 
-      each_entry { |entry| receiver.call(entry) if entry.change? }
+      each_entry { |entry| yield(entry) if entry.change? }
       self
     end
   end

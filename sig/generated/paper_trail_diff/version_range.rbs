@@ -26,9 +26,6 @@ module PaperTrailDiff
 
     @version_scope: untyped
 
-    # : () -> untyped
-    def versions_relation: () -> untyped
-
     # : (untyped, ?through: untyped, ?live_endpoint: untyped) -> RootVersionPlan
     def select_plan: (untyped, ?through: untyped, ?live_endpoint: untyped) -> RootVersionPlan
 

@@ -13,16 +13,18 @@ module PaperTrailDiff
   def self.compare: (untyped, untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?reload_live_endpoints: bool) -> Diff
 
   # Compares many independent endpoint pairs while batching current-record loading.
-  # : (Array[comparison_input], ?associations: Array[String | Symbol], ?ignore: ignore_option, ?reload_live_endpoints: bool) -> comparison_results
-  def self.compare_many: (Array[comparison_input], ?associations: Array[String | Symbol], ?ignore: ignore_option, ?reload_live_endpoints: bool) -> comparison_results
+  # : (Array[comparison_input], ?associations: Array[String | Symbol], ?ignore: ignore_option, ?reload_live_endpoints: bool, ?allow_expensive: bool) -> comparison_results
+  def self.compare_many: (Array[comparison_input], ?associations: Array[String | Symbol], ?ignore: ignore_option, ?reload_live_endpoints: bool, ?allow_expensive: bool) -> comparison_results
 
-  # Compares every adjacent reconstructed state in an inclusive version range.
+  # Compares every adjacent reconstructed state in an inclusive version range,
+  # by default the record's whole history through its current state.
   # : (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?version_scope: untyped, ?close_on: Symbol?) -> Array[Step]
   def self.timeline: (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?version_scope: untyped, ?close_on: Symbol?) -> Array[Step]
 
   # Compares adjacent root and selected-descendant activity boundaries.
-  # `reload_live_endpoints:` applies only when `to:` is a current record; the
-  # other range forms never read live state.
+  # `reload_live_endpoints:` applies whenever the range ends at the current
+  # record: an explicit `to:` record, the default range, or a window with no
+  # later version.
   # : (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?reload_live_endpoints: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?) -> Array[ActivityStep]
   def self.activity_timeline: (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?reload_live_endpoints: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?) -> Array[ActivityStep]
 
@@ -30,17 +32,13 @@ module PaperTrailDiff
   # : (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?) -> Analysis
   def self.analyze: (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?) -> Analysis
 
-  # Analyzes many roots over one shared time window, preparing their selected
-  # history once for the batch instead of once per record. Roots with no
-  # versions in the window return an empty `Analysis`.
-  #
-  # Pass `records` to analyze a list you assembled, which returns a Hash keyed
-  # by identity. Pass `scope:` with a `limit:` to have the roots selected for
-  # you from a relation, which returns a `ScopedAnalysis` -- the same Hash,
-  # plus the roots the relation could not reach. See `analyze_scope` for why
-  # that second collection exists.
-  # : (?Array[untyped]?, ?scope: untyped, ?limit: Integer?, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?historical_filter: untyped) -> (Hash[identity, Analysis] | ScopedAnalysis)
-  def self.analyze_many: (?Array[untyped]?, ?scope: untyped, ?limit: Integer?, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?historical_filter: untyped) -> (Hash[identity, Analysis] | ScopedAnalysis)
+  # Analyzes an array of records over one shared range, preparing their
+  # selected history once for the batch instead of once per record, and
+  # returns a frozen Hash keyed by identity. Roots with nothing to report in
+  # the window return an empty `Analysis`. To let a relation choose the
+  # records, use `analyze_scope`.
+  # : (Array[untyped], ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?allow_expensive: bool) -> Hash[identity, Analysis]
+  def self.analyze_many: (Array[untyped], ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?allow_expensive: bool) -> Hash[identity, Analysis]
 
   # Analyzes every root the relation reaches whose history moved inside the
   # window. Joined duplicates are read in bounded pages and analyzed once.
@@ -66,8 +64,14 @@ module PaperTrailDiff
   # Note also that a relation selects on current state, not on state during
   # the window: `where(status: 'published')` means published *now*, which is a
   # different set from what was published while the window was open.
-  # : (untyped, limit: Integer?, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?historical_filter: untyped) -> ScopedAnalysis
-  def self.analyze_scope: (untyped, limit: Integer?, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?historical_filter: untyped) -> ScopedAnalysis
+  # : (untyped, limit: Integer?, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?historical_filter: untyped, ?max_filter_versions: Integer, ?include_deleted: bool, ?allow_expensive: bool) -> ScopedAnalysis
+  def self.analyze_scope: (untyped, limit: Integer?, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?historical_filter: untyped, ?max_filter_versions: Integer, ?include_deleted: bool, ?allow_expensive: bool) -> ScopedAnalysis
+
+  # Recent root and selected-child activity through the current saved state.
+  # Historical windows remain explicit on analyze_scope; this entry point is
+  # deliberately named for a report through now rather than an as-of query.
+  # : (untyped, since: untyped, limit: Integer, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?snapshots: bool, ?group: Symbol?, ?include_deleted: bool, ?historical_filter: untyped, ?max_filter_versions: Integer, ?allow_expensive: bool) -> ScopedAnalysis
+  def self.report: (untyped, since: untyped, limit: Integer, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?snapshots: bool, ?group: Symbol?, ?include_deleted: bool, ?historical_filter: untyped, ?max_filter_versions: Integer, ?allow_expensive: bool) -> ScopedAnalysis
 
   # Returns the association macros this release can normalize.
   # : () -> Array[Symbol]
@@ -125,6 +129,8 @@ module PaperTrailDiff
   type comparison_input = Hash[String | Symbol, untyped]
 
   type comparison_results = Hash[identity, Diff]
+
+  type report_options = { within: untyped, activity: bool, version_scope: untyped, close_on: Symbol?, snapshots: bool, group: Symbol? }
 
   type ignore_option = Array[String | Symbol] | Hash[String | Symbol, untyped]
 

@@ -1,0 +1,24 @@
+# Generated from lib/paper_trail_diff/prepared_snapshot_builder.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Normalizes supported recorded graphs without historical ActiveRecord instances.
+  class PreparedSnapshotBuilder
+    # : (AssociationTraversal) -> void
+    def initialize: (AssociationTraversal) -> void
+
+    # : (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer, history: PreparedHistory?) -> [bool, RecordSnapshot?]
+    def call: (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer, history: PreparedHistory?) -> [ bool, RecordSnapshot? ]
+
+    private
+
+    @loader: DirectRecordStateLoader
+
+    @traversal: AssociationTraversal
+
+    # : (PreparedRecordState, untyped, AssociationTree, SnapshotNormalizer, PreparedHistory?, path: String, ?incoming: untyped) -> [bool, RecordSnapshot?]
+    def build: (PreparedRecordState, untyped, AssociationTree, SnapshotNormalizer, PreparedHistory?, path: String, ?incoming: untyped) -> [ bool, RecordSnapshot? ]
+
+    # : (PreparedRecordState, untyped, untyped, AssociationTree, SnapshotNormalizer, PreparedHistory, String) -> [bool, AssociationSnapshot?]
+    def association: (PreparedRecordState, untyped, untyped, AssociationTree, SnapshotNormalizer, PreparedHistory, String) -> [ bool, AssociationSnapshot? ]
+  end
+end

@@ -10,7 +10,7 @@ module PaperTrailDiff
     #: (untyped) -> void
     def initialize(record)
       @model_class = record.class
-      @attributes = Support.immutable_copy(record.attributes)
+      @attributes = stored_attributes(record.class, record.attributes)
       freeze
     end
 
@@ -36,8 +36,17 @@ module PaperTrailDiff
     #: (untyped, Hash[untyped, untyped]) -> void
     def initialize_attributes(model_class, attributes)
       @model_class = model_class
-      @attributes = Support.immutable_copy(attributes)
+      @attributes = stored_attributes(model_class, attributes)
       freeze
+    end
+
+    # A live fallback and a version decoded from history must agree on what
+    # the stored history could represent, or the gap between them reads as a
+    # change.
+    #: (untyped, Hash[untyped, untyped]) -> Hash[untyped, untyped]
+    def stored_attributes(model_class, attributes)
+      digits = StoredTimePrecision.digits(model_class)
+      Support.immutable_copy(StoredTimePrecision.apply(attributes, digits))
     end
   end
 
@@ -121,17 +130,37 @@ module PaperTrailDiff
 
     #: (untyped) -> untyped
     def record_before(boundary)
-      index = boundary_index(boundary)
-      return state_for(versions.fetch(index))&.instantiate if index
+      state_before(boundary)&.instantiate
+    end
 
-      @live&.instantiate
+    #: (untyped) -> PreparedRecordState?
+    def state_before(boundary)
+      index = boundary_index(boundary)
+      return state_for(versions.fetch(index)) if index
+
+      @live
+    end
+
+    # A handled nil is known absence, not permission to query the current row.
+    #: (untyped, ?direct: bool) -> [bool, untyped]
+    def record_after(version, direct: false)
+      index = @version_positions[version.id.to_s]
+      return [false, nil] unless index
+
+      state = state_after(index)
+      [true, direct ? state : state&.instantiate]
     end
 
     #: () -> Array[untyped]
     def records
-      version_records = versions.filter_map { |version| state_for(version)&.instantiate }
+      states.map(&:instantiate)
+    end
+
+    #: () -> Array[PreparedRecordState]
+    def states
+      recorded = versions.filter_map { |version| state_for(version) }
       live = @live
-      live ? [*version_records, live.instantiate] : version_records
+      live ? [*recorded, live] : recorded
     end
 
     #: (untyped) -> [Hash[untyped, untyped], Hash[untyped, untyped]]?
@@ -164,11 +193,15 @@ module PaperTrailDiff
     # boundary's transaction. The first is monotonic over the chronological
     # list and the second is indexed, so neither rescans a long history once
     # per boundary.
+    #
+    # "At or after" is decided by the version order rather than the timestamp
+    # alone. A version written in the same instant as the boundary but before
+    # it already took effect there; reading its pre-change state would put the
+    # boundary on the wrong side of a change it follows.
     #: (untyped) -> Integer?
     def boundary_index(boundary)
-      created_at = boundary.created_at
       chronological = versions.bsearch_index do |candidate|
-        candidate.created_at >= created_at
+        VersionBoundary.at_or_after?(candidate, boundary)
       end
       transactional = transaction_index(boundary)
       return chronological unless transactional
@@ -200,6 +233,7 @@ module PaperTrailDiff
     #: (untyped) -> PreparedRecordState?
     def state_for(version)
       return @states[version.id] if @states.key?(version.id)
+      return @states[version.id] = nil unless version.object
 
       prepared = @state_loader.call(version)
       return @states[version.id] = prepared if prepared
@@ -226,6 +260,8 @@ module PaperTrailDiff
       end
       @state_loader = PreparedVersionStateLoader.new
       @series = {} #: Hash[Array[String], PreparedRecordSeries]
+      @direct_loader = DirectRecordStateLoader.new
+      @direct_states = {} #: Hash[PreparedRecordState, PreparedRecordState?]
     end
 
     #: (untyped, Array[untyped]) -> void
@@ -240,9 +276,29 @@ module PaperTrailDiff
       missing.each { |id| add_series(model_class, id, versions, live) }
     end
 
+    #: (untyped, Array[untyped], Array[untyped]) -> void
+    def seed(model_class, ids, versions)
+      grouped = versions.group_by { |version| version.item_id.to_s }
+      live = available_live_records(model_class, ids).to_h { |record| [record.id.to_s, record] }
+      ids.each { |id| add_series(model_class, id, grouped, live) }
+    end
+
     #: (untyped, untyped, untyped) -> untyped
     def record_before(model_class, id, boundary)
       @series.fetch(identity(model_class, id)).record_before(boundary)
+    end
+
+    #: (untyped, untyped, untyped) -> [bool, PreparedRecordState?]
+    def snapshot_state_before(model_class, id, boundary)
+      series = @series[identity(model_class, id)]
+      return [false, nil] unless series
+
+      state = series.state_before(boundary)
+      return [true, nil] unless state
+
+      @direct_states[state] = @direct_loader.complete(state) unless @direct_states.key?(state)
+      prepared = @direct_states[state]
+      [!prepared.nil?, prepared]
     end
 
     #: (untyped, untyped, untyped) -> [Hash[untyped, untyped], Hash[untyped, untyped]]?
@@ -250,9 +306,35 @@ module PaperTrailDiff
       @series[identity(model_class, id)]&.transition(version)
     end
 
+    #: (untyped, untyped, untyped, ?direct: bool) -> [bool, untyped]
+    def record_after(model_class, id, version, direct: false)
+      handled, state = @series[identity(model_class, id)]&.record_after(version, direct: direct)
+      return [false, nil] unless handled
+      return [true, state] unless direct && state
+
+      prepared = @direct_loader.complete(state)
+      [!prepared.nil?, prepared]
+    end
+
     #: (untyped, Array[untyped]) -> Array[untyped]
     def records_for(model_class, ids)
       ids.flat_map { |id| @series.fetch(identity(model_class, id)).records }
+    end
+
+    #: (untyped, Array[untyped], String) -> Array[untyped]
+    def attribute_values_for(model_class, ids, name)
+      plain_reader = generated_reader?(model_class, name)
+      ids.flat_map do |id|
+        @series.fetch(identity(model_class, id)).states.map do |state|
+          direct = @direct_loader.complete(state) if plain_reader
+          direct ? direct.attributes[name] : state.instantiate.public_send(name)
+        end
+      end
+    end
+
+    #: (untyped, untyped) -> Array[untyped]
+    def versions_for_id(model_class, id)
+      @series.fetch(identity(model_class, id)).versions
     end
 
     #: (untyped, untyped) -> bool
@@ -262,11 +344,19 @@ module PaperTrailDiff
 
     private
 
+    #: (untyped, String) -> bool
+    def generated_reader?(model, name)
+      model.define_attribute_methods
+      model.instance_method(name).owner.name.to_s.end_with?('GeneratedAttributeMethods')
+    end
+
     # @rbs @start_time: untyped
     # @rbs @end_time: untyped
     # @rbs @seeded_live_records: Hash[Array[String], untyped]
     # @rbs @state_loader: PreparedVersionStateLoader
     # @rbs @series: Hash[Array[String], PreparedRecordSeries]
+    # @rbs @direct_loader: DirectRecordStateLoader
+    # @rbs @direct_states: Hash[PreparedRecordState, PreparedRecordState?]
 
     # Callers bound the range with either a version or a bare timestamp.
     #: (untyped) -> untyped
@@ -314,27 +404,10 @@ module PaperTrailDiff
     #: (untyped) -> untyped
     def window_condition(version_class)
       table = version_class.arel_table
-      table[:created_at].lteq(@end_time).or(first_after_range(table))
-    end
-
-    #: (untyped) -> untyped
-    def first_after_range(table)
-      arel = Object.const_get(:Arel) #: untyped
-      later = table.alias('paper_trail_diff_later_versions')
-      arel.const_get(:SelectManager).new
-          .from(later)
-          .project(arel.sql('1'))
-          .where(preceding_trailing_version(table, later))
-          .exists
-          .not
-    end
-
-    #: (untyped, untyped) -> untyped
-    def preceding_trailing_version(table, later)
-      later[:item_type].eq(table[:item_type])
-                       .and(later[:item_id].eq(table[:item_id]))
-                       .and(later[:created_at].gt(@end_time))
-                       .and(later[:created_at].lt(table[:created_at]))
+      first_after = VersionQuery.no_earlier_version(table) do |earlier|
+        earlier[:created_at].gt(@end_time)
+      end
+      table[:created_at].lteq(@end_time).or(first_after)
     end
 
     #: (untyped, Array[untyped]) -> Array[untyped]

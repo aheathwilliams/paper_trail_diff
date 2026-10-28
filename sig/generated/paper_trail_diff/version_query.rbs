@@ -1,0 +1,15 @@
+# Generated from lib/paper_trail_diff/version_query.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Arel conditions shared by the version queries that need one row per item.
+  module VersionQuery
+    # Keeps each item's earliest version among those the block also accepts:
+    # no other version of the same item that the block accepts is earlier. A
+    # correlated NOT EXISTS stays portable where window functions are not.
+    # : (untyped) ?{ (untyped) -> untyped } -> untyped
+    def self?.no_earlier_version: (untyped) ?{ (untyped) -> untyped } -> untyped
+
+    # : (untyped, untyped) ?{ (untyped) -> untyped } -> untyped
+    def self?.earlier_version: (untyped, untyped) ?{ (untyped) -> untyped } -> untyped
+  end
+end

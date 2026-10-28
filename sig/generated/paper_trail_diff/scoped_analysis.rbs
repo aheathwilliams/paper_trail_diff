@@ -22,8 +22,12 @@ module PaperTrailDiff
     # record to hand back, so `roots` and `unreachable` stay complementary.
     attr_reader roots: Array[untyped]
 
-    # : (analyses: Hash[Array[String], Analysis], unreachable: Array[Array[String]], ?roots: Array[untyped]) -> void
-    def initialize: (analyses: Hash[Array[String], Analysis], unreachable: Array[Array[String]], ?roots: Array[untyped]) -> void
+    # Requested missing-root analyses, kept separate because live SQL conditions
+    # cannot prove which deleted rows matched. nil means no destroy history.
+    attr_reader deleted: Hash[Array[String], Analysis?]
+
+    # : (analyses: Hash[Array[String], Analysis], unreachable: Array[Array[String]], ?roots: Array[untyped], ?deleted: Hash[Array[String], Analysis?]) -> void
+    def initialize: (analyses: Hash[Array[String], Analysis], unreachable: Array[Array[String]], ?roots: Array[untyped], ?deleted: Hash[Array[String], Analysis?]) -> void
 
     # Two elements, not three: `roots` is reached by name so that existing
     # destructuring keeps working.

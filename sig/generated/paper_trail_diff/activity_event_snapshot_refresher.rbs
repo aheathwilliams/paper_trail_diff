@@ -3,8 +3,8 @@
 module PaperTrailDiff
   # Dispatches safe descendant events to focused immutable snapshot appliers.
   class ActivityEventSnapshotRefresher
-    # : (traversal: AssociationTraversal, pool: SnapshotPool, components: untyped, ?association_reader: untyped, ?record_transition: untyped) -> void
-    def initialize: (traversal: AssociationTraversal, pool: SnapshotPool, components: untyped, ?association_reader: untyped, ?record_transition: untyped) -> void
+    # : (traversal: AssociationTraversal, pool: SnapshotPool, components: untyped, ?association_reader: untyped, ?record_transition: untyped, ?prepared_record_after: untyped) -> void
+    def initialize: (traversal: AssociationTraversal, pool: SnapshotPool, components: untyped, ?association_reader: untyped, ?record_transition: untyped, ?prepared_record_after: untyped) -> void
 
     # : (SnapshotPool, untyped) -> void
     def configure_appliers: (SnapshotPool, untyped) -> void

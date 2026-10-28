@@ -5,11 +5,34 @@ RSpec.describe PaperTrailDiff::NestedComparator do
     expect(changes({ outer: { count: 1 } }, { 'outer' => { 'count' => 2 } }))
       .to eq(%w[outer count] => { from: 1, to: 2 })
     expect(described_class.call({ a: 1 }, { 'a' => 1 })).to be_empty
+    expect(changes({ 'outer' => { 'count' => 1 } }, { outer: { count: 2 } }))
+      .to eq(%w[outer count] => { from: 1, to: 2 })
+  end
+
+  # Serialized columns commonly read back as a Hash subclass.
+  it 'looks inside hash subclasses such as HashWithIndifferentAccess' do
+    indifferent = ->(hash) { ActiveSupport::HashWithIndifferentAccess.new(hash) }
+
+    expect(changes(indifferent.call('a' => { 'b' => 1 }), indifferent.call('a' => { 'b' => 2 })))
+      .to eq(%w[a b] => { from: 1, to: 2 })
+  end
+
+  it 'reports a nested object replaced by a plain value as a whole-value change' do
+    expect(changes({ 'a' => { 'b' => 1 } }, { 'a' => 5 }))
+      .to eq(['a'] => { from: { 'b' => 1 }, to: 5 })
+    expect(changes({ 'a' => 5 }, { 'a' => { 'b' => 1 } }))
+      .to eq(['a'] => { from: 5, to: { 'b' => 1 } })
+  end
+
+  it 'keeps looking after a key that did not change' do
+    expect(changes({ 'a' => 1, 'b' => 1, 'c' => 1 }, { 'a' => 1, 'b' => 2, 'c' => 3 }).keys)
+      .to eq([['b'], ['c']])
   end
 
   it 'rejects ambiguous normalized keys instead of overwriting a change' do
     expect { described_class.call({ a: 1, 'a' => 2 }, { a: 3 }) }
-      .to raise_error(PaperTrailDiff::AmbiguousNestedKeyError, /duplicate.*a/)
+      .to raise_error(PaperTrailDiff::AmbiguousNestedKeyError,
+                      'duplicate nested key after normalization: "a"')
   end
 
   it 'keeps the whole-value diff available when nested keys are ambiguous' do
@@ -44,6 +67,9 @@ RSpec.describe PaperTrailDiff::NestedComparator do
   it 'reads a column that stores JSON as text' do
     expect(changes('{"mode":"fast","retries":3}', '{"mode":"slow","retries":3}'))
       .to eq(['mode'] => { from: 'fast', to: 'slow' })
+    text = Class.new(String) # such as ActiveSupport::SafeBuffer
+    expect(changes(text.new('{"mode":"fast"}'), text.new('{"mode":"slow"}')))
+      .to eq(['mode'] => { from: 'fast', to: 'slow' })
   end
 
   # `{"a": null}` and `{}` mean different things in JSON, and an audit trail
@@ -57,6 +83,8 @@ RSpec.describe PaperTrailDiff::NestedComparator do
     expect(result.fetch(['nulled'])).to eq(from: 3, to: nil)
     expect(result.fetch(['removed'])[:to]).to be(described_class::ABSENT)
     expect(result.fetch(['added'])[:from]).to be(described_class::ABSENT)
+    expect(described_class::ABSENT.inspect).to eq('#<PaperTrailDiff absent>')
+    expect(described_class::ABSENT.to_s).to eq('absent')
   end
 
   # Host names and locales routinely contain dots, so a joined path could not
@@ -148,6 +176,24 @@ RSpec.describe PaperTrailDiff::NestedComparator do
     expect(described_class.call('{oops', '{nope')).to eq({})
     expect(described_class.call(nil, { 'a' => 1 })).to eq({})
     expect(described_class.call('[1,2]', '[1,3]')).to eq({})
+    expect(described_class.call({ 'a' => 1 }, 'not json')).to eq({})
+    expect(described_class.call({ 'a' => 1 }, 5)).to eq({})
+    expect(described_class.call(nil, nil)).to be_frozen
+  end
+
+  it 'compares an array with a non-array as a whole value, not by membership' do
+    expect(described_class.call({ 'k' => 'x' }, { 'k' => ['x'] }).fetch(['k']))
+      .to be_a(PaperTrailDiff::ValueChange)
+    expect(described_class.call({ 'k' => ['x'] }, { 'k' => 'x' }).fetch(['k']))
+      .to be_a(PaperTrailDiff::ValueChange)
+  end
+
+  it 'compares array subclasses by membership' do
+    list = Class.new(Array)
+
+    change = described_class.call({ 'k' => list.new(%w[a]) }, { 'k' => list.new(%w[a b]) })
+
+    expect(change.fetch(['k']).added).to eq(['b'])
   end
 
   it 'reports nothing when the structures are equal' do

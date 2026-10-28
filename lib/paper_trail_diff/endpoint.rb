@@ -82,6 +82,16 @@ module PaperTrailDiff
       raise InvalidEndpointError, "cannot resolve endpoint model: #{model_type}", cause: e
     end
 
+    # The record's own PaperTrail versions, under whatever name the model gave
+    # the association.
+    #: (untyped) -> untyped
+    def versions(record)
+      record.public_send(record.class.versions_association_name)
+    rescue NoMethodError => e
+      message = 'record does not expose a PaperTrail version history'
+      raise InvalidTimelineRangeError, message, cause: e
+    end
+
     #: (untyped) -> untyped
     def reload_record(record)
       validate_record!(record)

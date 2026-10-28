@@ -9,8 +9,8 @@ module PaperTrailDiff
     # The only thing a wall-clock window can close on besides a later version.
     CLOSE_ON_CURRENT: ::Symbol
 
-    # : (associations: Array[String | Symbol], ignore: ignore_option, ?reload_live_endpoints: bool) -> void
-    def initialize: (associations: Array[String | Symbol], ignore: ignore_option, ?reload_live_endpoints: bool) -> void
+    # : (associations: Array[String | Symbol], ignore: ignore_option, ?reload_live_endpoints: bool, ?allow_expensive: bool) -> void
+    def initialize: (associations: Array[String | Symbol], ignore: ignore_option, ?reload_live_endpoints: bool, ?allow_expensive: bool) -> void
 
     # : (untyped, untyped) -> Diff
     def compare: (untyped, untyped) -> Diff
@@ -36,10 +36,24 @@ module PaperTrailDiff
     # caller reporting on a population does not have to rediscover which of its
     # members changed. The roots the relation could not reach come back named
     # rather than dropped -- see `PaperTrailDiff.analyze_scope`.
-    # : (untyped, limit: Integer?, within: untyped, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?historical_filter: untyped) -> ScopedAnalysis
-    def analyze_scope: (untyped, limit: Integer?, within: untyped, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?historical_filter: untyped) -> ScopedAnalysis
+    # : (untyped, limit: Integer?, within: untyped, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?historical_filter: untyped, ?max_filter_versions: Integer, ?include_deleted: bool) -> ScopedAnalysis
+    def analyze_scope: (untyped, limit: Integer?, within: untyped, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?historical_filter: untyped, ?max_filter_versions: Integer, ?include_deleted: bool) -> ScopedAnalysis
 
     private
+
+    # : (Array[comparison_input], preparer: untyped) -> ComparisonBatch
+    def comparison_batch: (Array[comparison_input], preparer: untyped) -> ComparisonBatch
+
+    # : (Array[untyped]) -> Hash[identity, untyped]
+    def load_batch_endpoints: (Array[untyped]) -> Hash[identity, untyped]
+
+    # : (untyped, historical: bool) -> void
+    def prepare_batch_model: (untyped, historical: bool) -> void
+
+    @batch_safety: BatchSafety
+
+    # : (untyped, Array[Array[String]], Hash[Symbol, untyped]) -> Hash[Array[String], Analysis?]
+    def analyze_deleted: (untyped, Array[Array[String]], Hash[Symbol, untyped]) -> Hash[Array[String], Analysis?]
 
     @activity_snapshotter: ActivitySnapshotProvider
 
@@ -74,13 +88,23 @@ module PaperTrailDiff
     # : (untyped, untyped) -> void
     def notify_ambiguous_association_boundary: (untyped, untyped) -> void
 
-    # `close_on:` names what ends a wall-clock window, so it is meaningless for a
-    # range whose endpoints the caller already gave explicitly.
+    # A window with nothing recorded after its last change ends at the live
+    # record, which holds the state that change produced -- whether the window
+    # ended a moment ago or long before. `close_on: :current` asked for this
+    # before it was the default and is still accepted. It names what ends a
+    # wall-clock window, so it is meaningless for explicit endpoints.
     # : (Symbol?, untyped) -> bool
     def close_on_current?: (Symbol?, untyped) -> bool
 
-    # A destroyed root has no current state to close on, and its own destroy
-    # version already terminates the history.
+    # With neither a window nor endpoints, a range is the record's whole
+    # history through its current saved state; a missing endpoint takes that
+    # side of the same default.
+    # : (untyped, untyped, untyped, untyped) -> [untyped, untyped]
+    def default_range: (untyped, untyped, untyped, untyped) -> [ untyped, untyped ]
+
+    # Only a saved row has current state to close on. A destroyed root's own
+    # destroy version already terminates its history, and a reified or unsaved
+    # instance stands for a state that is not in the table.
     # : (untyped, Symbol?, untyped) -> untyped
     def live_endpoint_for: (untyped, Symbol?, untyped) -> untyped
 
@@ -98,9 +122,6 @@ module PaperTrailDiff
 
     # : (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped, ?live_endpoint: untyped, ?snapshots: bool, ?group: Symbol?) -> ActivityTimelineBuilder
     def activity_builder: (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped, ?live_endpoint: untyped, ?snapshots: bool, ?group: Symbol?) -> ActivityTimelineBuilder
-
-    # : (untyped) -> void
-    def reject_live_habtm_activity!: (untyped) -> void
 
     # : (untyped) -> RecordSnapshot?
     def snapshot_for_endpoint: (untyped) -> RecordSnapshot?

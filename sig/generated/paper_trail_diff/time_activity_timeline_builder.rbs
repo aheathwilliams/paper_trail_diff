@@ -29,6 +29,9 @@ module PaperTrailDiff
     # : () -> [ActivityHistory, RootVersionPlan, ActivityStep?, RecordSnapshot?, untyped]
     def history_and_versions: () -> [ ActivityHistory, RootVersionPlan, ActivityStep?, RecordSnapshot?, untyped ]
 
+    # : () -> void
+    def reject_live_habtm!: () -> void
+
     # : (RootVersionPlan, untyped) -> [ActivityHistory, RootVersionPlan, ActivityStep?, RecordSnapshot?, untyped]
     def history_for: (RootVersionPlan, untyped) -> [ ActivityHistory, RootVersionPlan, ActivityStep?, RecordSnapshot?, untyped ]
 
@@ -40,8 +43,10 @@ module PaperTrailDiff
     # : (Array[untyped], untyped) -> Array[ActivityEvent]
     def events_through: (Array[untyped], untyped) -> Array[ActivityEvent]
 
-    # : (Array[untyped], Array[ActivityEvent]) -> ActivityHistory
-    def build_history: (Array[untyped], Array[ActivityEvent]) -> ActivityHistory
+    # Events after the last root version read the root from the live record
+    # when the window closes on it, as an explicit `to: record` range does.
+    # : (Array[untyped], Array[ActivityEvent], ?current: untyped) -> ActivityHistory
+    def build_history: (Array[untyped], Array[ActivityEvent], ?current: untyped) -> ActivityHistory
 
     # : (ActivityHistory, ActivityStep?) -> Array[ActivityStep]
     def activity_steps: (ActivityHistory, ActivityStep?) -> Array[ActivityStep]

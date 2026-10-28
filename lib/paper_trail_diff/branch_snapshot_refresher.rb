@@ -4,7 +4,7 @@
 module PaperTrailDiff
   # Reconstructs selected root branches and merges them into a prior immutable snapshot.
   class BranchSnapshotRefresher
-    #: (tree: AssociationTree, ignore_policy: IgnorePolicy, traversal: AssociationTraversal, pool: SnapshotPool, normalizer: SnapshotNormalizer, full_snapshotter: untyped, partial_snapshotter: untyped, association_reader: untyped, record_transition: untyped) -> void
+    #: (tree: AssociationTree, ignore_policy: IgnorePolicy, traversal: AssociationTraversal, pool: SnapshotPool, normalizer: SnapshotNormalizer, full_snapshotter: untyped, partial_snapshotter: untyped, association_reader: untyped, record_transition: untyped, ?prepared_record_after: untyped) -> void
     def initialize( # rubocop:disable Metrics/MethodLength, Metrics/ParameterLists
       tree:,
       ignore_policy:,
@@ -14,7 +14,8 @@ module PaperTrailDiff
       full_snapshotter:,
       partial_snapshotter:,
       association_reader:,
-      record_transition:
+      record_transition:,
+      prepared_record_after: nil
     )
       @tree = tree
       @ignore_policy = ignore_policy
@@ -24,16 +25,14 @@ module PaperTrailDiff
       @partial_snapshotter = partial_snapshotter
       @components = {} #: Hash[Array[String], [AssociationTree, SnapshotNormalizer]]
       @event_refresher = ActivityEventSnapshotRefresher.new(
-        traversal: traversal,
-        pool: pool,
+        traversal: traversal, pool: pool,
         components: method(:components),
         association_reader: association_reader,
-        record_transition: record_transition
+        record_transition: record_transition,
+        prepared_record_after: prepared_record_after
       )
       @root_refresher = ActivityRootSnapshotRefresher.new(
-        tree: tree,
-        traversal: traversal,
-        normalizer: normalizer,
+        tree: tree, traversal: traversal, normalizer: normalizer,
         record_after: @event_refresher.method(:record_after),
         changeset: @event_refresher.method(:deserialized_changeset),
         partial_snapshotter: method(:partial_snapshot)

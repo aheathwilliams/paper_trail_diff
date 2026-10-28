@@ -27,6 +27,10 @@ module PaperTrailDiff
     # The root versions this plan reports as mutations, which excludes any
     # version present only to reveal what the last of them produced.
     attr_reader :mutations #: Array[untyped]
+    # Whether a wall-clock window closes on the root's own destruction. Its
+    # final state is then the absence the destroy left, just as a window
+    # closing on current state ends at the live record.
+    attr_reader :closes_on_destroy #: bool
 
     class << self
       # Adjacent boundaries, which is what an unfiltered range reports.
@@ -45,14 +49,24 @@ module PaperTrailDiff
         steps = [] #: Array[[untyped, untyped]]
         new(versions: versions, steps: steps)
       end
+
+      # No root version to report or replay: only descendants moved, and the
+      # live record is the root's state throughout.
+      #: (untyped) -> RootVersionPlan
+      def closing_on(record)
+        versions = [] #: Array[untyped]
+        steps = [] #: Array[[untyped, untyped]]
+        new(versions: versions, steps: steps, closing_record: record)
+      end
     end
 
-    #: (versions: Array[untyped], steps: Array[[untyped, untyped]], ?context_version: untyped, ?reconstruction_versions: Array[untyped]?, ?mutations: Array[untyped]?, ?closing_record: untyped) -> void
+    #: (versions: Array[untyped], steps: Array[[untyped, untyped]], ?context_version: untyped, ?reconstruction_versions: Array[untyped]?, ?mutations: Array[untyped]?, ?closing_record: untyped, ?closes_on_destroy: bool) -> void
     def initialize( # rubocop:disable Metrics/ParameterLists
       versions:, steps:, context_version: nil, reconstruction_versions: nil, mutations: nil,
-      closing_record: nil
+      closing_record: nil, closes_on_destroy: false
     )
       @closing_record = closing_record
+      @closes_on_destroy = closes_on_destroy
       @versions = versions.freeze
       @reconstruction_versions = (reconstruction_versions || versions).freeze
       @steps = steps.freeze
@@ -65,6 +79,15 @@ module PaperTrailDiff
     #: () -> bool
     def empty?
       versions.empty?
+    end
+
+    #: () -> RootVersionPlan
+    def closing_on_destroy
+      self.class.new(
+        versions: versions, steps: steps, context_version: context_version,
+        reconstruction_versions: reconstruction_versions, mutations: mutations,
+        closing_record: closing_record, closes_on_destroy: true
+      )
     end
 
     # What the range's final state is read from, which is the live record when

@@ -32,6 +32,11 @@ module PaperTrailDiff
     # version present only to reveal what the last of them produced.
     attr_reader mutations: Array[untyped]
 
+    # Whether a wall-clock window closes on the root's own destruction. Its
+    # final state is then the absence the destroy left, just as a window
+    # closing on current state ends at the live record.
+    attr_reader closes_on_destroy: bool
+
     # Adjacent boundaries, which is what an unfiltered range reports.
     # : (Array[untyped], ?context_version: untyped) -> RootVersionPlan
     def self.contiguous: (Array[untyped], ?context_version: untyped) -> RootVersionPlan
@@ -39,11 +44,19 @@ module PaperTrailDiff
     # : () -> RootVersionPlan
     def self.empty: () -> RootVersionPlan
 
-    # : (versions: Array[untyped], steps: Array[[untyped, untyped]], ?context_version: untyped, ?reconstruction_versions: Array[untyped]?, ?mutations: Array[untyped]?, ?closing_record: untyped) -> void
-    def initialize: (versions: Array[untyped], steps: Array[[ untyped, untyped ]], ?context_version: untyped, ?reconstruction_versions: Array[untyped]?, ?mutations: Array[untyped]?, ?closing_record: untyped) -> void
+    # No root version to report or replay: only descendants moved, and the
+    # live record is the root's state throughout.
+    # : (untyped) -> RootVersionPlan
+    def self.closing_on: (untyped) -> RootVersionPlan
+
+    # : (versions: Array[untyped], steps: Array[[untyped, untyped]], ?context_version: untyped, ?reconstruction_versions: Array[untyped]?, ?mutations: Array[untyped]?, ?closing_record: untyped, ?closes_on_destroy: bool) -> void
+    def initialize: (versions: Array[untyped], steps: Array[[ untyped, untyped ]], ?context_version: untyped, ?reconstruction_versions: Array[untyped]?, ?mutations: Array[untyped]?, ?closing_record: untyped, ?closes_on_destroy: bool) -> void
 
     # : () -> bool
     def empty?: () -> bool
+
+    # : () -> RootVersionPlan
+    def closing_on_destroy: () -> RootVersionPlan
 
     # What the range's final state is read from, which is the live record when
     # the window closes on current state and the last version otherwise.

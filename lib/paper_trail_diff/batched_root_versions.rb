@@ -6,9 +6,13 @@ module PaperTrailDiff
   # queries. Only the range forms that mean the same thing for every root are
   # supported: a shared wall-clock window, or each root's own whole history.
   class BatchedRootVersions
-    #: (Array[untyped], time_range: TimeRange?, ?version_scope: untyped, ?live_endpoints: Hash[Array[String], untyped]?) -> void
-    def initialize(records, time_range:, version_scope: nil, live_endpoints: nil)
+    #: (Array[untyped], time_range: TimeRange?, ?version_scope: untyped, ?live_endpoints: Hash[Array[String], untyped]?, ?context_required: bool) -> void
+    def initialize(records, time_range:, version_scope: nil, live_endpoints: nil,
+                   context_required: false)
       @records = records
+      # An activity view needs a root to reconstruct from even in a window with
+      # no root version, exactly as a single-record activity timeline does.
+      @context_required = context_required
       @time_range = time_range
       @version_scope = version_scope
       @live_endpoints = live_endpoints
@@ -32,6 +36,7 @@ module PaperTrailDiff
     # @rbs @time_range: TimeRange?
     # @rbs @version_scope: untyped
     # @rbs @live_endpoints: Hash[Array[String], untyped]?
+    # @rbs @context_required: bool
 
     #: (untyped, Array[untyped], Hash[Array[String], RootVersionPlan]) -> void
     def select_model(model_class, records, selected)
@@ -64,6 +69,7 @@ module PaperTrailDiff
         selected: chosen ? in_range.select { |version| chosen.include?(version.id) } : in_range,
         after_range: after_range,
         windowed: !@time_range.nil?,
+        context_required: @context_required,
         filtered: !@version_scope.nil?,
         live_endpoint: live_endpoint
       ).call
@@ -104,43 +110,9 @@ module PaperTrailDiff
       range ? range.scope(scope) : scope
     end
 
-    # One row per root: the earliest version after the window, found without a
-    # window function so the query stays portable.
     #: (untyped, Array[untyped], TimeRange) -> Hash[String, untyped]
     def trailing_versions(model_class, ids, range)
-      table = model_class.paper_trail.version_class.arel_table
-      relation = range.trailing_scope(base_scope(model_class, ids))
-      ordered(relation.where(no_earlier_trailing(table, range)))
-        .to_h { |version| [version.item_id.to_s, version] }
-    end
-
-    #: (untyped, TimeRange) -> untyped
-    def no_earlier_trailing(table, range)
-      arel = Object.const_get(:Arel) #: untyped
-      later = table.alias('paper_trail_diff_later_roots')
-      arel.const_get(:SelectManager).new
-          .from(later)
-          .project(arel.sql('1'))
-          .where(preceding(table, later, range))
-          .exists
-          .not
-    end
-
-    # Mirrors the window's own end handling, so a version sitting exactly on an
-    # inclusive boundary stays inside the window instead of masking the trailing
-    # version that follows it.
-    #: (untyped, untyped, TimeRange) -> untyped
-    def preceding(table, later, range)
-      same_item = later[:item_type].eq(table[:item_type])
-                                   .and(later[:item_id].eq(table[:item_id]))
-      same_item.and(after_window(later, range)).and(later[:created_at].lt(table[:created_at]))
-    end
-
-    #: (untyped, TimeRange) -> untyped
-    def after_window(later, range)
-      return later[:created_at].gteq(range.end_time) if range.exclude_end?
-
-      later[:created_at].gt(range.end_time)
+      range.first_trailing_versions(base_scope(model_class, ids))
     end
 
     #: (untyped, Array[untyped]) -> untyped

@@ -113,6 +113,10 @@ module PaperTrailDiff
     # : () -> RecordReference
     def reference: () -> RecordReference
 
+    # A copy holding a different state for one association.
+    # : (String, AssociationSnapshot) -> RecordSnapshot
+    def with_association: (String, AssociationSnapshot) -> RecordSnapshot
+
     # : () -> Hash[Symbol, untyped]
     def to_h: () -> Hash[Symbol, untyped]
 

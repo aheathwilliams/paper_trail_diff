@@ -76,11 +76,36 @@ module PaperTrailDiff
     # Normalizes scalar attributes without traversing or loading associations.
     #: (untyped, tree: AssociationTree, path: String) -> snapshot_attributes
     def attributes_for(record, tree:, path:)
+      if record.is_a?(PreparedRecordState)
+        return from_state(record, tree: tree,
+                                  path: path).attributes
+      end
+
       reflections = reflections_for(record, tree, path)
       normalized_attributes(record, reflections, path)
     end
 
+    # Same exclusions as AR normalization, applied to an already typed state.
+    #: (PreparedRecordState, tree: AssociationTree, path: String, ?incoming: untyped, ?associations: snapshot_associations) -> RecordSnapshot
+    def from_state(state, tree:, path:, incoming: nil, associations: {})
+      model = state.model_class
+      @structural_columns[path] ||= @traversal.incoming_relationship_columns(incoming) if incoming
+      reflections = @traversal.reflections_for(model, tree, path: path)
+      excluded = @excluded_attributes[[model, path]] ||=
+        build_excluded_attributes(model, reflections, path)
+      snapshot = RecordSnapshot.new(
+        type: model.name, id: state.attributes[model.primary_key],
+        attributes: state.attributes.except(*excluded), associations: associations
+      )
+      pool_state(path, snapshot)
+    end
+
     private
+
+    #: (String, RecordSnapshot) -> RecordSnapshot
+    def pool_state(path, snapshot)
+      path.empty? ? snapshot : @pool.record(path, snapshot)
+    end
 
     # @rbs @tree: AssociationTree
     # @rbs @ignore_policy: IgnorePolicy
@@ -106,7 +131,7 @@ module PaperTrailDiff
     def normalized_attributes(record, reflections, path)
       attributes = record.attributes.dup
       excluded_attributes(record, reflections, path).each { |name| attributes.delete(name) }
-      attributes
+      StoredTimePrecision.apply(attributes, StoredTimePrecision.digits(record.class))
     end
 
     # Every input is fixed for one model class at one selected path, and the
@@ -127,7 +152,21 @@ module PaperTrailDiff
       primary_keys = primary_keys.map { |key| key.to_s } # rubocop:disable Style/SymbolProc
       ignored = @ignore_policy.attributes_for(path)
       structural = @structural_columns.fetch(path, [])
-      (primary_keys + ignored + relationship_columns(reflections) + structural).uniq.freeze
+      (primary_keys + ignored + skipped_columns(model_class) +
+        relationship_columns(reflections) + structural).uniq.freeze
+    end
+
+    # `has_paper_trail skip:` columns are never written to a version, so history
+    # holds only their defaults. Compared with a live row they would report a
+    # change nobody recorded.
+    #: (untyped) -> Array[String]
+    def skipped_columns(model_class)
+      return [] unless Support.versioned?(model_class)
+
+      entries = Array(model_class.paper_trail_options[:skip]) #: Array[untyped]
+      entries.flat_map do |entry|
+        entry.is_a?(Hash) ? entry.keys.map(&:to_s) : [entry.to_s]
+      end
     end
 
     #: (Array[untyped]) -> Array[String]

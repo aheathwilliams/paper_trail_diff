@@ -41,13 +41,33 @@ module PaperTrailDiff
     #: (untyped) -> untyped
     def trailing_scope(relation)
       column = relation.klass.arel_table[:created_at]
-      predicate = exclude_end? ? column.gteq(end_time) : column.gt(end_time)
-      relation.where(predicate)
+      relation.where(after_end(column))
+    end
+
+    # Each item's earliest version after the range, keyed by item id. One row
+    # per item comes back from a NOT EXISTS rather than a window function, so
+    # the query stays portable; a timestamp tie keeps the lower id.
+    #: (untyped) -> Hash[String, untyped]
+    def first_trailing_versions(relation)
+      table = relation.klass.arel_table
+      first_after = VersionQuery.no_earlier_version(table) do |earlier|
+        after_end(earlier[:created_at])
+      end
+      versions = trailing_scope(relation).where(first_after)
+                                         .reorder(created_at: :asc, id: :asc).to_a
+      first = {} #: Hash[String, untyped]
+      versions.each { |version| first[version.item_id.to_s] ||= version }
+      first
     end
 
     private
 
     # @rbs @exclude_end: bool
+
+    #: (untyped) -> untyped
+    def after_end(column)
+      exclude_end? ? column.gteq(end_time) : column.gt(end_time)
+    end
 
     #: () -> Range[Time]
     def query_range

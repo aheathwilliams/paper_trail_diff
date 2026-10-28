@@ -25,7 +25,7 @@ module PaperTrailDiff
       TimelineBuilder.new(
         record,
         from: plan.versions.first,
-        to: plan.versions.last,
+        to: plan.closing_record || plan.versions.last,
         within: nil,
         plan: plan,
         snapshotter: @timeline_snapshotter
@@ -47,7 +47,8 @@ module PaperTrailDiff
     def activity_analysis(record, plan)
       range = TimelineRange.new(
         record, from: (@within ? nil : plan.versions.first),
-                to: (@within ? nil : plan.versions.last), within: @within, plan: plan
+                to: (@within ? nil : plan.closing_record || plan.versions.last),
+                within: @within, plan: plan
       )
       ActivityTimelineBuilder.new(
         record, range: range, tree: @tree, snapshotter: @activity_snapshotter,

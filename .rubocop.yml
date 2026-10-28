@@ -1,3 +1,7 @@
+plugins:
+  - rubocop-performance
+  - rubocop-rspec
+
 AllCops:
   NewCops: enable
   SuggestExtensions: false
@@ -55,3 +59,25 @@ Metrics/ClassLength:
 
 Metrics/MethodLength:
   Max: 15
+
+# The specs are behavioral and mostly integration-level: one example builds a
+# real PaperTrail history and checks several facets of one result, and groups
+# are named for the behavior under test rather than a class or file. Splitting
+# them to satisfy these rules would rebuild the same history many times.
+RSpec/MultipleExpectations:
+  Enabled: false
+
+RSpec/ExampleLength:
+  Enabled: false
+
+RSpec/DescribeClass:
+  Enabled: false
+
+RSpec/SpecFilePathFormat:
+  Enabled: false
+
+# These specs assert that no PaperTrail version is reified, or count how many
+# are, across every instance a call touches -- which is what any_instance
+# expectations exist for.
+RSpec/AnyInstance:
+  Enabled: false

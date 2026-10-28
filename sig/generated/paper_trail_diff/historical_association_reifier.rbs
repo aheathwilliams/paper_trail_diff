@@ -25,6 +25,14 @@ module PaperTrailDiff
     # : (untyped, untyped) -> void
     def reify_has_many: (untyped, untyped) -> void
 
+    # PT-AT's collection-source helper reifies every has_many on each join
+    # record. Walk only the requested source instead, including nested throughs.
+    # : (untyped, untyped) -> void
+    def reify_through: (untyped, untyped) -> void
+
+    # : (untyped, untyped, untyped) -> Array[untyped]
+    def through_members: (untyped, untyped, untyped) -> Array[untyped]
+
     # : (untyped, untyped) -> void
     def reify_habtm: (untyped, untyped) -> void
 

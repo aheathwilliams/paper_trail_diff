@@ -5,14 +5,16 @@ module PaperTrailDiff
   # queries. Only the range forms that mean the same thing for every root are
   # supported: a shared wall-clock window, or each root's own whole history.
   class BatchedRootVersions
-    # : (Array[untyped], time_range: TimeRange?, ?version_scope: untyped, ?live_endpoints: Hash[Array[String], untyped]?) -> void
-    def initialize: (Array[untyped], time_range: TimeRange?, ?version_scope: untyped, ?live_endpoints: Hash[Array[String], untyped]?) -> void
+    # : (Array[untyped], time_range: TimeRange?, ?version_scope: untyped, ?live_endpoints: Hash[Array[String], untyped]?, ?context_required: bool) -> void
+    def initialize: (Array[untyped], time_range: TimeRange?, ?version_scope: untyped, ?live_endpoints: Hash[Array[String], untyped]?, ?context_required: bool) -> void
 
     # Returns a plan per record identity.
     # : () -> Hash[Array[String], RootVersionPlan]
     def call: () -> Hash[Array[String], RootVersionPlan]
 
     private
+
+    @context_required: bool
 
     @live_endpoints: Hash[Array[String], untyped]?
 
@@ -47,22 +49,8 @@ module PaperTrailDiff
     # : (untyped, Array[untyped], TimeRange?) -> untyped
     def range_scope: (untyped, Array[untyped], TimeRange?) -> untyped
 
-    # One row per root: the earliest version after the window, found without a
-    # window function so the query stays portable.
     # : (untyped, Array[untyped], TimeRange) -> Hash[String, untyped]
     def trailing_versions: (untyped, Array[untyped], TimeRange) -> Hash[String, untyped]
-
-    # : (untyped, TimeRange) -> untyped
-    def no_earlier_trailing: (untyped, TimeRange) -> untyped
-
-    # Mirrors the window's own end handling, so a version sitting exactly on an
-    # inclusive boundary stays inside the window instead of masking the trailing
-    # version that follows it.
-    # : (untyped, untyped, TimeRange) -> untyped
-    def preceding: (untyped, untyped, TimeRange) -> untyped
-
-    # : (untyped, TimeRange) -> untyped
-    def after_window: (untyped, TimeRange) -> untyped
 
     # : (untyped, Array[untyped]) -> untyped
     def base_scope: (untyped, Array[untyped]) -> untyped

@@ -3,6 +3,11 @@
 module PaperTrailDiff
   # Resolves and validates ActiveRecord reflections for a bounded association tree.
   class AssociationTraversal
+    # The class a `belongs_to` points at for this record, reading a polymorphic
+    # type column when there is one. Nil when that type names no class.
+    # : (untyped, untyped) -> untyped
+    def self.belongs_to_target: (untyped, untyped) -> untyped
+
     # : (AssociationTree) -> void
     def initialize: (AssociationTree) -> void
 
@@ -17,6 +22,12 @@ module PaperTrailDiff
 
     # : (untyped) -> Array[String]
     def habtm_paths: (untyped) -> Array[String]
+
+    # HABTM join rows have no versions of their own, so membership changes
+    # cannot be split into events once a range runs past the last root version
+    # into live state.
+    # : (untyped) -> void
+    def reject_live_habtm_activity!: (untyped) -> void
 
     # : (untyped, AssociationTree, path: String) -> Array[untyped]
     def reflections_for: (untyped, AssociationTree, path: String) -> Array[untyped]

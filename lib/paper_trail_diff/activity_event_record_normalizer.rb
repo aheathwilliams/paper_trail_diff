@@ -19,6 +19,10 @@ module PaperTrailDiff
       root_endpoint:,
       context_endpoint:
     )
+      if record.is_a?(PreparedRecordState)
+        return normalizer.from_state(record, tree: subtree, path: path, incoming: reflection)
+      end
+
       boundary = Endpoint.version?(root_endpoint) ? root_endpoint : context_endpoint
       reifier = @association_reader.call(context_endpoint, habtm_version: boundary)
       normalizer.call_child(

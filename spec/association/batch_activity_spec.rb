@@ -26,9 +26,8 @@ RSpec.describe 'batched activity reporting' do
     single = PaperTrailDiff.analyze(article, **options)
     batch = PaperTrailDiff.analyze_many([article], **options).values.fetch(0)
     scope = PaperTrailDiff.analyze_scope(TrackedArticle, limit: 1, **options)
-    alias_result = PaperTrailDiff.analyze_many(scope: TrackedArticle, limit: 1, **options)
 
-    [batch, scope.analyses.values.fetch(0), alias_result.analyses.values.fetch(0)].each do |result|
+    [batch, scope.analyses.values.fetch(0)].each do |result|
       expect(result.activity_timeline.map { |step| step.diff.to_h })
         .to eq(single.activity_timeline.map { |step| step.diff.to_h })
       last = result.activity_timeline.last

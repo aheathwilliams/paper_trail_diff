@@ -37,10 +37,8 @@ module PaperTrailDiff
       return without_selection if @selected.empty?
 
       closing = revealing_version || @live_endpoint
-      raise IncompleteTimeRangeError, INCOMPLETE if !closing && @windowed && !terminal_destroy?
-      return filtered_plan(closing) if @filtered
-
-      contiguous_plan(closing)
+      plan = @filtered ? filtered_plan(closing) : contiguous_plan(closing)
+      closes_on_destroy?(closing) ? plan.closing_on_destroy : plan
     end
 
     private
@@ -69,13 +67,16 @@ module PaperTrailDiff
     end
 
     # An activity view still needs a root to reconstruct from even when no root
-    # version falls inside the window, because descendants may have moved.
+    # version falls inside the window, because descendants may have moved. With
+    # no later version, a window closing on current state reads the root from
+    # the live record, which is then its state throughout the window.
     #: () -> RootVersionPlan
     def without_selection
       return RootVersionPlan.empty unless @context_required
       if @after_range
         return RootVersionPlan.contiguous([@after_range], context_version: @after_range)
       end
+      return RootVersionPlan.closing_on(@live_endpoint) if @live_endpoint && @windowed
 
       raise IncompleteTimeRangeError, INCOMPLETE
     end
@@ -147,6 +148,16 @@ module PaperTrailDiff
     #: () -> untyped
     def revealing_version
       immediate_successor(@selected.last) || @after_range
+    end
+
+    # A window with nothing after its last selected mutation can only close on
+    # that mutation being the record's destruction.
+    #: (untyped) -> bool
+    def closes_on_destroy?(closing)
+      return false if closing || !@windowed
+      raise IncompleteTimeRangeError, INCOMPLETE unless terminal_destroy?
+
+      true
     end
 
     # A range closing on the record's own destruction needs no later version:

@@ -53,6 +53,82 @@ RSpec.describe PaperTrailDiff::Engine do
     expect(result).not_to be_empty
   end
 
+  it 'reports a record that existed before and not after as removed' do
+    from = snapshot(type: 'Article', id: 1, attributes: { title: 'Gone' })
+
+    change = described_class.compare(from, nil).record_presence_change
+
+    expect(change.from).to equal(from)
+    expect(change.to).to be_nil
+  end
+
+  # A column added or dropped between two versions leaves an attribute on one
+  # side only; it must still be reported, in name order with the rest.
+  it 'reports attributes present on only one side, in name order' do
+    from = snapshot(type: 'Article', id: 1, attributes: { kept: 1, dropped: 'x', zeta: 1 })
+    to = snapshot(type: 'Article', id: 1, attributes: { added: 'y', kept: 1, zeta: 2 })
+
+    attributes = described_class.compare(from, to).to_h.fetch(:attributes)
+
+    expect(attributes).to eq(
+      'added' => { from: nil, to: 'y' },
+      'dropped' => { from: 'x', to: nil },
+      'zeta' => { from: 1, to: 2 }
+    )
+    expect(attributes.keys).to eq(%w[added dropped zeta])
+  end
+
+  it 'keeps comparing associations after an unchanged one, in name order' do
+    shared = association(:belongs_to, snapshot(type: 'Author', id: 1, attributes: {}))
+    from = snapshot(type: 'Article', id: 1, attributes: {},
+                    associations: { author: shared, zeta: association(:has_many) })
+    to = snapshot(
+      type: 'Article', id: 1, attributes: {},
+      associations: {
+        author: shared,
+        alpha: association(:has_many, snapshot(type: 'Tag', id: 1, attributes: {})),
+        zeta: association(:has_many, snapshot(type: 'Note', id: 1, attributes: {}))
+      }
+    )
+
+    expect(described_class.compare(from, to).associations.keys).to eq(%w[alpha zeta])
+  end
+
+  # A branch both snapshots share is the same immutable object, so it is not
+  # walked again. This collection would raise if it were.
+  it 'does not compare an association both snapshots share' do
+    record = snapshot(type: 'Tag', id: 1, attributes: {})
+    shared = association(:has_many, record, record)
+    from = snapshot(type: 'Article', id: 1, attributes: { a: 1 }, associations: { tags: shared })
+    to = snapshot(type: 'Article', id: 1, attributes: { a: 2 }, associations: { tags: shared })
+
+    expect(described_class.compare(from, to).associations).to eq({})
+  end
+
+  it 'reports a singular relationship being added or removed' do
+    author = snapshot(type: 'Author', id: 1, attributes: { name: 'Ada' })
+    without = snapshot(type: 'Article', id: 1, attributes: {},
+                       associations: { author: association(:belongs_to) })
+    with = snapshot(type: 'Article', id: 1, attributes: {},
+                    associations: { author: association(:belongs_to, author) })
+
+    added = described_class.compare(without, with).associations.fetch('author')
+    removed = described_class.compare(with, without).associations.fetch('author')
+
+    expect([added.relationship.from, added.relationship.to]).to eq([nil, author])
+    expect([removed.relationship.from, removed.relationship.to]).to eq([author, nil])
+    expect([added.changed, removed.changed]).to eq([nil, nil])
+  end
+
+  it 'reports nothing for a singular association empty on both sides' do
+    from = snapshot(type: 'Article', id: 1, attributes: {},
+                    associations: { author: association(:belongs_to) })
+    to = snapshot(type: 'Article', id: 1, attributes: {},
+                  associations: { author: association(:belongs_to) })
+
+    expect(described_class.compare(from, to)).to be_empty
+  end
+
   it 'returns an empty diff for equal snapshots' do
     from = snapshot(type: 'Article', id: 1, attributes: { title: 'Same' })
     to = snapshot(type: 'Article', id: 1, attributes: { title: 'Same' })
@@ -309,7 +385,7 @@ RSpec.describe PaperTrailDiff::Engine do
         super()
       end
     end
-    records = 100.times.map do |id|
+    records = Array.new(100) do |id|
       counting_snapshot.new(type: 'Comment', id: id, attributes: {})
     end
     before = records.fetch(50)

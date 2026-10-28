@@ -69,9 +69,10 @@ RSpec.describe 'activity reporting at current state' do
     expect(activity.activity_timeline.last.to_boundary).to be_current
     step = timeline.last
     expect(step.source_boundary).to equal(step.from_boundary)
-    expect(step.to_h).not_to have_key(:from_boundary)
-    expect(step.to_h(metadata: true).fetch(:from_boundary)).to include(event: 'update')
-    expect(step.to_h(metadata: true).fetch(:to_boundary)).to include(event: nil)
+    expect(step.to_h.fetch(:from)).not_to have_key(:event)
+    expect(step.to_h(metadata: true).fetch(:from)).to include(event: 'update')
+    expect(step.to_h(metadata: true).fetch(:to)).to include(event: nil)
+    expect(step.to_h.keys).to eq(activity.activity_timeline.last.to_h.keys)
   end
 
   it 'returns empty results for explicit current endpoints when no versions exist' do
@@ -109,8 +110,7 @@ RSpec.describe 'activity reporting at current state' do
     calls = [
       -> { PaperTrailDiff.analyze(article, **options, snapshots: true) },
       -> { PaperTrailDiff.analyze_many([], snapshots: true) },
-      -> { PaperTrailDiff.analyze_scope(CoreArticle.none, limit: 1, snapshots: true) },
-      -> { PaperTrailDiff.analyze_many(scope: CoreArticle.none, limit: 1, snapshots: true) }
+      -> { PaperTrailDiff.analyze_scope(CoreArticle.none, limit: 1, snapshots: true) }
     ]
 
     calls.each do |call|

@@ -9,8 +9,13 @@ module PaperTrailDiff
     # : (untyped, Array[untyped], ?start_at: untyped, ?end_at: untyped) -> void
     def prepare: (untyped, Array[untyped], ?start_at: untyped, ?end_at: untyped) -> void
 
-    # : (Array[untyped], Array[untyped]) -> void
-    def prepare_batch: (Array[untyped], Array[untyped]) -> void
+    # : (Array[untyped], Array[untyped], ?start_at: untyped, ?end_at: untyped) -> void
+    def prepare_batch: (Array[untyped], Array[untyped], ?start_at: untyped, ?end_at: untyped) -> void
+
+    # Missing roots have no live graph to collect. Reading their associations
+    # here would issue a query per root and seed nonexistent rows as live state.
+    # : (Array[untyped], Array[untyped], ?start_at: untyped, ?end_at: untyped) -> void
+    def prepare_deleted_batch: (Array[untyped], Array[untyped], ?start_at: untyped, ?end_at: untyped) -> void
 
     # : (untyped, untyped) -> RecordSnapshot?
     def call: (untyped, untyped) -> RecordSnapshot?
@@ -24,8 +29,14 @@ module PaperTrailDiff
     # : (untyped, habtm_version: untyped) -> untyped
     def association_reader: (untyped, habtm_version: untyped) -> untyped
 
+    # : () -> PreparedActivityIndex?
+    def activity_index: () -> PreparedActivityIndex?
+
     # : (untyped) -> [Hash[untyped, untyped], Hash[untyped, untyped]]?
     def record_transition: (untyped) -> [ Hash[untyped, untyped], Hash[untyped, untyped] ]?
+
+    # : (untyped, ?direct: bool) -> [bool, untyped]
+    def record_after: (untyped, ?direct: bool) -> [ bool, untyped ]
 
     private
 
@@ -36,6 +47,8 @@ module PaperTrailDiff
     @prepared_histories: Hash[Array[untyped], PreparedHistory]
 
     @prepared_history: PreparedHistory?
+
+    @prepared_snapshotter: PreparedSnapshotBuilder
 
     @preparer: untyped
 
@@ -51,8 +64,8 @@ module PaperTrailDiff
     # : (Array[untyped], Array[untyped]) -> Hash[Symbol, untyped]
     def batch_payload: (Array[untyped], Array[untyped]) -> Hash[Symbol, untyped]
 
-    # : (Array[untyped], Array[untyped]) -> void
-    def register_batch: (Array[untyped], Array[untyped]) -> void
+    # : (Array[untyped], Array[untyped], ?live_records: Array[untyped], ?start_at: untyped, ?end_at: untyped) -> void
+    def register_batch: (Array[untyped], Array[untyped], ?live_records: Array[untyped], ?start_at: untyped, ?end_at: untyped) -> void
 
     # : (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer) -> RecordSnapshot?
     def snapshot_from_version: (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer) -> RecordSnapshot?

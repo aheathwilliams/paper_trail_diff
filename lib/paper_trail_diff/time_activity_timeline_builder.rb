@@ -28,7 +28,7 @@ module PaperTrailDiff
     #: () -> Analysis
     def analyze
       history, plan, closing, closing_snapshot, captured_at = history_and_versions
-      final = closing_snapshot || history.last_snapshot
+      final = plan.closes_on_destroy ? nil : closing_snapshot || history.last_snapshot
       Analysis.new(
         diff: Engine.compare(history.first_snapshot, final),
         timeline: ActivityRootSteps.call(
@@ -52,12 +52,20 @@ module PaperTrailDiff
     #: () -> [ActivityHistory, RootVersionPlan, ActivityStep?, RecordSnapshot?, untyped]
     def history_and_versions
       plan = @range.select_plan(context_required: !@tree.empty?)
-      return [ActivityHistory.empty, plan, nil, nil, nil] if plan.reconstruction_versions.empty?
+      reject_live_habtm! if plan.closing_record
+      if plan.reconstruction_versions.empty? && !plan.closing_record
+        return [ActivityHistory.empty, plan, nil, nil, nil]
+      end
 
       # A window closing on current state runs to the instant it is captured,
       # not to the last root version, or descendants that moved after that
       # version would be missing from a report that claims to reach now.
       history_for(plan, plan.closing_record ? Time.now.utc : nil)
+    end
+
+    #: () -> void
+    def reject_live_habtm!
+      AssociationTraversal.new(@tree).reject_live_habtm_activity!(@record.class)
     end
 
     #: (RootVersionPlan, untyped) -> [ActivityHistory, RootVersionPlan, ActivityStep?, RecordSnapshot?, untyped]
@@ -69,7 +77,7 @@ module PaperTrailDiff
         return [ActivityHistory.empty, plan, nil, nil, nil]
       end
 
-      history = build_history(root_versions, events)
+      history = build_history(root_versions, events, current: plan.closing_record)
       snapshot = current_snapshot(plan)
       closing = closing_step(history, selected.last, plan, captured_at, snapshot)
       [history, plan, closing, snapshot, captured_at]
@@ -91,12 +99,15 @@ module PaperTrailDiff
       collect_events(root_versions, range_end: captured_at)
     end
 
-    #: (Array[untyped], Array[ActivityEvent]) -> ActivityHistory
-    def build_history(root_versions, events)
+    # Events after the last root version read the root from the live record
+    # when the window closes on it, as an explicit `to: record` range does.
+    #: (Array[untyped], Array[ActivityEvent], ?current: untyped) -> ActivityHistory
+    def build_history(root_versions, events, current: nil)
       ActivityHistoryBuilder.new(
         root_versions,
         events,
         @snapshotter,
+        current: current,
         include_step: ->(event) { @range.include?(event.version) },
         snapshots: @retain
       ).call
@@ -184,6 +195,7 @@ module PaperTrailDiff
         root_versions: root_versions,
         tree: @tree,
         traversal: AssociationTraversal.new(@tree),
+        prepared: (@snapshotter.activity_index if @snapshotter.respond_to?(:activity_index)),
         range_start: @range.begin_time,
         range_end: range_end || root_versions.last
       ).call

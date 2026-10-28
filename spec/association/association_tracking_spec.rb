@@ -15,6 +15,11 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     TrackedTag.delete_all
   end
 
+  # Diffs only: two runs capture current state at slightly different instants.
+  def diffs(analysis)
+    [analysis.diff.to_h, analysis.timeline.map { |step| step.diff.to_h }]
+  end
+
   def boundary_for(article)
     article.paper_trail.save_with_version ||
       raise('PaperTrail did not create the requested boundary version')
@@ -185,7 +190,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
   end
 
   it 'bulk-compares historical graphs with preloaded nested live associations' do
-    graphs = 2.times.map do |index|
+    graphs = Array.new(2) do |index|
       graph = article_with_graph
       graph[:kept_comment].update!(body: "Live after #{index}")
       graph[:reply].update!(body: "Nested live after #{index}")
@@ -226,7 +231,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
   end
 
   it 'preserves per-owner collection scopes while batching safe nested associations' do
-    comparisons = 2.times.map do |index|
+    comparisons = Array.new(2) do |index|
       article = TrackedArticle.create!(title: "Limited batch #{index}")
       before = boundary_for(article)
       selected = article.comments.create!(body: "Selected #{index}")
@@ -252,7 +257,8 @@ RSpec.describe 'PaperTrailDiff association tracking' do
       [identity, diff.to_h]
     end
 
-    actual = PaperTrailDiff.compare_many(comparisons, associations: associations)
+    actual = PaperTrailDiff.compare_many(comparisons, associations: associations,
+                                                      allow_expensive: true)
 
     expect(actual.transform_values(&:to_h)).to eq(expected)
     expect(actual.values).to all(satisfy do |diff|
@@ -269,7 +275,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
 
   it 'keeps historical-to-live collection queries constant as the batch grows' do
     build_comparisons = lambda do |count|
-      count.times.map do |index|
+      Array.new(count) do |index|
         article = TrackedArticle.create!(title: "Bulk order #{index}")
         comment = article.comments.create!(body: 'Before')
         before = boundary_for(article)
@@ -845,21 +851,18 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     expect(steps.map { |step| step.from_boundary.version_id }).not_to include(outside.id)
   end
 
-  it 'requires a later root checkpoint for a descendant time range' do
+  it 'closes a descendant time range on current state when no later root version exists' do
     graph = article_with_graph
-    range_start = Time.utc(2031, 2, 1, 12)
-    graph[:before].update_columns(created_at: range_start - 3600)
+    range_start = Time.now.utc
     graph[:kept_comment].update!(body: 'No trailing checkpoint')
-    latest = graph[:kept_comment].versions.reorder(id: :asc).last
-    latest.update_columns(created_at: range_start)
 
-    expect do
-      PaperTrailDiff.activity_timeline(
-        graph[:article],
-        within: range_start...(range_start + 3600),
-        associations: [:comments]
-      )
-    end.to raise_error(PaperTrailDiff::IncompleteTimeRangeError, /later root version/)
+    steps = PaperTrailDiff.activity_timeline(
+      graph[:article], within: range_start..Time.now.utc, associations: [:comments]
+    ).reject(&:empty?)
+
+    expect(steps.map { |step| step.to_boundary.kind }).to eq([:current])
+    expect(steps.last.diff.associations.fetch('comments').changed.first
+                .attributes.fetch('body').to).to eq('No trailing checkpoint')
   end
 
   it 'reuses root snapshots when analysis includes activity' do
@@ -1024,7 +1027,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
   it 'keeps same-branch descendant events atomic within one transaction' do
     article = TrackedArticle.create!(title: 'Atomic descendants')
     comment = article.comments.create!(body: 'Parent')
-    replies = 2.times.map { |index| comment.replies.create!(body: "Reply #{index}") }
+    replies = Array.new(2) { |index| comment.replies.create!(body: "Reply #{index}") }
     before = boundary_for(article)
     TrackedReply.transaction { replies.each(&:destroy!) }
     after = boundary_for(article)
@@ -1081,7 +1084,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
 
   it 'keeps direct collection activity work linear when selected children are nested' do
     article = TrackedArticle.create!(title: 'Scaled activity')
-    comments = 100.times.map do |index|
+    comments = Array.new(100) do |index|
       comment = article.comments.create!(body: "Approval #{index}")
       comment.replies.create!(body: "Approver #{index}")
       comment
@@ -1108,7 +1111,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
 
   it 'advances ordinary child updates without per-event live-record queries' do
     article = TrackedArticle.create!(title: 'Serialized activity changes')
-    comments = 100.times.map do |index|
+    comments = Array.new(100) do |index|
       article.comments.create!(body: "Approval #{index}")
     end
     before = boundary_for(article)
@@ -1131,7 +1134,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
 
   it 'keeps nested collection activity local to the affected parent snapshots' do
     article = TrackedArticle.create!(title: 'Scaled nested activity')
-    replies = 100.times.map do |index|
+    replies = Array.new(100) do |index|
       comment = article.comments.create!(body: "Approval #{index}")
       comment.replies.create!(body: "Approver #{index}")
     end
@@ -1157,7 +1160,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
 
   it 'does not instantiate out-of-range child history for a leaf collection' do
     article = TrackedArticle.create!(title: 'Bounded activity')
-    comments = 5.times.map do |index|
+    comments = Array.new(5) do |index|
       article.comments.create!(body: "Approval #{index}")
     end
     50.times do |round|
@@ -1184,7 +1187,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
   it 'applies nested belongs-to target updates without rebuilding the parent collection' do
     reviewer = TrackedAuthor.create!(name: 'Reviewer before')
     article = TrackedArticle.create!(title: 'Nested target')
-    comments = 3.times.map do |index|
+    comments = Array.new(3) do |index|
       article.comments.create!(body: "Approval #{index}", reviewer: reviewer)
     end
     before = boundary_for(article)
@@ -1304,7 +1307,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     reply_after = PaperTrailDiff::RecordSnapshot.new(
       type: 'TrackedReply', id: 9, attributes: { body: 'After' }
     )
-    comments = 100.times.map do |id|
+    comments = Array.new(100) do |id|
       replies = id == 50 ? [reply_before] : []
       PaperTrailDiff::RecordSnapshot.new(
         type: 'TrackedComment', id: id, attributes: {},
@@ -1431,7 +1434,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
       retained = steps_for(article, group: :transaction, snapshots: true)
 
       expect(grouped.map(&:from_snapshot)).to all(be_nil)
-      expect(retained.map(&:from_snapshot).compact).not_to be_empty
+      expect(retained.filter_map(&:from_snapshot)).not_to be_empty
     end
 
     # PaperTrail leaves the column nil outside a transaction and a custom
@@ -1452,12 +1455,13 @@ RSpec.describe 'PaperTrailDiff association tracking' do
       article = transaction_history
       PaperTrail.request(whodunnit: 'carol') { article.update!(title: 'Archived') }
 
+      archived = article.versions.reload.last
       grouped = PaperTrailDiff.analyze(
-        article, from: :first, to: :last, associations: [:comments],
+        article, from: :first, to: archived, associations: [:comments],
                  activity: true, group: :transaction
       ).activity_timeline
       ungrouped = PaperTrailDiff.analyze(
-        article, from: :first, to: :last, associations: [:comments], activity: true
+        article, from: :first, to: archived, associations: [:comments], activity: true
       ).activity_timeline
 
       expect(grouped.length).to be < ungrouped.length
@@ -1466,7 +1470,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
   end
 
   it 'analyzes each root whole history when no window is given' do
-    articles = 2.times.map do |index|
+    articles = Array.new(2) do |index|
       article = TrackedArticle.create!(title: "Whole #{index}")
       article.comments.create!(body: "Comment #{index}")
       article.update!(title: "Whole updated #{index}")
@@ -1476,10 +1480,13 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     batched = PaperTrailDiff.analyze_many(articles, associations: [:comments])
     separately = articles.to_h do |article|
       [PaperTrailDiff::Endpoint.identity(article),
-       PaperTrailDiff.analyze(article, from: :first, to: :last, associations: [:comments])]
+       PaperTrailDiff.analyze(article, associations: [:comments])]
     end
 
-    expect(batched.transform_values(&:to_h)).to eq(separately.transform_values(&:to_h))
+    expect(batched.transform_values { |analysis| diffs(analysis) })
+      .to eq(separately.transform_values { |analysis| diffs(analysis) })
+    expect(batched.values.map { |analysis| analysis.to_snapshot.attributes.fetch('title') })
+      .to eq(['Whole updated 0', 'Whole updated 1'])
     expect(PaperTrailDiff.analyze_many([], associations: [:comments])).to eq({})
   end
 
@@ -1501,7 +1508,8 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     # A destroyed root is reported rather than analyzed, because `analyze_many`
     # requires live state it no longer has -- the same rule, made visible.
     expect(unreachable).to eq([['TrackedArticle', doomed.id.to_s]])
-    expect(analyses.transform_values(&:to_h)).to eq(by_hand.transform_values(&:to_h))
+    expect(analyses.transform_values { |analysis| diffs(analysis) })
+      .to eq(by_hand.transform_values { |analysis| diffs(analysis) })
     # Proves the selected associations reached the batch: the comment was added
     # between two root versions, so the step spanning it reports the addition.
     added = analyses.values.first.timeline.filter_map { |step| step.diff.associations['comments'] }
@@ -1540,25 +1548,26 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     expect(PaperTrailDiff.analyze_many([kept], within: start_at..cutoff).length).to eq(1)
   end
 
-  it 'refuses a batched window whose final mutation has no later root version' do
-    article = TrackedArticle.create!(title: 'Unreconstructable')
+  it 'closes a batched window on current state when no later root version exists' do
+    article = TrackedArticle.create!(title: 'Unrevealed')
     start_at = PaperTrail::Version.order(:id).first.created_at
     article.update!(title: 'Last recorded change')
     cutoff = PaperTrail::Version.order(:id).last.created_at + 60
 
-    expect { PaperTrailDiff.analyze_many([article], within: start_at..cutoff) }
-      .to raise_error(PaperTrailDiff::IncompleteTimeRangeError, /later root version/)
+    analysis = PaperTrailDiff.analyze_many([article], within: start_at..cutoff).values.first
+
+    expect(analysis.to_snapshot.attributes.fetch('title')).to eq('Last recorded change')
+    expect(analysis.timeline.last.to_boundary.kind).to eq(:current)
   end
 
   it 'anchors a batched boundary symbol on a version as well as a record' do
     article = TrackedArticle.create!(title: 'Anchored')
     article.comments.create!(body: 'First')
-    first_version = article.versions.reload.first
-    boundary_for(article)
 
     from_record = PaperTrailDiff.compare_many([{ from: :first, to: article }],
                                               associations: [:comments])
-    from_version = PaperTrailDiff.compare_many([{ from: first_version, to: :last }],
+    later = boundary_for(article)
+    from_version = PaperTrailDiff.compare_many([{ from: :first, to: later }],
                                                associations: [:comments])
 
     expect(from_record.length).to eq(1)
@@ -1568,7 +1577,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
 
   it 'keeps batched analysis queries constant as the root count grows' do
     build = lambda do |count|
-      articles = count.times.map do |index|
+      articles = Array.new(count) do |index|
         article = TrackedArticle.create!(title: "Batched #{index}")
         article.comments.create!(body: "Comment #{index}")
         article.update!(title: "Updated #{index}")
@@ -1760,6 +1769,23 @@ RSpec.describe 'PaperTrailDiff association tracking' do
         associations: [:tags]
       )
     end.to raise_error(PaperTrailDiff::UnsupportedLiveActivityError, /HABTM/)
+  end
+
+  it 'rejects a HABTM activity window only when it has to close on current state' do
+    graph = article_with_graph
+    window_start = Time.now.utc
+    graph[:article].update!(title: 'Windowed')
+    window_end = Time.now.utc
+
+    expect do
+      PaperTrailDiff.activity_timeline(graph[:article], within: window_start..window_end,
+                                                        associations: [:tags])
+    end.to raise_error(PaperTrailDiff::UnsupportedLiveActivityError, /HABTM/)
+
+    habtm_boundary_for(graph[:article])
+    steps = PaperTrailDiff.activity_timeline(graph[:article], within: window_start..window_end,
+                                                              associations: [:tags])
+    expect(steps.map { |step| step.to_boundary.kind }).to all(eq(:version))
   end
 
   it 'reports child additions and removals at their own activity boundaries' do
@@ -2088,8 +2114,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
       article, = edited_article
 
       analysis = PaperTrailDiff.analyze(
-        article, from: :first, to: :last, activity: true,
-                 associations: ['comments'], snapshots: true
+        article, activity: true, associations: ['comments'], snapshots: true
       )
 
       steps = analysis.activity_timeline
@@ -2109,15 +2134,15 @@ RSpec.describe 'PaperTrailDiff association tracking' do
       [article, start_at..(Time.now.utc + 86_400)]
     end
 
-    it 'closes an activity timeline on current state instead of refusing the range' do
+    it 'closes an activity timeline on current state by default' do
       article, window = open_window_article
 
-      expect { PaperTrailDiff.activity_timeline(article, within: window) }
-        .to raise_error(PaperTrailDiff::IncompleteTimeRangeError)
-
-      steps = PaperTrailDiff.activity_timeline(
+      steps = PaperTrailDiff.activity_timeline(article, within: window, associations: ['comments'])
+      explicit = PaperTrailDiff.activity_timeline(
         article, within: window, close_on: :current, associations: ['comments']
       )
+
+      expect(steps.map { |step| step.diff.to_h }).to eq(explicit.map { |step| step.diff.to_h })
 
       expect(steps.last.to_boundary.kind).to eq(:current)
       expect(steps.last.diff.attributes.fetch('title').to_h).to eq(from: 'Start', to: 'Revised')
@@ -2187,8 +2212,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     it 'reads the state each selected mutation started from, not the one before the run' do
       article, users = filtered_gap_history
 
-      steps = PaperTrailDiff.timeline(article, from: :first, to: :last, version_scope: users,
-                                               associations: ['comments'])
+      steps = PaperTrailDiff.timeline(article, version_scope: users, associations: ['comments'])
 
       expect(steps.map { |step| step.from_version.whodunnit }).to eq(%w[alice alice bob])
       expect(titles(steps)).to eq([nil, ['Start', 'By Alice'], ['System 3', 'By Bob']])
@@ -2197,10 +2221,9 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     it 'reports the same root timeline whether or not the activity view builds it' do
       article, users = filtered_gap_history
 
-      plain = PaperTrailDiff.analyze(article, from: :first, to: :last, version_scope: users,
-                                              associations: ['comments'])
-      activity = PaperTrailDiff.analyze(article, from: :first, to: :last, version_scope: users,
-                                                 activity: true, associations: ['comments'])
+      plain = PaperTrailDiff.analyze(article, version_scope: users, associations: ['comments'])
+      activity = PaperTrailDiff.analyze(article, version_scope: users, activity: true,
+                                                 associations: ['comments'])
 
       # The activity view carries one snapshot forward across every event, so it
       # has to replay the excluded versions even though it never reports them.
@@ -2211,8 +2234,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     it 'keeps every boundary in the activity sequence the filter spans' do
       article, users = filtered_gap_history
 
-      steps = PaperTrailDiff.activity_timeline(article, from: :first, to: :last,
-                                                        version_scope: users,
+      steps = PaperTrailDiff.activity_timeline(article, version_scope: users,
                                                         associations: ['comments'])
 
       # A filter narrows where the span starts and ends. Inside it the sequence

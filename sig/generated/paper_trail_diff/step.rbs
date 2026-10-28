@@ -26,6 +26,8 @@ module PaperTrailDiff
     # : () -> ActivityBoundary
     def source_boundary: () -> ActivityBoundary
 
+    # The same shape as `ActivityStep#to_h`, so a consumer reads both step
+    # types alike; each boundary carries its own `version_id`.
     # : (?metadata: bool) -> Hash[Symbol, untyped]
     def to_h: (?metadata: bool) -> Hash[Symbol, untyped]
   end

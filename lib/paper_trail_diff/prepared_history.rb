@@ -4,17 +4,21 @@
 module PaperTrailDiff
   # Batched record states and relationship candidates for one activity range.
   class PreparedHistory
+    attr_reader :activity_index #: PreparedActivityIndex?
+
     DIRECT_RESOLVERS = {
       belongs_to: :resolve_belongs_to,
       has_one: :resolve_children,
       has_many: :resolve_children,
-      has_and_belongs_to_many: :resolve_habtm
+      has_and_belongs_to_many: :habtm_records
     }.freeze
     private_constant :DIRECT_RESOLVERS
 
-    #: (PreparedRecordIndex) -> void
-    def initialize(records)
+    #: (PreparedRecordIndex, ?activity_index: PreparedActivityIndex?) -> void
+    def initialize(records, activity_index: nil)
       @records = records
+      @state_reader = PreparedStateAssociationReader.new(records, method(:edge))
+      @activity_index = activity_index
       @edges = {} #: Hash[Array[String], Hash[String, Hash[Symbol, untyped]]]
       @unsupported = {} #: Hash[Array[String], bool]
       @habtm = {} #: Hash[Array[String], Hash[String, Array[untyped]]]
@@ -24,7 +28,7 @@ module PaperTrailDiff
     def merge_edge(owner_class, reflection, groups)
       key = edge_key(owner_class, reflection)
       empty = {} #: Hash[String, Hash[Symbol, untyped]]
-      @edges[key] = merge_groups(@edges.fetch(key, empty), groups)
+      @edges[key] = Support.merge_record_groups(@edges.fetch(key, empty), groups)
     end
 
     #: (untyped, untyped) -> Hash[String, Hash[Symbol, untyped]]
@@ -48,6 +52,16 @@ module PaperTrailDiff
       @records.transition(model_class, id, version)
     end
 
+    #: (untyped, untyped, untyped, ?direct: bool) -> [bool, untyped]
+    def record_after(model_class, id, version, direct: false)
+      @records.record_after(model_class, id, version, direct: direct)
+    end
+
+    #: (PreparedRecordState, untyped, untyped) -> [bool, Array[PreparedRecordState]]
+    def snapshot_states(owner, reflection, boundary)
+      @state_reader.call(owner, reflection, boundary)
+    end
+
     #: (untyped, untyped, untyped, habtm_boundary: untyped) -> [bool, Array[untyped]]
     def resolve(record, reflection, boundary, habtm_boundary:)
       return [false, []] unless supported?(record.class, reflection)
@@ -63,6 +77,7 @@ module PaperTrailDiff
     private
 
     # @rbs @records: PreparedRecordIndex
+    # @rbs @state_reader: PreparedStateAssociationReader
     # @rbs @edges: Hash[Array[String], Hash[String, Hash[Symbol, untyped]]]
     # @rbs @unsupported: Hash[Array[String], bool]
     # @rbs @habtm: Hash[Array[String], Hash[String, Array[untyped]]]
@@ -70,12 +85,7 @@ module PaperTrailDiff
     #: (untyped, untyped) -> bool
     def supported?(owner_class, reflection)
       !@unsupported[edge_key(owner_class, reflection)] &&
-        reflection.scope.nil? && !default_scoped?(reflection.klass)
-    end
-
-    #: (untyped) -> bool
-    def default_scoped?(model_class)
-      model_class.default_scopes?
+        reflection.scope.nil? && !reflection.klass.default_scopes?
     end
 
     #: (untyped, untyped, untyped, untyped) -> Array[untyped]?
@@ -94,11 +104,6 @@ module PaperTrailDiff
       child_records(record, reflection, boundary)
     end
 
-    #: (untyped, untyped, untyped, untyped) -> Array[untyped]?
-    def resolve_habtm(record, reflection, boundary, habtm_boundary)
-      habtm_records(record, reflection, boundary, habtm_boundary)
-    end
-
     #: (untyped, untyped, untyped) -> Array[untyped]?
     def belongs_to_records(record, reflection, boundary)
       foreign_key = scalar_foreign_key(reflection)
@@ -107,7 +112,7 @@ module PaperTrailDiff
       id = record.public_send(foreign_key)
       return [] if id.nil?
 
-      model_class = belongs_to_class(record, reflection)
+      model_class = AssociationTraversal.belongs_to_target(reflection, record)
       return unless model_class && @records.loaded?(model_class, id)
 
       Array(@records.record_before(model_class, id, boundary)).compact
@@ -189,15 +194,6 @@ module PaperTrailDiff
       key.to_s unless key.is_a?(Array)
     end
 
-    #: (untyped, untyped) -> untyped
-    def belongs_to_class(record, reflection)
-      return reflection.klass unless reflection.polymorphic?
-
-      Object.const_get(record.public_send(reflection.foreign_type).to_s)
-    rescue NameError
-      nil
-    end
-
     #: (untyped, untyped) -> Array[String]
     def owner_types(reflection, owner)
       types = [owner.class.name, owner.class.base_class.name, reflection.active_record.name]
@@ -217,11 +213,6 @@ module PaperTrailDiff
     #: (untyped, untyped) -> Array[String]
     def edge_key(owner_class, reflection)
       [owner_class.base_class.name.to_s, reflection.name.to_s]
-    end
-
-    #: (Hash[String, Hash[Symbol, untyped]], Hash[String, Hash[Symbol, untyped]]) -> Hash[String, Hash[Symbol, untyped]]
-    def merge_groups(existing, incoming)
-      Support.merge_record_groups(existing, incoming)
     end
   end
 end
