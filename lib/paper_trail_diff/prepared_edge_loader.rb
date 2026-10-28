@@ -113,7 +113,12 @@ module PaperTrailDiff
         association_class.arel_table[:foreign_key_id],
         version_class.arel_table[:item_id]
       )
-      group_ids_by_owner(pairs)
+      group_ids_by_owner(typed_child_ids(reflection.klass, pairs))
+    end
+
+    #: (untyped, Array[Array[untyped]]) -> Array[Array[untyped]]
+    def typed_child_ids(model_class, pairs)
+      pairs.map { |owner_id, child_id| [owner_id, Support.record_id(model_class, child_id)] }
     end
 
     #: (untyped, Array[untyped], untyped, String) -> untyped

@@ -30,6 +30,10 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Association timelines and activity no longer raise `duplicate record
+  identity` when `versions.item_id` is a string column (PaperTrail's setup for
+  UUID keys) and the associated models use integer keys. Ids read from history
+  are cast to the model's key type before they are matched with live rows.
 - Histories stored with PaperTrail's JSON serializer or a `json`/`jsonb` object
   column no longer report every timestamp as changed when compared with the live
   record. Times are compared at the precision the history stored.

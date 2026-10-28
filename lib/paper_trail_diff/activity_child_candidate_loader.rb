@@ -24,8 +24,10 @@ module PaperTrailDiff
       version_class = @parent_class.paper_trail.version_class
       versions = version_class.arel_table
       associations = @parent_class.paper_trail.version_association_class.arel_table
-      candidate_scope(version_class).call(historical_relation(version_class)).distinct.pluck(
-        associations[:foreign_key_id], versions[:item_id], versions[:created_at], versions[:event]
+      typed_rows(
+        candidate_scope(version_class).call(historical_relation(version_class)).distinct.pluck(
+          associations[:foreign_key_id], versions[:item_id], versions[:created_at], versions[:event]
+        )
       )
     end
 
@@ -43,11 +45,19 @@ module PaperTrailDiff
     # @rbs @reflection: untyped
     # @rbs @range: ActivityRange
 
+    #: (Array[Array[untyped]]) -> Array[Array[untyped]]
+    def typed_rows(rows)
+      rows.map do |owner_id, item_id, created_at, event|
+        [owner_id, Support.record_id(@reflection.klass, item_id), created_at, event]
+      end
+    end
+
     #: () -> Array[untyped]
     def historical_ids
       version_class = @parent_class.paper_trail.version_class
       candidate_scope(version_class).call(historical_relation(version_class))
                                     .distinct.pluck(version_class.arel_table[:item_id])
+                                    .map { |id| Support.record_id(@reflection.klass, id) }
     end
 
     #: (untyped) -> untyped

@@ -43,6 +43,13 @@ module PaperTrailDiff
     # : (untyped) -> bool
     def self?.versioned?: (untyped) -> bool
 
+    # `versions.item_id` is often a string column -- PaperTrail's setup for UUID
+    # keys -- while the model's own key is an integer. An id read from history
+    # is cast to the key's type, or the same record read once from history and
+    # once from its live row would count as two.
+    # : (untyped, untyped) -> untyped
+    def self?.record_id: (untyped, untyped) -> untyped
+
     # : (untyped) -> bool
     def self?.sequential_id?: (untyped) -> bool
 

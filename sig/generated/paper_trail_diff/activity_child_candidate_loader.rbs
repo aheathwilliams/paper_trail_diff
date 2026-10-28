@@ -27,6 +27,9 @@ module PaperTrailDiff
 
     @reflection: untyped
 
+    # : (Array[Array[untyped]]) -> Array[Array[untyped]]
+    def typed_rows: (Array[Array[untyped]]) -> Array[Array[untyped]]
+
     # : () -> Array[untyped]
     def historical_ids: () -> Array[untyped]
 
