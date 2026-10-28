@@ -15,12 +15,12 @@ module ReportingBenchmark
       @reifications = 0
     end
 
-    def measure(&)
+    def measure(&block)
       GC.start
       before = memory
       allocations = GC.stat(:total_allocated_objects)
       started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-      result = subscribe(&)
+      result = subscribe(&block)
       [result, finish(started, allocations, before)]
     end
 

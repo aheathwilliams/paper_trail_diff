@@ -10,13 +10,13 @@ module PaperTrailDiff
     # no other version of the same item that the block accepts is earlier. A
     # correlated NOT EXISTS stays portable where window functions are not.
     #: (untyped) ?{ (untyped) -> untyped } -> untyped
-    def no_earlier_version(table, &)
+    def no_earlier_version(table, &block)
       arel = Object.const_get(:Arel) #: untyped
       earlier = table.alias('paper_trail_diff_earlier_versions')
       arel.const_get(:SelectManager).new
           .from(earlier)
           .project(arel.sql('1'))
-          .where(earlier_version(table, earlier, &))
+          .where(earlier_version(table, earlier, &block))
           .exists
           .not
     end
