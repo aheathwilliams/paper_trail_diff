@@ -23,6 +23,11 @@ integration:
 environment_variables:
   PAPER_TRAIL_DIFF_MUTANT: "1"
   PAPER_TRAIL_DIFF_DATABASE_URL: sqlite3:tmp/mutant/base.sqlite3
+# Mutant counts a timeout as a kill. A mutation no spec catches runs every
+# selected spec, so the limit must exceed that (the whole association suite
+# takes about 20 seconds), or a surviving mutation is reported as caught.
+mutation:
+  timeout: 60.0
 hooks:
   - spec/support/mutant_hooks.rb
 matcher:

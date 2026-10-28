@@ -230,11 +230,12 @@ jobs:
           signature_dir=$(ruby -e 'spec = Gem::Specification.find_by_name("paper_trail_diff"); print File.join(spec.full_gem_path, "sig/generated")')
           bundle exec rbs -I "$signature_dir" validate
 
-  # Mutation testing of the code that decides what counts as a change (see
-  # mutant.yml). Mutant needs Ruby 3.3+, so it has its own bundle. Pull
-  # requests mutate only the subjects they touch; pushes run the whole set.
+  # Mutation testing of the methods a pull request changes (see mutant.yml).
+  # Mutant needs Ruby 3.3+, so it has its own bundle. The full set runs nightly
+  # in mutation.yml, where a newer push cannot cancel it.
   mutation:
     name: Mutation testing
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
@@ -254,9 +255,4 @@ jobs:
           bundler-cache: true
 
       - name: Mutate the subjects this pull request touches
-        if: github.event_name == 'pull_request'
         run: bundle exec mutant run --since "origin/${{ github.base_ref }}"
-
-      - name: Mutate every configured subject
-        if: github.event_name != 'pull_request'
-        run: bundle exec mutant run

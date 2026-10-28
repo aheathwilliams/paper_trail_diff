@@ -17,11 +17,11 @@ module PaperTrailDiff
 
     @to: AssociationSnapshot
 
+    # A transition names the one record that changed between adjacent
+    # snapshots. With matching identities it is an update; otherwise the
+    # before record left and the after record joined.
     # : (CollectionTransition) -> CollectionAssociationDiff
     def transition_difference: (CollectionTransition) -> CollectionAssociationDiff
-
-    # : (RecordSnapshot?, RecordSnapshot?) -> RecordChange?
-    def compare_transition_records: (RecordSnapshot?, RecordSnapshot?) -> RecordChange?
 
     # : () -> Array[RecordChange]?
     def aligned_changes: () -> Array[RecordChange]?
@@ -57,6 +57,9 @@ module PaperTrailDiff
     # : (identity) -> Array[untyped]
     def sortable_identity: (identity) -> Array[untyped]
 
+    # Only the order of the group numbers matters, so moving the lowest one
+    # down or the highest one up changes nothing; the spec checks the order.
+    # mutant:disable
     # : (untyped) -> Array[untyped]
     def sortable_id: (untyped) -> Array[untyped]
 

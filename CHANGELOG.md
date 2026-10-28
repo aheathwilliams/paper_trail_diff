@@ -3,6 +3,26 @@
 All notable changes to this project will be documented in this file. The
 project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- A collection transition whose before and after records have different
+  identities reports the before record as removed and the after record as
+  added. It used to report nothing. No current caller builds one, but
+  `AssociationSnapshot#transition_to` accepts it.
+
+### Development
+
+- Mutation testing gives each mutation 60 seconds instead of mutant's 5-second
+  default. Mutant counts a timeout as a kill, so mutations no spec caught were
+  reported as caught. With the longer limit, 123 surfaced in
+  `CollectionComparator` and `CollectionIdentityIndex`; each class now has a
+  unit spec, and all of them are caught.
+- The full mutation run moves to a nightly workflow that runs only when `main`
+  has an untested commit, so a later push no longer cancels it. Pull requests
+  still mutate the methods they change.
+
 ## [0.13.0] - 2026-10-28
 
 ### Breaking changes

@@ -6,19 +6,16 @@ module PaperTrailDiff
   class CollectionIdentityIndex
     #: (Array[untyped]) -> void
     def initialize(records)
-      @positions = {} #: Hash[Array[untyped], Integer]
+      @identities = Set.new #: Set[Array[untyped]]
       @serialized_positions = {} #: Hash[Array[String], Integer]
       @id_positions = {} #: Hash[String, Integer?]
       records.each_with_index { |record, index| register(record, index) }
-      @positions.freeze
-      @serialized_positions.freeze
-      @id_positions.freeze
       freeze
     end
 
-    #: (untyped, untyped) -> Integer?
+    #: (String, untyped) -> Integer?
     def position(type, id)
-      @serialized_positions[[type.to_s, id.to_s]]
+      @serialized_positions[[type, id.to_s]]
     end
 
     #: (untyped) -> Integer?
@@ -28,26 +25,25 @@ module PaperTrailDiff
 
     private
 
-    # @rbs @positions: Hash[Array[untyped], Integer]
+    # @rbs @identities: Set[Array[untyped]]
     # @rbs @serialized_positions: Hash[Array[String], Integer]
     # @rbs @id_positions: Hash[String, Integer?]
 
     #: (untyped, Integer) -> void
     def register(record, index)
       identity = record.identity
-      if @positions.key?(identity)
-        raise ArgumentError, "duplicate record identity: #{identity.inspect}"
+      unless @identities.add?(identity)
+        raise ArgumentError, "duplicate record identity: #{identity}"
       end
 
-      @positions[identity] = index
-      @serialized_positions[[record.type.to_s, record.id.to_s]] = index
+      @serialized_positions[[record.type, record.id.to_s]] = index
       register_id(record.id, index)
     end
 
     #: (untyped, Integer) -> void
     def register_id(id, index)
       key = id.to_s
-      @id_positions[key] = @id_positions.key?(key) ? nil : index
+      @id_positions[key] = (index unless @id_positions.key?(key))
     end
   end
 end

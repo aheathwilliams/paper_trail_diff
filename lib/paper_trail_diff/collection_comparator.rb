@@ -28,25 +28,21 @@ module PaperTrailDiff
     # @rbs @to: AssociationSnapshot
     # @rbs @record_comparer: untyped
 
+    # A transition names the one record that changed between adjacent
+    # snapshots. With matching identities it is an update; otherwise the
+    # before record left and the after record joined.
     #: (CollectionTransition) -> CollectionAssociationDiff
     def transition_difference(transition)
       @from.validate_unique_identities!
       @to.validate_unique_identities!
       before = transition.before
       after = transition.after
-      changed = compare_transition_records(before, after)
-      difference(
-        added: before.nil? && after ? [after] : [],
-        removed: after.nil? && before ? [before] : [],
-        changed: changed ? [changed] : []
-      )
-    end
+      if before && after && before.identity == after.identity
+        change = @record_comparer.call(before, after)
+        return difference(added: [], removed: [], changed: change ? [change] : [])
+      end
 
-    #: (RecordSnapshot?, RecordSnapshot?) -> RecordChange?
-    def compare_transition_records(before, after)
-      return unless before && after && before.identity == after.identity
-
-      @record_comparer.call(before, after)
+      difference(added: [after].compact, removed: [before].compact, changed: [])
     end
 
     #: () -> Array[RecordChange]?
@@ -70,17 +66,16 @@ module PaperTrailDiff
 
     #: (Array[RecordSnapshot], Array[RecordSnapshot]) -> Array[[RecordSnapshot, RecordSnapshot]]?
     def collect_aligned_pairs(from_records, to_records)
-      seen = {} #: Hash[identity, bool]
+      seen = Set.new #: Set[identity]
       changed = [] #: Array[[RecordSnapshot, RecordSnapshot]]
       index = 0
       while index < from_records.length
         from_record = from_records.fetch(index)
         to_record = to_records.fetch(index)
         identity = from_record.identity
-        raise_duplicate_identity!(identity) if seen.key?(identity)
+        raise_duplicate_identity!(identity) unless seen.add?(identity)
         return unless identity == to_record.identity
 
-        seen[identity] = true
         changed << [from_record, to_record] unless from_record.equal?(to_record)
         index += 1
       end
@@ -148,21 +143,24 @@ module PaperTrailDiff
     # result is rendered.
     #: (identity) -> Array[untyped]
     def sortable_identity(identity)
-      [identity.fetch(0), *sortable_id(identity.fetch(1))]
+      [identity.fetch(0), sortable_id(identity.fetch(1))]
     end
 
+    # Only the order of the group numbers matters, so moving the lowest one
+    # down or the highest one up changes nothing; the spec checks the order.
+    # mutant:disable
     #: (untyped) -> Array[untyped]
     def sortable_id(id)
       case id
-      when Numeric then [0, id, '']
-      when String, Symbol then [1, 0, id.to_s]
-      else [2, 0, id.inspect]
+      when Numeric then [0, id]
+      when String, Symbol then [1, id.to_s]
+      else [2, id.inspect]
       end
     end
 
     #: (identity) -> void
     def raise_duplicate_identity!(identity)
-      raise ArgumentError, "duplicate record identity: #{identity.inspect}"
+      raise ArgumentError, "duplicate record identity: #{identity}"
     end
   end
 end
