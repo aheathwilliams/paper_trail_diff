@@ -5,157 +5,116 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Breaking changes
+
+- `:last` is no longer accepted as an endpoint. It named the last version, whose
+  recorded state is the one *before* the latest change, so ranges ending there
+  silently left that change out. Omit `to:` to end at current state, or pass a
+  version. Passing `:last` raises with that advice.
+- `analyze_many` without `within:` now ends each record's history at its current
+  state, so the latest change is included. It previously stopped at the last
+  version.
+- Batch methods reject scoped associations, default-scoped targets, and
+  `has_many :through` associations whose source is not a `belongs_to`, because
+  they need queries per record. The error names the association. Pass
+  `allow_expensive: true` to accept that cost.
+
 ### Added
 
-- `report(scope, since:, limit:)` for recent activity through current saved state.
-- `include_deleted: true` on scoped reporting, returning separate batched
-  `deleted` analyses (nil when destroy history is unavailable) and enforcing a
-  combined live/missing root ceiling.
-- Attribute hashes for `historical_filter:` that inspect typed recorded values
-  without reifying candidate records. Existing callable semantics are preserved.
+- `report(scope, since:, limit:)` for recent activity through current state.
+- `historical_filter:` on `analyze_scope` and `report`, selecting records by
+  values they had at any point in the window: their state when it started and
+  after each change inside it. Pass an attribute hash, which reads stored values
+  without reifying, or a callable. `max_filter_versions:` (default 10,000) caps
+  the versions it loads and raises `FilterLimitExceededError` beyond that.
+- `include_deleted: true` on `analyze_scope` and `report`, returning analyses of
+  deleted records in `deleted` (`nil` when no destroy version was recorded).
+  Existing and deleted records together count toward `limit:`.
+- `ScopedAnalysis#roots`, the selected records in relation order.
+- `timeline`, `activity_timeline`, and `analyze` default to `from: :first` and
+  `to: record`, so `timeline(article)` covers the whole history through the
+  current saved record.
+- `source_boundary` on both step types names the event whose change a step
+  reports. For a transaction group it is the first event.
+- `metadata: true` on `to_h` for boundaries, steps, and analyses adds author,
+  event, transaction ID, and record. `ActivityStep#to_h(snapshots: true)` and
+  `Analysis#to_h(snapshots: true)` include retained states.
+- `group:` and `snapshots:` on `analyze_many` and `analyze_scope` with
+  `activity: true`.
+- Explicit current-record `to:` endpoints on `timeline` and `analyze`.
 
 ### Changed
 
-- **Breaking:** `:last` is no longer accepted as an endpoint. It named the last
-  version, whose recorded state is the one *before* the latest change, so
-  ranges ending there silently left that change out. Omit `to:` to end at
-  current state, or pass a version. Passing `:last` raises with that advice.
-- `timeline`, `activity_timeline`, and `analyze` default to `from: :first` and
-  `to: record`, so `timeline(article)` is the whole history through the current
-  saved record. `analyze_many` without `within:` also ends at current state.
-- A `within:` window with no version after its last change closes on the live
-  record instead of raising `IncompleteTimeRangeError`; that record holds the
-  state the change produced. `close_on: :current` is no longer needed and is
-  still accepted. Live-ended HABTM activity is rejected only when a window
-  actually closes on the live record.
-- **Breaking:** `historical_filter:` matches values a record had at any point in
-  the window: its state when the window started and after each change inside
-  it. It previously tested only the state before each change, so a record that
-  became `"published"` during the window did not match `{ status: "published" }`.
-  The state after the last change is read from the next version, or from the
-  live row when none exists, and counts toward `max_filter_versions:`.
-- Scope selection reads at most 250 joined rows per query independently of the
-  unique-root safety limit, reducing round trips for duplicate-heavy joins.
-- Missing prepared activity registration raises an explanatory configuration
-  error instead of a bare hash lookup error.
-- Scope selection keeps the window's candidate roots in a database subquery when
-  `versions.item_id` and the model's primary key share a column type, instead of
-  plucking every root changed in the window. A narrow relation over a busy
-  window no longer costs memory and SQL proportional to all activity in it.
-  `unreachable` identities are now sorted.
-- `compare` with `associations:` reads association state from prepared history,
-  like `compare_many`, instead of PT-AT's timestamp-only point reifier.
+- A `within:` window with no version after its last change closes on the current
+  record instead of raising `IncompleteTimeRangeError`. Nothing has been
+  recorded since that change, so the current record holds what it produced.
+  This also applies to windows in which only chosen associations changed.
+  `close_on: :current` is no longer needed and is still accepted.
+- Live-ended HABTM activity is rejected only when a range actually ends at the
+  current record, including in batches.
+- `compare` with `associations:` reads association state from the prepared
+  history `compare_many` uses, instead of PT-AT's timestamp-only reifier.
+- Plain recorded attributes of root and direct-child records are read without
+  building a model instance per historical state. Models with initialization
+  callbacks, custom types or defaults, default scopes, or encrypted attributes
+  still use PaperTrail's `reify`.
+- Batch activity reports share association discovery and prepared history
+  across records, and each analysis reuses its checkpoint snapshots, so standard
+  reports no longer add queries per record.
+- Activity without changesets uses prepared successor states instead of a query
+  per event.
+- `has_many :through` reconstruction visits only the requested source
+  association.
+- Scope selection keeps candidate records in a database subquery when
+  `versions.item_id` and the primary key share a column type, reads joined rows
+  in pages of 250, and sorts `unreachable`.
+- `snapshots: true` without `activity: true` raises `ConfigurationError`, as
+  `group:` already did, instead of being ignored.
+- The README is now a set of recipes; the full API reference and architecture
+  notes are separate pages.
 
 ### Fixed
 
-- `compare_many` resolves `:first` to each record's earliest version by time.
-  It previously took the lowest version id, which is not the earliest when ids
-  are not sequential, as with UUIDs.
-- Association timelines and activity no longer raise `duplicate record
-  identity` when `versions.item_id` is a string column (PaperTrail's setup for
-  UUID keys) and the associated models use integer keys. Ids read from history
-  are cast to the model's key type before they are matched with live rows.
+- Association timelines no longer raise `duplicate record identity` when
+  `versions.item_id` is a string column (PaperTrail's setup for UUID keys) and
+  associated models use integer keys.
 - Columns listed in `has_paper_trail skip:` are left out of snapshots. PaperTrail
-  never stores them, so comparing history with the live record reported them
+  never stores them, so comparing history with the current record reported them
   as changed from their default.
-- An activity window in which only selected associations changed now honors
-  `close_on: :current`. It previously raised `IncompleteTimeRangeError` with a
-  message asking for the option that had been passed.
-- `analyze_many(..., activity: true)` reports association activity for a root
-  that has no version of its own in the window, matching `analyze` for the
-  same record. It previously returned an empty analysis.
+- `analyze_many(..., activity: true)` reports association activity for a record
+  with no version of its own in the window, matching `analyze`. It previously
+  returned an empty analysis.
 - Histories stored with PaperTrail's JSON serializer or a `json`/`jsonb` object
-  column no longer report every timestamp as changed when compared with the live
-  record. Times are compared at the precision the history stored.
-- Association state at a boundary sharing its timestamp with other versions is
-  ordered by version id, so `compare`, `compare_many`, and `timeline` no longer
-  attribute same-instant association changes to the wrong side of a boundary.
-  Ties that ids cannot order raise `AmbiguousVersionOrderError`.
-- Analyses whose time window closes on the root's destruction end their `diff`
-  and `to_snapshot` at absence in both activity and checkpoint mode. A root
-  created and deleted inside the window previously read as added, and one
-  deleted in a checkpoint-mode window read as unchanged.
+  column no longer report every timestamp as changed when compared with the
+  current record.
+- Association changes at versions sharing a timestamp are placed by version id,
+  so `compare`, `compare_many`, and `timeline` no longer put them on the wrong
+  side of a boundary. Ties that ids cannot order raise
+  `AmbiguousVersionOrderError`.
+- A window that closes on the record's deletion ends its `diff` and
+  `to_snapshot` at "no record". A record created and deleted inside the window
+  previously read as added.
+- `compare_many` resolves `:first` to each record's earliest version by time,
+  not the lowest id, which differs for UUID version ids.
+- `version_scope:` is honored on activity timelines that end at the current
+  record.
+- Batch, single-record, and scoped activity results agree on the reporting
+  window and closing state.
+- A lone creation or update in an activity window that ends at the current
+  record is reported.
+- Joined relations count unique records against `limit:` without adding SQL
+  `DISTINCT`, so ordering by joined columns works on PostgreSQL and SQL Server.
+- Nested results are fully frozen, including nested paths and empty results.
+- Nested object diffs match string and symbol keys consistently and raise
+  `AmbiguousNestedKeyError` on collisions instead of losing a change.
 
-- Plain historical root and direct-child snapshots now normalize typed recorded
-  attributes without constructing historical ActiveRecord instances. Models with
-  initialization callbacks, custom types/defaults, or default scopes retain the
-  compatible reconstruction path.
-- Batch methods reject scoped associations, default-scoped targets, and historical
-  through associations with collection sources by default. Pass
-  `allow_expensive: true` to explicitly accept their per-record costs.
-- Activity without changesets uses prepared successor states instead of querying
-  the next version/current record for each event. Empty changesets no longer hide
-  root changes until a later child event.
-- Through reconstruction visits only the requested source association; it no
-  longer asks PT-AT to reconstruct unrelated intermediate collections.
+### Development
 
-- Historical filtering now caps candidate version loading at 10,000 by default.
-  `max_filter_versions:` can explicitly change that ceiling; overflow raises
-  `FilterLimitExceededError` before the over-budget batch is evaluated.
-
-- Reject `snapshots: true` without `activity: true` on analysis methods, matching
-  validation of `group:`. Previously the option was silently ignored.
-- Honor `version_scope:` on current-record-ended activity timelines. Previously
-  that path silently dropped the filter. As with time windows, an excluded later
-  version can supply the closing historical state instead of current state.
-- Batch activity analysis now uses the same completeness checks as single-record
-  time windows. Callers may receive `IncompleteTimeRangeError` for a range that
-  previously returned an incomplete report.
-- Separate the recipe-based README from the full API reference and architecture
-  notes. Clarify relation pagination, the independent safety ceiling, and the
-  unpaginated `unreachable` collection.
-
-### Fixed
-
-- Reuse each checkpoint snapshot within one root analysis instead of reifying
-  shared endpoints repeatedly; release that cache before analyzing the next root.
-- Share association activity discovery and prepared history across batch roots,
-  including through-association intermediates and the complete reporting window.
-  Standard live and deleted activity reports no longer add discovery queries per root.
-
-- Preserve the reporting window and live closing state in batch activity
-  analysis. Single-record, batch, and scoped results now agree rather than
-  omitting the latest update or reporting a live root as removed.
-- Report a lone creation or update in an activity window closing on current
-  state, even when no preceding step exists.
-- Count unique roots from joined relations against the safety limit, preserving
-  relation pagination and ordering without injecting SQL `DISTINCT`. This also
-  permits ordering by joined columns on PostgreSQL and SQL Server.
-- Copy mutable descendants of shallow-frozen containers into immutable results.
-  Freeze nested diff paths and empty nested results as well.
-- Match string and symbol keys consistently in nested object diffs, and reject
-  normalized-key collisions with `AmbiguousNestedKeyError` instead of overwriting
-  a change. Ordinary whole-value comparison remains available for such data.
-- Replace the absent-key sentinel's singleton methods with a typed value class
-  so Steep no longer logs internal errors. Fail the type-check gate on internal
-  errors even when Steep exits successfully, and check public API call examples
-  to catch missing signature keywords such as `activity_timeline`'s `group:`.
-
-### Added
-
-- Add `historical_filter:` to scoped analysis and its `analyze_many(scope:)`
-  alias. The predicate sees reified root states at recorded in-window boundaries;
-  matching deleted roots remain in `unreachable`. With this option, `limit:`
-  bounds matching candidates, including deleted ones, before live relation filters.
-- Expose `ScopedAnalysis#roots`, a frozen collection of the selected live model
-  instances, so consumers can attach presentation data without reloading them.
-
-
-- Run core and association suites against PostgreSQL 17, MySQL 8.4, and SQL Server
-  2022 in CI, alongside the existing SQLite Ruby/PaperTrail matrix. Database
-  adapters are optional development dependencies; the gem's dependencies are
-  unchanged.
-- Accept explicit current-record `to:` endpoints on `timeline` and `analyze`,
-  matching `activity_timeline`. Historical versus live state remains explicit.
-- Accept `group:` and `snapshots:` on `analyze_many` and `analyze_scope` for
-  activity analysis. Invalid grouping and grouping without `activity: true`
-  raise `ConfigurationError` instead of being silently ignored.
-- Expose `source_boundary` on both step types to identify the event whose change
-  is reported. For a transaction group it identifies the first event.
-- Add opt-in `metadata: true` serialization on boundaries, steps, and analyses
-  for actor, event, transaction ID, and record reference. Default shapes are
-  unchanged. `ActivityStep#to_h(snapshots: true)` serializes retained states;
-  `Analysis#to_h(snapshots: true)` also includes retained activity states.
+- CI runs both suites on PostgreSQL 17, MySQL 8.4, and SQL Server 2022 alongside
+  the SQLite Ruby/PaperTrail matrix. Database adapters are optional development
+  dependencies.
+- The type-check gate fails on Steep internal errors and checks public API call
+  examples.
 
 ## [0.12.0] - 2026-08-19
 

@@ -167,7 +167,8 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
       ).compare_many(comparisons)
     end
 
-    # Compares every adjacent reconstructed state in an inclusive version range.
+    # Compares every adjacent reconstructed state in an inclusive version range,
+    # by default the record's whole history through its current state.
     #: (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?version_scope: untyped, ?close_on: Symbol?) -> Array[Step]
     def timeline( # rubocop:disable Metrics/ParameterLists
       record,
@@ -190,8 +191,9 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
     end
 
     # Compares adjacent root and selected-descendant activity boundaries.
-    # `reload_live_endpoints:` applies only when `to:` is a current record; the
-    # other range forms never read live state.
+    # `reload_live_endpoints:` applies whenever the range ends at the current
+    # record: an explicit `to:` record, the default range, or a window with no
+    # later version.
     #: (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?reload_live_endpoints: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?) -> Array[ActivityStep]
     def activity_timeline( # rubocop:disable Metrics/ParameterLists
       record,
@@ -251,8 +253,8 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
     end
 
     # Analyzes many roots over one shared time window, preparing their selected
-    # history once for the batch instead of once per record. Roots with no
-    # versions in the window return an empty `Analysis`.
+    # history once for the batch instead of once per record. Roots with nothing
+    # to report in the window return an empty `Analysis`.
     #
     # Pass `records` to analyze a list you assembled, which returns a Hash keyed
     # by identity. Pass `scope:` with a `limit:` to have the roots selected for

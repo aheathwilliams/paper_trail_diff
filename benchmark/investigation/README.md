@@ -1,6 +1,6 @@
 # Remaining N+1 and reconstruction costs
 
-This is the pre-fix investigation. See the [production follow-up](performance.md#direct-reconstruction-follow-up-2026-09-07)
+This is the pre-fix investigation. See the [production follow-up](../../docs/performance.md#direct-reconstruction-follow-up-2026-09-07)
 for implemented changes, remaining exceptions and updated measurements.
 
 Investigated library revision `4cd54d641b71dc96181969217e0a206dd749a917` on

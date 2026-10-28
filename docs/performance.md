@@ -5,7 +5,7 @@ per-record queries and reification. Both database round trips and repeated Ruby
 reconstruction are therefore design concerns. A small SQL query count alone
 does not establish that a batch API meets that purpose.
 
-The [follow-up reconstruction investigation](reconstruction-investigation.md)
+The [follow-up reconstruction investigation](../benchmark/investigation/README.md)
 records the pre-fix N+1 paths and direct-snapshot experiments. Production now uses
 prepared event successors even without changesets, and directly normalizes plain
 root/direct-child states. Scoped and collection-source through batch paths require

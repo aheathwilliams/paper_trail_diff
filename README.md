@@ -60,7 +60,9 @@ historical states.
 
 PaperTrail's `version.changeset` describes one recorded change. `compare`
 describes the net difference between the two states you choose. If a field
-changes and then changes back, there is no net difference for that field.
+changes and then changes back, there is no net difference for that field. To
+see every change instead, use `PaperTrailDiff.timeline(article)`, which covers
+the article's whole history through its current saved values.
 
 An attribute appears in `diff.attributes` only when it changed. `diff.empty?`
 tells you whether anything changed. A PaperTrail `create` version has no earlier
@@ -86,7 +88,8 @@ end
 
 This example requires the association setup in the quickstart. PaperTrail's
 `whodunnit` records who made a change; here we set it with `PaperTrail.request`.
-Pass `to: article` to include the latest saved article and comment changes.
+The timeline covers the article's whole history, including comment changes made
+after the article's last version.
 
 <!-- executable:recipe-activity -->
 ```ruby
@@ -99,8 +102,7 @@ PaperTrail.request(whodunnit: "alice") do
 end
 
 steps = PaperTrailDiff.activity_timeline(
-  article, from: :first, to: article,
-  associations: [:comments], group: :transaction, snapshots: true
+  article, associations: [:comments], group: :transaction, snapshots: true
 )
 
 feed = steps.reject(&:empty?).map do |step|
@@ -190,32 +192,31 @@ Three selection rules matter:
 
 Use the relation's `order`, `offset`, and `limit` to choose a page, for example
 `Article.order(:id).limit(20)`. Joined rows can repeat a record; each record is
-analyzed once. See the [reporting reference](docs/reference.md#letting-a-relation-choose-the-roots)
-for historical filters, deleted-record selection, and pagination details.
+analyzed once. See the [reporting reference](docs/reference.md#which-records-are-selected)
+for pagination, deleted records, and selecting by past values with
+`historical_filter:`.
 
-For a fixed past window, use `analyze_scope(Article.all, within: start_time..end_time,
-limit: 100)`. PaperTrail needs a later version to supply the values after the
-window's last change. See the [quickstart](QUICKSTART.md#select-changes-by-time)
-for an example and an explanation of `close_on: :current`.
+For a fixed past window, use `analyze_scope(Article.all, within: start_time...end_time,
+limit: 100)`.
 
 ## Choose a method
 
 | What you need | Method |
 | --- | --- |
-| Net difference between a version and a record, or between two versions | `compare(before, after)` |
-| Net differences for a list of `{ from:, to: }` pairs | `compare_many(pairs)` |
-| Changes between successive versions of one record | `timeline(record, ...)` |
-| Activity for a record and its requested associations | `activity_timeline(record, ...)` |
-| Net difference and version timeline together | `analyze(record, ...)` |
-| The same analysis, plus activity | `analyze(record, activity: true, ...)` |
-| Reports for an array of records | `analyze_many(records, ...)` |
-| Recent activity through now, selected by a relation | `report(scope, since: ..., limit: ...)` |
-| Reports for a past time window, selected by a relation | `analyze_scope(scope, within: ..., limit: ...)` |
+| Net difference between two versions, or a version and the current record | `compare(from, to)` |
+| The same for a list of `{ from:, to: }` pairs, one per record | `compare_many(pairs)` |
+| Each change to one record, version by version | `timeline(record)` |
+| Each change to one record and its chosen associations, with who made it | `activity_timeline(record, associations: ...)` |
+| Net difference and timeline together | `analyze(record)` |
+| The same, plus the activity timeline | `analyze(record, activity: true)` |
+| Analyses for an array of records | `analyze_many(records)` |
+| Analyses for the records a relation selects, over a time window | `analyze_scope(scope, within:, limit:)` |
+| Recent activity through now, for the records a relation selects | `report(scope, since:, limit:)` |
 
-For `timeline`, `activity_timeline`, and `analyze`, `from: :first, to: article`
-means history through the current saved record. `:last` means the last stored
-version's **before-change** state, just like `article.versions.last.reify`;
-it does not mean the current record.
+`timeline`, `activity_timeline`, and `analyze` cover the whole history through
+the current saved record by default. Narrow them with `from:` and `to:`
+(versions) or `within:` (a time range). See
+[choosing a range](docs/reference.md#choosing-a-range).
 
 ## Performance and defaults
 

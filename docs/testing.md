@@ -7,6 +7,12 @@ mise exec -- bundle install
 mise exec -- bundle exec rake
 ```
 
+The default task runs the core specs without PT-AT loaded, the association specs
+in a separate process, RuboCop, generated-signature verification, and Steep.
+Ruby blocks in the README, quickstart, and API reference marked with
+`<!-- executable:... -->` run inside those specs, so documented examples stay
+correct.
+
 For reporting workloads, query counts, reconstruction cost, and memory readings,
 see [Reporting performance](performance.md). Those measurements run separately
 from the correctness suite and have no timing-based CI gate.
@@ -80,3 +86,17 @@ before running Steep. Unstaged generated changes therefore fail the gate even
 when they are correct. Review and stage matching source/signature changes before
 running the complete gate. The Steep wrapper also fails on internal errors even
 if Steep returns exit status zero.
+
+## Releasing
+
+Tags matching `v*` publish through RubyGems trusted publishing. Never add a
+long-lived RubyGems API key. Before tagging:
+
+1. Update `PaperTrailDiff::VERSION` and replace `Unreleased` in the changelog
+   with that version and the release date.
+2. Run `mise exec -- bundle exec rake release:preflight`. It runs the full gate,
+   checks that the tree is clean and pushed, that the Appraisal gemfiles are
+   current, and that the changelog names the version, then builds the gem. It
+   does not tag, push, or publish.
+3. Configure the RubyGems trusted publisher for `release.yml` and the `release`
+   environment.

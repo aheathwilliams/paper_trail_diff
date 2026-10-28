@@ -155,6 +155,11 @@ visible_steps = steps.reject(&:empty?)
 Each item in `steps` has a `diff`, just like the comparison above. Steps with
 no reported changes are kept; `reject(&:empty?)` removes them for display.
 
+Without `from:` and `to:`, `PaperTrailDiff.timeline(article)` reads the whole
+history through the current saved article, including the change to
+`"Archived"`. Pass a version as `to:` when the result should stay the same after
+later edits.
+
 ### Select changes by time
 
 Use `within:` to choose changes by their PaperTrail version's `created_at`:
@@ -172,13 +177,13 @@ end
 ```
 
 Ruby's `...` excludes the end of the range. Here the selected versions are
-`draft_version` and `published_version`. The gem also reads `final_version` to
-find the values after the last selected change.
+`draft_version` and `published_version`.
 
-That extra version matters: each PaperTrail version stores the values **before**
-its own change. If no later article version exists, the gem raises
-`PaperTrailDiff::IncompleteTimeRangeError`. For a report through now, allow it
-to use the current saved article with `close_on: :current`, as shown next.
+Each PaperTrail version stores the values **before** its own change, so the
+values after the window's last change are in the next version, `final_version`.
+The gem reads that version even though it is outside the window. When no later
+version exists, nothing has been recorded since, and the gem reads the current
+saved article instead.
 
 ### Report through now
 
@@ -202,36 +207,29 @@ An article needs its own PaperTrail version in the time window to be selected.
 Editing a comment alone does not select its article. A relation's `where`
 conditions check current values; they cannot check a deleted article's values.
 
-For one article, you can read changes through its current saved state this way:
+For one article, use a window ending now:
 
 <!-- executable:quickstart-current-window -->
 ```ruby
-current_steps = PaperTrailDiff.timeline(
-  article, within: 1.day.ago..Time.current, close_on: :current
-)
+current_steps = PaperTrailDiff.timeline(article, within: 1.day.ago..Time.current)
 ```
 
-The same window options work on `activity_timeline`, `analyze`, `analyze_many`,
-and `analyze_scope`. Use `close_on: :current` for a report through now: today's
-record may include changes made after the end of a past window. For a report
-that should stay the same when the article changes again, use recorded versions
-and make sure an article version exists after the window.
-
-To read all versions through now without choosing dates, use
-`from: :first, to: article`.
+The same `within:` option works on `activity_timeline`, `analyze`,
+`analyze_many`, and `analyze_scope`.
 
 ## 6. Choose a method
 
-| Need | Call |
+| What you need | Method |
 | --- | --- |
-| Net difference between two versions, or a version and current record | `compare` |
-| Net differences for a list of `{ from:, to: }` pairs | `compare_many` |
-| Changes between successive versions of one record | `timeline` |
-| Activity for a record and its requested associations | `activity_timeline` |
-| Net difference and version timeline together | `analyze` |
-| A report for an array of records | `analyze_many` |
-| A report selected by a relation | `analyze_scope` |
-| Recent activity through now | `report` |
+| Net difference between two versions, or a version and the current record | `compare(from, to)` |
+| The same for a list of `{ from:, to: }` pairs, one per record | `compare_many(pairs)` |
+| Each change to one record, version by version | `timeline(record)` |
+| Each change to one record and its chosen associations, with who made it | `activity_timeline(record, associations: ...)` |
+| Net difference and timeline together | `analyze(record)` |
+| The same, plus the activity timeline | `analyze(record, activity: true)` |
+| Analyses for an array of records | `analyze_many(records)` |
+| Analyses for the records a relation selects, over a time window | `analyze_scope(scope, within:, limit:)` |
+| Recent activity through now, for the records a relation selects | `report(scope, since:, limit:)` |
 
 Use the batch methods for many records so they can share database queries.
 Some scoped associations and `has_many :through` histories still need queries
@@ -367,9 +365,8 @@ instead of `to: current`.
 
 You can also pass `within: start_time...end_time`. This single-article method
 includes comment changes even if the article was not edited in that period.
-Save an article version after the end time so the gem can read the result of
-the final comment change. Unlike this method, a relation-based `report` needs
-an article version in the window to select that article.
+Unlike this method, a relation-based `report` needs an article version in the
+window to select that article.
 
 ## 9. Common surprises
 
@@ -377,8 +374,9 @@ an article version in the window to select that article.
   change. Pass `article` to read the current saved values.
 - PaperTrail's creation version returns `nil` from `reify`. There was no record
   before creation; the diff reports the record being added.
-- A historical `within:` window needs a later article version to read the values
-  after the last selected change. Use `close_on: :current` for reports through now.
+- A range ending at the current article includes changes PaperTrail never
+  recorded, such as `update_columns`. Pass a version as `to:` to stop at
+  recorded history.
 - `ignore:` replaces the default list. Include `updated_at` yourself when using
   a custom list and you still want it ignored.
 - Historical associations require PT-AT to be installed, loaded, migrated, and
