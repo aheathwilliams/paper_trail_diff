@@ -29,8 +29,8 @@ module PaperTrailDiff
     # which Active Record 7.2 and newer can deprecate. Active Record 7.1 has no
     # `with_connection` and reaches the same connection through the accessor.
     #: () { (untyped) -> String } -> String
-    def with_connection(&)
-      return @version_class.with_connection(&) if @version_class.respond_to?(:with_connection)
+    def with_connection(&block)
+      return @version_class.with_connection(&block) if @version_class.respond_to?(:with_connection)
 
       yield(@version_class.connection)
     end
