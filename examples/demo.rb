@@ -84,7 +84,7 @@ end
 
 # --------------------------------------------------------------- history ----
 
-def as(person, &) = PaperTrail.request(whodunnit: person, &)
+def as(person, &block) = PaperTrail.request(whodunnit: person, &block)
 
 article = as('Maya') { Article.create!(title: 'Apollo Notes') }
 as('Maya') { article.update!(title: 'Apollo Notes — Draft') }

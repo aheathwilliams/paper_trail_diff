@@ -9,13 +9,13 @@ module PaperTrailDiff
     module_function
 
     #: (String | Symbol, Hash[Symbol, untyped]) { () -> untyped } -> untyped
-    def instrument(event, payload, &)
+    def instrument(event, payload, &block)
       active_support = Object.const_get(:ActiveSupport) #: untyped
       notifications = active_support.const_get(:Notifications) #: untyped
       notifications.instrument(
         "#{event}.paper_trail_diff",
         payload,
-        &
+        &block
       )
     end
 

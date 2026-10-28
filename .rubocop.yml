@@ -25,6 +25,15 @@ Layout/LineLength:
   AllowedPatterns:
     - "^\\s*#:"
 
+# CodeQL's Ruby extractor rejects anonymous block forwarding (`def m(&)` and
+# `call(&)`) as a syntax error and skips the whole file, so name forwarded
+# blocks instead.
+Naming/BlockForwarding:
+  EnforcedStyle: explicit
+
+Style/ArgumentsForwarding:
+  UseAnonymousForwarding: false
+
 Metrics/AbcSize:
   Exclude:
     - "spec/**/*"
