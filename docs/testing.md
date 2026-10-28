@@ -9,7 +9,8 @@ mise exec -- bundle exec rake
 
 CI keeps the Ruby 3.1–4.0 and PaperTrail 16/17 compatibility matrix on SQLite,
 including Windows runs. Separate Linux jobs run both core and association suites
-on PostgreSQL 17, MySQL 8.4, and SQL Server 2022 with Ruby 4.0 and PaperTrail 17.
+on PostgreSQL 17, MySQL 8.4, and SQL Server 2019 and 2022 with Ruby 4.0 and
+PaperTrail 17.
 The SQL jobs exercise the same regressions, including joined-column ordering,
 duplicate roots, pagination, and historical association reconstruction.
 
@@ -48,7 +49,7 @@ change an application's YAML configuration.
 
 The CI service configuration is in `.github/workflows/ci.yml`. PostgreSQL and
 MySQL create the named database during container initialization. The SQL Server
-job creates it explicitly after the service passes its health check.
+jobs create it explicitly after the service passes its health check.
 
 ## Generated signatures
 
