@@ -1,7 +1,7 @@
 # Generated from lib/paper_trail_diff/batch_boundary_resolver.rb with RBS::Inline
 
 module PaperTrailDiff
-  # Resolves `:first` and `:last` endpoints for a whole batch in two queries per
+  # Resolves `:first` endpoints for a whole batch in a fixed number of queries per
   # model class. Left to the caller this is a per-root lookup, which reintroduces
   # exactly the queries a batched comparison exists to remove.
   class BatchBoundaryResolver
@@ -46,15 +46,18 @@ module PaperTrailDiff
     # : (Hash[Array[String], Hash[Symbol, untyped]], untyped, Array[untyped]) -> void
     def add_model_boundaries: (Hash[Array[String], Hash[Symbol, untyped]], untyped, Array[untyped]) -> void
 
-    # Two grouped queries name each root's outermost versions, and one more
-    # loads them, whatever the size of the batch.
-    # : (untyped, Array[untyped]) -> [Hash[untyped, untyped], Hash[untyped, untyped], Hash[untyped, untyped]]
-    def boundary_versions: (untyped, Array[untyped]) -> [ Hash[untyped, untyped], Hash[untyped, untyped], Hash[untyped, untyped] ]
+    # Each root's earliest version by time, in one query whatever the size of
+    # the batch. The lowest id is not the earliest version when ids are not
+    # sequential, as with UUIDs, so time decides and the usual ordering breaks
+    # a tie -- refusing one that ids cannot order.
+    # : (untyped, Array[untyped]) -> Hash[String, untyped]
+    def first_versions: (untyped, Array[untyped]) -> Hash[String, untyped]
 
-    # Grouped keys come back with whatever type the column uses, so match on the
-    # string form rather than assuming integers.
-    # : (Hash[untyped, untyped], untyped) -> untyped
-    def boundary_key: (Hash[untyped, untyped], untyped) -> untyped
+    # : (untyped) -> untyped
+    def no_earlier_version: (untyped) -> untyped
+
+    # : (untyped, untyped) -> untyped
+    def earlier_version: (untyped, untyped) -> untyped
 
     # : (untyped, untyped) -> Array[String]
     def identity_key: (untyped, untyped) -> Array[String]

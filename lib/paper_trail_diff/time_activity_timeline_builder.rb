@@ -52,6 +52,7 @@ module PaperTrailDiff
     #: () -> [ActivityHistory, RootVersionPlan, ActivityStep?, RecordSnapshot?, untyped]
     def history_and_versions
       plan = @range.select_plan(context_required: !@tree.empty?)
+      reject_live_habtm! if plan.closing_record
       if plan.reconstruction_versions.empty? && !plan.closing_record
         return [ActivityHistory.empty, plan, nil, nil, nil]
       end
@@ -60,6 +61,11 @@ module PaperTrailDiff
       # not to the last root version, or descendants that moved after that
       # version would be missing from a report that claims to reach now.
       history_for(plan, plan.closing_record ? Time.now.utc : nil)
+    end
+
+    #: () -> void
+    def reject_live_habtm!
+      AssociationTraversal.new(@tree).reject_live_habtm_activity!(@record.class)
     end
 
     #: (RootVersionPlan, untyped) -> [ActivityHistory, RootVersionPlan, ActivityStep?, RecordSnapshot?, untyped]

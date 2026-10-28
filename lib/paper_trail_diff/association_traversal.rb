@@ -37,6 +37,18 @@ module PaperTrailDiff
       end.freeze
     end
 
+    # HABTM join rows have no versions of their own, so membership changes
+    # cannot be split into events once a range runs past the last root version
+    # into live state.
+    #: (untyped) -> void
+    def reject_live_habtm_activity!(model_class)
+      paths = habtm_paths(model_class)
+      return if paths.empty?
+
+      message = "live-ended activity cannot reconstruct HABTM event boundaries: #{paths.join(', ')}"
+      raise UnsupportedLiveActivityError, message
+    end
+
     #: (untyped, AssociationTree, path: String) -> Array[untyped]
     def reflections_for(model_class, tree, path:)
       key = [model_class.name.to_s, path, tree.object_id]

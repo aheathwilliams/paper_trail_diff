@@ -126,6 +126,7 @@ module PaperTrailDiff
 
       Endpoint.validate_pair!(@from, @to)
       Endpoint.validate_pair!(@record, @to)
+      AssociationTraversal.new(@tree).reject_live_habtm_activity!(@record.class)
     end
 
     #: (Array[untyped], ?range_start: untyped, ?range_end: untyped) -> Array[ActivityEvent]

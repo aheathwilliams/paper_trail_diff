@@ -16,6 +16,18 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- **Breaking:** `:last` is no longer accepted as an endpoint. It named the last
+  version, whose recorded state is the one *before* the latest change, so
+  ranges ending there silently left that change out. Omit `to:` to end at
+  current state, or pass a version. Passing `:last` raises with that advice.
+- `timeline`, `activity_timeline`, and `analyze` default to `from: :first` and
+  `to: record`, so `timeline(article)` is the whole history through the current
+  saved record. `analyze_many` without `within:` also ends at current state.
+- A `within:` window with no version after its last change closes on the live
+  record instead of raising `IncompleteTimeRangeError`; that record holds the
+  state the change produced. `close_on: :current` is no longer needed and is
+  still accepted. Live-ended HABTM activity is rejected only when a window
+  actually closes on the live record.
 - **Breaking:** `historical_filter:` matches values a record had at any point in
   the window: its state when the window started and after each change inside
   it. It previously tested only the state before each change, so a record that
@@ -36,6 +48,9 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- `compare_many` resolves `:first` to each record's earliest version by time.
+  It previously took the lowest version id, which is not the earliest when ids
+  are not sequential, as with UUIDs.
 - Association timelines and activity no longer raise `duplicate record
   identity` when `versions.item_id` is a string column (PaperTrail's setup for
   UUID keys) and the associated models use integer keys. Ids read from history

@@ -2,11 +2,11 @@
 # rbs_inline: enabled
 
 module PaperTrailDiff
-  # Resolves `:first` and `:last` endpoints for a whole batch in two queries per
+  # Resolves `:first` endpoints for a whole batch in a fixed number of queries per
   # model class. Left to the caller this is a per-root lookup, which reintroduces
   # exactly the queries a batched comparison exists to remove.
   class BatchBoundaryResolver
-    BOUNDARIES = %i[first last].freeze
+    BOUNDARIES = %i[first].freeze
 
     class << self
       #: (untyped) -> bool
@@ -45,16 +45,17 @@ module PaperTrailDiff
     #: (untyped, untyped, Hash[Array[String], Hash[Symbol, untyped]]) -> untyped
     def resolve(endpoint, other, index)
       return endpoint unless symbolic?(endpoint)
+      raise ConfigurationError, TimelineRange::LAST_REMOVED if endpoint == :last
 
       unless BOUNDARIES.include?(endpoint)
         raise ConfigurationError,
-              "unsupported boundary: #{endpoint.inspect}; use :first, :last, a version, or a record"
+              "unsupported boundary: #{endpoint.inspect}; use :first, a version, or a record"
       end
 
       identity = anchor_identity(other)
       unless identity
         raise ConfigurationError,
-              'a :first or :last endpoint needs the other endpoint to name a record'
+              'a :first endpoint needs the other endpoint to name a record'
       end
 
       index.dig(identity, endpoint) || endpoint
@@ -100,33 +101,43 @@ module PaperTrailDiff
 
     #: (Hash[Array[String], Hash[Symbol, untyped]], untyped, Array[untyped]) -> void
     def add_model_boundaries(index, model_class, ids)
-      first_ids, last_ids, versions = boundary_versions(model_class, ids)
+      firsts = first_versions(model_class, ids)
       ids.each do |id|
-        index[identity_key(model_class, id)] = {
-          first: versions[boundary_key(first_ids, id)],
-          last: versions[boundary_key(last_ids, id)]
-        }
+        index[identity_key(model_class, id)] = { first: firsts[id.to_s] }
       end
     end
 
-    # Two grouped queries name each root's outermost versions, and one more
-    # loads them, whatever the size of the batch.
-    #: (untyped, Array[untyped]) -> [Hash[untyped, untyped], Hash[untyped, untyped], Hash[untyped, untyped]]
-    def boundary_versions(model_class, ids)
+    # Each root's earliest version by time, in one query whatever the size of
+    # the batch. The lowest id is not the earliest version when ids are not
+    # sequential, as with UUIDs, so time decides and the usual ordering breaks
+    # a tie -- refusing one that ids cannot order.
+    #: (untyped, Array[untyped]) -> Hash[String, untyped]
+    def first_versions(model_class, ids)
       version_class = model_class.paper_trail.version_class
-      scope = version_class.where(item_type: model_class.base_class.name.to_s, item_id: ids)
-      first_ids = scope.group(:item_id).minimum(:id)
-      last_ids = scope.group(:item_id).maximum(:id)
-      loaded = version_class.where(id: (first_ids.values + last_ids.values).uniq).index_by(&:id)
-      [first_ids, last_ids, loaded]
+      table = version_class.arel_table
+      candidates = version_class.where(item_type: model_class.base_class.name.to_s, item_id: ids)
+                                .where(no_earlier_version(table)).to_a
+      candidates.group_by { |version| version.item_id.to_s }
+                .transform_values { |versions| Support.chronological_sort(versions).first }
     end
 
-    # Grouped keys come back with whatever type the column uses, so match on the
-    # string form rather than assuming integers.
-    #: (Hash[untyped, untyped], untyped) -> untyped
-    def boundary_key(grouped, id)
-      key = grouped.keys.find { |candidate| candidate.to_s == id.to_s }
-      grouped[key]
+    #: (untyped) -> untyped
+    def no_earlier_version(table)
+      arel = Object.const_get(:Arel) #: untyped
+      earlier = table.alias('paper_trail_diff_earlier_versions')
+      arel.const_get(:SelectManager).new
+          .from(earlier)
+          .project(arel.sql('1'))
+          .where(earlier_version(table, earlier))
+          .exists
+          .not
+    end
+
+    #: (untyped, untyped) -> untyped
+    def earlier_version(table, earlier)
+      earlier[:item_type].eq(table[:item_type])
+                         .and(earlier[:item_id].eq(table[:item_id]))
+                         .and(earlier[:created_at].lt(table[:created_at]))
     end
 
     #: (untyped, untyped) -> Array[String]

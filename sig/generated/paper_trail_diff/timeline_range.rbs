@@ -5,6 +5,10 @@ module PaperTrailDiff
   class TimelineRange
     BOUNDARY_SYMBOLS: untyped
 
+    # `:last` once named the last version, whose recorded state is the one
+    # *before* the latest change, so a range ending there silently dropped it.
+    LAST_REMOVED: ::String
+
     attr_reader from: untyped
 
     attr_reader to: untyped
@@ -14,7 +18,7 @@ module PaperTrailDiff
     # : (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped, ?plan: RootVersionPlan?, ?live_endpoint: untyped) -> void
     def initialize: (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped, ?plan: RootVersionPlan?, ?live_endpoint: untyped) -> void
 
-    # A record with no versions has no first or last boundary to resolve, which
+    # A record with no versions has no first boundary to resolve, which
     # is an empty history rather than a bad request.
     # : () -> bool
     def unresolved?: () -> bool
@@ -59,7 +63,7 @@ module PaperTrailDiff
     # : (untyped) -> bool
     def symbolic?: (untyped) -> bool
 
-    # Resolving `:first` and `:last` here keeps callers from depending on the
+    # Resolving `:first` here keeps callers from depending on the
     # order PaperTrail happens to give its versions association, which a caller
     # is also free to reorder.
     # : (untyped) -> untyped

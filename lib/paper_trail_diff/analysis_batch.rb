@@ -83,14 +83,24 @@ module PaperTrailDiff
         next if versions.empty?
 
         roots = grouped.map { |record| loaded.fetch(Endpoint.identity(record), record) }
-        @history_preparer.call(roots, versions, **preparation_range(versions))
+        live = closes_live?(grouped, selected)
+        @history_preparer.call(roots, versions, **preparation_range(versions, live: live))
       end
     end
 
-    #: (Array[untyped]) -> Hash[Symbol, untyped]
-    def preparation_range(versions)
+    #: (Array[untyped], Hash[Array[String], RootVersionPlan]) -> bool
+    def closes_live?(records, selected)
+      records.any? do |record|
+        !selected.fetch(Endpoint.identity(record), RootVersionPlan.empty).closing_record.nil?
+      end
+    end
+
+    # A plan closing on the live record reads history up to now; the others
+    # stop at the window, so a past window does not load everything since.
+    #: (Array[untyped], ?live: bool) -> Hash[Symbol, untyped]
+    def preparation_range(versions, live: @close_on_current)
       last = versions.map(&:created_at).max
-      end_at = [last, @time_range&.end_time, (Time.now.utc if @close_on_current)].compact.max
+      end_at = [last, @time_range&.end_time, (Time.now.utc if live)].compact.max
       { start_at: @time_range&.begin_time || versions.map(&:created_at).min, end_at: end_at }
     end
 

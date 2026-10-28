@@ -119,7 +119,7 @@ section 'What changed between an early draft and now?' do
 end
 
 section 'Every checkpoint in order' do
-  PaperTrailDiff.timeline(article, from: :first, to: :last).reject(&:empty?).each do |step|
+  PaperTrailDiff.timeline(article).reject(&:empty?).each do |step|
     who = step.from_boundary.whodunnit.to_s.ljust(7)
     change = step.diff.attributes['title']
     if change

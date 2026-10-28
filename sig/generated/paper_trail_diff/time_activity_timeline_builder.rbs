@@ -29,6 +29,9 @@ module PaperTrailDiff
     # : () -> [ActivityHistory, RootVersionPlan, ActivityStep?, RecordSnapshot?, untyped]
     def history_and_versions: () -> [ ActivityHistory, RootVersionPlan, ActivityStep?, RecordSnapshot?, untyped ]
 
+    # : () -> void
+    def reject_live_habtm!: () -> void
+
     # : (RootVersionPlan, untyped) -> [ActivityHistory, RootVersionPlan, ActivityStep?, RecordSnapshot?, untyped]
     def history_for: (RootVersionPlan, untyped) -> [ ActivityHistory, RootVersionPlan, ActivityStep?, RecordSnapshot?, untyped ]
 

@@ -78,13 +78,15 @@ RSpec.describe 'Activity windows where only descendants changed' do
     expect(batch.diff.to_h).to eq(single.diff.to_h)
   end
 
-  it 'still raises without a later version or close_on: :current' do
+  it 'closes on current state by default, as close_on: :current asks' do
     article, window_start = child_only_history
+    window = window_start..Time.now.utc
 
-    expect do
-      PaperTrailDiff.activity_timeline(
-        article, within: window_start..Time.now.utc, associations: [:comments]
-      )
-    end.to raise_error(PaperTrailDiff::IncompleteTimeRangeError)
+    defaulted = PaperTrailDiff.activity_timeline(article, within: window, associations: [:comments])
+    explicit = PaperTrailDiff.activity_timeline(
+      article, within: window, associations: [:comments], close_on: :current
+    )
+
+    expect(defaulted.map { |step| step.diff.to_h }).to eq(explicit.map { |step| step.diff.to_h })
   end
 end

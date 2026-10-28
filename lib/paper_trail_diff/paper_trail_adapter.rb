@@ -59,6 +59,7 @@ module PaperTrailDiff
     #: (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped, ?close_on: Symbol?) -> Array[Step]
     def timeline(record, from:, to:, within:, version_scope: nil, close_on: nil) # rubocop:disable Metrics/ParameterLists
       @traversal_preparer.call(record.class, historical: true)
+      from, to = default_range(record, from, to, within)
       TimelineBuilder.new(
         record,
         from: from,
@@ -75,8 +76,8 @@ module PaperTrailDiff
       payload = @instrumentation_payload.merge(model_type: record.class.base_class.name.to_s)
       Instrumentation.instrument('activity_timeline', payload) do
         @traversal_preparer.call(record.class, historical: true)
+        from, to = default_range(record, from, to, within)
         live = live_endpoint_for(record, close_on, within)
-        reject_live_habtm_activity!(record.class) if Endpoint.record?(to) || live
         steps = activity_builder(
           record, from: from, to: to, within: within, version_scope: version_scope,
                   live_endpoint: live, snapshots: snapshots, group: group
@@ -90,6 +91,7 @@ module PaperTrailDiff
     def analyze(record, from:, to:, within:, activity: false, version_scope: nil, close_on: nil, snapshots: false, group: nil) # rubocop:disable Metrics/ParameterLists, Layout/LineLength
       ActivityGrouping.validate!(group, activity: activity, snapshots: snapshots)
       @traversal_preparer.call(record.class, historical: true)
+      from, to = default_range(record, from, to, within)
       live = live_endpoint_for(record, close_on, within)
       if activity
         return analyze_activity(
@@ -114,7 +116,7 @@ module PaperTrailDiff
         AnalysisBatch.new(
           records,
           time_range: within.nil? ? nil : TimeRange.new(within), version_scope: version_scope,
-          close_on_current: close_on_current?(close_on, within),
+          close_on_current: close_on_current?(close_on, within) || within.nil?,
           context_required: activity && !@association_tree.empty?,
           live_loader: method(:load_batch_endpoints),
           history_preparer: @historical_store.method(:prepare_batch),
@@ -201,7 +203,6 @@ module PaperTrailDiff
 
     #: (untyped, from: untyped, to: untyped, within: untyped, version_scope: untyped, live_endpoint: untyped, ?snapshots: bool, ?group: Symbol?) -> Analysis
     def analyze_activity(record, from:, to:, within:, version_scope:, live_endpoint:, snapshots: false, group: nil) # rubocop:disable Metrics/ParameterLists, Layout/LineLength
-      reject_live_habtm_activity!(record.class) if live_endpoint || Endpoint.record?(to)
       activity_builder(
         record, from: from, to: to, within: within, version_scope: version_scope,
                 live_endpoint: live_endpoint, snapshots: snapshots, group: group
@@ -229,25 +230,38 @@ module PaperTrailDiff
       )
     end
 
-    # `close_on:` names what ends a wall-clock window, so it is meaningless for a
-    # range whose endpoints the caller already gave explicitly.
+    # A window with nothing recorded after its last change ends at the live
+    # record, which holds the state that change produced -- whether the window
+    # ended a moment ago or long before. `close_on: :current` asked for this
+    # before it was the default and is still accepted. It names what ends a
+    # wall-clock window, so it is meaningless for explicit endpoints.
     #: (Symbol?, untyped) -> bool
     def close_on_current?(close_on, within)
-      return false if close_on.nil?
-      unless close_on == CLOSE_ON_CURRENT
+      unless close_on.nil? || close_on == CLOSE_ON_CURRENT
         raise ConfigurationError, "close_on: must be #{CLOSE_ON_CURRENT.inspect} or nil"
       end
-      raise ConfigurationError, 'close_on: requires `within`' if within.nil?
+      raise ConfigurationError, 'close_on: requires `within`' if close_on && within.nil?
 
-      true
+      !within.nil?
     end
 
-    # A destroyed root has no current state to close on, and its own destroy
-    # version already terminates the history.
+    # With neither a window nor endpoints, a range is the record's whole
+    # history through its current saved state; a missing endpoint takes that
+    # side of the same default.
+    #: (untyped, untyped, untyped, untyped) -> [untyped, untyped]
+    def default_range(record, from, to, within)
+      return [from, to] unless within.nil?
+
+      [from.nil? ? :first : from, to.nil? ? record : to]
+    end
+
+    # Only a saved row has current state to close on. A destroyed root's own
+    # destroy version already terminates its history, and a reified or unsaved
+    # instance stands for a state that is not in the table.
     #: (untyped, Symbol?, untyped) -> untyped
     def live_endpoint_for(record, close_on, within)
       return unless close_on_current?(close_on, within)
-      return unless Endpoint.record?(record) && !record.destroyed?
+      return unless Endpoint.record?(record) && record.persisted?
 
       record
     end
@@ -314,15 +328,6 @@ module PaperTrailDiff
         snapshots: snapshots,
         group: group
       )
-    end
-
-    #: (untyped) -> void
-    def reject_live_habtm_activity!(model_class)
-      paths = @traversal.habtm_paths(model_class)
-      return if paths.empty?
-
-      message = "live-ended activity cannot reconstruct HABTM event boundaries: #{paths.join(', ')}"
-      raise UnsupportedLiveActivityError, message
     end
 
     #: (untyped) -> RecordSnapshot?

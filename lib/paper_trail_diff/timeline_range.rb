@@ -4,7 +4,11 @@
 module PaperTrailDiff
   # Chooses explicit-version or wall-clock selection for one timeline request.
   class TimelineRange
-    BOUNDARY_SYMBOLS = %i[first last].freeze
+    BOUNDARY_SYMBOLS = %i[first].freeze
+    # `:last` once named the last version, whose recorded state is the one
+    # *before* the latest change, so a range ending there silently dropped it.
+    LAST_REMOVED = '`:last` was removed because it left out the latest change: omit `to:` ' \
+                   'to end at current state, or pass a version'
 
     attr_reader :from #: untyped
     attr_reader :to #: untyped
@@ -25,7 +29,7 @@ module PaperTrailDiff
       freeze
     end
 
-    # A record with no versions has no first or last boundary to resolve, which
+    # A record with no versions has no first boundary to resolve, which
     # is an empty history rather than a bad request.
     #: () -> bool
     def unresolved?
@@ -96,19 +100,20 @@ module PaperTrailDiff
       boundary.is_a?(Symbol)
     end
 
-    # Resolving `:first` and `:last` here keeps callers from depending on the
+    # Resolving `:first` here keeps callers from depending on the
     # order PaperTrail happens to give its versions association, which a caller
     # is also free to reorder.
     #: (untyped) -> untyped
     def resolve(boundary)
       return boundary unless symbolic?(boundary)
+      raise InvalidTimelineRangeError, LAST_REMOVED if boundary == :last
 
       unless BOUNDARY_SYMBOLS.include?(boundary)
         raise InvalidTimelineRangeError,
-              "unsupported boundary: #{boundary.inspect}; use :first, :last, a version, or a record"
+              "unsupported boundary: #{boundary.inspect}; use :first, a version, or a record"
       end
 
-      boundary == :first ? ordered_versions.first : ordered_versions.last
+      ordered_versions.first
     end
 
     #: () -> untyped

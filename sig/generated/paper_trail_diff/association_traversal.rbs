@@ -18,6 +18,12 @@ module PaperTrailDiff
     # : (untyped) -> Array[String]
     def habtm_paths: (untyped) -> Array[String]
 
+    # HABTM join rows have no versions of their own, so membership changes
+    # cannot be split into events once a range runs past the last root version
+    # into live state.
+    # : (untyped) -> void
+    def reject_live_habtm_activity!: (untyped) -> void
+
     # : (untyped, AssociationTree, path: String) -> Array[untyped]
     def reflections_for: (untyped, AssociationTree, path: String) -> Array[untyped]
 
