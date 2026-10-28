@@ -116,28 +116,9 @@ module PaperTrailDiff
       version_class = model_class.paper_trail.version_class
       table = version_class.arel_table
       candidates = version_class.where(item_type: model_class.base_class.name.to_s, item_id: ids)
-                                .where(no_earlier_version(table)).to_a
+                                .where(VersionQuery.no_earlier_version(table)).to_a
       candidates.group_by { |version| version.item_id.to_s }
                 .transform_values { |versions| Support.chronological_sort(versions).first }
-    end
-
-    #: (untyped) -> untyped
-    def no_earlier_version(table)
-      arel = Object.const_get(:Arel) #: untyped
-      earlier = table.alias('paper_trail_diff_earlier_versions')
-      arel.const_get(:SelectManager).new
-          .from(earlier)
-          .project(arel.sql('1'))
-          .where(earlier_version(table, earlier))
-          .exists
-          .not
-    end
-
-    #: (untyped, untyped) -> untyped
-    def earlier_version(table, earlier)
-      earlier[:item_type].eq(table[:item_type])
-                         .and(earlier[:item_id].eq(table[:item_id]))
-                         .and(earlier[:created_at].lt(table[:created_at]))
     end
 
     #: (untyped, untyped) -> Array[String]

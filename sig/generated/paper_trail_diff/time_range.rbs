@@ -35,14 +35,6 @@ module PaperTrailDiff
     # : (untyped) -> untyped
     def after_end: (untyped) -> untyped
 
-    # : (untyped) -> untyped
-    def no_earlier_trailing: (untyped) -> untyped
-
-    # Mirrors the range's own end handling, so a version sitting exactly on an
-    # inclusive end stays inside the range instead of masking the one after it.
-    # : (untyped, untyped) -> untyped
-    def earlier_trailing: (untyped, untyped) -> untyped
-
     # : () -> Range[Time]
     def query_range: () -> Range[Time]
 

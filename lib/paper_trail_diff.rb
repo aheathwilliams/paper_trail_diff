@@ -5,6 +5,7 @@ require 'paper_trail'
 
 require_relative 'paper_trail_diff/version'
 require_relative 'paper_trail_diff/support'
+require_relative 'paper_trail_diff/version_query'
 require_relative 'paper_trail_diff/stored_time_precision'
 require_relative 'paper_trail_diff/version_boundary'
 require_relative 'paper_trail_diff/instrumentation'

@@ -14,7 +14,7 @@ module PaperTrailDiff
 
     #: (?context_required: bool) -> RootVersionPlan
     def select_plan(context_required: false)
-      relation = versions_relation
+      relation = Endpoint.versions(@record)
       in_range = ordered(@time_range.scope(relation).to_a)
       RootVersionSelection.new(
         in_range: in_range,
@@ -34,15 +34,6 @@ module PaperTrailDiff
     # @rbs @time_range: TimeRange
     # @rbs @version_scope: untyped
     # @rbs @live_endpoint: untyped
-
-    #: () -> untyped
-    def versions_relation
-      association_name = @record.class.versions_association_name
-      @record.public_send(association_name)
-    rescue NoMethodError => e
-      message = 'record does not expose a PaperTrail version history'
-      raise InvalidTimelineRangeError, message, cause: e
-    end
 
     #: (untyped) -> untyped
     def trailing_version(relation)

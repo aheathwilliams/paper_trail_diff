@@ -50,7 +50,10 @@ module PaperTrailDiff
     #: (untyped) -> Hash[String, untyped]
     def first_trailing_versions(relation)
       table = relation.klass.arel_table
-      versions = trailing_scope(relation).where(no_earlier_trailing(table))
+      first_after = VersionQuery.no_earlier_version(table) do |earlier|
+        after_end(earlier[:created_at])
+      end
+      versions = trailing_scope(relation).where(first_after)
                                          .reorder(created_at: :asc, id: :asc).to_a
       first = {} #: Hash[String, untyped]
       versions.each { |version| first[version.item_id.to_s] ||= version }
@@ -64,27 +67,6 @@ module PaperTrailDiff
     #: (untyped) -> untyped
     def after_end(column)
       exclude_end? ? column.gteq(end_time) : column.gt(end_time)
-    end
-
-    #: (untyped) -> untyped
-    def no_earlier_trailing(table)
-      arel = Object.const_get(:Arel) #: untyped
-      later = table.alias('paper_trail_diff_earlier_trailing')
-      arel.const_get(:SelectManager).new
-          .from(later)
-          .project(arel.sql('1'))
-          .where(earlier_trailing(table, later))
-          .exists
-          .not
-    end
-
-    # Mirrors the range's own end handling, so a version sitting exactly on an
-    # inclusive end stays inside the range instead of masking the one after it.
-    #: (untyped, untyped) -> untyped
-    def earlier_trailing(table, later)
-      same_item = later[:item_type].eq(table[:item_type])
-                                   .and(later[:item_id].eq(table[:item_id]))
-      same_item.and(after_end(later[:created_at])).and(later[:created_at].lt(table[:created_at]))
     end
 
     #: () -> Range[Time]

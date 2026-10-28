@@ -404,27 +404,10 @@ module PaperTrailDiff
     #: (untyped) -> untyped
     def window_condition(version_class)
       table = version_class.arel_table
-      table[:created_at].lteq(@end_time).or(first_after_range(table))
-    end
-
-    #: (untyped) -> untyped
-    def first_after_range(table)
-      arel = Object.const_get(:Arel) #: untyped
-      later = table.alias('paper_trail_diff_later_versions')
-      arel.const_get(:SelectManager).new
-          .from(later)
-          .project(arel.sql('1'))
-          .where(preceding_trailing_version(table, later))
-          .exists
-          .not
-    end
-
-    #: (untyped, untyped) -> untyped
-    def preceding_trailing_version(table, later)
-      later[:item_type].eq(table[:item_type])
-                       .and(later[:item_id].eq(table[:item_id]))
-                       .and(later[:created_at].gt(@end_time))
-                       .and(later[:created_at].lt(table[:created_at]))
+      first_after = VersionQuery.no_earlier_version(table) do |earlier|
+        earlier[:created_at].gt(@end_time)
+      end
+      table[:created_at].lteq(@end_time).or(first_after)
     end
 
     #: (untyped, Array[untyped]) -> Array[untyped]

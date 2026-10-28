@@ -58,7 +58,7 @@ module PaperTrailDiff
       grouped = {} #: Hash[String, Hash[Symbol, untyped]]
       @records.records_for(owner_class, owner_ids).each do |owner|
         id = owner.public_send(key)
-        model_class = target_class(reflection, owner)
+        model_class = AssociationTraversal.belongs_to_target(reflection, owner)
         add_identity(grouped, model_class, id) if model_class && id
       end
       grouped
@@ -146,15 +146,6 @@ module PaperTrailDiff
         relation = relation.where(reflection.type => parent_types(owner_class))
       end
       group_ids_by_owner(relation.pluck(foreign_key, reflection.klass.primary_key))
-    end
-
-    #: (untyped, untyped) -> untyped
-    def target_class(reflection, owner)
-      return reflection.klass unless reflection.polymorphic?
-
-      Object.const_get(owner.public_send(reflection.foreign_type).to_s)
-    rescue NameError
-      nil
     end
 
     #: (Hash[String, Hash[Symbol, untyped]], untyped, untyped) -> void

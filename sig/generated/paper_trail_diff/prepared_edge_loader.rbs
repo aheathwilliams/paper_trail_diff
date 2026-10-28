@@ -58,9 +58,6 @@ module PaperTrailDiff
     # : (untyped, Array[untyped], untyped, String) -> Hash[String, Array[untyped]]
     def live_child_ids: (untyped, Array[untyped], untyped, String) -> Hash[String, Array[untyped]]
 
-    # : (untyped, untyped) -> untyped
-    def target_class: (untyped, untyped) -> untyped
-
     # : (Hash[String, Hash[Symbol, untyped]], untyped, untyped) -> void
     def add_identity: (Hash[String, Hash[Symbol, untyped]], untyped, untyped) -> void
 

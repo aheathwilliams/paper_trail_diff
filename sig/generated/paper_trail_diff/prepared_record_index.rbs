@@ -200,12 +200,6 @@ module PaperTrailDiff
     # : (untyped) -> untyped
     def window_condition: (untyped) -> untyped
 
-    # : (untyped) -> untyped
-    def first_after_range: (untyped) -> untyped
-
-    # : (untyped, untyped) -> untyped
-    def preceding_trailing_version: (untyped, untyped) -> untyped
-
     # : (untyped, Array[untyped]) -> Array[untyped]
     def available_live_records: (untyped, Array[untyped]) -> Array[untyped]
 

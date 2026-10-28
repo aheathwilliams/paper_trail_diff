@@ -118,15 +118,7 @@ module PaperTrailDiff
 
     #: () -> untyped
     def ordered_versions
-      versions_relation.reorder(created_at: :asc, id: :asc)
-    end
-
-    #: () -> untyped
-    def versions_relation
-      @record.public_send(@record.class.versions_association_name)
-    rescue NoMethodError => e
-      message = 'record does not expose a PaperTrail version history'
-      raise InvalidTimelineRangeError, message, cause: e
+      Endpoint.versions(@record).reorder(created_at: :asc, id: :asc)
     end
 
     #: (untyped) -> TimeRange?

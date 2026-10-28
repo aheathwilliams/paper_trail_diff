@@ -24,7 +24,7 @@ module PaperTrailDiff
 
     #: () -> untyped
     def validated_relation
-      relation = versions_relation
+      relation = Endpoint.versions(@record)
       validate_boundary!(@from, relation, boundary: :from)
       validate_boundary!(@to, relation, boundary: :to)
       if Support.compare_versions(@from, @to).positive?
@@ -37,7 +37,7 @@ module PaperTrailDiff
     #: (untyped) -> RootVersionPlan
     def select_plan_through_current(current)
       Endpoint.validate_pair!(@record, current)
-      relation = versions_relation
+      relation = Endpoint.versions(@record)
       validate_boundary!(@from, relation, boundary: :from)
       select_plan(relation.where(created_at: @from.created_at..), live_endpoint: current)
     end
@@ -48,15 +48,6 @@ module PaperTrailDiff
     # @rbs @from: untyped
     # @rbs @to: untyped
     # @rbs @version_scope: untyped
-
-    #: () -> untyped
-    def versions_relation
-      association_name = @record.class.versions_association_name
-      @record.public_send(association_name)
-    rescue NoMethodError => e
-      message = 'record does not expose a PaperTrail version history'
-      raise InvalidTimelineRangeError, message, cause: e
-    end
 
     #: (untyped, ?through: untyped, ?live_endpoint: untyped) -> RootVersionPlan
     def select_plan(relation, through: nil, live_endpoint: nil)

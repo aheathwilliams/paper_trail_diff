@@ -82,9 +82,6 @@ module PaperTrailDiff
     # : (untyped) -> String?
     def scalar_foreign_key: (untyped) -> String?
 
-    # : (untyped, untyped) -> untyped
-    def belongs_to_class: (untyped, untyped) -> untyped
-
     # : (untyped, untyped) -> Array[String]
     def owner_types: (untyped, untyped) -> Array[String]
 

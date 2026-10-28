@@ -70,7 +70,7 @@ module PaperTrailDiff
       return [snapshot, false] unless changed
 
       updated_association = AssociationSnapshot.new(kind: association.kind, records: records)
-      [replace_association(snapshot, name, updated_association), true]
+      [snapshot.with_association(name, updated_association), true]
     end
 
     #: (Array[RecordSnapshot], Array[untyped], untyped, RecordSnapshot?, Integer) -> [Array[RecordSnapshot], bool]
@@ -99,16 +99,6 @@ module PaperTrailDiff
       updated = records.dup
       replacement ? updated[index] = replacement : updated.delete_at(index)
       [updated.freeze, true]
-    end
-
-    #: (RecordSnapshot, String, AssociationSnapshot) -> RecordSnapshot
-    def replace_association(snapshot, name, association)
-      RecordSnapshot.new(
-        type: snapshot.type,
-        id: snapshot.id,
-        attributes: snapshot.attributes,
-        associations: snapshot.associations.merge(name => association)
-      )
     end
 
     #: (untyped, RecordSnapshot?) -> String

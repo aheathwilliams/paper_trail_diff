@@ -112,7 +112,7 @@ module PaperTrailDiff
       id = record.public_send(foreign_key)
       return [] if id.nil?
 
-      model_class = belongs_to_class(record, reflection)
+      model_class = AssociationTraversal.belongs_to_target(reflection, record)
       return unless model_class && @records.loaded?(model_class, id)
 
       Array(@records.record_before(model_class, id, boundary)).compact
@@ -192,15 +192,6 @@ module PaperTrailDiff
     def scalar_foreign_key(reflection)
       key = reflection.foreign_key
       key.to_s unless key.is_a?(Array)
-    end
-
-    #: (untyped, untyped) -> untyped
-    def belongs_to_class(record, reflection)
-      return reflection.klass unless reflection.polymorphic?
-
-      Object.const_get(record.public_send(reflection.foreign_type).to_s)
-    rescue NameError
-      nil
     end
 
     #: (untyped, untyped) -> Array[String]

@@ -53,12 +53,6 @@ module PaperTrailDiff
     # : (untyped, Array[untyped]) -> Hash[String, untyped]
     def first_versions: (untyped, Array[untyped]) -> Hash[String, untyped]
 
-    # : (untyped) -> untyped
-    def no_earlier_version: (untyped) -> untyped
-
-    # : (untyped, untyped) -> untyped
-    def earlier_version: (untyped, untyped) -> untyped
-
     # : (untyped, untyped) -> Array[String]
     def identity_key: (untyped, untyped) -> Array[String]
   end

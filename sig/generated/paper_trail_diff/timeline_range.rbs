@@ -72,9 +72,6 @@ module PaperTrailDiff
     # : () -> untyped
     def ordered_versions: () -> untyped
 
-    # : () -> untyped
-    def versions_relation: () -> untyped
-
     # : (untyped) -> TimeRange?
     def build_time_range: (untyped) -> TimeRange?
 
