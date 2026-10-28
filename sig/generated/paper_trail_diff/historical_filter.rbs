@@ -1,7 +1,13 @@
 # Generated from lib/paper_trail_diff/historical_filter.rb with RBS::Inline
 
 module PaperTrailDiff
-  # Selects recorded pre-event states with an explicit ceiling on version loading.
+  # Selects roots by the values they held at any point in the window, with an
+  # explicit ceiling on version loading.
+  #
+  # A version records the state *before* its own change, so the versions in
+  # the window supply the state at its start and after every change but the
+  # last. The state after the last change lives in the first version after
+  # the window, or in the live row when nothing follows; a destroy leaves none.
   class HistoricalFilter
     DEFAULT_VERSION_LIMIT: ::Integer
 
@@ -37,6 +43,22 @@ module PaperTrailDiff
 
     # : (Array[String]) -> Hash[String, Array[untyped]]
     def candidate_versions: (Array[String]) -> Hash[String, Array[untyped]]
+
+    # : (Array[untyped], untyped) -> bool
+    def held?: (Array[untyped], untyped) -> bool
+
+    # What each candidate held after its last change in the window.
+    # : (Array[String], Hash[String, Array[untyped]]) -> Hash[String, untyped]
+    def closing_states: (Array[String], Hash[String, Array[untyped]]) -> Hash[String, untyped]
+
+    # : (Array[String]) -> Hash[String, untyped]
+    def trailing_versions: (Array[String]) -> Hash[String, untyped]
+
+    # : (Array[String]) -> Hash[String, untyped]
+    def live_records: (Array[String]) -> Hash[String, untyped]
+
+    # : (untyped) -> bool
+    def record_matches?: (untyped) -> bool
 
     # : (Integer) -> void
     def account_versions!: (Integer) -> void

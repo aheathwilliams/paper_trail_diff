@@ -936,9 +936,10 @@ RSpec.describe PaperTrailDiff do
     end
 
     describe 'historical_filter:' do
-      # The population a relation cannot describe: one root left it after the
-      # window, another joined it after the window, and a third was destroyed
-      # inside it. Only the first was ever what the report is asking about.
+      # The population a relation cannot describe: one root left it during the
+      # window, another joined it during the window, and a third was destroyed
+      # inside it. A relation sees only who is in it now; the filter sees who
+      # was in it at any point in the window.
       def moving_population
         start_at = Time.now.utc - 3600
         left = CoreArticle.create!(title: 'left after', internal_note: 'review')
@@ -971,10 +972,11 @@ RSpec.describe PaperTrailDiff do
                        historical_filter: was_review
         )
 
-        # The relation finds the root that only joined the population later.
+        # The relation finds only the root that is `review` now.
         expect(by_relation.analyses.keys).to eq([PaperTrailDiff::Endpoint.identity(joined)])
-        # The filter finds the one that actually was `review` inside the window.
-        expect(historically.analyses.keys).to eq([PaperTrailDiff::Endpoint.identity(left)])
+        # The filter also finds the one that was `review` earlier in the window.
+        expect(historically.analyses.keys)
+          .to eq([left, joined].map { |root| PaperTrailDiff::Endpoint.identity(root) })
       end
 
       # The gap this closes: a relation reads the live table, so it can say
@@ -1059,13 +1061,13 @@ RSpec.describe PaperTrailDiff do
       end
 
       it 'preserves activity options through the scoped analyze_many alias' do
-        left, _joined, _doomed, window = moving_population
+        left, joined, _doomed, window = moving_population
         result = described_class.analyze_many(
           scope: CoreArticle, within: window, limit: 100, close_on: :current,
           historical_filter: was_review, activity: true, snapshots: true, group: :transaction
         )
 
-        expect(result.roots.map(&:id)).to eq([left.id])
+        expect(result.roots.map(&:id)).to eq([left.id, joined.id])
         steps = result.analyses.values.first.activity_timeline
         expect(steps).not_to be_empty
         expect(steps.last.to_snapshot).not_to be_nil

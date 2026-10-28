@@ -572,35 +572,36 @@ when needed. With no explicit order, selection uses ascending root IDs.
 extra lookup for application presentation. The array is frozen; its ActiveRecord
 instances are mutable. Existing two-value destructuring is unchanged.
 
-**`historical_filter:` selects by earlier recorded values.** For example, to find
-articles with a version that stored the title `"Published"`:
+**`historical_filter:` selects records by values they had at any point in the
+window.** For example, to find articles that were titled `"Published"` at some
+point in the last day, including ones published during it:
 
 ```ruby
 report = PaperTrailDiff.report(
   Article.all, since: 1.day.ago, limit: 100,
-  historical_filter: { title: "Published" }, max_filter_versions: 10_000
+  historical_filter: { title: "Published" }
 )
 ```
 
-The hash checks the values in each version recorded inside the window. All keys
-must match using Ruby equality. It reads typed values without calling `reify`.
-Unknown or unrecorded attributes raise instead of matching `nil`. For custom
-checks, pass a callable; it receives reified records and can incur additional
-queries through application code.
+The filter checks the record as it was when the window started and after each
+change made inside it. A record matches if any of those states match. With a
+hash, every key must be equal (`==`). Values are read from the stored history
+without calling `reify`, and unknown or unrecorded attributes raise an error
+instead of matching `nil`. For other checks, pass a callable such as
+`->(article) { article.title.start_with?("Pub") }`; it receives each state as a
+model instance and may run queries of its own.
 
-A match in any eligible version selects the record. Creation versions have no
-earlier record and are skipped. The filter does not test current values, even
-with `close_on: :current`, or versions outside the window. It does not search
-associations or establish whether a value held continuously over a period.
-`version_scope:` filters the reported events, not the versions tested here.
+The filter looks only at the record itself, not its associations, and it does
+not check whether a value was held for the whole window. `version_scope:`
+narrows which changes are reported, not which states are tested here.
 
 The relation still filters current rows. Matching deleted records remain in
 `unreachable`. With a historical filter, all matching records count toward
 `limit:` **before** the relation's current-state filters and pagination, including
 records that no longer exist. Matching stops if that ceiling is exceeded.
 
-`max_filter_versions:` limits candidate versions loaded across batches; its
-default is 10,000. Overflow raises `FilterLimitExceededError` before evaluating
+`max_filter_versions:` limits the versions the filter loads, including the one
+version after the window it reads for each record; its default is 10,000. Overflow raises `FilterLimitExceededError` before evaluating
 the over-budget batch. At most one extra row is loaded to detect overflow.
 This limits loading even when nothing matches. It does not limit queries inside
 callables or the later analysis work, and is unused without `historical_filter:`.

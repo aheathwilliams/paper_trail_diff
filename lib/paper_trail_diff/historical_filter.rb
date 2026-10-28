@@ -2,7 +2,13 @@
 # rbs_inline: enabled
 
 module PaperTrailDiff
-  # Selects recorded pre-event states with an explicit ceiling on version loading.
+  # Selects roots by the values they held at any point in the window, with an
+  # explicit ceiling on version loading.
+  #
+  # A version records the state *before* its own change, so the versions in
+  # the window supply the state at its start and after every change but the
+  # last. The state after the last change lives in the first version after
+  # the window, or in the live row when nothing follows; a destroy leaves none.
   class HistoricalFilter
     DEFAULT_VERSION_LIMIT = 10_000
     CANDIDATE_BATCH = 250
@@ -23,8 +29,9 @@ module PaperTrailDiff
       matched = [] #: Array[String]
       candidates.each_slice(CANDIDATE_BATCH) do |slice|
         versions = candidate_versions(slice)
+        closing = closing_states(slice, versions)
         slice.each do |id|
-          next unless versions.fetch(id, []).any? { |version| matches?(version) }
+          next unless held?(versions.fetch(id, []), closing[id])
 
           matched << id
           reject_root_limit! if matched.length > @limit
@@ -77,6 +84,51 @@ module PaperTrailDiff
                          .limit(@max_versions - @loaded + 1).to_a
       account_versions!(versions.length)
       versions.group_by { |version| version.item_id.to_s }
+    end
+
+    #: (Array[untyped], untyped) -> bool
+    def held?(versions, closing)
+      return true if versions.any? { |version| matches?(version) }
+      return false unless closing
+
+      Endpoint.version?(closing) ? matches?(closing) : record_matches?(closing)
+    end
+
+    # What each candidate held after its last change in the window.
+    #: (Array[String], Hash[String, Array[untyped]]) -> Hash[String, untyped]
+    def closing_states(ids, versions)
+      open = ids.reject { |id| versions.fetch(id, []).last&.event.to_s == 'destroy' }
+      return {} if open.empty?
+
+      trailing = trailing_versions(open)
+      trailing.merge(live_records(open - trailing.keys))
+    end
+
+    #: (Array[String]) -> Hash[String, untyped]
+    def trailing_versions(ids)
+      range = @time_range
+      return {} unless range
+
+      relation = @model.paper_trail.version_class.where(item_type: @model.base_class.name,
+                                                        item_id: ids)
+      trailing = range.first_trailing_versions(relation)
+      account_versions!(trailing.length)
+      trailing
+    end
+
+    #: (Array[String]) -> Hash[String, untyped]
+    def live_records(ids)
+      return {} if ids.empty?
+
+      @model.base_class.unscoped.where(@model.primary_key => ids).to_a
+            .to_h { |record| [record.id.to_s, record] }
+    end
+
+    #: (untyped) -> bool
+    def record_matches?(record)
+      return !!@predicate.call(record) unless @predicate.is_a?(Hash)
+
+      @predicate.all? { |name, expected| record.attributes.fetch(name) == expected }
     end
 
     #: (Integer) -> void

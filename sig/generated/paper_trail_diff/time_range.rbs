@@ -22,9 +22,26 @@ module PaperTrailDiff
     # : (untyped) -> untyped
     def trailing_scope: (untyped) -> untyped
 
+    # Each item's earliest version after the range, keyed by item id. One row
+    # per item comes back from a NOT EXISTS rather than a window function, so
+    # the query stays portable; a timestamp tie keeps the lower id.
+    # : (untyped) -> Hash[String, untyped]
+    def first_trailing_versions: (untyped) -> Hash[String, untyped]
+
     private
 
     @exclude_end: bool
+
+    # : (untyped) -> untyped
+    def after_end: (untyped) -> untyped
+
+    # : (untyped) -> untyped
+    def no_earlier_trailing: (untyped) -> untyped
+
+    # Mirrors the range's own end handling, so a version sitting exactly on an
+    # inclusive end stays inside the range instead of masking the one after it.
+    # : (untyped, untyped) -> untyped
+    def earlier_trailing: (untyped, untyped) -> untyped
 
     # : () -> Range[Time]
     def query_range: () -> Range[Time]

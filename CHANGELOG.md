@@ -16,6 +16,12 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- **Breaking:** `historical_filter:` matches values a record had at any point in
+  the window: its state when the window started and after each change inside
+  it. It previously tested only the state before each change, so a record that
+  became `"published"` during the window did not match `{ status: "published" }`.
+  The state after the last change is read from the next version, or from the
+  live row when none exists, and counts toward `max_filter_versions:`.
 - Scope selection reads at most 250 joined rows per query independently of the
   unique-root safety limit, reducing round trips for duplicate-heavy joins.
 - Missing prepared activity registration raises an explanatory configuration

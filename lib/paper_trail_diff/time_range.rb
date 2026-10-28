@@ -41,13 +41,51 @@ module PaperTrailDiff
     #: (untyped) -> untyped
     def trailing_scope(relation)
       column = relation.klass.arel_table[:created_at]
-      predicate = exclude_end? ? column.gteq(end_time) : column.gt(end_time)
-      relation.where(predicate)
+      relation.where(after_end(column))
+    end
+
+    # Each item's earliest version after the range, keyed by item id. One row
+    # per item comes back from a NOT EXISTS rather than a window function, so
+    # the query stays portable; a timestamp tie keeps the lower id.
+    #: (untyped) -> Hash[String, untyped]
+    def first_trailing_versions(relation)
+      table = relation.klass.arel_table
+      versions = trailing_scope(relation).where(no_earlier_trailing(table))
+                                         .reorder(created_at: :asc, id: :asc).to_a
+      first = {} #: Hash[String, untyped]
+      versions.each { |version| first[version.item_id.to_s] ||= version }
+      first
     end
 
     private
 
     # @rbs @exclude_end: bool
+
+    #: (untyped) -> untyped
+    def after_end(column)
+      exclude_end? ? column.gteq(end_time) : column.gt(end_time)
+    end
+
+    #: (untyped) -> untyped
+    def no_earlier_trailing(table)
+      arel = Object.const_get(:Arel) #: untyped
+      later = table.alias('paper_trail_diff_earlier_trailing')
+      arel.const_get(:SelectManager).new
+          .from(later)
+          .project(arel.sql('1'))
+          .where(earlier_trailing(table, later))
+          .exists
+          .not
+    end
+
+    # Mirrors the range's own end handling, so a version sitting exactly on an
+    # inclusive end stays inside the range instead of masking the one after it.
+    #: (untyped, untyped) -> untyped
+    def earlier_trailing(table, later)
+      same_item = later[:item_type].eq(table[:item_type])
+                                   .and(later[:item_id].eq(table[:item_id]))
+      same_item.and(after_end(later[:created_at])).and(later[:created_at].lt(table[:created_at]))
+    end
 
     #: () -> Range[Time]
     def query_range

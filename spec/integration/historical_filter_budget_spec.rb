@@ -40,18 +40,34 @@ RSpec.describe 'bounded historical filtering' do
     expect(report({ title: 'Missing' }).analyses).to be_empty
   end
 
-  it 'preserves pre-event semantics and includes matching deleted identities' do
+  it 'matches a value held at any point in the window, including after the last change' do
     moved = CoreArticle.create!(title: 'Match', internal_note: 'stable')
     moved.update!(title: 'Now different')
     final = CoreArticle.create!(title: 'Other', internal_note: 'stable')
     final.update!(title: 'Match')
+    never = CoreArticle.create!(title: 'Other', internal_note: 'stable')
+    never.update!(title: 'Still other')
     deleted = CoreArticle.create!(title: 'Match', internal_note: 'stable')
     deleted.destroy!
 
     result = report({ title: 'Match' })
 
-    expect(result.roots.map(&:id)).to eq([moved.id])
+    expect(result.roots.map(&:id)).to eq([moved.id, final.id])
     expect(result.unreachable).to eq([PaperTrailDiff::Endpoint.identity(deleted)])
+  end
+
+  it 'reads the state after the last change from the next version when the window is past' do
+    article = CoreArticle.create!(title: 'Other', internal_note: 'stable')
+    article.update!(title: 'Match')
+    window_end = Time.now.utc
+    article.update!(title: 'Later')
+
+    result = PaperTrailDiff.analyze_scope(
+      CoreArticle, limit: 10, within: (window_end - 3600)..window_end,
+                   historical_filter: { title: 'Match' }
+    )
+
+    expect(result.roots.map(&:id)).to eq([article.id])
   end
 
   it 'rejects unknown or unrecorded attributes instead of treating them as nil' do
