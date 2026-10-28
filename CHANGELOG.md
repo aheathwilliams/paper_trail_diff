@@ -3,6 +3,15 @@
 All notable changes to this project will be documented in this file. The
 project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Development
+
+- Mutation testing also covers `TimeRange`, `VersionRange`,
+  `TimeVersionRange`, `BatchedRootVersions`, and `DeletedAnalysisBatch`, each
+  with a unit spec of its own; all 5,485 mutations across the fourteen classes
+  are caught.
+
 ## [0.13.1] - 2026-10-28
 
 ### Fixed

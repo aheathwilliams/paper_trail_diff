@@ -46,19 +46,22 @@ passes is behavior nothing checks. `mutant.yml` lists the classes it mutates:
 - what counts as a change: `Engine`, `CollectionComparator`,
   `CollectionIdentityIndex`, and `NestedComparator`;
 - which columns are compared: `SnapshotNormalizer` and `SnapshotPool`;
-- which history a range or filter reads: `TimelineRange`, `RootVersionPlan`,
-  and `HistoricalFilter`.
+- which versions a range reads: `TimeRange`, `TimelineRange`, `VersionRange`,
+  `TimeVersionRange`, and `RootVersionPlan`;
+- which versions a batch or filter reads: `BatchedRootVersions`,
+  `DeletedAnalysisBatch`, and `HistoricalFilter`.
 
 The specs for the classes that read the database use tables of their own
 (`spec/support/filter_database.rb`, `spec/support/normalizer_database.rb`), so
 they run in both the core and the association suite.
 
-Mutant does not run every spec for every mutation. It runs the specs whose
+Mutant reads `spec/unit` and `spec/association`, never `spec/integration`.
+Even there it does not run every spec for every mutation, only those whose
 description names the mutated class (`RSpec.describe PaperTrailDiff::Engine`),
-and only falls back to wider names such as `PaperTrailDiff` when none does. A
-spec named after a behavior, as most integration specs are, never runs. So
-each mutated class has a unit spec of its own that catches every mutation in
-it, and a class added to `mutant.yml` needs one too.
+falling back to wider names such as `PaperTrailDiff` when none does. A spec
+named after a behavior, as most integration specs are, never runs. So each
+mutated class has a unit spec of its own that catches every mutation in it,
+and a class added to `mutant.yml` needs one too.
 
 Mutant counts a mutation that runs past its time limit as caught, so
 `mutant.yml` sets the limit well above the time the whole suite takes. With
@@ -87,8 +90,10 @@ BUNDLE_GEMFILE=gemfiles/mutant.gemfile mise exec -- bundle exec mutant run --sin
 When a mutation survives, either add the spec that would catch it, or, if the
 mutated code means the same thing, simplify the code to that form. Reserve a
 `mutant:disable` comment for a method whose surviving mutations all mean the
-same thing as the code, and say why next to it. Mutant forks a worker per CPU; `spec/support/mutant_hooks.rb`
-gives each worker its own copy of the SQLite fixture database.
+same thing as the code, and say why next to it.
+
+Mutant forks a worker per CPU; `spec/support/mutant_hooks.rb` gives each
+worker its own copy of the SQLite fixture database.
 
 ## Test clock
 
