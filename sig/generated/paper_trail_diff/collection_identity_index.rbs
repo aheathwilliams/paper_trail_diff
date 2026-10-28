@@ -6,8 +6,8 @@ module PaperTrailDiff
     # : (Array[untyped]) -> void
     def initialize: (Array[untyped]) -> void
 
-    # : (untyped, untyped) -> Integer?
-    def position: (untyped, untyped) -> Integer?
+    # : (String, untyped) -> Integer?
+    def position: (String, untyped) -> Integer?
 
     # : (untyped) -> Integer?
     def position_for_id: (untyped) -> Integer?
@@ -16,7 +16,7 @@ module PaperTrailDiff
 
     @id_positions: Hash[String, Integer?]
 
-    @positions: Hash[Array[untyped], Integer]
+    @identities: Set[Array[untyped]]
 
     @serialized_positions: Hash[Array[String], Integer]
 
