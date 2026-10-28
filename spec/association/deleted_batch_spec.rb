@@ -11,7 +11,7 @@ RSpec.describe 'batched deleted association history' do
   end
 
   def seed(count)
-    count.times.map do
+    Array.new(count) do
       article = TrackedArticle.create!(title: 'Before')
       comment = article.comments.create!(body: 'Before')
       article.update!(title: 'After')

@@ -98,7 +98,7 @@ RSpec.describe PaperTrailDiff do
     end
 
     it 'resolves :first endpoints for a whole batch' do
-      endpoints = 3.times.map do |index|
+      endpoints = Array.new(3) do |index|
         article = CoreArticle.create!(title: "Draft #{index}", internal_note: 'stable')
         article.update!(title: "Published #{index}")
         article
@@ -230,7 +230,7 @@ RSpec.describe PaperTrailDiff do
 
   describe '.compare_many' do
     it 'matches individual comparisons and batches current root loading' do
-      endpoints = 3.times.map do |index|
+      endpoints = Array.new(3) do |index|
         article = CoreArticle.create!(title: "Draft #{index}", internal_note: 'stable')
         article.update!(title: "Published #{index}")
         [article.versions.reload.last, article]
@@ -255,7 +255,7 @@ RSpec.describe PaperTrailDiff do
     end
 
     it 'preloads the selected live association once for the whole batch' do
-      articles = 3.times.map do |index|
+      articles = Array.new(3) do |index|
         article = CoreArticle.create!(title: "Article #{index}", internal_note: 'stable')
         article.comments.create!(body: "Comment #{index}")
         article
@@ -276,7 +276,7 @@ RSpec.describe PaperTrailDiff do
     end
 
     it 'reuses fully preloaded endpoints without live-record queries' do
-      articles = 3.times.map do |index|
+      articles = Array.new(3) do |index|
         article = CoreArticle.create!(title: "Preloaded #{index}", internal_note: 'stable')
         article.comments.create!(body: "Comment #{index}")
         article
@@ -552,7 +552,7 @@ RSpec.describe PaperTrailDiff do
 
   describe 'close_on: :current' do
     def open_window_articles(count = 2)
-      articles = count.times.map do |index|
+      articles = Array.new(count) do |index|
         article = CoreArticle.create!(title: "Draft #{index}", internal_note: 'stable')
         article.update!(title: "Published #{index}")
         article
@@ -669,7 +669,7 @@ RSpec.describe PaperTrailDiff do
 
   describe '.analyze_many' do
     def windowed_articles(count)
-      articles = count.times.map do |index|
+      articles = Array.new(count) do |index|
         article = CoreArticle.create!(title: "Draft #{index}", internal_note: 'stable')
         article.update!(title: "Published #{index}")
         article
@@ -1040,7 +1040,7 @@ RSpec.describe PaperTrailDiff do
       # back a quietly short report instead of an error.
       it 'refuses rather than returning a short result when matches are destroyed' do
         start_at = Time.now.utc - 3600
-        doomed = 6.times.map do |index|
+        doomed = Array.new(6) do |index|
           article = CoreArticle.create!(title: "gone #{index}", internal_note: 'wanted')
           article.update!(title: "gone #{index} v2")
           article

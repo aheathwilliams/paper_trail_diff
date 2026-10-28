@@ -82,7 +82,10 @@ module ReportingBenchmark
 
     def options
       result = { within: Time.at(0).utc..(Time.now.utc + 60), limit: limit, close_on: :current }
-      result.merge!(activity: true, snapshots: true) if name == 'retained_activity'
+      if name == 'retained_activity'
+        result[:activity] = true
+        result[:snapshots] = true
+      end
       if name == 'deleted_roots'
         result.merge!(activity: true, snapshots: true,
                       include_deleted: true)

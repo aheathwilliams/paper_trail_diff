@@ -148,8 +148,7 @@ RSpec.describe PaperTrailDiff::PreparedRecordIndex do
     version = author.versions.last
     fallback = version.reify(dup: true)
     deserialized = version.object_deserialized.merge('retired_column' => 'legacy')
-    allow(version).to receive(:object_deserialized).and_return(deserialized)
-    expect(version).to receive(:reify).and_return(fallback)
+    allow(version).to receive_messages(object_deserialized: deserialized, reify: fallback)
     series = PaperTrailDiff::PreparedRecordSeries.new(
       versions: [version],
       live: PaperTrailDiff::PreparedRecordState.new(author)
@@ -157,6 +156,7 @@ RSpec.describe PaperTrailDiff::PreparedRecordIndex do
     boundary = Struct.new(:created_at).new(version.created_at)
 
     expect(series.record_before(boundary).name).to eq('Before fallback')
+    expect(version).to have_received(:reify)
   end
 
   it 'declines direct preparation for encrypted model attributes' do
@@ -166,8 +166,8 @@ RSpec.describe PaperTrailDiff::PreparedRecordIndex do
       def self.attribute_names = ['secret']
     end
     stub_const('PreparedEncryptedRecord', encrypted_model)
-    version = double(
-      'encrypted version',
+    version = instance_double(
+      PaperTrail::Version,
       object: 'payload',
       object_deserialized: { 'secret' => 'value' },
       item_type: 'PreparedEncryptedRecord'
@@ -195,7 +195,7 @@ RSpec.describe PaperTrailDiff::PreparedRecordIndex do
 
   it 'loads multiple identities with one version query and one live query' do
     article = TrackedArticle.create!(title: 'Batched identities')
-    authors = 3.times.map { |index| TrackedAuthor.create!(name: "Author #{index}") }
+    authors = Array.new(3) { |index| TrackedAuthor.create!(name: "Author #{index}") }
     before = boundary_for(article)
     authors.each { |author| author.update!(name: "#{author.name} updated") }
     queries = 0
@@ -225,7 +225,7 @@ RSpec.describe PaperTrailDiff::PreparedRecordIndex do
 
   it 'reuses seeded live records while querying any identities not supplied' do
     article = TrackedArticle.create!(title: 'Seeded live records')
-    authors = 3.times.map { |index| TrackedAuthor.create!(name: "Author #{index}") }
+    authors = Array.new(3) { |index| TrackedAuthor.create!(name: "Author #{index}") }
     before = boundary_for(article)
     authors.each { |author| author.update!(name: "#{author.name} updated") }
     index = described_class.new(before, live_records: authors.first(2))
@@ -271,7 +271,7 @@ RSpec.describe PaperTrailDiff::PreparedRecordIndex do
     series = PaperTrailDiff::PreparedRecordSeries.new(versions: [version], live: state)
     boundary = Struct.new(:created_at).new(version.created_at + 1)
     index = described_class.new(version)
-    composite = double('composite model', primary_key: %i[tenant_id id])
+    composite = class_double(TrackedAuthor, primary_key: %i[tenant_id id])
 
     expect(series.record_before(boundary).name).to eq('Timestamp fallback')
     mismatched = PaperTrailDiff::PreparedRecordState.new(

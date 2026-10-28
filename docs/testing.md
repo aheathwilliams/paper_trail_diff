@@ -8,7 +8,8 @@ mise exec -- bundle exec rake
 ```
 
 The default task runs the core specs without PT-AT loaded, the association specs
-in a separate process, RuboCop, generated-signature verification, and Steep.
+in a separate process, RuboCop (with the rubocop-performance and rubocop-rspec
+plugins), generated-signature verification, and Steep.
 Ruby blocks in the README, quickstart, and API reference marked with
 `<!-- executable:... -->` run inside those specs, so documented examples stay
 correct.

@@ -148,7 +148,7 @@ module PaperTrailDiff
       identities.each do |model_class, class_rows|
         next unless model_class
 
-        ids = class_rows.map(&:foreign_key_id).compact.uniq
+        ids = class_rows.filter_map(&:foreign_key_id).uniq
         groups[model_class.name] = group(model_class, ids)
       end
       groups

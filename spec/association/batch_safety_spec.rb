@@ -32,11 +32,12 @@ RSpec.describe PaperTrailDiff::BatchSafety do
   end
 
   it 'enforces the policy on public reports before selecting roots' do
-    expect(TrackedArticle).not_to receive(:pluck)
+    allow(TrackedArticle).to receive(:pluck).and_call_original
     expect do
       PaperTrailDiff.report(TrackedArticle, since: Time.now.utc - 60,
                                             limit: 5, associations: [:limited_comments])
     end.to raise_error(PaperTrailDiff::UnsupportedBatchPathError, /limited_comments/)
+    expect(TrackedArticle).not_to have_received(:pluck)
   end
 
   it 'permits live-only through comparisons without an expensive-history opt-in' do

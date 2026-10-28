@@ -25,7 +25,7 @@ if scenario == 'default_scope'
 end
 TrackedArticle.after_initialize { TrackedTag.count } if scenario == 'callback'
 
-roots = size.times.map do
+roots = Array.new(size) do
   author = TrackedAuthor.create!(name: 'Author')
   article = TrackedArticle.create!(title: 'Before', author: author)
   comment = article.comments.create!(body: 'Before')

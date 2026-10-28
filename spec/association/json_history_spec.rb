@@ -16,11 +16,12 @@ RSpec.describe 'Association history stored as JSON' do
     PaperTrail::Version.delete_all
     TrackedComment.delete_all
     TrackedArticle.delete_all
+    skip_unless_json_history_writable
   end
 
   # See spec/integration/json_history_spec.rb: some PaperTrail, Ruby, and
   # adapter combinations cannot write JSON history at all.
-  before do
+  def skip_unless_json_history_writable
     TrackedArticle.transaction do
       TrackedArticle.create!(title: 'Probe')
       raise ActiveRecord::Rollback

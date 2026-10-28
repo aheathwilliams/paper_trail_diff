@@ -309,7 +309,7 @@ RSpec.describe PaperTrailDiff::Engine do
         super()
       end
     end
-    records = 100.times.map do |id|
+    records = Array.new(100) do |id|
       counting_snapshot.new(type: 'Comment', id: id, attributes: {})
     end
     before = records.fetch(50)

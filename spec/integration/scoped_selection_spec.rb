@@ -26,7 +26,7 @@ RSpec.describe 'scoped root selection' do
   end
 
   it 'preserves the relation limit, offset, and ordering' do
-    articles = 3.times.map do |index|
+    articles = Array.new(3) do |index|
       CoreArticle.create!(title: "Article #{index}", internal_note: 'stable')
     end
     [CoreArticle.order(id: :desc), CoreArticle.order('core_articles.id DESC')].each do |ordered|
@@ -60,7 +60,7 @@ RSpec.describe 'scoped root selection' do
   end
 
   it 'preserves eager-loaded relation ordering and pagination' do
-    articles = 3.times.map do |index|
+    articles = Array.new(3) do |index|
       article = CoreArticle.create!(title: "Article #{index}", internal_note: 'stable')
       2.times { article.comments.create!(body: 'Comment', created_at: Time.utc(2030 + index)) }
       article

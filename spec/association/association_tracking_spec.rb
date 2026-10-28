@@ -190,7 +190,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
   end
 
   it 'bulk-compares historical graphs with preloaded nested live associations' do
-    graphs = 2.times.map do |index|
+    graphs = Array.new(2) do |index|
       graph = article_with_graph
       graph[:kept_comment].update!(body: "Live after #{index}")
       graph[:reply].update!(body: "Nested live after #{index}")
@@ -231,7 +231,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
   end
 
   it 'preserves per-owner collection scopes while batching safe nested associations' do
-    comparisons = 2.times.map do |index|
+    comparisons = Array.new(2) do |index|
       article = TrackedArticle.create!(title: "Limited batch #{index}")
       before = boundary_for(article)
       selected = article.comments.create!(body: "Selected #{index}")
@@ -275,7 +275,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
 
   it 'keeps historical-to-live collection queries constant as the batch grows' do
     build_comparisons = lambda do |count|
-      count.times.map do |index|
+      Array.new(count) do |index|
         article = TrackedArticle.create!(title: "Bulk order #{index}")
         comment = article.comments.create!(body: 'Before')
         before = boundary_for(article)
@@ -1027,7 +1027,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
   it 'keeps same-branch descendant events atomic within one transaction' do
     article = TrackedArticle.create!(title: 'Atomic descendants')
     comment = article.comments.create!(body: 'Parent')
-    replies = 2.times.map { |index| comment.replies.create!(body: "Reply #{index}") }
+    replies = Array.new(2) { |index| comment.replies.create!(body: "Reply #{index}") }
     before = boundary_for(article)
     TrackedReply.transaction { replies.each(&:destroy!) }
     after = boundary_for(article)
@@ -1084,7 +1084,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
 
   it 'keeps direct collection activity work linear when selected children are nested' do
     article = TrackedArticle.create!(title: 'Scaled activity')
-    comments = 100.times.map do |index|
+    comments = Array.new(100) do |index|
       comment = article.comments.create!(body: "Approval #{index}")
       comment.replies.create!(body: "Approver #{index}")
       comment
@@ -1111,7 +1111,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
 
   it 'advances ordinary child updates without per-event live-record queries' do
     article = TrackedArticle.create!(title: 'Serialized activity changes')
-    comments = 100.times.map do |index|
+    comments = Array.new(100) do |index|
       article.comments.create!(body: "Approval #{index}")
     end
     before = boundary_for(article)
@@ -1134,7 +1134,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
 
   it 'keeps nested collection activity local to the affected parent snapshots' do
     article = TrackedArticle.create!(title: 'Scaled nested activity')
-    replies = 100.times.map do |index|
+    replies = Array.new(100) do |index|
       comment = article.comments.create!(body: "Approval #{index}")
       comment.replies.create!(body: "Approver #{index}")
     end
@@ -1160,7 +1160,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
 
   it 'does not instantiate out-of-range child history for a leaf collection' do
     article = TrackedArticle.create!(title: 'Bounded activity')
-    comments = 5.times.map do |index|
+    comments = Array.new(5) do |index|
       article.comments.create!(body: "Approval #{index}")
     end
     50.times do |round|
@@ -1187,7 +1187,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
   it 'applies nested belongs-to target updates without rebuilding the parent collection' do
     reviewer = TrackedAuthor.create!(name: 'Reviewer before')
     article = TrackedArticle.create!(title: 'Nested target')
-    comments = 3.times.map do |index|
+    comments = Array.new(3) do |index|
       article.comments.create!(body: "Approval #{index}", reviewer: reviewer)
     end
     before = boundary_for(article)
@@ -1307,7 +1307,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     reply_after = PaperTrailDiff::RecordSnapshot.new(
       type: 'TrackedReply', id: 9, attributes: { body: 'After' }
     )
-    comments = 100.times.map do |id|
+    comments = Array.new(100) do |id|
       replies = id == 50 ? [reply_before] : []
       PaperTrailDiff::RecordSnapshot.new(
         type: 'TrackedComment', id: id, attributes: {},
@@ -1434,7 +1434,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
       retained = steps_for(article, group: :transaction, snapshots: true)
 
       expect(grouped.map(&:from_snapshot)).to all(be_nil)
-      expect(retained.map(&:from_snapshot).compact).not_to be_empty
+      expect(retained.filter_map(&:from_snapshot)).not_to be_empty
     end
 
     # PaperTrail leaves the column nil outside a transaction and a custom
@@ -1470,7 +1470,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
   end
 
   it 'analyzes each root whole history when no window is given' do
-    articles = 2.times.map do |index|
+    articles = Array.new(2) do |index|
       article = TrackedArticle.create!(title: "Whole #{index}")
       article.comments.create!(body: "Comment #{index}")
       article.update!(title: "Whole updated #{index}")
@@ -1577,7 +1577,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
 
   it 'keeps batched analysis queries constant as the root count grows' do
     build = lambda do |count|
-      articles = count.times.map do |index|
+      articles = Array.new(count) do |index|
         article = TrackedArticle.create!(title: "Batched #{index}")
         article.comments.create!(body: "Comment #{index}")
         article.update!(title: "Updated #{index}")

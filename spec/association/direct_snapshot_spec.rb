@@ -23,11 +23,12 @@ RSpec.describe 'direct snapshot compatibility' do
   it 'normalizes STI states without reification or historical model construction' do
     document, version = version_for(PreparedSpecialDocument)
     expected = version.reify(dup: true).attributes.except('id', 'updated_at')
-    expect(PreparedSpecialDocument).not_to receive(:new)
+    allow(PreparedSpecialDocument).to receive(:new).and_call_original
     expect_any_instance_of(PaperTrail::Version).not_to receive(:reify)
 
     result = PaperTrailDiff.analyze(document, from: version, to: document)
 
+    expect(PreparedSpecialDocument).not_to have_received(:new)
     expect(result.from_snapshot.type).to eq('PreparedSpecialDocument')
     expect(result.from_snapshot.attributes).to eq(expected)
   end

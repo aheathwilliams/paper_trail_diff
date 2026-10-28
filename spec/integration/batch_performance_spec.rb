@@ -9,7 +9,7 @@ RSpec.describe 'batch reconstruction cost' do
   end
 
   it 'normalizes plain checkpoints without reifying and preserves every adjacent change' do
-    articles = 3.times.map do |index|
+    articles = Array.new(3) do |index|
       article = CoreArticle.create!(title: "Root #{index}", internal_note: 'stable')
       4.times { |step| article.update!(title: "Root #{index} v#{step}") }
       article
@@ -32,7 +32,7 @@ RSpec.describe 'batch reconstruction cost' do
       expect(analysis.from_snapshot).to be_nil
       expect(analysis.to_snapshot.attributes.fetch('title')).to eq("Root #{index} v3")
       expect(analysis.timeline.drop(1).map { |step| step.diff.attributes.fetch('title').to })
-        .to eq(4.times.map { |step| "Root #{index} v#{step}" })
+        .to eq(Array.new(4) { |step| "Root #{index} v#{step}" })
     end
   end
 

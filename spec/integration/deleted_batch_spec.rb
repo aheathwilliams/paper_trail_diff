@@ -17,7 +17,7 @@ RSpec.describe 'deleted root reporting' do
   end
 
   def seed_deleted(count)
-    count.times.map do |index|
+    Array.new(count) do |index|
       article = CoreArticle.create!(title: "Deleted #{index}", internal_note: 'stable')
       article.update!(title: "Final #{index}")
       article.destroy!
