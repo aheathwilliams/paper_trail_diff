@@ -82,10 +82,11 @@ module PaperTrailDiff
 
       parsed = begin
         JSON.parse(value)
-      rescue JSON::ParserError, TypeError
+      rescue JSON::ParserError
         nil
       end
-      parsed if parsed.is_a?(Hash)
+      # JSON parses objects into plain Hashes, never a subclass.
+      parsed if parsed.instance_of?(Hash)
     end
 
     #: (Hash[untyped, untyped], Hash[untyped, untyped], Array[String], nested_changes) -> void
@@ -97,7 +98,7 @@ module PaperTrailDiff
         to_item = to_hash.fetch(key, ABSENT)
         next if from_item == to_item
 
-        here = [*path, key.to_s].freeze
+        here = (path + [key]).freeze
         if from_item.is_a?(Hash) && to_item.is_a?(Hash)
           walk(from_item, to_item, here, changes)
         else
@@ -131,11 +132,12 @@ module PaperTrailDiff
       end
     end
 
-    # Sorted so a report reads the same twice, and stringified because a hash
-    # loaded from JSON and one built in Ruby can key the same field differently.
-    #: (Hash[untyped, untyped], Hash[untyped, untyped]) -> Array[untyped]
+    # Sorted so a report reads the same twice. Both hashes are already keyed by
+    # strings, because a hash loaded from JSON and one built in Ruby can key the
+    # same field differently.
+    #: (Hash[String, untyped], Hash[String, untyped]) -> Array[String]
     def keys(from_hash, to_hash)
-      (from_hash.keys | to_hash.keys).sort_by(&:to_s)
+      (from_hash.keys | to_hash.keys).sort
     end
   end
 end

@@ -71,6 +71,8 @@ module PaperTrailDiff
         raise ArgumentError, 'association kind changed between snapshots'
       end
 
+      # Kinds are symbols, so `!=`, `equal?`, and `eql?` all agree here.
+      # mutant:disable
       #: (AssociationSnapshot?, AssociationSnapshot?) -> bool
       def kinds_differ?(from_association, to_association)
         return false unless from_association && to_association
@@ -131,9 +133,9 @@ module PaperTrailDiff
         ).call
       end
 
-      #: (RecordSnapshot?, RecordSnapshot?) -> bool
+      #: (RecordSnapshot?, RecordSnapshot?) -> boolish
       def same_identity?(from_record, to_record)
-        from_record && to_record ? from_record.identity == to_record.identity : false
+        from_record && to_record && from_record.identity == to_record.identity
       end
     end
   end

@@ -1,0 +1,33 @@
+# Mutation testing for the code that decides what counts as a change. Mutant
+# alters one expression at a time and expects at least one spec to fail; a
+# mutation every spec still passes is a behavior nothing checks.
+#
+#   BUNDLE_GEMFILE=gemfiles/mutant.gemfile bundle exec mutant run
+#
+# Free `opensource` usage applies because this repository is public and MIT
+# licensed.
+usage: opensource
+includes:
+  - lib
+requires:
+  - paper_trail_diff
+integration:
+  name: rspec
+  # The association suite: it loads PT-AT and reaches every path these subjects
+  # are on, including activity timelines. Same files as `rake spec_associations`.
+  arguments:
+    - --exclude-pattern
+    - spec/unit/loading_spec.rb
+    - spec/unit
+    - spec/association
+environment_variables:
+  PAPER_TRAIL_DIFF_MUTANT: "1"
+  PAPER_TRAIL_DIFF_DATABASE_URL: sqlite3:tmp/mutant/base.sqlite3
+hooks:
+  - spec/support/mutant_hooks.rb
+matcher:
+  subjects:
+    - PaperTrailDiff::Engine*
+    - PaperTrailDiff::CollectionComparator*
+    - PaperTrailDiff::CollectionIdentityIndex*
+    - PaperTrailDiff::NestedComparator*

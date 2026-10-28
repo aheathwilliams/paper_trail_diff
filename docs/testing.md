@@ -36,6 +36,36 @@ history, with integer and string `versions.item_id`, YAML and JSON history, and
 a `has_paper_trail skip:` column. When one fails, its seed reproduces it. Add a
 variant here when a bug turns out to depend on a schema or configuration.
 
+## Mutation testing
+
+[Mutant](https://github.com/mbj/mutant) changes the comparison code one
+expression at a time and expects a spec to fail each time. A change that every
+spec still passes is behavior nothing checks. `mutant.yml` lists the classes it
+mutates: `Engine`, `CollectionComparator`, `CollectionIdentityIndex`, and
+`NestedComparator`, which decide what counts as a change. It runs the
+association suite, which reaches all of their paths.
+
+Mutant needs Ruby 3.3 or newer, so it has its own bundle:
+
+```console
+BUNDLE_GEMFILE=gemfiles/mutant.gemfile mise exec -- bundle install
+mise exec -- bundle exec rake mutant
+```
+
+Pass a subject to mutate one class, and `--since main` to mutate only what a
+branch changed:
+
+```console
+BUNDLE_GEMFILE=gemfiles/mutant.gemfile mise exec -- bundle exec mutant run 'PaperTrailDiff::Engine*'
+BUNDLE_GEMFILE=gemfiles/mutant.gemfile mise exec -- bundle exec mutant run --since main
+```
+
+When a mutation survives, either add the spec that would catch it, or, if the
+mutated code means the same thing, simplify the code to that form. Reserve a
+`mutant:disable` comment for a method whose mutations all mean the same thing,
+and say why next to it. Mutant forks a worker per CPU; `spec/support/mutant_hooks.rb`
+gives each worker its own copy of the SQLite fixture database.
+
 ## Test clock
 
 The specs build time windows from `Time.now` around versions they have just

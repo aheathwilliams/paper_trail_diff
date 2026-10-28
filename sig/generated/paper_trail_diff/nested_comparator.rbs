@@ -72,9 +72,10 @@ module PaperTrailDiff
     # : (untyped, untyped) -> nested_change
     def change_for: (untyped, untyped) -> nested_change
 
-    # Sorted so a report reads the same twice, and stringified because a hash
-    # loaded from JSON and one built in Ruby can key the same field differently.
-    # : (Hash[untyped, untyped], Hash[untyped, untyped]) -> Array[untyped]
-    def keys: (Hash[untyped, untyped], Hash[untyped, untyped]) -> Array[untyped]
+    # Sorted so a report reads the same twice. Both hashes are already keyed by
+    # strings, because a hash loaded from JSON and one built in Ruby can key the
+    # same field differently.
+    # : (Hash[String, untyped], Hash[String, untyped]) -> Array[String]
+    def keys: (Hash[String, untyped], Hash[String, untyped]) -> Array[String]
   end
 end

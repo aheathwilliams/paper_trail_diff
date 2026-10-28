@@ -50,6 +50,15 @@ task typecheck: :verify_signatures do
   abort('Steep failed or encountered an internal error.') unless SteepCheck.call
 end
 
+# Mutant needs Ruby 3.3+, above the gem's floor, so it runs from its own bundle
+# rather than joining the default gate. See mutant.yml for what it mutates.
+desc 'Run mutation testing on the comparison code (Ruby 3.3+)'
+task :mutant do
+  Bundler.with_original_env do
+    sh({ 'BUNDLE_GEMFILE' => 'gemfiles/mutant.gemfile' }, 'bundle', 'exec', 'mutant', 'run')
+  end
+end
+
 # The gemfiles under gemfiles/ are generated from this Gemfile, and CI runs
 # every job against them rather than against the Gemfile itself. So a change
 # made only to the Gemfile is a change CI never executes: the jobs pass, but

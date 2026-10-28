@@ -125,6 +125,10 @@ project follows [Semantic Versioning](https://semver.org/).
 - RuboCop runs with the rubocop-performance and rubocop-rspec plugins.
 - Consistency specs check that every method agrees on seeded, generated
   histories across schema and serializer variants.
+- Mutation testing with mutant covers the comparison code, in CI and through
+  `rake mutant`. New specs close the gaps it found: attributes present on only
+  one side, a record removed, singular relationships added or removed, and
+  JSON values held in Hash, Array, or String subclasses.
 
 ## [0.12.0] - 2026-08-19
 
