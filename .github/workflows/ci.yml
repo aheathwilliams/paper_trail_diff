@@ -97,6 +97,11 @@ jobs:
             port: 3306
             url: mysql2://paper_trail_diff:test@127.0.0.1:3306/paper_trail_diff_test
             health: mysqladmin ping -h 127.0.0.1 -ptest
+          - database: SQL Server 2019
+            image: mcr.microsoft.com/mssql/server:2019-latest
+            port: 1433
+            url: sqlserver://sa:PaperTrail_Test2026@127.0.0.1:1433/paper_trail_diff_test
+            health: /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P PaperTrail_Test2026 -C -Q 'SELECT 1' -b
           - database: SQL Server 2022
             image: mcr.microsoft.com/mssql/server:2022-latest
             port: 1433
@@ -144,7 +149,7 @@ jobs:
           bundler-cache: true
 
       - name: Create SQL Server test database
-        if: matrix.database == 'SQL Server 2022'
+        if: startsWith(matrix.database, 'SQL Server')
         run: >-
           docker exec ${{ job.services.database.id }}
           /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P PaperTrail_Test2026
