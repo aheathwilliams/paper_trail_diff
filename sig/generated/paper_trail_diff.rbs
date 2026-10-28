@@ -32,17 +32,13 @@ module PaperTrailDiff
   # : (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?) -> Analysis
   def self.analyze: (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?) -> Analysis
 
-  # Analyzes many roots over one shared time window, preparing their selected
-  # history once for the batch instead of once per record. Roots with nothing
-  # to report in the window return an empty `Analysis`.
-  #
-  # Pass `records` to analyze a list you assembled, which returns a Hash keyed
-  # by identity. Pass `scope:` with a `limit:` to have the roots selected for
-  # you from a relation, which returns a `ScopedAnalysis` -- the same Hash,
-  # plus the roots the relation could not reach. See `analyze_scope` for why
-  # that second collection exists.
-  # : (?Array[untyped]?, ?scope: untyped, ?limit: Integer?, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?historical_filter: untyped, ?max_filter_versions: Integer, ?include_deleted: bool, ?allow_expensive: bool) -> (Hash[identity, Analysis] | ScopedAnalysis)
-  def self.analyze_many: (?Array[untyped]?, ?scope: untyped, ?limit: Integer?, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?historical_filter: untyped, ?max_filter_versions: Integer, ?include_deleted: bool, ?allow_expensive: bool) -> (Hash[identity, Analysis] | ScopedAnalysis)
+  # Analyzes an array of records over one shared range, preparing their
+  # selected history once for the batch instead of once per record, and
+  # returns a frozen Hash keyed by identity. Roots with nothing to report in
+  # the window return an empty `Analysis`. To let a relation choose the
+  # records, use `analyze_scope`.
+  # : (Array[untyped], ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?allow_expensive: bool) -> Hash[identity, Analysis]
+  def self.analyze_many: (Array[untyped], ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?allow_expensive: bool) -> Hash[identity, Analysis]
 
   # Analyzes every root the relation reaches whose history moved inside the
   # window. Joined duplicates are read in bounded pages and analyzed once.
@@ -76,9 +72,6 @@ module PaperTrailDiff
   # deliberately named for a report through now rather than an as-of query.
   # : (untyped, since: untyped, limit: Integer, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?snapshots: bool, ?group: Symbol?, ?include_deleted: bool, ?historical_filter: untyped, ?max_filter_versions: Integer, ?allow_expensive: bool) -> ScopedAnalysis
   def self.report: (untyped, since: untyped, limit: Integer, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?snapshots: bool, ?group: Symbol?, ?include_deleted: bool, ?historical_filter: untyped, ?max_filter_versions: Integer, ?allow_expensive: bool) -> ScopedAnalysis
-
-  # : (Array[untyped]?, untyped, bool) -> Array[untyped]
-  def self.validate_record_batch!: (Array[untyped]?, untyped, bool) -> Array[untyped]
 
   # Returns the association macros this release can normalize.
   # : () -> Array[Symbol]

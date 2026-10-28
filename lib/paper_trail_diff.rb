@@ -252,20 +252,14 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
       )
     end
 
-    # Analyzes many roots over one shared time window, preparing their selected
-    # history once for the batch instead of once per record. Roots with nothing
-    # to report in the window return an empty `Analysis`.
-    #
-    # Pass `records` to analyze a list you assembled, which returns a Hash keyed
-    # by identity. Pass `scope:` with a `limit:` to have the roots selected for
-    # you from a relation, which returns a `ScopedAnalysis` -- the same Hash,
-    # plus the roots the relation could not reach. See `analyze_scope` for why
-    # that second collection exists.
-    #: (?Array[untyped]?, ?scope: untyped, ?limit: Integer?, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?historical_filter: untyped, ?max_filter_versions: Integer, ?include_deleted: bool, ?allow_expensive: bool) -> (Hash[identity, Analysis] | ScopedAnalysis)
+    # Analyzes an array of records over one shared range, preparing their
+    # selected history once for the batch instead of once per record, and
+    # returns a frozen Hash keyed by identity. Roots with nothing to report in
+    # the window return an empty `Analysis`. To let a relation choose the
+    # records, use `analyze_scope`.
+    #: (Array[untyped], ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?allow_expensive: bool) -> Hash[identity, Analysis]
     def analyze_many( # rubocop:disable Metrics/ParameterLists
-      records = nil,
-      scope: nil,
-      limit: nil,
+      records,
       within: nil,
       associations: [],
       ignore: DEFAULT_IGNORED_ATTRIBUTES,
@@ -274,28 +268,12 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
       close_on: nil,
       snapshots: false,
       group: nil,
-      historical_filter: nil,
-      max_filter_versions: HistoricalFilter::DEFAULT_VERSION_LIMIT,
-      include_deleted: false,
       allow_expensive: false
     )
-      adapter = PaperTrailAdapter.new(associations: associations, ignore: ignore,
-                                      allow_expensive: allow_expensive)
-      if scope
-        raise ConfigurationError, 'pass either records or scope:, not both' unless records.nil?
-
-        return adapter.analyze_scope(scope, limit: limit, within: within, activity: activity,
-                                            version_scope: version_scope, close_on: close_on,
-                                            snapshots: snapshots, group: group,
-                                            historical_filter: historical_filter,
-                                            max_filter_versions: max_filter_versions,
-                                            include_deleted: include_deleted)
-      end
-      records = validate_record_batch!(records, historical_filter, include_deleted)
-
-      adapter.analyze_many(records, within: within, activity: activity,
-                                    version_scope: version_scope, close_on: close_on,
-                                    snapshots: snapshots, group: group)
+      PaperTrailAdapter.new(
+        associations: associations, ignore: ignore, allow_expensive: allow_expensive
+      ).analyze_many(records, within: within, activity: activity, version_scope: version_scope,
+                              close_on: close_on, snapshots: snapshots, group: group)
     end
 
     # Analyzes every root the relation reaches whose history moved inside the
@@ -366,16 +344,6 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
         max_filter_versions: max_filter_versions, allow_expensive: allow_expensive
       )
     end
-
-    #: (Array[untyped]?, untyped, bool) -> Array[untyped]
-    def validate_record_batch!(records, historical_filter, include_deleted)
-      raise ConfigurationError, 'pass records or scope:' if records.nil?
-      raise ConfigurationError, 'historical_filter: requires scope:' unless historical_filter.nil?
-      raise ConfigurationError, 'include_deleted: requires scope:' if include_deleted
-
-      records
-    end
-    private :validate_record_batch!
 
     # Returns the association macros this release can normalize.
     #: () -> Array[Symbol]

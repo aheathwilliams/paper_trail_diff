@@ -577,7 +577,7 @@ RSpec.describe PaperTrailDiff do
       expect(steps.last.diff.attributes.fetch('title').to_h)
         .to eq(from: 'Draft 0', to: 'Published 0')
       expect(steps.last.to_version).to be_nil
-      expect(steps.last.to_h.fetch(:to_boundary).fetch(:kind)).to eq(:current)
+      expect(steps.last.to_h.fetch(:to)).to include(kind: :current, version_id: nil)
     end
 
     it 'reports state the live record holds but no version recorded' do
@@ -921,19 +921,13 @@ RSpec.describe PaperTrailDiff do
       expect(unreachable).to eq([])
     end
 
-    it 'is reachable through analyze_many, which rejects being given both forms' do
-      kept, _skipped, doomed, window = scoped_history
+    it 'takes a relation only through analyze_scope; analyze_many takes an array' do
+      kept, = scoped_history
 
-      analyses, unreachable = described_class.analyze_many(
-        scope: kept_scope, within: window, limit: 100, close_on: :current
-      )
-
-      expect(analyses.keys).to eq([PaperTrailDiff::Endpoint.identity(kept)])
-      expect(unreachable).to eq([['CoreArticle', doomed.id.to_s]])
       expect { described_class.analyze_many([kept], scope: kept_scope, limit: 1) }
-        .to raise_error(PaperTrailDiff::ConfigurationError, /not both/)
-      expect { described_class.analyze_many(within: window) }
-        .to raise_error(PaperTrailDiff::ConfigurationError, /pass records or scope/)
+        .to raise_error(ArgumentError, /unknown keywords?: :scope/)
+      expect { described_class.analyze_many(kept_scope) }
+        .to raise_error(PaperTrailDiff::ConfigurationError, /must be an array/)
     end
 
     describe 'historical_filter:' do
@@ -1061,11 +1055,11 @@ RSpec.describe PaperTrailDiff do
         end.to raise_error(PaperTrailDiff::BatchLimitExceededError)
       end
 
-      it 'preserves activity options through the scoped analyze_many alias' do
+      it 'preserves activity options alongside the filter' do
         left, joined, _doomed, window = moving_population
-        result = described_class.analyze_many(
-          scope: CoreArticle, within: window, limit: 100, close_on: :current,
-          historical_filter: was_review, activity: true, snapshots: true, group: :transaction
+        result = described_class.analyze_scope(
+          CoreArticle, within: window, limit: 100, historical_filter: was_review,
+                       activity: true, snapshots: true, group: :transaction
         )
 
         expect(result.roots.map(&:id)).to eq([left.id, joined.id])
@@ -1078,7 +1072,7 @@ RSpec.describe PaperTrailDiff do
         left, _joined, _doomed, window = moving_population
         expect do
           described_class.analyze_many([left], within: window, historical_filter: was_review)
-        end.to raise_error(PaperTrailDiff::ConfigurationError, /requires scope/)
+        end.to raise_error(ArgumentError, /historical_filter/)
       end
 
       it 'matches a value held only at an intermediate boundary' do
@@ -1169,10 +1163,8 @@ RSpec.describe PaperTrailDiff do
           { from: 'Published', to: 'Draft' }
         ]
       )
-      expect(steps.first.to_h).to include(
-        from_version_id: draft.id,
-        to_version_id: published.id
-      )
+      expect(steps.first.to_h.fetch(:from)).to include(kind: :version, version_id: draft.id)
+      expect(steps.first.to_h.fetch(:to)).to include(kind: :version, version_id: published.id)
       expect(steps.first.from_boundary.record.to_h).to eq(
         type: 'CoreArticle', id: article.id.to_s
       )

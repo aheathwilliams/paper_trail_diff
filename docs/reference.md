@@ -294,8 +294,10 @@ steps.reject(&:empty?)      # hide steps with no reported changes
   one step. Use `activity_timeline` to split them.
 - `source_boundary` (also available as `from_boundary`) describes the version
   responsible for the step, including `whodunnit`, `event`, and `recorded_at`.
-- `step.to_h` returns `{ from_version_id:, to_version_id:, to_boundary:, diff: }`.
-  `to_h(metadata: true)` adds author, event, transaction ID, and record.
+- `step.to_h` returns `{ from:, to:, diff: }`, the same shape as an activity
+  step. `from` and `to` are boundary hashes with `kind`, `version_id`,
+  `item_type`, `item_id`, and `recorded_at`. `to_h(metadata: true)` adds author,
+  event, transaction ID, and record to each boundary.
 - Options: `from:`, `to:`, `within:`, `associations:`, `ignore:`,
   `version_scope:`, `close_on:`.
 
@@ -499,8 +501,7 @@ analyses, unreachable = report # destructures into the first two
 
 It takes the same options as `analyze_many`, plus `limit:`, `historical_filter:`,
 `max_filter_versions:`, and `include_deleted:`. `within:` can be omitted to use
-all history. `analyze_many(scope: ..., limit: ...)` is an older spelling of the
-same call.
+all history.
 
 ### report
 
@@ -586,7 +587,8 @@ model instance and may run queries of its own.
   checked. It does not limit queries inside a callable.
 - `version_scope:` narrows which changes are reported, not which states are
   tested here.
-- It requires a relation; `analyze_many` with an array rejects it.
+- It is accepted by `analyze_scope` and `report`, which select records from a
+  relation.
 
 ### Costly associations
 

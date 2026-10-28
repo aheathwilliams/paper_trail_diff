@@ -18,6 +18,13 @@ project follows [Semantic Versioning](https://semver.org/).
   `has_many :through` associations whose source is not a `belongs_to`, because
   they need queries per record. The error names the association. Pass
   `allow_expensive: true` to accept that cost.
+- `Step#to_h` returns `{ from:, to:, diff: }`, the same shape as
+  `ActivityStep#to_h`, with boundary hashes on both sides. Read the version ids
+  from `from[:version_id]` and `to[:version_id]` instead of `from_version_id`
+  and `to_version_id`; `metadata: true` adds details to both boundaries.
+- `analyze_many` takes only an array of records. Use `analyze_scope` with a
+  model or relation; `analyze_many(scope:, limit:)` and the scoped options it
+  accepted have been removed.
 
 ### Added
 
