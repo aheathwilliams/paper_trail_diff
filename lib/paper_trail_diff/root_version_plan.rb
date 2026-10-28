@@ -72,7 +72,7 @@ module PaperTrailDiff
       @steps = steps.freeze
       @context_version = context_version
       @mutations = (mutations || default_mutations).freeze
-      @mutation_keys = Set.new(@mutations.map { |version| key(version) }).freeze
+      @mutation_keys = key_set(@mutations)
       freeze
     end
 
@@ -114,6 +114,15 @@ module PaperTrailDiff
       @versions.reject { |version| key(version) == context }
     end
 
+    # A Set only makes the lookup in `mutation?` fast; an Array would answer the
+    # same, which is why mutant leaves this alone.
+    # mutant:disable
+    #: (Array[untyped]) -> Set[Array[untyped]]
+    def key_set(versions)
+      Set.new(versions.map { |version| key(version) })
+    end
+
+    # By class name, so a version still matches after its class is reloaded.
     #: (untyped) -> Array[untyped]
     def key(version)
       [version.class.name, version.id]

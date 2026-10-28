@@ -1,6 +1,7 @@
-# Mutation testing for the code that decides what counts as a change. Mutant
-# alters one expression at a time and expects at least one spec to fail; a
-# mutation every spec still passes is a behavior nothing checks.
+# Mutation testing for the code that decides what counts as a change and which
+# history is read. Mutant alters one expression at a time and expects at least
+# one spec to fail; a mutation every spec still passes is a behavior nothing
+# checks.
 #
 #   BUNDLE_GEMFILE=gemfiles/mutant.gemfile bundle exec mutant run
 #
@@ -36,3 +37,8 @@ matcher:
     - PaperTrailDiff::CollectionComparator*
     - PaperTrailDiff::CollectionIdentityIndex*
     - PaperTrailDiff::NestedComparator*
+    - PaperTrailDiff::SnapshotNormalizer*
+    - PaperTrailDiff::SnapshotPool*
+    - PaperTrailDiff::TimelineRange*
+    - PaperTrailDiff::RootVersionPlan*
+    - PaperTrailDiff::HistoricalFilter*

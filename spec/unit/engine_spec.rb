@@ -14,6 +14,11 @@ RSpec.describe PaperTrailDiff::Engine do
     PaperTrailDiff::AssociationSnapshot.new(kind: kind, records: records)
   end
 
+  it 'requires a record type given as a String' do
+    expect { snapshot(type: :Author, id: 1, attributes: {}) }
+      .to raise_error(ArgumentError, 'record type must be a String, not :Author')
+  end
+
   it 'validates association snapshot kinds and singular cardinality' do
     record = snapshot(type: 'Author', id: 1, attributes: {})
 

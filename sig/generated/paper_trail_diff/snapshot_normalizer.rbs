@@ -19,6 +19,9 @@ module PaperTrailDiff
 
     # : (RecordSnapshot, RecordSnapshot) -> bool
     def equivalent_record?: (RecordSnapshot, RecordSnapshot) -> bool
+
+    # : (AssociationSnapshot, AssociationSnapshot) -> bool
+    def same_association?: (AssociationSnapshot, AssociationSnapshot) -> bool
   end
 
   # Converts an ActiveRecord graph into immutable, persistence-independent snapshots.
@@ -43,10 +46,15 @@ module PaperTrailDiff
 
     private
 
+    # The id a live record of the same row reports: one value, or one per
+    # column of a composite key.
+    # : (untyped, PreparedRecordState) -> untyped
+    def state_id: (untyped, PreparedRecordState) -> untyped
+
     # : (String, RecordSnapshot) -> RecordSnapshot
     def pool_state: (String, RecordSnapshot) -> RecordSnapshot
 
-    @excluded_attributes: Hash[Array[untyped], Array[String]]
+    @excluded_attributes: Hash[Array[untyped], Array[String?]]
 
     @ignore_policy: IgnorePolicy
 
@@ -58,8 +66,8 @@ module PaperTrailDiff
 
     @tree: AssociationTree
 
-    # : (untyped, AssociationTree, String, untyped, Array[untyped]) -> RecordSnapshot?
-    def normalize_record: (untyped, AssociationTree, String, untyped, Array[untyped]) -> RecordSnapshot?
+    # : (untyped, AssociationTree, String, untyped, Array[untyped]) -> RecordSnapshot
+    def normalize_record: (untyped, AssociationTree, String, untyped, Array[untyped]) -> RecordSnapshot
 
     # : (untyped, Array[untyped], String) -> snapshot_attributes
     def normalized_attributes: (untyped, Array[untyped], String) -> snapshot_attributes
@@ -67,11 +75,11 @@ module PaperTrailDiff
     # Every input is fixed for one model class at one selected path, and the
     # path's structural columns are recorded before its records normalize, so
     # this is resolved once instead of per record per boundary.
-    # : (untyped, Array[untyped], String) -> Array[String]
-    def excluded_attributes: (untyped, Array[untyped], String) -> Array[String]
+    # : (untyped, Array[untyped], String) -> Array[String?]
+    def excluded_attributes: (untyped, Array[untyped], String) -> Array[String?]
 
-    # : (untyped, Array[untyped], String) -> Array[String]
-    def build_excluded_attributes: (untyped, Array[untyped], String) -> Array[String]
+    # : (untyped, Array[untyped], String) -> Array[String?]
+    def build_excluded_attributes: (untyped, Array[untyped], String) -> Array[String?]
 
     # `has_paper_trail skip:` columns are never written to a version, so history
     # holds only their defaults. Compared with a live row they would report a
@@ -79,8 +87,10 @@ module PaperTrailDiff
     # : (untyped) -> Array[String]
     def skipped_columns: (untyped) -> Array[String]
 
-    # : (Array[untyped]) -> Array[String]
-    def relationship_columns: (Array[untyped]) -> Array[String]
+    # A non-polymorphic reflection has no foreign type, so it adds nil, which
+    # excludes nothing.
+    # : (Array[untyped]) -> Array[String?]
+    def relationship_columns: (Array[untyped]) -> Array[String?]
 
     # : (untyped, AssociationTree, String, untyped, Array[untyped]) -> Hash[String, AssociationSnapshot]
     def normalize_associations: (untyped, AssociationTree, String, untyped, Array[untyped]) -> Hash[String, AssociationSnapshot]

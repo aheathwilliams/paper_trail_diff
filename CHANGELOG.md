@@ -11,6 +11,13 @@ project follows [Semantic Versioning](https://semver.org/).
   identities reports the before record as removed and the after record as
   added. It used to report nothing. No current caller builds one, but
   `AssociationSnapshot#transition_to` accepts it.
+- A record with a composite primary key, read from prepared history, gets the
+  same id as when it is read live: the key's values. It was `nil`.
+
+### Changed
+
+- `RecordSnapshot.new` requires `type:` to be a String and raises
+  `ArgumentError` otherwise. It used to convert any value with `to_s`.
 
 ### Development
 
@@ -19,6 +26,10 @@ project follows [Semantic Versioning](https://semver.org/).
   reported as caught. With the longer limit, 123 surfaced in
   `CollectionComparator` and `CollectionIdentityIndex`; each class now has a
   unit spec, and all of them are caught.
+- Mutation testing also covers `SnapshotNormalizer`, `SnapshotPool`,
+  `TimelineRange`, `RootVersionPlan`, and `HistoricalFilter`, each with a unit
+  spec of its own; all 4,040 mutations across the nine classes are caught.
+  Versions are ordered by time and then id through one shared helper.
 - The full mutation run moves to a nightly workflow that runs only when `main`
   has an untested commit, so a later push no longer cancels it. Pull requests
   still mutate the methods they change.

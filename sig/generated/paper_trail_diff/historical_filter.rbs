@@ -44,8 +44,8 @@ module PaperTrailDiff
     # : (Array[String]) -> Hash[String, Array[untyped]]
     def candidate_versions: (Array[String]) -> Hash[String, Array[untyped]]
 
-    # : (Array[untyped], untyped) -> bool
-    def held?: (Array[untyped], untyped) -> bool
+    # : (Array[untyped], untyped) -> boolish
+    def held?: (Array[untyped], untyped) -> boolish
 
     # What each candidate held after its last change in the window.
     # : (Array[String], Hash[String, Array[untyped]]) -> Hash[String, untyped]
@@ -57,14 +57,14 @@ module PaperTrailDiff
     # : (Array[String]) -> Hash[String, untyped]
     def live_records: (Array[String]) -> Hash[String, untyped]
 
-    # : (untyped) -> bool
-    def record_matches?: (untyped) -> bool
+    # : (untyped) -> boolish
+    def record_matches?: (untyped) -> boolish
 
     # : (Integer) -> void
     def account_versions!: (Integer) -> void
 
-    # : (untyped) -> bool
-    def matches?: (untyped) -> bool
+    # : (untyped) -> boolish
+    def matches?: (untyped) -> boolish
 
     # : (untyped) -> bool
     def attributes_match?: (untyped) -> bool
