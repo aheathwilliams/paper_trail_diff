@@ -4,9 +4,9 @@
 module PaperTrailDiff
   # Analyzes missing roots together without pretending that they have live rows.
   class DeletedAnalysisBatch
-    #: (untyped, identities: Array[Array[String]], time_range: TimeRange?, analyzer: untyped, history_preparer: untyped, ?version_scope: untyped) -> void
+    #: (untyped, identities: Array[Array[String]], time_range: TimeRange?, analyzer: untyped, history_preparer: untyped, version_scope: untyped) -> void
     def initialize( # rubocop:disable Metrics/ParameterLists
-      model, identities:, time_range:, analyzer:, history_preparer:, version_scope: nil
+      model, identities:, time_range:, analyzer:, history_preparer:, version_scope:
     )
       @model = model
       @identities = identities
@@ -18,12 +18,10 @@ module PaperTrailDiff
 
     #: () -> Hash[Array[String], Analysis?]
     def call
-      empty = {} #: Hash[Array[String], Analysis?]
-      return empty.freeze if @identities.empty?
-
       records = historical_roots
       selected = BatchedRootVersions.new(
-        records, time_range: @time_range, version_scope: @version_scope
+        records, time_range: @time_range, version_scope: @version_scope,
+                 live_endpoints: nil, context_required: false
       ).call
       prepare(records, selected)
       analyses = records.to_h do |record|
@@ -67,10 +65,8 @@ module PaperTrailDiff
       destroys = @model.paper_trail.version_class.where(
         item_type: @model.base_class.name, item_id: @identities.map(&:last), event: 'destroy'
       )
-      versions = VersionQuery.chronological(destroys)
-      versions.group_by { |version| version.item_id.to_s }.values.map do |history|
-        Support.chronological_sort(history).last
-      end
+      # Oldest first, so each item keeps its latest destroy.
+      VersionQuery.chronological(destroys).index_by(&:item_id).values
     end
 
     #: (Array[untyped]) -> Hash[Symbol, untyped]

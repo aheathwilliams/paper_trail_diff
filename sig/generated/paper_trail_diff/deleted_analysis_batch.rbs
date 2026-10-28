@@ -3,8 +3,8 @@
 module PaperTrailDiff
   # Analyzes missing roots together without pretending that they have live rows.
   class DeletedAnalysisBatch
-    # : (untyped, identities: Array[Array[String]], time_range: TimeRange?, analyzer: untyped, history_preparer: untyped, ?version_scope: untyped) -> void
-    def initialize: (untyped, identities: Array[Array[String]], time_range: TimeRange?, analyzer: untyped, history_preparer: untyped, ?version_scope: untyped) -> void
+    # : (untyped, identities: Array[Array[String]], time_range: TimeRange?, analyzer: untyped, history_preparer: untyped, version_scope: untyped) -> void
+    def initialize: (untyped, identities: Array[Array[String]], time_range: TimeRange?, analyzer: untyped, history_preparer: untyped, version_scope: untyped) -> void
 
     # : () -> Hash[Array[String], Analysis?]
     def call: () -> Hash[Array[String], Analysis?]

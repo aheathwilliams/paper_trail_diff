@@ -4,8 +4,8 @@
 module PaperTrailDiff
   # Selects an inclusive, chronological range from a record's root versions.
   class VersionRange
-    #: (untyped, from: untyped, to: untyped, ?version_scope: untyped) -> void
-    def initialize(record, from:, to:, version_scope: nil)
+    #: (untyped, from: untyped, to: untyped, version_scope: untyped) -> void
+    def initialize(record, from:, to:, version_scope:)
       @record = record
       @from = from
       @to = to
@@ -51,11 +51,9 @@ module PaperTrailDiff
 
     #: (untyped, ?through: untyped, ?live_endpoint: untyped) -> RootVersionPlan
     def select_plan(relation, through: nil, live_endpoint: nil)
-      in_range = ordered(relation.to_a.select do |version|
-        next false if Support.compare_versions(@from, version).positive?
-        next true unless through
-
-        Support.compare_versions(version, through) <= 0
+      in_range = ordered(relation.select do |version|
+        Support.compare_versions(@from, version) <= 0 &&
+          (!through || Support.compare_versions(version, through) <= 0)
       end)
       RootVersionSelection.new(
         in_range: in_range,
@@ -73,21 +71,16 @@ module PaperTrailDiff
 
     #: (untyped, untyped, boundary: Symbol) -> void
     def validate_boundary!(requested, relation, boundary:)
-      Endpoint.validate!(requested)
       return if valid_boundary?(requested, relation)
 
       raise InvalidTimelineRangeError, "`#{boundary}` version is not in the record history"
-    rescue InvalidEndpointError, NoMethodError
-      raise InvalidTimelineRangeError, "`#{boundary}` version is not in the record history"
     end
 
+    # The relation holds only this record's versions, so finding the id there
+    # also settles which record the version belongs to.
     #: (untyped, untyped) -> bool
     def valid_boundary?(requested, relation)
-      expected_identity = [@record.class.base_class.name.to_s, @record.id.to_s]
-      Endpoint.version?(requested) &&
-        requested.instance_of?(relation.klass) &&
-        Endpoint.identity(requested) == expected_identity &&
-        relation.where(id: requested.id).exists?
+      requested.instance_of?(relation.klass) && relation.exists?(requested.id)
     end
   end
 end

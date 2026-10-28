@@ -40,8 +40,7 @@ module PaperTrailDiff
 
     #: (untyped) -> untyped
     def trailing_scope(relation)
-      column = relation.klass.arel_table[:created_at]
-      relation.where(after_end(column))
+      relation.where(after_end(relation.arel_table[:created_at]))
     end
 
     # Each item's earliest version after the range, keyed by item id. One row
@@ -49,11 +48,11 @@ module PaperTrailDiff
     # the query stays portable; a timestamp tie keeps the lower id.
     #: (untyped) -> Hash[String, untyped]
     def first_trailing_versions(relation)
-      table = relation.klass.arel_table
+      table = relation.arel_table
       first_after = VersionQuery.no_earlier_version(table) do |earlier|
         after_end(earlier[:created_at])
       end
-      versions = VersionQuery.chronological(trailing_scope(relation).where(first_after)).to_a
+      versions = VersionQuery.chronological(trailing_scope(relation).where(first_after))
       first = {} #: Hash[String, untyped]
       versions.each { |version| first[version.item_id.to_s] ||= version }
       first
@@ -75,17 +74,15 @@ module PaperTrailDiff
 
     #: (untyped, boundary: Symbol) -> Time
     def coerce_time(value, boundary:)
-      unless value.respond_to?(:to_time)
-        raise InvalidTimeRangeError, "`within` #{boundary} must be time-like"
-      end
-
       time_value(value).getutc.freeze
-    rescue ArgumentError, NoMethodError, TypeError => e
-      raise InvalidTimeRangeError,
-            "`within` #{boundary} must be time-like",
-            cause: e
+    rescue ArgumentError, NoMethodError, TypeError
+      raise InvalidTimeRangeError, "`within` #{boundary} must be time-like"
     end
 
+    # Active Support 8.0 and older warn, once per process, that `to_time` will
+    # change on a zoned time, so read zoned values without it. Every branch
+    # gives the same instant, so no spec (and no mutation) can tell them apart.
+    # mutant:disable
     #: (untyped) -> Time
     def time_value(value)
       return value if value.is_a?(Time)

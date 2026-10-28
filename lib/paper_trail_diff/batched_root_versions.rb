@@ -6,9 +6,8 @@ module PaperTrailDiff
   # queries. Only the range forms that mean the same thing for every root are
   # supported: a shared wall-clock window, or each root's own whole history.
   class BatchedRootVersions
-    #: (Array[untyped], time_range: TimeRange?, ?version_scope: untyped, ?live_endpoints: Hash[Array[String], untyped]?, ?context_required: bool) -> void
-    def initialize(records, time_range:, version_scope: nil, live_endpoints: nil,
-                   context_required: false)
+    #: (Array[untyped], time_range: TimeRange?, version_scope: untyped, live_endpoints: Hash[Array[String], untyped]?, context_required: bool) -> void
+    def initialize(records, time_range:, version_scope:, live_endpoints:, context_required:)
       @records = records
       # An activity view needs a root to reconstruct from even in a window with
       # no root version, exactly as a single-record activity timeline does.
@@ -21,8 +20,6 @@ module PaperTrailDiff
     # Returns a plan per record identity.
     #: () -> Hash[Array[String], RootVersionPlan]
     def call
-      return {} if @records.empty?
-
       selected = {} #: Hash[Array[String], RootVersionPlan]
       @records.group_by(&:class).each do |model_class, records|
         select_model(model_class, records, selected)
@@ -40,10 +37,9 @@ module PaperTrailDiff
 
     #: (untyped, Array[untyped], Hash[Array[String], RootVersionPlan]) -> void
     def select_model(model_class, records, selected)
-      ids = records.map(&:id)
-      in_range, chosen, trailing = model_versions(model_class, ids)
+      in_range, chosen, trailing = model_versions(model_class, records)
       records.each do |record|
-        key = identity(model_class, record.id)
+        key = Endpoint.identity(record)
         selected[key] = versions_for(
           in_range.fetch(record.id.to_s, []), chosen, trailing[record.id.to_s],
           live_endpoint(key, record)
@@ -52,13 +48,13 @@ module PaperTrailDiff
     end
 
     #: (untyped, Array[untyped]) -> [Hash[String, Array[untyped]], Set[untyped]?, Hash[String, untyped]]
-    def model_versions(model_class, ids)
+    def model_versions(model_class, records)
       range = @time_range
       empty = {} #: Hash[String, untyped]
       [
-        grouped_versions(model_class, ids, range),
-        chosen_version_ids(model_class, ids, range),
-        range ? trailing_versions(model_class, ids, range) : empty
+        grouped_versions(model_class, records, range),
+        chosen_version_ids(model_class, records, range),
+        range ? trailing_versions(model_class, records, range) : empty
       ]
     end
 
@@ -89,48 +85,34 @@ module PaperTrailDiff
     # One extra query names the selected mutations without discarding the
     # unfiltered versions the successor lookup still needs.
     #: (untyped, Array[untyped], TimeRange?) -> Set[untyped]?
-    def chosen_version_ids(model_class, ids, range)
-      scope = @version_scope
-      return unless scope
-
-      # A narrowed relation is the expected return. Active Support also gives
-      # `pluck` to plain enumerables, so an array of versions works too.
-      filtered = scope.call(range_scope(model_class, ids, range))
-      Set.new(filtered.pluck(:id))
+    def chosen_version_ids(model_class, records, range)
+      VersionScopeFilter.new(@version_scope).chosen_ids(range_scope(model_class, records, range))
     end
 
     #: (untyped, Array[untyped], TimeRange?) -> Hash[String, Array[untyped]]
-    def grouped_versions(model_class, ids, range)
-      ordered(range_scope(model_class, ids, range)).group_by { |version| version.item_id.to_s }
+    def grouped_versions(model_class, records, range)
+      VersionQuery.chronological(range_scope(model_class, records, range))
+                  .group_by { |version| version.item_id.to_s }
     end
 
     #: (untyped, Array[untyped], TimeRange?) -> untyped
-    def range_scope(model_class, ids, range)
-      scope = base_scope(model_class, ids)
+    def range_scope(model_class, records, range)
+      scope = base_scope(model_class, records)
       range ? range.scope(scope) : scope
     end
 
     #: (untyped, Array[untyped], TimeRange) -> Hash[String, untyped]
-    def trailing_versions(model_class, ids, range)
-      range.first_trailing_versions(base_scope(model_class, ids))
+    def trailing_versions(model_class, records, range)
+      range.first_trailing_versions(base_scope(model_class, records))
     end
 
     #: (untyped, Array[untyped]) -> untyped
-    def base_scope(model_class, ids)
+    def base_scope(model_class, records)
+      # Active Record reads each record's id.
       model_class.paper_trail.version_class.where(
-        item_type: model_class.base_class.name.to_s,
-        item_id: ids
+        item_type: model_class.base_class.name,
+        item_id: records
       )
-    end
-
-    #: (untyped) -> Array[untyped]
-    def ordered(relation)
-      VersionQuery.chronological(relation).to_a
-    end
-
-    #: (untyped, untyped) -> Array[String]
-    def identity(model_class, id)
-      [model_class.base_class.name.to_s, id.to_s]
     end
   end
 end

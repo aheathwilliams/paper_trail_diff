@@ -14,13 +14,21 @@ module PaperTrailDiff
 
     #: (untyped, Array[untyped]) -> Array[untyped]
     def call(relation, in_range)
+      chosen = chosen_ids(relation)
+      return in_range unless chosen
+
+      in_range.select { |version| chosen.include?(version.id) }
+    end
+
+    # The ids of the versions the scope keeps, or nil when there is no scope.
+    #: (untyped) -> Set[untyped]?
+    def chosen_ids(relation)
       scope = @scope
-      return in_range unless scope
+      return unless scope
 
       # A narrowed relation is the expected return. Active Support also gives
       # `pluck` to plain enumerables, so an array of versions works too.
-      chosen = Set.new(scope.call(relation).pluck(:id))
-      in_range.select { |version| chosen.include?(version.id) }
+      Set.new(scope.call(relation).pluck(:id))
     end
 
     private

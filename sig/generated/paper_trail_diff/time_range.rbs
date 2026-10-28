@@ -41,6 +41,10 @@ module PaperTrailDiff
     # : (untyped, boundary: Symbol) -> Time
     def coerce_time: (untyped, boundary: Symbol) -> Time
 
+    # Active Support 8.0 and older warn, once per process, that `to_time` will
+    # change on a zoned time, so read zoned values without it. Every branch
+    # gives the same instant, so no spec (and no mutation) can tell them apart.
+    # mutant:disable
     # : (untyped) -> Time
     def time_value: (untyped) -> Time
 
