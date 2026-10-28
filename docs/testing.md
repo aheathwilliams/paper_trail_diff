@@ -24,6 +24,18 @@ on PostgreSQL 17, MySQL 8.4, and SQL Server 2022 with Ruby 4.0 and PaperTrail 17
 The SQL jobs exercise the same regressions, including joined-column ordering,
 duplicate roots, pagination, and historical association reconstruction.
 
+## Consistency checks
+
+`spec/association/consistency_spec.rb` and `spec/integration/consistency_spec.rb`
+build seeded, generated histories: root edits, checkpoints, and child creates,
+edits, and deletes. For each one they check that every route to the same answer
+agrees: `analyze`, `analyze_many`, and `analyze_scope`; checkpoint and activity
+modes; `compare` and `timeline` against `analyze`; and that activity steps
+chain into the final state. They run over random windows as well as the whole
+history, with integer and string `versions.item_id`, YAML and JSON history, and
+a `has_paper_trail skip:` column. When one fails, its seed reproduces it. Add a
+variant here when a bug turns out to depend on a schema or configuration.
+
 ## Test clock
 
 The specs build time windows from `Time.now` around versions they have just

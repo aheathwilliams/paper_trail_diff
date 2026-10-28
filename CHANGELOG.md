@@ -123,6 +123,8 @@ project follows [Semantic Versioning](https://semver.org/).
 - The type-check gate fails on Steep internal errors and checks public API call
   examples.
 - RuboCop runs with the rubocop-performance and rubocop-rspec plugins.
+- Consistency specs check that every method agrees on seeded, generated
+  histories across schema and serializer variants.
 
 ## [0.12.0] - 2026-08-19
 

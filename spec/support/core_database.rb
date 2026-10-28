@@ -79,3 +79,16 @@ end
 class UuidKeyedArticle < ActiveRecord::Base
   has_paper_trail versions: { class_name: 'UuidVersion' }
 end
+
+# Its `view_count` column is never written to a version.
+ActiveRecord::Schema.define do
+  create_table :skipping_articles, force: true do |table|
+    table.string :title, null: false
+    table.integer :view_count, null: false, default: 0
+    table.timestamps null: false
+  end
+end
+
+class SkippingArticle < ActiveRecord::Base
+  has_paper_trail skip: [:view_count]
+end

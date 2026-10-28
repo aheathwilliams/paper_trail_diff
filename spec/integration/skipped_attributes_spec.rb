@@ -2,18 +2,6 @@
 
 require_relative '../support/core_database'
 
-ActiveRecord::Schema.define do
-  create_table :skipping_articles, force: true do |table|
-    table.string :title, null: false
-    table.integer :view_count, null: false, default: 0
-    table.timestamps null: false
-  end
-end
-
-class SkippingArticle < ActiveRecord::Base
-  has_paper_trail skip: [:view_count]
-end
-
 # PaperTrail never writes a `skip:` column to a version, so history holds only
 # its default. Comparing that default with the live row would invent a change.
 RSpec.describe 'has_paper_trail skip: columns' do
