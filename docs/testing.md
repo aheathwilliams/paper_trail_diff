@@ -46,6 +46,15 @@ mutates: `Engine`, `CollectionComparator`, `CollectionIdentityIndex`, and
 `NestedComparator`, which decide what counts as a change. It runs the
 association suite, which reaches all of their paths.
 
+Mutant counts a mutation that runs past its time limit as caught, so
+`mutant.yml` sets the limit well above the time the whole suite takes. With
+mutant's 5-second default, mutations no spec caught were reported as caught.
+
+In CI, a pull request mutates only the methods it changes. The full set runs
+nightly in `.github/workflows/mutation.yml`, and only when `main` has a commit
+that has not passed yet. Start it by hand from the Actions tab with "Run
+workflow".
+
 Mutant needs Ruby 3.3 or newer, so it has its own bundle:
 
 ```console
