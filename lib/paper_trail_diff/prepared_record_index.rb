@@ -163,6 +163,15 @@ module PaperTrailDiff
       live ? [*recorded, live] : recorded
     end
 
+    # The classes the record had at any point, or either side of one version.
+    #: (?untyped) -> Array[untyped]
+    def model_classes(version = nil)
+      return states.map(&:model_class) unless version
+
+      index = @version_positions.fetch(version.id.to_s)
+      [state_for(version), state_after(index)].compact.map(&:model_class)
+    end
+
     #: (untyped) -> [Hash[untyped, untyped], Hash[untyped, untyped]]?
     def transition(version)
       index = @version_positions[version.id.to_s]
@@ -335,6 +344,11 @@ module PaperTrailDiff
     #: (untyped, untyped) -> Array[untyped]
     def versions_for_id(model_class, id)
       @series.fetch(identity(model_class, id)).versions
+    end
+
+    #: (untyped, untyped, ?untyped) -> Array[untyped]
+    def model_classes(model_class, id, version = nil)
+      @series.fetch(identity(model_class, id)).model_classes(version)
     end
 
     #: (untyped, untyped) -> bool
