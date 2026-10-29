@@ -552,7 +552,10 @@ missing_history = report.deleted.select { |_identity, analysis| analysis.nil? }.
 ```
 
 A deleted record's `diff` and `to_snapshot` end at "no record". Its `timeline`
-lists only edits; its `activity_timeline` ends with the deletion.
+lists only edits; its `activity_timeline` ends with the deletion. That last
+step's `diff.record_presence_change.from` is the record just before it was
+deleted, even when it was also created inside the window, where
+`from_snapshot` is `nil`.
 
 ### Selecting by past values: `historical_filter:`
 
