@@ -715,6 +715,13 @@ comments.changed.first.associations["replies"].added
   `association_paths` leaves such a path out. To follow another record's
   memberships, compare that record's own checkpoints, or replace the HABTM
   with a `has_many :through` a versioned join model.
+- A root that uses single-table inheritance gets the associations of the
+  class it had at each version, so you can request one that only a subclass
+  declares. Without an `item_subtype` column, PaperTrail stores only the base
+  class; the gem reads the subclass from the type column the version stored.
+  A version where the record was a class without that association raises
+  `UnknownAssociationError`, as a current record of that class would. A
+  stored type that names no class raises `InvalidEndpointError`.
 - Requesting associations for a historical state without PT-AT raises
   `AssociationTrackingUnavailableError`. Unknown names raise
   `UnknownAssociationError`; unsupported macros raise

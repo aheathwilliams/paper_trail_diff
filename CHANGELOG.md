@@ -79,6 +79,12 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- An association that only an STI subclass declares can be requested on a
+  root of that subclass in every method. Without an `item_subtype` column on
+  versions, each version resolved to the base class, so every method raised
+  `UnknownAssociationError`. The subclass is now read from the type the
+  version stored, or for a `create`, from its recorded changes. A stored type
+  that names no class raises `InvalidEndpointError`.
 - `compare` and `compare_many` between two versions report a `has_many` child
   that moved to another owner afterwards. They reported no change: the
   comparison read associations through PT-AT, which finds children by the keys
