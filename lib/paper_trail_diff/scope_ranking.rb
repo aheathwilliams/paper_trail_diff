@@ -183,10 +183,14 @@ module PaperTrailDiff
       value.to_r
     end
 
-    # The value the database sorts by, as the key's type casts it.
+    # The value the database sorts by, as the key's type casts it. An enum
+    # sorts by the integer it stores; other types are compared cast, since an
+    # adapter may serialize a time or date as a wrapper, as SQL Server does.
     #: (String, Hash[String, untyped]) -> untyped
     def stored(name, attributes)
-      @model_class.type_for_attribute(name).serialize(attributes[name])
+      type = @model_class.type_for_attribute(name)
+      value = type.cast(attributes[name])
+      ENUM_TYPE.eql?(type.class.name) ? type.serialize(value) : value
     end
   end
 end

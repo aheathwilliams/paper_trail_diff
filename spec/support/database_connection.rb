@@ -15,6 +15,7 @@ if ActiveRecord::Base.connection.adapter_name == 'SQLServer'
   # PaperTrail serializes SQL Server datetime2 values as adapter wrappers.
   ActiveRecord.yaml_column_permitted_classes += [
     ActiveRecord::ConnectionAdapters::SQLServer::Type::Data,
+    ActiveRecord::ConnectionAdapters::SQLServer::Type::Date,
     ActiveRecord::ConnectionAdapters::SQLServer::Type::DateTime2
   ]
 end

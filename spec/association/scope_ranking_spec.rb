@@ -89,9 +89,13 @@ RSpec.describe PaperTrailDiff::ScopeRanking do
     %i[rank level flag status due_on seen_at ms_at].each do |key|
       expect(build(-> { order(key, :id).limit(1) })).not_to be_nil
     end
-    %i[label kind loose_at starts_at amount].each do |key|
+    %i[label kind starts_at amount].each do |key|
       expect(build(-> { order(key, :id).limit(1) })).to be_nil
     end
+    # MySQL gives a datetime declared without a precision precision 0, to which
+    # Active Record truncates; elsewhere it has none and is not read.
+    expect(build(-> { order(:loose_at, :id).limit(1) }).nil?)
+      .to eq(ScopeRankingItem.type_for_attribute('loose_at').precision.nil?)
     # Active Record writes `order(:virtual_rank)` as SQL, so the attribute is
     # named through Arel to reach a key that is no column.
     stub_const('ScopeRankingVirtual', Class.new(ScopeRankingItem))
@@ -145,6 +149,25 @@ RSpec.describe PaperTrailDiff::ScopeRanking do
                                                                          .at_least(:once)
   end
 
+  # SQL Server's types serialize a time as a wrapper around the value.
+  it 'ranks a time its type serializes as a wrapper by the value it casts' do
+    wrapper = Struct.new(:value)
+    wrapping = Class.new(ActiveRecord::Type::DateTime) do
+      define_method(:serialize) { |value| wrapper.new(super(value)) }
+    end
+    stub_const('ScopeRankingWrappingTime', wrapping)
+    wrapped = Class.new(ScopeRankingItem)
+    stub_const('ScopeRankingWrapped', wrapped)
+    wrapped.attribute :seen_at, wrapping.new(precision: 6)
+    ranking = described_class.build(wrapped.order(seen_at: :desc, id: :asc).limit(9),
+                                    reflection(nil), wrapped)
+    rows = [row(id: 1, seen_at: '2026-01-01 12:00:00.000001'),
+            row(id: 2, seen_at: '2026-01-01 12:00:00.000003'),
+            row(id: 3, seen_at: '2025-12-31 12:00:00')]
+    expect(ranking.call(rows).map { |ranked_row| ranked_row.attributes.fetch('id') })
+      .to eq([2, 1, 3])
+  end
+
   it 'reads only an adapter whose NULL placement it knows' do
     with_adapter('oracle') do
       expect(build(-> { order(:level, :id).limit(1) })).to be_nil
@@ -191,9 +214,11 @@ RSpec.describe PaperTrailDiff::ScopeRanking do
                row(id: 2, seen_at: at, due_on: Date.new(2026, 1, 2)),
                row(id: 3, seen_at: at + Rational(1, 1_000_000), due_on: Date.new(2026, 1, 2)),
                row(id: 4, seen_at: at - 86_400, due_on: nil)]
-      expect(ranked(-> { order(seen_at: :desc, id: :asc).limit(9) }, times)).to eq([1, 3, 2, 4])
-      expect(ranked(-> { order(:due_on, :id).limit(9) }, times)).to eq([4, 2, 3, 1])
-      expect(ranked(-> { order(due_on: :desc, id: :desc).limit(3) }, times)).to eq([1, 3, 2])
+      with_adapter('sqlite3') do
+        expect(ranked(-> { order(seen_at: :desc, id: :asc).limit(9) }, times)).to eq([1, 3, 2, 4])
+        expect(ranked(-> { order(:due_on, :id).limit(9) }, times)).to eq([4, 2, 3, 1])
+        expect(ranked(-> { order(due_on: :desc, id: :desc).limit(3) }, times)).to eq([1, 3, 2])
+      end
     end
 
     it 'compares the values the database stores, as the key’s type casts them' do
