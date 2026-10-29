@@ -79,6 +79,12 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- `compare` and `compare_many` between two versions report a `has_many` child
+  that moved to another owner afterwards. They reported no change: the
+  comparison read associations through PT-AT, which finds children by the keys
+  their versions recorded after each change, so the child was not found at the
+  earlier version. Version pairs now read the same prepared history as a
+  comparison with the current record, including for a record that was deleted.
 - Historical analysis through a polymorphic `belongs_to` works in every method.
   Only comparisons between two versions used to work: timelines, analyses,
   reports, and comparisons with the current record raised `ArgumentError`.

@@ -226,6 +226,11 @@ diff.to_h
   `ReversedEndpointsError`, because the result would look valid with every
   change backwards. A current record can be on either side.
 - Both sides must belong to the same record.
+- Associations at a version are read from the history recorded since then, plus
+  the current rows for records that have not changed since. A comment that later
+  moved to another article is still found at the versions where it belonged.
+  This also holds when both sides are versions, or the record has since been
+  deleted.
 - A current record must be saved, not destroyed, and have no unsaved changes.
   The gem reloads it, so in-memory edits and cached associations are ignored.
 - Options: `associations:`, `ignore:`, and `reload_live_endpoints:` (see

@@ -4,12 +4,16 @@
 module PaperTrailDiff
   # Validates and executes independent comparisons with shared live endpoint loading.
   class ComparisonBatch
-    #: (Array[comparison_input], live_loader: untyped, preparer: untyped, history_preparer: untyped, historical_snapshotter: untyped, live_normalizer: untyped) -> void
+    # `history_preparer` prepares roots that have a live endpoint to collect a
+    # graph from; `version_history_preparer` prepares roots compared only
+    # between versions.
+    #: (Array[comparison_input], live_loader: untyped, preparer: untyped, history_preparer: untyped, version_history_preparer: untyped, historical_snapshotter: untyped, live_normalizer: untyped) -> void
     def initialize( # rubocop:disable Metrics/ParameterLists
       comparisons,
       live_loader:,
       preparer:,
       history_preparer:,
+      version_history_preparer:,
       historical_snapshotter:,
       live_normalizer:
     )
@@ -17,6 +21,7 @@ module PaperTrailDiff
       @live_loader = live_loader
       @preparer = preparer
       @history_preparer = history_preparer
+      @version_history_preparer = version_history_preparer
       @historical_snapshotter = historical_snapshotter
       @live_normalizer = live_normalizer
     end
@@ -35,6 +40,7 @@ module PaperTrailDiff
     # @rbs @live_loader: untyped
     # @rbs @preparer: untyped
     # @rbs @history_preparer: untyped
+    # @rbs @version_history_preparer: untyped
     # @rbs @historical_snapshotter: untyped
     # @rbs @live_normalizer: untyped
 
@@ -97,20 +103,41 @@ module PaperTrailDiff
 
     #: (Array[[untyped, untyped]], Hash[identity, untyped]) -> void
     def prepare_historical_batches!(pairs, live_records)
-      grouped = historical_versions(pairs, live_records).group_by do |version|
-        Endpoint.model_class(version)
+      loaded, unloaded = historical_versions(pairs).partition do |version|
+        live_records.key?(Endpoint.identity(version))
       end
-      grouped.each_value do |versions|
+      loaded.group_by { |version| Endpoint.model_class(version) }.each_value do |versions|
         records = versions.map { |version| live_records.fetch(Endpoint.identity(version)) }.uniq
         @history_preparer.call(records, versions)
       end
+      prepare_version_roots!(unloaded)
     end
 
-    #: (Array[[untyped, untyped]], Hash[identity, untyped]) -> Array[untyped]
-    def historical_versions(pairs, live_records)
-      selected = pairs.flatten.select do |endpoint|
-        Endpoint.version?(endpoint) && live_records.key?(Endpoint.identity(endpoint))
+    # A root compared only between versions has no live endpoint, and its row
+    # may be gone. Without prepared history, PT-AT finds a has_many's children
+    # by the keys each version recorded after its change, so it misses a child
+    # that later moved to another owner. Such roots are prepared from identity
+    # alone, like deleted ones. Their history still reads the live rows it
+    # needs: a record's current row is its state after its last version.
+    #: (Array[untyped]) -> void
+    def prepare_version_roots!(versions)
+      versions.group_by { |version| Endpoint.model_class(version) }.each do |model, group|
+        ids = group.map(&:item_id).uniq(&:to_s)
+        @version_history_preparer.call(ids.map { |id| historical_root(model, id) }, group)
       end
+    end
+
+    # The record supplies identity and model metadata only.
+    #: (untyped, untyped) -> untyped
+    def historical_root(model, id)
+      record = model.new
+      record[model.primary_key] = id
+      record
+    end
+
+    #: (Array[[untyped, untyped]]) -> Array[untyped]
+    def historical_versions(pairs)
+      selected = pairs.flatten.select { |endpoint| Endpoint.version?(endpoint) }
       selected.uniq { |version| [version.class.name, version.id] }
     end
 

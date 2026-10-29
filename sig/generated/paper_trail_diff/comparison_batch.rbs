@@ -3,8 +3,11 @@
 module PaperTrailDiff
   # Validates and executes independent comparisons with shared live endpoint loading.
   class ComparisonBatch
-    # : (Array[comparison_input], live_loader: untyped, preparer: untyped, history_preparer: untyped, historical_snapshotter: untyped, live_normalizer: untyped) -> void
-    def initialize: (Array[comparison_input], live_loader: untyped, preparer: untyped, history_preparer: untyped, historical_snapshotter: untyped, live_normalizer: untyped) -> void
+    # `history_preparer` prepares roots that have a live endpoint to collect a
+    # graph from; `version_history_preparer` prepares roots compared only
+    # between versions.
+    # : (Array[comparison_input], live_loader: untyped, preparer: untyped, history_preparer: untyped, version_history_preparer: untyped, historical_snapshotter: untyped, live_normalizer: untyped) -> void
+    def initialize: (Array[comparison_input], live_loader: untyped, preparer: untyped, history_preparer: untyped, version_history_preparer: untyped, historical_snapshotter: untyped, live_normalizer: untyped) -> void
 
     # : () -> comparison_results
     def call: () -> comparison_results
@@ -22,6 +25,8 @@ module PaperTrailDiff
     @live_normalizer: untyped
 
     @preparer: untyped
+
+    @version_history_preparer: untyped
 
     # : (Array[[untyped, untyped]]) -> Hash[identity, RecordSnapshot]
     def prepared_live_snapshots: (Array[[ untyped, untyped ]]) -> Hash[identity, RecordSnapshot]
@@ -53,8 +58,21 @@ module PaperTrailDiff
     # : (Array[[untyped, untyped]], Hash[identity, untyped]) -> void
     def prepare_historical_batches!: (Array[[ untyped, untyped ]], Hash[identity, untyped]) -> void
 
-    # : (Array[[untyped, untyped]], Hash[identity, untyped]) -> Array[untyped]
-    def historical_versions: (Array[[ untyped, untyped ]], Hash[identity, untyped]) -> Array[untyped]
+    # A root compared only between versions has no live endpoint, and its row
+    # may be gone. Without prepared history, PT-AT finds a has_many's children
+    # by the keys each version recorded after its change, so it misses a child
+    # that later moved to another owner. Such roots are prepared from identity
+    # alone, like deleted ones. Their history still reads the live rows it
+    # needs: a record's current row is its state after its last version.
+    # : (Array[untyped]) -> void
+    def prepare_version_roots!: (Array[untyped]) -> void
+
+    # The record supplies identity and model metadata only.
+    # : (untyped, untyped) -> untyped
+    def historical_root: (untyped, untyped) -> untyped
+
+    # : (Array[[untyped, untyped]]) -> Array[untyped]
+    def historical_versions: (Array[[ untyped, untyped ]]) -> Array[untyped]
 
     # : () -> Array[[untyped, untyped]]
     def comparison_pairs: () -> Array[[ untyped, untyped ]]
