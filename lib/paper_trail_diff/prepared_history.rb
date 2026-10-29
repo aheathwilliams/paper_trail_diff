@@ -163,6 +163,9 @@ module PaperTrailDiff
       )
       return unless handled
 
+      intermediates = intermediates.select do |intermediate|
+        AssociationTraversal.source_type_join?(reflection, intermediate)
+      end
       resolved = resolve_sources(intermediates, reflection, boundary, habtm_boundary)
       return unless resolved.all?(&:first)
 

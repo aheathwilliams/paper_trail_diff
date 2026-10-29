@@ -71,6 +71,11 @@ module PaperTrailDiff
     # : (untyped, Array[source]) -> Array[source]
     def through_owners: (untyped, Array[source]) -> Array[source]
 
+    # Under `source_type:`, only join rows of that type are members, so only
+    # targets of that type and changes to those rows count.
+    # : (untyped, Array[source], untyped) -> Array[source]
+    def typed_joins: (untyped, Array[source], untyped) -> Array[source]
+
     # A polymorphic key's targets are known only from the types its rows name,
     # and a path stops at one, so only the targets' own changes count.
     # : (untyped) -> Array[source]
@@ -79,9 +84,10 @@ module PaperTrailDiff
     # : (untyped) -> Array[AssociationActivityEdge]
     def edges: (untyped) -> Array[AssociationActivityEdge]
 
-    # Records with a version in the window.
-    # : (untyped) -> Array[source]
-    def changed: (untyped) -> Array[source]
+    # Records with a version in the window, or only those of them `item_ids`
+    # selects: under `source_type:`, the join rows that had that type.
+    # : (untyped, ?untyped) -> Array[source]
+    def changed: (untyped, ?untyped) -> Array[source]
 
     # One edge for each source. A subquery whose column type matches the
     # filtered column stays a subquery; anything else is read, and the edge

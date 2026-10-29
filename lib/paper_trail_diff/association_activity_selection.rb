@@ -101,8 +101,22 @@ module PaperTrailDiff
     #: (untyped, Array[source]) -> Array[source]
     def through_owners(reflection, ids)
       through = reflection.through_reflection
-      joins = owners(reflection.source_reflection, ids) + changed(through.klass)
+      source_type = reflection.options[:source_type]
+      joins = if source_type
+                typed_joins(reflection, ids, source_type)
+              else
+                owners(reflection.source_reflection, ids) + changed(through.klass)
+              end
       owners(through, joins)
+    end
+
+    # Under `source_type:`, only join rows of that type are members, so only
+    # targets of that type and changes to those rows count.
+    #: (untyped, Array[source], untyped) -> Array[source]
+    def typed_joins(reflection, ids, source_type)
+      edge = AssociationActivityEdge::BelongsTo.new(reflection.source_reflection, @time_range,
+                                                    foreign_type: source_type)
+      follow(edge, ids) + changed(reflection.through_reflection.klass, edge.typed_owners)
     end
 
     # A polymorphic key's targets are known only from the types its rows name,
@@ -127,13 +141,15 @@ module PaperTrailDiff
       kinds.map { |kind| kind.new(reflection, @time_range) }.select(&:available?)
     end
 
-    # Records with a version in the window.
-    #: (untyped) -> Array[source]
-    def changed(model)
+    # Records with a version in the window, or only those of them `item_ids`
+    # selects: under `source_type:`, the join rows that had that type.
+    #: (untyped, ?untyped) -> Array[source]
+    def changed(model, item_ids = nil)
       return [] unless Support.versioned?(model)
 
       versions = model.paper_trail.version_class
       relation = versions.where(item_type: model.base_class.name)
+      relation = relation.where(item_id: item_ids) if item_ids
       range = @time_range
       relation = range.scope(relation) if range
       [Query.new(relation, versions.arel_table[:item_id],

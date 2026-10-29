@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative '../support/association_database'
+require_relative '../support/source_type_database'
 
 ActiveRecord::Schema.define do
   create_table :traversal_notes, force: true do |table|
@@ -108,6 +109,26 @@ RSpec.describe PaperTrailDiff::AssociationTraversal do
       expect(described_class.named_class('TrackedArticle')).to eq(TrackedArticle)
       expect(described_class.named_class('RenamedArticle')).to be_nil
       expect(described_class.named_class('not a constant')).to be_nil
+    end
+  end
+
+  describe '.source_type_join?' do
+    def join?(name, join)
+      described_class.source_type_join?(SourceTypeHolder.reflect_on_association(name), join)
+    end
+
+    it 'takes a join row only when its type column names the source type' do
+      %i[linked_authors symbol_authors].each do |name|
+        expect(join?(name, SourceTypeLink.new(target_type: 'SourceTypeAuthor'))).to be(true)
+        expect(join?(name, SourceTypeLink.new(target_type: 'SourceTypeTag',
+                                              origin_type: 'SourceTypeAuthor'))).to be(false)
+        expect(join?(name, SourceTypeLink.new)).to be(false)
+      end
+    end
+
+    it 'takes every join row of a through without one' do
+      expect(described_class.source_type_join?(TrackedAuthor.reflect_on_association(:comments),
+                                               Object.new)).to be(true)
     end
   end
 

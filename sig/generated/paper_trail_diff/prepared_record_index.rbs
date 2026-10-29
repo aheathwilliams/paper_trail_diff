@@ -85,6 +85,11 @@ module PaperTrailDiff
     # : (?untyped) -> Array[untyped]
     def model_classes: (?untyped) -> Array[untyped]
 
+    # The states either side of one version; a create has none before it and a
+    # destroy none after.
+    # : (untyped) -> Array[PreparedRecordState]
+    def states_around: (untyped) -> Array[PreparedRecordState]
+
     # : (untyped) -> [Hash[untyped, untyped], Hash[untyped, untyped]]?
     def transition: (untyped) -> [ Hash[untyped, untyped], Hash[untyped, untyped] ]?
 
@@ -159,6 +164,9 @@ module PaperTrailDiff
 
     # : (untyped, untyped, ?untyped) -> Array[untyped]
     def model_classes: (untyped, untyped, ?untyped) -> Array[untyped]
+
+    # : (untyped, untyped, untyped) -> Array[PreparedRecordState]
+    def states_around: (untyped, untyped, untyped) -> Array[PreparedRecordState]
 
     # : (untyped, untyped) -> bool
     def loaded?: (untyped, untyped) -> bool

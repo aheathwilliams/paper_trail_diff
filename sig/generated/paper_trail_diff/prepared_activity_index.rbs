@@ -22,6 +22,13 @@ module PaperTrailDiff
     # : (untyped, Array[untyped], ActivityRange) -> Array[untyped]
     def member_versions: (untyped, Array[untyped], ActivityRange) -> Array[untyped]
 
+    # The versions of a through's join rows that are on its path. Under
+    # `source_type:`, a row is on it only while its type column names that
+    # class, so only the versions it had that type before or after count. A
+    # version saved before the type column existed has no type to read.
+    # : (Hash[Symbol, untyped], untyped) -> Array[untyped]
+    def join_versions: (Hash[Symbol, untyped], untyped) -> Array[untyped]
+
     # : (untyped, Array[untyped], untyped, ActivityRange) -> Array[untyped]
     def child_ids: (untyped, Array[untyped], untyped, ActivityRange) -> Array[untyped]
 

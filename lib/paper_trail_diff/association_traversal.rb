@@ -14,6 +14,17 @@ module PaperTrailDiff
       polymorphic_target(reflection, record, type) unless type.empty?
     end
 
+    # A through with `source_type:` reaches only the join records whose type
+    # column names that class, as Active Record's `where(type => source_type)`.
+    # A through's `foreign_type` is its polymorphic source's.
+    #: (untyped, untyped) -> bool
+    def self.source_type_join?(reflection, join)
+      source_type = reflection.options[:source_type]
+      return true unless source_type
+
+      join.public_send(reflection.foreign_type) == source_type.to_s
+    end
+
     # The class a stored type names, or nil when it names none.
     # This class defines no constants of its own, so the one mutation left,
     # `const_get` on it rather than on Object, finds the same class.

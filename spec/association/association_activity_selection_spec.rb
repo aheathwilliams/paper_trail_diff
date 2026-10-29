@@ -2,6 +2,7 @@
 
 require_relative '../support/association_database'
 require_relative '../support/string_item_database'
+require_relative '../support/source_type_database'
 
 ActiveRecord::Schema.define do
   create_table :selection_pages, force: true do |table|
@@ -43,7 +44,8 @@ RSpec.describe PaperTrailDiff::AssociationActivitySelection do
     ActiveRecord::Base.connection.execute('DELETE FROM tracked_articles_tags')
     [TrackedReply, TrackedComment, TrackedAuthorship, TrackedProfile, TrackedArticle,
      TrackedAuthor, TrackedTag, SelectionNote, SelectionPage,
-     UnversionedAttachment].each(&:delete_all)
+     UnversionedAttachment, SourceTypeLink, SourceTypeHolder, SourceTypeAuthor,
+     SourceTypeTag].each(&:delete_all)
     StringItemVersionAssociation.delete_all
     StringItemVersion.delete_all
     [StringItemNote, StringItemPost].each(&:delete_all)
@@ -169,6 +171,38 @@ RSpec.describe PaperTrailDiff::AssociationActivitySelection do
 
     expect(scope_ids([:contributors], window_start..Time.now.utc))
       .to eq([renamed.id, removed.id])
+  end
+
+  # Only links of the source type are members: a renamed tag sharing an
+  # author's id, or a change to a link that names a tag on both sides of it,
+  # selects nothing.
+  it 'selects through a source_type only for authors and links of that type' do
+    author = SourceTypeAuthor.create!(name: 'Ann')
+    tag = SourceTypeTag.create!(name: 'Same id', id: author.id)
+    renamed, joined, left, tagged, retagged, earlier = %w[renamed joined left tagged retagged
+                                                          earlier].map do |name|
+      SourceTypeHolder.create!(name: name)
+    end
+    SourceTypeLink.create!(holder: renamed, target: author)
+    joining = SourceTypeLink.create!(holder: joined, target: tag)
+    leaving = SourceTypeLink.create!(holder: left, target: SourceTypeAuthor.create!(name: 'Bea'))
+    SourceTypeLink.create!(holder: tagged, target: tag)
+    touched = SourceTypeLink.create!(holder: retagged, target: tag, origin: author)
+    switched = SourceTypeLink.create!(holder: earlier, target: author)
+    switched.update!(target: tag)
+    start = Time.now.utc
+    [author, tag].each { |record| record.update!(name: "#{record.name} renamed") }
+    joining.update!(target: SourceTypeAuthor.create!(name: 'Cy'))
+    leaving.update!(target: tag)
+    [touched, switched].each(&:touch)
+
+    %i[linked_authors symbol_authors].each do |name|
+      analyses, = PaperTrailDiff.analyze_scope(SourceTypeHolder, within: start..Time.now.utc,
+                                                                 associations: [name],
+                                                                 activity: true, limit: 10)
+      expect(analyses.keys.map { |identity| identity.last.to_i }.sort)
+        .to eq([renamed.id, joined.id, left.id])
+    end
   end
 
   # The article shares an id with the renamed page, so only the type keeps its

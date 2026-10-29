@@ -699,6 +699,11 @@ comments.changed.first.associations["replies"].added
   through the join records it had then. A record that moves to another join
   record leaves one owner and joins the other, and so does every record under
   a join record that moves to another owner.
+- A `has_many :through` with `source_type:` holds only the records reached
+  through join records whose type column names that class, as Active Record
+  reads it. A join record that points at another type is never a member, and
+  its changes add no activity step. A join record whose type changes adds or
+  removes its target in the step of that version.
 - A `has_many :through` that goes through a HABTM, as its `through:`, its
   `source:`, or further down its chain, raises `UnsupportedAssociationError`
   up front in every method. Active Record joins a HABTM through a hidden

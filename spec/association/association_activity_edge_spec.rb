@@ -2,6 +2,7 @@
 
 require_relative '../support/association_database'
 require_relative '../support/string_item_database'
+require_relative '../support/source_type_database'
 
 ActiveRecord::Schema.define do
   create_table :edge_stickers, force: true do |table|
@@ -61,7 +62,8 @@ RSpec.describe PaperTrailDiff::AssociationActivityEdge do
     ActiveRecord::Base.connection.execute('DELETE FROM tracked_articles_tags')
     ActiveRecord::Base.connection.execute('DELETE FROM edge_documents_tags')
     [TrackedReply, TrackedComment, TrackedProfile, TrackedArticle, TrackedAuthor, TrackedTag,
-     EdgeSticker, PreparedDocument, StringItemNote, StringItemPost].each(&:delete_all)
+     EdgeSticker, PreparedDocument, StringItemNote, StringItemPost, SourceTypeLink,
+     SourceTypeAuthor, SourceTypeTag].each(&:delete_all)
   end
 
   def reflection(model, name)
@@ -284,6 +286,25 @@ RSpec.describe PaperTrailDiff::AssociationActivityEdge do
       edge = described_class::BelongsTo.new(reflection(EdgeSticker, :holder), window(start))
 
       expect(edge.target_types).to eq(['TrackedAuthor'])
+    end
+
+    it 'reads the owners with a target of its type when the window opened or after' do
+      author = SourceTypeAuthor.create!(name: 'Author')
+      tag = SourceTypeTag.create!(name: 'Tag')
+      kept = SourceTypeLink.create!(target: author)
+      SourceTypeLink.create!(target: author).update!(target: tag)
+      joined = SourceTypeLink.create!(target: tag)
+      left = SourceTypeLink.create!(target: author)
+      start = Time.now.utc
+      joined.update!(target: author)
+      left.update!(target: tag)
+      SourceTypeLink.create!(target: tag, origin: author)
+      edge = described_class::BelongsTo.new(reflection(SourceTypeLink, :target), window(start),
+                                            foreign_type: 'SourceTypeAuthor')
+      SourceTypeLink.create!(target: author)
+
+      owners = PaperTrail::Version.where(item_id: edge.typed_owners).distinct.pluck(:item_id)
+      expect(owners.sort).to eq([kept.id, joined.id, left.id])
     end
   end
 

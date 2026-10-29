@@ -90,7 +90,7 @@ module PaperTrailDiff
     #: (untyped, untyped) -> void
     def reify_through(record, reflection)
       source = reflection.source_reflection
-      if source.belongs_to?
+      if pt_at_source?(reflection)
         reifier(:HasManyThrough).reify(reflection, record, options, @transaction_id)
         return
       end
@@ -101,9 +101,17 @@ module PaperTrailDiff
       association.loaded!
     end
 
+    # PT-AT's belongs_to source ignores `source_type:` and reads targets by id
+    # alone, so a typed through walks its join records instead.
+    #: (untyped) -> bool
+    def pt_at_source?(reflection)
+      reflection.source_reflection.belongs_to? && !reflection.options[:source_type]
+    end
+
     #: (untyped, untyped, untyped) -> Array[untyped]
     def through_members(record, reflection, source)
       joins = Array(record.public_send(reflection.through_reflection.name)) #: Array[untyped]
+      joins = joins.select { |join| AssociationTraversal.source_type_join?(reflection, join) }
       joins.flat_map do |join|
         reify_association(join, source)
         Array(join.public_send(source.name))

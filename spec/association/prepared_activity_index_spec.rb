@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative '../support/association_database'
+require_relative '../support/source_type_database'
 
 ActiveRecord::Schema.define do
   create_table :index_spec_pages, force: true do |table|
@@ -49,7 +50,7 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
     PaperTrail::Version.delete_all
     ActiveRecord::Base.connection.execute('DELETE FROM tracked_articles_tags')
     [IndexSpecSection, IndexSpecPage, TrackedComment, TrackedArticle, TrackedAuthor,
-     TrackedTag].each(&:delete_all)
+     TrackedTag, SourceTypeLink, SourceTypeAuthor, SourceTypeTag].each(&:delete_all)
   end
 
   def statements(&block)
@@ -285,6 +286,32 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
     queries = statements { expect(rows.call(TrackedArticle, [other_tagged], :tags)).to eq([]) }
     expect(queries).to eq(0)
     expect(rows.call(TrackedTag, [retagged], :articles)).to contain_exactly(article.id, other.id)
+  end
+
+  describe '#join_versions' do
+    # Of a link's versions, only those it named an author before or after
+    # are on a path that names its type.
+    it 'keeps a version of a source_type join row only when the row had that type' do
+      origin = Time.now.utc
+      author = SourceTypeAuthor.create!(name: 'Author')
+      tag = SourceTypeTag.create!(name: 'Tag')
+      link = SourceTypeLink.create!(target: tag, origin: author)
+      [author, author, tag, tag].each_with_index do |target, index|
+        link.update!(target: target, origin_id: index)
+      end
+      versions = link.versions.reorder(:id).to_a
+      # Saved before the link had a type column: no type, and the author after.
+      versions[1].update_columns(object: versions[1].object.sub(/^target_type:.*\n/, ''))
+      index = index_for(origin, { SourceTypeLink => [link.id] })
+      group = { model: SourceTypeLink, versions: versions }
+
+      %i[linked_authors symbol_authors].each do |name|
+        expect(index.join_versions(group, SourceTypeHolder.reflect_on_association(name)))
+          .to eq(versions[1..3])
+      end
+      expect(index.join_versions(group, TrackedAuthor.reflect_on_association(:comments)))
+        .to eq(versions)
+    end
   end
 
   it 'explains missing graph registration instead of leaking a hash lookup error' do

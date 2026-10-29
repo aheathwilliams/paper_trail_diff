@@ -89,12 +89,16 @@ module PaperTrailDiff
       intermediate = edge_groups(parent, through, branch)
       result = {} #: Hash[String, untyped]
       intermediate.each_value do |group|
-        @registry.add(group.fetch(:versions), branch: branch)
+        # A through is always read with prepared history, which knows the
+        # join row's state either side of each version.
+        @registry.add(@prepared&.join_versions(group, reflection) || group.fetch(:versions),
+                      branch: branch)
         source = reflection.source_reflection
         children = edge_groups(group, source, branch)
         merge_groups!(result, children)
       end
-      result
+      # Under `source_type:`, only targets of that type are members.
+      reflection.options[:source_type]&.then { |type| result.slice(type.to_s) } || result
     end
 
     # Every target the owners pointed at in the range, not only those their own
