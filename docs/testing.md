@@ -54,11 +54,14 @@ passes is behavior nothing checks. `mutant.yml` lists the classes it mutates:
 - which records a scope or report selects: `ScopedRootSelection`,
   `AssociationActivitySelection`, and `AssociationActivityEdge`;
 - which children and targets a record had at each point:
-  `PreparedHistoryLoader`, `PreparedEdgeLoader`, and
-  `ActivityTargetCandidateLoader`;
+  `PreparedHistoryLoader`, `PreparedEdgeLoader`,
+  `ActivityTargetCandidateLoader`, and `PreparedActivityIndex`;
+- where an activity range starts and ends, and which association history its
+  query reads: `ActivityRange` and `VersionAssociationCandidateScope`;
 - what activity a record shows: `ActivityTimelineBuilder` and
   `ActivityTransactionGrouper`;
-- which association paths a batch refuses: `BatchSafety`.
+- which association paths are followed, and which a batch refuses:
+  `AssociationTraversal` and `BatchSafety`.
 
 The specs for the classes that read the database use tables of their own
 (`spec/support/filter_database.rb`, `spec/support/normalizer_database.rb`,

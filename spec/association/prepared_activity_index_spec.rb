@@ -2,10 +2,243 @@
 
 require_relative '../support/association_database'
 
+ActiveRecord::Schema.define do
+  create_table :index_spec_pages, force: true do |table|
+    table.string :type
+    table.string :title, null: false
+    table.integer :author_id
+    table.timestamps null: false
+  end
+
+  create_table :index_spec_sections, force: true do |table|
+    table.string :title, null: false
+    table.integer :page_id
+    table.integer :featured_page_id
+    table.timestamps null: false
+  end
+end
+
+class IndexSpecPage < ActiveRecord::Base
+  belongs_to :author, class_name: 'TrackedAuthor', optional: true
+  has_many :sections, class_name: 'IndexSpecSection', foreign_key: :page_id, inverse_of: :page
+  has_many :featured_sections, class_name: 'IndexSpecSection', foreign_key: :featured_page_id,
+                               inverse_of: :featured_page
+  has_paper_trail
+end
+
+# PaperTrail records a subclass under its base class, and so does the index.
+class IndexSpecLandingPage < IndexSpecPage
+end
+
+class IndexSpecSection < ActiveRecord::Base
+  belongs_to :page, class_name: 'IndexSpecPage', optional: true, inverse_of: :sections
+  belongs_to :featured_page, class_name: 'IndexSpecPage', optional: true,
+                             inverse_of: :featured_sections
+  has_paper_trail
+end
+
 RSpec.describe PaperTrailDiff::PreparedActivityIndex do
   before do
     PaperTrail::VersionAssociation.delete_all
     PaperTrail::Version.delete_all
+    ActiveRecord::Base.connection.execute('DELETE FROM tracked_articles_tags')
+    [IndexSpecSection, IndexSpecPage, TrackedComment, TrackedArticle, TrackedAuthor,
+     TrackedTag].each(&:delete_all)
+  end
+
+  def statements(&block)
+    count = 0
+    callback = lambda do |*, payload|
+      count += 1 unless %w[SCHEMA TRANSACTION].include?(payload[:name])
+    end
+    ActiveSupport::Notifications.subscribed(callback, 'sql.active_record', &block)
+    count
+  end
+
+  def range(start_boundary, end_boundary)
+    PaperTrailDiff::ActivityRange.new(start_boundary, end_boundary)
+  end
+
+  # An index over everything from `origin`, as a batch builds one for all its
+  # roots, with each call narrowing to one root's range.
+  def index_for(origin, loads, root_versions: [])
+    records = PaperTrailDiff::PreparedRecordIndex.new(origin)
+    loads.each { |model, ids| records.load(model, ids) }
+    described_class.new(records, root_versions, start_at: origin, end_at: Time.now.utc)
+  end
+
+  def sections
+    IndexSpecPage.reflect_on_association(:sections)
+  end
+
+  it 'reads root versions as given and every other record from the record index' do
+    origin = Time.now.utc
+    root, other = %w[Root Other].map { |title| IndexSpecLandingPage.create!(title: title) }
+    given = [root.versions.reorder(:id).first]
+    root.update!(title: 'Root again')
+    other.update!(title: 'Other again')
+    index = index_for(origin, { IndexSpecPage => [root.id, other.id] }, root_versions: given)
+
+    expect(index.versions(IndexSpecLandingPage, [root.id, other.id.to_s]))
+      .to eq(given + other.versions.reorder(:id).to_a)
+    expect([index.loaded?(IndexSpecPage, other.id), index.loaded?(IndexSpecPage, 0)])
+      .to eq([true, false])
+  end
+
+  # The batch registers each record under the class it found it as, and asks
+  # for its children under the class an association names.
+  it 'reads every record registered under a class or its subclass, once each' do
+    origin = Time.now.utc
+    first, second = %w[First Second].map { |title| IndexSpecLandingPage.create!(title: title) }
+    kept = [first, second].map { |page| IndexSpecSection.create!(title: 'kept', page: page) }
+    index = index_for(origin, { IndexSpecSection => kept.map(&:id) })
+    index.register(IndexSpecLandingPage, [first.id])
+    index.register(IndexSpecPage, [second.id])
+    index.register(IndexSpecPage, [second.id])
+
+    found = index.child_ids(IndexSpecLandingPage, [first.id, second.id], sections,
+                            range(origin, Time.now.utc))
+
+    expect(found).to match_array(kept.map(&:id))
+  end
+
+  # PT-AT records a version's foreign keys after its change: the latest one
+  # before the range names the children at its start. A section moved away
+  # before the index's own start, or saved after its end, is outside it.
+  it "reads a page's sections at the range start, inside it, and live at a current end" do
+    page, other, bare = %w[Page Other Bare].map { |title| IndexSpecPage.create!(title: title) }
+    early = IndexSpecSection.create!(title: 'early', page: page)
+    early.update!(page: other)
+    origin = Time.now.utc
+    kept, moved, gone = %w[kept moved gone].map do |title|
+      IndexSpecSection.create!(title: title, page: page)
+    end
+    adopted = IndexSpecSection.create!(title: 'adopted')
+    moved.update!(page: other)
+    gone.destroy!
+    start = Time.now.utc
+    added = IndexSpecSection.create!(title: 'added', page: page)
+    added.update!(title: 'added again')
+    finish = TrackedAuthor.create!(name: 'End').versions.last
+    late = IndexSpecSection.create!(title: 'late', page: page)
+    # Saved without a version, so only the live row has it.
+    IndexSpecSection.where(id: adopted.id).update_all(page_id: page.id)
+    ids = [early, kept, moved, gone, adopted, added, late].map(&:id)
+    index = index_for(origin, { IndexSpecSection => ids })
+    index.register(IndexSpecPage, [page.id, other.id, bare.id])
+    IndexSpecSection.create!(title: 'fleeting', page: page).destroy!
+
+    closed = index.child_ids(IndexSpecPage, [page.id], sections, range(start, finish))
+    current = index.child_ids(IndexSpecPage, [page.id, bare.id], sections,
+                              range(start, Time.now.utc))
+    both = index.child_ids(IndexSpecPage, [page.id, other.id], sections, range(start, finish))
+
+    expect(closed).to contain_exactly(kept.id, added.id)
+    expect(current).to contain_exactly(kept.id, added.id, late.id, adopted.id)
+    expect(both).to contain_exactly(kept.id, added.id, moved.id, early.id)
+  end
+
+  it 'reads the rows of each association once for every page' do
+    origin = Time.now.utc
+    page, other = %w[Page Other].map { |title| IndexSpecLandingPage.create!(title: title) }
+    listed = IndexSpecSection.create!(title: 'listed', page: other)
+    featured = IndexSpecSection.create!(title: 'featured', featured_page: page)
+    index = index_for(origin, { IndexSpecSection => [listed.id, featured.id] })
+    index.register(IndexSpecPage, [page.id, other.id])
+    index.register(IndexSpecSection, [listed.id, featured.id])
+    window = range(origin, Time.now.utc)
+    index.child_ids(IndexSpecLandingPage, [page.id], sections, window)
+    owner = ->(name) { IndexSpecSection.reflect_on_association(name) }
+    owners = lambda do |name|
+      index.target_rows(IndexSpecSection, [featured.id], owner.call(name), window)
+           .map(&:foreign_key_id).uniq
+    end
+
+    queries = statements do
+      expect(index.child_ids(IndexSpecPage, [other.id], sections, window)).to eq([listed.id])
+    end
+    expect(queries).to eq(0)
+    expect(index.child_ids(IndexSpecPage, [page.id],
+                           IndexSpecPage.reflect_on_association(:featured_sections), window))
+      .to eq([featured.id])
+    expect([owners.call(:page), owners.call(:featured_page)]).to eq([[nil], [page.id]])
+  end
+
+  # The version a range ends at names the author after it, which the range
+  # never reached.
+  it 'reads the authors a page pointed at in the range, and its live one at a current end' do
+    origin = Time.now.utc
+    first, second, third = %w[Ann Bea Cy].map { |name| TrackedAuthor.create!(name: name) }
+    page, other, gone = %w[Page Other Gone].map do |title|
+      IndexSpecPage.create!(title: title, author: first)
+    end
+    unversioned = PaperTrail.request(enabled: false) do
+      IndexSpecPage.create!(title: 'Unversioned', author: first)
+    end
+    other.update!(author: second)
+    gone.destroy!
+    start = Time.now.utc
+    page.update!(author: second)
+    page.update!(author: third)
+    closing = page.versions.reorder(:id).last
+    ids = [page, other, gone, unversioned].map(&:id)
+    index = index_for(origin, { IndexSpecPage => ids })
+    index.register(IndexSpecPage, ids)
+    author = IndexSpecPage.reflect_on_association(:author)
+    fields = ->(rows) { rows.map { |row| [row.owner_id, row.foreign_key_id, row.event] } }
+
+    closed = index.target_rows(IndexSpecLandingPage, [page.id, gone.id], author,
+                               range(start, closing))
+    current = index.target_rows(IndexSpecPage, [page.id, unversioned.id], author,
+                                range(start, Time.now.utc))
+
+    expect(fields.call(closed))
+      .to contain_exactly([page.id, first.id, 'create'], [page.id, second.id, 'update'])
+    expect(fields.call(current)).to contain_exactly(
+      [page.id, first.id, 'create'], [page.id, second.id, 'update'],
+      [page.id, third.id, 'update'], [page.id, third.id, nil], [unversioned.id, first.id, nil]
+    )
+    queries = statements do
+      found = index.target_rows(IndexSpecPage, [other.id], author, range(start, closing))
+      expect(fields.call(found)).to eq([[other.id, second.id, 'update']])
+    end
+    expect(queries).to eq(0)
+  end
+
+  def checkpoint(article)
+    TrackedArticle.transaction { TrackedArticle.find(article.id).paper_trail.save_with_version }
+    article.versions.reorder(:id).last
+  end
+
+  # A transaction's id is its first version's, which here is a comment's, and
+  # the comment's own `belongs_to` rows share it.
+  it 'reads the tags each selected transaction recorded, for registered articles only' do
+    origin = Time.now.utc
+    article, other = %w[Tagged Other].map { |title| TrackedArticle.create!(title: title) }
+    ruby, rails = %w[ruby rails].map { |name| TrackedTag.create!(name: name) }
+    article.tags << ruby
+    TrackedArticle.transaction do
+      article.comments.create!(body: 'First in the transaction')
+      TrackedArticle.find(article.id).paper_trail.save_with_version
+    end
+    tagged = article.versions.reorder(:id).last
+    other.tags << rails
+    other_tagged = checkpoint(other)
+    ruby.articles << other
+    TrackedTag.transaction { TrackedTag.find(ruby.id).paper_trail.save_with_version }
+    retagged = ruby.versions.reorder(:id).last
+    untracked = Struct.new(:id).new(tagged.id)
+    index = index_for(origin, { TrackedArticle => [article.id, other.id], TrackedTag => [ruby.id] })
+    index.register(TrackedArticle, [article.id])
+    index.register(TrackedTag, [ruby.id])
+    rows = lambda do |model, selected, name|
+      index.habtm_rows(model, selected, model.reflect_on_association(name)).map(&:foreign_key_id)
+    end
+
+    expect(rows.call(TrackedArticle, [tagged, tagged, untracked], :tags)).to eq([ruby.id])
+    queries = statements { expect(rows.call(TrackedArticle, [other_tagged], :tags)).to eq([]) }
+    expect(queries).to eq(0)
+    expect(rows.call(TrackedTag, [retagged], :articles)).to contain_exactly(article.id, other.id)
   end
 
   it 'explains missing graph registration instead of leaking a hash lookup error' do
@@ -26,14 +259,18 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
               [3, 1, 'create', true], [3, 5, 'destroy', true],
               [4, 5, 'create', true], [4, 5, 'update', true],
               [5, 10, 'create', true], [5, 20, 'destroy', true],
-              [6, 21, 'create', true], [7, 5, 'create', true], [7, 12, 'update', true]]
+              [6, 21, 'create', true], [7, 5, 'create', true], [7, 12, 'update', true],
+              [8, 1, 'create', true], [8, 10, 'destroy', true]]
+    # The spec clock moves a version saved out of order past the last one, so
+    # each time is set after saving to keep these ties and boundaries.
     candidates = events.filter_map do |id, offset, event, selected_owner|
       version = PaperTrail::Version.create!(item_type: 'TrackedComment', item_id: id,
-                                            event: event, created_at: origin + offset)
+                                            event: event)
+      version.update_columns(created_at: origin + offset)
       version if selected_owner
     end
     records = PaperTrailDiff::PreparedRecordIndex.new(origin)
-    records.load(TrackedComment, (1..7).to_a)
+    records.load(TrackedComment, (1..8).to_a)
     index = described_class.new(records, [], start_at: origin, end_at: origin + 30)
     relation = PaperTrail::Version.where(id: candidates.map(&:id))
 

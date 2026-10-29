@@ -11,6 +11,39 @@ RSpec.describe PaperTrailDiff::VersionAssociationCandidateScope do
     TrackedArticle.delete_all
   end
 
+  # SQLite reads these names unquoted and passes times through its type, so
+  # the examples that save versions cannot see either. These stand-ins mark both.
+  let(:visible_connection) do
+    Object.new.tap do |connection|
+      connection.define_singleton_method(:quote_table_name) { |name| "[#{name}]" }
+      connection.define_singleton_method(:quote_column_name) { |name| "{#{name}}" }
+      connection.define_singleton_method(:quote) { |value| "<#{value}>" }
+    end
+  end
+
+  let(:visible_type) do
+    Object.new.tap do |type|
+      type.define_singleton_method(:cast) { |time| "cast #{time.strftime('%H:%M')}" }
+      type.define_singleton_method(:serialize) { |value| "stored #{value}" }
+    end
+  end
+
+  # Active Record 7.1 has no `with_connection`, so the scope falls back to
+  # `connection` there.
+  def visible_version_class(style)
+    connection = visible_connection
+    types = { 'created_at' => visible_type }
+    Object.new.tap do |version_class|
+      version_class.define_singleton_method(:table_name) { 'item versions' }
+      version_class.define_singleton_method(:type_for_attribute) { |name| types.fetch(name) }
+      if style == :with_connection
+        version_class.define_singleton_method(:with_connection) { |&block| block.call(connection) }
+      else
+        version_class.define_singleton_method(:connection) { connection }
+      end
+    end
+  end
+
   it 'keeps start-state and later candidates without retaining removed history' do
     article = TrackedArticle.create!(title: 'Candidate window')
     stable = article.comments.create!(body: 'Stable at start')
@@ -67,5 +100,27 @@ RSpec.describe PaperTrailDiff::VersionAssociationCandidateScope do
                          .call(relation).distinct.pluck(PaperTrail::Version.arel_table[:id])
 
     expect(ids).to contain_exactly(created.id, inside.id)
+  end
+
+  it 'quotes every name and types every time through the version class' do
+    noon = Time.utc(2032, 1, 1, 12)
+    relation = Object.new.tap { |where| where.define_singleton_method(:where) { |sql| sql } }
+    outer = '[item versions]'
+    later = '[paper_trail_diff_later_versions]'
+    before_start = "( #{outer}.{created_at} < <stored cast 12:00> AND #{outer}.{event} != " \
+                   "<destroy> AND NOT EXISTS ( SELECT 1 FROM #{outer} #{later} WHERE " \
+                   "#{later}.{item_type} = #{outer}.{item_type} AND #{later}.{item_id} = " \
+                   "#{outer}.{item_id} AND #{later}.{created_at} < <stored cast 12:00> AND " \
+                   "#{later}.{created_at} > #{outer}.{created_at} ) )"
+
+    %i[with_connection connection].each do |style|
+      bounded = described_class.new(visible_version_class(style), noon, end_at: noon + 3600)
+
+      expect(bounded.call(relation))
+        .to eq("( (#{outer}.{created_at} >= <stored cast 12:00> AND #{outer}.{created_at} <= " \
+               "<stored cast 13:00>) OR #{before_start} )")
+    end
+    expect(described_class.new(visible_version_class(:connection), noon).call(relation))
+      .to eq("( #{outer}.{created_at} >= <stored cast 12:00> OR #{before_start} )")
   end
 end
