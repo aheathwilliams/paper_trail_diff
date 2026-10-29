@@ -7,8 +7,10 @@ module PaperTrailDiff
     # : (PreparedRecordIndex, untyped, ScopeCondition::Cache) -> void
     def initialize: (PreparedRecordIndex, untyped, ScopeCondition::Cache) -> void
 
-    # : (PreparedRecordState, untyped, untyped) -> [bool, Array[PreparedRecordState]]
-    def call: (PreparedRecordState, untyped, untyped) -> [ bool, Array[PreparedRecordState] ]
+    # Unranked, as a part of a has_many through is read, it returns every row
+    # the part's conditions admit, a record reached twice appearing twice.
+    # : (PreparedRecordState, untyped, untyped, ?ranked: bool) -> [bool, Array[PreparedRecordState]]
+    def call: (PreparedRecordState, untyped, untyped, ?ranked: bool) -> [ bool, Array[PreparedRecordState] ]
 
     private
 
@@ -20,31 +22,36 @@ module PaperTrailDiff
 
     # A polymorphic target's class is known only once a record names it, so
     # `target` reads its scope for each record instead.
-    # : (untyped) -> bool
-    def supported?: (untyped) -> bool
+    # : (untyped, bool) -> bool
+    def supported?: (untyped, bool) -> bool
 
-    # : (PreparedRecordState, untyped, ?untyped) -> bool
-    def in_scope?: (PreparedRecordState, untyped, ?untyped) -> bool
+    # : (PreparedRecordState, untyped, bool, ?untyped) -> bool
+    def in_scope?: (PreparedRecordState, untyped, bool, ?untyped) -> bool
 
     # A type that names no class, or a class whose scope cannot be read as
     # conditions, is left to the record path, which raises for the first and
     # reads the second through its association.
-    # : (PreparedRecordState, untyped, untyped) -> [bool, Array[PreparedRecordState]]
-    def target: (PreparedRecordState, untyped, untyped) -> [ bool, Array[PreparedRecordState] ]
+    # : (PreparedRecordState, untyped, untyped, bool) -> [bool, Array[PreparedRecordState]]
+    def target: (PreparedRecordState, untyped, untyped, bool) -> [ bool, Array[PreparedRecordState] ]
 
     # : (PreparedRecordState, untyped) -> untyped
     def target_class: (PreparedRecordState, untyped) -> untyped
 
     # The members of each join record the owner had at the boundary, as
     # PreparedHistory#through_records reads them from records. Under
-    # `source_type:`, only join records of that type count.
-    # : (PreparedRecordState, untyped, untyped) -> [bool, Array[PreparedRecordState]]
-    def through: (PreparedRecordState, untyped, untyped) -> [ bool, Array[PreparedRecordState] ]
+    # `source_type:`, only join records of that type count. A has_many
+    # through reads its parts unranked, as its query does.
+    # : (PreparedRecordState, untyped, untyped, bool) -> [bool, Array[PreparedRecordState]]
+    def through: (PreparedRecordState, untyped, untyped, bool) -> [ bool, Array[PreparedRecordState] ]
 
-    # A record reached through two join records is one member, and the
-    # through's own scope applies after its parts' scopes.
+    # The through's own scope applies after its parts' scopes, to each row,
+    # and a ranked read then keeps a record reached twice as one member.
+    # : (untyped, Array[PreparedRecordState], bool) -> Array[PreparedRecordState]
+    def through_members: (untyped, Array[PreparedRecordState], bool) -> Array[PreparedRecordState]
+
+    # A has_one keeps the first of its records.
     # : (untyped, Array[PreparedRecordState]) -> Array[PreparedRecordState]
-    def through_members: (untyped, Array[PreparedRecordState]) -> Array[PreparedRecordState]
+    def first_if_one: (untyped, Array[PreparedRecordState]) -> Array[PreparedRecordState]
 
     # : (untyped, PreparedRecordState) -> bool
     def typed_join?: (untyped, PreparedRecordState) -> bool
@@ -53,14 +60,14 @@ module PaperTrailDiff
     # : (PreparedRecordState) -> Array[untyped]
     def identity: (PreparedRecordState) -> Array[untyped]
 
-    # : (PreparedRecordState, untyped, untyped) -> [bool, Array[PreparedRecordState]]
-    def children: (PreparedRecordState, untyped, untyped) -> [ bool, Array[PreparedRecordState] ]
+    # : (PreparedRecordState, untyped, untyped, bool) -> [bool, Array[PreparedRecordState]]
+    def children: (PreparedRecordState, untyped, untyped, bool) -> [ bool, Array[PreparedRecordState] ]
 
     # : (untyped, PreparedRecordState) -> Array[untyped]
     def ids_for: (untyped, PreparedRecordState) -> Array[untyped]
 
-    # : (PreparedRecordState, PreparedRecordState, untyped) -> bool
-    def member?: (PreparedRecordState, PreparedRecordState, untyped) -> bool
+    # : (PreparedRecordState, PreparedRecordState, untyped, bool) -> bool
+    def member?: (PreparedRecordState, PreparedRecordState, untyped, bool) -> bool
 
     # : (PreparedRecordState) -> String
     def owner_id: (PreparedRecordState) -> String

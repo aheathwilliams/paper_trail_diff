@@ -103,15 +103,34 @@ module PaperTrailDiff
 
     # The preloader applies a limit or offset to all owners' records at once,
     # not to each owner's, so such an association is loaded per record. A
-    # has_one is no exception.
+    # has_one is no exception. Through a part with a limit, an offset or a
+    # has_one cut, the preloader keeps what the part alone would load, while
+    # the through's own query keeps the part's conditions only.
     #: (untyped, untyped) -> bool
     def batch_safe?(record, reflection)
       scope = reflection.scope
       return false if scope && !scope.arity.zero?
       return true unless reflection.collection? || reflection.has_one?
+      return false if cut_part?(reflection)
 
       relation = record.association(reflection.name).scope
       relation.limit_value.nil? && relation.offset_value.nil?
+    end
+
+    #: (untyped) -> bool
+    def cut_part?(reflection)
+      reflection.collection? &&
+        (ScopeCondition.ranked_parts?(reflection) || through_parts(reflection).any?(&:has_one?))
+    end
+
+    # Every part a through passes, at any depth.
+    #: (untyped) -> Array[untyped]
+    def through_parts(reflection)
+      return [] unless reflection.through_reflection?
+
+      [reflection.through_reflection, reflection.source_reflection].flat_map do |part|
+        [part, *through_parts(part)]
+      end
     end
 
     #: (Array[untyped], untyped) -> Array[untyped]

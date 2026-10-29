@@ -663,10 +663,16 @@ query would have. The order must reach the primary key, so that no two records
 tie, and each key before it must be an integer, boolean, or integer enum column
 of the target, ascending or descending. NULL sorts where the database puts it
 by default: last in an ascending order on PostgreSQL, first on SQLite, MySQL,
-and SQL Server. This works on a direct `has_many` or `has_one`; a `has_many
-:through` whose own scope or whose parts have a limit, an offset, or a
-`has_one` order is not read, since Active Record applies only the conditions of
-a through's parts.
+and SQL Server.
+
+A `has_many :through` reads its parts as Active Record's own query joins them:
+it keeps each part's conditions but not its `limit`, `offset`, or `has_one`
+cut, so a through over `has_one :latest_comment` holds the records of every
+comment that meets the part's conditions, not only the latest. Its own `limit`
+or `offset` ranks the rows the join yields, so a record reached through two
+join records fills two places, as in the query. A `has_one :through` whose
+own scope or whose parts have a limit, an offset, or a `has_one` order is not
+read.
 
 A few associations still need queries per record: a `limit` or `offset` whose
 order is not total or sorts by another column type (strings follow a

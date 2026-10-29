@@ -98,6 +98,12 @@ module PaperTrailDiff
     # : (untyped, untyped, AssociationTree, String, untyped) -> AssociationSnapshot
     def association_snapshot: (untyped, untyped, AssociationTree, String, untyped) -> AssociationSnapshot
 
+    # A reified history can hold a member PaperTrail could not rebuild. A
+    # through loads a record once per join that reaches it; it is one member,
+    # as Active Record compares records by class and id.
+    # : (untyped, untyped) -> Array[untyped]
+    def members: (untyped, untyped) -> Array[untyped]
+
     # : (Array[untyped], AssociationTree, String, untyped) -> Array[RecordSnapshot]
     def normalize_children: (Array[untyped], AssociationTree, String, untyped) -> Array[RecordSnapshot]
 

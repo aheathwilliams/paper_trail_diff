@@ -237,21 +237,32 @@ RSpec.describe PaperTrailDiff::ScopeCondition do
       expect(build(-> { order(:label, :id).limit(1) })).to be_nil
     end
 
-    # Active Record reads only the conditions of a through's parts.
-    it 'builds no condition for a through that passes a ranked part, though the part is read' do
+    # A has_many through keeps only its parts' conditions, so a part is read
+    # unranked there; a has_one through orders by its parts and takes one.
+    it 'reads a has_many through a ranked part, the part unranked, but no such has_one' do
       ScopeConditionItem.has_many :all_items, class_name: 'ScopeConditionItem',
                                               foreign_key: :owner_id
+      ScopeConditionItem.belongs_to :parent_item, class_name: 'ScopeConditionItem',
+                                                  foreign_key: :owner_id
       ScopeConditionOwner.has_many :first_items, -> { order(:id).limit(1) },
                                    class_name: 'ScopeConditionItem', foreign_key: :owner_id
+      ScopeConditionOwner.has_one :lead_item, -> { order(:id) }, class_name: 'ScopeConditionItem',
+                                                                 foreign_key: :owner_id
       ScopeConditionOwner.has_many :first_through, through: :first_items, source: :all_items
-      ScopeConditionOwner.has_many :all_through, through: :items, source: :all_items
+      ScopeConditionOwner.has_one :lead_parent, through: :lead_item, source: :parent_item
       reflection
+      rows = [3, 1, 2].map { |id| Struct.new(:attributes).new({ 'id' => id }) }
+      ids = ->(condition) { condition.members(rows).map { |row| row.attributes.fetch('id') } }
 
       through = ScopeConditionOwner.reflect_on_association(:first_through)
-      expect(described_class.build(through)).to be_nil
-      expect(described_class.build(through.through_reflection)).not_to be_nil
-      expect(described_class.build(ScopeConditionOwner.reflect_on_association(:all_through)))
-        .not_to be_nil
+      expect(ids.call(described_class.build(through))).to eq([3, 1, 2])
+      expect(ids.call(described_class.build(through.through_reflection, ranked: false)))
+        .to eq([3, 1, 2])
+      expect(ids.call(described_class.build(through.through_reflection))).to eq([1])
+      expect(described_class.build(ScopeConditionOwner.reflect_on_association(:lead_parent)))
+        .to be_nil
+      expect(described_class.build(ScopeConditionOwner.reflect_on_association(:lead_parent),
+                                   ranked: false)).not_to be_nil
     end
 
     it 'reads a polymorphic target with the class it is given' do
@@ -290,18 +301,33 @@ RSpec.describe PaperTrailDiff::ScopeCondition do
       expect(cache.call(target, ScopeConditionItem)).to equal(item)
       expect(cache.call(target, ScopeConditionOwner)).not_to equal(item)
 
-      expect(PaperTrailDiff::ScopeCondition).to have_received(:build).exactly(4).times
+      unranked = cache.call(reflection(:ranked), ranked: false)
+      expect(unranked).not_to equal(ranked)
+      expect(cache.call(reflection(:ranked), ScopeConditionItem, ranked: false)).to equal(unranked)
+
+      expect(PaperTrailDiff::ScopeCondition).to have_received(:build).exactly(5).times
       expect(PaperTrailDiff::ScopeCondition).to have_received(:build)
-        .with(reflection(:ranked), ScopeConditionItem).once
+        .with(reflection(:ranked), ScopeConditionItem, ranked: true).once
     end
 
     it 'selects the records the scope admits, by their attributes' do
       records = [{ 'rank' => 1 }, { 'rank' => 2 }, { 'rank' => '1' }].map do |attributes|
         instance_double(ScopeConditionItem, attributes: attributes)
       end
-      expect(cache.select(reflection(:ranked), records)).to eq([records[0], records[2]])
-      expect(cache.select(reflection(:target), records, ScopeConditionItem))
+      expect(cache.select(reflection(:ranked), records, ranked: true))
         .to eq([records[0], records[2]])
+      expect(cache.select(reflection(:target), records, ScopeConditionItem, ranked: true))
+        .to eq([records[0], records[2]])
+    end
+
+    it 'ranks the records it selects only when asked' do
+      ScopeConditionOwner.has_many :first_ranked, -> { where(rank: 1).order(id: :desc).limit(1) },
+                                   class_name: 'ScopeConditionItem', foreign_key: :owner_id
+      records = [{ 'id' => 1, 'rank' => 1 }, { 'id' => 2, 'rank' => 1 }, { 'id' => 3, 'rank' => 2 }]
+                .map { |attributes| instance_double(ScopeConditionItem, attributes: attributes) }
+      expect([true, false].map do |ranked|
+        cache.select(reflection(:first_ranked), records, ranked: ranked)
+      end).to eq([[records[1]], records.first(2)])
     end
   end
 
@@ -341,8 +367,7 @@ RSpec.describe PaperTrailDiff::ScopeCondition do
     end
   end
 
-  # Active Record reads only the conditions of a through's parts.
-  describe '.ranked_through?' do
+  describe '.ranked_parts?' do
     before do
       ScopeConditionOwner.has_many :all_items, class_name: 'ScopeConditionItem',
                                                foreign_key: :owner_id
@@ -370,17 +395,40 @@ RSpec.describe PaperTrailDiff::ScopeCondition do
       end
     end
 
-    def ranked_through?(name)
-      described_class.ranked_through?(ScopeConditionOwner.reflect_on_association(name))
+    def ranked_parts?(name)
+      described_class.ranked_parts?(ScopeConditionOwner.reflect_on_association(name))
     end
 
     it 'finds a limit, offset or has_one order on any part a through passes' do
       expect(%i[first_through lead_through later_through nested_through].map do |name|
-        ranked_through?(name)
+        ranked_parts?(name)
       end).to eq([true, true, true, true])
       expect(%i[first_items plain_through plain_nested typed_through owner_through].map do |name|
-        ranked_through?(name)
+        ranked_parts?(name)
       end).to eq([false, false, false, false, false])
+    end
+  end
+
+  # A has_many through keeps only its parts' conditions.
+  describe '.ranked_through?' do
+    before do
+      ScopeConditionOwner.has_one :lead_item, -> { order(:id) }, class_name: 'ScopeConditionItem',
+                                                                 foreign_key: :owner_id
+      ScopeConditionOwner.has_one :any_item, class_name: 'ScopeConditionItem',
+                                             foreign_key: :owner_id
+      ScopeConditionItem.belongs_to :parent_item, class_name: 'ScopeConditionItem',
+                                                  foreign_key: :owner_id
+      ScopeConditionItem.has_many :all_items, class_name: 'ScopeConditionItem',
+                                              foreign_key: :owner_id
+      ScopeConditionOwner.has_one :lead_parent, through: :lead_item, source: :parent_item
+      ScopeConditionOwner.has_one :any_parent, through: :any_item, source: :parent_item
+      ScopeConditionOwner.has_many :lead_children, through: :lead_item, source: :all_items
+    end
+
+    it 'finds a ranked part only under a has_one through' do
+      expect(%i[lead_parent any_parent lead_children lead_item].map do |name|
+        described_class.ranked_through?(ScopeConditionOwner.reflect_on_association(name))
+      end).to eq([true, false, false, false])
     end
   end
 end

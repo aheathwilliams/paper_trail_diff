@@ -49,7 +49,7 @@ RSpec.describe PaperTrailDiff::PreparedHistoryLoader do
   end
 
   def supported?(history, model, name)
-    history.send(:supported?, model, reflection(model, name))
+    history.send(:supported?, model, reflection(model, name), true)
   end
 
   def nodes(history, model)
@@ -354,7 +354,7 @@ RSpec.describe PaperTrailDiff::PreparedHistoryLoader do
     loader.send(:mark_unsupported, TrackedArticle, composite, {})
     loader.send(:mark_unsupported, TrackedArticle, plain, {})
 
-    expect(history.send(:supported?, TrackedArticle, composite)).to be(false)
-    expect(history.send(:supported?, TrackedArticle, plain)).to be(true)
+    expect(history.send(:supported?, TrackedArticle, composite, true)).to be(false)
+    expect(history.send(:supported?, TrackedArticle, plain, true)).to be(true)
   end
 end

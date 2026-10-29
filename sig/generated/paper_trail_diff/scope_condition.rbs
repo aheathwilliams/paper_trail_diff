@@ -42,19 +42,25 @@ module PaperTrailDiff
     def self.scoped_path?: (untyped) -> bool
 
     # Returns nil when the scope cannot be read as plain conditions and an
-    # exact ranking.
-    # : (untyped, ?untyped) -> ScopeCondition?
-    def self.build: (untyped, ?untyped) -> ScopeCondition?
+    # exact ranking. A part of a has_many through is read unranked: the
+    # through's query keeps only its conditions.
+    # : (untyped, ?untyped, ?ranked: bool) -> ScopeCondition?
+    def self.build: (untyped, ?untyped, ?ranked: bool) -> ScopeCondition?
 
     # nil when the relation picks its members by conditions alone.
     # : (untyped, untyped, untyped) -> ScopeRanking?
     def self.ranking: (untyped, untyped, untyped) -> ScopeRanking?
 
-    # Active Record reads only the conditions of a through's parts, never
-    # their limit, offset or has_one order, so a through that passes a ranked
-    # part is not read.
+    # A has_one through orders its rows by its own order and then its parts',
+    # and takes the first, so one that passes a ranked part is not read. A
+    # has_many through keeps only its parts' conditions.
     # : (untyped) -> bool
     def self.ranked_through?: (untyped) -> bool
+
+    # Whether any part of a through, at any depth, has a limit, an offset or
+    # a has_one order.
+    # : (untyped) -> bool
+    def self.ranked_parts?: (untyped) -> bool
 
     # A polymorphic part's class, and so its scope, is known only per record.
     # : (untyped) -> bool
@@ -110,13 +116,13 @@ module PaperTrailDiff
       def initialize: () -> void
 
       # nil when the scope cannot be read from stored attributes.
-      # : (untyped, ?untyped) -> ScopeCondition?
-      def call: (untyped, ?untyped) -> ScopeCondition?
+      # : (untyped, ?untyped, ?ranked: bool) -> ScopeCondition?
+      def call: (untyped, ?untyped, ?ranked: bool) -> ScopeCondition?
 
       # The records the reflection's scope admits, as it ranks them. Its
       # condition must exist.
-      # : (untyped, Array[untyped], ?untyped) -> Array[untyped]
-      def select: (untyped, Array[untyped], ?untyped) -> Array[untyped]
+      # : (untyped, Array[untyped], ?untyped, ranked: bool) -> Array[untyped]
+      def select: (untyped, Array[untyped], ?untyped, ranked: bool) -> Array[untyped]
 
       @conditions: Hash[Array[untyped], ScopeCondition?]
     end

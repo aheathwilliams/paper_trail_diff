@@ -64,14 +64,16 @@ module PaperTrailDiff
       @state_reader.call(owner, reflection, boundary)
     end
 
-    #: (untyped, untyped, untyped, habtm_boundary: untyped) -> [bool, Array[untyped]]
-    def resolve(record, reflection, boundary, habtm_boundary:)
-      return [false, []] unless supported?(record.class, reflection)
+    # Unranked, as a part of a has_many through is read, it returns every row
+    # the part's conditions admit, a record reached twice appearing twice.
+    #: (untyped, untyped, untyped, habtm_boundary: untyped, ?ranked: bool) -> [bool, Array[untyped]]
+    def resolve(record, reflection, boundary, habtm_boundary:, ranked: true)
+      return [false, []] unless supported?(record.class, reflection, ranked)
 
       records = if reflection.options[:through]
-                  through_records(record, reflection, boundary, habtm_boundary)
+                  through_records(record, reflection, boundary, habtm_boundary, ranked)
                 else
-                  direct_records(record, reflection, boundary, habtm_boundary)
+                  direct_records(record, reflection, boundary, habtm_boundary, ranked)
                 end
       records ? [true, records] : [false, []]
     end
@@ -87,30 +89,30 @@ module PaperTrailDiff
 
     # A polymorphic target's class is known only once a record names it, so
     # belongs_to_records reads its scope for each record instead.
-    #: (untyped, untyped) -> bool
-    def supported?(owner_class, reflection)
+    #: (untyped, untyped, bool) -> bool
+    def supported?(owner_class, reflection, ranked)
       !@unsupported[edge_key(owner_class, reflection)] &&
-        (reflection.polymorphic? || !@conditions.call(reflection).nil?)
+        (reflection.polymorphic? || !@conditions.call(reflection, ranked: ranked).nil?)
     end
 
-    #: (untyped, untyped, untyped, untyped) -> Array[untyped]?
-    def direct_records(record, reflection, boundary, habtm_boundary)
+    #: (untyped, untyped, untyped, untyped, bool) -> Array[untyped]?
+    def direct_records(record, reflection, boundary, habtm_boundary, ranked)
       resolver = DIRECT_RESOLVERS.fetch(reflection.macro)
-      send(resolver, record, reflection, boundary, habtm_boundary)
+      send(resolver, record, reflection, boundary, habtm_boundary, ranked)
     end
 
-    #: (untyped, untyped, untyped, untyped) -> Array[untyped]?
-    def resolve_belongs_to(record, reflection, boundary, _habtm_boundary)
-      belongs_to_records(record, reflection, boundary)
+    #: (untyped, untyped, untyped, untyped, bool) -> Array[untyped]?
+    def resolve_belongs_to(record, reflection, boundary, _habtm_boundary, ranked)
+      belongs_to_records(record, reflection, boundary, ranked)
     end
 
-    #: (untyped, untyped, untyped, untyped) -> Array[untyped]
-    def resolve_children(record, reflection, boundary, _habtm_boundary)
-      child_records(record, reflection, boundary)
+    #: (untyped, untyped, untyped, untyped, bool) -> Array[untyped]
+    def resolve_children(record, reflection, boundary, _habtm_boundary, ranked)
+      child_records(record, reflection, boundary, ranked)
     end
 
-    #: (untyped, untyped, untyped) -> Array[untyped]?
-    def belongs_to_records(record, reflection, boundary)
+    #: (untyped, untyped, untyped, bool) -> Array[untyped]?
+    def belongs_to_records(record, reflection, boundary, ranked)
       foreign_key = scalar_foreign_key(reflection)
       return unless foreign_key
 
@@ -118,15 +120,15 @@ module PaperTrailDiff
       return [] if id.nil?
 
       model_class = AssociationTraversal.belongs_to_target(reflection, record)
-      return unless model_class && @conditions.call(reflection, model_class) &&
+      return unless model_class && @conditions.call(reflection, model_class, ranked: ranked) &&
                     @records.loaded?(model_class, id)
 
       target = Array(@records.record_before(model_class, id, boundary)).compact
-      @conditions.select(reflection, target, model_class)
+      @conditions.select(reflection, target, model_class, ranked: ranked)
     end
 
-    #: (untyped, untyped, untyped) -> Array[untyped]
-    def child_records(record, reflection, boundary)
+    #: (untyped, untyped, untyped, bool) -> Array[untyped]
+    def child_records(record, reflection, boundary, ranked)
       children = edge(record.class, reflection).values.flat_map do |group|
         model_class = group.fetch(:model)
         child_ids_for(group, record).filter_map do |id|
@@ -134,7 +136,7 @@ module PaperTrailDiff
           child if child && member_of?(child, reflection, record)
         end
       end
-      @conditions.select(reflection, children)
+      @conditions.select(reflection, children, ranked: ranked)
     end
 
     #: (Hash[Symbol, untyped], untyped) -> Array[untyped]
@@ -144,8 +146,8 @@ module PaperTrailDiff
       owners ? owners.fetch(owner.id.to_s, empty) : group.fetch(:ids)
     end
 
-    #: (untyped, untyped, untyped, untyped) -> Array[untyped]?
-    def habtm_records(record, reflection, boundary, habtm_boundary)
+    #: (untyped, untyped, untyped, untyped, bool) -> Array[untyped]?
+    def habtm_records(record, reflection, boundary, habtm_boundary, ranked)
       transaction_id = transaction_id_for(habtm_boundary)
       return unless transaction_id
 
@@ -154,38 +156,34 @@ module PaperTrailDiff
       return unless ids
 
       members = ids.filter_map { |id| @records.record_before(reflection.klass, id, boundary) }
-      @conditions.select(reflection, members)
+      @conditions.select(reflection, members, ranked: ranked)
     end
 
-    #: (untyped, untyped, untyped, untyped) -> Array[untyped]?
-    def through_records(record, reflection, boundary, habtm_boundary)
-      handled, intermediates = resolve(
-        record,
-        reflection.through_reflection,
-        boundary,
-        habtm_boundary: habtm_boundary
-      )
+    # A has_many through reads its parts unranked, as its query does. Its own
+    # scope applies to each row, and a ranked read then keeps a record reached
+    # twice as one member.
+    #: (untyped, untyped, untyped, untyped, bool) -> Array[untyped]?
+    def through_records(record, reflection, boundary, habtm_boundary, ranked)
+      read = lambda do |owner, part|
+        resolve(owner, part, boundary, habtm_boundary: habtm_boundary,
+                                       ranked: ranked && !reflection.collection?)
+      end
+      rows = through_rows(record, reflection, read)
+      return unless rows
+
+      rows = @conditions.select(reflection, rows, ranked: ranked)
+      ranked ? unique_records(rows) : rows
+    end
+
+    # The source records of each join record, once for each join.
+    #: (untyped, untyped, ^(untyped, untyped) -> [bool, Array[untyped]]) -> Array[untyped]?
+    def through_rows(record, reflection, read)
+      handled, joins = read.call(record, reflection.through_reflection)
       return unless handled
 
-      intermediates = intermediates.select do |intermediate|
-        AssociationTraversal.source_type_join?(reflection, intermediate)
-      end
-      resolved = resolve_sources(intermediates, reflection, boundary, habtm_boundary)
-      return unless resolved.all?(&:first)
-
-      @conditions.select(reflection, unique_records(resolved.flat_map(&:last)))
-    end
-
-    #: (Array[untyped], untyped, untyped, untyped) -> Array[[bool, Array[untyped]]]
-    def resolve_sources(intermediates, reflection, boundary, habtm_boundary)
-      intermediates.map do |intermediate|
-        resolve(
-          intermediate,
-          reflection.source_reflection,
-          boundary,
-          habtm_boundary: habtm_boundary
-        )
-      end
+      joins = joins.select { |join| AssociationTraversal.source_type_join?(reflection, join) }
+      resolved = joins.map { |join| read.call(join, reflection.source_reflection) }
+      resolved.flat_map(&:last) if resolved.all?(&:first)
     end
 
     #: (untyped, untyped, untyped) -> bool

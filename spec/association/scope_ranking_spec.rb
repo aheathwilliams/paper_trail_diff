@@ -108,14 +108,20 @@ RSpec.describe PaperTrailDiff::ScopeRanking do
     expect(build(-> { order(table[:id].desc).limit(1) })).not_to be_nil
   end
 
-  it 'reads only a direct has_many or has_one with an integer offset' do
+  it 'reads a has_many, through or not, or a direct has_one, with an integer offset' do
     expect(build(-> { order(:id).offset(1) }, macro: :has_one, name: :second)).not_to be_nil
     expect(build(-> { order(:id).limit(1) }, macro: :belongs_to, name: :owner_item)).to be_nil
     ScopeRankingOwner.has_many :ranked_through, -> { order(:id).limit(1) },
                                through: :items, source: :children
-    expect(described_class.build(relation(-> { order(:id).limit(1) }),
-                                 ScopeRankingOwner.reflect_on_association(:ranked_through),
-                                 ScopeRankingItem)).to be_nil
+    ScopeRankingOwner.has_one :lead_item, -> { order(:id) }, class_name: 'ScopeRankingItem',
+                                                             foreign_key: :owner_id
+    ScopeRankingItem.belongs_to :parent, class_name: 'ScopeRankingItem', foreign_key: :owner_id
+    ScopeRankingOwner.has_one :ranked_parent, -> { order(:id) }, through: :lead_item,
+                                                                 source: :parent
+    expect(%i[ranked_through ranked_parent].map do |name|
+      described_class.build(relation(-> { order(:id).limit(1) }),
+                            ScopeRankingOwner.reflect_on_association(name), ScopeRankingItem)
+    end.map(&:nil?)).to eq([false, true])
     expect(build(-> { order(:id).offset(Arel.sql('1')) })).to be_nil
     expect(build(-> { order(:id).offset('1') })).to be_nil
   end
