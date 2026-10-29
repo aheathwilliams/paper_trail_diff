@@ -47,3 +47,4 @@ matcher:
     - PaperTrailDiff::TimeVersionRange*
     - PaperTrailDiff::BatchedRootVersions*
     - PaperTrailDiff::DeletedAnalysisBatch*
+    - PaperTrailDiff::RecordedChanges*

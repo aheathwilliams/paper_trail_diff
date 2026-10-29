@@ -19,6 +19,7 @@ including ones most applications never need.
 - [Ignoring fields](#ignoring-fields)
 - [Reading results](#reading-results)
 - [JSON columns](#json-columns)
+- [What a version recorded](#what-a-version-recorded): `recorded_changes`
 - [Checking your setup](#checking-your-setup)
 - [Models, schemas, and edge cases](#models-schemas-and-edge-cases)
 - [Instrumentation](#instrumentation)
@@ -60,7 +61,7 @@ Take an article created as `"Draft"`, then updated to `"Published"`, then to
                                              only in the table
 ```
 
-Three things follow from this:
+Four things follow from this:
 
 - **A `create` version stands for "no record yet".** Its `reify` returns `nil`.
   Comparing it with a later state reports the record as added
@@ -70,6 +71,14 @@ Three things follow from this:
   change from the current record.
 - **A change shows up between two points, never at one.** That is why the
   timeline methods return steps, each comparing one state with the next.
+- **A change saved without a version joins the change before it.** Writing
+  with `update_columns` or with versioning off creates no version, but it
+  changes the values the record's next version stores, or its current row. The
+  gem reads the result of a change from there, so the write appears in the step
+  for that record's previous recorded change and is attributed to its author.
+  Ending a range at a version leaves out only the writes after it.
+  [`recorded_changes`](#what-a-version-recorded) reads what a version itself
+  recorded.
 
 ## Choosing a method
 
@@ -142,8 +151,9 @@ the current record instead. The step's `to_boundary.kind` is then `:current`.
 This works the same for a window that ends now and one that ended long ago.
 
 Reading the current record has one consequence: it includes changes PaperTrail
-never recorded, such as an `update_columns` call. Those appear in the last step
-of the window.
+never recorded, such as an `update_columns` call. Like any
+[change saved without a version](#how-papertrail-stores-history), each appears
+in the step for that record's last recorded change.
 
 If the window's last change destroyed the record, the window closes on that
 deletion instead. See [a destroyed record](#a-destroyed-record).
@@ -317,9 +327,10 @@ steps.reject(&:empty?).each do |step|
 end
 ```
 
-- Each step's `diff` is what the event at its `source_boundary` changed. Use
-  `source_boundary` for attribution. `to_boundary` is only the next point in
-  time and may belong to someone else.
+- Each step's `diff` is what the event at its `source_boundary` changed, plus
+  anything [saved without a version](#how-papertrail-stores-history) to the
+  same record before its next version. Use `source_boundary` for attribution.
+  `to_boundary` is only the next point in time and may belong to someone else.
 - Boundaries have a `kind`: `:version`, `:current` (the current record), or
   `:destroyed` (after a deletion). They also have `event`, `whodunnit`,
   `recorded_at`, `item_type`, `item_id`, `transaction_id`, and `record`, and
@@ -347,7 +358,7 @@ attributed = steps.reject(&:empty?)
 by_priya = attributed.select { |step| step.source_boundary.whodunnit == "Priya Shah" }
 
 by_priya.first.source_boundary.whodunnit  # "Priya Shah"
-by_priya.first.diff                     # exactly what that one event changed
+by_priya.first.diff                     # what that one event changed
 
 authors = attributed.group_by { |step| step.source_boundary.whodunnit }
                     .transform_values(&:length)
@@ -852,6 +863,56 @@ PaperTrailDiff.nested_changes(from_value, to_value) # also accepts two values
   has the whole change.
 - Keys such as `:a` and `"a"` in one object raise `AmbiguousNestedKeyError`.
 
+## What a version recorded
+
+`recorded_changes(version)` returns the changes PaperTrail stored with one
+version in its `object_changes` column, as a frozen hash of `ValueChange`
+objects in attribute-name order:
+
+```ruby
+PaperTrailDiff.recorded_changes(version)
+# => { "title" => <from "Draft" to "Published"> }
+```
+
+A step's `diff` compares the record before and after an event instead. The two
+usually agree. They differ when:
+
+- something was [saved without a version](#how-papertrail-stores-history)
+  before the record's next version. The diff includes it; this does not.
+- `has_paper_trail` ignores an attribute or leaves it out of `only:`. PaperTrail
+  stores its value but not its changes, so only the diff reports them.
+- the version is a `create` or a `destroy`. The diff reports
+  `record_presence_change`; this lists each attribute changing from `nil`, or
+  to `nil`.
+- an included association's foreign key changed. The diff reports the
+  association instead; this keeps the column.
+
+Other details:
+
+- It returns `nil` when nothing was recorded: the version table has no
+  `object_changes` column, or this version has no value in it. A version that
+  recorded no changes, such as a [checkpoint](#saving-a-checkpoint), returns
+  `{}`.
+- `ignore:` takes an array of attribute names and defaults to `updated_at`, as
+  elsewhere. It does not take `paths:`, because a version does not say which
+  association path it was reached through. Primary keys are left out.
+- Unlike PaperTrail's `version.changeset`, it never loads the record. That
+  saves a query per version, and a deleted record's values keep their types,
+  such as an enum's label rather than the integer PaperTrail stored.
+
+Steps name their source version by ID. Load the versions in one query rather
+than one per step; a model with its own version class needs that class here:
+
+<!-- executable:reference-recorded-changes -->
+```ruby
+ids = steps.map { |step| step.source_boundary.version_id }
+recorded = PaperTrail::Version.where(id: ids).to_h do |version|
+  [version.id, PaperTrailDiff.recorded_changes(version)]
+end
+
+recorded.fetch(steps.last.source_boundary.version_id)
+```
+
 ## Checking your setup
 
 List the associations a model supports, for example to build a settings
@@ -948,7 +1009,7 @@ All errors inherit from `PaperTrailDiff::Error`.
 | --- | --- |
 | `ConfigurationError` | An option is invalid |
 | `UnsupportedBatchPathError` | A batch requests a [costly association](#costly-associations) without `allow_expensive: true` |
-| `InvalidEndpointError` | A record is unsaved, destroyed, or has unsaved changes |
+| `InvalidEndpointError` | A record is unsaved, destroyed, or has unsaved changes, or `recorded_changes` is given something other than a version |
 | `UnloadedAssociationError` | `reload_live_endpoints: false` and an association is not loaded |
 | `VersionMismatchError` | Two endpoints belong to different records |
 | `ReversedEndpointsError` | Two versions are given newest first |
@@ -971,8 +1032,9 @@ All errors inherit from `PaperTrailDiff::Error`.
 Results can only be as complete as the history PaperTrail and PT-AT recorded.
 
 - Changes made with versioning off, with `update_columns`, or to `skip:` columns
-  were never recorded. A range ending at the current record shows the first two
-  in its last step, attributed to the change before them.
+  were never recorded. The first two still appear, in the step for the record's
+  previous recorded change and attributed to its author; see
+  [how PaperTrail stores history](#how-papertrail-stores-history).
 - Deleted versions, schema changes, and serializer changes can affect how old
   versions read.
 - Several queries against the current record are not one database snapshot.

@@ -1,0 +1,47 @@
+# Generated from lib/paper_trail_diff/recorded_changes.rb with RBS::Inline
+
+module PaperTrailDiff
+  # The changes PaperTrail wrote with one version, typed by the version's model.
+  #
+  # A step's diff compares reconstructed states, so it also holds whatever was
+  # saved without a version before the next one was read. This is the other
+  # account of the same event: only what PaperTrail recorded for it. Comparing
+  # the two is how a caller tells an unrecorded write from the event's own edit.
+  #
+  # PaperTrail's `version.changeset` finds the model through `version.item`,
+  # which is a query per version and nothing at all once the record is deleted.
+  # The version already names its model, so neither is needed here.
+  class RecordedChanges
+    IGNORE_NAMES_REQUIRED: ::String
+
+    # : (untyped, ignore: untyped) -> Hash[String, ValueChange]?
+    def self.call: (untyped, ignore: untyped) -> Hash[String, ValueChange]?
+
+    # : (untyped, ignore: untyped) -> void
+    def initialize: (untyped, ignore: untyped) -> void
+
+    # : () -> Hash[String, ValueChange]?
+    def call: () -> Hash[String, ValueChange]?
+
+    private
+
+    @ignore: untyped
+
+    @version: untyped
+
+    # Validated before anything is read, so a bad option fails the same way
+    # whether or not this version happened to record changes. Subclasses of
+    # Array and String pass, as in other methods' `ignore:`; Symbol has none.
+    # : () -> Array[String]
+    def ignored_names: () -> Array[String]
+
+    # Without the column, or with it left empty for this version, nothing was
+    # recorded. That is not the same answer as a recorded empty changeset.
+    # : () -> bool
+    def recorded?: () -> bool
+
+    # Primary keys identify the record rather than describe it, as in a diff.
+    # : (untyped, Array[String]) -> Hash[String, ValueChange]
+    def value_changes: (untyped, Array[String]) -> Hash[String, ValueChange]
+  end
+end
