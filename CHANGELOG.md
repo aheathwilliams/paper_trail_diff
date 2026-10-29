@@ -60,7 +60,14 @@ project follows [Semantic Versioning](https://semver.org/).
   `has_many :pinned_badges, class_name: 'PinnedBadge'`, holds only that class
   and its subclasses, as the live association does. It used to hold the
   sibling classes' records too, so a range ending at the current record
-  reported them as removed.
+  reported them as removed. Activity used to report a sibling's changes under
+  the association too, and to open a step for each version of a sibling or of
+  its children.
+- Activity reports a record whose STI type changed in the step of the version
+  that changed it, as a removal of the old type and an addition of the new,
+  and adds it to or removes it from an association to an STI subclass there.
+  It used to add the new type alongside the old one and leave the old one in
+  place until a later step, or to the end of a range ending at a version.
 - `activity_timeline`, and `analyze` with `activity: true`, return no steps for
   a range that ends at a version when `version_scope:` keeps none of its
   versions, as a checkpoint timeline does. They used to raise `NoMethodError`.

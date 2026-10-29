@@ -81,6 +81,10 @@ module PaperTrailDiff
     # : () -> Array[PreparedRecordState]
     def states: () -> Array[PreparedRecordState]
 
+    # The classes the record had at any point, or either side of one version.
+    # : (?untyped) -> Array[untyped]
+    def model_classes: (?untyped) -> Array[untyped]
+
     # : (untyped) -> [Hash[untyped, untyped], Hash[untyped, untyped]]?
     def transition: (untyped) -> [ Hash[untyped, untyped], Hash[untyped, untyped] ]?
 
@@ -152,6 +156,9 @@ module PaperTrailDiff
 
     # : (untyped, untyped) -> Array[untyped]
     def versions_for_id: (untyped, untyped) -> Array[untyped]
+
+    # : (untyped, untyped, ?untyped) -> Array[untyped]
+    def model_classes: (untyped, untyped, ?untyped) -> Array[untyped]
 
     # : (untyped, untyped) -> bool
     def loaded?: (untyped, untyped) -> bool

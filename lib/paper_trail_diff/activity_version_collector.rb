@@ -163,6 +163,7 @@ module PaperTrailDiff
 
     #: (untyped, Array[untyped]) -> Hash[Symbol, untyped]
     def group(model_class, ids)
+      ids = @prepared&.member_ids(model_class, ids) || ids
       { model: model_class, ids: ids, versions: versions_for(model_class, ids) }
     end
 
@@ -185,7 +186,7 @@ module PaperTrailDiff
       return [] if ids.empty?
 
       if (prepared = @prepared)
-        return prepared.versions(model_class, ids).select { |version| @range.include?(version) }
+        return prepared.member_versions(model_class, ids, @range)
       end
 
       version_class = model_class.paper_trail.version_class

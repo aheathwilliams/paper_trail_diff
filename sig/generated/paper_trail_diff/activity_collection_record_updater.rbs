@@ -19,6 +19,11 @@ module PaperTrailDiff
 
     @relationship: ActivityRelationship
 
+    # A row whose STI type changed is the same row under a new identity, so it
+    # is found by id among the records of its table.
+    # : (AssociationSnapshot, untyped) -> Integer?
+    def retyped_position: (AssociationSnapshot, untyped) -> Integer?
+
     # : (Array[RecordSnapshot], Integer?, RecordSnapshot?) -> Array[RecordSnapshot]
     def replacement_records: (Array[RecordSnapshot], Integer?, RecordSnapshot?) -> Array[RecordSnapshot]
   end

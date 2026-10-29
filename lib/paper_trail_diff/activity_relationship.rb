@@ -11,6 +11,7 @@ module PaperTrailDiff
       # @type var expected_ids: Array[untyped]
       expected = expected_ids.map { |id| id.to_s } # rubocop:disable Style/SymbolProc
       return false unless actual == expected
+      return false unless sti_member?(record, reflection, state)
       return true unless reflection.options[:as]
 
       type = event_attribute(record, reflection.type, state: state).to_s
@@ -26,6 +27,17 @@ module PaperTrailDiff
     end
 
     private
+
+    #: (untyped, untyped, Symbol) -> bool
+    def sti_member?(record, reflection, state)
+      model_class = reflection.klass
+      return true if model_class.descends_from_active_record?
+
+      column = model_class.inheritance_column
+      type = event_attribute(record, column, state: state)
+      attributes = { column => type } #: Hash[untyped, untyped]
+      AssociationTraversal.sti_member?(model_class, attributes)
+    end
 
     #: (untyped, untyped, state: Symbol) -> Array[String]
     def relationship_owner_values(record, reflection, state:)
