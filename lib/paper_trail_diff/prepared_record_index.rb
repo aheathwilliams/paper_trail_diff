@@ -168,8 +168,15 @@ module PaperTrailDiff
     def model_classes(version = nil)
       return states.map(&:model_class) unless version
 
+      states_around(version).map(&:model_class)
+    end
+
+    # The states either side of one version; a create has none before it and a
+    # destroy none after.
+    #: (untyped) -> Array[PreparedRecordState]
+    def states_around(version)
       index = @version_positions.fetch(version.id.to_s)
-      [state_for(version), state_after(index)].compact.map(&:model_class)
+      [state_for(version), state_after(index)].compact
     end
 
     #: (untyped) -> [Hash[untyped, untyped], Hash[untyped, untyped]]?
@@ -349,6 +356,11 @@ module PaperTrailDiff
     #: (untyped, untyped, ?untyped) -> Array[untyped]
     def model_classes(model_class, id, version = nil)
       @series.fetch(identity(model_class, id)).model_classes(version)
+    end
+
+    #: (untyped, untyped, untyped) -> Array[PreparedRecordState]
+    def states_around(model_class, id, version)
+      @series.fetch(identity(model_class, id)).states_around(version)
     end
 
     #: (untyped, untyped) -> bool

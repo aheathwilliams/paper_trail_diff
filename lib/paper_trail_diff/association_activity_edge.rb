@@ -113,6 +113,14 @@ module PaperTrailDiff
           .distinct.pluck(@associations.arel_table[:foreign_type]).compact
       end
 
+      # The owners that pointed at a target of this edge's type when the window
+      # opened or after a change inside it, whichever target that was.
+      #: () -> untyped
+      def typed_owners
+        conditions = { foreign_key_name: @reflection.foreign_key, foreign_type: @foreign_type }
+        candidates(@versions, owner_rows(conditions)).select(@column)
+      end
+
       #: (untyped) -> untyped
       def relation(filter)
         conditions = { foreign_key_name: @reflection.foreign_key, foreign_key_id: filter }

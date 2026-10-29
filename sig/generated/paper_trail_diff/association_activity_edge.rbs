@@ -72,6 +72,11 @@ module PaperTrailDiff
       # : () -> Array[String]
       def target_types: () -> Array[String]
 
+      # The owners that pointed at a target of this edge's type when the window
+      # opened or after a change inside it, whichever target that was.
+      # : () -> untyped
+      def typed_owners: () -> untyped
+
       # : (untyped) -> untyped
       def relation: (untyped) -> untyped
 

@@ -50,6 +50,24 @@ module PaperTrailDiff
       end
     end
 
+    # The versions of a through's join rows that are on its path. Under
+    # `source_type:`, a row is on it only while its type column names that
+    # class, so only the versions it had that type before or after count. A
+    # version saved before the type column existed has no type to read.
+    #: (Hash[Symbol, untyped], untyped) -> Array[untyped]
+    def join_versions(group, reflection)
+      versions = group.fetch(:versions)
+      source_type = reflection.options[:source_type]
+      return versions unless source_type
+
+      column = reflection.foreign_type
+      versions.select do |version|
+        @records.states_around(group.fetch(:model), version.item_id, version).any? do |state|
+          state.attributes[column] == source_type.to_s
+        end
+      end
+    end
+
     #: (untyped, Array[untyped], untyped, ActivityRange) -> Array[untyped]
     def child_ids(model, ids, reflection, range)
       historical, live = @children[reflection] ||= child_rows(model, reflection)

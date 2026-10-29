@@ -8,6 +8,12 @@ module PaperTrailDiff
     # : (untyped, untyped) -> untyped
     def self.belongs_to_target: (untyped, untyped) -> untyped
 
+    # A through with `source_type:` reaches only the join records whose type
+    # column names that class, as Active Record's `where(type => source_type)`.
+    # A through's `foreign_type` is its polymorphic source's.
+    # : (untyped, untyped) -> bool
+    def self.source_type_join?: (untyped, untyped) -> bool
+
     # The class a stored type names, or nil when it names none.
     # This class defines no constants of its own, so the one mutation left,
     # `const_get` on it rather than on Object, finds the same class.

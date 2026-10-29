@@ -38,6 +38,11 @@ module PaperTrailDiff
     # : (untyped, untyped) -> void
     def reify_through: (untyped, untyped) -> void
 
+    # PT-AT's belongs_to source ignores `source_type:` and reads targets by id
+    # alone, so a typed through walks its join records instead.
+    # : (untyped) -> bool
+    def pt_at_source?: (untyped) -> bool
+
     # : (untyped, untyped, untyped) -> Array[untyped]
     def through_members: (untyped, untyped, untyped) -> Array[untyped]
 

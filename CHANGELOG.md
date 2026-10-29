@@ -90,6 +90,14 @@ project follows [Semantic Versioning](https://semver.org/).
   `UnknownAssociationError`. The subclass is now read from the type the
   version stored, or for a `create`, from its recorded changes. A stored type
   that names no class raises `InvalidEndpointError`.
+- A `has_many :through` with `source_type:` holds only the records reached
+  through join records of that type, in every method. History used to ignore
+  the option, so a join record pointing at another type made its target a
+  member: a holder whose links named a tag reported the tag among its authors,
+  and the tag's changes opened activity steps and selected the holder in
+  `report`. The current record was read correctly, so a comparison with it
+  reported the tag as removed. A join record whose type changes now adds or
+  removes its target in the step of that version.
 - `compare` and `compare_many` between two versions report a `has_many` child
   that moved to another owner afterwards. They reported no change: the
   comparison read associations through PT-AT, which finds children by the keys
