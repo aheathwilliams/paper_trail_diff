@@ -121,6 +121,10 @@ responsible for that change, including its `whodunnit`, `event`, `item_type`,
 and `item_id`. Its `recorded_at` is the version's `created_at`.
 Use this source information for attribution: the version used to read the
 resulting state, exposed as `to_boundary`, may have been saved by someone else.
+A change saved without a version, such as with `update_columns`, appears in the
+step for that record's previous recorded change. To read only what a version
+recorded, use `PaperTrailDiff.recorded_changes(version)`; see
+[what a version recorded](docs/reference.md#what-a-version-recorded).
 
 `group: :transaction` combines changes from one database transaction. Its source
 information comes from the first event in that group. Omit `group:` if you need

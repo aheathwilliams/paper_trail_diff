@@ -56,6 +56,7 @@ require_relative 'paper_trail_diff/snapshot_normalizer'
 require_relative 'paper_trail_diff/historical_snapshot_store'
 require_relative 'paper_trail_diff/timeline_snapshot_provider'
 require_relative 'paper_trail_diff/activity_event_record_resolver'
+require_relative 'paper_trail_diff/recorded_changes'
 require_relative 'paper_trail_diff/activity_event_route_finder'
 require_relative 'paper_trail_diff/activity_relationship'
 require_relative 'paper_trail_diff/activity_collection_route_change'
@@ -389,6 +390,24 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
       return NestedComparator.call(change.from, change.to) if change.is_a?(ValueChange)
 
       NestedComparator.call(change, to_value)
+    end
+
+    # Reads what PaperTrail recorded with one version: its `object_changes`,
+    # typed by the version's model, as `{ "title" => <from "Draft" to "Published"> }`.
+    #
+    #   versions = PaperTrail::Version.where(id: steps.map { _1.source_boundary.version_id })
+    #   versions.to_h { [_1.id, PaperTrailDiff.recorded_changes(_1)] }
+    #
+    # A step's diff compares the states before and after an event, so it also
+    # includes anything saved without a version in between; this does not.
+    # Returns nil when nothing was recorded (no `object_changes` column, or no
+    # value for this version), which differs from a recorded empty hash. Unlike
+    # PaperTrail's `version.changeset`, it never loads the record, so it costs no
+    # query per version and still types a deleted record's changes. `ignore:`
+    # takes attribute names, as an array, and defaults to `updated_at`.
+    #: (untyped, ?ignore: Array[String | Symbol]) -> Hash[String, ValueChange]?
+    def recorded_changes(version, ignore: DEFAULT_IGNORED_ATTRIBUTES)
+      RecordedChanges.call(version, ignore: ignore)
     end
   end
 end

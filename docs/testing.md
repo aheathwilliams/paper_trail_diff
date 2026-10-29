@@ -49,11 +49,13 @@ passes is behavior nothing checks. `mutant.yml` lists the classes it mutates:
 - which versions a range reads: `TimeRange`, `TimelineRange`, `VersionRange`,
   `TimeVersionRange`, and `RootVersionPlan`;
 - which versions a batch or filter reads: `BatchedRootVersions`,
-  `DeletedAnalysisBatch`, and `HistoricalFilter`.
+  `DeletedAnalysisBatch`, and `HistoricalFilter`;
+- what a version recorded: `RecordedChanges`.
 
 The specs for the classes that read the database use tables of their own
-(`spec/support/filter_database.rb`, `spec/support/normalizer_database.rb`), so
-they run in both the core and the association suite.
+(`spec/support/filter_database.rb`, `spec/support/normalizer_database.rb`,
+`spec/support/recorded_changes_database.rb`), so they run in both the core and
+the association suite.
 
 Mutant reads `spec/unit` and `spec/association`, never `spec/integration`.
 Even there it does not run every spec for every mutation, only those whose
