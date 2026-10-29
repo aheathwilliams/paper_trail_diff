@@ -212,6 +212,9 @@ project follows [Semantic Versioning](https://semver.org/).
   membership of a `has_many :through` with a `has_many` source over moves,
   deletions, transactions, and changes saved without a version, alone and in
   a batch.
+- `ActivityEventRouteFinder` no longer checks for a polymorphic `belongs_to`
+  before following a path below it. Validation already rejects such a path,
+  so the check could not be reached.
 
 ## [0.13.1] - 2026-10-28
 
