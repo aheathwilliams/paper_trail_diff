@@ -615,6 +615,11 @@ whose source is not a `belongs_to`. Batch methods raise
 Remove it from `associations:`, or pass `allow_expensive: true` to accept the
 per-record cost. Single-record methods always allow them.
 
+A polymorphic `belongs_to` is loaded together too, with one query per target
+class. Its classes are known only from the records, though, so batch methods
+cannot reject a default-scoped one in advance: a record that points at a
+default-scoped class is read on its own, without an error.
+
 This check covers known association cases only. Your model callbacks, custom
 attribute types, and callable filters can still run queries. See the
 [performance guide](performance.md) for measurements.
@@ -657,6 +662,12 @@ comments.changed.first.associations["replies"].added
   the association already reports it. The same applies to the foreign key a
   `has_one` or `has_many` child points back with. Without the association, the
   key is an ordinary attribute.
+- A polymorphic `belongs_to` reads each record's target from its type
+  column. Because the targets' classes differ, a path cannot continue past
+  it: `"notable.comments"` raises `UnsupportedAssociationError`. A record
+  whose type names a model without `has_paper_trail` raises
+  `UnversionedAssociationError` when its history is read; the gem cannot
+  check this earlier, since only the record names the class.
 - `has_many :through` uses the versioned join model's history, so join-model
   attributes are available. HABTM reports membership and the target's
   attributes; it has no join model, so it has no join attributes.
@@ -960,8 +971,8 @@ All errors inherit from `PaperTrailDiff::Error`.
 | `FilterLimitExceededError` | `historical_filter:` needs more than `max_filter_versions:` |
 | `AssociationTrackingUnavailableError` | Association history is requested without PT-AT |
 | `UnknownAssociationError` | An association name does not exist |
-| `UnsupportedAssociationError` | An association's macro is not supported |
-| `UnversionedAssociationError` | An association's target model has no `has_paper_trail` |
+| `UnsupportedAssociationError` | An association's macro is not supported, or a path continues past a polymorphic `belongs_to` |
+| `UnversionedAssociationError` | An association's target model has no `has_paper_trail`, including the class a polymorphic `belongs_to` names |
 | `IncompleteAssociationHistoryError` | PT-AT did not record enough to rebuild an association, such as HABTM without a transaction |
 | `UnsupportedLiveActivityError` | A HABTM activity range ends at the current record |
 | `AmbiguousNestedKeyError` | `nested_changes` finds keys like `:a` and `"a"` together |

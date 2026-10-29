@@ -101,11 +101,23 @@ module PaperTrailDiff
     def validate_tree!(model_class, tree, path:)
       reflections_for(model_class, tree, path: path).each do |reflection|
         subtree = tree.child(reflection.name)
-        next unless subtree && !subtree.empty? && !reflection.polymorphic?
+        next unless subtree && !subtree.empty?
 
         child_path = join_path(path, reflection.name.to_s)
+        reject_polymorphic_descent!(reflection, subtree, child_path)
         validate_tree!(reflection.klass, subtree, path: child_path)
       end
+    end
+
+    # A polymorphic target's class differs from record to record, so the
+    # associations a path names below it may not exist on every target.
+    #: (untyped, AssociationTree, String) -> void
+    def reject_polymorphic_descent!(reflection, subtree, path)
+      return unless reflection.polymorphic?
+
+      raise UnsupportedAssociationError,
+            "unsupported association #{subtree.paths(prefix: path).first}: " \
+            "#{path} is polymorphic, so a path cannot continue past it"
     end
 
     #: (untyped, AssociationTree, String) -> Array[untyped]

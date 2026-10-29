@@ -21,6 +21,12 @@ module PaperTrailDiff
     # : () -> bool
     def current_end?: () -> bool
 
+    # Whether the state a version recorded after its change held inside the
+    # range. A range ending at a version ends at the state before it, so the
+    # change that version records is past the end, unlike #include?.
+    # : (untyped, untyped) -> bool
+    def recorded_before_end?: (untyped, untyped) -> bool
+
     private
 
     @end_boundary: untyped

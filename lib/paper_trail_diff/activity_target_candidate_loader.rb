@@ -6,9 +6,10 @@ module PaperTrailDiff
   # at its start and after each change inside it.
   #
   # PT-AT records a version's foreign keys as they stood after its change, so
-  # the target at the start comes from the latest version before it. Reading
-  # only the owners' versions inside the range misses a target whose owner did
-  # not change there -- an author renamed under an article nobody edited.
+  # the target at the start comes from the latest version before it, and the
+  # version a range ends at names a target only after the range. Reading only
+  # the owners' versions inside the range misses a target whose owner did not
+  # change there -- an author renamed under an article nobody edited.
   class ActivityTargetCandidateLoader
     # A plain class rather than Data.define, which arrived in Ruby 3.2 while this
     # gem supports 3.1.
@@ -18,14 +19,17 @@ module PaperTrailDiff
       attr_reader :foreign_type #: String?
       attr_reader :created_at #: untyped
       attr_reader :event #: String?
+      attr_reader :version_id #: untyped
 
-      #: (untyped, untyped, String?, ?untyped, ?String?) -> void
-      def initialize(owner_id, foreign_key_id, foreign_type, created_at = nil, event = nil)
+      #: (untyped, untyped, String?, ?untyped, ?String?, ?untyped) -> void
+      def initialize(owner_id, foreign_key_id, foreign_type, created_at = nil, event = nil, # rubocop:disable Metrics/ParameterLists
+                     version_id = nil)
         @owner_id = owner_id
         @foreign_key_id = foreign_key_id
         @foreign_type = foreign_type
         @created_at = created_at
         @event = event
+        @version_id = version_id
         freeze
       end
     end
@@ -40,7 +44,9 @@ module PaperTrailDiff
 
     #: () -> Array[Row]
     def call
-      rows = historical_rows
+      rows = historical_rows.select do |row|
+        @range.recorded_before_end?(row.created_at, row.version_id)
+      end
       @range.current_end? ? rows + current_rows : rows
     end
 
@@ -53,8 +59,9 @@ module PaperTrailDiff
       version_class = @owner_class.paper_trail.version_class
       relation = candidate_scope(version_class).call(historical_relation(version_class))
       rows = relation.distinct.pluck(*historical_columns(version_class))
-      rows.map do |owner_id, id, type, created_at, event|
-        Row.new(Support.record_id(@owner_class, owner_id), id, type, created_at, event)
+      rows.map do |row|
+        owner_id, id, type, created_at, event, version_id = row
+        Row.new(Support.record_id(@owner_class, owner_id), id, type, created_at, event, version_id)
       end
     end
 
@@ -89,7 +96,7 @@ module PaperTrailDiff
       versions = version_class.arel_table
       associations = association_class.arel_table
       [versions[:item_id], associations[:foreign_key_id], associations[:foreign_type],
-       versions[:created_at], versions[:event]]
+       versions[:created_at], versions[:event], versions[:id]]
     end
 
     #: () -> untyped

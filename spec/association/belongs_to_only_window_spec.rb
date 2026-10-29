@@ -85,4 +85,22 @@ RSpec.describe 'Activity windows where only a belongs_to target changed' do
     expect(batch.activity_timeline.map { |step| step.diff.to_h })
       .to eq(single.activity_timeline.map { |step| step.diff.to_h })
   end
+
+  # The version that closes the window records the author the article points
+  # at after it, which the window never reached.
+  it 'leaves out the author an article moves to when the window closes' do
+    first = TrackedAuthor.create!(name: 'Ann')
+    second = TrackedAuthor.create!(name: 'Bea')
+    article = TrackedArticle.create!(title: 'Moving', author: first)
+    window_start = Time.now.utc
+    article.update!(title: 'Moved')
+    second.update!(name: 'Beatrice')
+    window_end = Time.now.utc
+    article.update!(author: second)
+
+    analyses(article, :author, window_start..window_end).each do |analysis|
+      expect(analysis.activity_timeline.map { |step| step.source_boundary.item_type })
+        .to eq(['TrackedArticle'])
+    end
+  end
 end

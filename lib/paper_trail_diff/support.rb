@@ -3,7 +3,7 @@
 
 module PaperTrailDiff
   # Internal helpers for isolating and serializing values held by result objects.
-  module Support
+  module Support # rubocop:disable Metrics/ModuleLength
     module_function
 
     #: (untyped) -> untyped
@@ -46,7 +46,12 @@ module PaperTrailDiff
 
     #: (untyped) -> Array[untyped]
     def chronological_version_key(version)
-      [version.created_at, version.id.to_s.rjust(32, '0')]
+      version_key(version.created_at, version.id)
+    end
+
+    #: (untyped, untyped) -> Array[untyped]
+    def version_key(created_at, id)
+      [created_at, id.to_s.rjust(32, '0')]
     end
 
     # Ordering falls back to the id whenever timestamps tie, which recovers the

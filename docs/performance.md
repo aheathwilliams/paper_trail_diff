@@ -45,9 +45,10 @@ Ruby memory was about 15.0, 20.8 and 19.9 MiB respectively. These timings do not
 establish a retained-activity improvement.
 
 A querying initialization callback still produced 10 / 26 / 86 queries, and a
-querying historical predicate produced 8 / 12 / 27. Custom behavior, polymorphic
-or advanced graph reconstruction, and non-leaf activity fallbacks may still
-instantiate historical records. There is no blanket no-N+1 guarantee.
+querying historical predicate produced 8 / 12 / 27. Custom behavior, advanced
+graph reconstruction, and non-leaf activity fallbacks may still instantiate
+historical records, as does a polymorphic `belongs_to` to a default-scoped
+class. There is no blanket no-N+1 guarantee.
 
 Production parity matches PaperTrail for STI, enum, decimal, date, boolean, JSON
 and serialized values, including missing fields supplied by callbacks/default

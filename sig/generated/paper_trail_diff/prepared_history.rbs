@@ -46,6 +46,8 @@ module PaperTrailDiff
 
     @unsupported: Hash[Array[String], bool]
 
+    # A polymorphic target's class is known only once a record names it, so
+    # belongs_to_records checks its default scopes for each record instead.
     # : (untyped, untyped) -> bool
     def supported?: (untyped, untyped) -> bool
 

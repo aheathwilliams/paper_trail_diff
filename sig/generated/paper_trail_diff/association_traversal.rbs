@@ -47,6 +47,11 @@ module PaperTrailDiff
     # : (untyped, AssociationTree, path: String) -> void
     def validate_tree!: (untyped, AssociationTree, path: String) -> void
 
+    # A polymorphic target's class differs from record to record, so the
+    # associations a path names below it may not exist on every target.
+    # : (untyped, AssociationTree, String) -> void
+    def reject_polymorphic_descent!: (untyped, AssociationTree, String) -> void
+
     # : (untyped, AssociationTree, String) -> Array[untyped]
     def requested_reflections: (untyped, AssociationTree, String) -> Array[untyped]
 

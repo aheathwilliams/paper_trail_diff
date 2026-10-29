@@ -20,6 +20,9 @@ project follows [Semantic Versioning](https://semver.org/).
   selected through a HABTM path in a window that ends at the current record
   raises `UnsupportedLiveActivityError`, as one that changed itself already
   does.
+- A path that continues past a polymorphic `belongs_to`, such as
+  `"notable.comments"`, raises `UnsupportedAssociationError`. The part after
+  it used to be ignored without a word.
 
 ### Changed
 
@@ -29,6 +32,16 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Historical analysis through a polymorphic `belongs_to` works in every method.
+  Only comparisons between two versions used to work: timelines, analyses,
+  reports, and comparisons with the current record raised `ArgumentError`.
+  Batches load the targets with one query per target class. A target class
+  without `has_paper_trail` raises `UnversionedAssociationError` when a record
+  names it, rather than a `NoMethodError` from PT-AT, and a default-scoped
+  target class is read as its association returns it.
+- Activity leaves out the `belongs_to` target a record moves to in the
+  version that closes the window. Its changes inside the window used to add
+  empty steps, attributed to a record the root never pointed at there.
 - Activity reports a change to a `belongs_to` target, or to the source of a
   `has_many :through`, when the record pointing at it did not change in the
   window: an author renamed under an article nobody edited. It used to report

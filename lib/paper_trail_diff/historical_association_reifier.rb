@@ -37,7 +37,7 @@ module PaperTrailDiff
       reified[reflection.name] = true
       case reflection.macro
       when :belongs_to
-        reifier(:BelongsTo).reify(reflection, record, options, @transaction_id)
+        reify_belongs_to(record, reflection)
       when :has_one
         reifier(:HasOne).reify(reflection, record, options, @transaction_id)
       when :has_many
@@ -45,6 +45,26 @@ module PaperTrailDiff
       when :has_and_belongs_to_many
         reify_habtm(record, reflection)
       end
+    end
+
+    #: (untyped, untyped) -> void
+    def reify_belongs_to(record, reflection)
+      ensure_versioned_target!(record, reflection) if reflection.polymorphic?
+      reifier(:BelongsTo).reify(reflection, record, options, @transaction_id)
+    end
+
+    # A polymorphic target's class is known only from the record's type
+    # column, so TraversalPreparer cannot check it is versioned up front.
+    #: (untyped, untyped) -> void
+    def ensure_versioned_target!(record, reflection)
+      model_class = AssociationTraversal.belongs_to_target(reflection, record)
+      return if model_class.nil? || Support.versioned?(model_class)
+
+      raise UnversionedAssociationError,
+            "association #{record.class.name}##{reflection.name} cannot be compared " \
+            "historically: it points at #{model_class.name}, which is not versioned. Add " \
+            "`has_paper_trail` to #{model_class.name}, or mirror the fields you need onto a " \
+            'model that has it.'
     end
 
     #: (untyped, untyped) -> void

@@ -82,10 +82,12 @@ module PaperTrailDiff
     # @rbs @unsupported: Hash[Array[String], bool]
     # @rbs @habtm: Hash[Array[String], Hash[String, Array[untyped]]]
 
+    # A polymorphic target's class is known only once a record names it, so
+    # belongs_to_records checks its default scopes for each record instead.
     #: (untyped, untyped) -> bool
     def supported?(owner_class, reflection)
       !@unsupported[edge_key(owner_class, reflection)] &&
-        reflection.scope.nil? && !reflection.klass.default_scopes?
+        reflection.scope.nil? && (reflection.polymorphic? || !reflection.klass.default_scopes?)
     end
 
     #: (untyped, untyped, untyped, untyped) -> Array[untyped]?
@@ -113,7 +115,7 @@ module PaperTrailDiff
       return [] if id.nil?
 
       model_class = AssociationTraversal.belongs_to_target(reflection, record)
-      return unless model_class && @records.loaded?(model_class, id)
+      return unless model_class && !model_class.default_scopes? && @records.loaded?(model_class, id)
 
       Array(@records.record_before(model_class, id, boundary)).compact
     end

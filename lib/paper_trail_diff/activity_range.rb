@@ -39,6 +39,20 @@ module PaperTrailDiff
       !Endpoint.version?(@end_boundary)
     end
 
+    # Whether the state a version recorded after its change held inside the
+    # range. A range ending at a version ends at the state before it, so the
+    # change that version records is past the end, unlike #include?.
+    #: (untyped, untyped) -> bool
+    def recorded_before_end?(created_at, id)
+      end_key = @end_key
+      return created_at <= @end_boundary unless end_key
+
+      comparison = Support.version_key(created_at, id) <=> end_key
+      raise ConfigurationError, 'versions have incomparable timestamps' unless comparison
+
+      comparison.negative?
+    end
+
     private
 
     # @rbs @start_boundary: untyped

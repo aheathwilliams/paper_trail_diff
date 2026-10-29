@@ -108,9 +108,12 @@ module PaperTrailDiff
       end.uniq.sort.freeze
     end
 
+    # A polymorphic target's class is known only per record, so it cannot be
+    # checked here; a target that is not versioned raises when it is read.
     #: (untyped) -> bool
     def direct_versioned_reflection?(reflection)
-      return false if reflection.polymorphic? || reflection.options[:through]
+      return true if reflection.polymorphic?
+      return false if reflection.options[:through]
       return false if reflection.macro == :has_and_belongs_to_many
 
       paper_trail = Object.const_get(:PaperTrail) #: untyped
