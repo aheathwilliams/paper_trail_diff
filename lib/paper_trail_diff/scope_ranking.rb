@@ -11,15 +11,21 @@ module PaperTrailDiff
     DIRECTIONS = { 'Arel::Nodes::Ascending' => false, 'Arel::Nodes::Descending' => true }.freeze
     ATTRIBUTE = 'Arel::Attributes::Attribute'
     ENUM_TYPE = 'ActiveRecord::Enum::EnumType'
-    # Integers and booleans sort alike everywhere. Strings follow a collation
-    # and times the precision each history kept, so neither is read.
-    ORDER_TYPES = %w[ActiveModel::Type::Integer ActiveModel::Type::Boolean].freeze
+    # Integers, booleans and dates sort alike everywhere. Strings follow a
+    # collation, so they are not read.
+    ORDER_TYPES = %w[ActiveModel::Type::Integer ActiveModel::Type::Boolean
+                     ActiveModel::Type::Date].freeze
+    # Times sort alike only at the precision both the column and history
+    # keep. A time of day is not read: in memory it keeps the date it was
+    # given, which the database drops.
+    DATETIME_TYPE = 'ActiveModel::Type::DateTime'
     # Where each adapter sorts NULL in an ascending order by default; a
     # descending order reverses it. Another adapter's ranking is not read.
     NULLS_LAST = { 'postgresql' => true, 'sqlite3' => false, 'mysql2' => false,
                    'trilogy' => false, 'sqlserver' => false }.freeze
     # Places in a sort key, of which only the order counts: a value between a
-    # NULL sorted first and one sorted last, and false before true.
+    # NULL sorted first and one sorted last, and false before true. Every
+    # value is a number, so that a descending key can negate it.
     NULL_PLACE = { false => -1, true => 1 }.freeze
     VALUE_PLACE = 0
     BOOLEAN_VALUE = { false => 0, true => 1 }.freeze
@@ -103,9 +109,23 @@ module PaperTrailDiff
 
       type = model_class.type_for_attribute(name)
       type = type.subtype if ENUM_TYPE.eql?(type.class.name)
-      ORDER_TYPES.intersect?(type.class.ancestors.map(&:name))
+      kinds = type.class.ancestors.map(&:name)
+      ORDER_TYPES.intersect?(kinds) ||
+        (kinds.include?(DATETIME_TYPE) && exact_time?(model_class, type))
     end
     private_class_method :orderable?
+
+    # Active Record truncates a time to its column's precision before writing
+    # it, so history holds the stored value when it keeps that many digits.
+    # Times the type stores in UTC sort as the instants they name; local
+    # times repeat an hour when clocks go back.
+    #: (untyped, untyped) -> bool
+    def self.exact_time?(model_class, type)
+      precision = type.precision
+      digits = StoredTimePrecision.digits(model_class)
+      !precision.nil? && (digits.nil? || digits >= precision) && type.default_timezone == :utc
+    end
+    private_class_method :exact_time?
 
     #: (untyped, Array[[String, bool]], bool, Integer?, Integer?) -> void
     def initialize(model_class, keys, nulls_last, limit, offset)
@@ -138,7 +158,7 @@ module PaperTrailDiff
     # Keys compare in turn, and the primary key always decides. A descending
     # key negates its places, which also moves NULL to the other end, as each
     # adapter does by default.
-    #: (Hash[String, untyped]) -> Array[Array[Integer]]
+    #: (Hash[String, untyped]) -> Array[Array[Numeric]]
     def sort_key(attributes)
       @keys.map do |name, descending|
         place = place(stored(name, attributes))
@@ -148,11 +168,19 @@ module PaperTrailDiff
 
     # NULL holds the adapter's place alone, so it never compares as a value.
     # A version saved before its column existed holds NULL there too.
-    #: (untyped) -> Array[Integer]
+    #: (untyped) -> Array[Numeric]
     def place(value)
       return [NULL_PLACE.fetch(@nulls_last)] if value.nil?
 
-      [VALUE_PLACE, BOOLEAN_VALUE.fetch(value, value)]
+      [VALUE_PLACE, number(value)]
+    end
+
+    # A time as its seconds, exactly, and a date as its day number.
+    #: (untyped) -> Numeric
+    def number(value)
+      value = BOOLEAN_VALUE.fetch(value, value)
+      value = value.jd if value.respond_to?(:jd)
+      value.to_r
     end
 
     # The value the database sorts by, as the key's type casts it.

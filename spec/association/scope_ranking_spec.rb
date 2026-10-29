@@ -12,6 +12,12 @@ ActiveRecord::Schema.define do
     table.string :kind, null: false, default: 'a'
     table.string :label
     table.datetime :seen_at
+    table.datetime :ms_at, precision: 3
+    table.datetime :loose_at, precision: nil
+    table.datetime :second_at, precision: 0
+    table.time :starts_at, precision: 6
+    table.decimal :amount, precision: 10, scale: 2
+    table.date :due_on
   end
 end
 
@@ -79,11 +85,11 @@ RSpec.describe PaperTrailDiff::ScopeRanking do
     expect(build(-> { limit(2) })).to be_nil
   end
 
-  it 'reads integer, boolean and integer enum columns, and no other keys' do
-    %i[rank level flag status].each do |key|
+  it 'reads integer, boolean, integer enum, date and exact datetime columns, and no others' do
+    %i[rank level flag status due_on seen_at ms_at].each do |key|
       expect(build(-> { order(key, :id).limit(1) })).not_to be_nil
     end
-    %i[label seen_at kind].each do |key|
+    %i[label kind loose_at starts_at amount].each do |key|
       expect(build(-> { order(key, :id).limit(1) })).to be_nil
     end
     # Active Record writes `order(:virtual_rank)` as SQL, so the attribute is
@@ -126,6 +132,19 @@ RSpec.describe PaperTrailDiff::ScopeRanking do
     expect(build(-> { order(:id).offset('1') })).to be_nil
   end
 
+  # JSON history keeps milliseconds by default, and local times repeat an hour.
+  it 'reads a datetime only at a precision history keeps, stored in UTC' do
+    allow(PaperTrailDiff::StoredTimePrecision).to receive(:digits).and_return(3)
+    expect(%i[seen_at ms_at second_at].map { |key| build(-> { order(key, :id).limit(1) }) }
+             .map(&:nil?)).to eq([true, false, false])
+    allow(PaperTrailDiff::StoredTimePrecision).to receive(:digits).and_return(nil)
+    allow(ActiveRecord).to receive(:default_timezone).and_return(:local)
+    expect(build(-> { order(:ms_at, :id).limit(1) })).to be_nil
+    expect(build(-> { order(:due_on, :id).limit(1) })).not_to be_nil
+    expect(PaperTrailDiff::StoredTimePrecision).to have_received(:digits).with(ScopeRankingItem)
+                                                                         .at_least(:once)
+  end
+
   it 'reads only an adapter whose NULL placement it knows' do
     with_adapter('oracle') do
       expect(build(-> { order(:level, :id).limit(1) })).to be_nil
@@ -164,6 +183,17 @@ RSpec.describe PaperTrailDiff::ScopeRanking do
         expect(ranked(-> { order(:rank, :id).limit(9) }, rows)).to eq([1, 5, 2, 3, 4])
         expect(ranked(-> { order(rank: :desc, id: :asc).limit(9) }, rows)).to eq([3, 4, 2, 1, 5])
       end
+    end
+
+    it 'ranks datetimes to the microsecond and dates by day, either way' do
+      at = Time.utc(2026, 1, 1, 12)
+      times = [row(id: 1, seen_at: at + Rational(2, 1_000_000), due_on: Date.new(2026, 1, 3)),
+               row(id: 2, seen_at: at, due_on: Date.new(2026, 1, 2)),
+               row(id: 3, seen_at: at + Rational(1, 1_000_000), due_on: Date.new(2026, 1, 2)),
+               row(id: 4, seen_at: at - 86_400, due_on: nil)]
+      expect(ranked(-> { order(seen_at: :desc, id: :asc).limit(9) }, times)).to eq([1, 3, 2, 4])
+      expect(ranked(-> { order(:due_on, :id).limit(9) }, times)).to eq([4, 2, 3, 1])
+      expect(ranked(-> { order(due_on: :desc, id: :desc).limit(3) }, times)).to eq([1, 3, 2])
     end
 
     it 'compares the values the database stores, as the key’s type casts them' do

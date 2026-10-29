@@ -10,7 +10,7 @@ ActiveRecord::Base.establish_connection(
   ENV.fetch('PAPER_TRAIL_DIFF_DATABASE_URL') { { adapter: 'sqlite3', database: ':memory:' } }
 )
 ActiveRecord::Migration.verbose = false
-ActiveRecord.yaml_column_permitted_classes = [Symbol, Time]
+ActiveRecord.yaml_column_permitted_classes = [Symbol, Time, Date]
 if ActiveRecord::Base.connection.adapter_name == 'SQLServer'
   # PaperTrail serializes SQL Server datetime2 values as adapter wrappers.
   ActiveRecord.yaml_column_permitted_classes += [

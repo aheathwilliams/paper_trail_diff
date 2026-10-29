@@ -79,8 +79,14 @@ project follows [Semantic Versioning](https://semver.org/).
   sorts as each adapter puts it by default. In the reconstruction probe,
   `report` over `order(:id).limit(1)` went from 252 queries and 160 `reify`
   calls at 20 roots, with the opt-in, to 32 queries and none without it. A
-  string or time order, an order with ties, and a `has_one :through` over a
-  ranked part are still rejected without the opt-in.
+  string order, an order with ties, and a `has_one :through` over a ranked
+  part are still rejected without the opt-in.
+- Batch methods also rank by date columns, and by datetime columns when the
+  column declares a precision that history keeps and times are stored in UTC,
+  such as `order(created_at: :desc).limit(5)` with YAML history. JSON history
+  keeps milliseconds by default, so with it only a `datetime(3)` column is
+  read. A time-of-day column, and a datetime without a precision, are still
+  rejected without the opt-in.
 - Batch methods read a `has_many :through` over a part with a `limit`,
   `offset`, or `has_one` order, and one with its own `limit` or `offset`, from
   prepared history without the opt-in.
@@ -107,7 +113,7 @@ project follows [Semantic Versioning](https://semver.org/).
 
 - A `limit` or `offset` scope, or an ordered `has_one`, read at a version
   returns the records its query returned then, when the order is total and
-  sorts by integer, boolean, or integer enum columns. It used to start from
+  sorts by columns batch methods can rank. It used to start from
   the association's current rows, so a range whose records later changed
   reported the wrong ones: with comments `first` and `second` under
   `order(:id).limit(1)`, destroying `first` and adding `third` reported

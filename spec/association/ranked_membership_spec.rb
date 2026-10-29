@@ -14,6 +14,8 @@ ActiveRecord::Schema.define do
     table.integer :position
     table.boolean :pinned, null: false, default: false
     table.boolean :hidden, null: false, default: false
+    table.datetime :seen_at
+    table.date :due_on
     table.timestamps null: false
   end
 end
@@ -31,6 +33,10 @@ class RankList < ActiveRecord::Base
   has_one :lead_item, -> { order(pinned: :desc, position: :asc, id: :asc) },
           class_name: 'RankItem', foreign_key: :list_id
   has_one :second_item, -> { order(:id).offset(1) }, class_name: 'RankItem', foreign_key: :list_id
+  # Times a microsecond apart, as history keeps them, and dates.
+  has_many :recent_items, -> { order(seen_at: :desc, id: :desc).limit(2) },
+           class_name: 'RankItem', foreign_key: :list_id
+  has_one :due_item, -> { order(:due_on, :id) }, class_name: 'RankItem', foreign_key: :list_id
   # Kept on the record path: a string order, an order with ties, and a through.
   has_many :titled_items, -> { order(:title, :id).limit(1) }, class_name: 'RankItem',
                                                               foreign_key: :list_id
@@ -54,8 +60,12 @@ RSpec.describe 'A ranked association over time' do
     [RankItem, RankList].each(&:delete_all)
   end
 
-  let(:paths) { %i[top_items bottom_items later_items paged_items lead_item second_item] }
-  let(:collections) { %i[top_items bottom_items later_items paged_items] }
+  let(:paths) do
+    %i[top_items bottom_items later_items paged_items lead_item second_item recent_items due_item]
+  end
+  let(:collections) { %i[top_items bottom_items later_items paged_items recent_items] }
+  let(:at) { Time.utc(2026, 1, 1, 12) }
+  let(:day) { Date.new(2026, 1, 1) }
   let(:checkpoints) { [] }
 
   # One version per list, saved together, with each association's live members.
@@ -85,26 +95,31 @@ RSpec.describe 'A ranked association over time' do
   end
 
   def seed(list)
-    [item(list, 'a', position: 2), item(list, 'b'), item(list, 'c', position: 1),
-     item(list, 'd', position: 2, pinned: true)]
+    [item(list, 'a', position: 2, seen_at: microseconds(1), due_on: day + 2),
+     item(list, 'b'), item(list, 'c', position: 1, seen_at: microseconds(2), due_on: day),
+     item(list, 'd', position: 2, pinned: true, seen_at: at, due_on: day + 2)]
+  end
+
+  def microseconds(count)
+    at + Rational(count, 1_000_000)
   end
 
   # Ties in `position` and NULLs, moves, hides, destroys and new records.
   def history(first, second)
     a, b, c, d = seed(first)
     checkpoint(first, second)
-    b.update!(position: 0)
-    item(first, 'e', position: 1)
+    b.update!(position: 0, seen_at: microseconds(3))
+    item(first, 'e', position: 1, seen_at: microseconds(2), due_on: day)
     checkpoint(first, second)
     RankItem.transaction do
-      c.update!(position: nil, hidden: true)
-      d.update!(pinned: false)
+      c.update!(position: nil, hidden: true, seen_at: nil)
+      d.update!(pinned: false, due_on: day - 1)
     end
     a.destroy!
     checkpoint(first, second)
     b.update!(list: second)
-    item(second, 'f', pinned: true)
-    c.update!(hidden: false, position: 3)
+    item(second, 'f', pinned: true, seen_at: microseconds(4), due_on: day - 2)
+    c.update!(hidden: false, position: 3, due_on: day + 5)
     checkpoint(first, second)
   end
 
