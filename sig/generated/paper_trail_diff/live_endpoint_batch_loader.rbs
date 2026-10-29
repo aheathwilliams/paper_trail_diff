@@ -25,6 +25,11 @@ module PaperTrailDiff
     # : (untyped, AssociationTree) -> Array[[untyped, AssociationTree]]
     def selected_reflections: (untyped, AssociationTree) -> Array[[ untyped, AssociationTree ]]
 
+    # Active Record raises a bare NameError for a type that names no class, so
+    # each type is resolved first to raise one that names the record.
+    # : (Array[untyped], Array[[untyped, AssociationTree]]) -> void
+    def resolve_polymorphic_targets: (Array[untyped], Array[[ untyped, AssociationTree ]]) -> void
+
     # : (Array[untyped], Array[[untyped, AssociationTree]], individually: bool) -> void
     def preload_subtrees: (Array[untyped], Array[[ untyped, AssociationTree ]], individually: bool) -> void
 

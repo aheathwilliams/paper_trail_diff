@@ -5,15 +5,37 @@ module PaperTrailDiff
   # Resolves and validates ActiveRecord reflections for a bounded association tree.
   class AssociationTraversal
     # The class a `belongs_to` points at for this record, reading a polymorphic
-    # type column when there is one. Nil when that type names no class.
+    # type column when there is one. Nil when the record points at nothing.
     #: (untyped, untyped) -> untyped
     def self.belongs_to_target(reflection, record)
       return reflection.klass unless reflection.polymorphic?
 
-      Object.const_get(record.public_send(reflection.foreign_type).to_s)
+      type = record.public_send(reflection.foreign_type).to_s
+      polymorphic_target(reflection, record, type) unless type.empty?
+    end
+
+    # The class a stored type names, or nil when it names none.
+    #: (String) -> untyped
+    def self.named_class(type)
+      Object.const_get(type)
     rescue NameError
       nil
     end
+
+    # A type left by a renamed or removed model names no class. Active Record
+    # and PT-AT raise a bare NameError for it, which does not say where it is.
+    #: (untyped, untyped, String) -> untyped
+    def self.polymorphic_target(reflection, record, type)
+      model_class = named_class(type)
+      return model_class if model_class
+
+      raise IncompleteAssociationHistoryError,
+            "association #{record.class.name}##{reflection.name} cannot be read: " \
+            "#{record.class.name} #{record.id} has #{reflection.foreign_type} #{type}, which " \
+            'names no class. If the model was renamed, replace the old name in that column ' \
+            'and in the versions that recorded it.'
+    end
+    private_class_method :polymorphic_target
 
     attr_reader :tree #: AssociationTree
 
@@ -116,11 +138,23 @@ module PaperTrailDiff
     def validate_tree!(model_class, tree, path:)
       reflections_for(model_class, tree, path: path).each do |reflection|
         subtree = tree.child(reflection.name)
-        next unless subtree && !subtree.empty? && !reflection.polymorphic?
+        next unless subtree && !subtree.empty?
 
         child_path = join_path(path, reflection.name.to_s)
+        reject_polymorphic_descent!(reflection, subtree, child_path)
         validate_tree!(reflection.klass, subtree, path: child_path)
       end
+    end
+
+    # A polymorphic target's class differs from record to record, so the
+    # associations a path names below it may not exist on every target.
+    #: (untyped, AssociationTree, String) -> void
+    def reject_polymorphic_descent!(reflection, subtree, path)
+      return unless reflection.polymorphic?
+
+      raise UnsupportedAssociationError,
+            "unsupported association #{subtree.paths(prefix: path).first}: " \
+            "#{path} is polymorphic, so a path cannot continue past it"
     end
 
     #: (untyped, AssociationTree, String) -> Array[untyped]

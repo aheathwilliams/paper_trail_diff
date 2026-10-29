@@ -109,7 +109,10 @@ module PaperTrailDiff
 
     #: (untyped, Array[ActivityTargetCandidateLoader::Row], ActivityRange) -> Array[ActivityTargetCandidateLoader::Row]
     def eligible_rows(model, rows, range)
-      rows.select { |row| eligible_version?(model, row.owner_id, row.created_at, row.event, range) }
+      rows.select do |row|
+        eligible_version?(model, row.owner_id, row.created_at, row.event, range) &&
+          range.recorded_before_end?(row.created_at, row.version_id)
+      end
     end
 
     #: (untyped, untyped) -> untyped

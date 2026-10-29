@@ -171,8 +171,8 @@ RSpec.describe PaperTrailDiff::AssociationActivitySelection do
       .to eq([renamed.id, removed.id])
   end
 
-  # Analysis through a polymorphic belongs_to fails in prepared history before
-  # this change too, so the selection is read directly here.
+  # The article shares an id with the renamed page, so only the type keeps its
+  # note out. polymorphic_belongs_to_spec.rb covers the report itself.
   it 'selects notes whose polymorphic target changed, and only those' do
     page = SelectionPage.create!(title: 'Old')
     note = page.notes.create!(body: 'one')

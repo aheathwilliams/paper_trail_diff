@@ -61,14 +61,17 @@ RSpec.describe PaperTrailDiff::ActivityTargetCandidateLoader do
     record.versions.reorder(:id).last
   end
 
+  # PT-AT records a version's foreign keys after its change, so the version
+  # that closes the range names the author the article moves to after it.
   it 'reads the target when the range opened and each target set inside it' do
-    superseded, first, second, after = %w[Old Ann Bea Late].map do |name|
+    superseded, first, second, closing, after = %w[Old Ann Bea Cy Late].map do |name|
       TrackedAuthor.create!(name: name)
     end
     article = TrackedArticle.create!(title: 'Moving', author: superseded)
     article.update!(author: first)
     start = version_of(TrackedAuthor.create!(name: 'Marker'))
     article.update!(author: second)
+    article.update!(author: closing)
     finish = version_of(article)
     article.update!(author: after)
 
@@ -136,9 +139,10 @@ RSpec.describe PaperTrailDiff::ActivityTargetCandidateLoader do
     author = TrackedAuthor.create!(name: 'Sponsor')
     sticker = TargetLoaderSponsoredSticker.create!(label: 'sponsored', sponsor: author)
     start = version_of(sticker)
+    finish = version_of(TrackedAuthor.create!(name: 'End'))
 
     expect(fields(rows(TargetLoaderSponsoredSticker, [sticker.id], :sponsor,
-                       PaperTrailDiff::ActivityRange.new(start, start))))
+                       PaperTrailDiff::ActivityRange.new(start, finish))))
       .to eq([[sticker.id, author.id, 'TrackedAuthor', 'create']])
   end
 
@@ -146,7 +150,8 @@ RSpec.describe PaperTrailDiff::ActivityTargetCandidateLoader do
     post = StringItemPost.create!(title: 'Post')
     note = StringItemNote.create!(post: post, body: 'one')
     start = note.versions.reorder(:id).last
-    range = PaperTrailDiff::ActivityRange.new(start, start)
+    finish = StringItemPost.create!(title: 'End').versions.reorder(:id).last
+    range = PaperTrailDiff::ActivityRange.new(start, finish)
 
     expect(fields(rows(StringItemNote, [note.id], :post, range)))
       .to eq([[note.id, post.id, 'StringItemPost', 'create']])

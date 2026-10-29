@@ -37,9 +37,12 @@ module PaperTrailDiff
       end
 
       grouped = {} #: Hash[String, Hash[Symbol, untyped]]
+      # Grouping only decides what to preload, so a type that names no class is
+      # left to raise where that state is read.
       @records.records_for(owner_class, owner_ids).each do |owner|
         id = owner.public_send(key)
-        model_class = AssociationTraversal.belongs_to_target(reflection, owner)
+        type = owner.public_send(reflection.foreign_type).to_s
+        model_class = AssociationTraversal.named_class(type)
         add_identity(grouped, model_class, id) if model_class && id
       end
       grouped

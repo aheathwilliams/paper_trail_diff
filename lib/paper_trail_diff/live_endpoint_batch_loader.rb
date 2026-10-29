@@ -44,7 +44,9 @@ module PaperTrailDiff
 
     #: (untyped, Array[untyped], AssociationTree) -> void
     def preload_model_tree(model_class, records, tree)
-      batch, individual = selected_reflections(model_class, tree).partition do |reflection, _|
+      reflections = selected_reflections(model_class, tree)
+      resolve_polymorphic_targets(records, reflections)
+      batch, individual = reflections.partition do |reflection, _|
         batch_safe?(records.fetch(0), reflection)
       end
       preload_batch(records, batch.map { |reflection, _| reflection.name })
@@ -59,6 +61,15 @@ module PaperTrailDiff
         raise ConfigurationError, "unknown association: #{name}" unless reflection
 
         [reflection, subtree]
+      end
+    end
+
+    # Active Record raises a bare NameError for a type that names no class, so
+    # each type is resolved first to raise one that names the record.
+    #: (Array[untyped], Array[[untyped, AssociationTree]]) -> void
+    def resolve_polymorphic_targets(records, reflections)
+      reflections.map(&:first).select(&:polymorphic?).each do |reflection|
+        records.each { |record| AssociationTraversal.belongs_to_target(reflection, record) }
       end
     end
 

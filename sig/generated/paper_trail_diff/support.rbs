@@ -15,6 +15,9 @@ module PaperTrailDiff
     # : (untyped) -> Array[untyped]
     def self?.chronological_version_key: (untyped) -> Array[untyped]
 
+    # : (untyped, untyped) -> Array[untyped]
+    def self?.version_key: (untyped, untyped) -> Array[untyped]
+
     # Ordering falls back to the id whenever timestamps tie, which recovers the
     # real order only while ids increase with insertion. An autoincrement id
     # does; a UUID does not, so a tie between UUID-keyed versions is genuinely

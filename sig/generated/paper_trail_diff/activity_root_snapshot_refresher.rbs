@@ -36,6 +36,8 @@ module PaperTrailDiff
     # : (untyped) -> Array[String]
     def unsupported_branches: (untyped) -> Array[String]
 
+    # A polymorphic target's class is known only per record, so it cannot be
+    # checked here; a target that is not versioned raises when it is read.
     # : (untyped) -> bool
     def direct_versioned_reflection?: (untyped) -> bool
 

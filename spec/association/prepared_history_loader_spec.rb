@@ -308,10 +308,10 @@ RSpec.describe PaperTrailDiff::PreparedHistoryLoader do
     composite = instance_double(ActiveRecord::Reflection::HasManyReflection,
                                 name: :composite,
                                 foreign_key: Class.new(Array).new(%w[article_id body]),
-                                scope: nil, klass: TrackedComment)
+                                scope: nil, klass: TrackedComment, polymorphic?: false)
     plain = instance_double(ActiveRecord::Reflection::HasManyReflection,
                             name: :plain, foreign_key: 'article_id', scope: nil,
-                            klass: TrackedComment)
+                            klass: TrackedComment, polymorphic?: false)
 
     loader.send(:mark_unsupported, TrackedArticle, composite, {})
     loader.send(:mark_unsupported, TrackedArticle, plain, {})

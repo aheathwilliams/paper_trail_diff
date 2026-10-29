@@ -4,9 +4,18 @@ module PaperTrailDiff
   # Resolves and validates ActiveRecord reflections for a bounded association tree.
   class AssociationTraversal
     # The class a `belongs_to` points at for this record, reading a polymorphic
-    # type column when there is one. Nil when that type names no class.
+    # type column when there is one. Nil when the record points at nothing.
     # : (untyped, untyped) -> untyped
     def self.belongs_to_target: (untyped, untyped) -> untyped
+
+    # The class a stored type names, or nil when it names none.
+    # : (String) -> untyped
+    def self.named_class: (String) -> untyped
+
+    # A type left by a renamed or removed model names no class. Active Record
+    # and PT-AT raise a bare NameError for it, which does not say where it is.
+    # : (untyped, untyped, String) -> untyped
+    def self.polymorphic_target: (untyped, untyped, String) -> untyped
 
     attr_reader tree: AssociationTree
 
@@ -56,6 +65,11 @@ module PaperTrailDiff
 
     # : (untyped, AssociationTree, path: String) -> void
     def validate_tree!: (untyped, AssociationTree, path: String) -> void
+
+    # A polymorphic target's class differs from record to record, so the
+    # associations a path names below it may not exist on every target.
+    # : (untyped, AssociationTree, String) -> void
+    def reject_polymorphic_descent!: (untyped, AssociationTree, String) -> void
 
     # : (untyped, AssociationTree, String) -> Array[untyped]
     def requested_reflections: (untyped, AssociationTree, String) -> Array[untyped]

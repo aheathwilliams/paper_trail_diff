@@ -23,6 +23,14 @@ module PaperTrailDiff
     def reify_association: (untyped, untyped) -> void
 
     # : (untyped, untyped) -> void
+    def reify_belongs_to: (untyped, untyped) -> void
+
+    # A polymorphic target's class is known only from the record's type
+    # column, so TraversalPreparer cannot check it is versioned up front.
+    # : (untyped, untyped) -> void
+    def ensure_versioned_target!: (untyped, untyped) -> void
+
+    # : (untyped, untyped) -> void
     def reify_has_many: (untyped, untyped) -> void
 
     # PT-AT's collection-source helper reifies every has_many on each join
