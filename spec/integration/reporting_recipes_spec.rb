@@ -47,6 +47,11 @@ RSpec.describe 'README reporting recipes' do
     expect(deletion.to_boundary).to be_destroyed
     expect(deletion.diff.record_presence_change.to).to be_nil
     expect(context.local_variable_get(:unavailable)).to eq([PaperTrailDiff::Endpoint.identity(missing)])
+    last_state = context.local_variable_get(:last_state)
+    destroyed_key = PaperTrailDiff::Endpoint.identity(destroyed)
+    expect(last_state.fetch(destroyed_key).attributes.fetch('title')).to eq('Destroyed')
+    expect(last_state.fetch(PaperTrailDiff::Endpoint.identity(missing))).to be_nil
+    expect(report.deleted.fetch(destroyed_key).from_snapshot).to be_nil
     expect(PaperTrailDiff.analyze_many([unversioned]).values.first.diff).to be_empty
   end
 
@@ -57,6 +62,7 @@ RSpec.describe 'README reporting recipes' do
 
     expect(context.local_variable_get(:rows)).to be_empty
     expect(context.local_variable_get(:deleted_activity)).to be_empty
+    expect(context.local_variable_get(:last_state)).to be_empty
     expect(context.local_variable_get(:unavailable)).to be_empty
   end
 end

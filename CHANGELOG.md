@@ -5,6 +5,12 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- The README recipe for deleted records also reads each record as it was just
+  before deletion, which a record created inside the window has no other
+  snapshot of.
+
 ### Development
 
 - Mutation testing also covers `TimeRange`, `VersionRange`,

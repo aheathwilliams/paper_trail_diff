@@ -172,10 +172,17 @@ unavailable = report.deleted.select { |_identity, analysis| analysis.nil? }.keys
 deleted_activity = report.deleted.transform_values do |analysis|
   analysis&.activity_timeline
 end
+last_state = report.deleted.transform_values do |analysis|
+  analysis&.activity_timeline&.last&.diff&.record_presence_change&.from
+end
 ```
 
 The results are already computed; you do not need to query or reify each deleted
-record. Omit `include_deleted:` if you only need records that still exist.
+record. `last_state` is each record just before its deletion, which the final
+step removes. Use it to show what a deleted record was, such as its title:
+`analysis.from_snapshot` is the record when the window began, so it is `nil` for
+one created inside the window. Omit `include_deleted:` if you only need records
+that still exist.
 
 Three selection rules matter:
 
