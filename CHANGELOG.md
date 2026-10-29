@@ -79,6 +79,11 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Activity reports a change to a `belongs_to` target that is an STI subclass.
+  When the target was destroyed, or its `type` changed between a subclass and
+  another class, activity reported nothing while checkpoint analysis reported
+  it, because a target's version names only the base class. This includes the
+  same target further down a path, such as `"note.badge"`.
 - An association that only an STI subclass declares can be requested on a
   root of that subclass in every method. Without an `item_subtype` column on
   versions, each version resolved to the base class, so every method raised

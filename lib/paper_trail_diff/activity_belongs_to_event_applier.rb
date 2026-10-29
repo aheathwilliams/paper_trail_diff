@@ -91,8 +91,7 @@ module PaperTrailDiff
     #: (Array[RecordSnapshot], untyped, RecordSnapshot?) -> [Array[RecordSnapshot], bool]
     def replace_existing_target(records, version, replacement)
       index = records.index do |record|
-        record.id.to_s == version.item_id.to_s &&
-          record.type.to_s == replacement_type(version, replacement)
+        record.id.to_s == version.item_id.to_s && same_table?(record, version)
       end
       return [records, false] unless index
 
@@ -101,11 +100,13 @@ module PaperTrailDiff
       [updated.freeze, true]
     end
 
-    #: (untyped, RecordSnapshot?) -> String
-    def replacement_type(version, replacement)
-      return replacement.type.to_s if replacement
-
-      Endpoint.model_class(version).name.to_s
+    # The target is matched by id within its table rather than by type name.
+    # Without `item_subtype`, a version names only the STI base class, and a
+    # row whose type changes is replaced by a record of another class.
+    #: (RecordSnapshot, untyped) -> bool
+    def same_table?(record, version)
+      model = AssociationTraversal.named_class(record.type.to_s)
+      !model.nil? && model.base_class == Endpoint.model_class(version).base_class
     end
 
     #: (untyped) -> untyped

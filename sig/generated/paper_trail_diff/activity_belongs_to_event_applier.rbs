@@ -29,8 +29,11 @@ module PaperTrailDiff
     # : (Array[RecordSnapshot], untyped, RecordSnapshot?) -> [Array[RecordSnapshot], bool]
     def replace_existing_target: (Array[RecordSnapshot], untyped, RecordSnapshot?) -> [ Array[RecordSnapshot], bool ]
 
-    # : (untyped, RecordSnapshot?) -> String
-    def replacement_type: (untyped, RecordSnapshot?) -> String
+    # The target is matched by id within its table rather than by type name.
+    # Without `item_subtype`, a version names only the STI base class, and a
+    # row whose type changes is replaced by a record of another class.
+    # : (RecordSnapshot, untyped) -> bool
+    def same_table?: (RecordSnapshot, untyped) -> bool
 
     # : (untyped) -> untyped
     def endpoint_model_class: (untyped) -> untyped

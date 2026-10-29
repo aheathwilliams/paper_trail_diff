@@ -129,7 +129,26 @@ module PaperTrailDiff
       return unless before
 
       attributes = before.attributes.merge(after_attributes(changes, model))
-      @direct_loader.complete(PreparedRecordState.from_attributes(model, attributes))
+      model_after = class_after(model, attributes)
+      return unless model_after
+
+      @direct_loader.complete(PreparedRecordState.from_attributes(model_after, attributes))
+    end
+
+    # Without `item_subtype` a version names only the STI base class, and a
+    # change can move the row to another class, so the type the row holds
+    # after the change decides. A type that names no class has no direct
+    # state; the caller falls back to reifying the record.
+    #: (untyped, Hash[untyped, untyped]) -> untyped
+    def class_after(model, attributes)
+      column = model.inheritance_column.to_s
+      return model unless model.columns_hash.key?(column)
+
+      type = attributes[column].to_s
+      type.empty? ? model.base_class : model.base_class.sti_class_for(type)
+    rescue StandardError => e
+      active_record = Object.const_get(:ActiveRecord) #: untyped
+      raise unless e.is_a?(active_record.const_get(:SubclassNotFound))
     end
 
     #: (untyped) -> untyped
