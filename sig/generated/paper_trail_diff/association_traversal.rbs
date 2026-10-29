@@ -20,6 +20,28 @@ module PaperTrailDiff
     # : (untyped, untyped, String) -> untyped
     def self.polymorphic_target: (untyped, untyped, String) -> untyped
 
+    # Why a request cannot name this association of the model, or nil when it
+    # can. Discovery lists only the associations this accepts, so every path it
+    # lists can be requested. A has_many :through Active Record cannot follow
+    # raises Active Record's own error.
+    # : (untyped, untyped) -> String?
+    def self.unsupported_reason: (untyped, untyped) -> String?
+
+    # : (untyped, untyped) -> bool
+    def self.paper_trail_versions?: (untyped, untyped) -> bool
+
+    # Active Record joins a HABTM through a hidden model of its own, which has
+    # no versions and no reader that PT-AT or prepared history can follow, so a
+    # through that crosses one would fail partway through reconstruction.
+    #
+    # The through and source reflections of a through are the hidden ones, a
+    # has_many in place of each HABTM, so only the public reflection of the
+    # same name shows the HABTM. Active Record's own check, which it runs on
+    # first use anyway, explains a through it cannot follow before the chain
+    # below it is read.
+    # : (untyped) -> untyped
+    def self.habtm_in_chain: (untyped) -> untyped
+
     attr_reader tree: AssociationTree
 
     # Whether a row belongs to an association whose class is `model_class`.
@@ -83,23 +105,6 @@ module PaperTrailDiff
 
     # : (untyped, String, String) -> untyped
     def resolve_reflection: (untyped, String, String) -> untyped
-
-    # Active Record joins a HABTM through a hidden model of its own, which has
-    # no versions and no reader that PT-AT or prepared history can follow, so a
-    # through that crosses one would fail partway through reconstruction.
-    # : (untyped, String) -> void
-    def reject_habtm_through!: (untyped, String) -> void
-
-    # The through and source reflections of a through are the hidden ones, a
-    # has_many in place of each HABTM, so only the public reflection of the
-    # same name shows the HABTM. Active Record's own check, which it runs on
-    # first use anyway, explains a through it cannot follow before the chain
-    # below it is read.
-    # : (untyped) -> untyped
-    def habtm_in_chain: (untyped) -> untyped
-
-    # : (untyped, untyped) -> bool
-    def paper_trail_versions?: (untyped, untyped) -> bool
 
     # : (untyped) -> bool
     def habtm_reflection?: (untyped) -> bool

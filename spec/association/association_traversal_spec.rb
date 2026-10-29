@@ -52,9 +52,13 @@ RSpec.describe PaperTrailDiff::AssociationTraversal do
     described_class.new(PaperTrailDiff::AssociationTree.build(paths))
   end
 
+  def habtm_reason(habtm)
+    "it goes through #{habtm}, a has_and_belongs_to_many, whose hidden join model has no " \
+      'history to compare'
+  end
+
   def unsupported(path, habtm)
-    "unsupported association #{path}: it goes through #{habtm}, a has_and_belongs_to_many, " \
-      'whose hidden join model has no history to compare'
+    "unsupported association #{path}: #{habtm_reason(habtm)}"
   end
 
   describe '.belongs_to_target' do
@@ -114,6 +118,60 @@ RSpec.describe PaperTrailDiff::AssociationTraversal do
       expect(member.call('PreparedSpecialDocument')).to be(false)
       expect(member.call('PreparedDocument')).to be(false)
       expect(described_class.sti_member?(TraversalDocument, {})).to be(false)
+    end
+  end
+
+  describe '.unsupported_reason' do
+    def reason(model, name)
+      described_class.unsupported_reason(model, model.reflect_on_association(name))
+    end
+
+    it 'accepts every supported macro and a has_many :through' do
+      %i[author profile comments tags contributors].each do |name|
+        expect(reason(TrackedArticle, name)).to be_nil
+      end
+    end
+
+    it 'names the PaperTrail versions association' do
+      expect(reason(TrackedArticle, :versions)).to eq('PaperTrail versions')
+    end
+
+    it 'names an unsupported macro' do
+      reflection = TrackedArticle.reflect_on_association(:comments)
+      allow(reflection).to receive(:macro).and_return(:composed_of)
+
+      expect(reason(TrackedArticle, :comments)).to eq('composed_of')
+    end
+
+    it 'names the HABTM a has_many :through goes through' do
+      expect(reason(TraversalArticle, :tagged_comments))
+        .to eq(habtm_reason('TraversalArticle#tags'))
+      expect(reason(TraversalAuthor, :article_tags)).to eq(habtm_reason('TrackedArticle#tags'))
+    end
+
+    it "raises Active Record's own error for a through it cannot follow" do
+      expect { reason(TraversalNote, :holder_replies) }
+        .to raise_error(ActiveRecord::HasManyThroughAssociationPolymorphicThroughError)
+    end
+
+    # A settings screen offers what discovery lists, so a path it lists must be
+    # one a request accepts.
+    it 'is what discovery leaves out, so every path it lists can be requested' do
+      expect(PaperTrailDiff.association_paths(TraversalArticle).map(&:path))
+        .to eq(%w[author comments notes tags])
+      expect(PaperTrailDiff.association_paths(TraversalAuthor).map(&:path))
+        .to eq(%w[articles traversal_articles])
+
+      paths = PaperTrailDiff.association_paths(TraversalAuthor, max_depth: 2).map(&:path)
+      expect(paths).to include('traversal_articles.comments', 'articles.contributors')
+      expect(paths).not_to include('traversal_articles.tagged_articles',
+                                   'traversal_articles.tagged_comments')
+      expect { traversal(*paths).validate!(TraversalAuthor) }.not_to raise_error
+    end
+
+    it "makes discovery raise Active Record's own error for a through it cannot follow" do
+      expect { PaperTrailDiff.association_paths(TraversalNote) }
+        .to raise_error(ActiveRecord::HasManyThroughAssociationPolymorphicThroughError)
     end
   end
 

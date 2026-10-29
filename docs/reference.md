@@ -689,7 +689,7 @@ comments.changed.first.associations["replies"].added
   up front in every method. Active Record joins a HABTM through a hidden
   model with no versions, so the through cannot be rebuilt from history.
   Replace the HABTM with a `has_many :through` a versioned join model to
-  compare it.
+  compare it. `association_paths` leaves such a through out.
 - Requesting associations for a historical state without PT-AT raises
   `AssociationTrackingUnavailableError`. Unknown names raise
   `UnknownAssociationError`; unsupported macros raise
@@ -944,6 +944,12 @@ PaperTrailDiff.association_paths(Article, max_depth: 3).map(&:to_h)
 
 Each descriptor has `path`, `kind`, `target_type`, `through`, `polymorphic`,
 and `cycle`. Cycles are marked and not followed.
+
+Only associations a request accepts are listed, so each path can be passed to
+`associations:`. The PaperTrail versions association and a `has_many :through`
+that goes through a HABTM are left out. A `has_many :through` Active Record
+cannot follow, such as one through a polymorphic `belongs_to`, raises Active
+Record's own error from any model discovery reaches, as requesting it does.
 
 Check two versions for known problems before relying on association history:
 
