@@ -678,7 +678,9 @@ comments.changed.first.associations["replies"].added
   it: `"notable.comments"` raises `UnsupportedAssociationError`. A record
   whose type names a model without `has_paper_trail` raises
   `UnversionedAssociationError` when its history is read; the gem cannot
-  check this earlier, since only the record names the class.
+  check this earlier, since only the record names the class. A type that
+  names no class, such as one a renamed model left in its versions, raises
+  `IncompleteAssociationHistoryError` naming the record.
 - `has_many :through` uses the versioned join model's history, so join-model
   attributes are available. HABTM reports membership and the target's
   attributes; it has no join model, so it has no join attributes.
@@ -1034,7 +1036,7 @@ All errors inherit from `PaperTrailDiff::Error`.
 | `UnknownAssociationError` | An association name does not exist |
 | `UnsupportedAssociationError` | An association's macro is not supported, or a path continues past a polymorphic `belongs_to` |
 | `UnversionedAssociationError` | An association's target model has no `has_paper_trail`, including the class a polymorphic `belongs_to` names |
-| `IncompleteAssociationHistoryError` | PT-AT did not record enough to rebuild an association, such as HABTM without a transaction |
+| `IncompleteAssociationHistoryError` | PT-AT did not record enough to rebuild an association, such as HABTM without a transaction, or a polymorphic type names no class |
 | `UnsupportedLiveActivityError` | A HABTM activity range ends at the current record |
 | `AmbiguousNestedKeyError` | `nested_changes` finds keys like `:a` and `"a"` together |
 

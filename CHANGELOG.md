@@ -57,7 +57,10 @@ project follows [Semantic Versioning](https://semver.org/).
   Batches load the targets with one query per target class. A target class
   without `has_paper_trail` raises `UnversionedAssociationError` when a record
   names it, rather than a `NoMethodError` from PT-AT, and a default-scoped
-  target class is read as its association returns it.
+  target class is read as its association returns it. A type that names no
+  class, such as one a renamed model left in its versions, raises
+  `IncompleteAssociationHistoryError` naming the record and the type, rather
+  than a `NameError` that names neither.
 - Activity leaves out the `belongs_to` target a record moves to in the
   version that closes the window. Its changes inside the window used to add
   empty steps, attributed to a record the root never pointed at there.

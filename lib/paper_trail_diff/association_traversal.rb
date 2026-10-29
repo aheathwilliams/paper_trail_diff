@@ -5,15 +5,28 @@ module PaperTrailDiff
   # Resolves and validates ActiveRecord reflections for a bounded association tree.
   class AssociationTraversal
     # The class a `belongs_to` points at for this record, reading a polymorphic
-    # type column when there is one. Nil when that type names no class.
+    # type column when there is one. Nil when the record points at nothing.
     #: (untyped, untyped) -> untyped
     def self.belongs_to_target(reflection, record)
       return reflection.klass unless reflection.polymorphic?
 
-      Object.const_get(record.public_send(reflection.foreign_type).to_s)
-    rescue NameError
-      nil
+      type = record.public_send(reflection.foreign_type).to_s
+      polymorphic_target(reflection, record, type) unless type.empty?
     end
+
+    # A type left by a renamed or removed model names no class. Active Record
+    # and PT-AT raise a bare NameError for it, which does not say where it is.
+    #: (untyped, untyped, String) -> untyped
+    def self.polymorphic_target(reflection, record, type)
+      Object.const_get(type)
+    rescue NameError => e
+      raise IncompleteAssociationHistoryError,
+            "association #{record.class.name}##{reflection.name} cannot be read: " \
+            "#{record.class.name} #{record.id} has #{reflection.foreign_type} #{type}, which " \
+            'names no class. If the model was renamed, replace the old name in that column ' \
+            'and in the versions that recorded it.', cause: e
+    end
+    private_class_method :polymorphic_target
 
     #: (AssociationTree) -> void
     def initialize(tree)

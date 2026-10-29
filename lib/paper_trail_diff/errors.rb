@@ -58,7 +58,8 @@ module PaperTrailDiff
   # Raised when association comparison is requested without an available PT-AT setup.
   class AssociationTrackingUnavailableError < Error; end
 
-  # Raised when recorded PT-AT metadata cannot reliably reconstruct a selected association.
+  # Raised when recorded PT-AT metadata cannot reliably reconstruct a selected association,
+  # or a polymorphic type names no class.
   class IncompleteAssociationHistoryError < Error; end
 
   # Raised when current-ended activity cannot be reconstructed for a selected association.

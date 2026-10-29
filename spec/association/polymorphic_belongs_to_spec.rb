@@ -174,6 +174,30 @@ RSpec.describe 'Polymorphic belongs_to history' do
                       /PolymorphicNote#notable .*PolymorphicPlain, which is not versioned/)
   end
 
+  # A model renamed without updating the stored types leaves a name that no
+  # longer resolves, in the record itself or only in its versions.
+  it 'raises naming the record when its type names no class' do
+    page = PolymorphicPage.create!(title: 'Page')
+    renamed, removed = Array.new(2) { PolymorphicNote.create!(body: 'one', notable: page) }
+    start = Time.now.utc
+    [renamed, removed].each { |note| note.update!(body: 'two') }
+    renamed.versions.each do |version|
+      version.update_columns(object: version.object&.sub('PolymorphicPage', 'OldPage'))
+    end
+    removed.update_columns(notable_type: 'RemovedModel')
+    window = start..Time.now.utc
+
+    types = { renamed => 'OldPage', removed => 'RemovedModel' }
+    types.to_a.product([false, true]).each do |(note, type), activity|
+      message = /PolymorphicNote #{note.id} has notable_type #{type}, which names no class/
+      options = { within: window, associations: [:notable], activity: activity }
+      expect { PaperTrailDiff.analyze(note, **options) }
+        .to raise_error(PaperTrailDiff::IncompleteAssociationHistoryError, message)
+      expect { PaperTrailDiff.analyze_many([note], **options) }
+        .to raise_error(PaperTrailDiff::IncompleteAssociationHistoryError, message)
+    end
+  end
+
   # Seeded moves between targets of both classes and none, target renames, and
   # transactions that do both: a single analysis and a batch read the same
   # history through different queries, so they must agree step by step. Seed
