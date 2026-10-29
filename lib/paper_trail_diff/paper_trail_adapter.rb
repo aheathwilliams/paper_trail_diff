@@ -38,8 +38,9 @@ module PaperTrailDiff
         if @association_tree.empty?
           Engine.compare(snapshot_for_endpoint(from_endpoint), snapshot_for_endpoint(to_endpoint))
         else
-          # Prepared history orders versions that share a timestamp; reading
-          # associations straight from PT-AT would resolve them by time alone.
+          # Prepared history orders versions that share a timestamp and finds
+          # children that later moved away; reading associations straight from
+          # PT-AT would resolve them by time alone and miss those children.
           comparison_batch([{ from: from_endpoint, to: to_endpoint }],
                            preparer: @traversal_preparer.method(:call)).call.values.fetch(0)
         end
@@ -168,6 +169,7 @@ module PaperTrailDiff
         comparisons,
         live_loader: @live_endpoints, preparer: preparer,
         history_preparer: @historical_store.method(:prepare_batch),
+        version_history_preparer: @historical_store.method(:prepare_deleted_batch),
         historical_snapshotter: method(:historical_snapshot),
         live_normalizer: method(:normalize_live_snapshot)
       )

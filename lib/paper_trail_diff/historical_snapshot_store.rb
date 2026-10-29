@@ -48,8 +48,9 @@ module PaperTrailDiff
       end
     end
 
-    # Missing roots have no live graph to collect. Reading their associations
-    # here would issue a query per root and seed nonexistent rows as live state.
+    # Missing roots, and roots compared only between versions, have no live
+    # graph to collect. Reading their associations here would issue a query
+    # per root and seed nonexistent rows as live state.
     #: (Array[untyped], Array[untyped], ?start_at: untyped, ?end_at: untyped) -> void
     def prepare_deleted_batch(records, root_versions, start_at: nil, end_at: nil)
       return if @tree.empty? || records.empty? || root_versions.empty?
