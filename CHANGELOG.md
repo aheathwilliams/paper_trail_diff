@@ -104,6 +104,10 @@ project follows [Semantic Versioning](https://semver.org/).
   `PreparedEdgeLoader`, `ActivityTimelineBuilder`,
   `ActivityTransactionGrouper`, and `BatchSafety`, each with a spec of its
   own. All 10,732 mutations across the 24 classes are caught.
+- Mutation testing also covers range and boundary handling:
+  `ActivityRange`, `VersionAssociationCandidateScope`,
+  `PreparedActivityIndex`, and `AssociationTraversal`, each with a spec of its
+  own. All 12,878 mutations across the 28 classes are caught.
 
 ## [0.13.1] - 2026-10-28
 
