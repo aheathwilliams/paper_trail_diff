@@ -194,7 +194,6 @@ module PaperTrailDiff
         @record,
         root_versions: root_versions,
         tree: @tree,
-        traversal: AssociationTraversal.new(@tree),
         prepared: (@snapshotter.activity_index if @snapshotter.respond_to?(:activity_index)),
         range_start: @range.begin_time,
         range_end: range_end || root_versions.last

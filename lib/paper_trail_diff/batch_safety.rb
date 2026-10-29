@@ -36,17 +36,18 @@ module PaperTrailDiff
               "association #{path} requires per-record reconstruction (#{reason}); " \
               'remove this path or explicitly pass allow_expensive: true'
       end
-      return unless reflection.options[:through]
+      return unless reflection.through_reflection?
 
-      check(reflection.through_reflection, path, historical)
-      check(reflection.source_reflection, path, historical)
+      [reflection.through_reflection, reflection.source_reflection].each do |part|
+        check(part, path, historical)
+      end
     end
 
     #: (untyped, bool) -> String?
     def reason_for(reflection, historical)
       return 'association scope' if reflection.scope
       return 'default-scoped target' if !reflection.polymorphic? && reflection.klass.default_scopes?
-      return unless historical && reflection.options[:through]
+      return unless historical && reflection.through_reflection?
       return if reflection.source_reflection.belongs_to?
 
       'through source is not belongs_to'

@@ -3,11 +3,10 @@
 module PaperTrailDiff
   # Loads every historical identity that can participate in one association edge.
   class PreparedEdgeLoader
-    EDGE_LOADERS: untyped
-
     # : (PreparedRecordIndex, Array[untyped], ?start_at: untyped) -> void
     def initialize: (PreparedRecordIndex, Array[untyped], ?start_at: untyped) -> void
 
+    # HABTM alone also returns each root transaction's members.
     # : (untyped, Array[untyped], untyped) -> [Hash[String, Hash[Symbol, untyped]], Hash[String, Array[untyped]]?]
     def call: (untyped, Array[untyped], untyped) -> [ Hash[String, Hash[Symbol, untyped]], Hash[String, Array[untyped]]? ]
 
@@ -18,15 +17,6 @@ module PaperTrailDiff
     @start_at: untyped
 
     @transaction_ids: Array[untyped]
-
-    # : (untyped, Array[untyped], untyped) -> [Hash[String, Hash[Symbol, untyped]], nil]
-    def belongs_to_edge: (untyped, Array[untyped], untyped) -> [ Hash[String, Hash[Symbol, untyped]], nil ]
-
-    # : (untyped, Array[untyped], untyped) -> [Hash[String, Hash[Symbol, untyped]], nil]
-    def child_edge: (untyped, Array[untyped], untyped) -> [ Hash[String, Hash[Symbol, untyped]], nil ]
-
-    # : (untyped, Array[untyped], untyped) -> [Hash[String, Hash[Symbol, untyped]], Hash[String, Array[untyped]]]
-    def habtm_edge: (untyped, Array[untyped], untyped) -> [ Hash[String, Hash[Symbol, untyped]], Hash[String, Array[untyped]] ]
 
     # : (untyped, Array[untyped], untyped) -> Hash[String, Hash[Symbol, untyped]]
     def belongs_to_groups: (untyped, Array[untyped], untyped) -> Hash[String, Hash[Symbol, untyped]]
@@ -64,7 +54,7 @@ module PaperTrailDiff
     # : (untyped, Array[untyped], ?owners: Hash[String, Array[untyped]]?) -> Hash[String, Hash[Symbol, untyped]]
     def group_for: (untyped, Array[untyped], ?owners: Hash[String, Array[untyped]]?) -> Hash[String, Hash[Symbol, untyped]]
 
-    # Keyed rather than scanned so that a wide edge stays linear in its width.
+    # A set rather than a scan, so that a wide edge stays linear in its width.
     # : (Array[Array[untyped]]) -> Hash[String, Array[untyped]]
     def group_ids_by_owner: (Array[Array[untyped]]) -> Hash[String, Array[untyped]]
 

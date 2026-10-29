@@ -54,16 +54,13 @@ module PaperTrailDiff
     # : (untyped) -> untyped
     def historical_relation: (untyped) -> untyped
 
-    # : (untyped) -> Array[untyped]
-    def historical_columns: (untyped) -> Array[untyped]
-
-    # : () -> untyped
-    def live_relation: () -> untyped
+    # : (untyped, untyped) -> Array[Array[untyped]]
+    def historical_columns: (untyped, untyped) -> Array[Array[untyped]]
 
     # A polymorphic key names its target in a type column; any other names it
     # in the reflection, so no type is read.
-    # : () -> Array[String]
-    def live_columns: () -> Array[String]
+    # : () -> Array[Array[untyped]]
+    def live_rows: () -> Array[Array[untyped]]
 
     # : (untyped) -> VersionAssociationCandidateScope
     def candidate_scope: (untyped) -> VersionAssociationCandidateScope
@@ -72,6 +69,6 @@ module PaperTrailDiff
     def association_class: () -> untyped
 
     # : () -> bool
-    def scalar_foreign_key?: () -> bool
+    def composite_foreign_key?: () -> bool
   end
 end

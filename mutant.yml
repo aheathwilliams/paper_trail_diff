@@ -48,3 +48,12 @@ matcher:
     - PaperTrailDiff::BatchedRootVersions*
     - PaperTrailDiff::DeletedAnalysisBatch*
     - PaperTrailDiff::RecordedChanges*
+    - PaperTrailDiff::AssociationActivitySelection*
+    - PaperTrailDiff::AssociationActivityEdge*
+    - PaperTrailDiff::ActivityTargetCandidateLoader*
+    - PaperTrailDiff::ScopedRootSelection*
+    - PaperTrailDiff::PreparedHistoryLoader*
+    - PaperTrailDiff::PreparedEdgeLoader*
+    - PaperTrailDiff::ActivityTimelineBuilder*
+    - PaperTrailDiff::ActivityTransactionGrouper*
+    - PaperTrailDiff::BatchSafety*

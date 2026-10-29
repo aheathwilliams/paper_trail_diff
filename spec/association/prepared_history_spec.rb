@@ -99,9 +99,13 @@ RSpec.describe PaperTrailDiff::PreparedHistory do
     ).select_plan_for_range.versions
     history = PaperTrailDiff::PreparedHistoryLoader.new(
       article,
+      root_ids: [article.id],
       root_versions: root_versions,
       tree: tree,
-      traversal: traversal
+      traversal: traversal,
+      start_at: root_versions.first.created_at,
+      end_at: nil,
+      live_records: []
     ).call
 
     root = before.reify(dup: true)
@@ -175,9 +179,13 @@ RSpec.describe PaperTrailDiff::PreparedHistory do
     ).select_plan_for_range.versions
     history = PaperTrailDiff::PreparedHistoryLoader.new(
       article,
+      root_ids: [article.id],
       root_versions: root_versions,
       tree: tree,
-      traversal: traversal
+      traversal: traversal,
+      start_at: root_versions.first.created_at,
+      end_at: nil,
+      live_records: []
     ).call
 
     root_versions.each do |version|

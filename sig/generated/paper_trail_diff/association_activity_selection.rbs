@@ -59,15 +59,10 @@ module PaperTrailDiff
 
     @traversal: AssociationTraversal
 
-    @tree: AssociationTree
-
-    # Ids of `model` records with a change somewhere below them in `tree`.
+    # Ids of `model` records with a change somewhere below them in `tree`: the
+    # targets that changed, or that reach a change further down.
     # : (untyped, AssociationTree, String) -> Array[source]
     def reach: (untyped, AssociationTree, String) -> Array[source]
-
-    # Target records that changed, or that reach a change further down.
-    # : (untyped, AssociationTree?, String) -> Array[source]
-    def targets: (untyped, AssociationTree?, String) -> Array[source]
 
     # : (untyped, Array[source]) -> Array[source]
     def owners: (untyped, Array[source]) -> Array[source]
@@ -97,9 +92,14 @@ module PaperTrailDiff
     # : (AssociationActivityEdge, Array[untyped]) -> Array[untyped]
     def read: (AssociationActivityEdge, Array[untyped]) -> Array[untyped]
 
-    # : (Query, Symbol?) -> bool
-    def comparable?: (Query, Symbol?) -> bool
+    # Sources are only ever a Query or a plain Array, so the one mutation
+    # left, `instance_of?` for `is_a?`, cannot change an answer.
+    # mutant:disable
+    # : (source, Symbol?) -> Query?
+    def subquery: (source, Symbol?) -> Query?
 
+    # A type naming no class has no versions to read; `changed` skips one that
+    # names an unversioned class.
     # : (String) -> untyped
     def target_class: (String) -> untyped
   end

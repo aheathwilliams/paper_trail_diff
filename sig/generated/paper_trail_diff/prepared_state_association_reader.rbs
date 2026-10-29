@@ -27,6 +27,9 @@ module PaperTrailDiff
     # : (PreparedRecordState, PreparedRecordState, untyped) -> bool
     def member?: (PreparedRecordState, PreparedRecordState, untyped) -> bool
 
+    # : (PreparedRecordState) -> String
+    def owner_id: (PreparedRecordState) -> String
+
     # : (PreparedRecordState, untyped, untyped) -> bool
     def matching_type?: (PreparedRecordState, untyped, untyped) -> bool
   end

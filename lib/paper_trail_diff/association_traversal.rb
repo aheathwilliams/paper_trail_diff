@@ -15,6 +15,21 @@ module PaperTrailDiff
       nil
     end
 
+    attr_reader :tree #: AssociationTree
+
+    # Whether a row belongs to an association whose class is `model_class`.
+    # Children are found by key across the whole table, so an association to an
+    # STI subclass has to leave out its siblings, as Active Record's type
+    # condition does for the live association: the row's type must name the
+    # class or one of its descendants. A base class takes every row.
+    #: (untyped, Hash[String, untyped]) -> bool
+    def self.sti_member?(model_class, attributes)
+      return true if model_class.descends_from_active_record?
+
+      names = [model_class, *model_class.descendants].map(&:sti_name)
+      names.include?(attributes[model_class.inheritance_column])
+    end
+
     #: (AssociationTree) -> void
     def initialize(tree)
       @tree = tree

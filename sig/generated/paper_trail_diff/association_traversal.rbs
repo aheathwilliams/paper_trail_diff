@@ -8,6 +8,16 @@ module PaperTrailDiff
     # : (untyped, untyped) -> untyped
     def self.belongs_to_target: (untyped, untyped) -> untyped
 
+    attr_reader tree: AssociationTree
+
+    # Whether a row belongs to an association whose class is `model_class`.
+    # Children are found by key across the whole table, so an association to an
+    # STI subclass has to leave out its siblings, as Active Record's type
+    # condition does for the live association: the row's type must name the
+    # class or one of its descendants. A base class takes every row.
+    # : (untyped, Hash[String, untyped]) -> bool
+    def self.sti_member?: (untyped, Hash[String, untyped]) -> bool
+
     # : (AssociationTree) -> void
     def initialize: (AssociationTree) -> void
 

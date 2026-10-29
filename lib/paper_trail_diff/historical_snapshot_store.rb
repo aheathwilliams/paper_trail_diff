@@ -34,12 +34,8 @@ module PaperTrailDiff
       end
 
       @prepared_history = PreparedHistoryLoader.new(
-        record,
-        root_versions: root_versions,
-        start_at: start_at,
-        end_at: end_at,
-        tree: @tree,
-        traversal: @traversal
+        record, root_ids: [record.id], root_versions: root_versions, start_at: start_at,
+                end_at: end_at, tree: @tree, traversal: @traversal, live_records: []
       ).call
     end
 

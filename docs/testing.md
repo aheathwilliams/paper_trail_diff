@@ -50,12 +50,21 @@ passes is behavior nothing checks. `mutant.yml` lists the classes it mutates:
   `TimeVersionRange`, and `RootVersionPlan`;
 - which versions a batch or filter reads: `BatchedRootVersions`,
   `DeletedAnalysisBatch`, and `HistoricalFilter`;
-- what a version recorded: `RecordedChanges`.
+- what a version recorded: `RecordedChanges`;
+- which records a scope or report selects: `ScopedRootSelection`,
+  `AssociationActivitySelection`, and `AssociationActivityEdge`;
+- which children and targets a record had at each point:
+  `PreparedHistoryLoader`, `PreparedEdgeLoader`, and
+  `ActivityTargetCandidateLoader`;
+- what activity a record shows: `ActivityTimelineBuilder` and
+  `ActivityTransactionGrouper`;
+- which association paths a batch refuses: `BatchSafety`.
 
 The specs for the classes that read the database use tables of their own
 (`spec/support/filter_database.rb`, `spec/support/normalizer_database.rb`,
 `spec/support/recorded_changes_database.rb`), so they run in both the core and
-the association suite.
+the association suite. The association classes need PT-AT, so their specs are
+in `spec/association` and define any extra tables in the spec file itself.
 
 Mutant reads `spec/unit` and `spec/association`, never `spec/integration`.
 Even there it does not run every spec for every mutation, only those whose

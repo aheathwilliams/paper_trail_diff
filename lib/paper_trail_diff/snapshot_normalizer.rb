@@ -202,7 +202,7 @@ module PaperTrailDiff
     )
       # A reified history can hold a member PaperTrail could not rebuild.
       records = Array(record.public_send(reflection.name)).compact
-      child_path = Support.association_path(path, reflection.name.to_s)
+      child_path = Support.association_path(path, reflection.name)
       @structural_columns[child_path] ||= @traversal.incoming_relationship_columns(reflection)
       snapshot = AssociationSnapshot.new(
         kind: reflection.macro,

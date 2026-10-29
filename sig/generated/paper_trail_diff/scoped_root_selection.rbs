@@ -75,7 +75,8 @@ module PaperTrailDiff
     def plucked_selection: (Array[String]) -> Result
 
     # Comparing the two columns in SQL needs them to share a type: PostgreSQL
-    # rejects an integer key against a string item_id outright.
+    # rejects an integer key against a string item_id outright. A composite
+    # key names no single attribute, so it has no type and never matches.
     # : () -> bool
     def comparable_keys?: () -> bool
 
@@ -99,6 +100,10 @@ module PaperTrailDiff
     # : (untyped) -> untyped
     def normalize_scope: (untyped) -> untyped
 
+    # : () -> void
+    def reject_unversioned!: () -> void
+
+    # No Integer subclass has instances, so this is `is_a?` by another name.
     # : (Integer) -> Integer
     def validate_limit: (Integer) -> Integer
 
@@ -143,6 +148,12 @@ module PaperTrailDiff
 
     # : () -> String
     def item_type: () -> String
+
+    # A relation delegates class methods to its model, so every mutation here,
+    # which drops `.model`, answers the same.
+    # mutant:disable
+    # : () -> untyped
+    def model: () -> untyped
 
     # : () -> untyped
     def base_class: () -> untyped

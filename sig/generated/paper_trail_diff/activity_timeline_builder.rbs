@@ -5,8 +5,8 @@ module PaperTrailDiff
   class ActivityTimelineBuilder
     include ActivityGrouping
 
-    # : (untyped, range: TimelineRange, tree: AssociationTree, snapshotter: untyped, ?snapshots: bool, ?group: Symbol?) -> void
-    def initialize: (untyped, range: TimelineRange, tree: AssociationTree, snapshotter: untyped, ?snapshots: bool, ?group: Symbol?) -> void
+    # : (untyped, range: TimelineRange, tree: AssociationTree, snapshotter: untyped, snapshots: bool, group: Symbol?) -> void
+    def initialize: (untyped, range: TimelineRange, tree: AssociationTree, snapshotter: untyped, snapshots: bool, group: Symbol?) -> void
 
     # : () -> Array[ActivityStep]
     def build: () -> Array[ActivityStep]
@@ -16,8 +16,6 @@ module PaperTrailDiff
     def analyze: () -> Analysis
 
     private
-
-    @from: untyped
 
     @range: TimelineRange
 
@@ -37,7 +35,8 @@ module PaperTrailDiff
     # Every boundary in the span, filtered out or not. A filter narrows where the
     # span starts and ends, but the sequence inside it stays complete: dropping
     # boundaries would fold the changes they carried into a neighbouring step and
-    # credit them to whoever made that one.
+    # credit them to whoever made that one. A filter that keeps no version
+    # leaves no span, as it does for a checkpoint timeline.
     # : () -> Array[ActivityStep]
     def build_between_versions: () -> Array[ActivityStep]
 
@@ -51,6 +50,12 @@ module PaperTrailDiff
     # same selected plan. A version filter can close earlier, on its successor.
     # : () -> [RootVersionPlan, Array[ActivityEvent], ActivityHistory, RecordSnapshot?, ActivityBoundary?]
     def current_history: () -> [ RootVersionPlan, Array[ActivityEvent], ActivityHistory, RecordSnapshot?, ActivityBoundary? ]
+
+    # Without a closing boundary nothing reads the events or the closing pair,
+    # so their mutations cannot change an answer.
+    # mutant:disable
+    # : (RootVersionPlan) -> [RootVersionPlan, Array[ActivityEvent], ActivityHistory, RecordSnapshot?, ActivityBoundary?]
+    def empty_history: (RootVersionPlan) -> [ RootVersionPlan, Array[ActivityEvent], ActivityHistory, RecordSnapshot?, ActivityBoundary? ]
 
     # : () -> [RecordSnapshot?, untyped]
     def capture_current: () -> [ RecordSnapshot?, untyped ]
@@ -66,6 +71,7 @@ module PaperTrailDiff
 
     # Appends the transition into an explicit closing boundary, which is either
     # a requested current record or the absence a final root destroy leaves.
+    # Either follows the root versions, which are themselves events.
     # : (ActivityHistory, Array[ActivityEvent], ActivityBoundary?, RecordSnapshot?) -> Array[ActivityStep]
     def activity_steps: (ActivityHistory, Array[ActivityEvent], ActivityBoundary?, RecordSnapshot?) -> Array[ActivityStep]
 

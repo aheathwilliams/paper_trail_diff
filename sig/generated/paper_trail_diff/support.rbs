@@ -59,8 +59,8 @@ module PaperTrailDiff
     # : (untyped, untyped) -> Integer
     def self?.compare_versions: (untyped, untyped) -> Integer
 
-    # : (String, String) -> String
-    def self?.association_path: (String, String) -> String
+    # : (String, String | Symbol) -> String
+    def self?.association_path: (String, String | Symbol) -> String
 
     # : (Hash[String, Hash[Symbol, untyped]], Hash[String, Hash[Symbol, untyped]]) -> Hash[String, Hash[Symbol, untyped]]
     def self?.merge_record_groups: (Hash[String, Hash[Symbol, untyped]], Hash[String, Hash[Symbol, untyped]]) -> Hash[String, Hash[Symbol, untyped]]
