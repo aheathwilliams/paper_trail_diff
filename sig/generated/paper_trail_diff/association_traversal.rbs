@@ -46,6 +46,13 @@ module PaperTrailDiff
     # : (untyped) -> String
     def self.habtm_below_root: (untyped) -> String
 
+    # PT-AT records a HABTM's membership by loading the association, scope and
+    # target default scope applied, so a target outside the scope when the
+    # owner saved is never recorded. One that enters it before the next save
+    # is a member then that history cannot hold.
+    # : (untyped, bool) -> String?
+    def self.habtm_reason: (untyped, bool) -> String?
+
     # : (untyped, untyped) -> bool
     def self.paper_trail_versions?: (untyped, untyped) -> bool
 

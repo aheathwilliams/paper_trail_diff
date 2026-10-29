@@ -20,6 +20,11 @@ class TraversalNote < ActiveRecord::Base
   has_many :holder_replies, through: :holder, source: :replies
 end
 
+class TraversalNamedTag < ActiveRecord::Base
+  self.table_name = 'tracked_tags'
+  default_scope { where.not(name: '') }
+end
+
 class TraversalArticle < ActiveRecord::Base
   self.table_name = 'tracked_articles'
   belongs_to :author, class_name: 'TrackedAuthor', optional: true
@@ -31,6 +36,14 @@ class TraversalArticle < ActiveRecord::Base
   has_and_belongs_to_many :labels, class_name: 'TrackedTag', join_table: :tracked_articles_tags,
                                    foreign_key: :tracked_article_id,
                                    association_foreign_key: :tracked_tag_id
+  # PT-AT records only the members a scope admits when the owner saves.
+  has_and_belongs_to_many :named_tags, -> { where.not(name: '') },
+                          class_name: 'TrackedTag', join_table: :tracked_articles_tags,
+                          foreign_key: :tracked_article_id, association_foreign_key: :tracked_tag_id
+  has_and_belongs_to_many :default_named_tags, class_name: 'TraversalNamedTag',
+                                               join_table: :tracked_articles_tags,
+                                               foreign_key: :tracked_article_id,
+                                               association_foreign_key: :tracked_tag_id
   has_many :tagged_articles, through: :tags, source: :articles
   has_many :tagged_comments, through: :tagged_articles, source: :comments
   has_paper_trail
@@ -63,6 +76,12 @@ RSpec.describe PaperTrailDiff::AssociationTraversal do
 
   def unsupported(path, habtm)
     "unsupported association #{path}: #{habtm_reason(habtm)}"
+  end
+
+  def scoped(habtm)
+    "#{habtm} is a scoped has_and_belongs_to_many, and PaperTrail records only the members " \
+      'its scope admitted when the owner saved, so membership between saves cannot be ' \
+      'rebuilt; replace it with a has_many :through a versioned join model'
   end
 
   def below_root(habtm)
@@ -184,6 +203,13 @@ RSpec.describe PaperTrailDiff::AssociationTraversal do
       end
       expect(reason(TraversalAuthor, :article_tags, root: false))
         .to eq(habtm_reason('TrackedArticle#tags'))
+    end
+
+    it 'names a HABTM with a scope or a default-scoped target' do
+      expect(reason(TraversalArticle, :named_tags)).to eq(scoped('TraversalArticle#named_tags'))
+      expect(reason(TraversalArticle, :default_named_tags))
+        .to eq(scoped('TraversalArticle#default_named_tags'))
+      expect(reason(TraversalArticle, :labels)).to be_nil
     end
 
     it 'names the PaperTrail versions association' do
@@ -512,7 +538,9 @@ RSpec.describe PaperTrailDiff::AssociationTraversal do
       cases = [[article, :tagged_articles, unsupported('tagged_articles', 'TraversalArticle#tags')],
                [author, :article_tags, unsupported('article_tags', 'TrackedArticle#tags')],
                [article, 'tags.articles',
-                "unsupported association tags.articles: #{below_root('TrackedTag#articles')}"]]
+                "unsupported association tags.articles: #{below_root('TrackedTag#articles')}"],
+               [article, :named_tags,
+                "unsupported association named_tags: #{scoped('TraversalArticle#named_tags')}"]]
 
       cases.each do |record, association, message|
         calls(record, association).each do |call|

@@ -7,6 +7,12 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Breaking changes
 
+- A `has_and_belongs_to_many` with a scope, or whose target has a default
+  scope, raises `UnsupportedAssociationError` up front in every method, and
+  `association_paths` leaves it out. PT-AT records a HABTM's members through
+  its scope when the owner saves, so a target that entered the scope between
+  saves was missing from history, and `activity_timeline` raised `KeyError`.
+  Replace it with a `has_many :through` a versioned join model.
 - `report`, and `analyze_scope` with `activity: true`, also select a record
   when only a record on one of its requested `associations:` changed in the
   window: editing a comment selects its article. They used to skip it, although
