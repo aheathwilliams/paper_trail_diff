@@ -63,7 +63,9 @@ HABTM membership comes from the snapshots PT-AT records with each transaction,
 so it is only known at root versions saved in a transaction. Those snapshots
 name the transaction and the association but not the owner, so they give only
 the root's own membership, and a HABTM below the root is rejected before any
-history is read.
+history is read. Even at the root, a transaction in which another record with a
+HABTM of the same name saved a version holds both records' members;
+`HabtmTransactionOwners` finds those transactions, and reading one raises.
 
 ## Database indexes
 

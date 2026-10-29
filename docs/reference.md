@@ -440,6 +440,13 @@ the range at a version instead (see the
 [checkpoint recipe](#saving-a-checkpoint)), or use a join model with
 `has_many :through`.
 
+PT-AT records HABTM members under the transaction a version was saved in, and
+does not say which record they belong to. If another record with a HABTM of the
+same name, such as a second article, also saved a version in that transaction
+and members were recorded there, reading the root's membership at that version
+raises `IncompleteAssociationHistoryError` instead of mixing both records'
+members. Save each HABTM owner's versions in a transaction of its own.
+
 ## analyze
 
 `analyze(record)` returns an `Analysis` with the net `diff` and the `timeline`
@@ -729,7 +736,10 @@ end
 ```
 
 Without `synchronize_version_creation_timestamp: false`, the checkpoint takes the
-record's old `updated_at` as its time and lands in the past.
+record's old `updated_at` as its time and lands in the past. Save one record per
+transaction: HABTM membership cannot be read from a transaction in which
+another record with the same HABTM also saved a version (see the
+[HABTM limitation](#habtm-limitation)).
 
 ### Files from ActiveStorage
 
@@ -1062,7 +1072,7 @@ All errors inherit from `PaperTrailDiff::Error`.
 | `UnknownAssociationError` | An association name does not exist |
 | `UnsupportedAssociationError` | An association's macro is not supported, a path continues past a polymorphic `belongs_to`, a `has_many :through` goes through a HABTM, or a HABTM is below the root |
 | `UnversionedAssociationError` | An association's target model has no `has_paper_trail`, including the class a polymorphic `belongs_to` names |
-| `IncompleteAssociationHistoryError` | PT-AT did not record enough to rebuild an association, such as HABTM without a transaction, or a polymorphic type names no class |
+| `IncompleteAssociationHistoryError` | PT-AT did not record enough to rebuild an association, such as HABTM without a transaction or in a transaction another record with that HABTM also saved a version in, or a polymorphic type names no class |
 | `UnsupportedLiveActivityError` | A HABTM activity range ends at the current record |
 | `AmbiguousNestedKeyError` | `nested_changes` finds keys like `:a` and `"a"` together |
 
@@ -1080,7 +1090,8 @@ Results can only be as complete as the history PaperTrail and PT-AT recorded.
   Use a transaction with a suitable isolation level if that matters.
 - HABTM membership history exists only where PT-AT recorded it in a
   transaction, and only for the root record: a HABTM below the root raises
-  `UnsupportedAssociationError`. HABTM changes cannot become their own
+  `UnsupportedAssociationError`, and a transaction that another record with
+  that HABTM also saved a version in raises `IncompleteAssociationHistoryError`. HABTM changes cannot become their own
   activity steps.
 - PT-AT has its own
   [limitations](https://github.com/westonganger/paper_trail-association_tracking#limitations),
