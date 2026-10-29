@@ -660,10 +660,21 @@ has_one :latest_comment, -> { order(id: :desc) }
 At every point the gem ranks the records that meet the scope's conditions by
 the order, then skips the offset and keeps the limit, as the association's own
 query would have. The order must reach the primary key, so that no two records
-tie, and each key before it must be an integer, boolean, or integer enum column
-of the target, ascending or descending. NULL sorts where the database puts it
-by default: last in an ascending order on PostgreSQL, first on SQLite, MySQL,
-and SQL Server.
+tie, and each key before it must be an integer, boolean, integer enum, date,
+or datetime column of the target, ascending or descending. NULL sorts where the
+database puts it by default: last in an ascending order on PostgreSQL, first on
+SQLite, MySQL, and SQL Server.
+
+A datetime key, such as `order(created_at: :desc)`, is read when its column
+declares a precision, as Rails 7 and later give every new `datetime` column,
+when history keeps that many fractional digits, and when Active Record stores
+times in UTC, its default. Active Record truncates a time to its column's
+precision before writing it, so history then holds the value the database
+sorts by. YAML history keeps every digit; JSON history, and a `json` or
+`jsonb` object column, keep `ActiveSupport::JSON::Encoding.time_precision`
+digits, 3 by default, so with them only a `datetime(3)` or coarser column is
+read. A time-of-day column is not read: Active Record keeps the date it was
+given in memory but stores only the time.
 
 A `has_many :through` reads its parts as Active Record's own query joins them:
 it keeps each part's conditions but not its `limit`, `offset`, or `has_one`
@@ -676,7 +687,7 @@ read.
 
 A few associations still need queries per record: a `limit` or `offset` whose
 order is not total or sorts by another column type (strings follow a
-collation, and times the precision each history kept), scopes that take the
+collation) or by a datetime history cannot rank exactly, scopes that take the
 owner (`->(article) { ... }`), scopes written as SQL strings or ranges, scopes
 that join or select, and conditions on other column types or other tables. Batch methods raise `UnsupportedBatchPathError`
 for these by default and name the association. Remove it from

@@ -13,16 +13,22 @@ module PaperTrailDiff
 
     ENUM_TYPE: ::String
 
-    # Integers and booleans sort alike everywhere. Strings follow a collation
-    # and times the precision each history kept, so neither is read.
+    # Integers, booleans and dates sort alike everywhere. Strings follow a
+    # collation, so they are not read.
     ORDER_TYPES: untyped
+
+    # Times sort alike only at the precision both the column and history
+    # keep. A time of day is not read: in memory it keeps the date it was
+    # given, which the database drops.
+    DATETIME_TYPE: ::String
 
     # Where each adapter sorts NULL in an ascending order by default; a
     # descending order reverses it. Another adapter's ranking is not read.
     NULLS_LAST: untyped
 
     # Places in a sort key, of which only the order counts: a value between a
-    # NULL sorted first and one sorted last, and false before true.
+    # NULL sorted first and one sorted last, and false before true. Every
+    # value is a number, so that a descending key can negate it.
     NULL_PLACE: untyped
 
     VALUE_PLACE: ::Integer
@@ -61,6 +67,13 @@ module PaperTrailDiff
     # : (untyped, String) -> bool
     def self.orderable?: (untyped, String) -> bool
 
+    # Active Record truncates a time to its column's precision before writing
+    # it, so history holds the stored value when it keeps that many digits.
+    # Times the type stores in UTC sort as the instants they name; local
+    # times repeat an hour when clocks go back.
+    # : (untyped, untyped) -> bool
+    def self.exact_time?: (untyped, untyped) -> bool
+
     # : (untyped, Array[[String, bool]], bool, Integer?, Integer?) -> void
     def initialize: (untyped, Array[[ String, bool ]], bool, Integer?, Integer?) -> void
 
@@ -83,15 +96,21 @@ module PaperTrailDiff
     # Keys compare in turn, and the primary key always decides. A descending
     # key negates its places, which also moves NULL to the other end, as each
     # adapter does by default.
-    # : (Hash[String, untyped]) -> Array[Array[Integer]]
-    def sort_key: (Hash[String, untyped]) -> Array[Array[Integer]]
+    # : (Hash[String, untyped]) -> Array[Array[Numeric]]
+    def sort_key: (Hash[String, untyped]) -> Array[Array[Numeric]]
 
     # NULL holds the adapter's place alone, so it never compares as a value.
     # A version saved before its column existed holds NULL there too.
-    # : (untyped) -> Array[Integer]
-    def place: (untyped) -> Array[Integer]
+    # : (untyped) -> Array[Numeric]
+    def place: (untyped) -> Array[Numeric]
 
-    # The value the database sorts by, as the key's type casts it.
+    # A time as its seconds, exactly, and a date as its day number.
+    # : (untyped) -> Numeric
+    def number: (untyped) -> Numeric
+
+    # The value the database sorts by, as the key's type casts it. An enum
+    # sorts by the integer it stores; other types are compared cast, since an
+    # adapter may serialize a time or date as a wrapper, as SQL Server does.
     # : (String, Hash[String, untyped]) -> untyped
     def stored: (String, Hash[String, untyped]) -> untyped
   end
