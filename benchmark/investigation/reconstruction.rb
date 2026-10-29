@@ -12,10 +12,6 @@ scenarios = %w[scalar comments checkpoints belongs_to limited owner default_scop
 scenario = ARGV.fetch(0)
 size = Integer(ARGV.fetch(1))
 abort 'invalid scenario or size' unless scenarios.include?(scenario) && size.positive?
-prepared_through = ARGV[2] == 'prepared-through'
-if ARGV[2] && !(prepared_through && scenario == 'through_has_many')
-  abort 'prepared-through is only valid for through_has_many'
-end
 
 ENV.delete('PAPER_TRAIL_DIFF_DATABASE_URL')
 require_relative '../../spec/support/association_database'
@@ -39,9 +35,6 @@ roots.each { |author| author.update!(name: 'After') } if scenario == 'through_ha
 PaperTrail::Version.update_all(object_changes: nil) if scenario.end_with?('without_changes')
 captured_at = Time.now
 Time.define_singleton_method(:now) { captured_at }
-# Investigate the existing indexed resolver, without changing production code.
-experimental = Module.new { define_method(:deferred_macro?) { |_reflection| false } }
-PaperTrailDiff::PreparedHistoryLoader.prepend(experimental) if prepared_through
 
 counts = Hash.new(0)
 reified_ids = Hash.new(0)
@@ -125,27 +118,10 @@ if result && result.roots.length != size
   abort "#{scenario}: expected #{size} roots, got #{result.roots.length}"
 end
 measured_counts = counts.dup
-equal = nil
-if prepared_through && result
-  experimental.send(:remove_method, :deferred_macro?)
-  # Snapshot counters before this untimed check against the ordinary fallback.
-  measured_ids = reified_ids.dup
-  measured_present_ids = present_reified_ids.dup
-  expected = PaperTrailDiff.report(model, **options)
-  serialize = lambda { |report|
-    report.analyses.transform_values do |analysis|
-      analysis.to_h(snapshots: true)
-    end
-  }
-  equal = serialize.call(result) == serialize.call(expected)
-  reified_ids = measured_ids
-  present_reified_ids = measured_present_ids
-end
 puts JSON.generate(
   scenario: scenario, roots: size, elapsed_ms: elapsed.round(3), counts: measured_counts,
   unique_reified_versions: reified_ids.length,
   repeated_reify_calls: reified_ids.values.sum { |count| count - 1 },
   repeated_present_reify_calls: present_reified_ids.values.sum { |count| count - 1 },
-  statements: statements, query_origins: query_origins, error: error,
-  prepared_through: prepared_through, equivalent_output: equal
+  statements: statements, query_origins: query_origins, error: error
 )

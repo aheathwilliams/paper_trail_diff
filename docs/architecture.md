@@ -54,10 +54,9 @@ resolves association membership by timestamp only:
 - associations with a scope, including `limit` and owner-dependent scopes;
 - targets with a default scope;
 - targets that are not versioned;
-- composite foreign keys;
-- `has_many :through` associations whose source is not a `belongs_to`.
+- composite foreign keys.
 
-Batch methods reject the scoped and through cases unless you pass
+Batch methods reject the scoped cases unless you pass
 `allow_expensive: true`; see [costly associations](reference.md#costly-associations).
 
 HABTM membership comes from the snapshots PT-AT records with each transaction,
