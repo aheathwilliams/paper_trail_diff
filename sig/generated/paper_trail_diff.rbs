@@ -41,7 +41,9 @@ module PaperTrailDiff
   def self.analyze_many: (Array[untyped], ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?allow_expensive: bool) -> Hash[identity, Analysis]
 
   # Analyzes every root the relation reaches whose history moved inside the
-  # window. Joined duplicates are read in bounded pages and analyzed once.
+  # window. With `activity: true`, a change to a record on one of the
+  # requested association paths also counts, because the activity timeline
+  # reports it. Joined duplicates are read in bounded pages and analyzed once.
   #
   # `limit:` is required and exceeding it raises. Selection moves into the gem
   # here. The relation's own limit/offset select the live page; this separate
@@ -67,7 +69,8 @@ module PaperTrailDiff
   # : (untyped, limit: Integer?, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?historical_filter: untyped, ?max_filter_versions: Integer, ?include_deleted: bool, ?allow_expensive: bool) -> ScopedAnalysis
   def self.analyze_scope: (untyped, limit: Integer?, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?historical_filter: untyped, ?max_filter_versions: Integer, ?include_deleted: bool, ?allow_expensive: bool) -> ScopedAnalysis
 
-  # Recent root and selected-child activity through the current saved state.
+  # Recent root and selected-child activity through the current saved state,
+  # for every root that changed or whose requested associations did.
   # Historical windows remain explicit on analyze_scope; this entry point is
   # deliberately named for a report through now rather than an as-of query.
   # : (untyped, since: untyped, limit: Integer, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?snapshots: bool, ?group: Symbol?, ?include_deleted: bool, ?historical_filter: untyped, ?max_filter_versions: Integer, ?allow_expensive: bool) -> ScopedAnalysis

@@ -15,6 +15,14 @@ module PaperTrailDiff
     # : (untyped, Array[untyped], untyped, ActivityRange) -> Array[untyped]
     def child_ids: (untyped, Array[untyped], untyped, ActivityRange) -> Array[untyped]
 
+    # The `belongs_to` targets each owner pointed at in the range: at its start
+    # and after each change inside it, plus the live row at a current end.
+    # : (untyped, Array[untyped], untyped, ActivityRange) -> Array[ActivityTargetCandidateLoader::Row]
+    def target_rows: (untyped, Array[untyped], untyped, ActivityRange) -> Array[ActivityTargetCandidateLoader::Row]
+
+    # : (untyped, untyped) -> bool
+    def loaded?: (untyped, untyped) -> bool
+
     # : (untyped, Array[untyped], untyped, ?transactions: bool) -> Array[untyped]
     def association_rows: (untyped, Array[untyped], untyped, ?transactions: bool) -> Array[untyped]
 
@@ -32,6 +40,8 @@ module PaperTrailDiff
 
     @rows: Hash[Array[String], Hash[String, Array[untyped]]]
 
+    @targets: Hash[Array[String], untyped]
+
     # : (untyped, Array[untyped], untyped, ActivityRange) -> Array[untyped]
     def historical_ids: (untyped, Array[untyped], untyped, ActivityRange) -> Array[untyped]
 
@@ -41,11 +51,20 @@ module PaperTrailDiff
     # : (untyped, untyped) -> untyped
     def child_rows: (untyped, untyped) -> untyped
 
+    # : (Hash[String, Array[ActivityTargetCandidateLoader::Row]], Array[untyped]) -> Array[ActivityTargetCandidateLoader::Row]
+    def rows_for: (Hash[String, Array[ActivityTargetCandidateLoader::Row]], Array[untyped]) -> Array[ActivityTargetCandidateLoader::Row]
+
+    # : (untyped, Array[ActivityTargetCandidateLoader::Row], ActivityRange) -> Array[ActivityTargetCandidateLoader::Row]
+    def eligible_rows: (untyped, Array[ActivityTargetCandidateLoader::Row], ActivityRange) -> Array[ActivityTargetCandidateLoader::Row]
+
+    # : (untyped, untyped) -> untyped
+    def target_candidates: (untyped, untyped) -> untyped
+
     # Mirrors VersionAssociationCandidateScope's before-window rule. The loaded
     # series includes changes to other owners too, so an old membership cannot
     # survive a later pre-window reassignment just because that owner is absent.
-    # : (untyped, Array[untyped], ActivityRange) -> bool
-    def eligible_child?: (untyped, Array[untyped], ActivityRange) -> bool
+    # : (untyped, untyped, untyped, String?, ActivityRange) -> bool
+    def eligible_version?: (untyped, untyped, untyped, String?, ActivityRange) -> bool
 
     # : (untyped, untyped, bool) -> Hash[String, Array[untyped]]
     def load_association_rows: (untyped, untyped, bool) -> Hash[String, Array[untyped]]

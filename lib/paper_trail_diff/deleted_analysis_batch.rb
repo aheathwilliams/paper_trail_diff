@@ -4,11 +4,15 @@
 module PaperTrailDiff
   # Analyzes missing roots together without pretending that they have live rows.
   class DeletedAnalysisBatch
-    #: (untyped, identities: Array[Array[String]], time_range: TimeRange?, analyzer: untyped, history_preparer: untyped, version_scope: untyped) -> void
+    # `context_required` reads a root that did not change in the window from
+    # the version after it, so its associations' activity can be reported.
+    #: (untyped, identities: Array[Array[String]], time_range: TimeRange?, analyzer: untyped, history_preparer: untyped, version_scope: untyped, context_required: bool) -> void
     def initialize( # rubocop:disable Metrics/ParameterLists
-      model, identities:, time_range:, analyzer:, history_preparer:, version_scope:
+      model, identities:, time_range:, analyzer:, history_preparer:, version_scope:,
+      context_required:
     )
       @model = model
+      @context_required = context_required
       @identities = identities
       @time_range = time_range
       @analyzer = analyzer
@@ -18,11 +22,9 @@ module PaperTrailDiff
 
     #: () -> Hash[Array[String], Analysis?]
     def call
-      records = historical_roots
-      selected = BatchedRootVersions.new(
-        records, time_range: @time_range, version_scope: @version_scope,
-                 live_endpoints: nil, context_required: false
-      ).call
+      destroys = destroy_versions
+      records = historical_roots(destroys)
+      selected = plans(records, destroys)
       prepare(records, selected)
       analyses = records.to_h do |record|
         key = Endpoint.identity(record)
@@ -40,19 +42,39 @@ module PaperTrailDiff
     end
 
     # @rbs @model: untyped
+    # @rbs @context_required: bool
     # @rbs @identities: Array[Array[String]]
     # @rbs @time_range: TimeRange?
     # @rbs @analyzer: untyped
     # @rbs @history_preparer: untyped
     # @rbs @version_scope: untyped
 
+    # A root destroyed before the window had no state inside it to read, so
+    # only the others take the version after the window as context.
+    #: (Array[untyped], Array[untyped]) -> Hash[Array[String], RootVersionPlan]
+    def plans(records, destroys)
+      start = @time_range&.begin_time
+      early = destroys.select { |version| start && version.created_at < start }
+                      .map { |version| version.item_id.to_s }
+      before, during = records.partition { |record| early.include?(record.id.to_s) }
+      plans_for(during, @context_required).merge(plans_for(before, false))
+    end
+
+    #: (Array[untyped], bool) -> Hash[Array[String], RootVersionPlan]
+    def plans_for(records, context_required)
+      BatchedRootVersions.new(
+        records, time_range: @time_range, version_scope: @version_scope,
+                 live_endpoints: nil, context_required: context_required
+      ).call
+    end
+
     # These records supply identity and model metadata only. Every reported
     # value comes from the batched historical plan; no per-root reify or live
     # lookup is needed to get into the comparison engine.
-    #: () -> Array[untyped]
-    def historical_roots
+    #: (Array[untyped]) -> Array[untyped]
+    def historical_roots(destroys)
       loader = PreparedVersionStateLoader.new
-      destroy_versions.map do |version|
+      destroys.map do |version|
         model = loader.call(version)&.model_class || Endpoint.model_class(version)
         record = model.new
         record[model.primary_key] = version.item_id

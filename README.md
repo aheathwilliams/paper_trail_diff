@@ -190,9 +190,10 @@ that still exist.
 
 Three selection rules matter:
 
-- The record itself needs a PaperTrail version in the time window. For example,
-  editing only a comment does not select its article. Comment activity is included
-  for selected articles when you request `associations: [:comments]`.
+- A record is selected when it, or a record on one of the `associations:` you
+  request, has a PaperTrail version in the time window. With
+  `associations: [:comments]`, editing only a comment selects its article, and
+  the article's report shows the edit.
 - A relation such as `Article.where(status: "open")` checks today's values.
   It cannot establish whether deleted articles matched that condition. Deleted
   records are therefore listed separately.
@@ -208,7 +209,9 @@ for pagination, deleted records, and selecting by past values with
 `historical_filter:`.
 
 For a fixed past window, use `analyze_scope(Article.all, within: start_time...end_time,
-limit: 100)`.
+activity: true, limit: 100)`. Without `activity: true`, `analyze_scope` compares
+each record's own versions, so it selects only records with a version of their
+own.
 
 ## 4. Turn a report into rows
 

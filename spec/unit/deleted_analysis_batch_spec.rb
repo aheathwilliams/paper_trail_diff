@@ -39,10 +39,11 @@ RSpec.describe PaperTrailDiff::DeletedAnalysisBatch do
     ['FilterArticle', record.id.to_s]
   end
 
-  def analyze(identities, model: FilterArticle, within: nil, version_scope: nil)
+  def analyze(identities, model: FilterArticle, within: nil, version_scope: nil, context: false)
     described_class.new(
       model, identities: identities, time_range: within && PaperTrailDiff::TimeRange.new(within),
-             analyzer: analyzer, history_preparer: history_preparer, version_scope: version_scope
+             analyzer: analyzer, history_preparer: history_preparer, version_scope: version_scope,
+             context_required: context
     ).call
   end
 
@@ -111,6 +112,31 @@ RSpec.describe PaperTrailDiff::DeletedAnalysisBatch do
     expect(result.fetch(key(article)).activity_timeline).to eq([])
     expect(analyzed).to eq([])
     expect(prepared).to eq([])
+  end
+
+  # An activity view reports association changes in such a window, so it
+  # needs the root's state there: the version after the window holds it.
+  it 'reads a root with nothing in the window from the version after it when asked' do
+    article, _created, _updated, destroyed = deleted(minutes: [0, 1, 4])
+
+    analyze([key(article)], within: at(2)..at(3), context: true)
+
+    plan = analyzed.sole.last
+    expect(plan.reconstruction_versions).to eq([destroyed])
+    expect(plan.mutation?(destroyed)).to be(false)
+  end
+
+  it 'does not read a root destroyed before the window, even when asked' do
+    article, = deleted
+    early, = deleted(minutes: [0, 1, 2])
+    late, _created, _updated, after = deleted(minutes: [0, 1, 9])
+
+    result = analyze([key(article), key(early), key(late)], within: at(5)..at(6), context: true)
+
+    expect(result.fetch(key(article)).activity_timeline).to eq([])
+    expect(result.fetch(key(early)).activity_timeline).to eq([])
+    expect(analyzed.map { |record, plan| [record.id, plan.reconstruction_versions] })
+      .to eq([[late.id, [after]]])
   end
 
   it 'passes the version scope on to version selection' do

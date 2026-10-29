@@ -5,6 +5,22 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Breaking changes
+
+- `report`, and `analyze_scope` with `activity: true`, also select a record
+  when only a record on one of its requested `associations:` changed in the
+  window: editing a comment selects its article. They used to skip it, although
+  `analyze_many` reports that activity. A report can therefore return more
+  records and reach `limit:` sooner. Nested paths count at every level,
+  `has_many :through` counts its join rows, and a child that moved selects its
+  old and new owner. Selection adds one query per association level, not per
+  record. Checkpoint analyses (`activity: false`) are unchanged: they compare a
+  record's own versions, so only those select it. To keep only records that
+  changed themselves, drop analyses whose `timeline` is empty. A record
+  selected through a HABTM path in a window that ends at the current record
+  raises `UnsupportedLiveActivityError`, as one that changed itself already
+  does.
+
 ### Added
 
 - `recorded_changes(version)` returns what PaperTrail stored with one version
@@ -30,8 +46,25 @@ project follows [Semantic Versioning](https://semver.org/).
   with the record, whether it changed, appeared, or disappeared, and the step's
   author, event, and time.
 
+### Fixed
+
+- Activity reports a change to a `belongs_to` target, or to the source of a
+  `has_many :through`, when the record pointing at it did not change in the
+  window: an author renamed under an article nobody edited. It used to report
+  nothing. A record that changed its target in the window also reports
+  changes to the target it pointed at before.
+- `include_deleted: true` with `activity: true` reports the association
+  activity of a deleted record that did not change itself in the window. Its
+  analysis used to be empty.
+- On SQL Server, activity places a version saved within two milliseconds of a
+  window's start or end on the side it was saved. The window's bounds used to
+  be rounded to 1/300 second, so such a version could be read as outside the
+  window, or one just past its end as inside it.
+
 ### Development
 
+- The consistency specs also check that activity selection includes every
+  record whose analysis reports a change.
 - Mutation testing also covers `TimeRange`, `VersionRange`,
   `TimeVersionRange`, `BatchedRootVersions`, and `DeletedAnalysisBatch`, each
   with a unit spec of its own; all 5,485 mutations across the fourteen classes

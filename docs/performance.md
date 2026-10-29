@@ -300,10 +300,13 @@ Deleted history has no original timed counterpart here. Its five queries at both
   a small root ceiling can load a full 250-candidate version batch, subject to the
   separate version budget. Requested analysis history and retained snapshots
   still consume memory proportional to the data involved.
-- **Selection semantics are unchanged.** Historical filters test the states a
-  record held during the window, not continuous-time membership. Scope selection needs a root
-  version in the window; child-only edits do not select an otherwise quiet root.
+- **Selection reads the window's versions.** Historical filters test the states a
+  record held during the window, not continuous-time membership. Activity
+  selection also reaches roots through their requested associations, with one
+  query per association level, not per root. Those queries scan the window's
+  versions of each associated model and their `version_associations` rows; ids
+  stay in subqueries unless `versions.item_id` and the keys differ in type, in
+  which case they are read in slices of 250.
 
 Further batching of advanced association fallbacks needs temporal parity tests,
-especially around ownership changes. A graph-wide selector for child-only activity
-also needs its own bounded query design.
+especially around ownership changes.

@@ -44,7 +44,7 @@ module PaperTrailDiff
     def condition_sql(connection) # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
       outer = connection.quote_table_name(@version_class.table_name)
       later = connection.quote_table_name('paper_trail_diff_later_versions')
-      start_at = connection.quote(@start_at)
+      start_at = quote_time(connection, @start_at)
       columns = quoted_columns(connection, outer, later)
       compact_sql(<<~SQL)
         (
@@ -84,7 +84,17 @@ module PaperTrailDiff
       condition = "#{created_at} >= #{start_at}"
       return condition unless @end_at
 
-      "(#{condition} AND #{created_at} <= #{connection.quote(@end_at)})"
+      "(#{condition} AND #{created_at} <= #{quote_time(connection, @end_at)})"
+    end
+
+    # A time quoted on its own takes the adapter's default precision, which on
+    # SQL Server is `datetime` and rounds to 1/300 second. Serializing through
+    # the column's type quotes it as a bound value would be, at the precision
+    # `created_at` is stored with.
+    #: (untyped, untyped) -> String
+    def quote_time(connection, time)
+      type = @version_class.type_for_attribute('created_at')
+      connection.quote(type.serialize(type.cast(time)))
     end
 
     #: (untyped, String, String) -> String

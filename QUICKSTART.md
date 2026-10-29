@@ -203,9 +203,10 @@ report.analyses.each_value { |analysis| analysis.diff.to_h }
 are selected, the call raises instead of returning a partial report. Omit
 `include_deleted:` if you only need articles that still exist.
 
-An article needs its own PaperTrail version in the time window to be selected.
-Editing a comment alone does not select its article. A relation's `where`
-conditions check current values; they cannot check a deleted article's values.
+An article is selected when it has a PaperTrail version in the time window. With
+`associations: [:comments]`, editing a comment alone also selects its article. A
+relation's `where` conditions check current values; they cannot check a deleted
+article's values.
 
 For one article, use a window ending now:
 

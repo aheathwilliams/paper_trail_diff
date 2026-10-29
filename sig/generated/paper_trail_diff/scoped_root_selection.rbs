@@ -38,8 +38,11 @@ module PaperTrailDiff
       def initialize: (records: Array[untyped], unreachable: Array[Array[String]]) -> void
     end
 
-    # : (untyped, time_range: TimeRange?, limit: Integer, ?historical_filter: untyped, ?max_filter_versions: Integer) -> void
-    def initialize: (untyped, time_range: TimeRange?, limit: Integer, ?historical_filter: untyped, ?max_filter_versions: Integer) -> void
+    # `activity_tree` names the association paths whose changes also select a
+    # root, as an activity analysis reports them. Without one, only a root's
+    # own versions select it.
+    # : (untyped, time_range: TimeRange?, limit: Integer, ?historical_filter: untyped, ?max_filter_versions: Integer, ?activity_tree: AssociationTree?) -> void
+    def initialize: (untyped, time_range: TimeRange?, limit: Integer, ?historical_filter: untyped, ?max_filter_versions: Integer, ?activity_tree: AssociationTree?) -> void
 
     # : () -> Result
     def call: () -> Result
@@ -50,6 +53,8 @@ module PaperTrailDiff
 
     @limit: Integer
 
+    @related: AssociationActivitySelection?
+
     @scope: untyped
 
     @time_range: TimeRange?
@@ -59,13 +64,26 @@ module PaperTrailDiff
     # in the window -- not to the relation or `limit:` -- so a report on one
     # record could read every id in a busy table. A subquery keeps the work
     # bounded by what the relation and the deletions actually contain.
-    # : () -> Result
-    def database_selection: () -> Result
+    # : (Array[AssociationActivitySelection::Query]) -> Result
+    def database_selection: (Array[AssociationActivitySelection::Query]) -> Result
+
+    # Comparing in SQL needs every subquery's column to share the key's type.
+    # : (Array[AssociationActivitySelection::source]) -> Array[AssociationActivitySelection::Query]?
+    def subqueries: (Array[AssociationActivitySelection::source]) -> Array[AssociationActivitySelection::Query]?
+
+    # : (Array[String]) -> Result
+    def plucked_selection: (Array[String]) -> Result
 
     # Comparing the two columns in SQL needs them to share a type: PostgreSQL
     # rejects an integer key against a string item_id outright.
     # : () -> bool
     def comparable_keys?: () -> bool
+
+    # : () -> Symbol?
+    def key_type: () -> Symbol?
+
+    # : (Array[AssociationActivitySelection::Query]) -> Array[String]
+    def related_missing_ids: (Array[AssociationActivitySelection::Query]) -> Array[String]
 
     # Changed in the window but without a row, found with an anti-join instead
     # of comparing two plucked lists.
@@ -98,8 +116,13 @@ module PaperTrailDiff
     # Deduplicate records rather than adding SQL DISTINCT: an otherwise valid
     # relation may order by joined columns or select a PostgreSQL json column.
     # Read bounded pages until the relation ends or too many unique roots appear.
-    # : (untyped) -> Array[untyped]
-    def selected_records: (untyped) -> Array[untyped]
+    # Each candidate source is an id list or a subquery; a record matching any
+    # of them is selected.
+    # : (Array[untyped]) -> Array[untyped]
+    def selected_records: (Array[untyped]) -> Array[untyped]
+
+    # : (Array[untyped]) -> untyped
+    def candidate_relation: (Array[untyped]) -> untyped
 
     # : (untyped, Integer) -> Array[untyped]
     def record_page: (untyped, Integer) -> Array[untyped]

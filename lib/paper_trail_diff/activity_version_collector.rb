@@ -74,7 +74,7 @@ module PaperTrailDiff
 
       case reflection.macro
       when :belongs_to
-        belongs_to_groups(parent.fetch(:model), parent.fetch(:versions), reflection)
+        belongs_to_groups(parent.fetch(:model), parent.fetch(:ids), reflection)
       when :has_one, :has_many
         direct_child_groups(parent.fetch(:model), parent.fetch(:ids), reflection)
       when :has_and_belongs_to_many
@@ -98,16 +98,23 @@ module PaperTrailDiff
       result
     end
 
+    # Every target the owners pointed at in the range, not only those their own
+    # changes there recorded: an author renamed under an article nobody edited
+    # is still that article's activity.
     #: (untyped, Array[untyped], untyped) -> Hash[String, untyped]
-    def belongs_to_groups(parent_class, parent_versions, reflection)
-      if (prepared = @prepared)
-        rows = prepared.association_rows(parent_class, parent_versions, reflection)
-        return identity_groups(rows, reflection)
-      end
-      rows = parent_class.paper_trail.version_association_class.where(
-        version_id: parent_versions.map(&:id),
-        foreign_key_name: reflection.foreign_key.to_s
-      ).to_a
+    def belongs_to_groups(parent_class, parent_ids, reflection)
+      prepared = @prepared
+      return unprepared_belongs_to_groups(parent_class, parent_ids, reflection) unless prepared
+
+      # Prepared history holds every target its snapshots can contain. One it
+      # did not load -- a key changed without a version -- has no state to compare.
+      rows = prepared.target_rows(parent_class, parent_ids, reflection, @range)
+      identity_groups(rows, reflection) { |model_class, id| prepared.loaded?(model_class, id) }
+    end
+
+    #: (untyped, Array[untyped], untyped) -> Hash[String, untyped]
+    def unprepared_belongs_to_groups(parent_class, parent_ids, reflection)
+      rows = ActivityTargetCandidateLoader.new(parent_class, parent_ids, reflection, @range).call
       identity_groups(rows, reflection)
     end
 
@@ -141,7 +148,7 @@ module PaperTrailDiff
       identity_groups(rows, reflection)
     end
 
-    #: (Array[untyped], untyped) -> Hash[String, untyped]
+    #: (Array[untyped], untyped) ?{ (untyped, untyped) -> bool } -> Hash[String, untyped]
     def identity_groups(rows, reflection)
       identities = rows.group_by { |row| target_class(reflection, row) }
       groups = {} #: Hash[String, untyped]
@@ -149,6 +156,7 @@ module PaperTrailDiff
         next unless model_class
 
         ids = class_rows.filter_map(&:foreign_key_id).uniq
+        ids = ids.select { |id| yield(model_class, id) } if block_given?
         groups[model_class.name] = group(model_class, ids)
       end
       groups

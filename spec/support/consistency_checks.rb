@@ -111,6 +111,11 @@ module ConsistencyChecks
       scoped = PaperTrailDiff.analyze_scope(scope, limit: 10, **options).analyses[identity(root)]
 
       expect(diffs(batch)).to eq(diffs(single)), "window #{window}, activity: #{activity}"
+      # Activity selects a root whenever its analysis has something to report,
+      # including changes to its associations alone.
+      if activity && !single.diff.empty?
+        expect(scoped).not_to be_nil, "window #{window}: activity selected nothing to report"
+      end
       next unless scoped
 
       expect(diffs(scoped)).to eq(diffs(single)), "window #{window}, activity: #{activity}"
