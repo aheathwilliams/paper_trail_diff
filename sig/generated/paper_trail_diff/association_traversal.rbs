@@ -8,9 +8,9 @@ module PaperTrailDiff
     # : (untyped, untyped) -> untyped
     def self.belongs_to_target: (untyped, untyped) -> untyped
 
-    # The class a stored type names, or nil when it names none. The one
-    # mutation left, `self.const_get`, also searches Object, so it answers the
-    # same for every stored type.
+    # The class a stored type names, or nil when it names none.
+    # This class defines no constants of its own, so the one mutation left,
+    # `const_get` on it rather than on Object, finds the same class.
     # mutant:disable
     # : (String) -> untyped
     def self.named_class: (String) -> untyped
@@ -19,6 +19,28 @@ module PaperTrailDiff
     # and PT-AT raise a bare NameError for it, which does not say where it is.
     # : (untyped, untyped, String) -> untyped
     def self.polymorphic_target: (untyped, untyped, String) -> untyped
+
+    # Why a request cannot name this association of the model, or nil when it
+    # can. Discovery lists only the associations this accepts, so every path it
+    # lists can be requested. A has_many :through Active Record cannot follow
+    # raises Active Record's own error.
+    # : (untyped, untyped) -> String?
+    def self.unsupported_reason: (untyped, untyped) -> String?
+
+    # : (untyped, untyped) -> bool
+    def self.paper_trail_versions?: (untyped, untyped) -> bool
+
+    # Active Record joins a HABTM through a hidden model of its own, which has
+    # no versions and no reader that PT-AT or prepared history can follow, so a
+    # through that crosses one would fail partway through reconstruction.
+    #
+    # The through and source reflections of a through are the hidden ones, a
+    # has_many in place of each HABTM, so only the public reflection of the
+    # same name shows the HABTM. Active Record's own check, which it runs on
+    # first use anyway, explains a through it cannot follow before the chain
+    # below it is read.
+    # : (untyped) -> untyped
+    def self.habtm_in_chain: (untyped) -> untyped
 
     attr_reader tree: AssociationTree
 
@@ -51,12 +73,13 @@ module PaperTrailDiff
     # : (untyped) -> void
     def reject_live_habtm_activity!: (untyped) -> void
 
-    # The path only names an association in an error, so it is not part of
-    # what is cached.
+    # A model and a tree resolve to the same reflections at any path; the path
+    # only names a failure, and a failure is not cached.
     # : (untyped, AssociationTree, path: String) -> Array[untyped]
     def reflections_for: (untyped, AssociationTree, path: String) -> Array[untyped]
 
-    # A polymorphic child (`as:`) also names its owner's class in a type column.
+    # Active Record names keys as strings. A polymorphic child also points back
+    # with its type column; `type` is nil for any other.
     # : (untyped) -> Array[String]
     def incoming_relationship_columns: (untyped) -> Array[String]
 
@@ -66,8 +89,6 @@ module PaperTrailDiff
 
     @tree: AssociationTree
 
-    # A polymorphic target's class is known only per record, so listing stops
-    # there; validation rejects a path that continues past it.
     # : (untyped, AssociationTree, path: String) -> Array[Array[untyped]]
     def collect_reflections: (untyped, AssociationTree, path: String) -> Array[Array[untyped]]
 
@@ -85,15 +106,7 @@ module PaperTrailDiff
     # : (untyped, String, String) -> untyped
     def resolve_reflection: (untyped, String, String) -> untyped
 
-    # : (untyped, untyped) -> bool
-    def paper_trail_versions?: (untyped, untyped) -> bool
-
-    # A `has_many :through` a HABTM never counts: Active Record builds a HABTM
-    # as a hidden `has_many`, which is what its `through_reflection` returns.
     # : (untyped) -> bool
     def habtm_reflection?: (untyped) -> bool
-
-    # : (String, String | Symbol) -> String
-    def join_path: (String, String | Symbol) -> String
   end
 end

@@ -98,18 +98,13 @@ module PaperTrailDiff
       )
     end
 
+    # Only what a request accepts, so every listed path can be requested.
     #: (untyped) -> Array[untyped]
     def supported_reflections(model_class)
-      model_class.reflect_on_all_associations
-                 .select { |reflection| SUPPORTED_ASSOCIATION_MACROS.include?(reflection.macro) }
-                 .reject { |reflection| paper_trail_versions?(model_class, reflection) }
-                 .sort_by { |reflection| reflection.name.to_s }
-    end
-
-    #: (untyped, untyped) -> bool
-    def paper_trail_versions?(model_class, reflection)
-      model_class.respond_to?(:versions_association_name) &&
-        reflection.name.to_s == model_class.versions_association_name.to_s
+      reflections = model_class.reflect_on_all_associations.reject do |reflection|
+        AssociationTraversal.unsupported_reason(model_class, reflection)
+      end
+      reflections.sort_by { |reflection| reflection.name.to_s }
     end
 
     #: (untyped) -> untyped

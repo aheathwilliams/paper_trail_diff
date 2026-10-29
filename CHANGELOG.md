@@ -76,7 +76,14 @@ project follows [Semantic Versioning](https://semver.org/).
   `has_many :pinned_badges, class_name: 'PinnedBadge'`, holds only that class
   and its subclasses, as the live association does. It used to hold the
   sibling classes' records too, so a range ending at the current record
-  reported them as removed.
+  reported them as removed. Activity used to report a sibling's changes under
+  the association too, and to open a step for each version of a sibling or of
+  its children.
+- Activity reports a record whose STI type changed in the step of the version
+  that changed it, as a removal of the old type and an addition of the new,
+  and adds it to or removes it from an association to an STI subclass there.
+  It used to add the new type alongside the old one and leave the old one in
+  place until a later step, or to the end of a range ending at a version.
 - `activity_timeline`, and `analyze` with `activity: true`, return no steps for
   a range that ends at a version when `version_scope:` keeps none of its
   versions, as a checkpoint timeline does. They used to raise `NoMethodError`.
@@ -87,6 +94,24 @@ project follows [Semantic Versioning](https://semver.org/).
   window's start or end on the side it was saved. The window's bounds used to
   be rounded to 1/300 second, so such a version could be read as outside the
   window, or one just past its end as inside it.
+- A `has_many :through` that goes through a `has_and_belongs_to_many`, as its
+  `through:`, its `source:`, or further down its chain, raises
+  `UnsupportedAssociationError` up front in every method, naming the path and
+  the HABTM. Comparing two versions used to raise `NoMethodError` from inside
+  PT-AT, and analyses `ActiveRecord::StatementInvalid`. A `has_many :through`
+  Active Record cannot follow at all, such as one through a polymorphic
+  `belongs_to`, likewise raises Active Record's own error in every method,
+  where historical work used to fail partway with `ArgumentError` or
+  `NoMethodError`.
+- `association_paths` leaves out a `has_many :through` that goes through a
+  `has_and_belongs_to_many`, so every path it lists can be requested. It
+  decides with the same check a request makes. It used to list such a path,
+  and a settings screen built from it offered one that failed when picked. A
+  model it reaches with a `has_many :through` Active Record cannot follow,
+  such as one through a polymorphic `belongs_to`, raises Active Record's own
+  error, where discovery used to raise `ArgumentError`, `NameError`, or
+  `NoMethodError` from inside the reflection, or list a path that raised when
+  requested.
 
 ### Development
 
@@ -104,10 +129,12 @@ project follows [Semantic Versioning](https://semver.org/).
   `PreparedEdgeLoader`, `ActivityTimelineBuilder`,
   `ActivityTransactionGrouper`, and `BatchSafety`, each with a spec of its
   own. All 10,732 mutations across the 24 classes are caught.
+- Mutation testing also covers `AssociationTraversal`, which decides which
+  association paths a request accepts, with a spec of its own; all 764 of its
+  mutations are caught.
 - Mutation testing also covers range and boundary handling:
-  `ActivityRange`, `VersionAssociationCandidateScope`,
-  `PreparedActivityIndex`, and `AssociationTraversal`, each with a spec of its
-  own. All 12,878 mutations across the 28 classes are caught.
+  `ActivityRange`, `VersionAssociationCandidateScope`, and
+  `PreparedActivityIndex`, each with a spec of its own.
 
 ## [0.13.1] - 2026-10-28
 

@@ -29,6 +29,27 @@ module PaperTrailDiff
       end
     end
 
+    # Children are found by key across the whole table, so an association to
+    # an STI subclass finds the rows of its siblings too. Only a row that was
+    # of the class at some point belongs to it, and of that row only the
+    # versions it had the class before or after.
+    #: (untyped, Array[untyped]) -> Array[untyped]
+    def member_ids(model, ids)
+      return ids if model.descends_from_active_record?
+
+      ids.select { |id| member_class?(model, @records.model_classes(model, id)) }
+    end
+
+    #: (untyped, Array[untyped], ActivityRange) -> Array[untyped]
+    def member_versions(model, ids, range)
+      all = versions(model, ids).select { |version| range.include?(version) }
+      return all if model.descends_from_active_record?
+
+      all.select do |version|
+        member_class?(model, @records.model_classes(model, version.item_id, version))
+      end
+    end
+
     #: (untyped, Array[untyped], untyped, ActivityRange) -> Array[untyped]
     def child_ids(model, ids, reflection, range)
       historical, live = @children[reflection] ||= child_rows(model, reflection)
@@ -69,6 +90,11 @@ module PaperTrailDiff
     # @rbs @children: Hash[untyped, untyped]
     # @rbs @targets: Hash[untyped, untyped]
     # @rbs @rows: Hash[untyped, Hash[String, Array[untyped]]]
+
+    #: (untyped, Array[untyped]) -> bool
+    def member_class?(model, classes)
+      classes.any? { |model_class| model_class <= model }
+    end
 
     #: (untyped, Array[untyped], untyped, ActivityRange) -> Array[untyped]
     def historical_ids(model, ids, historical, range)

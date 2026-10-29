@@ -1276,6 +1276,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
       foreign_key: :subject_id,
       options: { as: :subject },
       type: :subject_type,
+      klass: TrackedComment,
       active_record: TrackedArticle
     )
     subject = Struct.new(:subject_id, :subject_type).new(article.id, 'TrackedArticle')

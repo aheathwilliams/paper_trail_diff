@@ -3,38 +3,48 @@
 require_relative '../support/association_database'
 
 ActiveRecord::Schema.define do
-  create_table :traversal_pages, force: true do |table|
-    table.string :type
-    table.string :title, null: false
-    table.timestamps null: false
-  end
-
   create_table :traversal_notes, force: true do |table|
-    table.string :body, null: false
-    table.references :notable, polymorphic: true
-    table.references :page
+    table.string :body
+    table.references :holder, polymorphic: true
+    table.integer :reviewer_id
     table.timestamps null: false
   end
 end
 
-class TraversalPage < ActiveRecord::Base
-  has_many :notes, class_name: 'TraversalNote', as: :notable, inverse_of: :notable
-  has_paper_trail
-end
-
-class TraversalLandingPage < TraversalPage
-end
-
-class TraversalPromoPage < TraversalLandingPage
-end
-
-class TraversalArchivePage < TraversalPage
-end
-
+# Apart from the polymorphic notes, only reflections are read, so these reuse
+# the fixture tables.
 class TraversalNote < ActiveRecord::Base
-  belongs_to :notable, polymorphic: true, optional: true
-  belongs_to :page, class_name: 'TraversalPage', optional: true
+  belongs_to :holder, polymorphic: true, optional: true
+  belongs_to :reviewer, class_name: 'TrackedAuthor', optional: true
+  has_many :holder_replies, through: :holder, source: :replies
+end
+
+class TraversalArticle < ActiveRecord::Base
+  self.table_name = 'tracked_articles'
+  belongs_to :author, class_name: 'TrackedAuthor', optional: true
+  has_many :comments, class_name: 'TrackedComment', foreign_key: :article_id
+  has_many :notes, class_name: 'TraversalNote', as: :holder
+  has_and_belongs_to_many :tags, class_name: 'TrackedTag', join_table: :tracked_articles_tags,
+                                 foreign_key: :tracked_article_id,
+                                 association_foreign_key: :tracked_tag_id
+  has_many :tagged_articles, through: :tags, source: :articles
+  has_many :tagged_comments, through: :tagged_articles, source: :comments
   has_paper_trail
+end
+
+class TraversalAuthor < ActiveRecord::Base
+  self.table_name = 'tracked_authors'
+  has_many :articles, class_name: 'TrackedArticle', foreign_key: :author_id
+  has_many :article_tags, through: :articles, source: :tags
+  has_many :traversal_articles, class_name: 'TraversalArticle', foreign_key: :author_id
+  has_many :articles_tagged_alike, through: :traversal_articles, source: :tagged_articles
+  has_paper_trail
+end
+
+class TraversalDocument < PreparedDocument
+end
+
+class TraversalSpecialDocument < TraversalDocument
 end
 
 RSpec.describe PaperTrailDiff::AssociationTraversal do
@@ -42,157 +52,403 @@ RSpec.describe PaperTrailDiff::AssociationTraversal do
     described_class.new(PaperTrailDiff::AssociationTree.build(paths))
   end
 
-  def reflection(model, name)
-    model.reflect_on_association(name)
+  def habtm_reason(habtm)
+    "it goes through #{habtm}, a has_and_belongs_to_many, whose hidden join model has no " \
+      'history to compare'
   end
 
-  def note(type)
-    TraversalNote.new(body: 'note', notable_type: type, notable_id: 1)
+  def unsupported(path, habtm)
+    "unsupported association #{path}: #{habtm_reason(habtm)}"
   end
 
-  it 'names the class a belongs_to points at, reading a polymorphic type per record' do
-    notable = reflection(TraversalNote, :notable)
+  describe '.belongs_to_target' do
+    let(:reflection) { TraversalNote.reflect_on_association(:holder) }
 
-    expect(described_class.belongs_to_target(reflection(TrackedComment, :article), nil))
-      .to eq(TrackedArticle)
-    expect(described_class.belongs_to_target(notable, note('TraversalLandingPage')))
-      .to eq(TraversalLandingPage)
-    expect([nil, ''].map { |type| described_class.belongs_to_target(notable, note(type)) })
-      .to eq([nil, nil])
-  end
-
-  it 'raises naming the record and column when a polymorphic type names no class' do
-    record = note('RemovedModel')
-    record.id = 7
-
-    expect { described_class.belongs_to_target(reflection(TraversalNote, :notable), record) }
-      .to raise_error(
-        PaperTrailDiff::IncompleteAssociationHistoryError,
-        'association TraversalNote#notable cannot be read: TraversalNote 7 has notable_type ' \
-        'RemovedModel, which names no class. If the model was renamed, replace the old name ' \
-        'in that column and in the versions that recorded it.'
-      )
-  end
-
-  it 'resolves a stored type name to its class, or to nothing' do
-    expect(%w[TraversalPage RemovedModel].map { |name| described_class.named_class(name) })
-      .to eq([TraversalPage, nil])
-  end
-
-  it 'counts a row as a subclass member when its type names the class or a descendant' do
-    members = %w[TraversalLandingPage TraversalPromoPage TraversalPage TraversalArchivePage]
-              .map { |type| described_class.sti_member?(TraversalLandingPage, 'type' => type) }
-
-    expect(members).to eq([true, true, false, false])
-    expect(described_class.sti_member?(TraversalLandingPage, {})).to be(false)
-    expect(described_class.sti_member?(TraversalPage, 'type' => 'TraversalArchivePage')).to be(true)
-    expect(described_class.sti_member?(TrackedArticle, {})).to be(true)
-  end
-
-  it 'lists every requested association depth first, with its path' do
-    found = traversal('comments.replies', 'author', :tags).selected_reflections(TrackedArticle)
-
-    expect(found.map { |path, found_reflection| [path, found_reflection.name] })
-      .to eq([['author', :author], ['comments', :comments], ['comments.replies', :replies],
-              ['tags', :tags]])
-    expect(found.last.last).to equal(reflection(TrackedArticle, :tags))
-    expect(found).to be_frozen
-  end
-
-  # A batch can check its paths before they are validated, so listing stops
-  # at a polymorphic association rather than asking for its class.
-  it 'lists nothing past a polymorphic association' do
-    expect(traversal('notable.notes', :page).selected_reflections(TraversalNote).map(&:first))
-      .to eq(%w[notable page])
-  end
-
-  it 'accepts every supported path and names the full path of one it rejects' do
-    expect { traversal('comments.replies', 'contributors', :tags).validate!(TrackedArticle) }
-      .not_to raise_error
-    expect { traversal(:notable).validate!(TraversalNote) }.not_to raise_error
-    expect { traversal('author', 'comments.replies.missing').validate!(TrackedArticle) }
-      .to raise_error(PaperTrailDiff::UnknownAssociationError,
-                      'unknown association: comments.replies.missing')
-    expect { traversal('versions').validate!(TrackedArticle) }
-      .to raise_error(PaperTrailDiff::UnsupportedAssociationError,
-                      'unsupported association versions: PaperTrail versions')
-    expect { traversal('notable.notes.notable').validate!(TraversalNote) }
-      .to raise_error(PaperTrailDiff::UnsupportedAssociationError,
-                      'unsupported association notable.notes: notable is polymorphic, ' \
-                      'so a path cannot continue past it')
-  end
-
-  it 'rejects a macro it does not support' do
-    unsupported = Struct.new(:name, :macro).new(:embedded, :embeds_many)
-    model = Class.new do
-      define_singleton_method(:reflect_on_association) { |_name| unsupported }
+    it 'returns the declared class of an ordinary belongs_to' do
+      expect(described_class.belongs_to_target(TrackedArticle.reflect_on_association(:author),
+                                               TrackedArticle.new))
+        .to eq(TrackedAuthor)
     end
 
-    expect { traversal('embedded').validate!(model) }
-      .to raise_error(PaperTrailDiff::UnsupportedAssociationError,
-                      'unsupported association embedded: embeds_many')
-  end
+    it 'returns the class a polymorphic record names' do
+      note = TraversalNote.new(holder_type: 'TrackedArticle', holder_id: 1)
 
-  it 'reads each model and tree once, whatever path reaches them' do
-    comments = traversal(:comments)
-    tree = comments.tree
-    first = comments.reflections_for(TrackedArticle, tree, path: '')
-
-    expect(comments.reflections_for(TrackedArticle, tree, path: 'other')).to equal(first)
-    expect(comments.reflections_for(TrackedAuthor, tree, path: '').first)
-      .to equal(reflection(TrackedAuthor, :comments))
-    expect(comments.reflections_for(TrackedArticle, PaperTrailDiff::AssociationTree.build([]),
-                                    path: '')).to eq([])
-    expect(first).to be_frozen
-  end
-
-  it 'names the HABTM paths at any depth' do
-    expect(traversal('comments.article.tags', :author, :tags).habtm_paths(TrackedArticle))
-      .to eq(%w[comments.article.tags tags])
-    expect(traversal(:comments, :contributors).habtm_paths(TrackedArticle)).to eq([])
-    expect(traversal(:tags).habtm_paths(TrackedArticle)).to be_frozen
-  end
-
-  it 'requires a transaction id on a root version only when a HABTM path is requested' do
-    without = Struct.new(:id).new(7)
-    blank = Struct.new(:id, :transaction_id).new(8, nil)
-    recorded = Struct.new(:id, :transaction_id).new(9, 3)
-    tagged = traversal(:tags, 'comments.article.tags')
-
-    expect { traversal(:comments).ensure_habtm_history!(TrackedArticle, without) }
-      .not_to raise_error
-    expect { tagged.ensure_habtm_history!(TrackedArticle, recorded) }.not_to raise_error
-    [without, blank].each do |version|
-      expect { tagged.ensure_habtm_history!(TrackedArticle, version) }
-        .to raise_error(PaperTrailDiff::IncompleteAssociationHistoryError,
-                        "HABTM history is incomplete at version #{version.id}: " \
-                        'comments.article.tags, tags')
+      expect(described_class.belongs_to_target(reflection, note)).to eq(TrackedArticle)
     end
-  end
 
-  it 'refuses activity that ends at the current record only for HABTM paths' do
-    expect { traversal(:comments).reject_live_habtm_activity!(TrackedArticle) }.not_to raise_error
-    expect { traversal(:tags, 'comments.article.tags').reject_live_habtm_activity!(TrackedArticle) }
-      .to raise_error(PaperTrailDiff::UnsupportedLiveActivityError,
-                      'live-ended activity cannot reconstruct HABTM event boundaries: ' \
-                      'comments.article.tags, tags')
-  end
-
-  it 'names the columns a child points back at its owner with' do
-    columns = lambda do |model, name|
-      traversal.incoming_relationship_columns(reflection(model, name))
-    end
-    composite = Struct.new(:macro, :foreign_key, :type) do
-      def through_reflection?
-        false
+    it 'returns nil when a polymorphic record names no type' do
+      [nil, ''].each do |type|
+        expect(described_class.belongs_to_target(reflection, TraversalNote.new(holder_type: type)))
+          .to be_nil
       end
-    end.new(:has_many, %i[article_id title])
+    end
 
-    expect(columns.call(TrackedArticle, :comments)).to eq(['article_id'])
-    expect(columns.call(TrackedArticle, :profile)).to eq(['article_id'])
-    expect(columns.call(TraversalPage, :notes)).to eq(%w[notable_id notable_type])
-    expect(%i[author contributors tags].map { |name| columns.call(TrackedArticle, name) })
-      .to eq([[], [], []])
-    expect(traversal.incoming_relationship_columns(composite)).to eq(%w[article_id title])
+    it 'names the record and the column when a polymorphic type names no class' do
+      note = TraversalNote.create!(body: 'Note', holder_type: 'RenamedArticle', holder_id: 1)
+
+      expect { described_class.belongs_to_target(reflection, note) }
+        .to raise_error(PaperTrailDiff::IncompleteAssociationHistoryError,
+                        'association TraversalNote#holder cannot be read: ' \
+                        "TraversalNote #{note.id} has holder_type RenamedArticle, which names " \
+                        'no class. If the model was renamed, replace the old name in that ' \
+                        'column and in the versions that recorded it.')
+    end
+  end
+
+  describe '.named_class' do
+    it 'returns the class a type names, or nil when it names none' do
+      expect(described_class.named_class('TrackedArticle')).to eq(TrackedArticle)
+      expect(described_class.named_class('RenamedArticle')).to be_nil
+      expect(described_class.named_class('not a constant')).to be_nil
+    end
+  end
+
+  describe '.sti_member?' do
+    it 'takes every row for a base class' do
+      expect(described_class.sti_member?(PreparedDocument, 'type' => 'PreparedSpecialDocument'))
+        .to be(true)
+      expect(described_class.sti_member?(PreparedDocument, {})).to be(true)
+    end
+
+    it 'takes rows of an STI subclass and its descendants, leaving out siblings and parents' do
+      member = ->(type) { described_class.sti_member?(TraversalDocument, 'type' => type) }
+
+      expect(member.call('TraversalDocument')).to be(true)
+      expect(member.call('TraversalSpecialDocument')).to be(true)
+      expect(member.call('PreparedSpecialDocument')).to be(false)
+      expect(member.call('PreparedDocument')).to be(false)
+      expect(described_class.sti_member?(TraversalDocument, {})).to be(false)
+    end
+  end
+
+  describe '.unsupported_reason' do
+    def reason(model, name)
+      described_class.unsupported_reason(model, model.reflect_on_association(name))
+    end
+
+    it 'accepts every supported macro and a has_many :through' do
+      %i[author profile comments tags contributors].each do |name|
+        expect(reason(TrackedArticle, name)).to be_nil
+      end
+    end
+
+    it 'names the PaperTrail versions association' do
+      expect(reason(TrackedArticle, :versions)).to eq('PaperTrail versions')
+    end
+
+    it 'names an unsupported macro' do
+      reflection = TrackedArticle.reflect_on_association(:comments)
+      allow(reflection).to receive(:macro).and_return(:composed_of)
+
+      expect(reason(TrackedArticle, :comments)).to eq('composed_of')
+    end
+
+    it 'names the HABTM a has_many :through goes through' do
+      expect(reason(TraversalArticle, :tagged_comments))
+        .to eq(habtm_reason('TraversalArticle#tags'))
+      expect(reason(TraversalAuthor, :article_tags)).to eq(habtm_reason('TrackedArticle#tags'))
+    end
+
+    it "raises Active Record's own error for a through it cannot follow" do
+      expect { reason(TraversalNote, :holder_replies) }
+        .to raise_error(ActiveRecord::HasManyThroughAssociationPolymorphicThroughError)
+    end
+
+    # A settings screen offers what discovery lists, so a path it lists must be
+    # one a request accepts.
+    it 'is what discovery leaves out, so every path it lists can be requested' do
+      expect(PaperTrailDiff.association_paths(TraversalArticle).map(&:path))
+        .to eq(%w[author comments notes tags])
+      expect(PaperTrailDiff.association_paths(TraversalAuthor).map(&:path))
+        .to eq(%w[articles traversal_articles])
+
+      paths = PaperTrailDiff.association_paths(TraversalAuthor, max_depth: 2).map(&:path)
+      expect(paths).to include('traversal_articles.comments', 'articles.contributors')
+      expect(paths).not_to include('traversal_articles.tagged_articles',
+                                   'traversal_articles.tagged_comments')
+      expect { traversal(*paths).validate!(TraversalAuthor) }.not_to raise_error
+    end
+
+    it "makes discovery raise Active Record's own error for a through it cannot follow" do
+      expect { PaperTrailDiff.association_paths(TraversalNote) }
+        .to raise_error(ActiveRecord::HasManyThroughAssociationPolymorphicThroughError)
+    end
+  end
+
+  describe '#tree' do
+    it 'returns the tree it walks' do
+      tree = PaperTrailDiff::AssociationTree.build([:comments])
+
+      expect(described_class.new(tree).tree).to equal(tree)
+    end
+  end
+
+  describe '#validate!' do
+    it 'accepts supported paths, including nested and through paths' do
+      paths = [:author, :profile, :tags, :contributors, 'comments.replies', 'comments.article.tags']
+
+      expect { traversal(*paths).validate!(TrackedArticle) }.not_to raise_error
+      expect { traversal(:comments, 'articles.tags').validate!(TrackedAuthor) }.not_to raise_error
+    end
+
+    it 'names the full path of an unknown association' do
+      expect { traversal('comments.missing').validate!(TrackedArticle) }
+        .to raise_error(PaperTrailDiff::UnknownAssociationError,
+                        'unknown association: comments.missing')
+    end
+
+    it 'rejects the PaperTrail versions association' do
+      expect { traversal('comments.versions').validate!(TrackedArticle) }
+        .to raise_error(PaperTrailDiff::UnsupportedAssociationError,
+                        'unsupported association comments.versions: PaperTrail versions')
+    end
+
+    it 'rejects an unsupported macro' do
+      reflection = TrackedArticle.reflect_on_association(:comments)
+      allow(reflection).to receive(:macro).and_return(:composed_of)
+
+      expect { traversal(:comments).validate!(TrackedArticle) }
+        .to raise_error(PaperTrailDiff::UnsupportedAssociationError,
+                        'unsupported association comments: composed_of')
+    end
+
+    it 'rejects a path that continues past a polymorphic belongs_to' do
+      expect { traversal('holder.comments.replies').validate!(TraversalNote) }
+        .to raise_error(PaperTrailDiff::UnsupportedAssociationError,
+                        'unsupported association holder.comments: holder is polymorphic, ' \
+                        'so a path cannot continue past it')
+    end
+
+    it 'accepts a polymorphic belongs_to that ends its path' do
+      expect { traversal(:holder).validate!(TraversalNote) }.not_to raise_error
+    end
+
+    it 'checks paths below the root' do
+      expect { traversal('author.articles.missing').validate!(TrackedArticle) }
+        .to raise_error(PaperTrailDiff::UnknownAssociationError,
+                        'unknown association: author.articles.missing')
+    end
+
+    it 'checks the paths below every association, not only the first' do
+      expect { traversal(:author, 'comments.missing').validate!(TrackedArticle) }
+        .to raise_error(PaperTrailDiff::UnknownAssociationError,
+                        'unknown association: comments.missing')
+    end
+
+    # Active Record replaces each HABTM in a through chain with a hidden
+    # has_many, so the HABTM shows only on the public reflection.
+    it 'rejects a has_many :through whose through association is a HABTM' do
+      expect { traversal(:tagged_articles).validate!(TraversalArticle) }
+        .to raise_error(PaperTrailDiff::UnsupportedAssociationError,
+                        unsupported('tagged_articles', 'TraversalArticle#tags'))
+    end
+
+    it 'rejects a has_many :through whose source is a HABTM' do
+      expect { traversal(:article_tags).validate!(TraversalAuthor) }
+        .to raise_error(PaperTrailDiff::UnsupportedAssociationError,
+                        unsupported('article_tags', 'TrackedArticle#tags'))
+    end
+
+    it 'rejects a has_many :through that reaches a HABTM through another through' do
+      expect { traversal(:tagged_comments).validate!(TraversalArticle) }
+        .to raise_error(PaperTrailDiff::UnsupportedAssociationError,
+                        unsupported('tagged_comments', 'TraversalArticle#tags'))
+      expect { traversal(:articles_tagged_alike).validate!(TraversalAuthor) }
+        .to raise_error(PaperTrailDiff::UnsupportedAssociationError,
+                        unsupported('articles_tagged_alike', 'TraversalArticle#tags'))
+    end
+
+    it 'names the full path of a through over a HABTM below the root' do
+      expect { traversal('traversal_articles.tagged_articles').validate!(TraversalAuthor) }
+        .to raise_error(PaperTrailDiff::UnsupportedAssociationError,
+                        unsupported('traversal_articles.tagged_articles', 'TraversalArticle#tags'))
+    end
+
+    it "raises Active Record's own error for a through it cannot follow" do
+      expect { traversal(:holder_replies).validate!(TraversalNote) }
+        .to raise_error(ActiveRecord::HasManyThroughAssociationPolymorphicThroughError)
+    end
+  end
+
+  describe '#selected_reflections' do
+    it 'lists each requested path with its reflection, depth first and frozen' do
+      selected = traversal('comments.replies', :author).selected_reflections(TrackedArticle)
+
+      expect(selected).to be_frozen
+      expect(selected).to eq(
+        [['author', TrackedArticle.reflect_on_association(:author)],
+         ['comments', TrackedArticle.reflect_on_association(:comments)],
+         ['comments.replies', TrackedComment.reflect_on_association(:replies)]]
+      )
+    end
+
+    it 'stops at a polymorphic belongs_to and goes on to its siblings' do
+      expected = %i[holder reviewer].map do |name|
+        [name.to_s, TraversalNote.reflect_on_association(name)]
+      end
+
+      expect(traversal('holder.comments', :reviewer).selected_reflections(TraversalNote))
+        .to eq(expected)
+    end
+
+    it 'rejects a through over a HABTM' do
+      expect { traversal(:article_tags).selected_reflections(TraversalAuthor) }
+        .to raise_error(PaperTrailDiff::UnsupportedAssociationError,
+                        unsupported('article_tags', 'TrackedArticle#tags'))
+    end
+  end
+
+  describe '#habtm_paths' do
+    it 'lists the HABTM paths at any depth, frozen' do
+      paths = traversal(:tags, :comments, 'author.articles.tags').habtm_paths(TrackedArticle)
+
+      expect(paths).to be_frozen
+      expect(paths).to eq(%w[author.articles.tags tags])
+    end
+
+    it 'leaves out a has_many :through' do
+      expect(traversal(:contributors).habtm_paths(TrackedArticle)).to eq([])
+    end
+  end
+
+  describe '#ensure_habtm_history!' do
+    let(:version) { Struct.new(:id, :transaction_id) }
+
+    it 'requires a transaction id on the version when a HABTM path is selected' do
+      walker = traversal(:tags, :comments, 'author.articles.tags')
+
+      expect { walker.ensure_habtm_history!(TrackedArticle, version.new(4, nil)) }
+        .to raise_error(PaperTrailDiff::IncompleteAssociationHistoryError,
+                        'HABTM history is incomplete at version 4: author.articles.tags, tags')
+      expect(walker.ensure_habtm_history!(TrackedArticle, version.new(4, 9))).to be_nil
+    end
+
+    it 'requires a transaction_id column' do
+      expect { traversal(:tags).ensure_habtm_history!(TrackedArticle, Struct.new(:id).new(5)) }
+        .to raise_error(PaperTrailDiff::IncompleteAssociationHistoryError,
+                        'HABTM history is incomplete at version 5: tags')
+    end
+
+    it 'accepts any version when no HABTM path is selected' do
+      expect(traversal(:comments).ensure_habtm_history!(TrackedArticle, Object.new)).to be_nil
+    end
+  end
+
+  describe '#reject_live_habtm_activity!' do
+    it 'refuses live-ended activity over HABTM paths and names them' do
+      walker = traversal(:tags, 'author.articles.tags')
+
+      expect { walker.reject_live_habtm_activity!(TrackedArticle) }
+        .to raise_error(PaperTrailDiff::UnsupportedLiveActivityError,
+                        'live-ended activity cannot reconstruct HABTM event boundaries: ' \
+                        'author.articles.tags, tags')
+    end
+
+    it 'allows activity without HABTM paths' do
+      expect(traversal(:comments).reject_live_habtm_activity!(TrackedArticle)).to be_nil
+    end
+  end
+
+  describe '#reflections_for' do
+    it 'resolves the children of a tree once, frozen' do
+      tree = PaperTrailDiff::AssociationTree.build(%i[comments author])
+      walker = described_class.new(tree)
+      reflections = walker.reflections_for(TrackedArticle, tree, path: '')
+      expected = %i[author comments].map { |name| TrackedArticle.reflect_on_association(name) }
+
+      expect(reflections).to be_frozen
+      expect(reflections).to eq(expected)
+      expect(walker.reflections_for(TrackedArticle, tree, path: '')).to equal(reflections)
+    end
+
+    it 'keeps the reflections of each model and tree apart' do
+      tree = PaperTrailDiff::AssociationTree.build([:comments])
+      other_tree = PaperTrailDiff::AssociationTree.build([:articles])
+      walker = described_class.new(tree)
+
+      expect(walker.reflections_for(TrackedArticle, tree, path: '').first.active_record)
+        .to eq(TrackedArticle)
+      expect(walker.reflections_for(TrackedAuthor, tree, path: '').first.active_record)
+        .to eq(TrackedAuthor)
+      expect(walker.reflections_for(TrackedAuthor, other_tree, path: '').first.name)
+        .to eq(:articles)
+    end
+  end
+
+  describe '#incoming_relationship_columns' do
+    def columns(model, name)
+      traversal.incoming_relationship_columns(model.reflect_on_association(name))
+    end
+
+    it 'returns the keys a direct has_one or has_many child points back with' do
+      expect(columns(TrackedArticle, :comments)).to eq(['article_id'])
+      expect(columns(TrackedArticle, :profile)).to eq(['article_id'])
+    end
+
+    it 'returns every column of a composite foreign key' do
+      reflection = instance_double(ActiveRecord::Reflection::HasManyReflection,
+                                   macro: :has_many, through_reflection?: false,
+                                   foreign_key: %w[article_id reviewer_id].freeze, type: nil)
+
+      expect(traversal.incoming_relationship_columns(reflection)).to eq(%w[article_id reviewer_id])
+    end
+
+    it 'adds the type column of a polymorphic child' do
+      expect(columns(TraversalArticle, :notes)).to eq(%w[holder_id holder_type])
+    end
+
+    it 'returns no columns for a belongs_to, a HABTM, or a has_many :through' do
+      expect(columns(TrackedArticle, :author)).to eq([])
+      expect(columns(TrackedArticle, :tags)).to eq([])
+      expect(columns(TrackedArticle, :contributors)).to eq([])
+    end
+  end
+
+  describe 'public methods' do
+    def statements(&block)
+      sql = []
+      callback = proc do |_name, _start, _finish, _id, payload|
+        sql << payload.fetch(:sql) unless payload[:name] == 'SCHEMA' || payload[:cached]
+      end
+      ActiveSupport::Notifications.subscribed(callback, 'sql.active_record', &block)
+      sql
+    end
+
+    def calls(record, association)
+      from, to = record.versions.order(:id).to_a
+      window = (Time.now.utc - 60)..Time.now.utc
+      options = { associations: [association] }
+      [
+        -> { PaperTrailDiff.compare(from, to, **options) },
+        -> { PaperTrailDiff.compare(record, record, **options) },
+        -> { PaperTrailDiff.compare_many([{ from: from, to: record }], **options) },
+        -> { PaperTrailDiff.timeline(record, from: from, to: to, **options) },
+        -> { PaperTrailDiff.activity_timeline(record, from: from, to: to, **options) },
+        -> { PaperTrailDiff.analyze(record, within: window, **options) },
+        -> { PaperTrailDiff.analyze(record, within: window, activity: true, **options) },
+        -> { PaperTrailDiff.analyze_many([record], within: window, **options) },
+        -> { PaperTrailDiff.analyze_scope(record.class.all, within: window, limit: 5, **options) },
+        -> { PaperTrailDiff.report(record.class.all, since: window.begin, limit: 5, **options) }
+      ]
+    end
+
+    it 'reject a through over a HABTM before running any query' do
+      article = TraversalArticle.create!(title: 'Article')
+      article.update!(title: 'Renamed')
+      author = TraversalAuthor.create!(name: 'Author')
+      author.update!(name: 'Renamed')
+      cases = [[article, :tagged_articles, 'TraversalArticle#tags'],
+               [author, :article_tags, 'TrackedArticle#tags']]
+
+      cases.each do |record, association, habtm|
+        calls(record, association).each do |call|
+          sql = statements do
+            expect(&call).to raise_error(PaperTrailDiff::UnsupportedAssociationError,
+                                         unsupported(association, habtm))
+          end
+          expect(sql).to eq([])
+        end
+      end
+    end
   end
 end
