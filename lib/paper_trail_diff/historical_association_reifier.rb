@@ -116,6 +116,8 @@ module PaperTrailDiff
         message = 'HABTM reconstruction requires a transaction-backed endpoint version'
         raise IncompleteAssociationHistoryError, message
       end
+      HabtmTransactionOwners.new(record.class, reflection)
+                            .ensure_single_owner!(@habtm_transaction_id)
 
       paper_trail = Object.const_get(:PaperTrail) #: untyped
       target_versioned = paper_trail.request.enabled_for_model?(reflection.klass)
