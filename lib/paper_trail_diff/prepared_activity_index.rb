@@ -10,22 +10,22 @@ module PaperTrailDiff
       @range = ActivityRange.new(start_at, end_at)
       @roots = root_versions.group_by { |version| [version.item_type, version.item_id.to_s] }
       @nodes = {} #: Hash[String, Array[untyped]]
-      @children = {} #: Hash[Array[String], untyped]
-      @targets = {} #: Hash[Array[String], untyped]
-      @rows = {} #: Hash[Array[String], Hash[String, Array[untyped]]]
+      # Rows are cached by reflection, which a subclass shares with its base.
+      @children = {} #: Hash[untyped, untyped]
+      @targets = {} #: Hash[untyped, untyped]
+      @rows = {} #: Hash[untyped, Hash[String, Array[untyped]]]
     end
 
     #: (untyped, Array[untyped]) -> void
     def register(model, ids)
-      name = model.base_class.name.to_s
+      name = model.base_class.name
       @nodes[name] = (@nodes.fetch(name, []) | ids)
     end
 
     #: (untyped, Array[untyped]) -> Array[untyped]
     def versions(model, ids)
       ids.flat_map do |id|
-        key = [model.base_class.name.to_s, id.to_s]
-        @roots[key] || @records.versions_for_id(model, id)
+        @roots[[model.base_class.name, id.to_s]] || @records.versions_for_id(model, id)
       end
     end
 
@@ -52,8 +52,7 @@ module PaperTrailDiff
 
     #: (untyped, Array[untyped], untyped, ActivityRange) -> Array[untyped]
     def child_ids(model, ids, reflection, range)
-      key = [model.base_class.name.to_s, reflection.name.to_s]
-      historical, live = @children[key] ||= child_rows(model, reflection)
+      historical, live = @children[reflection] ||= child_rows(model, reflection)
       empty = [] #: Array[untyped]
       selected = historical_ids(reflection.klass, ids, historical, range)
       selected |= ids.flat_map { |id| live.fetch(id.to_s, empty) } if range.current_end?
@@ -64,8 +63,7 @@ module PaperTrailDiff
     # and after each change inside it, plus the live row at a current end.
     #: (untyped, Array[untyped], untyped, ActivityRange) -> Array[ActivityTargetCandidateLoader::Row]
     def target_rows(model, ids, reflection, range)
-      key = [model.base_class.name.to_s, reflection.name.to_s]
-      historical, live = @targets[key] ||= target_candidates(model, reflection)
+      historical, live = @targets[reflection] ||= target_candidates(model, reflection)
       rows = eligible_rows(model, rows_for(historical, ids), range)
       range.current_end? ? rows + rows_for(live, ids) : rows
     end
@@ -75,11 +73,12 @@ module PaperTrailDiff
       @records.loaded?(model, id)
     end
 
-    #: (untyped, Array[untyped], untyped, ?transactions: bool) -> Array[untyped]
-    def association_rows(model, selected_versions, reflection, transactions: false)
-      key = [model.base_class.name.to_s, reflection.name.to_s]
-      rows = @rows[key] ||= load_association_rows(model, reflection, transactions)
-      version_ids(selected_versions, transactions).flat_map { |id| rows.fetch(id.to_s, []) }
+    # PT-AT records HABTM membership once per transaction, under the
+    # association's name, so the rows are keyed by transaction id.
+    #: (untyped, Array[untyped], untyped) -> Array[untyped]
+    def habtm_rows(model, selected_versions, reflection)
+      rows = @rows[reflection] ||= load_habtm_rows(model, reflection)
+      transaction_ids(selected_versions).flat_map { |id| rows.fetch(id.to_s, []) }
     end
 
     private
@@ -88,9 +87,9 @@ module PaperTrailDiff
     # @rbs @range: ActivityRange
     # @rbs @roots: Hash[Array[String], Array[untyped]]
     # @rbs @nodes: Hash[String, Array[untyped]]
-    # @rbs @children: Hash[Array[String], untyped]
-    # @rbs @targets: Hash[Array[String], untyped]
-    # @rbs @rows: Hash[Array[String], Hash[String, Array[untyped]]]
+    # @rbs @children: Hash[untyped, untyped]
+    # @rbs @targets: Hash[untyped, untyped]
+    # @rbs @rows: Hash[untyped, Hash[String, Array[untyped]]]
 
     #: (untyped, Array[untyped]) -> bool
     def member_class?(model, classes)
@@ -110,7 +109,7 @@ module PaperTrailDiff
 
     #: (untyped) -> Array[untyped]
     def node_ids(model)
-      name = model.base_class.name.to_s
+      name = model.base_class.name
       @nodes.fetch(name) do
         raise ConfigurationError,
               "prepared activity graph is missing #{name}; " \
@@ -161,24 +160,18 @@ module PaperTrailDiff
       !later || later.created_at >= range.start_time
     end
 
-    #: (untyped, untyped, bool) -> Hash[String, Array[untyped]]
-    def load_association_rows(model, reflection, transactions)
-      all_versions = versions(model, node_ids(model))
-      foreign_key = transactions ? reflection.name.to_s : reflection.foreign_key.to_s
+    #: (untyped, untyped) -> Hash[String, Array[untyped]]
+    def load_habtm_rows(model, reflection)
       model.paper_trail.version_association_class.where(
-        version_id: version_ids(all_versions, transactions), foreign_key_name: foreign_key
-      ).to_a.group_by { |row| row.version_id.to_s }
+        version_id: transaction_ids(versions(model, node_ids(model))),
+        foreign_key_name: reflection.name
+      ).group_by { |row| row.version_id.to_s }
     end
 
-    #: (Array[untyped], bool) -> Array[untyped]
-    def version_ids(versions, transactions)
-      if transactions
-        versions.filter_map do |version|
-          version.transaction_id if version.respond_to?(:transaction_id)
-        end.uniq
-      else
-        versions.map(&:id)
-      end
+    # A version without a transaction id names no rows, so it can stay in.
+    #: (Array[untyped]) -> Array[untyped]
+    def transaction_ids(versions)
+      versions.map { |version| version.transaction_id if version.respond_to?(:transaction_id) }.uniq
     end
   end
 end

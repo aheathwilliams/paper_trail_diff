@@ -132,6 +132,10 @@ project follows [Semantic Versioning](https://semver.org/).
 - Mutation testing also covers `AssociationTraversal`, which decides which
   association paths a request accepts, with a spec of its own; all 764 of its
   mutations are caught.
+- Mutation testing also covers range and boundary handling:
+  `ActivityRange`, `VersionAssociationCandidateScope`, and
+  `PreparedActivityIndex`, each with a spec of its own; all 1,507 of their
+  mutations are caught.
 
 ## [0.13.1] - 2026-10-28
 

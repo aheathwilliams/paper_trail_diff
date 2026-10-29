@@ -104,7 +104,7 @@ module PaperTrailDiff
 
     #: (String) -> String
     def compact_sql(sql)
-      sql.gsub(/\s+/, ' ').strip
+      sql.split.join(' ')
     end
   end
 end

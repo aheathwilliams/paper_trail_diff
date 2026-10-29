@@ -33,12 +33,14 @@ module PaperTrailDiff
     # : (untyped, untyped) -> bool
     def loaded?: (untyped, untyped) -> bool
 
-    # : (untyped, Array[untyped], untyped, ?transactions: bool) -> Array[untyped]
-    def association_rows: (untyped, Array[untyped], untyped, ?transactions: bool) -> Array[untyped]
+    # PT-AT records HABTM membership once per transaction, under the
+    # association's name, so the rows are keyed by transaction id.
+    # : (untyped, Array[untyped], untyped) -> Array[untyped]
+    def habtm_rows: (untyped, Array[untyped], untyped) -> Array[untyped]
 
     private
 
-    @children: Hash[Array[String], untyped]
+    @children: Hash[untyped, untyped]
 
     @nodes: Hash[String, Array[untyped]]
 
@@ -48,9 +50,9 @@ module PaperTrailDiff
 
     @roots: Hash[Array[String], Array[untyped]]
 
-    @rows: Hash[Array[String], Hash[String, Array[untyped]]]
+    @rows: Hash[untyped, Hash[String, Array[untyped]]]
 
-    @targets: Hash[Array[String], untyped]
+    @targets: Hash[untyped, untyped]
 
     # : (untyped, Array[untyped]) -> bool
     def member_class?: (untyped, Array[untyped]) -> bool
@@ -79,10 +81,11 @@ module PaperTrailDiff
     # : (untyped, untyped, untyped, String?, ActivityRange) -> bool
     def eligible_version?: (untyped, untyped, untyped, String?, ActivityRange) -> bool
 
-    # : (untyped, untyped, bool) -> Hash[String, Array[untyped]]
-    def load_association_rows: (untyped, untyped, bool) -> Hash[String, Array[untyped]]
+    # : (untyped, untyped) -> Hash[String, Array[untyped]]
+    def load_habtm_rows: (untyped, untyped) -> Hash[String, Array[untyped]]
 
-    # : (Array[untyped], bool) -> Array[untyped]
-    def version_ids: (Array[untyped], bool) -> Array[untyped]
+    # A version without a transaction id names no rows, so it can stay in.
+    # : (Array[untyped]) -> Array[untyped]
+    def transaction_ids: (Array[untyped]) -> Array[untyped]
   end
 end

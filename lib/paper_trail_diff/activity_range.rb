@@ -9,7 +9,6 @@ module PaperTrailDiff
 
     #: (untyped, untyped) -> void
     def initialize(start_boundary, end_boundary)
-      @start_boundary = start_boundary
       @end_boundary = end_boundary
       @start_key = if Endpoint.version?(start_boundary)
                      Support.chronological_version_key(start_boundary)
@@ -55,7 +54,6 @@ module PaperTrailDiff
 
     private
 
-    # @rbs @start_boundary: untyped
     # @rbs @end_boundary: untyped
     # @rbs @start_key: Array[untyped]?
     # @rbs @start_time: untyped

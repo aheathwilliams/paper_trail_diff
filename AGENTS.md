@@ -26,6 +26,26 @@ formatted diff text.
 - Preserve deterministic ordering and immutable public result objects.
 - Keep global-array and exact-path ignore behavior backward compatible.
 
+## Changes
+
+- Record every user-visible change under `Unreleased` in `CHANGELOG.md`, in
+  the section that fits: Breaking changes, Added, Changed, Fixed, or
+  Development.
+- `mutant.yml` lists the classes under mutation testing, and CI fails a pull
+  request on any mutation that survives in a method it changes. Before pushing
+  a change to one of them, run mutant with `--since origin/main` (see
+  Commands) and handle what survives as `docs/testing.md` describes.
+- When a change is meant to alter behavior, update the specs that pinned the
+  old behavior, often a class's own mutation spec, and say why in the commit.
+  Never bend the change to keep an old expectation passing, and never assume
+  a spec that breaks unexpectedly is outdated.
+- SQLite is the default test database. "Other databases locally" in
+  `docs/testing.md` covers PostgreSQL, MySQL, and SQL Server. Disposable
+  containers of the images in `.github/workflows/ci.yml` work; SQL Server
+  needs `CREATE DATABASE paper_trail_diff_test` before the run. A database
+  you cannot run locally is covered by CI's database jobs: report it as not
+  run, not as passing.
+
 ## Commands
 
 Run Ruby and package commands through mise in non-interactive shells:
@@ -38,6 +58,8 @@ mise exec -- bundle exec rake rubocop
 mise exec -- bundle exec rake typecheck
 mise exec -- bundle exec rake
 mise exec -- bundle exec rake build
+BUNDLE_GEMFILE=gemfiles/mutant.gemfile mise exec -- bundle install
+BUNDLE_GEMFILE=gemfiles/mutant.gemfile mise exec -- bundle exec mutant run --since origin/main
 mise exec -- act -l
 mise exec -- act push -j quality --matrix ruby:4.0 --matrix paper_trail:17
 mise exec -- act push

@@ -100,10 +100,12 @@ module PaperTrailDiff
     end
 
     # A polymorphic key names its target in a type column; any other names it
-    # in the reflection, so no type is read.
+    # in the reflection, so no type is read. Like the history, the live read
+    # takes owners of every class under the base class: a batch can ask for
+    # the owners of an association through one subclass.
     #: () -> Array[Array[untyped]]
     def live_rows
-      relation = @owner_class.unscoped.where(@owner_class.primary_key => @owner_ids)
+      relation = @owner_class.base_class.unscoped.where(@owner_class.primary_key => @owner_ids)
       key = @reflection.foreign_key
       return relation.pluck(@owner_class.primary_key, key) unless @reflection.polymorphic?
 

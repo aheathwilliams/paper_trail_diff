@@ -54,8 +54,10 @@ passes is behavior nothing checks. `mutant.yml` lists the classes it mutates:
 - which records a scope or report selects: `ScopedRootSelection`,
   `AssociationActivitySelection`, and `AssociationActivityEdge`;
 - which children and targets a record had at each point:
-  `PreparedHistoryLoader`, `PreparedEdgeLoader`, and
-  `ActivityTargetCandidateLoader`;
+  `PreparedHistoryLoader`, `PreparedEdgeLoader`,
+  `ActivityTargetCandidateLoader`, and `PreparedActivityIndex`;
+- where an activity range starts and ends, and which association history its
+  query reads: `ActivityRange` and `VersionAssociationCandidateScope`;
 - what activity a record shows: `ActivityTimelineBuilder` and
   `ActivityTransactionGrouper`;
 - which association paths a request accepts: `AssociationTraversal`;

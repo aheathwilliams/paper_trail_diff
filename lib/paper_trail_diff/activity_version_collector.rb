@@ -133,8 +133,7 @@ module PaperTrailDiff
     #: (untyped, Array[untyped], untyped) -> Hash[String, untyped]
     def habtm_groups(parent_class, parent_versions, reflection)
       if (prepared = @prepared)
-        rows = prepared.association_rows(parent_class, parent_versions, reflection,
-                                         transactions: true)
+        rows = prepared.habtm_rows(parent_class, parent_versions, reflection)
         return identity_groups(rows, reflection)
       end
       transaction_ids = parent_versions.filter_map do |version|
