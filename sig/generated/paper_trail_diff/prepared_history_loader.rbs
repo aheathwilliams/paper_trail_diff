@@ -3,19 +3,22 @@
 module PaperTrailDiff
   # Expands the explicit association tree into a request-scoped PreparedHistory.
   class PreparedHistoryLoader
-    # : (untyped, root_versions: Array[untyped], tree: AssociationTree, traversal: AssociationTraversal, ?root_ids: Array[untyped], ?start_at: untyped, ?end_at: untyped, ?live_records: Array[untyped]) -> void
-    def initialize: (untyped, root_versions: Array[untyped], tree: AssociationTree, traversal: AssociationTraversal, ?root_ids: Array[untyped], ?start_at: untyped, ?end_at: untyped, ?live_records: Array[untyped]) -> void
+    # Without `end_at`, the activity range closes on the last root version.
+    # : (untyped, root_ids: Array[untyped], root_versions: Array[untyped], tree: AssociationTree, traversal: AssociationTraversal, start_at: untyped, end_at: untyped, live_records: Array[untyped]) -> void
+    def initialize: (untyped, root_ids: Array[untyped], root_versions: Array[untyped], tree: AssociationTree, traversal: AssociationTraversal, start_at: untyped, end_at: untyped, live_records: Array[untyped]) -> void
 
     # : () -> PreparedHistory
     def call: () -> PreparedHistory
 
     private
 
+    @activity: PreparedActivityIndex
+
     @edges: PreparedEdgeLoader
 
     @history: PreparedHistory
 
-    @prepared: Hash[Array[String], Array[String]]
+    @prepared: Hash[untyped, Array[String]]
 
     @record: untyped
 
@@ -41,17 +44,16 @@ module PaperTrailDiff
     # : (untyped, Array[untyped], untyped) -> Hash[String, Hash[Symbol, untyped]]
     def prepare_edge: (untyped, Array[untyped], untyped) -> Hash[String, Hash[Symbol, untyped]]
 
-    # : (untyped, Array[untyped], untyped) -> Array[untyped]
-    def unprepared_ids: (untyped, Array[untyped], untyped) -> Array[untyped]
+    # A reflection belongs to the class that declares it, so it alone names
+    # the edge; a subclass that inherits it reads the same records.
+    # : (Array[untyped], untyped) -> Array[untyped]
+    def unprepared_ids: (Array[untyped], untyped) -> Array[untyped]
 
-    # : (untyped, Array[untyped], untyped) -> void
-    def mark_prepared: (untyped, Array[untyped], untyped) -> void
+    # : (Array[untyped], untyped) -> void
+    def mark_prepared: (Array[untyped], untyped) -> void
 
     # : (untyped, untyped, Hash[String, Hash[Symbol, untyped]]) -> void
     def mark_unsupported: (untyped, untyped, Hash[String, Hash[Symbol, untyped]]) -> void
-
-    # : (untyped) -> bool
-    def deferred_macro?: (untyped) -> bool
 
     # : (Hash[String, Hash[Symbol, untyped]]) -> void
     def load_groups: (Hash[String, Hash[Symbol, untyped]]) -> void
@@ -61,9 +63,6 @@ module PaperTrailDiff
 
     # : (untyped) -> bool
     def versioned?: (untyped) -> bool
-
-    # : (untyped, untyped) -> Array[String]
-    def edge_key: (untyped, untyped) -> Array[String]
 
     # : (Hash[String, Hash[Symbol, untyped]], Hash[String, Hash[Symbol, untyped]]) -> Hash[String, Hash[Symbol, untyped]]
     def merge_groups: (Hash[String, Hash[Symbol, untyped]], Hash[String, Hash[Symbol, untyped]]) -> Hash[String, Hash[Symbol, untyped]]

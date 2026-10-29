@@ -4,25 +4,21 @@
 module PaperTrailDiff
   # Loads every historical identity that can participate in one association edge.
   class PreparedEdgeLoader
-    EDGE_LOADERS = {
-      belongs_to: :belongs_to_edge,
-      has_one: :child_edge,
-      has_many: :child_edge,
-      has_and_belongs_to_many: :habtm_edge
-    }.freeze
-    private_constant :EDGE_LOADERS
-
     #: (PreparedRecordIndex, Array[untyped], ?start_at: untyped) -> void
     def initialize(records, root_versions, start_at: root_versions.first&.created_at)
       @records = records
-      @transaction_ids = root_versions.filter_map(&:transaction_id).uniq.freeze
+      @transaction_ids = root_versions.filter_map(&:transaction_id)
       @start_at = start_at
     end
 
+    # HABTM alone also returns each root transaction's members.
     #: (untyped, Array[untyped], untyped) -> [Hash[String, Hash[Symbol, untyped]], Hash[String, Array[untyped]]?]
     def call(owner_class, owner_ids, reflection)
-      loader = EDGE_LOADERS.fetch(reflection.macro)
-      send(loader, owner_class, owner_ids, reflection)
+      case reflection.macro
+      when :belongs_to then [belongs_to_groups(owner_class, owner_ids, reflection), nil]
+      when :has_and_belongs_to_many then habtm_groups(owner_class, reflection)
+      else [child_groups(owner_class, owner_ids, reflection), nil]
+      end
     end
 
     private
@@ -30,21 +26,6 @@ module PaperTrailDiff
     # @rbs @records: PreparedRecordIndex
     # @rbs @transaction_ids: Array[untyped]
     # @rbs @start_at: untyped
-
-    #: (untyped, Array[untyped], untyped) -> [Hash[String, Hash[Symbol, untyped]], nil]
-    def belongs_to_edge(owner_class, owner_ids, reflection)
-      [belongs_to_groups(owner_class, owner_ids, reflection), nil]
-    end
-
-    #: (untyped, Array[untyped], untyped) -> [Hash[String, Hash[Symbol, untyped]], nil]
-    def child_edge(owner_class, owner_ids, reflection)
-      [child_groups(owner_class, owner_ids, reflection), nil]
-    end
-
-    #: (untyped, Array[untyped], untyped) -> [Hash[String, Hash[Symbol, untyped]], Hash[String, Array[untyped]]]
-    def habtm_edge(owner_class, _owner_ids, reflection)
-      habtm_groups(owner_class, reflection)
-    end
 
     #: (untyped, Array[untyped], untyped) -> Hash[String, Hash[Symbol, untyped]]
     def belongs_to_groups(owner_class, owner_ids, reflection)
@@ -56,9 +37,12 @@ module PaperTrailDiff
       end
 
       grouped = {} #: Hash[String, Hash[Symbol, untyped]]
+      # Grouping only decides what to preload, so a type that names no class is
+      # left to raise where that state is read.
       @records.records_for(owner_class, owner_ids).each do |owner|
         id = owner.public_send(key)
-        model_class = AssociationTraversal.belongs_to_target(reflection, owner)
+        type = owner.public_send(reflection.foreign_type).to_s
+        model_class = AssociationTraversal.named_class(type)
         add_identity(grouped, model_class, id) if model_class && id
       end
       grouped
@@ -81,22 +65,22 @@ module PaperTrailDiff
       memberships = @transaction_ids.to_h do |transaction_id|
         [transaction_id.to_s, membership_ids(rows, transaction_id)]
       end
-      [group_for(reflection.klass, rows.filter_map(&:foreign_key_id)), memberships]
+      [group_for(reflection.klass, rows.map(&:foreign_key_id)), memberships]
     end
 
     #: (untyped, untyped) -> Array[untyped]
     def habtm_rows(owner_class, reflection)
       owner_class.paper_trail.version_association_class.where(
         version_id: @transaction_ids,
-        foreign_key_name: reflection.name.to_s
-      ).to_a
+        foreign_key_name: reflection.name
+      )
     end
 
     #: (Array[untyped], untyped) -> Array[untyped]
     def membership_ids(rows, transaction_id)
       rows.filter_map do |row|
         row.foreign_key_id if row.version_id.to_s == transaction_id.to_s
-      end.uniq
+      end
     end
 
     #: (untyped, Array[untyped], untyped, String) -> Hash[String, Array[untyped]]
@@ -109,7 +93,7 @@ module PaperTrailDiff
       version_class = owner_class.paper_trail.version_class
       association_class = owner_class.paper_trail.version_association_class
       relation = historical_child_relation(owner_class, owner_ids, reflection, foreign_key)
-      pairs = child_candidate_scope(version_class).call(relation).distinct.pluck(
+      pairs = child_candidate_scope(version_class).call(relation).pluck(
         association_class.arel_table[:foreign_key_id],
         version_class.arel_table[:item_id]
       )
@@ -141,10 +125,10 @@ module PaperTrailDiff
 
     #: (untyped, Array[untyped], untyped, String) -> Hash[String, Array[untyped]]
     def live_child_ids(owner_class, owner_ids, reflection, foreign_key)
+      # Every row of the table, as history reads them: an STI subclass's
+      # siblings are left out where children are resolved.
       relation = reflection.klass.base_class.unscoped.where(foreign_key => owner_ids)
-      if reflection.options[:as]
-        relation = relation.where(reflection.type => parent_types(owner_class))
-      end
+      relation = relation.where(reflection.type => parent_types(owner_class)) if reflection.type
       group_ids_by_owner(relation.pluck(foreign_key, reflection.klass.primary_key))
     end
 
@@ -161,18 +145,15 @@ module PaperTrailDiff
 
       group = { model: model_class, ids: unique } #: Hash[Symbol, untyped]
       group[:owners] = owners if owners
-      { model_class.name.to_s => group }
+      { model_class.name => group }
     end
 
-    # Keyed rather than scanned so that a wide edge stays linear in its width.
+    # A set rather than a scan, so that a wide edge stays linear in its width.
     #: (Array[Array[untyped]]) -> Hash[String, Array[untyped]]
     def group_ids_by_owner(pairs)
-      grouped = {} #: Hash[String, Hash[untyped, true]]
-      pairs.each do |owner_id, child_id|
-        ids = grouped[owner_id.to_s] ||= {} #: Hash[untyped, true]
-        ids[child_id] = true
-      end
-      grouped.transform_values(&:keys)
+      grouped = {} #: Hash[String, Set[untyped]]
+      pairs.each { |owner_id, child_id| (grouped[owner_id.to_s] ||= Set.new) << child_id }
+      grouped.transform_values(&:to_a)
     end
 
     #: (Hash[String, Array[untyped]], Hash[String, Array[untyped]]) -> Hash[String, Array[untyped]]
@@ -183,12 +164,12 @@ module PaperTrailDiff
     #: (untyped) -> String?
     def scalar_foreign_key(reflection)
       key = reflection.foreign_key
-      key.to_s unless key.is_a?(Array)
+      key unless key.is_a?(Array)
     end
 
     #: (untyped) -> Array[String?]
     def parent_types(owner_class)
-      [nil, '', owner_class.name.to_s, owner_class.base_class.name.to_s].uniq
+      [nil, '', owner_class.name, owner_class.base_class.name]
     end
   end
 end

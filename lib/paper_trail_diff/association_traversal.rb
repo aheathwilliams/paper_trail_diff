@@ -14,19 +14,43 @@ module PaperTrailDiff
       polymorphic_target(reflection, record, type) unless type.empty?
     end
 
+    # The class a stored type names, or nil when it names none.
+    #: (String) -> untyped
+    def self.named_class(type)
+      Object.const_get(type)
+    rescue NameError
+      nil
+    end
+
     # A type left by a renamed or removed model names no class. Active Record
     # and PT-AT raise a bare NameError for it, which does not say where it is.
     #: (untyped, untyped, String) -> untyped
     def self.polymorphic_target(reflection, record, type)
-      Object.const_get(type)
-    rescue NameError => e
+      model_class = named_class(type)
+      return model_class if model_class
+
       raise IncompleteAssociationHistoryError,
             "association #{record.class.name}##{reflection.name} cannot be read: " \
             "#{record.class.name} #{record.id} has #{reflection.foreign_type} #{type}, which " \
             'names no class. If the model was renamed, replace the old name in that column ' \
-            'and in the versions that recorded it.', cause: e
+            'and in the versions that recorded it.'
     end
     private_class_method :polymorphic_target
+
+    attr_reader :tree #: AssociationTree
+
+    # Whether a row belongs to an association whose class is `model_class`.
+    # Children are found by key across the whole table, so an association to an
+    # STI subclass has to leave out its siblings, as Active Record's type
+    # condition does for the live association: the row's type must name the
+    # class or one of its descendants. A base class takes every row.
+    #: (untyped, Hash[String, untyped]) -> bool
+    def self.sti_member?(model_class, attributes)
+      return true if model_class.descends_from_active_record?
+
+      names = [model_class, *model_class.descendants].map(&:sti_name)
+      names.include?(attributes[model_class.inheritance_column])
+    end
 
     #: (AssociationTree) -> void
     def initialize(tree)

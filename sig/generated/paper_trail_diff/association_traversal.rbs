@@ -8,10 +8,24 @@ module PaperTrailDiff
     # : (untyped, untyped) -> untyped
     def self.belongs_to_target: (untyped, untyped) -> untyped
 
+    # The class a stored type names, or nil when it names none.
+    # : (String) -> untyped
+    def self.named_class: (String) -> untyped
+
     # A type left by a renamed or removed model names no class. Active Record
     # and PT-AT raise a bare NameError for it, which does not say where it is.
     # : (untyped, untyped, String) -> untyped
     def self.polymorphic_target: (untyped, untyped, String) -> untyped
+
+    attr_reader tree: AssociationTree
+
+    # Whether a row belongs to an association whose class is `model_class`.
+    # Children are found by key across the whole table, so an association to an
+    # STI subclass has to leave out its siblings, as Active Record's type
+    # condition does for the live association: the row's type must name the
+    # class or one of its descendants. A base class takes every row.
+    # : (untyped, Hash[String, untyped]) -> bool
+    def self.sti_member?: (untyped, Hash[String, untyped]) -> bool
 
     # : (AssociationTree) -> void
     def initialize: (AssociationTree) -> void

@@ -39,6 +39,7 @@ module PaperTrailDiff
     # : (untyped, String) -> Symbol?
     def column_type: (untyped, String) -> Symbol?
 
+    # A relation is compared as its SQL; ids are compared as values.
     # : (untyped) -> untyped
     def arel_value: (untyped) -> untyped
 
@@ -64,8 +65,8 @@ module PaperTrailDiff
     # The owners that pointed at a target when the window opened or after a
     # change inside it, as PT-AT recorded them on the owners' versions.
     class BelongsTo < AssociationActivityEdge
-      # : (untyped, TimeRange?, ?foreign_types: Array[String]?) -> void
-      def initialize: (untyped, TimeRange?, ?foreign_types: Array[String]?) -> void
+      # : (untyped, TimeRange?, ?foreign_type: String?) -> void
+      def initialize: (untyped, TimeRange?, ?foreign_type: String?) -> void
 
       # The types a polymorphic key's rows name, the only way to know its targets.
       # : () -> Array[String]
@@ -78,7 +79,7 @@ module PaperTrailDiff
 
       @associations: untyped
 
-      @foreign_types: Array[String]?
+      @foreign_type: String?
 
       @versions: untyped
 
@@ -92,9 +93,6 @@ module PaperTrailDiff
       # : (untyped, TimeRange?) -> void
       def initialize: (untyped, TimeRange?) -> void
 
-      # : () -> bool
-      def available?: () -> bool
-
       # : (untyped) -> untyped
       def relation: (untyped) -> untyped
 
@@ -105,14 +103,22 @@ module PaperTrailDiff
       # : () -> Hash[String, Symbol?]
       def join_columns: () -> Hash[String, Symbol?]
 
+      # Some adapters take the quoted name as a plain string too, but a raw SQL
+      # check may not, so it is marked as SQL; no SQLite spec can tell.
+      # mutant:disable
       # : () -> untyped
       def quoted_owner_column: () -> untyped
 
-      # Arel ships no signatures; see VersionQuery.
+      # Arel ships no signatures; see VersionQuery. Any spelling of the
+      # constant finds the same module.
+      # mutant:disable
       # : () -> untyped
       def arel: () -> untyped
 
       # Active Record 7.1 has no `with_connection`; see VersionAssociationCandidateScope.
+      # Only that version takes the fallback, so no spec run on a newer one can
+      # tell its mutations apart.
+      # mutant:disable
       # : [T] () { (untyped) -> T } -> T
       def connected: [T] () { (untyped) -> T } -> T
     end

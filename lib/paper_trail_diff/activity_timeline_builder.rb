@@ -6,8 +6,8 @@ module PaperTrailDiff
   class ActivityTimelineBuilder
     include ActivityGrouping
 
-    #: (untyped, range: TimelineRange, tree: AssociationTree, snapshotter: untyped, ?snapshots: bool, ?group: Symbol?) -> void
-    def initialize(record, range:, tree:, snapshotter:, snapshots: false, group: nil) # rubocop:disable Metrics/ParameterLists
+    #: (untyped, range: TimelineRange, tree: AssociationTree, snapshotter: untyped, snapshots: bool, group: Symbol?) -> void
+    def initialize(record, range:, tree:, snapshotter:, snapshots:, group:) # rubocop:disable Metrics/ParameterLists
       ActivityGrouping.validate!(group)
       @snapshots = snapshots
       @group = group
@@ -15,7 +15,6 @@ module PaperTrailDiff
       # the build even when the caller did not ask to keep them.
       @retain = snapshots || grouping?
       @record = record
-      @from = range.from
       @to = range.to
       @range = range
       @tree = tree
@@ -40,6 +39,8 @@ module PaperTrailDiff
       return analyze_current if Endpoint.record?(@to)
 
       plan = @range.select_plan
+      return Analysis.empty if plan.empty?
+
       root_versions = plan.reconstruction_versions
       prepare_history(root_versions)
       events = collect_events(root_versions)
@@ -49,7 +50,6 @@ module PaperTrailDiff
     private
 
     # @rbs @record: untyped
-    # @rbs @from: untyped
     # @rbs @to: untyped
     # @rbs @range: TimelineRange
     # @rbs @tree: AssociationTree
@@ -65,10 +65,14 @@ module PaperTrailDiff
     # Every boundary in the span, filtered out or not. A filter narrows where the
     # span starts and ends, but the sequence inside it stays complete: dropping
     # boundaries would fold the changes they carried into a neighbouring step and
-    # credit them to whoever made that one.
+    # credit them to whoever made that one. A filter that keeps no version
+    # leaves no span, as it does for a checkpoint timeline.
     #: () -> Array[ActivityStep]
     def build_between_versions
-      root_versions = @range.select_plan.reconstruction_versions
+      plan = @range.select_plan
+      return no_steps if plan.empty?
+
+      root_versions = plan.reconstruction_versions
       prepare_history(root_versions)
       events = collect_events(root_versions)
       history = event_history(root_versions, events)
@@ -102,7 +106,7 @@ module PaperTrailDiff
     def current_history
       validate_current_range!
       plan = @range.select_plan
-      return [plan, [], ActivityHistory.empty, nil, nil] if plan.empty?
+      return empty_history(plan) if plan.empty?
 
       snapshot, captured_at = capture_current if plan.closing_record
       versions = plan.reconstruction_versions
@@ -113,6 +117,14 @@ module PaperTrailDiff
       [plan, events, history, snapshot, boundary]
     end
 
+    # Without a closing boundary nothing reads the events or the closing pair,
+    # so their mutations cannot change an answer.
+    # mutant:disable
+    #: (RootVersionPlan) -> [RootVersionPlan, Array[ActivityEvent], ActivityHistory, RecordSnapshot?, ActivityBoundary?]
+    def empty_history(plan)
+      [plan, [], ActivityHistory.empty, nil, nil]
+    end
+
     #: () -> [RecordSnapshot?, untyped]
     def capture_current
       [@snapshotter.call(@to, @to), Time.now.utc]
@@ -120,12 +132,11 @@ module PaperTrailDiff
 
     #: () -> void
     def validate_current_range!
-      unless Endpoint.version?(@from)
+      unless Endpoint.version?(@range.from)
         raise InvalidTimelineRangeError, '`from` must be a root PaperTrail version'
       end
 
-      Endpoint.validate_pair!(@from, @to)
-      Endpoint.validate_pair!(@record, @to)
+      Endpoint.validate_pair!(@range.from, @to)
       AssociationTraversal.new(@tree).reject_live_habtm_activity!(@record.class)
     end
 
@@ -139,7 +150,6 @@ module PaperTrailDiff
         @record,
         root_versions: root_versions,
         tree: @tree,
-        traversal: AssociationTraversal.new(@tree),
         prepared: (@snapshotter.activity_index if @snapshotter.respond_to?(:activity_index)),
         range_start: range_start,
         range_end: range_end
@@ -156,14 +166,15 @@ module PaperTrailDiff
 
     # Appends the transition into an explicit closing boundary, which is either
     # a requested current record or the absence a final root destroy leaves.
+    # Either follows the root versions, which are themselves events.
     #: (ActivityHistory, Array[ActivityEvent], ActivityBoundary?, RecordSnapshot?) -> Array[ActivityStep]
     def activity_steps(history, events, final_boundary, final_snapshot)
       steps = history.steps.dup
-      previous_event = events.last
-      previous_boundary = ActivityBoundary.from_version(previous_event.version) if previous_event
-      if final_boundary && previous_boundary
+      if final_boundary
+        last_event = events.last #: ActivityEvent
         steps << ActivityStep.between(
-          from_boundary: previous_boundary, to_boundary: final_boundary,
+          from_boundary: ActivityBoundary.from_version(last_event.version),
+          to_boundary: final_boundary,
           from_snapshot: history.last_snapshot, to_snapshot: final_snapshot,
           retain: @retain
         )
@@ -176,7 +187,7 @@ module PaperTrailDiff
     #: (Array[untyped]) -> ActivityBoundary?
     def destroyed_boundary(root_versions)
       version = root_versions.last
-      return unless version && version.event.to_s == 'destroy'
+      return unless version.event == 'destroy'
 
       ActivityBoundary.destroyed(version)
     end
@@ -210,14 +221,9 @@ module PaperTrailDiff
 
     #: () -> TimeActivityTimelineBuilder
     def time_builder
-      TimeActivityTimelineBuilder.new(
-        @record,
-        range: @range,
-        tree: @tree,
-        snapshotter: @snapshotter,
-        snapshots: @snapshots,
-        group: @group
-      )
+      TimeActivityTimelineBuilder.new(@record, range: @range, tree: @tree,
+                                               snapshotter: @snapshotter, snapshots: @snapshots,
+                                               group: @group)
     end
   end
 end

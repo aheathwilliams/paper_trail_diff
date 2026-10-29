@@ -4,12 +4,11 @@
 module PaperTrailDiff
   # Collects root and selected-descendant versions relevant to one root history range.
   class ActivityVersionCollector
-    #: (untyped, root_versions: Array[untyped], tree: AssociationTree, traversal: AssociationTraversal, ?range_start: untyped, ?range_end: untyped, ?prepared: PreparedActivityIndex?) -> void
+    #: (untyped, root_versions: Array[untyped], tree: AssociationTree, ?range_start: untyped, ?range_end: untyped, ?prepared: PreparedActivityIndex?) -> void
     def initialize( # rubocop:disable Metrics/ParameterLists
       record,
       root_versions:,
       tree:,
-      traversal:,
       range_start: root_versions.first,
       range_end: root_versions.last,
       prepared: nil
@@ -18,7 +17,7 @@ module PaperTrailDiff
       @record = record
       @root_versions = root_versions
       @tree = tree
-      @traversal = traversal
+      @traversal = AssociationTraversal.new(tree)
       @range = ActivityRange.new(range_start, range_end)
       @registry = ActivityEventRegistry.new
     end
@@ -62,7 +61,7 @@ module PaperTrailDiff
         @registry.add(group.fetch(:versions), branch: branch)
         next if subtree.empty?
 
-        child_path = Support.association_path(path, reflection.name.to_s)
+        child_path = Support.association_path(path, reflection.name)
         collect_tree(group.fetch(:model), group.fetch(:ids), subtree,
                      path: child_path, branch: branch)
       end

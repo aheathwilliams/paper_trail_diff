@@ -36,7 +36,7 @@ module PaperTrailDiff
         subtree = tree.child(reflection.name)
         next unless subtree
 
-        child_path = Support.association_path(path, reflection.name.to_s)
+        child_path = Support.association_path(path, reflection.name)
         collect(children_for(records, reflection), subtree, path: child_path, into: into)
       end
     end

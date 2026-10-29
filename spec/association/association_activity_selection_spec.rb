@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative '../support/association_database'
+require_relative '../support/string_item_database'
 
 ActiveRecord::Schema.define do
   create_table :selection_pages, force: true do |table|
@@ -9,20 +10,27 @@ ActiveRecord::Schema.define do
   end
 
   create_table :selection_notes, force: true do |table|
+    table.string :type
     table.string :body, null: false
     table.references :notable, polymorphic: true
+    table.integer :author_id
     table.timestamps null: false
   end
 end
 
 class SelectionPage < ActiveRecord::Base
   has_many :notes, class_name: 'SelectionNote', as: :notable, inverse_of: :notable
+  has_many :pinned_notes, class_name: 'SelectionPinnedNote', as: :notable
   has_paper_trail
 end
 
 class SelectionNote < ActiveRecord::Base
   belongs_to :notable, polymorphic: true, optional: true
+  belongs_to :author, class_name: 'TrackedAuthor', optional: true
   has_paper_trail
+end
+
+class SelectionPinnedNote < SelectionNote
 end
 
 # With activity, a record is selected when it or a record on a requested path
@@ -34,7 +42,11 @@ RSpec.describe PaperTrailDiff::AssociationActivitySelection do
     PaperTrail::Version.delete_all
     ActiveRecord::Base.connection.execute('DELETE FROM tracked_articles_tags')
     [TrackedReply, TrackedComment, TrackedAuthorship, TrackedProfile, TrackedArticle,
-     TrackedAuthor, TrackedTag, SelectionNote, SelectionPage].each(&:delete_all)
+     TrackedAuthor, TrackedTag, SelectionNote, SelectionPage,
+     UnversionedAttachment].each(&:delete_all)
+    StringItemVersionAssociation.delete_all
+    StringItemVersion.delete_all
+    [StringItemNote, StringItemPost].each(&:delete_all)
   end
 
   def ids(result)
@@ -206,6 +218,21 @@ RSpec.describe PaperTrailDiff::AssociationActivitySelection do
     expect(scope_ids([:tags], window_start..window_end)).to eq([article.id])
   end
 
+  # Only the tag changes in the window. The article's next version, after the
+  # window, records that it held the tag; the join row is gone by selection.
+  it 'selects an article that held a renamed tag in the window but no longer does' do
+    article = TrackedArticle.create!(title: 'Was tagged')
+    tag = TrackedTag.create!(name: 'ruby')
+    article.tags << tag
+    window_start = Time.now.utc
+    tag.update!(name: 'rails')
+    window_end = Time.now.utc
+    TrackedArticle.transaction { TrackedArticle.find(article.id).paper_trail.save_with_version }
+    article.tags.delete(tag)
+
+    expect(scope_ids([:tags], window_start..window_end)).to eq([article.id])
+  end
+
   # HABTM membership after the article's last version lives only in the join
   # table, and a window ending at the current record cannot split HABTM
   # activity into events. The article is still selected, so that says so.
@@ -302,5 +329,273 @@ RSpec.describe PaperTrailDiff::AssociationActivitySelection do
     end
 
     expect(measure.call(1)).to eq(measure.call(12))
+  end
+
+  describe 'its sources' do
+    def sources(model, paths, window: nil)
+      range = PaperTrailDiff::TimeRange.new(window) if window
+      described_class.new(model, tree: PaperTrailDiff::AssociationTree.build(paths),
+                                 time_range: range).call
+    end
+
+    def selected(found)
+      described_class.values(found).map(&:to_i).sort
+    end
+
+    def since(start)
+      start..Time.now.utc
+    end
+
+    it 'keeps a subquery typed like the owner column where the columns compared match' do
+      article = TrackedArticle.create!(title: 'Quiet')
+      comment = article.comments.create!(body: 'one')
+      start = Time.now.utc
+      comment.update!(body: 'two')
+
+      found = sources(TrackedArticle, [:comments], window: since(start))
+
+      expect(found.map(&:class)).to eq([described_class::Query])
+      expect(found.first.type).to eq(:integer)
+      expect(selected(found)).to eq([article.id])
+    end
+
+    it 'reads ids, in slices, where a string item_id meets an integer key' do
+      posts = Array.new(2) { |index| StringItemPost.create!(title: "Post #{index}") }
+      note = posts.first.notes.create!(body: 'moving')
+      StringItemPost.create!(title: 'Other').notes.create!(body: 'other')
+      start = Time.now.utc
+      note.update!(post: posts.last)
+      posts.each { |post| post.update!(title: 'Renamed') }
+      window = since(start)
+      count = lambda do |slice|
+        stub_const('PaperTrailDiff::AssociationActivitySelection::SLICE', slice)
+        found = nil
+        [statements { found = sources(StringItemNote, [:post], window: window) }, found]
+      end
+
+      whole, found = count.call(2)
+      sliced, sliced_found = count.call(1)
+
+      expect(found).to eq([[note.id.to_s]])
+      expect(sliced_found).to eq([[note.id.to_s]])
+      expect(sliced).to eq(whole + 1)
+      expect(sources(StringItemNote, [:post], window: since(Time.now.utc))).to eq([])
+    end
+
+    it 'follows read ids back up a child edge, leaving out keys recorded as empty' do
+      post = StringItemPost.create!(title: 'Old')
+      note = post.notes.create!(body: 'one')
+      start = Time.now.utc
+      post.update!(title: 'New')
+      note.update!(body: 'two')
+      StringItemVersionAssociation.joins(:version)
+                                  .where(string_item_versions: { item_id: note.id.to_s,
+                                                                 event: 'update' })
+                                  .update_all(foreign_key_id: nil)
+
+      found = sources(StringItemPost, ['notes.post'], window: since(start))
+
+      expect(found.grep(Array)).to eq([[post.id]])
+      expect(found.grep(described_class::Query).map(&:type)).to eq([:integer])
+      expect(described_class.values(found)).to eq([post.id])
+    end
+
+    it 'reads owners only from the window and the state when it opened' do
+      before = TrackedArticle.create!(title: 'Held it before')
+      after = TrackedArticle.create!(title: 'Holds it')
+      comment = before.comments.create!(body: 'one')
+      comment.update!(article: after)
+      start = Time.now.utc
+      comment.update!(body: 'two')
+
+      expect(selected(sources(TrackedArticle, [:comments], window: since(start))))
+        .to eq([after.id])
+      expect(selected(sources(TrackedArticle, [:comments]))).to eq([before.id, after.id])
+    end
+
+    it 'reads a change of a model of the path only, not another with the same id' do
+      article = TrackedArticle.create!(title: 'Quiet')
+      comment = article.comments.create!(id: 9_100, body: 'unchanged')
+      profile = TrackedProfile.create!(id: comment.id, article: TrackedArticle.create!(title: 'P'),
+                                       bio: 'one')
+      start = Time.now.utc
+      profile.update!(bio: 'two')
+
+      expect(selected(sources(TrackedArticle, [:comments], window: since(start)))).to eq([])
+    end
+
+    it 'reads changes of a subclass under the base class name' do
+      page = SelectionPage.create!(title: 'Pinned')
+      note = SelectionPinnedNote.create!(body: 'one', notable: page)
+      start = Time.now.utc
+      note.update!(body: 'two')
+
+      expect(selected(sources(SelectionPage, [:pinned_notes], window: since(start))))
+        .to eq([page.id])
+    end
+
+    it 'reads nothing for a path to an unversioned model' do
+      article = TrackedArticle.create!(title: 'Article')
+      UnversionedAttachment.create!(article: article, filename: 'a.txt')
+
+      expect(sources(TrackedArticle, [:unversioned_attachments])).to eq([])
+    end
+
+    it 'names a nested path it cannot resolve in full' do
+      expect { sources(TrackedArticle, ['comments.nope']) }
+        .to raise_error(PaperTrailDiff::UnknownAssociationError,
+                        'unknown association: comments.nope')
+    end
+
+    it 'skips the recorded HABTM edge without a transaction_id column' do
+      article = TrackedArticle.create!(title: 'Tagged')
+      tag = TrackedTag.create!(name: 'ruby')
+      article.tags << tag
+      start = Time.now.utc
+      tag.update!(name: 'rails')
+      allow(PaperTrail::Version).to receive(:column_names)
+        .and_return(PaperTrail::Version.column_names - ['transaction_id'])
+      sql = []
+      callback = ->(*, payload) { sql << payload[:sql] }
+      found = nil
+
+      ActiveSupport::Notifications.subscribed(callback, 'sql.active_record') do
+        found = selected(sources(TrackedArticle, [:tags], window: since(start)))
+      end
+
+      expect(found).to eq([article.id])
+      expect(sql.grep(/transaction_id/)).to eq([])
+    end
+
+    describe 'a polymorphic belongs_to' do
+      it 'reads each target type it names, and only targets of that type' do
+        page = SelectionPage.create!(id: 7_000, title: 'Page')
+        article = TrackedArticle.create!(id: 7_000, title: 'Article')
+        on_page = page.notes.create!(body: 'on page')
+        SelectionNote.create!(body: 'on article', notable: article)
+        start = Time.now.utc
+        page.update!(title: 'Renamed')
+
+        expect(selected(sources(SelectionNote, [:notable], window: since(start))))
+          .to eq([on_page.id])
+      end
+
+      it 'reads only the types and owners of the window and its opening state' do
+        article = TrackedArticle.create!(title: 'Earlier')
+        page = SelectionPage.create!(title: 'Now')
+        note = SelectionNote.create!(body: 'moved', notable: article)
+        note.update!(notable: page)
+        start = Time.now.utc
+        article.update!(title: 'Renamed')
+
+        found = sources(SelectionNote, [:notable], window: since(start))
+
+        expect(found.length).to eq(1)
+        expect(selected(found)).to eq([])
+        expect(selected(sources(SelectionNote, [:notable]))).to eq([note.id])
+      end
+
+      it 'reads the owners of a type in the window only from the window' do
+        earlier = TrackedArticle.create!(title: 'Earlier')
+        later = TrackedArticle.create!(title: 'Later')
+        note = SelectionNote.create!(body: 'moved', notable: earlier)
+        note.update!(notable: SelectionPage.create!(title: 'Page'))
+        start = Time.now.utc
+        SelectionNote.create!(body: 'new', notable: later)
+        earlier.update!(title: 'Renamed')
+
+        expect(selected(sources(SelectionNote, [:notable], window: since(start)))).to eq([])
+      end
+
+      it 'skips a type naming no class or an unversioned one' do
+        missing = SelectionNote.create!(body: 'missing',
+                                        notable: TrackedArticle.create!(title: 'A'))
+        unversioned = SelectionNote.create!(body: 'unversioned',
+                                            notable: TrackedArticle.create!(title: 'B'))
+        page = SelectionPage.create!(title: 'Page')
+        kept = page.notes.create!(body: 'kept')
+        {
+          missing => 'NoSuchSelectionModel', unversioned => 'UnversionedAttachment'
+        }.each do |note, type|
+          PaperTrail::VersionAssociation.joins(:version)
+                                        .where(versions: { item_type: 'SelectionNote',
+                                                           item_id: note.id })
+                                        .update_all(foreign_type: type)
+        end
+        start = Time.now.utc
+        page.update!(title: 'Renamed')
+
+        expect(selected(sources(SelectionNote, [:notable], window: since(start))))
+          .to eq([kept.id])
+      end
+
+      it 'goes on to the paths after it' do
+        author = TrackedAuthor.create!(name: 'Ann')
+        note = SelectionNote.create!(body: 'one', notable: SelectionPage.create!(title: 'P'),
+                                     author: author)
+        start = Time.now.utc
+        author.update!(name: 'Anne')
+
+        expect(selected(sources(SelectionNote, %i[notable author], window: since(start))))
+          .to eq([note.id])
+      end
+    end
+  end
+
+  describe described_class::Query do
+    def query(relation = PaperTrail::Version.where(item_type: 'TrackedComment'))
+      described_class.new(relation, PaperTrail::Version.arel_table[:item_id], :integer)
+    end
+
+    it 'selects its column, keeps its type, and is frozen' do
+      selection = query
+
+      expect(selection.type).to eq(:integer)
+      expect(selection.relation.select_values).to eq([PaperTrail::Version.arel_table[:item_id]])
+      expect(selection).to be_frozen
+    end
+
+    it 'reads each id once, leaving out empty keys' do
+      article = TrackedArticle.create!(title: 'Article')
+      comment = article.comments.create!(body: 'one')
+      comment.update!(body: 'two')
+      rows = PaperTrail::VersionAssociation.where(foreign_key_name: 'article_id')
+      rows.limit(1).update_all(foreign_key_id: nil)
+      keys = described_class.new(rows, PaperTrail::VersionAssociation.arel_table[:foreign_key_id],
+                                 :integer)
+
+      expect(query.values).to eq([comment.id])
+      expect(keys.values).to eq([article.id])
+    end
+
+    it 'names each id without a row once' do
+      article = TrackedArticle.create!(title: 'Article')
+      kept = article.comments.create!(body: 'kept')
+      gone = article.comments.create!(body: 'gone')
+      gone.update!(body: 'edited')
+      TrackedComment.where(id: gone.id).delete_all
+
+      expect(query.missing(TrackedComment.select(:id).arel)).to eq([gone.id])
+      expect(kept.id).not_to eq(gone.id)
+    end
+  end
+
+  it 'reads every id its sources name, once' do
+    article = TrackedArticle.create!(title: 'Article')
+    article.comments.create!(body: 'one')
+    sources = [
+      described_class::Query.new(PaperTrail::Version.where(item_type: 'TrackedComment'),
+                                 PaperTrail::Version.arel_table[:item_id], :integer),
+      [41, 42], [42]
+    ]
+
+    narrowed = Class.new(described_class::Query).new(
+      PaperTrail::Version.where(item_type: 'TrackedArticle'),
+      PaperTrail::Version.arel_table[:item_id], :integer
+    )
+
+    expect(described_class.values(sources)).to eq([TrackedComment.last.id, 41, 42])
+    expect(described_class.values([narrowed])).to eq([article.id])
+    expect(described_class.values([])).to eq([])
   end
 end

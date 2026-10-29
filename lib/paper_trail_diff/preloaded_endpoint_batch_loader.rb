@@ -30,7 +30,7 @@ module PaperTrailDiff
 
     #: (untyped, AssociationTree, String, untyped) -> void
     def validate_association(record, tree, path, reflection)
-      association_path = Support.association_path(path, reflection.name.to_s)
+      association_path = Support.association_path(path, reflection.name)
       association = record.association(reflection.name)
       unless association.loaded?
         message = "current endpoint association is not preloaded: #{association_path}"

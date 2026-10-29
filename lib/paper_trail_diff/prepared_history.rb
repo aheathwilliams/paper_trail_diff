@@ -185,6 +185,7 @@ module PaperTrailDiff
       foreign_key = scalar_foreign_key(reflection)
       return false unless foreign_key
       return false unless child.public_send(foreign_key).to_s == owner.id.to_s
+      return false unless AssociationTraversal.sti_member?(reflection.klass, child.attributes)
       return true unless reflection.options[:as]
 
       owner_types(reflection, owner).include?(child.public_send(reflection.type).to_s)
