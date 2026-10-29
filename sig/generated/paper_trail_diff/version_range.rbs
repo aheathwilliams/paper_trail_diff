@@ -3,8 +3,8 @@
 module PaperTrailDiff
   # Selects an inclusive, chronological range from a record's root versions.
   class VersionRange
-    # : (untyped, from: untyped, to: untyped, ?version_scope: untyped) -> void
-    def initialize: (untyped, from: untyped, to: untyped, ?version_scope: untyped) -> void
+    # : (untyped, from: untyped, to: untyped, version_scope: untyped) -> void
+    def initialize: (untyped, from: untyped, to: untyped, version_scope: untyped) -> void
 
     # Keep both reconstruction boundaries and the step pairs a filter implies.
     # : () -> RootVersionPlan
@@ -35,6 +35,8 @@ module PaperTrailDiff
     # : (untyped, untyped, boundary: Symbol) -> void
     def validate_boundary!: (untyped, untyped, boundary: Symbol) -> void
 
+    # The relation holds only this record's versions, so finding the id there
+    # also settles which record the version belongs to.
     # : (untyped, untyped) -> bool
     def valid_boundary?: (untyped, untyped) -> bool
   end

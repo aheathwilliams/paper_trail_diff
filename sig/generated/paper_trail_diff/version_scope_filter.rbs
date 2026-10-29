@@ -12,6 +12,10 @@ module PaperTrailDiff
     # : (untyped, Array[untyped]) -> Array[untyped]
     def call: (untyped, Array[untyped]) -> Array[untyped]
 
+    # The ids of the versions the scope keeps, or nil when there is no scope.
+    # : (untyped) -> Set[untyped]?
+    def chosen_ids: (untyped) -> Set[untyped]?
+
     private
 
     @scope: untyped

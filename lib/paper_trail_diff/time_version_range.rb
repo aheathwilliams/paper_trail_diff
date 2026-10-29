@@ -4,18 +4,18 @@
 module PaperTrailDiff
   # Selects in-range root versions plus one later reconstruction boundary.
   class TimeVersionRange
-    #: (untyped, time_range: TimeRange, ?version_scope: untyped, ?live_endpoint: untyped) -> void
-    def initialize(record, time_range:, version_scope: nil, live_endpoint: nil)
+    #: (untyped, time_range: TimeRange, version_scope: untyped, live_endpoint: untyped) -> void
+    def initialize(record, time_range:, version_scope:, live_endpoint:)
       @record = record
       @time_range = time_range
       @version_scope = version_scope
       @live_endpoint = live_endpoint
     end
 
-    #: (?context_required: bool) -> RootVersionPlan
-    def select_plan(context_required: false)
+    #: (context_required: bool) -> RootVersionPlan
+    def select_plan(context_required:)
       relation = Endpoint.versions(@record)
-      in_range = ordered(@time_range.scope(relation).to_a)
+      in_range = ordered(@time_range.scope(relation))
       RootVersionSelection.new(
         in_range: in_range,
         selected: VersionScopeFilter.new(@version_scope).call(@time_range.scope(relation),

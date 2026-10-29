@@ -3,11 +3,11 @@
 module PaperTrailDiff
   # Selects in-range root versions plus one later reconstruction boundary.
   class TimeVersionRange
-    # : (untyped, time_range: TimeRange, ?version_scope: untyped, ?live_endpoint: untyped) -> void
-    def initialize: (untyped, time_range: TimeRange, ?version_scope: untyped, ?live_endpoint: untyped) -> void
+    # : (untyped, time_range: TimeRange, version_scope: untyped, live_endpoint: untyped) -> void
+    def initialize: (untyped, time_range: TimeRange, version_scope: untyped, live_endpoint: untyped) -> void
 
-    # : (?context_required: bool) -> RootVersionPlan
-    def select_plan: (?context_required: bool) -> RootVersionPlan
+    # : (context_required: bool) -> RootVersionPlan
+    def select_plan: (context_required: bool) -> RootVersionPlan
 
     private
 
