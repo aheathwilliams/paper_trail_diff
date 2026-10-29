@@ -62,7 +62,7 @@ module PaperTrailDiff
 
     #: (untyped, prefix: String, ancestry: Array[untyped], depth: Integer) -> Array[AssociationDescriptor]
     def discover(model_class, prefix:, ancestry:, depth:)
-      supported_reflections(model_class).flat_map do |reflection|
+      supported_reflections(model_class, root: prefix.empty?).flat_map do |reflection|
         describe_and_descend(reflection, prefix: prefix, ancestry: ancestry, depth: depth)
       end
     end
@@ -99,10 +99,10 @@ module PaperTrailDiff
     end
 
     # Only what a request accepts, so every listed path can be requested.
-    #: (untyped) -> Array[untyped]
-    def supported_reflections(model_class)
+    #: (untyped, root: bool) -> Array[untyped]
+    def supported_reflections(model_class, root:)
       reflections = model_class.reflect_on_all_associations.reject do |reflection|
-        AssociationTraversal.unsupported_reason(model_class, reflection)
+        AssociationTraversal.unsupported_reason(model_class, reflection, root: root)
       end
       reflections.sort_by { |reflection| reflection.name.to_s }
     end

@@ -61,7 +61,10 @@ Batch methods reject the scoped and through cases unless you pass
 `allow_expensive: true`; see [costly associations](reference.md#costly-associations).
 
 HABTM membership comes from the snapshots PT-AT records with each transaction,
-so it is only known at root versions saved in a transaction.
+so it is only known at root versions saved in a transaction. Those snapshots
+name the transaction and the association but not the owner, so they give only
+the root's own membership, and a HABTM below the root is rejected before any
+history is read.
 
 ## Database indexes
 

@@ -548,34 +548,34 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     expect(step_tags.to_h).to eq(tags.to_h)
   end
 
-  it 'reconstructs nested HABTM paths and bounds cyclic paths explicitly' do
-    graph = article_with_graph
-    kept_tag = TrackedTag.create!(name: 'Nested before')
-    graph[:article].tags << kept_tag
-    before = habtm_boundary_for(graph[:article])
+  # The root's checkpoints record the root's tags and nothing else, so the
+  # tag's articles used to read as empty at both: `Other` joining the tag went
+  # unreported, and against the current record both articles read as added.
+  # The activity timeline raised a KeyError.
+  it 'rejects a HABTM below the root instead of reading the root checkpoint' do
+    ActiveRecord::Base.connection.execute('DELETE FROM tracked_articles_tags')
+    root = TrackedArticle.create!(title: 'Root')
+    other = TrackedArticle.create!(title: 'Other')
+    tag = TrackedTag.create!(name: 'tag')
+    root.tags << tag
+    before = habtm_boundary_for(root)
+    other.tags << tag
+    tag.update!(name: 'renamed')
+    after = habtm_boundary_for(root)
+    options = { associations: ['tags.articles'] }
+    error = [PaperTrailDiff::UnsupportedAssociationError,
+             /\Aunsupported association tags\.articles: TrackedTag#articles /]
 
-    kept_tag.update!(name: 'Nested after')
-    after = habtm_boundary_for(graph[:article])
-    result = PaperTrailDiff.compare(
-      before,
-      after,
-      associations: ['comments.article.tags']
-    )
-
-    comment = result.associations.fetch('comments').changed.find do |change|
-      change.record.fetch(:id) == graph[:kept_comment].id
+    [after, root].each do |to|
+      expect { PaperTrailDiff.compare(before, to, **options) }.to raise_error(*error)
     end
-    article = comment.associations.fetch('article').changed
-    tag_change = article.associations.fetch('tags').changed.fetch(0)
-    expect(tag_change.attributes.fetch('name').to_h)
-      .to eq(from: 'Nested before', to: 'Nested after')
+    expect { PaperTrailDiff.activity_timeline(root, from: before, to: after, **options) }
+      .to raise_error(*error)
+    expect { PaperTrailDiff.diagnose(before, after, **options) }.to raise_error(*error)
 
-    cyclic = PaperTrailDiff.compare(
-      before,
-      before,
-      associations: ['tags.articles.tags']
-    )
-    expect(cyclic).to be_empty
+    tags = PaperTrailDiff.compare(before, after, associations: [:tags]).associations.fetch('tags')
+    expect(tags.changed.map { |change| change.attributes.fetch('name').to_h })
+      .to eq([{ from: 'tag', to: 'renamed' }])
   end
 
   it 'applies ignore rules to exact association paths' do

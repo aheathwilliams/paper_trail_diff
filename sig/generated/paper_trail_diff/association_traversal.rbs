@@ -21,11 +21,19 @@ module PaperTrailDiff
     def self.polymorphic_target: (untyped, untyped, String) -> untyped
 
     # Why a request cannot name this association of the model, or nil when it
-    # can. Discovery lists only the associations this accepts, so every path it
+    # can; `root` says whether the model is the record the request compares.
+    # Discovery lists only the associations this accepts, so every path it
     # lists can be requested. A has_many :through Active Record cannot follow
     # raises Active Record's own error.
-    # : (untyped, untyped) -> String?
-    def self.unsupported_reason: (untyped, untyped) -> String?
+    # : (untyped, untyped, root: bool) -> String?
+    def self.unsupported_reason: (untyped, untyped, root: bool) -> String?
+
+    # PT-AT records a HABTM's membership only when its owner saves a version,
+    # in rows keyed by transaction and association name, not by owner. A root
+    # checkpoint so holds the root's membership and no one else's: another
+    # record's HABTM would read the root's rows, or none.
+    # : (untyped) -> String
+    def self.habtm_below_root: (untyped) -> String
 
     # : (untyped, untyped) -> bool
     def self.paper_trail_versions?: (untyped, untyped) -> bool
@@ -73,8 +81,10 @@ module PaperTrailDiff
     # : (untyped) -> void
     def reject_live_habtm_activity!: (untyped) -> void
 
-    # A model and a tree resolve to the same reflections at any path; the path
-    # only names a failure, and a failure is not cached.
+    # A model and a tree resolve to the same reflections wherever they are
+    # read: a tree is only ever walked from one place, the root tree at the
+    # root and a subtree below it. Beyond that, the path only names a failure,
+    # and a failure is not cached.
     # : (untyped, AssociationTree, path: String) -> Array[untyped]
     def reflections_for: (untyped, AssociationTree, path: String) -> Array[untyped]
 
@@ -103,8 +113,8 @@ module PaperTrailDiff
     # : (untyped, AssociationTree, String) -> Array[untyped]
     def requested_reflections: (untyped, AssociationTree, String) -> Array[untyped]
 
-    # : (untyped, String, String) -> untyped
-    def resolve_reflection: (untyped, String, String) -> untyped
+    # : (untyped, String, String, root: bool) -> untyped
+    def resolve_reflection: (untyped, String, String, root: bool) -> untyped
 
     # : (untyped) -> bool
     def habtm_reflection?: (untyped) -> bool
