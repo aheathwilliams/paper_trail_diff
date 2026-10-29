@@ -43,12 +43,19 @@ module PaperTrailDiff
       end
     end
 
-    #: (untyped, time_range: TimeRange?, limit: Integer, ?historical_filter: untyped, ?max_filter_versions: Integer) -> void
-    def initialize(scope, time_range:, limit:, historical_filter: nil,
-                   max_filter_versions: HistoricalFilter::DEFAULT_VERSION_LIMIT)
+    # `activity_tree` names the association paths whose changes also select a
+    # root, as an activity analysis reports them. Without one, only a root's
+    # own versions select it.
+    #: (untyped, time_range: TimeRange?, limit: Integer, ?historical_filter: untyped, ?max_filter_versions: Integer, ?activity_tree: AssociationTree?) -> void
+    def initialize(scope, time_range:, limit:, historical_filter: nil, # rubocop:disable Metrics/ParameterLists
+                   max_filter_versions: HistoricalFilter::DEFAULT_VERSION_LIMIT, activity_tree: nil)
       @scope = normalize_scope(scope)
       @time_range = time_range
       @limit = validate_limit(limit)
+      @related = unless activity_tree.nil? || activity_tree.empty?
+                   AssociationActivitySelection.new(@scope.model, tree: activity_tree,
+                                                                  time_range: time_range)
+                 end
       @historical_filter = unless historical_filter.nil?
                              HistoricalFilter.new(base_class, predicate: historical_filter,
                                                               time_range: time_range, limit: @limit,
@@ -58,17 +65,11 @@ module PaperTrailDiff
 
     #: () -> Result
     def call
-      return database_selection if @historical_filter.nil? && comparable_keys?
+      related = @related&.call || []
+      queries = subqueries(related)
+      return database_selection(queries) if queries
 
-      candidates = versioned_ids
-      candidates = @historical_filter.call(candidates) if @historical_filter && candidates.any?
-      return Result.new(records: [], unreachable: []) if candidates.empty?
-
-      live = live_ids(candidates)
-      Result.new(
-        records: selected_records(live),
-        unreachable: (candidates - live).map { |id| identity(id) }.freeze
-      )
+      plucked_selection(versioned_ids | AssociationActivitySelection.values(related).map(&:to_s))
     end
 
     private
@@ -77,18 +78,44 @@ module PaperTrailDiff
     # @rbs @time_range: TimeRange?
     # @rbs @limit: Integer
     # @rbs @historical_filter: untyped
+    # @rbs @related: AssociationActivitySelection?
 
     # Leaves the candidate set in the database. Plucking every root changed in
     # the window would cost memory and a statement proportional to all activity
     # in the window -- not to the relation or `limit:` -- so a report on one
     # record could read every id in a busy table. A subquery keeps the work
     # bounded by what the relation and the deletions actually contain.
-    #: () -> Result
-    def database_selection
-      candidates = window_versions.select(:item_id)
+    #: (Array[AssociationActivitySelection::Query]) -> Result
+    def database_selection(related)
+      candidates = [window_versions.select(:item_id)] + related.map(&:relation)
+      missing = (missing_ids + related_missing_ids(related)).uniq.sort
       Result.new(
         records: selected_records(candidates),
-        unreachable: missing_ids.map { |id| identity(id) }.freeze
+        unreachable: missing.map { |id| identity(id) }.freeze
+      )
+    end
+
+    # Comparing in SQL needs every subquery's column to share the key's type.
+    #: (Array[AssociationActivitySelection::source]) -> Array[AssociationActivitySelection::Query]?
+    def subqueries(related)
+      return unless @historical_filter.nil? && comparable_keys?
+
+      queries = [] #: Array[AssociationActivitySelection::Query]
+      related.each do |ids|
+        queries << ids if ids.is_a?(AssociationActivitySelection::Query) && ids.type == key_type
+      end
+      queries if queries.length == related.length
+    end
+
+    #: (Array[String]) -> Result
+    def plucked_selection(candidates)
+      candidates = @historical_filter.call(candidates) if @historical_filter && candidates.any?
+      return Result.new(records: [], unreachable: []) if candidates.empty?
+
+      live = live_ids(candidates)
+      Result.new(
+        records: live.empty? ? [] : selected_records([live]),
+        unreachable: (candidates - live).map { |id| identity(id) }.freeze
       )
     end
 
@@ -99,8 +126,18 @@ module PaperTrailDiff
       return false unless primary_key.is_a?(String)
 
       item_id = version_class.columns_hash['item_id']&.type
-      key = base_class.columns_hash[primary_key]&.type
-      !item_id.nil? && item_id == key
+      !item_id.nil? && item_id == key_type
+    end
+
+    #: () -> Symbol?
+    def key_type
+      base_class.columns_hash[primary_key.to_s]&.type
+    end
+
+    #: (Array[AssociationActivitySelection::Query]) -> Array[String]
+    def related_missing_ids(related)
+      live = base_class.unscoped.select(primary_key).arel
+      related.flat_map { |ids| ids.missing(live) }.map(&:to_s)
     end
 
     # Changed in the window but without a row, found with an anti-join instead
@@ -161,14 +198,15 @@ module PaperTrailDiff
     # Deduplicate records rather than adding SQL DISTINCT: an otherwise valid
     # relation may order by joined columns or select a PostgreSQL json column.
     # Read bounded pages until the relation ends or too many unique roots appear.
-    #: (untyped) -> Array[untyped]
-    def selected_records(live)
-      return [] if live.is_a?(Array) && live.empty?
-
+    # Each candidate source is an id list or a subquery; a record matching any
+    # of them is selected.
+    #: (Array[untyped]) -> Array[untyped]
+    def selected_records(candidates)
+      relation = candidate_relation(candidates)
       records = {} #: Hash[untyped, untyped]
       consumed = 0
       loop do
-        page = record_page(live, consumed)
+        page = record_page(relation, consumed)
         page.each { |record| records[record.id] ||= record }
         reject_oversized!(records.length)
         break if page.length < PAGE_SIZE
@@ -178,15 +216,20 @@ module PaperTrailDiff
       records.values.freeze
     end
 
+    #: (Array[untyped]) -> untyped
+    def candidate_relation(candidates)
+      candidates.map do |ids|
+        conditions = { primary_key => ids } #: Hash[untyped, untyped]
+        ordered_scope.where(conditions)
+      end.reduce(:or)
+    end
+
     #: (untyped, Integer) -> Array[untyped]
-    def record_page(live, consumed)
+    def record_page(relation, consumed)
       count = page_limit(consumed)
       return [] if count.zero?
 
-      # An id list or a candidate subquery; both read the same way in SQL.
-      conditions = { primary_key => live } #: Hash[untyped, untyped]
-      ordered_scope.where(conditions)
-                   .offset((@scope.offset_value || 0) + consumed).limit(count).to_a
+      relation.offset((@scope.offset_value || 0) + consumed).limit(count).to_a
     end
 
     # Preserve explicit ordering: SQL Server rejects duplicate ORDER BY columns,

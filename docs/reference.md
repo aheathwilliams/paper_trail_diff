@@ -519,9 +519,18 @@ It accepts `associations:`, `ignore:`, `snapshots:`, `group:`,
 
 ### Which records are selected
 
-- **A record needs its own version in the window.** Editing only a comment does
-  not select its article. Once an article is selected, its comment activity is
-  included when you request `associations: [:comments]`.
+- **A record is selected when it, or a record on a requested association,
+  changed in the window.** With `activity: true`, which `report` always uses,
+  editing only a comment selects its article when you request
+  `associations: [:comments]`. A comment that moved between articles selects
+  both. Nested paths count at every level, and a `has_many :through` counts its
+  join rows too. Without `activity: true`, an analysis compares a record's own
+  versions and cannot show a change to its associations alone, so only a
+  record's own version selects it.
+- **An analysis can still be empty.** A record is selected by any version on its
+  paths, but its analysis compares only the state you requested. A join row
+  whose role changed, or a version that touched only ignored columns, selects a
+  record with nothing to report.
 - **A relation checks current values.** `Order.where(status: "open")` means open
   now, not open during the window. Use `historical_filter:` to select by past
   values.
@@ -533,14 +542,17 @@ It accepts `associations:`, `ignore:`, `snapshots:`, `group:`,
   ID tie-breaker to any other order. If a join repeats a record, it is analyzed
   once, in order of first appearance.
 - Selection still scans the versions in the window, so keep windows reasonable
-  for large tables.
+  for large tables. Each requested association adds one query per level, however
+  many records it selects. Changes to associations are found from PT-AT's
+  `version_associations`, so history recorded before PT-AT was installed selects
+  nothing.
 
 ### Deleted records
 
 A deleted record cannot be tested against a relation's conditions, because it
 has no row. Records that changed in the window but no longer exist are listed in
-`unreachable`. It is not paginated and does not mean those records matched the
-relation.
+`unreachable`, including those selected by a change to their associations. It
+is not paginated and does not mean those records matched the relation.
 
 `include_deleted: true` also analyzes them from their `destroy` versions and
 returns the results in `deleted`, keyed the same way. A value is `nil` when no

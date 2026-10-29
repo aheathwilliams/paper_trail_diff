@@ -36,6 +36,13 @@ module PaperTrailDiff
     # : (Hash[Symbol, String], String, untyped) -> String
     def activity_condition: (Hash[Symbol, String], String, untyped) -> String
 
+    # A time quoted on its own takes the adapter's default precision, which on
+    # SQL Server is `datetime` and rounds to 1/300 second. Serializing through
+    # the column's type quotes it as a bound value would be, at the precision
+    # `created_at` is stored with.
+    # : (untyped, untyped) -> String
+    def quote_time: (untyped, untyped) -> String
+
     # : (untyped, String, String) -> String
     def column: (untyped, String, String) -> String
 

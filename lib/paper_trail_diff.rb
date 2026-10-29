@@ -77,6 +77,8 @@ require_relative 'paper_trail_diff/analysis_batch'
 require_relative 'paper_trail_diff/deleted_analysis_batch'
 require_relative 'paper_trail_diff/scoped_analysis'
 require_relative 'paper_trail_diff/historical_filter'
+require_relative 'paper_trail_diff/association_activity_edge'
+require_relative 'paper_trail_diff/association_activity_selection'
 require_relative 'paper_trail_diff/scoped_root_selection'
 require_relative 'paper_trail_diff/scoped_analysis_builder'
 require_relative 'paper_trail_diff/batched_root_analyzer'
@@ -89,6 +91,7 @@ require_relative 'paper_trail_diff/timeline_builder'
 require_relative 'paper_trail_diff/activity_range'
 require_relative 'paper_trail_diff/activity_event'
 require_relative 'paper_trail_diff/activity_child_candidate_loader'
+require_relative 'paper_trail_diff/activity_target_candidate_loader'
 require_relative 'paper_trail_diff/activity_version_collector'
 require_relative 'paper_trail_diff/activity_snapshot_sequence'
 require_relative 'paper_trail_diff/activity_history'
@@ -278,7 +281,9 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
     end
 
     # Analyzes every root the relation reaches whose history moved inside the
-    # window. Joined duplicates are read in bounded pages and analyzed once.
+    # window. With `activity: true`, a change to a record on one of the
+    # requested association paths also counts, because the activity timeline
+    # reports it. Joined duplicates are read in bounded pages and analyzed once.
     #
     # `limit:` is required and exceeding it raises. Selection moves into the gem
     # here. The relation's own limit/offset select the live page; this separate
@@ -328,7 +333,8 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
       )
     end
 
-    # Recent root and selected-child activity through the current saved state.
+    # Recent root and selected-child activity through the current saved state,
+    # for every root that changed or whose requested associations did.
     # Historical windows remain explicit on analyze_scope; this entry point is
     # deliberately named for a report through now rather than an as-of query.
     #: (untyped, since: untyped, limit: Integer, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?snapshots: bool, ?group: Symbol?, ?include_deleted: bool, ?historical_filter: untyped, ?max_filter_versions: Integer, ?allow_expensive: bool) -> ScopedAnalysis

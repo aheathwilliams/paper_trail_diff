@@ -37,8 +37,14 @@ module PaperTrailDiff
     # : (Hash[Symbol, untyped], untyped, String) -> Hash[String, untyped]
     def through_groups: (Hash[Symbol, untyped], untyped, String) -> Hash[String, untyped]
 
+    # Every target the owners pointed at in the range, not only those their own
+    # changes there recorded: an author renamed under an article nobody edited
+    # is still that article's activity.
     # : (untyped, Array[untyped], untyped) -> Hash[String, untyped]
     def belongs_to_groups: (untyped, Array[untyped], untyped) -> Hash[String, untyped]
+
+    # : (untyped, Array[untyped], untyped) -> Hash[String, untyped]
+    def unprepared_belongs_to_groups: (untyped, Array[untyped], untyped) -> Hash[String, untyped]
 
     # : (untyped, Array[untyped], untyped) -> Hash[String, untyped]
     def direct_child_groups: (untyped, Array[untyped], untyped) -> Hash[String, untyped]
@@ -46,8 +52,8 @@ module PaperTrailDiff
     # : (untyped, Array[untyped], untyped) -> Hash[String, untyped]
     def habtm_groups: (untyped, Array[untyped], untyped) -> Hash[String, untyped]
 
-    # : (Array[untyped], untyped) -> Hash[String, untyped]
-    def identity_groups: (Array[untyped], untyped) -> Hash[String, untyped]
+    # : (Array[untyped], untyped) ?{ (untyped, untyped) -> bool } -> Hash[String, untyped]
+    def identity_groups: (Array[untyped], untyped) ?{ (untyped, untyped) -> bool } -> Hash[String, untyped]
 
     # : (untyped, Array[untyped]) -> Hash[Symbol, untyped]
     def group: (untyped, Array[untyped]) -> Hash[Symbol, untyped]

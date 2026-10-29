@@ -3,8 +3,10 @@
 module PaperTrailDiff
   # Analyzes missing roots together without pretending that they have live rows.
   class DeletedAnalysisBatch
-    # : (untyped, identities: Array[Array[String]], time_range: TimeRange?, analyzer: untyped, history_preparer: untyped, version_scope: untyped) -> void
-    def initialize: (untyped, identities: Array[Array[String]], time_range: TimeRange?, analyzer: untyped, history_preparer: untyped, version_scope: untyped) -> void
+    # `context_required` reads a root that did not change in the window from
+    # the version after it, so its associations' activity can be reported.
+    # : (untyped, identities: Array[Array[String]], time_range: TimeRange?, analyzer: untyped, history_preparer: untyped, version_scope: untyped, context_required: bool) -> void
+    def initialize: (untyped, identities: Array[Array[String]], time_range: TimeRange?, analyzer: untyped, history_preparer: untyped, version_scope: untyped, context_required: bool) -> void
 
     # : () -> Hash[Array[String], Analysis?]
     def call: () -> Hash[Array[String], Analysis?]
@@ -16,6 +18,8 @@ module PaperTrailDiff
 
     @analyzer: untyped
 
+    @context_required: bool
+
     @history_preparer: untyped
 
     @identities: Array[Array[String]]
@@ -26,11 +30,19 @@ module PaperTrailDiff
 
     @version_scope: untyped
 
+    # A root destroyed before the window had no state inside it to read, so
+    # only the others take the version after the window as context.
+    # : (Array[untyped], Array[untyped]) -> Hash[Array[String], RootVersionPlan]
+    def plans: (Array[untyped], Array[untyped]) -> Hash[Array[String], RootVersionPlan]
+
+    # : (Array[untyped], bool) -> Hash[Array[String], RootVersionPlan]
+    def plans_for: (Array[untyped], bool) -> Hash[Array[String], RootVersionPlan]
+
     # These records supply identity and model metadata only. Every reported
     # value comes from the batched historical plan; no per-root reify or live
     # lookup is needed to get into the comparison engine.
-    # : () -> Array[untyped]
-    def historical_roots: () -> Array[untyped]
+    # : (Array[untyped]) -> Array[untyped]
+    def historical_roots: (Array[untyped]) -> Array[untyped]
 
     # : () -> Array[untyped]
     def destroy_versions: () -> Array[untyped]

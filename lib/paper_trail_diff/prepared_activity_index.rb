@@ -11,6 +11,7 @@ module PaperTrailDiff
       @roots = root_versions.group_by { |version| [version.item_type, version.item_id.to_s] }
       @nodes = {} #: Hash[String, Array[untyped]]
       @children = {} #: Hash[Array[String], untyped]
+      @targets = {} #: Hash[Array[String], untyped]
       @rows = {} #: Hash[Array[String], Hash[String, Array[untyped]]]
     end
 
@@ -38,6 +39,21 @@ module PaperTrailDiff
       selected.uniq
     end
 
+    # The `belongs_to` targets each owner pointed at in the range: at its start
+    # and after each change inside it, plus the live row at a current end.
+    #: (untyped, Array[untyped], untyped, ActivityRange) -> Array[ActivityTargetCandidateLoader::Row]
+    def target_rows(model, ids, reflection, range)
+      key = [model.base_class.name.to_s, reflection.name.to_s]
+      historical, live = @targets[key] ||= target_candidates(model, reflection)
+      rows = eligible_rows(model, rows_for(historical, ids), range)
+      range.current_end? ? rows + rows_for(live, ids) : rows
+    end
+
+    #: (untyped, untyped) -> bool
+    def loaded?(model, id)
+      @records.loaded?(model, id)
+    end
+
     #: (untyped, Array[untyped], untyped, ?transactions: bool) -> Array[untyped]
     def association_rows(model, selected_versions, reflection, transactions: false)
       key = [model.base_class.name.to_s, reflection.name.to_s]
@@ -52,6 +68,7 @@ module PaperTrailDiff
     # @rbs @roots: Hash[Array[String], Array[untyped]]
     # @rbs @nodes: Hash[String, Array[untyped]]
     # @rbs @children: Hash[Array[String], untyped]
+    # @rbs @targets: Hash[Array[String], untyped]
     # @rbs @rows: Hash[Array[String], Hash[String, Array[untyped]]]
 
     #: (untyped, Array[untyped], untyped, ActivityRange) -> Array[untyped]
@@ -59,7 +76,8 @@ module PaperTrailDiff
       empty = [] #: Array[untyped]
       ids.flat_map do |id|
         historical.fetch(id.to_s, empty).filter_map do |row|
-          row[1] if eligible_child?(model, row, range)
+          _owner, child_id, timestamp, event = row
+          child_id if eligible_version?(model, child_id, timestamp, event, range)
         end
       end
     end
@@ -84,12 +102,28 @@ module PaperTrailDiff
              .transform_values { |rows| rows.map(&:last) }]
     end
 
+    #: (Hash[String, Array[ActivityTargetCandidateLoader::Row]], Array[untyped]) -> Array[ActivityTargetCandidateLoader::Row]
+    def rows_for(grouped, ids)
+      ids.flat_map { |id| grouped[id.to_s] || [] }
+    end
+
+    #: (untyped, Array[ActivityTargetCandidateLoader::Row], ActivityRange) -> Array[ActivityTargetCandidateLoader::Row]
+    def eligible_rows(model, rows, range)
+      rows.select { |row| eligible_version?(model, row.owner_id, row.created_at, row.event, range) }
+    end
+
+    #: (untyped, untyped) -> untyped
+    def target_candidates(model, reflection)
+      loader = ActivityTargetCandidateLoader.new(model, node_ids(model), reflection, @range)
+      [loader.historical_rows.group_by { |row| row.owner_id.to_s },
+       loader.current_rows.group_by { |row| row.owner_id.to_s }]
+    end
+
     # Mirrors VersionAssociationCandidateScope's before-window rule. The loaded
     # series includes changes to other owners too, so an old membership cannot
     # survive a later pre-window reassignment just because that owner is absent.
-    #: (untyped, Array[untyped], ActivityRange) -> bool
-    def eligible_child?(model, row, range)
-      _owner, id, timestamp, event = row
+    #: (untyped, untyped, untyped, String?, ActivityRange) -> bool
+    def eligible_version?(model, id, timestamp, event, range)
       return timestamp <= range.end_time if timestamp >= range.start_time
       return false if event == 'destroy'
 
