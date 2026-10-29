@@ -58,6 +58,13 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Batch reads of a `has_many :through` and of a polymorphic `belongs_to` no
+  longer call `reify` on each root version. They are read from stored
+  attributes like other associations. In the reconstruction probe, `report`
+  over a through went from 7 `reify` calls per root to none and builds about
+  half as many model instances. Results are unchanged. A type that names no
+  class, a default-scoped or unversioned target, and scoped associations still
+  take the record path.
 - The README recipe for deleted records also reads each record as it was just
   before deletion, which a record created inside the window has no other
   snapshot of.

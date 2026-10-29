@@ -16,6 +16,35 @@ The benchmark exercises `analyze_scope` with genuine PaperTrail history. It is
 a local SQLite baseline for finding work inside the gem, not a production
 latency guarantee or a comparison of SQL dialects.
 
+## Fewer `reify` calls: 2026-10-29
+
+The `reify` calls that remained came from one place: building a root's
+snapshot from its own version (`HistoricalSnapshotStore#snapshot_from_version`).
+That snapshot is built from stored attributes only when every requested
+association can be read the same way, and `has_many :through` and polymorphic
+`belongs_to` could not. So the whole root was rebuilt with `reify`, and its
+associations as model instances. Both are now read from stored attributes,
+resolving each part of a through as the record path does, and keeping only
+join records of the `source_type:` when there is one. A type that names no
+class, a default-scoped or unversioned target, and every scoped association
+still take the record path as before.
+
+Counts from `benchmark/investigation/reconstruction.rb` at 1 / 5 / 20 roots.
+`source_type_through` and `polymorphic_belongs_to` are new probe scenarios: a
+holder's links to an author and to a tag, one moving to another author.
+
+| Scenario | `reify` before | `reify` after | Model instances before | Model instances after |
+| --- | --- | --- | --- | --- |
+| `through_has_many` | 7 / 35 / 140 | 0 / 0 / 0 | 36 / 180 / 720 | 14 / 70 / 280 |
+| `source_type_through` | 7 / 35 / 140 | 0 / 0 / 0 | 45 / 225 / 900 | 22 / 110 / 440 |
+| `polymorphic_belongs_to` | 2 / 10 / 40 | 0 / 0 / 0 | 14 / 70 / 280 | 10 / 50 / 200 |
+
+Query counts are unchanged: 20, 20 and 14 at every size. `belongs_to`,
+`comments` and `checkpoints` made no `reify` calls before and are unchanged.
+Model instances still grow with the roots: they are the snapshots' own records
+and, for the two polymorphic scenarios, a few states the activity timeline
+builds as records.
+
 ## Through associations: 2026-10-29
 
 A `has_many :through` whose source is a `has_many` used to fall back to PT-AT
@@ -28,8 +57,8 @@ now reads prepared history like any other through. The five-root
 | Before, with `allow_expensive: true` | 56 / 200 / 740 | 15 / 75 / 300 |
 | After, without an opt-in | 20 / 20 / 20 | 7 / 35 / 140 |
 
-The `reify` calls still grow with the roots: each root's own versions are
-still rebuilt that way.
+The `reify` calls still grew with the roots: each root's own versions were
+still rebuilt that way, until the change above.
 
 ## Direct reconstruction follow-up: 2026-09-07
 

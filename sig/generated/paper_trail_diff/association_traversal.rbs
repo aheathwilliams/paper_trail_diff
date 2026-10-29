@@ -14,6 +14,11 @@ module PaperTrailDiff
     # : (untyped, untyped) -> bool
     def self.source_type_join?: (untyped, untyped) -> bool
 
+    # The same check for a join row read as stored attributes, given the
+    # value of its type column.
+    # : (untyped, untyped) -> bool
+    def self.source_type_member?: (untyped, untyped) -> bool
+
     # The class a stored type names, or nil when it names none.
     # This class defines no constants of its own, so the one mutation left,
     # `const_get` on it rather than on Object, finds the same class.

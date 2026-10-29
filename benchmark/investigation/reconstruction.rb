@@ -8,20 +8,39 @@ require 'paper_trail'
 require_relative '../../lib/paper_trail_diff'
 
 scenarios = %w[scalar comments checkpoints belongs_to limited owner default_scope
-               through_has_many callback callable without_changes comments_without_changes]
+               through_has_many callback callable without_changes comments_without_changes
+               polymorphic_belongs_to source_type_through]
 scenario = ARGV.fetch(0)
 size = Integer(ARGV.fetch(1))
 abort 'invalid scenario or size' unless scenarios.include?(scenario) && size.positive?
 
 ENV.delete('PAPER_TRAIL_DIFF_DATABASE_URL')
 require_relative '../../spec/support/association_database'
+polymorphic = %w[polymorphic_belongs_to source_type_through].include?(scenario)
+require_relative '../../spec/support/source_type_database' if polymorphic
 
 if scenario == 'default_scope'
   TrackedComment.class_eval { default_scope { where.not(body: 'hidden') } }
 end
 TrackedArticle.after_initialize { TrackedTag.count } if scenario == 'callback'
 
+# Polymorphic links from a holder: one to an author that is renamed, one that
+# moves from a tag to another author.
+polymorphic_roots = lambda do
+  holder = SourceTypeHolder.create!(name: 'Before')
+  author = SourceTypeAuthor.create!(name: 'Before')
+  link = SourceTypeLink.create!(holder: holder, target: author)
+  moved = SourceTypeLink.create!(holder: holder, target: SourceTypeTag.create!(name: 'Tag'))
+  holder.update!(name: 'Middle')
+  author.update!(name: 'Middle')
+  moved.update!(target: SourceTypeAuthor.create!(name: 'Other'))
+  link.update!(holder: holder)
+  holder.update!(name: 'After')
+  scenario == 'polymorphic_belongs_to' ? moved : holder
+end
 roots = Array.new(size) do
+  next polymorphic_roots.call if polymorphic
+
   author = TrackedAuthor.create!(name: 'Author')
   article = TrackedArticle.create!(title: 'Before', author: author)
   comment = article.comments.create!(body: 'Before')
@@ -39,9 +58,16 @@ Time.define_singleton_method(:now) { captured_at }
 counts = Hash.new(0)
 reified_ids = Hash.new(0)
 present_reified_ids = Hash.new(0)
+# Where each reify comes from: the version's model and the innermost gem frame.
+reify_origins = Hash.new(0)
+record_reify_origin = lambda do |item_type|
+  origin = caller_locations.find { |location| location.path.include?('/paper_trail_diff/') }
+  reify_origins["#{item_type} #{origin.to_s.sub(%r{.*/lib/}, 'lib/')}"] += 1 if origin
+end
 PaperTrail::Version.prepend(Module.new do
   define_method(:reify) do |*args, **kwargs|
     counts[:reify] += 1
+    record_reify_origin.call(item_type)
     reified_ids[[item_type, id]] += 1
     present_reified_ids[[item_type, id]] += 1 if object
     super(*args, **kwargs)
@@ -71,12 +97,19 @@ association = { 'comments' => :comments, 'comments_without_changes' => :comments
                 'checkpoints' => :comments, 'belongs_to' => :author,
                 'limited' => :limited_comments,
                 'owner' => :owner_comments, 'default_scope' => :comments,
-                'through_has_many' => :comments }[scenario]
+                'through_has_many' => :comments, 'polymorphic_belongs_to' => :target,
+                'source_type_through' => :linked_authors }[scenario]
 options = { since: Time.now.utc - 3600, limit: size, snapshots: true,
             associations: Array(association) }
 options[:allow_expensive] = true if ENV['PTD_PROBE_ALLOW_EXPENSIVE'] == '1'
 options[:historical_filter] = ->(state) { state.comments.exists? } if scenario == 'callable'
-model = scenario == 'through_has_many' ? TrackedAuthor : TrackedArticle
+model = case scenario
+        when 'through_has_many' then TrackedAuthor
+        when 'source_type_through' then SourceTypeHolder
+        # Each holder's other link changes in the window too, so name the roots.
+        when 'polymorphic_belongs_to' then SourceTypeLink.where(id: roots.map(&:id))
+        else TrackedArticle
+        end
 statements = Hash.new(0)
 query_origins = Hash.new(0)
 callback = lambda do |*args|
@@ -123,5 +156,6 @@ puts JSON.generate(
   unique_reified_versions: reified_ids.length,
   repeated_reify_calls: reified_ids.values.sum { |count| count - 1 },
   repeated_present_reify_calls: present_reified_ids.values.sum { |count| count - 1 },
+  reify_origins: reify_origins,
   statements: statements, query_origins: query_origins, error: error
 )

@@ -36,7 +36,8 @@ only the association paths you request:
 
 From that, the gem builds each state without querying again. Plain recorded
 attributes are read straight from the stored version, without creating a model
-instance. Models with initialization callbacks, custom attribute types or
+instance, including the members of a `has_many :through` and the target of a
+polymorphic `belongs_to`. Models with initialization callbacks, custom attribute types or
 defaults, default scopes, or encrypted attributes are rebuilt with PaperTrail's
 `reify` instead, so their behavior is kept.
 

@@ -19,10 +19,16 @@ module PaperTrailDiff
     # A through's `foreign_type` is its polymorphic source's.
     #: (untyped, untyped) -> bool
     def self.source_type_join?(reflection, join)
-      source_type = reflection.options[:source_type]
-      return true unless source_type
+      reflection.options[:source_type].nil? ||
+        source_type_member?(reflection, join.public_send(reflection.foreign_type))
+    end
 
-      join.public_send(reflection.foreign_type) == source_type.to_s
+    # The same check for a join row read as stored attributes, given the
+    # value of its type column.
+    #: (untyped, untyped) -> bool
+    def self.source_type_member?(reflection, type)
+      source_type = reflection.options[:source_type]
+      source_type.nil? || type == source_type.to_s
     end
 
     # The class a stored type names, or nil when it names none.
