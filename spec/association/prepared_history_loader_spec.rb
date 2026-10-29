@@ -2,6 +2,17 @@
 
 require_relative '../support/association_database'
 
+# Throughs whose parts are throughs. Declared here, on a class of their own,
+# so the shared fixtures keep their association lists.
+class LoaderSpecAuthor < ActiveRecord::Base
+  self.table_name = 'tracked_authors'
+  has_many :articles, class_name: 'TrackedArticle', foreign_key: :author_id, inverse_of: false
+  has_many :comments, through: :articles
+  has_many :comment_reviewers, through: :comments, source: :reviewer
+  has_many :article_contributors, through: :articles, source: :contributors
+  has_paper_trail
+end
+
 RSpec.describe PaperTrailDiff::PreparedHistoryLoader do
   before do
     PaperTrail::VersionAssociation.delete_all
@@ -234,6 +245,28 @@ RSpec.describe PaperTrailDiff::PreparedHistoryLoader do
     expect(ids(history, TrackedArticle, :authorships, 'TrackedAuthorship')).to eq([own.id])
     expect(ids(history, TrackedArticle, :profile, 'TrackedProfile')).to eq([profile.id])
     expect(ids(history, TrackedAuthor, :authorships, 'TrackedAuthorship')).to eq([written.id])
+  end
+
+  # Keys are offset from the authors' so that a part read by another key
+  # cannot find the same rows.
+  it 'prepares each part of a through that is itself a through' do
+    TrackedArticle.create!(title: 'Offset')
+    author = LoaderSpecAuthor.create!(name: 'Author')
+    reviewer, contributor = %w[Reviewer Contributor].map do |name|
+      TrackedAuthor.create!(name: name)
+    end
+    article = TrackedArticle.create!(title: 'Article', author_id: author.id)
+    comment = article.comments.create!(body: 'comment', reviewer: reviewer)
+    TrackedAuthorship.create!(article: article, author: contributor, role: 'role')
+
+    history = load_history(author, %i[comment_reviewers article_contributors])
+
+    expect(ids(history, LoaderSpecAuthor, :comments, 'TrackedComment')).to eq([comment.id])
+    expect(ids(history, LoaderSpecAuthor, :comment_reviewers, 'TrackedAuthor'))
+      .to eq([reviewer.id])
+    expect(ids(history, TrackedArticle, :contributors, 'TrackedAuthor')).to eq([contributor.id])
+    expect(ids(history, LoaderSpecAuthor, :article_contributors, 'TrackedAuthor'))
+      .to eq([contributor.id])
   end
 
   # The author path reads the source edge for the author's authorship first;

@@ -38,6 +38,8 @@ module PaperTrailDiff
     # : (untyped, Array[untyped], untyped) -> Hash[String, Hash[Symbol, untyped]]
     def prepare_reflection: (untyped, Array[untyped], untyped) -> Hash[String, Hash[Symbol, untyped]]
 
+    # Either part can itself be a through, which has no key of its own to
+    # read, so each part is prepared as what it is.
     # : (untyped, Array[untyped], untyped) -> Hash[String, Hash[Symbol, untyped]]
     def prepare_through: (untyped, Array[untyped], untyped) -> Hash[String, Hash[Symbol, untyped]]
 

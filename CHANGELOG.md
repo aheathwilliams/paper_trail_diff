@@ -112,6 +112,11 @@ project follows [Semantic Versioning](https://semver.org/).
   error, where discovery used to raise `ArgumentError`, `NameError`, or
   `NoMethodError` from inside the reflection, or list a path that raised when
   requested.
+- A `has_many :through` whose `through:` is itself a `has_many :through`, such
+  as `has_many :comment_reviewers, through: :comments, source: :reviewer` with
+  `comments` through `articles`, reports its changes in analyses, timelines,
+  and batches. It used to read as empty at every point, so it never reported a
+  change.
 
 ### Development
 
