@@ -684,6 +684,12 @@ comments.changed.first.associations["replies"].added
 - `has_many :through` uses the versioned join model's history, so join-model
   attributes are available. HABTM reports membership and the target's
   attributes; it has no join model, so it has no join attributes.
+- A `has_many :through` that goes through a HABTM, as its `through:`, its
+  `source:`, or further down its chain, raises `UnsupportedAssociationError`
+  up front in every method. Active Record joins a HABTM through a hidden
+  model with no versions, so the through cannot be rebuilt from history.
+  Replace the HABTM with a `has_many :through` a versioned join model to
+  compare it.
 - Requesting associations for a historical state without PT-AT raises
   `AssociationTrackingUnavailableError`. Unknown names raise
   `UnknownAssociationError`; unsupported macros raise
@@ -1034,7 +1040,7 @@ All errors inherit from `PaperTrailDiff::Error`.
 | `FilterLimitExceededError` | `historical_filter:` needs more than `max_filter_versions:` |
 | `AssociationTrackingUnavailableError` | Association history is requested without PT-AT |
 | `UnknownAssociationError` | An association name does not exist |
-| `UnsupportedAssociationError` | An association's macro is not supported, or a path continues past a polymorphic `belongs_to` |
+| `UnsupportedAssociationError` | An association's macro is not supported, a path continues past a polymorphic `belongs_to`, or a `has_many :through` goes through a HABTM |
 | `UnversionedAssociationError` | An association's target model has no `has_paper_trail`, including the class a polymorphic `belongs_to` names |
 | `IncompleteAssociationHistoryError` | PT-AT did not record enough to rebuild an association, such as HABTM without a transaction, or a polymorphic type names no class |
 | `UnsupportedLiveActivityError` | A HABTM activity range ends at the current record |

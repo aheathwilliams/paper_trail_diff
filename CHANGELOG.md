@@ -94,6 +94,15 @@ project follows [Semantic Versioning](https://semver.org/).
   window's start or end on the side it was saved. The window's bounds used to
   be rounded to 1/300 second, so such a version could be read as outside the
   window, or one just past its end as inside it.
+- A `has_many :through` that goes through a `has_and_belongs_to_many`, as its
+  `through:`, its `source:`, or further down its chain, raises
+  `UnsupportedAssociationError` up front in every method, naming the path and
+  the HABTM. Comparing two versions used to raise `NoMethodError` from inside
+  PT-AT, and analyses `ActiveRecord::StatementInvalid`. A `has_many :through`
+  Active Record cannot follow at all, such as one through a polymorphic
+  `belongs_to`, likewise raises Active Record's own error in every method,
+  where historical work used to fail partway with `ArgumentError` or
+  `NoMethodError`.
 
 ### Development
 
@@ -111,6 +120,9 @@ project follows [Semantic Versioning](https://semver.org/).
   `PreparedEdgeLoader`, `ActivityTimelineBuilder`,
   `ActivityTransactionGrouper`, and `BatchSafety`, each with a spec of its
   own. All 10,732 mutations across the 24 classes are caught.
+- Mutation testing also covers `AssociationTraversal`, which decides which
+  association paths a request accepts, with a spec of its own; all 755 of its
+  mutations are caught.
 
 ## [0.13.1] - 2026-10-28
 

@@ -58,6 +58,7 @@ passes is behavior nothing checks. `mutant.yml` lists the classes it mutates:
   `ActivityTargetCandidateLoader`;
 - what activity a record shows: `ActivityTimelineBuilder` and
   `ActivityTransactionGrouper`;
+- which association paths a request accepts: `AssociationTraversal`;
 - which association paths a batch refuses: `BatchSafety`.
 
 The specs for the classes that read the database use tables of their own

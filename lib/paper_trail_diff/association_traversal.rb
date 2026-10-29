@@ -15,6 +15,9 @@ module PaperTrailDiff
     end
 
     # The class a stored type names, or nil when it names none.
+    # This class defines no constants of its own, so the one mutation left,
+    # `const_get` on it rather than on Object, finds the same class.
+    # mutant:disable
     #: (String) -> untyped
     def self.named_class(type)
       Object.const_get(type)
@@ -97,24 +100,21 @@ module PaperTrailDiff
       raise UnsupportedLiveActivityError, message
     end
 
+    # A model and a tree resolve to the same reflections at any path; the path
+    # only names a failure, and a failure is not cached.
     #: (untyped, AssociationTree, path: String) -> Array[untyped]
     def reflections_for(model_class, tree, path:)
-      key = [model_class.name.to_s, path, tree.object_id]
-      @reflection_cache[key] ||= requested_reflections(model_class, tree, path)
+      @reflection_cache[[model_class, tree]] ||= requested_reflections(model_class, tree, path)
     end
 
+    # Active Record names keys as strings. A polymorphic child also points back
+    # with its type column; `type` is nil for any other.
     #: (untyped) -> Array[String]
     def incoming_relationship_columns(reflection)
-      direct = %i[has_one has_many].include?(reflection.macro) && !reflection.options[:through]
+      direct = %i[has_one has_many].include?(reflection.macro) && !reflection.through_reflection?
       return [] unless direct
 
-      foreign_keys = Array(reflection.foreign_key)
-      # @type var foreign_keys: Array[untyped]
-      columns = foreign_keys.map do |column| # rubocop:disable Style/SymbolProc
-        column.to_s
-      end
-      columns << reflection.type.to_s if reflection.options[:as]
-      columns
+      Array(reflection.foreign_key) + Array(reflection.type)
     end
 
     private
@@ -125,11 +125,12 @@ module PaperTrailDiff
     #: (untyped, AssociationTree, path: String) -> Array[Array[untyped]]
     def collect_reflections(model_class, tree, path:)
       reflections_for(model_class, tree, path: path).flat_map do |reflection|
-        child_path = join_path(path, reflection.name.to_s)
+        child_path = Support.association_path(path, reflection.name)
         result = [[child_path, reflection]]
-        subtree = tree.child(reflection.name)
-        next result unless subtree && !subtree.empty? && !reflection.polymorphic?
+        next result if reflection.polymorphic?
 
+        # A leaf's subtree is empty and adds nothing.
+        subtree = tree.child(reflection.name) #: AssociationTree
         result + collect_reflections(reflection.klass, subtree, path: child_path)
       end
     end
@@ -137,10 +138,10 @@ module PaperTrailDiff
     #: (untyped, AssociationTree, path: String) -> void
     def validate_tree!(model_class, tree, path:)
       reflections_for(model_class, tree, path: path).each do |reflection|
-        subtree = tree.child(reflection.name)
-        next unless subtree && !subtree.empty?
+        subtree = tree.child(reflection.name) #: AssociationTree
+        next if subtree.empty?
 
-        child_path = join_path(path, reflection.name.to_s)
+        child_path = Support.association_path(path, reflection.name)
         reject_polymorphic_descent!(reflection, subtree, child_path)
         validate_tree!(reflection.klass, subtree, path: child_path)
       end
@@ -160,13 +161,13 @@ module PaperTrailDiff
     #: (untyped, AssociationTree, String) -> Array[untyped]
     def requested_reflections(model_class, tree, path)
       tree.children.map do |name, _subtree|
-        resolve_reflection(model_class, name, join_path(path, name))
+        resolve_reflection(model_class, name, Support.association_path(path, name))
       end.freeze
     end
 
     #: (untyped, String, String) -> untyped
     def resolve_reflection(model_class, name, full_path)
-      reflection = model_class.reflect_on_association(name.to_sym)
+      reflection = model_class.reflect_on_association(name)
       raise UnknownAssociationError, "unknown association: #{full_path}" unless reflection
 
       if paper_trail_versions?(model_class, reflection)
@@ -177,8 +178,40 @@ module PaperTrailDiff
         raise UnsupportedAssociationError,
               "unsupported association #{full_path}: #{reflection.macro}"
       end
+      reject_habtm_through!(reflection, full_path)
 
       reflection
+    end
+
+    # Active Record joins a HABTM through a hidden model of its own, which has
+    # no versions and no reader that PT-AT or prepared history can follow, so a
+    # through that crosses one would fail partway through reconstruction.
+    #: (untyped, String) -> void
+    def reject_habtm_through!(reflection, path)
+      habtm = habtm_in_chain(reflection)
+      return unless habtm
+
+      raise UnsupportedAssociationError,
+            "unsupported association #{path}: it goes through " \
+            "#{habtm.active_record.name}##{habtm.name}, a has_and_belongs_to_many, " \
+            'whose hidden join model has no history to compare'
+    end
+
+    # The through and source reflections of a through are the hidden ones, a
+    # has_many in place of each HABTM, so only the public reflection of the
+    # same name shows the HABTM. Active Record's own check, which it runs on
+    # first use anyway, explains a through it cannot follow before the chain
+    # below it is read.
+    #: (untyped) -> untyped
+    def habtm_in_chain(reflection)
+      return unless reflection.through_reflection?
+
+      reflection.check_validity!
+      parts = [reflection.through_reflection, reflection.source_reflection]
+      parts.filter_map do |part|
+        link = part.active_record.reflect_on_association(part.name)
+        habtm_reflection?(link) ? link : habtm_in_chain(link)
+      end.first
     end
 
     #: (untyped, untyped) -> bool
@@ -189,15 +222,7 @@ module PaperTrailDiff
 
     #: (untyped) -> bool
     def habtm_reflection?(reflection)
-      return true if reflection.macro == :has_and_belongs_to_many
-      return false unless reflection.options[:through]
-
-      habtm_reflection?(reflection.through_reflection)
-    end
-
-    #: (String, String) -> String
-    def join_path(parent, name)
-      parent.empty? ? name : "#{parent}.#{name}"
+      reflection.macro == :has_and_belongs_to_many
     end
   end
 end
