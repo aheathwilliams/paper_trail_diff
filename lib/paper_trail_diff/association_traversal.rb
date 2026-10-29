@@ -66,7 +66,7 @@ module PaperTrailDiff
     def self.unsupported_reason(model_class, reflection, root:)
       return 'PaperTrail versions' if paper_trail_versions?(model_class, reflection)
       return reflection.macro.to_s unless SUPPORTED_ASSOCIATION_MACROS.include?(reflection.macro)
-      return habtm_below_root(reflection) if reflection.macro == :has_and_belongs_to_many && !root
+      return habtm_reason(reflection, root) if reflection.macro == :has_and_belongs_to_many
 
       habtm = habtm_in_chain(reflection)
       return unless habtm
@@ -85,6 +85,22 @@ module PaperTrailDiff
         'below the root, and a root checkpoint records HABTM membership for the root alone'
     end
     private_class_method :habtm_below_root
+
+    # PT-AT records a HABTM's membership by loading the association, scope and
+    # target default scope applied, so a target outside the scope when the
+    # owner saved is never recorded. One that enters it before the next save
+    # is a member then that history cannot hold.
+    #: (untyped, bool) -> String?
+    def self.habtm_reason(reflection, root)
+      return habtm_below_root(reflection) unless root
+      return unless ScopeCondition.scoped?(reflection)
+
+      "#{reflection.active_record.name}##{reflection.name} is a scoped " \
+        'has_and_belongs_to_many, and PaperTrail records only the members its scope ' \
+        'admitted when the owner saved, so membership between saves cannot be rebuilt; ' \
+        'replace it with a has_many :through a versioned join model'
+    end
+    private_class_method :habtm_reason
 
     #: (untyped, untyped) -> bool
     def self.paper_trail_versions?(model_class, reflection)
