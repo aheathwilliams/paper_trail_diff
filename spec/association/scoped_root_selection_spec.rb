@@ -47,10 +47,15 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
     PaperTrailDiff::AssociationTree.build(paths)
   end
 
+  # Each query with its identifiers in double quotes, whatever the adapter
+  # quotes them with, so that one pattern reads on every database.
   def queries(&block)
+    quote = ActiveRecord::Base.connection.quote_column_name('x')
     sql = []
     callback = lambda do |*, payload|
-      sql << payload[:sql] unless %w[SCHEMA TRANSACTION].include?(payload[:name])
+      next if %w[SCHEMA TRANSACTION].include?(payload[:name])
+
+      sql << payload[:sql].tr("#{quote[0]}#{quote[-1]}", '""')
     end
     ActiveSupport::Notifications.subscribed(callback, 'sql.active_record', &block)
     sql
@@ -192,7 +197,8 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
       sql = queries { expect(select(StringItemPost).records).to eq(posts) }
 
       expect(sql.grep(/SELECT DISTINCT "string_item_versions"."item_id"/).length).to eq(1)
-      expect(sql.grep(/FROM "string_item_posts" WHERE .* LIMIT/).grep(/ OR /)).to eq([])
+      expect(sql.grep(/FROM "string_item_posts" WHERE .* (LIMIT|FETCH NEXT)/).grep(/ OR /))
+        .to eq([])
     end
 
     it_behaves_like 'a selection'
@@ -218,7 +224,7 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
 
   describe 'ordering' do
     def page_sql(scope)
-      queries { select(scope) }.grep(/FROM "tracked_articles"/).grep(/LIMIT/).first
+      queries { select(scope) }.grep(/FROM "tracked_articles"/).grep(/LIMIT|FETCH NEXT/).first
     end
 
     it 'orders by key only a relation that has no order of its own' do
@@ -226,7 +232,7 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
 
       expect(page_sql(TrackedArticle)).to include('ORDER BY "tracked_articles"."id" ASC')
       expect(page_sql(TrackedArticle.order(title: :desc)))
-        .to include('ORDER BY "tracked_articles"."title" DESC LIMIT')
+        .to match(/ORDER BY "tracked_articles"."title" DESC (LIMIT|OFFSET)/)
     end
   end
 
@@ -239,12 +245,16 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
       stub_const('PaperTrailDiff::ScopedRootSelection::PAGE_SIZE', 2)
       scope = TrackedArticle.joins(:comments).order('tracked_comments.id')
 
-      sql = queries { expect(select(scope).records).to eq([article, other]) }
-      pages = sql.grep(/FROM "tracked_articles" INNER JOIN/)
+      pages = []
+      allow_any_instance_of(described_class).to receive(:record_page)
+        .and_wrap_original do |original, *args|
+          original.call(*args).tap { |page| pages << [page.offset_value, page.limit_value] }
+        end
 
-      expect(pages.length).to eq(3)
-      expect(pages.map { |page| page[/LIMIT \S+ OFFSET \S+/] })
-        .to eq(['LIMIT ? OFFSET ?'] * 3)
+      sql = queries { expect(select(scope).records).to eq([article, other]) }
+
+      expect(sql.grep(/FROM "tracked_articles" INNER JOIN/).length).to eq(3)
+      expect(pages).to eq([[0, 2], [2, 2], [4, 2]])
     end
 
     it 'stops at the relation limit without a query past it' do

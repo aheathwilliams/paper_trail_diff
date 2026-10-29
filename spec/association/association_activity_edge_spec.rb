@@ -299,7 +299,11 @@ RSpec.describe PaperTrailDiff::AssociationActivityEdge do
       expect(owners(edge, [tag.id])).to eq([tagged.id])
       expect(owners(edge, TrackedTag.where(id: tag.id).select(:id))).to eq([tagged.id])
       expect([edge.type, edge.filter_type]).to eq(%i[integer integer])
-      expect(edge.column.to_s).to eq('"tracked_articles_tags"."tracked_article_id"')
+      connection = ActiveRecord::Base.connection
+      expect(edge.column.to_s).to eq(
+        "#{connection.quote_table_name('tracked_articles_tags')}." \
+        "#{connection.quote_column_name('tracked_article_id')}"
+      )
     end
 
     it 'reads the join table past the owner default scope and STI condition' do
