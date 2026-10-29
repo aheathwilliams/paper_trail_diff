@@ -578,6 +578,90 @@ RSpec.describe 'PaperTrailDiff association tracking' do
       .to eq([{ from: 'tag', to: 'renamed' }])
   end
 
+  describe 'a HABTM transaction that more than one owner saved a version in' do
+    before { ActiveRecord::Base.connection.execute('DELETE FROM tracked_articles_tags') }
+
+    let(:root) { TrackedArticle.create!(title: 'Root').tap { |root| root.tags << root_tag } }
+    let(:other) { TrackedArticle.create!(title: 'Other').tap { |other| other.tags << other_tag } }
+    let(:root_tag) { TrackedTag.create!(name: 'root tag') }
+    let(:other_tag) { TrackedTag.create!(name: 'other tag') }
+    let(:error) do
+      [PaperTrailDiff::IncompleteAssociationHistoryError,
+       /\AHABTM history is ambiguous for tags at transaction \d+: more than one record/]
+    end
+
+    # Each update saves from a freshly loaded record, so PT-AT records both
+    # articles' tags under the one transaction id.
+    def update_together(*articles)
+      TrackedArticle.transaction do
+        TrackedArticle.where(id: articles.map(&:id)).order(:id).each do |article|
+          article.update!(title: "#{article.title}!")
+        end
+      end
+      articles.map { |article| article.versions.reorder(:id).last }
+    end
+
+    # Both articles' tags used to read as the root's own, so an unchanged root
+    # reported the other article's tag as removed.
+    it 'raises instead of reading the other owner members as the root' do
+      shared, other_shared = update_together(root, other)
+      after = habtm_boundary_for(root)
+      other_after = habtm_boundary_for(other)
+      options = { associations: [:tags] }
+
+      [after, root].each do |to|
+        expect { PaperTrailDiff.compare(shared, to, **options) }.to raise_error(*error)
+      end
+      comparisons = [{ from: shared, to: after }, { from: other_shared, to: other_after }]
+      expect { PaperTrailDiff.compare_many(comparisons, **options) }.to raise_error(*error)
+      expect { PaperTrailDiff.analyze(root, from: shared, to: after, **options) }
+        .to raise_error(*error)
+      expect { PaperTrailDiff.timeline(root, from: shared, to: after, **options) }
+        .to raise_error(*error)
+      expect { PaperTrailDiff.activity_timeline(root, from: shared, to: after, **options) }
+        .to raise_error(*error)
+
+      report = PaperTrailDiff.diagnose(shared, after, **options)
+      expect(report).not_to be_ok
+      expect(report.errors.map { |issue| [issue.code, issue.path, issue.version_id] })
+        .to eq([[:habtm_transaction_shared, 'tags', shared.id]])
+    end
+
+    it 'still reads a transaction where no owner recorded a member' do
+      bare_root = TrackedArticle.create!(title: 'Bare root')
+      bare_other = TrackedArticle.create!(title: 'Bare other')
+      shared, = update_together(bare_root, bare_other)
+      bare_root.tags << root_tag
+      after = habtm_boundary_for(bare_root)
+
+      tags = PaperTrailDiff.compare(shared, after, associations: [:tags]).associations.fetch('tags')
+
+      expect(tags.added.map(&:id)).to eq([root_tag.id])
+      expect(tags.removed).to be_empty
+    end
+
+    it 'still reads a transaction shared only with records that cannot own the association' do
+      comment = root.comments.create!(body: 'Comment')
+      shared = TrackedArticle.transaction do
+        TrackedArticle.find(root.id).paper_trail.save_with_version.tap do
+          root_tag.update!(name: 'renamed')
+          comment.update!(body: 'Edited')
+        end
+      end
+      root.tags << other_tag
+      after = habtm_boundary_for(root)
+
+      result = PaperTrailDiff.compare(shared, after, associations: [:tags])
+      analysis = PaperTrailDiff.analyze(root, from: shared, to: after, associations: [:tags])
+      tags = result.associations.fetch('tags')
+
+      expect(tags.added.map(&:id)).to eq([other_tag.id])
+      expect(tags.removed).to be_empty
+      expect(PaperTrailDiff.diagnose(shared, after, associations: [:tags])).to be_ok
+      expect(analysis.diff.to_h).to eq(result.to_h)
+    end
+  end
+
   it 'applies ignore rules to exact association paths' do
     graph = article_with_graph
     TrackedArticle.transaction do

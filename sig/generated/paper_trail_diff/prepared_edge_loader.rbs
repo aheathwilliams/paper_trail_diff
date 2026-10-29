@@ -24,6 +24,8 @@ module PaperTrailDiff
     # : (untyped, Array[untyped], untyped) -> Hash[String, Hash[Symbol, untyped]]
     def child_groups: (untyped, Array[untyped], untyped) -> Hash[String, Hash[Symbol, untyped]]
 
+    # A transaction more than one owner recorded members in is left out, so
+    # its read falls back to HistoricalAssociationReifier, which raises.
     # : (untyped, untyped) -> [Hash[String, Hash[Symbol, untyped]], Hash[String, Array[untyped]]]
     def habtm_groups: (untyped, untyped) -> [ Hash[String, Hash[Symbol, untyped]], Hash[String, Array[untyped]] ]
 

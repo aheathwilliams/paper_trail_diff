@@ -34,6 +34,18 @@ project follows [Semantic Versioning](https://semver.org/).
   reached through its author was given the root's tags. `activity_timeline`
   raised `KeyError`. Only a path that led back to the root, like
   `"comments.article.tags"`, read correctly; request `"tags"` instead.
+- A root HABTM read at a version saved in the same transaction as a version of
+  another record with a HABTM of that name raises
+  `IncompleteAssociationHistoryError`, naming the association and the
+  transaction, when PT-AT recorded members there. Those rows do not say which
+  record they belong to, so the root used to read every such record's members
+  as its own: two articles updated in one transaction each gained the other's
+  tags, and an unchanged article reported them removed. It happened in every
+  method, with no error. A transaction where only one record with that
+  association saved a version, or where none recorded a member, reads as
+  before, and `diagnose` reports the shared case as `habtm_transaction_shared`.
+  Save HABTM owners' versions in separate transactions, as a
+  [checkpoint](docs/reference.md#saving-a-checkpoint) does.
 
 ### Added
 
@@ -147,6 +159,9 @@ project follows [Semantic Versioning](https://semver.org/).
   `ActivityRange`, `VersionAssociationCandidateScope`, and
   `PreparedActivityIndex`, each with a spec of its own; all 1,507 of their
   mutations are caught.
+- Mutation testing also covers `HabtmTransactionOwners`, which decides whether
+  a transaction's HABTM members can be read as one record's, with a spec of
+  its own.
 
 ## [0.13.1] - 2026-10-28
 

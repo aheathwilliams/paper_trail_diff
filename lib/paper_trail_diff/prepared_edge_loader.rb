@@ -59,13 +59,16 @@ module PaperTrailDiff
       group_for(reflection.klass, owners.values.flatten, owners: owners)
     end
 
+    # A transaction more than one owner recorded members in is left out, so
+    # its read falls back to HistoricalAssociationReifier, which raises.
     #: (untyped, untyped) -> [Hash[String, Hash[Symbol, untyped]], Hash[String, Array[untyped]]]
     def habtm_groups(owner_class, reflection)
       rows = habtm_rows(owner_class, reflection)
+      shared = HabtmTransactionOwners.new(owner_class, reflection).shared(rows.map(&:version_id))
       memberships = @transaction_ids.to_h do |transaction_id|
         [transaction_id.to_s, membership_ids(rows, transaction_id)]
       end
-      [group_for(reflection.klass, rows.map(&:foreign_key_id)), memberships]
+      [group_for(reflection.klass, rows.map(&:foreign_key_id)), memberships.except(*shared)]
     end
 
     #: (untyped, untyped) -> Array[untyped]
