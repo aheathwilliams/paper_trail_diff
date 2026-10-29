@@ -37,6 +37,10 @@ project follows [Semantic Versioning](https://semver.org/).
 - `include_deleted: true` with `activity: true` reports the association
   activity of a deleted record that did not change itself in the window. Its
   analysis used to be empty.
+- On SQL Server, activity places a version saved within two milliseconds of a
+  window's start or end on the side it was saved. The window's bounds used to
+  be rounded to 1/300 second, so such a version could be read as outside the
+  window, or one just past its end as inside it.
 
 ### Development
 
