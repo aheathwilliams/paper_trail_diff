@@ -139,14 +139,17 @@ RSpec.describe PaperTrailDiff::PreparedHistoryLoader do
     expect(supported?(history, TrackedAuthor, :comments)).to be(true)
   end
 
+  # The comment gives the versioned edge a group of its own to check.
   it 'marks an edge into an unversioned model as unsupported, without loading it' do
     article = TrackedArticle.create!(title: 'Article')
     attachment = UnversionedAttachment.create!(article: article, filename: 'a.txt')
+    comment = article.comments.create!(body: 'comment')
 
     history = load_history(article, %i[unversioned_attachments comments])
 
     expect(ids(history, TrackedArticle, :unversioned_attachments, 'UnversionedAttachment'))
       .to eq([attachment.id])
+    expect(ids(history, TrackedArticle, :comments, 'TrackedComment')).to eq([comment.id])
     expect(supported?(history, TrackedArticle, :unversioned_attachments))
       .to be(false)
     expect(supported?(history, TrackedArticle, :comments)).to be(true)

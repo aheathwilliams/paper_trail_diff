@@ -215,6 +215,9 @@ project follows [Semantic Versioning](https://semver.org/).
 - `ActivityEventRouteFinder` no longer checks for a polymorphic `belongs_to`
   before following a path below it. Validation already rejects such a path,
   so the check could not be reached.
+- The `PreparedHistoryLoader` spec checks that an edge into a versioned model
+  with records stays prepared. A full mutation run of the 29 classes now
+  catches all 13,284 mutations.
 
 ## [0.13.1] - 2026-10-28
 
