@@ -1,7 +1,8 @@
 # Generated from lib/paper_trail_diff/prepared_state_association_reader.rb with RBS::Inline
 
 module PaperTrailDiff
-  # Reads plain direct edges without creating AR records for their members.
+  # Reads plain edges without creating AR records for their members: direct
+  # edges, polymorphic `belongs_to`, and `has_many :through` built from them.
   class PreparedStateAssociationReader
     # : (PreparedRecordIndex, untyped) -> void
     def initialize: (PreparedRecordIndex, untyped) -> void
@@ -15,8 +16,32 @@ module PaperTrailDiff
 
     @records: PreparedRecordIndex
 
+    # A polymorphic target's class is known only once a record names it, so
+    # `target` checks its default scopes instead.
     # : (untyped) -> bool
     def supported?: (untyped) -> bool
+
+    # A type that names no class, or a default-scoped one, is left to the
+    # record path, which raises for the first and reads the second through
+    # its association.
+    # : (PreparedRecordState, untyped, untyped) -> [bool, Array[PreparedRecordState]]
+    def target: (PreparedRecordState, untyped, untyped) -> [ bool, Array[PreparedRecordState] ]
+
+    # : (PreparedRecordState, untyped) -> untyped
+    def target_class: (PreparedRecordState, untyped) -> untyped
+
+    # The members of each join record the owner had at the boundary, as
+    # PreparedHistory#through_records reads them from records. Under
+    # `source_type:`, only join records of that type count.
+    # : (PreparedRecordState, untyped, untyped) -> [bool, Array[PreparedRecordState]]
+    def through: (PreparedRecordState, untyped, untyped) -> [ bool, Array[PreparedRecordState] ]
+
+    # : (untyped, PreparedRecordState) -> bool
+    def typed_join?: (untyped, PreparedRecordState) -> bool
+
+    # A record reached through two join records is one member.
+    # : (PreparedRecordState) -> Array[untyped]
+    def identity: (PreparedRecordState) -> Array[untyped]
 
     # : (PreparedRecordState, untyped, untyped) -> [bool, Array[PreparedRecordState]]
     def children: (PreparedRecordState, untyped, untyped) -> [ bool, Array[PreparedRecordState] ]

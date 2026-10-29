@@ -199,12 +199,15 @@ installed gem. They use disposable in-memory data and do not modify application 
 ```console
 mise exec -- bundle exec ruby benchmark/investigation/reconstruction.rb comments_without_changes 20
 mise exec -- bundle exec ruby benchmark/investigation/reconstruction.rb through_has_many 20
+mise exec -- bundle exec ruby benchmark/investigation/reconstruction.rb source_type_through 20
+mise exec -- bundle exec ruby benchmark/investigation/reconstruction.rb polymorphic_belongs_to 20
 mise exec -- bundle exec ruby benchmark/investigation/reconstruction.rb checkpoints 5
 mise exec -- bundle exec ruby benchmark/investigation/scalar_cost.rb baseline 500
 mise exec -- bundle exec ruby benchmark/investigation/scalar_cost.rb direct 500
 mise exec -- bundle exec ruby benchmark/investigation/scalar_parity.rb
 ```
 
-Run sizes 1, 5, and 20 to inspect query growth. Run each scalar mode three times
+Run sizes 1, 5, and 20 to inspect query growth. `reify_origins` in the output
+names the model and the gem frame of each `reify` call. Run each scalar mode three times
 for the timing comparison. `scalar_parity.rb` reports known mismatches as data;
 they are intentional evidence that the prototype is not a compatible replacement.

@@ -132,6 +132,19 @@ RSpec.describe PaperTrailDiff::AssociationTraversal do
     end
   end
 
+  describe '.source_type_member?' do
+    it 'takes a stored type only when it names the source type, and any without one' do
+      %i[linked_authors symbol_authors].each do |name|
+        reflection = SourceTypeHolder.reflect_on_association(name)
+        expect(described_class.source_type_member?(reflection, 'SourceTypeAuthor')).to be(true)
+        expect(described_class.source_type_member?(reflection, 'SourceTypeTag')).to be(false)
+        expect(described_class.source_type_member?(reflection, nil)).to be(false)
+      end
+      expect(described_class.source_type_member?(TrackedAuthor.reflect_on_association(:comments),
+                                                 nil)).to be(true)
+    end
+  end
+
   describe '.sti_member?' do
     it 'takes every row for a base class' do
       expect(described_class.sti_member?(PreparedDocument, 'type' => 'PreparedSpecialDocument'))

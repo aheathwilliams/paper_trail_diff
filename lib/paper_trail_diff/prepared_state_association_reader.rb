@@ -2,7 +2,8 @@
 # rbs_inline: enabled
 
 module PaperTrailDiff
-  # Reads plain direct edges without creating AR records for their members.
+  # Reads plain edges without creating AR records for their members: direct
+  # edges, polymorphic `belongs_to`, and `has_many :through` built from them.
   class PreparedStateAssociationReader
     #: (PreparedRecordIndex, untyped) -> void
     def initialize(records, edges)
@@ -13,14 +14,9 @@ module PaperTrailDiff
     #: (PreparedRecordState, untyped, untyped) -> [bool, Array[PreparedRecordState]]
     def call(owner, reflection, boundary)
       return [false, []] unless supported?(reflection)
+      return through(owner, reflection, boundary) if reflection.options[:through]
+      return target(owner, reflection, boundary) if reflection.belongs_to?
 
-      if reflection.belongs_to?
-        id = owner.attributes[reflection.foreign_key.to_s]
-        return [true, []] if id.nil?
-
-        handled, state = @records.snapshot_state_before(reflection.klass, id, boundary)
-        return [handled, state ? [state] : []]
-      end
       children(owner, reflection, boundary)
     end
 
@@ -29,11 +25,68 @@ module PaperTrailDiff
     # @rbs @records: PreparedRecordIndex
     # @rbs @edges: untyped
 
+    # A polymorphic target's class is known only once a record names it, so
+    # `target` checks its default scopes instead.
     #: (untyped) -> bool
     def supported?(reflection)
-      !reflection.options[:through] && !reflection.polymorphic? && reflection.scope.nil? &&
-        !reflection.klass.default_scopes? && !reflection.foreign_key.is_a?(Array) &&
+      reflection.scope.nil? && (reflection.polymorphic? || !reflection.klass.default_scopes?) &&
+        !reflection.foreign_key.is_a?(Array) &&
         %i[belongs_to has_one has_many].include?(reflection.macro)
+    end
+
+    # A type that names no class, or a default-scoped one, is left to the
+    # record path, which raises for the first and reads the second through
+    # its association.
+    #: (PreparedRecordState, untyped, untyped) -> [bool, Array[PreparedRecordState]]
+    def target(owner, reflection, boundary)
+      id = owner.attributes[reflection.foreign_key.to_s]
+      return [true, []] if id.nil?
+
+      model_class = target_class(owner, reflection)
+      return [false, []] unless model_class && !model_class.default_scopes?
+
+      handled, state = @records.snapshot_state_before(model_class, id, boundary)
+      [handled, state ? [state] : []]
+    end
+
+    #: (PreparedRecordState, untyped) -> untyped
+    def target_class(owner, reflection)
+      return reflection.klass unless reflection.polymorphic?
+
+      AssociationTraversal.named_class(owner.attributes[reflection.foreign_type].to_s)
+    end
+
+    # The members of each join record the owner had at the boundary, as
+    # PreparedHistory#through_records reads them from records. Under
+    # `source_type:`, only join records of that type count.
+    #: (PreparedRecordState, untyped, untyped) -> [bool, Array[PreparedRecordState]]
+    def through(owner, reflection, boundary)
+      handled, joins = call(owner, reflection.through_reflection, boundary)
+      return [false, []] unless handled
+
+      members = [] #: Array[PreparedRecordState]
+      joins.each do |join|
+        next unless typed_join?(reflection, join)
+
+        handled, states = call(join, reflection.source_reflection, boundary)
+        return [false, []] unless handled
+
+        members.concat(states)
+      end
+      members = members.uniq { |state| identity(state) }
+      [true, reflection.collection? ? members : members.first(1)]
+    end
+
+    #: (untyped, PreparedRecordState) -> bool
+    def typed_join?(reflection, join)
+      AssociationTraversal.source_type_member?(reflection, join.attributes[reflection.foreign_type])
+    end
+
+    # A record reached through two join records is one member.
+    #: (PreparedRecordState) -> Array[untyped]
+    def identity(state)
+      model = state.model_class
+      [model.base_class.name, *Array(model.primary_key).map { |key| state.attributes[key].to_s }]
     end
 
     #: (PreparedRecordState, untyped, untyped) -> [bool, Array[PreparedRecordState]]
