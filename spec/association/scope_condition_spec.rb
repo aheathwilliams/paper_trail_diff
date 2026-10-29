@@ -11,7 +11,7 @@ ActiveRecord::Schema.define do
     table.string :label
     table.text :note
     table.datetime :seen_at
-    table.decimal :amount
+    table.decimal :amount, precision: 10, scale: 2
   end
 end
 
@@ -187,7 +187,7 @@ RSpec.describe PaperTrailDiff::ScopeCondition do
       expect(build(-> { where(seen_at: Time.utc(2026)) })).to be_nil
       expect(build(-> { where(amount: 1) })).to be_nil
       stub_const('ScopeConditionSerialized', Class.new(ScopeConditionItem))
-      ScopeConditionSerialized.serialize :note, coder: JSON
+      ScopeConditionSerialized.serialize :note, coder: YAML
       expect(build(-> { where(note: 'a') }, target: 'ScopeConditionSerialized')).to be_nil
       stub_const('ScopeConditionVirtual', Class.new(ScopeConditionItem))
       ScopeConditionVirtual.attribute :virtual_rank, :integer
