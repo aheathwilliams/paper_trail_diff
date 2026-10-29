@@ -152,8 +152,9 @@ RSpec.describe PaperTrailDiff::PreparedStateAssociationReader do
       SourceTypeTag.class_eval { default_scope { where.not(id: hidden) } }
 
       expect_same_results(links, starts.zip(ends), start.created_at..Time.now.utc, [:target])
-      steps = PaperTrailDiff.activity_timeline(links.first, from: starts.first, to: ends.first,
-                                                            associations: [:target], snapshots: true)
+      steps = PaperTrailDiff.activity_timeline(
+        links.first, from: starts.first, to: ends.first, associations: [:target], snapshots: true
+      )
       expect(steps.last.to_snapshot.associations.fetch('target').records).to eq([])
     ensure
       SourceTypeTag.default_scopes = []

@@ -41,6 +41,11 @@ module PaperTrailDiff
     # : (PreparedRecordState, untyped, untyped) -> [bool, Array[PreparedRecordState]]
     def through: (PreparedRecordState, untyped, untyped) -> [ bool, Array[PreparedRecordState] ]
 
+    # A record reached through two join records is one member, and the
+    # through's own scope applies after its parts' scopes.
+    # : (untyped, Array[PreparedRecordState]) -> Array[PreparedRecordState]
+    def through_members: (untyped, Array[PreparedRecordState]) -> Array[PreparedRecordState]
+
     # : (untyped, PreparedRecordState) -> bool
     def typed_join?: (untyped, PreparedRecordState) -> bool
 

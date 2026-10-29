@@ -81,8 +81,16 @@ module PaperTrailDiff
 
         members.concat(states)
       end
-      members = members.uniq { |state| identity(state) }.select { |state| in_scope?(state, reflection) }
-      [true, reflection.collection? ? members : members.first(1)]
+      [true, through_members(reflection, members)]
+    end
+
+    # A record reached through two join records is one member, and the
+    # through's own scope applies after its parts' scopes.
+    #: (untyped, Array[PreparedRecordState]) -> Array[PreparedRecordState]
+    def through_members(reflection, states)
+      members = states.uniq { |state| identity(state) }
+      members = members.select { |state| in_scope?(state, reflection) }
+      reflection.collection? ? members : members.first(1)
     end
 
     #: (untyped, PreparedRecordState) -> bool
