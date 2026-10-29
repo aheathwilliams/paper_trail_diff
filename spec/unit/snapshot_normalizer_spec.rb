@@ -154,6 +154,16 @@ RSpec.describe PaperTrailDiff::SnapshotNormalizer do
       expect(records.map(&:id)).to eq([kept.id])
     end
 
+    it 'keeps a member loaded twice, as a through loads one two joins reach, once' do
+      post = post_with_comments
+      first, second = post.comments.to_a
+      post.define_singleton_method(:comments) { [first, second, NormComment.find(first.id)] }
+
+      records = snapshot(post, 'comments').associations.fetch('comments').records
+
+      expect(records.map(&:id)).to eq([first.id, second.id])
+    end
+
     it 'applies ignore rules for the children path' do
       post = post_with_comments
 

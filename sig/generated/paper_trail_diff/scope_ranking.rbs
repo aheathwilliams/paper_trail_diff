@@ -34,13 +34,15 @@ module PaperTrailDiff
     # : (untyped, untyped) -> bool
     def self.ranks?: (untyped, untyped) -> bool
 
-    # Only a direct has_many or has_one is ranked per owner as its own query
-    # ranks it. Returns nil when the ranking cannot be read exactly.
+    # A has_many, through or not, or a direct has_one is ranked per owner as
+    # its own query ranks it. A has_many through ranks the rows its join
+    # yields, a record reached twice counting twice, by its own order first.
+    # Returns nil when the ranking cannot be read exactly.
     # : (untyped, untyped, untyped) -> ScopeRanking?
     def self.build: (untyped, untyped, untyped) -> ScopeRanking?
 
     # : (untyped) -> bool
-    def self.direct?: (untyped) -> bool
+    def self.own?: (untyped) -> bool
 
     # Active Record casts a limit to an integer but keeps an offset as given,
     # which may be a String or SQL.

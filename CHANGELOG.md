@@ -79,8 +79,11 @@ project follows [Semantic Versioning](https://semver.org/).
   sorts as each adapter puts it by default. In the reconstruction probe,
   `report` over `order(:id).limit(1)` went from 252 queries and 160 `reify`
   calls at 20 roots, with the opt-in, to 32 queries and none without it. A
-  string or time order, an order with ties, and a through over a ranked part
-  are still rejected without the opt-in.
+  string or time order, an order with ties, and a `has_one :through` over a
+  ranked part are still rejected without the opt-in.
+- Batch methods read a `has_many :through` over a part with a `limit`,
+  `offset`, or `has_one` order, and one with its own `limit` or `offset`, from
+  prepared history without the opt-in.
 - The README recipe for deleted records also reads each record as it was just
   before deletion, which a record created inside the window has no other
   snapshot of.
@@ -110,6 +113,19 @@ project follows [Semantic Versioning](https://semver.org/).
   `order(:id).limit(1)`, destroying `first` and adding `third` reported
   `third` added instead of `second`. Other ranked scopes still read the
   current rows.
+- A `has_many :through` reads its parts as its own query does, keeping their
+  conditions but not their `limit`, `offset`, or `has_one` cut. History used
+  to apply them, and read with the opt-in it could raise PT-AT's
+  `FoundMoreThanOne`; batched history kept only one record through a `has_one`
+  part. A through's own `limit` or `offset` counts a record reached through
+  two join records twice, as the query does.
+- Batch comparisons with a current endpoint load a `has_many :through` over a
+  part with a `limit`, `offset`, or `has_one` per record. Active Record's
+  preloader applied the part's limit across every record in the batch, so a
+  record could show another's members or none.
+- A record reached through two join records is one member of a current
+  association, as it already was of a historical one, so a through loaded per
+  record no longer raises a duplicate identity error.
 - In a batch, a `has_one` with an `offset` is loaded per record at the current
   end. The preloader applied the offset across all records at once, so a
   record could show another record's member.

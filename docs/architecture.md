@@ -51,7 +51,9 @@ there meets the condition. A `limit`, `offset`, or `has_one` order is read
 into a `ScopeRanking` when its order is total and every key compares in Ruby
 as the database sorts it, including where each adapter puts NULL; the records
 that meet the condition are then sorted, offset, and limited as the
-association's query would. Activity reads a scoped branch again at each event
+association's query would. A `has_many :through` reads its parts' conditions
+only, at any depth, as its query joins them, and ranks by its own order the
+rows the join yields, a record reached twice counting twice. Activity reads a scoped branch again at each event
 on it rather than patching the previous snapshot, since any edit can move a
 record into or out of the scope, and with a ranking, move another record too.
 

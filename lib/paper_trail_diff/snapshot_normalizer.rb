@@ -200,8 +200,7 @@ module PaperTrailDiff
       path,
       reifier
     )
-      # A reified history can hold a member PaperTrail could not rebuild.
-      records = Array(record.public_send(reflection.name)).compact
+      records = members(record, reflection)
       child_path = Support.association_path(path, reflection.name)
       @structural_columns[child_path] ||= @traversal.incoming_relationship_columns(reflection)
       snapshot = AssociationSnapshot.new(
@@ -209,6 +208,14 @@ module PaperTrailDiff
         records: normalize_children(records, subtree, child_path, reifier)
       )
       @pool.association(child_path, snapshot)
+    end
+
+    # A reified history can hold a member PaperTrail could not rebuild. A
+    # through loads a record once per join that reaches it; it is one member,
+    # as Active Record compares records by class and id.
+    #: (untyped, untyped) -> Array[untyped]
+    def members(record, reflection)
+      Array(record.public_send(reflection.name)).compact.uniq
     end
 
     #: (Array[untyped], AssociationTree, String, untyped) -> Array[RecordSnapshot]

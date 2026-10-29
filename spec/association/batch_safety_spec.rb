@@ -54,6 +54,11 @@ class BatchSafetyArticle < ActiveRecord::Base
   has_many :first_comments, -> { order(:id).limit(1) }, class_name: 'TrackedComment',
                                                         foreign_key: :article_id
   has_many :first_comment_replies, through: :first_comments, source: :replies
+  has_one :lead_comment, -> { order(:id) }, class_name: 'TrackedComment', foreign_key: :article_id
+  has_one :lead_comment_reviewer, through: :lead_comment, source: :reviewer
+  has_many :lead_comment_replies, through: :lead_comment, source: :replies
+  has_many :body_ranked_comment_replies, through: :body_ranked_comments, source: :replies
+  has_many :lead_reviewer_authorships, through: :lead_comment_reviewer, source: :authorships
 end
 
 RSpec.describe PaperTrailDiff::BatchSafety do
@@ -94,11 +99,16 @@ RSpec.describe PaperTrailDiff::BatchSafety do
       end
   end
 
-  # Active Record reads only the conditions of a through's parts.
-  it 'rejects a through that passes a limited part, though the part alone is read' do
-    expect { safety([:first_comment_replies]).call(BatchSafetyArticle) }
+  # A has_many through keeps only its parts' conditions; a has_one through
+  # orders by its parts too and takes the first row.
+  it 'accepts a has_many through a ranked part, and rejects a has_one through one' do
+    expect do
+      safety(%i[first_comment_replies lead_comment_replies body_ranked_comment_replies
+                lead_reviewer_authorships]).call(BatchSafetyArticle)
+    end.not_to raise_error
+    expect { safety([:lead_comment_reviewer]).call(BatchSafetyArticle) }
       .to raise_error(PaperTrailDiff::UnsupportedBatchPathError,
-                      /\Aassociation first_comment_replies .*\(limit, offset or has_one order/)
+                      /\Aassociation lead_comment_reviewer .*\(limit, offset or has_one order/)
   end
 
   it 'requires an explicit boolean opt-in' do

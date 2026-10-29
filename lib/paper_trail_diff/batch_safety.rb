@@ -28,9 +28,12 @@ module PaperTrailDiff
     # @rbs @traversal: AssociationTraversal
     # @rbs @allow_expensive: bool
 
-    #: (untyped, String) -> void
-    def check(reflection, path)
-      reason = reason_for(reflection)
+    # A has_many through reads its parts' conditions only, at any depth. A
+    # has_one through over a ranked part is refused whole, so its parts, too,
+    # are checked for conditions alone.
+    #: (untyped, String, ?ranked: bool) -> void
+    def check(reflection, path, ranked: true)
+      reason = reason_for(reflection, ranked)
       if reason
         raise UnsupportedBatchPathError,
               "association #{path} requires per-record reconstruction (#{reason}); " \
@@ -39,20 +42,20 @@ module PaperTrailDiff
       return unless reflection.through_reflection?
 
       [reflection.through_reflection, reflection.source_reflection].each do |part|
-        check(part, path)
+        check(part, path, ranked: false)
       end
     end
 
     # A scope prepared history can read as conditions on stored attributes
     # is batched like any other path. A polymorphic target's class, and so
     # its scope, is known only per record.
-    #: (untyped) -> String?
-    def reason_for(reflection)
+    #: (untyped, bool) -> String?
+    def reason_for(reflection, ranked)
       return ('association scope' if reflection.scope) if reflection.polymorphic?
-      if ScopeCondition.ranked_through?(reflection)
-        return 'limit, offset or has_one order inside a through'
+      if ranked && ScopeCondition.ranked_through?(reflection)
+        return 'limit, offset or has_one order inside a has_one through'
       end
-      return if ScopeCondition.build(reflection)
+      return if ScopeCondition.build(reflection, ranked: ranked)
 
       reflection.scope ? 'association scope' : 'default-scoped target'
     end

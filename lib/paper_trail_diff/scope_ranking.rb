@@ -32,11 +32,13 @@ module PaperTrailDiff
         (reflection.has_one? && !relation.order_values.empty?)
     end
 
-    # Only a direct has_many or has_one is ranked per owner as its own query
-    # ranks it. Returns nil when the ranking cannot be read exactly.
+    # A has_many, through or not, or a direct has_one is ranked per owner as
+    # its own query ranks it. A has_many through ranks the rows its join
+    # yields, a record reached twice counting twice, by its own order first.
+    # Returns nil when the ranking cannot be read exactly.
     #: (untyped, untyped, untyped) -> ScopeRanking?
     def self.build(relation, reflection, model_class)
-      return unless direct?(reflection) && plain_offset?(relation)
+      return unless own?(reflection) && plain_offset?(relation)
 
       keys = keys(relation.order_values, model_class)
       return unless keys
@@ -48,10 +50,10 @@ module PaperTrailDiff
     end
 
     #: (untyped) -> bool
-    def self.direct?(reflection)
-      %i[has_many has_one].include?(reflection.macro) && !reflection.through_reflection?
+    def self.own?(reflection)
+      reflection.macro == :has_many || (reflection.has_one? && !reflection.through_reflection?)
     end
-    private_class_method :direct?
+    private_class_method :own?
 
     # Active Record casts a limit to an integer but keeps an offset as given,
     # which may be a String or SQL.

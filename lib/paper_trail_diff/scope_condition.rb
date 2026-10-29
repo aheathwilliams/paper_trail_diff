@@ -47,17 +47,18 @@ module PaperTrailDiff
     end
 
     # Returns nil when the scope cannot be read as plain conditions and an
-    # exact ranking.
-    #: (untyped, ?untyped) -> ScopeCondition?
-    def self.build(reflection, model_class = reflection.klass)
-      return if ranked_through?(reflection)
+    # exact ranking. A part of a has_many through is read unranked: the
+    # through's query keeps only its conditions.
+    #: (untyped, ?untyped, ?ranked: bool) -> ScopeCondition?
+    def self.build(reflection, model_class = reflection.klass, ranked: true)
+      return if ranked && ranked_through?(reflection)
 
       relation = scoped_relation(reflection, model_class)
       return unless relation && plain_relation?(relation)
 
       clause = relation.where_clause - model_class.unscoped.where_clause
       predicate = Reader.new(model_class).call(clause.ast)
-      new(model_class, predicate, ranking(relation, reflection, model_class))
+      new(model_class, predicate, (ranking(relation, reflection, model_class) if ranked))
     rescue Unreadable
       nil
     end
@@ -71,15 +72,24 @@ module PaperTrailDiff
     end
     private_class_method :ranking
 
-    # Active Record reads only the conditions of a through's parts, never
-    # their limit, offset or has_one order, so a through that passes a ranked
-    # part is not read.
+    # A has_one through orders its rows by its own order and then its parts',
+    # and takes the first, so one that passes a ranked part is not read. A
+    # has_many through keeps only its parts' conditions.
     #: (untyped) -> bool
     def self.ranked_through?(reflection)
+      return false if reflection.collection?
+
+      ranked_parts?(reflection)
+    end
+
+    # Whether any part of a through, at any depth, has a limit, an offset or
+    # a has_one order.
+    #: (untyped) -> bool
+    def self.ranked_parts?(reflection)
       return false unless reflection.through_reflection?
 
       [reflection.through_reflection, reflection.source_reflection].any? do |part|
-        ranked_part?(part) || ranked_through?(part)
+        ranked_part?(part) || ranked_parts?(part)
       end
     end
 
@@ -182,19 +192,19 @@ module PaperTrailDiff
       end
 
       # nil when the scope cannot be read from stored attributes.
-      #: (untyped, ?untyped) -> ScopeCondition?
-      def call(reflection, model_class = reflection.klass)
-        key = [reflection, model_class]
+      #: (untyped, ?untyped, ?ranked: bool) -> ScopeCondition?
+      def call(reflection, model_class = reflection.klass, ranked: true)
+        key = [reflection, model_class, ranked]
         return @conditions.fetch(key) if @conditions.key?(key)
 
-        @conditions[key] = ScopeCondition.build(reflection, model_class)
+        @conditions[key] = ScopeCondition.build(reflection, model_class, ranked: ranked)
       end
 
       # The records the reflection's scope admits, as it ranks them. Its
       # condition must exist.
-      #: (untyped, Array[untyped], ?untyped) -> Array[untyped]
-      def select(reflection, records, model_class = reflection.klass)
-        condition = call(reflection, model_class) #: ScopeCondition
+      #: (untyped, Array[untyped], ?untyped, ranked: bool) -> Array[untyped]
+      def select(reflection, records, model_class = reflection.klass, ranked:)
+        condition = call(reflection, model_class, ranked: ranked) #: ScopeCondition
         condition.members(records)
       end
 

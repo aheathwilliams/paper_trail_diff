@@ -32,8 +32,10 @@ module PaperTrailDiff
     # : (PreparedRecordState, untyped, untyped) -> [bool, Array[PreparedRecordState]]
     def snapshot_states: (PreparedRecordState, untyped, untyped) -> [ bool, Array[PreparedRecordState] ]
 
-    # : (untyped, untyped, untyped, habtm_boundary: untyped) -> [bool, Array[untyped]]
-    def resolve: (untyped, untyped, untyped, habtm_boundary: untyped) -> [ bool, Array[untyped] ]
+    # Unranked, as a part of a has_many through is read, it returns every row
+    # the part's conditions admit, a record reached twice appearing twice.
+    # : (untyped, untyped, untyped, habtm_boundary: untyped, ?ranked: bool) -> [bool, Array[untyped]]
+    def resolve: (untyped, untyped, untyped, habtm_boundary: untyped, ?ranked: bool) -> [ bool, Array[untyped] ]
 
     private
 
@@ -51,35 +53,39 @@ module PaperTrailDiff
 
     # A polymorphic target's class is known only once a record names it, so
     # belongs_to_records reads its scope for each record instead.
-    # : (untyped, untyped) -> bool
-    def supported?: (untyped, untyped) -> bool
+    # : (untyped, untyped, bool) -> bool
+    def supported?: (untyped, untyped, bool) -> bool
 
-    # : (untyped, untyped, untyped, untyped) -> Array[untyped]?
-    def direct_records: (untyped, untyped, untyped, untyped) -> Array[untyped]?
+    # : (untyped, untyped, untyped, untyped, bool) -> Array[untyped]?
+    def direct_records: (untyped, untyped, untyped, untyped, bool) -> Array[untyped]?
 
-    # : (untyped, untyped, untyped, untyped) -> Array[untyped]?
-    def resolve_belongs_to: (untyped, untyped, untyped, untyped) -> Array[untyped]?
+    # : (untyped, untyped, untyped, untyped, bool) -> Array[untyped]?
+    def resolve_belongs_to: (untyped, untyped, untyped, untyped, bool) -> Array[untyped]?
 
-    # : (untyped, untyped, untyped, untyped) -> Array[untyped]
-    def resolve_children: (untyped, untyped, untyped, untyped) -> Array[untyped]
+    # : (untyped, untyped, untyped, untyped, bool) -> Array[untyped]
+    def resolve_children: (untyped, untyped, untyped, untyped, bool) -> Array[untyped]
 
-    # : (untyped, untyped, untyped) -> Array[untyped]?
-    def belongs_to_records: (untyped, untyped, untyped) -> Array[untyped]?
+    # : (untyped, untyped, untyped, bool) -> Array[untyped]?
+    def belongs_to_records: (untyped, untyped, untyped, bool) -> Array[untyped]?
 
-    # : (untyped, untyped, untyped) -> Array[untyped]
-    def child_records: (untyped, untyped, untyped) -> Array[untyped]
+    # : (untyped, untyped, untyped, bool) -> Array[untyped]
+    def child_records: (untyped, untyped, untyped, bool) -> Array[untyped]
 
     # : (Hash[Symbol, untyped], untyped) -> Array[untyped]
     def child_ids_for: (Hash[Symbol, untyped], untyped) -> Array[untyped]
 
-    # : (untyped, untyped, untyped, untyped) -> Array[untyped]?
-    def habtm_records: (untyped, untyped, untyped, untyped) -> Array[untyped]?
+    # : (untyped, untyped, untyped, untyped, bool) -> Array[untyped]?
+    def habtm_records: (untyped, untyped, untyped, untyped, bool) -> Array[untyped]?
 
-    # : (untyped, untyped, untyped, untyped) -> Array[untyped]?
-    def through_records: (untyped, untyped, untyped, untyped) -> Array[untyped]?
+    # A has_many through reads its parts unranked, as its query does. Its own
+    # scope applies to each row, and a ranked read then keeps a record reached
+    # twice as one member.
+    # : (untyped, untyped, untyped, untyped, bool) -> Array[untyped]?
+    def through_records: (untyped, untyped, untyped, untyped, bool) -> Array[untyped]?
 
-    # : (Array[untyped], untyped, untyped, untyped) -> Array[[bool, Array[untyped]]]
-    def resolve_sources: (Array[untyped], untyped, untyped, untyped) -> Array[[ bool, Array[untyped] ]]
+    # The source records of each join record, once for each join.
+    # : (untyped, untyped, ^(untyped, untyped) -> [bool, Array[untyped]]) -> Array[untyped]?
+    def through_rows: (untyped, untyped, ^(untyped, untyped) -> [ bool, Array[untyped] ]) -> Array[untyped]?
 
     # : (untyped, untyped, untyped) -> bool
     def member_of?: (untyped, untyped, untyped) -> bool
