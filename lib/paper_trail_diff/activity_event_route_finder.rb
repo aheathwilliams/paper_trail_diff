@@ -70,7 +70,8 @@ module PaperTrailDiff
       entry = [name, reflection, subtree, child_path]
       direct = [] #: Array[Array[untyped]]
       direct << [entry] if direct_route?(reflection, target_type, macro)
-      return direct if subtree.empty? || reflection.polymorphic?
+      # Validation rejects a path that continues past a polymorphic target.
+      return direct if subtree.empty?
 
       nested = routes(reflection.klass, subtree, target_type, macro, path: child_path)
       direct.concat(nested.map { |route| [entry, *route] })
