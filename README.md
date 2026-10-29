@@ -294,10 +294,12 @@ method inside a loop. They share history loading across records. Ordinary
 record and direct-association histories can be read without creating a model
 instance for every historical state.
 
-Some associations still need per-record queries. Batch methods reject scoped
-and default-scoped associations by default with
-`UnsupportedBatchPathError`. The error names the association. Remove it from
-`associations:`, or pass `allow_expensive: true` if you accept that cost.
+Scopes and default scopes made of plain conditions, such as
+`-> { where(archived: false) }`, are batched too. Some associations still need
+per-record queries, such as scopes with `limit` or scopes that take the owner.
+Batch methods reject those by default with `UnsupportedBatchPathError`. The
+error names the association. Remove it from `associations:`, or pass
+`allow_expensive: true` if you accept that cost.
 Callbacks and callable historical filters can also issue queries. See the
 [performance guide](docs/performance.md) for measured behavior and limitations.
 

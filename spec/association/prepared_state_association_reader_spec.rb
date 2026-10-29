@@ -143,10 +143,26 @@ RSpec.describe PaperTrailDiff::PreparedStateAssociationReader do
       expect_same_results(links, starts.zip(ends), start.created_at..Time.now.utc, [:target])
     end
 
-    it 'leaves a type naming no class, and a default-scoped target, to the record path' do
+    # The tag a link moves to is outside the scope, so that link ends with no
+    # target.
+    it 'reads a target whose default scope is plain conditions, keeping it out' do
+      _holder, start, links, starts = history
+      ends = links.map { |link| checkpoint(link) }
+      hidden = links.first.target_id
+      SourceTypeTag.class_eval { default_scope { where.not(id: hidden) } }
+
+      expect_same_results(links, starts.zip(ends), start.created_at..Time.now.utc, [:target])
+      steps = PaperTrailDiff.activity_timeline(links.first, from: starts.first, to: ends.first,
+                                                            associations: [:target], snapshots: true)
+      expect(steps.last.to_snapshot.associations.fetch('target').records).to eq([])
+    ensure
+      SourceTypeTag.default_scopes = []
+    end
+
+    it 'leaves a type naming no class, and a target scope it cannot read, to the record path' do
       holder, start, links, = history
       SourceTypeLink.where(id: links.first.id).update_all(target_type: 'RenamedModel')
-      SourceTypeTag.class_eval { default_scope { where.not(name: 'hidden') } }
+      SourceTypeTag.class_eval { default_scope { where("name <> 'hidden'") } }
       window = start.created_at..Time.now.utc
 
       expect { PaperTrailDiff.analyze(links.first, within: window, associations: [:target]) }

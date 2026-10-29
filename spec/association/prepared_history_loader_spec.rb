@@ -347,7 +347,7 @@ RSpec.describe PaperTrailDiff::PreparedHistoryLoader do
                                 scope: nil, klass: TrackedComment, polymorphic?: false)
     plain = instance_double(ActiveRecord::Reflection::HasManyReflection,
                             name: :plain, foreign_key: 'article_id', scope: nil,
-                            klass: TrackedComment, polymorphic?: false)
+                            klass: TrackedComment, polymorphic?: false, collection?: true)
 
     loader.send(:mark_unsupported, TrackedArticle, composite, {})
     loader.send(:mark_unsupported, TrackedArticle, plain, {})

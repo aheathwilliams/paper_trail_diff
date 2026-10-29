@@ -5,10 +5,11 @@ module PaperTrailDiff
   # Reads plain edges without creating AR records for their members: direct
   # edges, polymorphic `belongs_to`, and `has_many :through` built from them.
   class PreparedStateAssociationReader
-    #: (PreparedRecordIndex, untyped) -> void
-    def initialize(records, edges)
+    #: (PreparedRecordIndex, untyped, ScopeCondition::Cache) -> void
+    def initialize(records, edges, conditions)
       @records = records
       @edges = edges
+      @conditions = conditions
     end
 
     #: (PreparedRecordState, untyped, untyped) -> [bool, Array[PreparedRecordState]]
@@ -24,29 +25,36 @@ module PaperTrailDiff
 
     # @rbs @records: PreparedRecordIndex
     # @rbs @edges: untyped
+    # @rbs @conditions: ScopeCondition::Cache
 
     # A polymorphic target's class is known only once a record names it, so
-    # `target` checks its default scopes instead.
+    # `target` reads its scope for each record instead.
     #: (untyped) -> bool
     def supported?(reflection)
-      reflection.scope.nil? && (reflection.polymorphic? || !reflection.klass.default_scopes?) &&
-        !reflection.foreign_key.is_a?(Array) &&
-        %i[belongs_to has_one has_many].include?(reflection.macro)
+      !reflection.foreign_key.is_a?(Array) &&
+        %i[belongs_to has_one has_many].include?(reflection.macro) &&
+        (reflection.polymorphic? || !@conditions.call(reflection).nil?)
     end
 
-    # A type that names no class, or a default-scoped one, is left to the
-    # record path, which raises for the first and reads the second through
-    # its association.
+    #: (PreparedRecordState, untyped, ?untyped) -> bool
+    def in_scope?(state, reflection, model_class = reflection.klass)
+      condition = @conditions.call(reflection, model_class) #: ScopeCondition
+      condition.matches?(state.attributes)
+    end
+
+    # A type that names no class, or a class whose scope cannot be read as
+    # conditions, is left to the record path, which raises for the first and
+    # reads the second through its association.
     #: (PreparedRecordState, untyped, untyped) -> [bool, Array[PreparedRecordState]]
     def target(owner, reflection, boundary)
       id = owner.attributes[reflection.foreign_key.to_s]
       return [true, []] if id.nil?
 
       model_class = target_class(owner, reflection)
-      return [false, []] unless model_class && !model_class.default_scopes?
+      return [false, []] unless model_class && @conditions.call(reflection, model_class)
 
       handled, state = @records.snapshot_state_before(model_class, id, boundary)
-      [handled, state ? [state] : []]
+      [handled, state && in_scope?(state, reflection, model_class) ? [state] : []]
     end
 
     #: (PreparedRecordState, untyped) -> untyped
@@ -73,7 +81,7 @@ module PaperTrailDiff
 
         members.concat(states)
       end
-      members = members.uniq { |state| identity(state) }
+      members = members.uniq { |state| identity(state) }.select { |state| in_scope?(state, reflection) }
       [true, reflection.collection? ? members : members.first(1)]
     end
 
@@ -114,6 +122,7 @@ module PaperTrailDiff
     def member?(child, owner, reflection)
       return false unless child.attributes[reflection.foreign_key.to_s].to_s == owner_id(owner)
       return false unless AssociationTraversal.sti_member?(reflection.klass, child.attributes)
+      return false unless in_scope?(child, reflection)
       return true unless reflection.options[:as]
 
       matching_type?(child, owner.model_class, reflection)

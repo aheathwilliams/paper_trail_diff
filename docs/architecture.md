@@ -37,9 +37,19 @@ only the association paths you request:
 From that, the gem builds each state without querying again. Plain recorded
 attributes are read straight from the stored version, without creating a model
 instance, including the members of a `has_many :through` and the target of a
-polymorphic `belongs_to`. Models with initialization callbacks, custom attribute types or
-defaults, default scopes, or encrypted attributes are rebuilt with PaperTrail's
-`reify` instead, so their behavior is kept.
+polymorphic `belongs_to`. Models with initialization callbacks, custom
+attribute types or defaults, default scopes that assign attributes, or
+encrypted attributes are rebuilt with PaperTrail's `reify` instead, so their
+behavior is kept.
+
+An association scope or a target's default scope is read once into a
+`ScopeCondition`: the `where` conditions of the relation it builds, kept only
+when each is an equality, `IN`, or `nil` test, or a negation of one, on the
+target's own column of a type Ruby compares as the database does. A record
+belongs to the association at a point when its key matches and its state
+there meets the condition. Activity reads a scoped branch again at each event
+on it rather than patching the previous snapshot, since any edit can move a
+record into or out of the scope.
 
 Each rebuilt state is an immutable snapshot. Activity timelines carry the
 previous snapshot forward and replace only the parts an event changed, so an
@@ -52,8 +62,9 @@ These association shapes cannot be read from the loaded history. The gem asks
 PT-AT to rebuild them at each point instead, which costs queries per record and
 resolves association membership by timestamp only:
 
-- associations with a scope, including `limit` and owner-dependent scopes;
-- targets with a default scope;
+- associations with a scope the gem cannot read as plain conditions, including
+  `limit` and owner-dependent scopes;
+- targets with such a default scope;
 - targets that are not versioned;
 - composite foreign keys.
 

@@ -43,11 +43,15 @@ module PaperTrailDiff
       end
     end
 
+    # A scope prepared history can read as conditions on stored attributes
+    # is batched like any other path. A polymorphic target's class, and so
+    # its scope, is known only per record.
     #: (untyped) -> String?
     def reason_for(reflection)
-      return 'association scope' if reflection.scope
+      return ('association scope' if reflection.scope) if reflection.polymorphic?
+      return if ScopeCondition.build(reflection)
 
-      'default-scoped target' if !reflection.polymorphic? && reflection.klass.default_scopes?
+      reflection.scope ? 'association scope' : 'default-scoped target'
     end
   end
 end

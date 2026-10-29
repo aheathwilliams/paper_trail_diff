@@ -630,17 +630,38 @@ model instance and may run queries of its own.
 
 ### Costly associations
 
-Most associations are loaded for all records together. A few still need queries
-per record: associations with a scope (including `limit` or owner-dependent
-scopes) and targets with a default scope. Batch methods raise
-`UnsupportedBatchPathError` for these by default and name the association.
-Remove it from `associations:`, or pass `allow_expensive: true` to accept the
-per-record cost. Single-record methods always allow them.
+Most associations are loaded for all records together. That includes an
+association whose scope, or whose target's default scope, is plain conditions
+on the target's own columns:
+
+```ruby
+has_many :active_cards, -> { where(archived: false) }, class_name: "Card"
+has_many :urgent_cards, -> { where(priority: [1, 2]).order(:id) }, class_name: "Card"
+default_scope { where.not(hidden: true) }
+```
+
+The gem reads such a scope once and checks each record's stored values against
+it at every point, so a record that moves into or out of the scope is added or
+removed at the version that moved it. It reads equality, `IN`, `nil`, their
+`where.not` forms, and `and`/`or` combinations of them on integer, boolean,
+and enum columns. String and text columns are read only on SQLite and
+PostgreSQL, and only without a column collation: MySQL and SQL Server compare
+strings without regard to case or trailing spaces by default, which the gem
+cannot repeat.
+
+A few associations still need queries per record: scopes with `limit` or
+`offset`, scopes that take the owner (`->(article) { ... }`), scopes written as
+SQL strings or ranges, scopes that join or select, and conditions on other
+column types or other tables. Batch methods raise `UnsupportedBatchPathError`
+for these by default and name the association. Remove it from
+`associations:`, or pass `allow_expensive: true` to accept the per-record
+cost. Single-record methods always allow them.
 
 A polymorphic `belongs_to` is loaded together too, with one query per target
 class. Its classes are known only from the records, though, so batch methods
-cannot reject a default-scoped one in advance: a record that points at a
-default-scoped class is read on its own, without an error.
+cannot reject one with a scope they cannot read in advance: a record that
+points at such a class is read on its own, without an error. A scope on the
+polymorphic `belongs_to` itself is rejected.
 
 This check covers known association cases only. Your model callbacks, custom
 attribute types, and callable filters can still run queries. See the

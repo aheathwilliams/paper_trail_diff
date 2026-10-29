@@ -17,7 +17,8 @@ module PaperTrailDiff
     #: (PreparedRecordIndex, ?activity_index: PreparedActivityIndex?) -> void
     def initialize(records, activity_index: nil)
       @records = records
-      @state_reader = PreparedStateAssociationReader.new(records, method(:edge))
+      @conditions = ScopeCondition::Cache.new
+      @state_reader = PreparedStateAssociationReader.new(records, method(:edge), @conditions)
       @activity_index = activity_index
       @edges = {} #: Hash[Array[String], Hash[String, Hash[Symbol, untyped]]]
       @unsupported = {} #: Hash[Array[String], bool]
@@ -82,13 +83,14 @@ module PaperTrailDiff
     # @rbs @edges: Hash[Array[String], Hash[String, Hash[Symbol, untyped]]]
     # @rbs @unsupported: Hash[Array[String], bool]
     # @rbs @habtm: Hash[Array[String], Hash[String, Array[untyped]]]
+    # @rbs @conditions: ScopeCondition::Cache
 
     # A polymorphic target's class is known only once a record names it, so
-    # belongs_to_records checks its default scopes for each record instead.
+    # belongs_to_records reads its scope for each record instead.
     #: (untyped, untyped) -> bool
     def supported?(owner_class, reflection)
       !@unsupported[edge_key(owner_class, reflection)] &&
-        reflection.scope.nil? && (reflection.polymorphic? || !reflection.klass.default_scopes?)
+        (reflection.polymorphic? || !@conditions.call(reflection).nil?)
     end
 
     #: (untyped, untyped, untyped, untyped) -> Array[untyped]?
@@ -116,20 +118,23 @@ module PaperTrailDiff
       return [] if id.nil?
 
       model_class = AssociationTraversal.belongs_to_target(reflection, record)
-      return unless model_class && !model_class.default_scopes? && @records.loaded?(model_class, id)
+      return unless model_class && @conditions.call(reflection, model_class) &&
+                    @records.loaded?(model_class, id)
 
-      Array(@records.record_before(model_class, id, boundary)).compact
+      target = Array(@records.record_before(model_class, id, boundary)).compact
+      @conditions.select(reflection, target, model_class)
     end
 
     #: (untyped, untyped, untyped) -> Array[untyped]
     def child_records(record, reflection, boundary)
-      edge(record.class, reflection).values.flat_map do |group|
+      children = edge(record.class, reflection).values.flat_map do |group|
         model_class = group.fetch(:model)
         child_ids_for(group, record).filter_map do |id|
           child = @records.record_before(model_class, id, boundary)
           child if child && member_of?(child, reflection, record)
         end
       end
+      @conditions.select(reflection, children)
     end
 
     #: (Hash[Symbol, untyped], untyped) -> Array[untyped]
@@ -148,9 +153,8 @@ module PaperTrailDiff
       ids = @habtm.fetch(edge_key(record.class, reflection), empty)[transaction_id.to_s]
       return unless ids
 
-      ids.filter_map do |id|
-        @records.record_before(reflection.klass, id, boundary)
-      end
+      members = ids.filter_map { |id| @records.record_before(reflection.klass, id, boundary) }
+      @conditions.select(reflection, members)
     end
 
     #: (untyped, untyped, untyped, untyped) -> Array[untyped]?
@@ -169,7 +173,7 @@ module PaperTrailDiff
       resolved = resolve_sources(intermediates, reflection, boundary, habtm_boundary)
       return unless resolved.all?(&:first)
 
-      unique_records(resolved.flat_map(&:last))
+      @conditions.select(reflection, unique_records(resolved.flat_map(&:last)))
     end
 
     #: (Array[untyped], untyped, untyped, untyped) -> Array[[bool, Array[untyped]]]

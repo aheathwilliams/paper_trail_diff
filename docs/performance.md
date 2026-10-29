@@ -8,13 +8,40 @@ does not establish that a batch API meets that purpose.
 The [follow-up reconstruction investigation](../benchmark/investigation/README.md)
 records the pre-fix N+1 paths and direct-snapshot experiments. Production now uses
 prepared event successors even without changesets, and directly normalizes plain
-root/direct-child states. Scoped and default-scoped batch paths require
-`allow_expensive: true`; that opt-in can still cause N+1 work. Model callbacks,
+root/direct-child states. Scopes and default scopes made of plain conditions
+are read from prepared history; other scoped batch paths, such as `limit` or
+owner-dependent scopes, require `allow_expensive: true`, and that opt-in can
+still cause N+1 work. Model callbacks,
 custom types and callable predicates also remain outside a flat-query guarantee.
 
 The benchmark exercises `analyze_scope` with genuine PaperTrail history. It is
 a local SQLite baseline for finding work inside the gem, not a production
 latency guarantee or a comparison of SQL dialects.
+
+## Scoped associations: 2026-10-29
+
+An association scope, or a target's default scope, made of plain conditions
+(`where(reviewer_id: nil)`, `where.not(body: "hidden")`) used to fall back to
+PT-AT for every record, so batch methods required `allow_expensive: true` for
+it. It is now read from prepared history, checking each record's stored values
+against the scope. The probe below reports articles with their comments,
+through `has_many :scoped_comments, -> { where(reviewer_id: nil) }`
+(`scoped`) and through a `TrackedComment` default scope (`default_scope`):
+
+| Scenario and code | SQL at 1 / 5 / 20 roots | `reify` calls at 1 / 5 / 20 roots |
+| --- | --- | --- |
+| `scoped`, before, with `allow_expensive: true` | 15 / 27 / 72 | 1 / 5 / 20 |
+| `scoped`, after, without an opt-in | 12 / 12 / 12 | 0 / 0 / 0 |
+| `default_scope`, before, with `allow_expensive: true` | 15 / 27 / 72 | 1 / 5 / 20 |
+| `default_scope`, after, without an opt-in | 12 / 12 / 12 | 0 / 0 / 0 |
+
+Model initializations fell from 17 / 85 / 340 (`scoped`) and 19 / 95 / 380
+(`default_scope`) to 10 / 50 / 200, the same as unscoped `comments`. The
+default-scoped comments are read without `reify` because their scope assigns
+no attributes to a new record; one such as `where(hidden: false)` does, so
+those records are still rebuilt with `reify`, though the query count stays
+flat. `limited` (`order(:id).limit(1)`) and `owner` (a scope that takes the
+article) still raise without the opt-in, and cost what they did.
 
 ## Fewer `reify` calls: 2026-10-29
 
