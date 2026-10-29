@@ -110,7 +110,7 @@ module PaperTrailDiff
 
     #: (untyped) -> untyped
     def endpoint_model_class(endpoint)
-      Endpoint.version?(endpoint) ? Endpoint.model_class(endpoint) : endpoint.class
+      Endpoint.version?(endpoint) ? RecordedClass.for(endpoint) : endpoint.class
     end
   end
 end

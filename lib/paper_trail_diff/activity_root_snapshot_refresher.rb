@@ -33,7 +33,7 @@ module PaperTrailDiff
       return [false, nil] unless previous && event.root?
 
       version = event.version
-      model_class = Endpoint.model_class(version)
+      model_class = RecordedClass.for(version)
       return [false, nil] unless same_record?(previous, version)
 
       changes = @changeset.call(version, model_class)

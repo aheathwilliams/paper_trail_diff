@@ -1,0 +1,22 @@
+# Generated from lib/paper_trail_diff/recorded_class.rb with RBS::Inline
+
+module PaperTrailDiff
+  # The class a record had at one version, which decides the associations it
+  # can have. Without an `item_subtype` column PaperTrail stores only the base
+  # class, so an STI subclass is read from the stored inheritance column: the
+  # state before the change, or for a create, the value it was created with.
+  # A version that stored neither stays on the base class.
+  module RecordedClass
+    # : (untyped) -> untyped
+    def self?.for: (untyped) -> untyped
+
+    # : (untyped) -> bool
+    def self?.sti_base?: (untyped) -> bool
+
+    # : (untyped, untyped) -> untyped
+    def self?.stored_type: (untyped, untyped) -> untyped
+
+    # : (StandardError) -> bool
+    def self?.subclass_not_found?: (StandardError) -> bool
+  end
+end

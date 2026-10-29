@@ -106,7 +106,7 @@ module PaperTrailDiff
       loaded, unloaded = historical_versions(pairs).partition do |version|
         live_records.key?(Endpoint.identity(version))
       end
-      loaded.group_by { |version| Endpoint.model_class(version) }.each_value do |versions|
+      loaded.group_by { |version| RecordedClass.for(version) }.each_value do |versions|
         records = versions.map { |version| live_records.fetch(Endpoint.identity(version)) }.uniq
         @history_preparer.call(records, versions)
       end
@@ -121,7 +121,7 @@ module PaperTrailDiff
     # needs: a record's current row is its state after its last version.
     #: (Array[untyped]) -> void
     def prepare_version_roots!(versions)
-      versions.group_by { |version| Endpoint.model_class(version) }.each do |model, group|
+      versions.group_by { |version| RecordedClass.for(version) }.each do |model, group|
         ids = group.map(&:item_id).uniq(&:to_s)
         @version_history_preparer.call(ids.map { |id| historical_root(model, id) }, group)
       end
@@ -194,7 +194,7 @@ module PaperTrailDiff
       requirements = {} #: Hash[untyped, bool]
       pairs.flatten.each_with_object(requirements) do |endpoint, collected|
         historical = Endpoint.version?(endpoint)
-        model_class = historical ? Endpoint.model_class(endpoint) : endpoint.class
+        model_class = historical ? RecordedClass.for(endpoint) : endpoint.class
         collected[model_class] = collected.fetch(model_class, false) || historical
       end
     end

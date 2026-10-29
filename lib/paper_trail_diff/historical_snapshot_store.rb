@@ -172,7 +172,7 @@ module PaperTrailDiff
 
     #: (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer) -> RecordSnapshot?
     def snapshot_from_version(root_version, context_version, tree:, normalizer:)
-      model_class = Endpoint.model_class(root_version)
+      model_class = RecordedClass.for(root_version)
       @preparer.call(model_class, historical: true)
       @traversal.ensure_habtm_history!(model_class, root_version)
       handled, snapshot = @prepared_snapshotter.call(
