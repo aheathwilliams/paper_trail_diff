@@ -1,0 +1,106 @@
+# Generated from lib/paper_trail_diff/association_activity_selection.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Finds the roots whose requested associations changed in a window, so that
+  # selecting by activity includes a record whose own row did not change.
+  #
+  # A root qualifies when a record on one of its requested paths has a version
+  # in the window while it belonged to that root: when the window opened, or
+  # after a change inside it. Those are the memberships PT-AT recorded, and the
+  # ones an activity analysis reads. For `has_many :through`, the join rows are
+  # on the path too, since creating or destroying one changes membership.
+  #
+  # Each edge is one query, walked from the leaves toward the root, never one
+  # per root. Ids stay in a subquery while the columns compared share a type;
+  # otherwise they are read and the edge runs over them in slices.
+  class AssociationActivitySelection
+    SLICE: ::Integer
+
+    # The ids a one-column subquery selects, with that column's type: a
+    # database compares columns of one type only, and PostgreSQL rejects an
+    # integer key against a string item_id outright.
+    class Query
+      attr_reader relation: untyped
+
+      attr_reader column: untyped
+
+      attr_reader type: Symbol?
+
+      # : (untyped, untyped, Symbol?) -> void
+      def initialize: (untyped, untyped, Symbol?) -> void
+
+      # A key PT-AT recorded as empty names no record, so it is left out.
+      # : () -> Array[untyped]
+      def values: () -> Array[untyped]
+
+      # The ids with no match in `keys`, a subquery of the keys that exist.
+      # : (untyped) -> Array[untyped]
+      def missing: (untyped) -> Array[untyped]
+    end
+
+    type source = Query | Array[untyped]
+
+    # Every id the sources name, read from the database where needed.
+    # : (Array[source]) -> Array[untyped]
+    def self.values: (Array[source]) -> Array[untyped]
+
+    # : (untyped, tree: AssociationTree, time_range: TimeRange?) -> void
+    def initialize: (untyped, tree: AssociationTree, time_range: TimeRange?) -> void
+
+    # The roots' ids, each source a subquery or an array of values.
+    # : () -> Array[source]
+    def call: () -> Array[source]
+
+    private
+
+    @model: untyped
+
+    @time_range: TimeRange?
+
+    @traversal: AssociationTraversal
+
+    @tree: AssociationTree
+
+    # Ids of `model` records with a change somewhere below them in `tree`.
+    # : (untyped, AssociationTree, String) -> Array[source]
+    def reach: (untyped, AssociationTree, String) -> Array[source]
+
+    # Target records that changed, or that reach a change further down.
+    # : (untyped, AssociationTree?, String) -> Array[source]
+    def targets: (untyped, AssociationTree?, String) -> Array[source]
+
+    # : (untyped, Array[source]) -> Array[source]
+    def owners: (untyped, Array[source]) -> Array[source]
+
+    # A join row that changes moves membership as surely as a target that does.
+    # : (untyped, Array[source]) -> Array[source]
+    def through_owners: (untyped, Array[source]) -> Array[source]
+
+    # A polymorphic key's targets are known only from the types its rows name,
+    # and a path stops at one, so only the targets' own changes count.
+    # : (untyped) -> Array[source]
+    def polymorphic_owners: (untyped) -> Array[source]
+
+    # : (untyped) -> Array[AssociationActivityEdge]
+    def edges: (untyped) -> Array[AssociationActivityEdge]
+
+    # Records with a version in the window.
+    # : (untyped) -> Array[source]
+    def changed: (untyped) -> Array[source]
+
+    # One edge for each source. A subquery whose column type matches the
+    # filtered column stays a subquery; anything else is read, and the edge
+    # runs over its values in slices.
+    # : (AssociationActivityEdge, Array[source]) -> Array[source]
+    def follow: (AssociationActivityEdge, Array[source]) -> Array[source]
+
+    # : (AssociationActivityEdge, Array[untyped]) -> Array[untyped]
+    def read: (AssociationActivityEdge, Array[untyped]) -> Array[untyped]
+
+    # : (Query, Symbol?) -> bool
+    def comparable?: (Query, Symbol?) -> bool
+
+    # : (String) -> untyped
+    def target_class: (String) -> untyped
+  end
+end

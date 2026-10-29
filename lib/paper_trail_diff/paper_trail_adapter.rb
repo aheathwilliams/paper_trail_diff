@@ -133,7 +133,7 @@ module PaperTrailDiff
     #: (untyped, limit: Integer?, within: untyped, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?historical_filter: untyped, ?max_filter_versions: Integer, ?include_deleted: bool) -> ScopedAnalysis
     def analyze_scope(scope, limit:, within:, activity: false, version_scope: nil, close_on: nil, snapshots: false, group: nil, historical_filter: nil, max_filter_versions: HistoricalFilter::DEFAULT_VERSION_LIMIT, include_deleted: false) # rubocop:disable Metrics/ParameterLists, Layout/LineLength
       ActivityGrouping.validate!(group, activity: activity, snapshots: snapshots)
-      @batch_safety.call(scope.all.model) if scope.respond_to?(:all) && scope.respond_to?(:where)
+      check_scope(scope, activity)
       # @type var options: report_options
       options = { within: within, activity: activity, version_scope: version_scope,
                   close_on: close_on, snapshots: snapshots, group: group }
@@ -143,11 +143,24 @@ module PaperTrailDiff
                analyzer: ->(records) { analyze_many(records, **options, within: within) },
                deleted_analyzer: lambda { |identities|
                  analyze_deleted(scope.all.model, identities, options)
-               }
+               },
+               # Checkpoints compare a root's own versions, so only activity can
+               # report a window in which just its associations changed.
+               activity_tree: (@association_tree if activity)
       ).call
     end
 
     private
+
+    # Selecting by activity reads association history, so it must be available
+    # before the first selection query rather than once analysis starts.
+    #: (untyped, bool) -> void
+    def check_scope(scope, activity)
+      return unless scope.respond_to?(:all) && scope.respond_to?(:where)
+
+      @batch_safety.call(scope.all.model)
+      @traversal_preparer.call(scope.all.model, historical: true) if activity
+    end
 
     #: (Array[comparison_input], preparer: untyped) -> ComparisonBatch
     def comparison_batch(comparisons, preparer:)
@@ -185,7 +198,8 @@ module PaperTrailDiff
         model, identities: identities, time_range: within.nil? ? nil : TimeRange.new(within),
                version_scope: options.fetch(:version_scope),
                history_preparer: @historical_store.method(:prepare_deleted_batch),
-               analyzer: analyzer
+               analyzer: analyzer,
+               context_required: options.fetch(:activity) && !@association_tree.empty?
       ).call
     end
 

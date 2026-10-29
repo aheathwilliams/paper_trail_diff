@@ -1,0 +1,137 @@
+# Generated from lib/paper_trail_diff/association_activity_edge.rb with RBS::Inline
+
+module PaperTrailDiff
+  # One association edge read backwards for a window: given the ids of records
+  # on its far side, the query for the owners that held them while it was open.
+  #
+  # `filter_type` is the type of the column those ids are compared with, and
+  # `type` that of the owner column the query selects, so a caller can keep a
+  # subquery only where the database can compare the two.
+  class AssociationActivityEdge
+    attr_reader column: untyped
+
+    attr_reader type: Symbol?
+
+    attr_reader filter_type: Symbol?
+
+    # : (untyped, TimeRange?) -> void
+    def initialize: (untyped, TimeRange?) -> void
+
+    # : () -> bool
+    def available?: () -> bool
+
+    # : (untyped) -> untyped
+    def relation: (untyped) -> untyped
+
+    private
+
+    @owner: untyped
+
+    @reflection: untyped
+
+    @time_range: TimeRange?
+
+    # The window plus the state when it opened, which is what
+    # VersionAssociationCandidateScope selects for an activity analysis.
+    # : (untyped, untyped) -> untyped
+    def candidates: (untyped, untyped) -> untyped
+
+    # : (untyped, String) -> Symbol?
+    def column_type: (untyped, String) -> Symbol?
+
+    # : (untyped) -> untyped
+    def arel_value: (untyped) -> untyped
+
+    # The owners a child pointed at when the window opened or after a change
+    # inside it, as PT-AT recorded them on the child's own versions.
+    class Child < AssociationActivityEdge
+      # : (untyped, TimeRange?) -> void
+      def initialize: (untyped, TimeRange?) -> void
+
+      # : (untyped) -> untyped
+      def relation: (untyped) -> untyped
+
+      private
+
+      @associations: untyped
+
+      @versions: untyped
+
+      # : () -> Array[String?]
+      def owner_types: () -> Array[String?]
+    end
+
+    # The owners that pointed at a target when the window opened or after a
+    # change inside it, as PT-AT recorded them on the owners' versions.
+    class BelongsTo < AssociationActivityEdge
+      # : (untyped, TimeRange?, ?foreign_types: Array[String]?) -> void
+      def initialize: (untyped, TimeRange?, ?foreign_types: Array[String]?) -> void
+
+      # The types a polymorphic key's rows name, the only way to know its targets.
+      # : () -> Array[String]
+      def target_types: () -> Array[String]
+
+      # : (untyped) -> untyped
+      def relation: (untyped) -> untyped
+
+      private
+
+      @associations: untyped
+
+      @foreign_types: Array[String]?
+
+      @versions: untyped
+
+      # : (Hash[Symbol, untyped]) -> untyped
+      def owner_rows: (Hash[Symbol, untyped]) -> untyped
+    end
+
+    # The owners a HABTM join row links to a target now. A join table has no
+    # model to type its columns, so the owner column is read by quoted name.
+    class LiveHabtm < AssociationActivityEdge
+      # : (untyped, TimeRange?) -> void
+      def initialize: (untyped, TimeRange?) -> void
+
+      # : () -> bool
+      def available?: () -> bool
+
+      # : (untyped) -> untyped
+      def relation: (untyped) -> untyped
+
+      private
+
+      @table: untyped
+
+      # : () -> Hash[String, Symbol?]
+      def join_columns: () -> Hash[String, Symbol?]
+
+      # : () -> untyped
+      def quoted_owner_column: () -> untyped
+
+      # Arel ships no signatures; see VersionQuery.
+      # : () -> untyped
+      def arel: () -> untyped
+
+      # Active Record 7.1 has no `with_connection`; see VersionAssociationCandidateScope.
+      # : [T] () { (untyped) -> T } -> T
+      def connected: [T] () { (untyped) -> T } -> T
+    end
+
+    # The owners whose versions PT-AT recorded a HABTM target with, keyed by
+    # the transaction each version was saved in.
+    class RecordedHabtm < AssociationActivityEdge
+      # : (untyped, TimeRange?) -> void
+      def initialize: (untyped, TimeRange?) -> void
+
+      # : () -> bool
+      def available?: () -> bool
+
+      # : (untyped) -> untyped
+      def relation: (untyped) -> untyped
+
+      @associations: untyped
+
+      @versions: untyped
+    end
+  end
+end
