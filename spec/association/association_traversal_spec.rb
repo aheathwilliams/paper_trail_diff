@@ -27,6 +27,9 @@ class TraversalArticle < ActiveRecord::Base
   has_and_belongs_to_many :tags, class_name: 'TrackedTag', join_table: :tracked_articles_tags,
                                  foreign_key: :tracked_article_id,
                                  association_foreign_key: :tracked_tag_id
+  has_and_belongs_to_many :labels, class_name: 'TrackedTag', join_table: :tracked_articles_tags,
+                                   foreign_key: :tracked_article_id,
+                                   association_foreign_key: :tracked_tag_id
   has_many :tagged_articles, through: :tags, source: :articles
   has_many :tagged_comments, through: :tagged_articles, source: :comments
   has_paper_trail
@@ -59,6 +62,11 @@ RSpec.describe PaperTrailDiff::AssociationTraversal do
 
   def unsupported(path, habtm)
     "unsupported association #{path}: #{habtm_reason(habtm)}"
+  end
+
+  def below_root(habtm)
+    "#{habtm} is a has_and_belongs_to_many below the root, and a root checkpoint records " \
+      'HABTM membership for the root alone'
   end
 
   describe '.belongs_to_target' do
@@ -122,14 +130,26 @@ RSpec.describe PaperTrailDiff::AssociationTraversal do
   end
 
   describe '.unsupported_reason' do
-    def reason(model, name)
-      described_class.unsupported_reason(model, model.reflect_on_association(name))
+    def reason(model, name, root: true)
+      described_class.unsupported_reason(model, model.reflect_on_association(name), root: root)
     end
 
     it 'accepts every supported macro and a has_many :through' do
       %i[author profile comments tags contributors].each do |name|
         expect(reason(TrackedArticle, name)).to be_nil
       end
+    end
+
+    # PT-AT keys HABTM rows by transaction and association name, not by owner,
+    # so a root checkpoint holds the root's membership alone.
+    it 'names a HABTM below the root, and accepts every other association there' do
+      expect(reason(TrackedTag, :articles, root: false)).to eq(below_root('TrackedTag#articles'))
+      expect(reason(TrackedTag, :articles)).to be_nil
+      %i[author profile comments contributors].each do |name|
+        expect(reason(TrackedArticle, name, root: false)).to be_nil
+      end
+      expect(reason(TraversalAuthor, :article_tags, root: false))
+        .to eq(habtm_reason('TrackedArticle#tags'))
     end
 
     it 'names the PaperTrail versions association' do
@@ -158,14 +178,18 @@ RSpec.describe PaperTrailDiff::AssociationTraversal do
     # one a request accepts.
     it 'is what discovery leaves out, so every path it lists can be requested' do
       expect(PaperTrailDiff.association_paths(TraversalArticle).map(&:path))
-        .to eq(%w[author comments notes tags])
+        .to eq(%w[author comments labels notes tags])
+      article_paths = PaperTrailDiff.association_paths(TrackedArticle, max_depth: 2).map(&:path)
+      expect(article_paths).to include('tags', 'comments.article')
+      expect(article_paths).not_to include('tags.articles')
       expect(PaperTrailDiff.association_paths(TraversalAuthor).map(&:path))
         .to eq(%w[articles traversal_articles])
 
       paths = PaperTrailDiff.association_paths(TraversalAuthor, max_depth: 2).map(&:path)
       expect(paths).to include('traversal_articles.comments', 'articles.contributors')
       expect(paths).not_to include('traversal_articles.tagged_articles',
-                                   'traversal_articles.tagged_comments')
+                                   'traversal_articles.tagged_comments',
+                                   'articles.tags', 'traversal_articles.tags')
       expect { traversal(*paths).validate!(TraversalAuthor) }.not_to raise_error
     end
 
@@ -185,10 +209,11 @@ RSpec.describe PaperTrailDiff::AssociationTraversal do
 
   describe '#validate!' do
     it 'accepts supported paths, including nested and through paths' do
-      paths = [:author, :profile, :tags, :contributors, 'comments.replies', 'comments.article.tags']
+      paths = [:author, :profile, :tags, :contributors, 'comments.replies', 'comments.article']
 
       expect { traversal(*paths).validate!(TrackedArticle) }.not_to raise_error
-      expect { traversal(:comments, 'articles.tags').validate!(TrackedAuthor) }.not_to raise_error
+      expect { traversal(:comments, 'articles.contributors').validate!(TrackedAuthor) }
+        .not_to raise_error
     end
 
     it 'names the full path of an unknown association' do
@@ -264,6 +289,19 @@ RSpec.describe PaperTrailDiff::AssociationTraversal do
                         unsupported('traversal_articles.tagged_articles', 'TraversalArticle#tags'))
     end
 
+    it 'rejects a HABTM below the root, even on a path that leads back to the root' do
+      {
+        'tags.articles' => %w[tags.articles TrackedTag#articles],
+        'tags.articles.tags' => %w[tags.articles TrackedTag#articles],
+        'author.articles.tags' => %w[author.articles.tags TrackedArticle#tags],
+        'comments.article.tags' => %w[comments.article.tags TrackedArticle#tags]
+      }.each do |requested, (path, habtm)|
+        expect { traversal(requested).validate!(TrackedArticle) }
+          .to raise_error(PaperTrailDiff::UnsupportedAssociationError,
+                          "unsupported association #{path}: #{below_root(habtm)}")
+      end
+    end
+
     it "raises Active Record's own error for a through it cannot follow" do
       expect { traversal(:holder_replies).validate!(TraversalNote) }
         .to raise_error(ActiveRecord::HasManyThroughAssociationPolymorphicThroughError)
@@ -299,11 +337,11 @@ RSpec.describe PaperTrailDiff::AssociationTraversal do
   end
 
   describe '#habtm_paths' do
-    it 'lists the HABTM paths at any depth, frozen' do
-      paths = traversal(:tags, :comments, 'author.articles.tags').habtm_paths(TrackedArticle)
+    it 'lists the HABTM paths, frozen' do
+      paths = traversal(:tags, :comments, :labels, 'author.articles').habtm_paths(TraversalArticle)
 
       expect(paths).to be_frozen
-      expect(paths).to eq(%w[author.articles.tags tags])
+      expect(paths).to eq(%w[labels tags])
     end
 
     it 'leaves out a has_many :through' do
@@ -315,12 +353,12 @@ RSpec.describe PaperTrailDiff::AssociationTraversal do
     let(:version) { Struct.new(:id, :transaction_id) }
 
     it 'requires a transaction id on the version when a HABTM path is selected' do
-      walker = traversal(:tags, :comments, 'author.articles.tags')
+      walker = traversal(:tags, :comments, :labels)
 
-      expect { walker.ensure_habtm_history!(TrackedArticle, version.new(4, nil)) }
+      expect { walker.ensure_habtm_history!(TraversalArticle, version.new(4, nil)) }
         .to raise_error(PaperTrailDiff::IncompleteAssociationHistoryError,
-                        'HABTM history is incomplete at version 4: author.articles.tags, tags')
-      expect(walker.ensure_habtm_history!(TrackedArticle, version.new(4, 9))).to be_nil
+                        'HABTM history is incomplete at version 4: labels, tags')
+      expect(walker.ensure_habtm_history!(TraversalArticle, version.new(4, 9))).to be_nil
     end
 
     it 'requires a transaction_id column' do
@@ -336,12 +374,12 @@ RSpec.describe PaperTrailDiff::AssociationTraversal do
 
   describe '#reject_live_habtm_activity!' do
     it 'refuses live-ended activity over HABTM paths and names them' do
-      walker = traversal(:tags, 'author.articles.tags')
+      walker = traversal(:tags, :labels)
 
-      expect { walker.reject_live_habtm_activity!(TrackedArticle) }
+      expect { walker.reject_live_habtm_activity!(TraversalArticle) }
         .to raise_error(PaperTrailDiff::UnsupportedLiveActivityError,
                         'live-ended activity cannot reconstruct HABTM event boundaries: ' \
-                        'author.articles.tags, tags')
+                        'labels, tags')
     end
 
     it 'allows activity without HABTM paths' do
@@ -432,19 +470,20 @@ RSpec.describe PaperTrailDiff::AssociationTraversal do
       ]
     end
 
-    it 'reject a through over a HABTM before running any query' do
+    it 'reject a through over a HABTM, or a HABTM below the root, before running any query' do
       article = TraversalArticle.create!(title: 'Article')
       article.update!(title: 'Renamed')
       author = TraversalAuthor.create!(name: 'Author')
       author.update!(name: 'Renamed')
-      cases = [[article, :tagged_articles, 'TraversalArticle#tags'],
-               [author, :article_tags, 'TrackedArticle#tags']]
+      cases = [[article, :tagged_articles, unsupported('tagged_articles', 'TraversalArticle#tags')],
+               [author, :article_tags, unsupported('article_tags', 'TrackedArticle#tags')],
+               [article, 'tags.articles',
+                "unsupported association tags.articles: #{below_root('TrackedTag#articles')}"]]
 
-      cases.each do |record, association, habtm|
+      cases.each do |record, association, message|
         calls(record, association).each do |call|
           sql = statements do
-            expect(&call).to raise_error(PaperTrailDiff::UnsupportedAssociationError,
-                                         unsupported(association, habtm))
+            expect(&call).to raise_error(PaperTrailDiff::UnsupportedAssociationError, message)
           end
           expect(sql).to eq([])
         end

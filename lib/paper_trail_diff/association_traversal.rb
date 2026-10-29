@@ -41,13 +41,15 @@ module PaperTrailDiff
     private_class_method :polymorphic_target
 
     # Why a request cannot name this association of the model, or nil when it
-    # can. Discovery lists only the associations this accepts, so every path it
+    # can; `root` says whether the model is the record the request compares.
+    # Discovery lists only the associations this accepts, so every path it
     # lists can be requested. A has_many :through Active Record cannot follow
     # raises Active Record's own error.
-    #: (untyped, untyped) -> String?
-    def self.unsupported_reason(model_class, reflection)
+    #: (untyped, untyped, root: bool) -> String?
+    def self.unsupported_reason(model_class, reflection, root:)
       return 'PaperTrail versions' if paper_trail_versions?(model_class, reflection)
       return reflection.macro.to_s unless SUPPORTED_ASSOCIATION_MACROS.include?(reflection.macro)
+      return habtm_below_root(reflection) if reflection.macro == :has_and_belongs_to_many && !root
 
       habtm = habtm_in_chain(reflection)
       return unless habtm
@@ -55,6 +57,17 @@ module PaperTrailDiff
       "it goes through #{habtm.active_record.name}##{habtm.name}, a has_and_belongs_to_many, " \
         'whose hidden join model has no history to compare'
     end
+
+    # PT-AT records a HABTM's membership only when its owner saves a version,
+    # in rows keyed by transaction and association name, not by owner. A root
+    # checkpoint so holds the root's membership and no one else's: another
+    # record's HABTM would read the root's rows, or none.
+    #: (untyped) -> String
+    def self.habtm_below_root(reflection)
+      "#{reflection.active_record.name}##{reflection.name} is a has_and_belongs_to_many " \
+        'below the root, and a root checkpoint records HABTM membership for the root alone'
+    end
+    private_class_method :habtm_below_root
 
     #: (untyped, untyped) -> bool
     def self.paper_trail_versions?(model_class, reflection)
@@ -145,8 +158,10 @@ module PaperTrailDiff
       raise UnsupportedLiveActivityError, message
     end
 
-    # A model and a tree resolve to the same reflections at any path; the path
-    # only names a failure, and a failure is not cached.
+    # A model and a tree resolve to the same reflections wherever they are
+    # read: a tree is only ever walked from one place, the root tree at the
+    # root and a subtree below it. Beyond that, the path only names a failure,
+    # and a failure is not cached.
     #: (untyped, AssociationTree, path: String) -> Array[untyped]
     def reflections_for(model_class, tree, path:)
       @reflection_cache[[model_class, tree]] ||= requested_reflections(model_class, tree, path)
@@ -206,16 +221,17 @@ module PaperTrailDiff
     #: (untyped, AssociationTree, String) -> Array[untyped]
     def requested_reflections(model_class, tree, path)
       tree.children.map do |name, _subtree|
-        resolve_reflection(model_class, name, Support.association_path(path, name))
+        resolve_reflection(model_class, name, Support.association_path(path, name),
+                           root: path.empty?)
       end.freeze
     end
 
-    #: (untyped, String, String) -> untyped
-    def resolve_reflection(model_class, name, full_path)
+    #: (untyped, String, String, root: bool) -> untyped
+    def resolve_reflection(model_class, name, full_path, root:)
       reflection = model_class.reflect_on_association(name)
       raise UnknownAssociationError, "unknown association: #{full_path}" unless reflection
 
-      reason = self.class.unsupported_reason(model_class, reflection)
+      reason = self.class.unsupported_reason(model_class, reflection, root: root)
       raise UnsupportedAssociationError, "unsupported association #{full_path}: #{reason}" if reason
 
       reflection
