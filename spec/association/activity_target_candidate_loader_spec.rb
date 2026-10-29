@@ -75,13 +75,18 @@ RSpec.describe PaperTrailDiff::ActivityTargetCandidateLoader do
     finish = version_of(article)
     article.update!(author: after)
 
-    found = rows(TrackedArticle, [article.id], :author,
-                 PaperTrailDiff::ActivityRange.new(start, finish))
+    range = PaperTrailDiff::ActivityRange.new(start, finish)
+    found = rows(TrackedArticle, [article.id], :author, range)
+    # The prepared index reads these directly, so they stop at the range end.
+    historical = described_class.new(TrackedArticle, [article.id],
+                                     TrackedArticle.reflect_on_association(:author), range)
+                                .historical_rows
 
     expect(fields(found)).to contain_exactly(
       [article.id, first.id, 'TrackedAuthor', 'update'],
       [article.id, second.id, 'TrackedAuthor', 'update']
     )
+    expect(historical.map(&:foreign_key_id)).not_to include(after.id)
     expect(found.map(&:created_at)).to all(be_a(Time))
     expect(found).to all(be_frozen)
   end
@@ -144,6 +149,19 @@ RSpec.describe PaperTrailDiff::ActivityTargetCandidateLoader do
     expect(fields(rows(TargetLoaderSponsoredSticker, [sticker.id], :sponsor,
                        PaperTrailDiff::ActivityRange.new(start, finish))))
       .to eq([[sticker.id, author.id, 'TrackedAuthor', 'create']])
+  end
+
+  it 'reads the live target of owners of the base class and its subclasses alike' do
+    article = TrackedArticle.create!(title: 'Holder')
+    plain = TargetLoaderSticker.create!(label: 'plain', holder: article)
+    sponsored = TargetLoaderSponsoredSticker.create!(label: 'sponsored', holder: article)
+    range = PaperTrailDiff::ActivityRange.new(Time.now.utc, Time.now.utc)
+
+    live = rows(TargetLoaderSponsoredSticker, [plain.id, sponsored.id], :holder, range)
+           .select { |row| row.event.nil? }
+
+    expect(fields(live)).to contain_exactly([plain.id, article.id, 'TrackedArticle', nil],
+                                            [sponsored.id, article.id, 'TrackedArticle', nil])
   end
 
   it 'types owner ids read from a string item_id' do
