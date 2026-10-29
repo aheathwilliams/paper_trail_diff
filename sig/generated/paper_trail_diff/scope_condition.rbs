@@ -3,12 +3,14 @@
 module PaperTrailDiff
   # An association scope, or its target's default scope, read as conditions
   # on stored attributes, so membership at a boundary can be decided from each
-  # record's state there rather than by a query. It reads the relation the
-  # scope builds once and never runs application code per record. A scope it
-  # cannot read exactly builds no condition, and the caller keeps its slower
-  # path.
+  # record's state there rather than by a query. A limit, offset or has_one
+  # order then ranks the records that meet the conditions (ScopeRanking). It
+  # reads the relation the scope builds once and never runs application code
+  # per record. A scope it cannot read exactly builds no condition, and the
+  # caller keeps its slower path.
   class ScopeCondition
-    # Relation parts that leave membership to the where clause alone.
+    # Relation parts that leave membership to the where clause and the
+    # ranking alone.
     RELATION_VALUES: untyped
 
     # Types whose stored values compare in Ruby as the database compares them,
@@ -39,25 +41,49 @@ module PaperTrailDiff
     # : (untyped) -> bool
     def self.scoped_path?: (untyped) -> bool
 
-    # Returns nil when the scope cannot be read as plain conditions.
+    # Returns nil when the scope cannot be read as plain conditions and an
+    # exact ranking.
     # : (untyped, ?untyped) -> ScopeCondition?
     def self.build: (untyped, ?untyped) -> ScopeCondition?
+
+    # nil when the relation picks its members by conditions alone.
+    # : (untyped, untyped, untyped) -> ScopeRanking?
+    def self.ranking: (untyped, untyped, untyped) -> ScopeRanking?
+
+    # Active Record reads only the conditions of a through's parts, never
+    # their limit, offset or has_one order, so a through that passes a ranked
+    # part is not read.
+    # : (untyped) -> bool
+    def self.ranked_through?: (untyped) -> bool
+
+    # A polymorphic part's class, and so its scope, is known only per record.
+    # : (untyped) -> bool
+    def self.ranked_part?: (untyped) -> bool
 
     # A scope that takes the owner differs per record, so it is never read.
     # : (untyped, untyped) -> untyped
     def self.scoped_relation: (untyped, untyped) -> untyped
 
-    # A has_one takes the first record its order names, which is a ranking,
-    # not a condition. Some parts, such as the having clause `or` sets, may
-    # be present but empty.
-    # : (untyped, untyped) -> bool
-    def self.plain_relation?: (untyped, untyped) -> bool
+    # Some parts, such as the having clause `or` sets, may be present but
+    # empty.
+    # : (untyped) -> bool
+    def self.plain_relation?: (untyped) -> bool
 
-    # : (untyped, Array[untyped]) -> void
-    def initialize: (untyped, Array[untyped]) -> void
+    # : (untyped, Array[untyped], ?ScopeRanking?) -> void
+    def initialize: (untyped, Array[untyped], ?ScopeRanking?) -> void
 
     # : (Hash[String, untyped]) -> bool
     def matches?: (Hash[String, untyped]) -> bool
+
+    # The members among records that are each the owner's by key: those that
+    # meet the conditions, then ranked.
+    # : (Array[untyped]) -> Array[untyped]
+    def members: (Array[untyped]) -> Array[untyped]
+
+    # Records that meet the conditions, as ranked; unchanged without a
+    # ranking.
+    # : (Array[untyped]) -> Array[untyped]
+    def rank: (Array[untyped]) -> Array[untyped]
 
     # SQL compares NULL with nothing, so only an IS NULL test, an equality
     # with nil, matches it.
@@ -68,6 +94,8 @@ module PaperTrailDiff
     @model_class: untyped
 
     @predicate: Array[untyped]
+
+    @ranking: ScopeRanking?
 
     # : (Array[untyped], Hash[String, untyped]) -> bool
     def evaluate: (Array[untyped], Hash[String, untyped]) -> bool
@@ -85,7 +113,8 @@ module PaperTrailDiff
       # : (untyped, ?untyped) -> ScopeCondition?
       def call: (untyped, ?untyped) -> ScopeCondition?
 
-      # The records the reflection's scope admits. Its condition must exist.
+      # The records the reflection's scope admits, as it ranks them. Its
+      # condition must exist.
       # : (untyped, Array[untyped], ?untyped) -> Array[untyped]
       def select: (untyped, Array[untyped], ?untyped) -> Array[untyped]
 

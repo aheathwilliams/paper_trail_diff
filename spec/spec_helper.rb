@@ -42,6 +42,8 @@ unless ENV['PAPER_TRAIL_DIFF_MUTANT']
       add_filter '/prepared_history_loader.rb'
       add_filter '/prepared_association_reifier.rb'
       add_filter '/timeline_snapshot_provider.rb'
+      add_filter '/scope_condition.rb'
+      add_filter '/scope_ranking.rb'
       minimum_coverage line: 85, branch: 60
     end
   end

@@ -70,10 +70,17 @@ project follows [Semantic Versioning](https://semver.org/).
   `where.not` forms, combined with `and` and `or`) from prepared history, so
   they no longer need `allow_expensive: true` for it and its query count no
   longer grows with the records. String conditions are read this way only on
-  SQLite and PostgreSQL. Scopes with `limit` or `offset`, scopes that take the
-  owner, and other conditions are still rejected without the opt-in. A
-  default-scoped model whose scope assigns no attributes is read without
-  `reify`.
+  SQLite and PostgreSQL. Scopes that take the owner and other conditions are
+  still rejected without the opt-in. A default-scoped model whose scope assigns
+  no attributes is read without `reify`.
+- Batch methods also read a `limit` or `offset`, and the order of a `has_one`,
+  from prepared history when the order is total, reaching the primary key, and
+  sorts only by integer, boolean, or integer enum columns of the target. NULL
+  sorts as each adapter puts it by default. In the reconstruction probe,
+  `report` over `order(:id).limit(1)` went from 252 queries and 160 `reify`
+  calls at 20 roots, with the opt-in, to 32 queries and none without it. A
+  string or time order, an order with ties, and a through over a ranked part
+  are still rejected without the opt-in.
 - The README recipe for deleted records also reads each record as it was just
   before deletion, which a record created inside the window has no other
   snapshot of.
@@ -95,6 +102,17 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- A `limit` or `offset` scope, or an ordered `has_one`, read at a version
+  returns the records its query returned then, when the order is total and
+  sorts by integer, boolean, or integer enum columns. It used to start from
+  the association's current rows, so a range whose records later changed
+  reported the wrong ones: with comments `first` and `second` under
+  `order(:id).limit(1)`, destroying `first` and adding `third` reported
+  `third` added instead of `second`. Other ranked scopes still read the
+  current rows.
+- In a batch, a `has_one` with an `offset` is loaded per record at the current
+  end. The preloader applied the offset across all records at once, so a
+  record could show another record's member.
 - Activity reports a change to a `belongs_to` target that is an STI subclass.
   When the target was destroyed, or its `type` changed between a subclass and
   another class, activity reported nothing while checkpoint analysis reported

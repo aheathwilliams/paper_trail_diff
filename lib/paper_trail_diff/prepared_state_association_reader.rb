@@ -116,6 +116,8 @@ module PaperTrailDiff
           selected << child if child && member?(child, owner, reflection)
         end
       end
+      condition = @conditions.call(reflection) #: ScopeCondition
+      selected = condition.rank(selected)
       [true, reflection.collection? ? selected : selected.first(1)]
     end
 

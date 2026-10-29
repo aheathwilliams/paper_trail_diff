@@ -4,13 +4,16 @@
 module PaperTrailDiff
   # An association scope, or its target's default scope, read as conditions
   # on stored attributes, so membership at a boundary can be decided from each
-  # record's state there rather than by a query. It reads the relation the
-  # scope builds once and never runs application code per record. A scope it
-  # cannot read exactly builds no condition, and the caller keeps its slower
-  # path.
+  # record's state there rather than by a query. A limit, offset or has_one
+  # order then ranks the records that meet the conditions (ScopeRanking). It
+  # reads the relation the scope builds once and never runs application code
+  # per record. A scope it cannot read exactly builds no condition, and the
+  # caller keeps its slower path.
   class ScopeCondition
-    # Relation parts that leave membership to the where clause alone.
-    RELATION_VALUES = %i[where order reordering readonly strict_loading extending].freeze
+    # Relation parts that leave membership to the where clause and the
+    # ranking alone.
+    RELATION_VALUES = %i[where order reordering limit offset readonly strict_loading
+                         extending].freeze
     # Types whose stored values compare in Ruby as the database compares them,
     # named rather than referenced so that loading needs no Active Model.
     VALUE_TYPES = %w[ActiveModel::Type::Integer ActiveModel::Type::Boolean
@@ -43,17 +46,52 @@ module PaperTrailDiff
       scoped_path?(reflection.through_reflection) || scoped_path?(reflection.source_reflection)
     end
 
-    # Returns nil when the scope cannot be read as plain conditions.
+    # Returns nil when the scope cannot be read as plain conditions and an
+    # exact ranking.
     #: (untyped, ?untyped) -> ScopeCondition?
     def self.build(reflection, model_class = reflection.klass)
+      return if ranked_through?(reflection)
+
       relation = scoped_relation(reflection, model_class)
-      return unless relation && plain_relation?(relation, reflection)
+      return unless relation && plain_relation?(relation)
 
       clause = relation.where_clause - model_class.unscoped.where_clause
-      new(model_class, Reader.new(model_class).call(clause.ast))
+      predicate = Reader.new(model_class).call(clause.ast)
+      new(model_class, predicate, ranking(relation, reflection, model_class))
     rescue Unreadable
       nil
     end
+
+    # nil when the relation picks its members by conditions alone.
+    #: (untyped, untyped, untyped) -> ScopeRanking?
+    def self.ranking(relation, reflection, model_class)
+      return unless ScopeRanking.ranks?(relation, reflection)
+
+      ScopeRanking.build(relation, reflection, model_class) || raise(Unreadable)
+    end
+    private_class_method :ranking
+
+    # Active Record reads only the conditions of a through's parts, never
+    # their limit, offset or has_one order, so a through that passes a ranked
+    # part is not read.
+    #: (untyped) -> bool
+    def self.ranked_through?(reflection)
+      return false unless reflection.through_reflection?
+
+      [reflection.through_reflection, reflection.source_reflection].any? do |part|
+        ranked_part?(part) || ranked_through?(part)
+      end
+    end
+
+    # A polymorphic part's class, and so its scope, is known only per record.
+    #: (untyped) -> bool
+    def self.ranked_part?(part)
+      return false if part.polymorphic?
+
+      relation = scoped_relation(part, part.klass)
+      !relation.nil? && ScopeRanking.ranks?(relation, part)
+    end
+    private_class_method :ranked_part?
 
     # A scope that takes the owner differs per record, so it is never read.
     #: (untyped, untyped) -> untyped
@@ -67,28 +105,41 @@ module PaperTrailDiff
     end
     private_class_method :scoped_relation
 
-    # A has_one takes the first record its order names, which is a ranking,
-    # not a condition. Some parts, such as the having clause `or` sets, may
-    # be present but empty.
-    #: (untyped, untyped) -> bool
-    def self.plain_relation?(relation, reflection)
+    # Some parts, such as the having clause `or` sets, may be present but
+    # empty.
+    #: (untyped) -> bool
+    def self.plain_relation?(relation)
       extra = relation.values.except(*RELATION_VALUES).values
-      return false unless extra.all? { |value| value.respond_to?(:empty?) && value.empty? }
-
-      reflection.collection? || reflection.belongs_to? || relation.order_values.empty?
+      extra.all? { |value| value.respond_to?(:empty?) && value.empty? }
     end
     private_class_method :plain_relation?
 
-    #: (untyped, Array[untyped]) -> void
-    def initialize(model_class, predicate)
+    #: (untyped, Array[untyped], ?ScopeRanking?) -> void
+    def initialize(model_class, predicate, ranking = nil)
       @model_class = model_class
       @predicate = predicate
+      @ranking = ranking
       freeze
     end
 
     #: (Hash[String, untyped]) -> bool
     def matches?(attributes)
       evaluate(@predicate, attributes)
+    end
+
+    # The members among records that are each the owner's by key: those that
+    # meet the conditions, then ranked.
+    #: (Array[untyped]) -> Array[untyped]
+    def members(records)
+      rank(records.select { |record| matches?(record.attributes) })
+    end
+
+    # Records that meet the conditions, as ranked; unchanged without a
+    # ranking.
+    #: (Array[untyped]) -> Array[untyped]
+    def rank(records)
+      ranking = @ranking
+      ranking ? ranking.call(records) : records
     end
 
     # SQL compares NULL with nothing, so only an IS NULL test, an equality
@@ -105,6 +156,7 @@ module PaperTrailDiff
 
     # @rbs @model_class: untyped
     # @rbs @predicate: Array[untyped]
+    # @rbs @ranking: ScopeRanking?
 
     #: (Array[untyped], Hash[String, untyped]) -> bool
     def evaluate(predicate, attributes)
@@ -138,11 +190,12 @@ module PaperTrailDiff
         @conditions[key] = ScopeCondition.build(reflection, model_class)
       end
 
-      # The records the reflection's scope admits. Its condition must exist.
+      # The records the reflection's scope admits, as it ranks them. Its
+      # condition must exist.
       #: (untyped, Array[untyped], ?untyped) -> Array[untyped]
       def select(reflection, records, model_class = reflection.klass)
         condition = call(reflection, model_class) #: ScopeCondition
-        records.select { |record| condition.matches?(record.attributes) }
+        condition.members(records)
       end
 
       # @rbs @conditions: Hash[Array[untyped], ScopeCondition?]

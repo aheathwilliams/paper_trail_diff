@@ -1,0 +1,96 @@
+# Generated from lib/paper_trail_diff/scope_ranking.rb with RBS::Inline
+
+module PaperTrailDiff
+  # The order, offset and limit by which a scope picks its members from the
+  # records that meet its conditions, as the database would rank them. It is
+  # read only when the order is total and every key compares in Ruby as SQL
+  # compares it; otherwise build returns nil and the caller keeps its slower
+  # path.
+  class ScopeRanking
+    DIRECTIONS: untyped
+
+    ATTRIBUTE: ::String
+
+    ENUM_TYPE: ::String
+
+    # Integers and booleans sort alike everywhere. Strings follow a collation
+    # and times the precision each history kept, so neither is read.
+    ORDER_TYPES: untyped
+
+    # Where each adapter sorts NULL in an ascending order by default; a
+    # descending order reverses it. Another adapter's ranking is not read.
+    NULLS_LAST: untyped
+
+    # Places in a sort key, of which only the order counts: a value between a
+    # NULL sorted first and one sorted last, and false before true.
+    NULL_PLACE: untyped
+
+    VALUE_PLACE: ::Integer
+
+    BOOLEAN_VALUE: untyped
+
+    # Whether the relation picks members by rank rather than by condition
+    # alone. A has_one takes the first record its order names.
+    # : (untyped, untyped) -> bool
+    def self.ranks?: (untyped, untyped) -> bool
+
+    # Only a direct has_many or has_one is ranked per owner as its own query
+    # ranks it. Returns nil when the ranking cannot be read exactly.
+    # : (untyped, untyped, untyped) -> ScopeRanking?
+    def self.build: (untyped, untyped, untyped) -> ScopeRanking?
+
+    # : (untyped) -> bool
+    def self.direct?: (untyped) -> bool
+
+    # Active Record casts a limit to an integer but keeps an offset as given,
+    # which may be a String or SQL.
+    # : (untyped) -> bool
+    def self.plain_offset?: (untyped) -> bool
+
+    # The order's keys up to the primary key, which makes it total. Keys
+    # after it never decide anything.
+    # : (Array[untyped], untyped) -> Array[[String, bool]]?
+    def self.keys: (Array[untyped], untyped) -> Array[[ String, bool ]]?
+
+    # The record's own column, sorted plainly in one direction.
+    # : (untyped, untyped) -> String?
+    def self.column: (untyped, untyped) -> String?
+
+    # : (untyped, String) -> bool
+    def self.orderable?: (untyped, String) -> bool
+
+    # : (untyped, Array[[String, bool]], bool, Integer?, Integer?) -> void
+    def initialize: (untyped, Array[[ String, bool ]], bool, Integer?, Integer?) -> void
+
+    # The members among records that met the scope's conditions, in order.
+    # : (Array[untyped]) -> Array[untyped]
+    def call: (Array[untyped]) -> Array[untyped]
+
+    private
+
+    @keys: Array[[ String, bool ]]
+
+    @limit: Integer?
+
+    @model_class: untyped
+
+    @nulls_last: bool
+
+    @offset: Integer?
+
+    # Keys compare in turn, and the primary key always decides. A descending
+    # key negates its places, which also moves NULL to the other end, as each
+    # adapter does by default.
+    # : (Hash[String, untyped]) -> Array[Array[Integer]]
+    def sort_key: (Hash[String, untyped]) -> Array[Array[Integer]]
+
+    # NULL holds the adapter's place alone, so it never compares as a value.
+    # A version saved before its column existed holds NULL there too.
+    # : (untyped) -> Array[Integer]
+    def place: (untyped) -> Array[Integer]
+
+    # The value the database sorts by, as the key's type casts it.
+    # : (String, Hash[String, untyped]) -> untyped
+    def stored: (String, Hash[String, untyped]) -> untyped
+  end
+end

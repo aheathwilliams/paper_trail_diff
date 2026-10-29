@@ -8,15 +8,33 @@ does not establish that a batch API meets that purpose.
 The [follow-up reconstruction investigation](../benchmark/investigation/README.md)
 records the pre-fix N+1 paths and direct-snapshot experiments. Production now uses
 prepared event successors even without changesets, and directly normalizes plain
-root/direct-child states. Scopes and default scopes made of plain conditions
-are read from prepared history; other scoped batch paths, such as `limit` or
-owner-dependent scopes, require `allow_expensive: true`, and that opt-in can
-still cause N+1 work. Model callbacks,
+root/direct-child states. Scopes and default scopes made of plain conditions,
+and a `limit` or `offset` with a total integer order, are read from prepared
+history; other scoped batch paths, such as owner-dependent scopes, require
+`allow_expensive: true`, and that opt-in can still cause N+1 work. Model callbacks,
 custom types and callable predicates also remain outside a flat-query guarantee.
 
 The benchmark exercises `analyze_scope` with genuine PaperTrail history. It is
 a local SQLite baseline for finding work inside the gem, not a production
 latency guarantee or a comparison of SQL dialects.
+
+## Limited associations: 2026-10-29
+
+A `limit` or `offset` with a total order on integer or boolean columns, and an
+ordered `has_one`, are now read from prepared history: each record's stored
+values decide whether it meets the scope's conditions, and the matching records
+are ranked as the association's query ranks them. Batch methods no longer need
+`allow_expensive: true` for them. The probe's `limited` scenario reports
+articles with `has_many :limited_comments, -> { order(:id).limit(1) }`:
+
+| `limited` | SQL at 1 / 5 / 20 roots | `reify` calls | Model initializations |
+| --- | --- | --- | --- |
+| before, with `allow_expensive: true` | 24 / 72 / 252 | 8 / 40 / 160 | 30 / 150 / 600 |
+| after, without an opt-in | 13 / 17 / 32 | 0 / 0 / 0 | 10 / 50 / 200 |
+
+One query per root remains: the current end loads each article's limited
+comments on its own, because Active Record's preloader applies a limit or
+offset to all owners' records at once rather than to each owner's.
 
 ## Scoped associations: 2026-10-29
 
