@@ -375,9 +375,11 @@ window to select that article.
   change. Pass `article` to read the current saved values.
 - PaperTrail's creation version returns `nil` from `reify`. There was no record
   before creation; the diff reports the record being added.
-- A range ending at the current article includes changes PaperTrail never
-  recorded, such as `update_columns`. Pass a version as `to:` to stop at
-  recorded history.
+- Changes PaperTrail never recorded, such as `update_columns`, still show up:
+  in the step for the article's previous recorded change, credited to its
+  author. Passing a version as `to:` leaves out only the ones made after it.
+  `PaperTrailDiff.recorded_changes(version)` reads just what a version
+  recorded.
 - `ignore:` replaces the default list. Include `updated_at` yourself when using
   a custom list and you still want it ignored.
 - Historical associations require PT-AT to be installed, loaded, migrated, and

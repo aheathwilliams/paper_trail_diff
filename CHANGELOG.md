@@ -24,11 +24,30 @@ project follows [Semantic Versioning](https://semver.org/).
   `"notable.comments"`, raises `UnsupportedAssociationError`. The part after
   it used to be ignored without a word.
 
+### Added
+
+- `recorded_changes(version)` returns what PaperTrail stored with one version
+  in `object_changes`, as a frozen hash of `ValueChange` objects, typed by the
+  version's model. Unlike PaperTrail's `version.changeset`, it never loads the
+  record, so it costs no query per version and still types a deleted record's
+  values. It returns `nil` when nothing was recorded, and takes an `ignore:`
+  array that defaults to `updated_at`.
+
 ### Changed
 
 - The README recipe for deleted records also reads each record as it was just
   before deletion, which a record created inside the window has no other
   snapshot of.
+- The documentation now says where a change saved without a version, such as
+  with `update_columns`, appears: in the step for that record's previous
+  recorded change, credited to its author, anywhere in a range. It used to say
+  only that the last step of a range ending at the current record shows them,
+  and that a step's diff is exactly what its event changed. Ending a range at a
+  version leaves out only the writes after it. Specs pin this behavior, which
+  is unchanged.
+- The README has a recipe that turns a report into one row per changed field,
+  with the record, whether it changed, appeared, or disappeared, and the step's
+  author, event, and time.
 
 ### Fixed
 
@@ -63,6 +82,8 @@ project follows [Semantic Versioning](https://semver.org/).
   `TimeVersionRange`, `BatchedRootVersions`, and `DeletedAnalysisBatch`, each
   with a unit spec of its own; all 5,485 mutations across the fourteen classes
   are caught.
+- Mutation testing also covers `RecordedChanges`; all 257 of its mutations are
+  caught.
 
 ## [0.13.1] - 2026-10-28
 

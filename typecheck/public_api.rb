@@ -31,3 +31,4 @@ PaperTrailDiff.report(record, since: window.begin, limit: 10,
 PaperTrailDiff.report(record, since: window.begin, limit: 10,
                               historical_filter: ->(_state) { true },
                               allow_expensive: true).analyses
+PaperTrailDiff.recorded_changes(record, ignore: [:updated_at, 'lock_version'])&.each_value(&:to_h)
