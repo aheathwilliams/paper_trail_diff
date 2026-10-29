@@ -4,16 +4,17 @@
 module PaperTrailDiff
   # Expands the explicit association tree into a request-scoped PreparedHistory.
   class PreparedHistoryLoader
-    #: (untyped, root_versions: Array[untyped], tree: AssociationTree, traversal: AssociationTraversal, ?root_ids: Array[untyped], ?start_at: untyped, ?end_at: untyped, ?live_records: Array[untyped]) -> void
+    # Without `end_at`, the activity range closes on the last root version.
+    #: (untyped, root_ids: Array[untyped], root_versions: Array[untyped], tree: AssociationTree, traversal: AssociationTraversal, start_at: untyped, end_at: untyped, live_records: Array[untyped]) -> void
     def initialize( # rubocop:disable Metrics/ParameterLists
       record,
+      root_ids:,
       root_versions:,
       tree:,
       traversal:,
-      root_ids: [record.id],
-      start_at: root_versions.first.created_at,
-      end_at: nil,
-      live_records: []
+      start_at:,
+      end_at:,
+      live_records:
     )
       @record = record
       @root_ids = root_ids
@@ -21,12 +22,12 @@ module PaperTrailDiff
       @tree = tree
       @traversal = traversal
       @records = PreparedRecordIndex.new(start_at, end_at: end_at, live_records: live_records)
-      activity = PreparedActivityIndex.new(
+      @activity = PreparedActivityIndex.new(
         @records, root_versions, start_at: start_at, end_at: end_at || root_versions.last.created_at
       )
-      @history = PreparedHistory.new(@records, activity_index: activity)
+      @history = PreparedHistory.new(@records, activity_index: @activity)
       @edges = PreparedEdgeLoader.new(@records, root_versions, start_at: start_at)
-      @prepared = {} #: Hash[Array[String], Array[String]]
+      @prepared = {} #: Hash[untyped, Array[String]]
     end
 
     #: () -> PreparedHistory
@@ -44,20 +45,18 @@ module PaperTrailDiff
     # @rbs @tree: AssociationTree
     # @rbs @traversal: AssociationTraversal
     # @rbs @records: PreparedRecordIndex
+    # @rbs @activity: PreparedActivityIndex
     # @rbs @history: PreparedHistory
     # @rbs @edges: PreparedEdgeLoader
-    # @rbs @prepared: Hash[Array[String], Array[String]]
+    # @rbs @prepared: Hash[untyped, Array[String]]
 
     #: (untyped, Array[untyped], AssociationTree, path: String) -> void
     def load_node(model_class, ids, tree, path:)
-      @history.activity_index&.register(model_class, ids)
+      @activity.register(model_class, ids)
       @traversal.reflections_for(model_class, tree, path: path).each do |reflection|
-        subtree = tree.child(reflection.name)
-        next unless subtree
-
+        subtree = tree.child(reflection.name) #: AssociationTree
         groups = prepare_reflection(model_class, ids, reflection)
-        load_groups(groups)
-        child_path = Support.association_path(path, reflection.name.to_s)
+        child_path = Support.association_path(path, reflection.name)
         groups.each_value do |group|
           load_node(group.fetch(:model), group.fetch(:ids), subtree, path: child_path)
         end
@@ -66,7 +65,7 @@ module PaperTrailDiff
 
     #: (untyped, Array[untyped], untyped) -> Hash[String, Hash[Symbol, untyped]]
     def prepare_reflection(owner_class, owner_ids, reflection)
-      return prepare_through(owner_class, owner_ids, reflection) if reflection.options[:through]
+      return prepare_through(owner_class, owner_ids, reflection) if reflection.through_reflection?
 
       prepare_edge(owner_class, owner_ids, reflection)
     end
@@ -76,52 +75,49 @@ module PaperTrailDiff
       through_groups = prepare_edge(owner_class, owner_ids, reflection.through_reflection)
       targets = {} #: Hash[String, Hash[Symbol, untyped]]
       through_groups.each_value do |group|
-        load_groups({ group.fetch(:model).name.to_s => group })
         source = prepare_edge(group.fetch(:model), group.fetch(:ids), reflection.source_reflection)
         targets = merge_groups(targets, source)
       end
       @history.merge_edge(owner_class, reflection, targets)
-      @history.mark_unsupported(owner_class, reflection) if deferred_macro?(reflection)
+      # Only a belongs_to source is read from prepared history.
+      unless reflection.source_reflection.belongs_to?
+        @history.mark_unsupported(owner_class, reflection)
+      end
       targets
     end
 
     #: (untyped, Array[untyped], untyped) -> Hash[String, Hash[Symbol, untyped]]
     def prepare_edge(owner_class, owner_ids, reflection)
-      missing = unprepared_ids(owner_class, owner_ids, reflection)
+      missing = unprepared_ids(owner_ids, reflection)
       return @history.edge(owner_class, reflection) if missing.empty?
 
-      load_records(owner_class, missing) if reflection.macro == :belongs_to
       groups, memberships = @edges.call(owner_class, missing, reflection)
       @history.merge_edge(owner_class, reflection, groups)
       @history.register_habtm(owner_class, reflection, memberships) if memberships
-      mark_prepared(owner_class, missing, reflection)
+      mark_prepared(missing, reflection)
       mark_unsupported(owner_class, reflection, groups)
       load_groups(groups)
       @history.edge(owner_class, reflection)
     end
 
-    #: (untyped, Array[untyped], untyped) -> Array[untyped]
-    def unprepared_ids(owner_class, ids, reflection)
-      prepared = @prepared.fetch(edge_key(owner_class, reflection), [])
+    # A reflection belongs to the class that declares it, so it alone names
+    # the edge; a subclass that inherits it reads the same records.
+    #: (Array[untyped], untyped) -> Array[untyped]
+    def unprepared_ids(ids, reflection)
+      prepared = @prepared.fetch(reflection, [])
       ids.reject { |id| prepared.include?(id.to_s) }
     end
 
-    #: (untyped, Array[untyped], untyped) -> void
-    def mark_prepared(owner_class, ids, reflection)
-      key = edge_key(owner_class, reflection)
-      @prepared[key] = (@prepared.fetch(key, []) | ids.map(&:to_s))
+    #: (Array[untyped], untyped) -> void
+    def mark_prepared(ids, reflection)
+      @prepared[reflection] = (@prepared.fetch(reflection, []) | ids.map(&:to_s))
     end
 
     #: (untyped, untyped, Hash[String, Hash[Symbol, untyped]]) -> void
     def mark_unsupported(owner_class, reflection, groups)
-      unsupported = deferred_macro?(reflection) || reflection.foreign_key.is_a?(Array) ||
+      unsupported = reflection.foreign_key.is_a?(Array) ||
                     groups.values.any? { |group| !versioned?(group.fetch(:model)) }
       @history.mark_unsupported(owner_class, reflection) if unsupported
-    end
-
-    #: (untyped) -> bool
-    def deferred_macro?(reflection)
-      reflection.options[:through] && !reflection.source_reflection.belongs_to?
     end
 
     #: (Hash[String, Hash[Symbol, untyped]]) -> void
@@ -129,7 +125,7 @@ module PaperTrailDiff
       groups.each_value do |group|
         model = group.fetch(:model)
         ids = group.fetch(:ids)
-        @history.activity_index&.register(model, ids)
+        @activity.register(model, ids)
         load_records(model, ids)
       end
     end
@@ -142,11 +138,6 @@ module PaperTrailDiff
     #: (untyped) -> bool
     def versioned?(model_class)
       Support.versioned?(model_class)
-    end
-
-    #: (untyped, untyped) -> Array[String]
-    def edge_key(owner_class, reflection)
-      [owner_class.base_class.name.to_s, reflection.name.to_s]
     end
 
     #: (Hash[String, Hash[Symbol, untyped]], Hash[String, Hash[Symbol, untyped]]) -> Hash[String, Hash[Symbol, untyped]]

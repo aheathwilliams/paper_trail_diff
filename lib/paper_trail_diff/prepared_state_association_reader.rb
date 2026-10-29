@@ -53,18 +53,22 @@ module PaperTrailDiff
     #: (untyped, PreparedRecordState) -> Array[untyped]
     def ids_for(group, owner)
       owners = group[:owners]
-      id = owner.attributes[owner.model_class.primary_key].to_s
       empty = [] #: Array[untyped]
-      owners ? owners.fetch(id, empty) : group.fetch(:ids)
+      owners ? owners.fetch(owner_id(owner), empty) : group.fetch(:ids)
     end
 
     #: (PreparedRecordState, PreparedRecordState, untyped) -> bool
     def member?(child, owner, reflection)
-      owner_id = owner.attributes[owner.model_class.primary_key].to_s
-      return false unless child.attributes[reflection.foreign_key.to_s].to_s == owner_id
+      return false unless child.attributes[reflection.foreign_key.to_s].to_s == owner_id(owner)
+      return false unless AssociationTraversal.sti_member?(reflection.klass, child.attributes)
       return true unless reflection.options[:as]
 
       matching_type?(child, owner.model_class, reflection)
+    end
+
+    #: (PreparedRecordState) -> String
+    def owner_id(owner)
+      owner.attributes[owner.model_class.primary_key].to_s
     end
 
     #: (PreparedRecordState, untyped, untyped) -> bool

@@ -49,12 +49,13 @@ module PaperTrailDiff
 
     #: (untyped, String) -> Symbol?
     def column_type(model, name)
-      model.columns_hash[name]&.type
+      model.type_for_attribute(name).type
     end
 
+    # A relation is compared as its SQL; ids are compared as values.
     #: (untyped) -> untyped
     def arel_value(filter)
-      filter.is_a?(Array) ? filter : filter.arel
+      filter.respond_to?(:arel) ? filter.arel : filter
     end
 
     # The owners a child pointed at when the window opened or after a change
@@ -74,7 +75,7 @@ module PaperTrailDiff
       def relation(filter)
         versions = { item_type: @reflection.klass.base_class.name, item_id: filter }
         relation = @associations.joins(:version)
-                                .where(foreign_key_name: @reflection.foreign_key.to_s,
+                                .where(foreign_key_name: @reflection.foreign_key,
                                        foreign_type: owner_types)
                                 .where(@versions.table_name => versions)
         candidates(@versions, relation)
@@ -87,17 +88,17 @@ module PaperTrailDiff
 
       #: () -> Array[String?]
       def owner_types
-        [nil, '', @owner.name.to_s, @owner.base_class.name.to_s].uniq
+        [nil, '', @owner.name, @owner.base_class.name]
       end
     end
 
     # The owners that pointed at a target when the window opened or after a
     # change inside it, as PT-AT recorded them on the owners' versions.
     class BelongsTo < AssociationActivityEdge
-      #: (untyped, TimeRange?, ?foreign_types: Array[String]?) -> void
-      def initialize(reflection, time_range, foreign_types: nil)
+      #: (untyped, TimeRange?, ?foreign_type: String?) -> void
+      def initialize(reflection, time_range, foreign_type: nil)
         super(reflection, time_range)
-        @foreign_types = foreign_types
+        @foreign_type = foreign_type
         @versions = @owner.paper_trail.version_class
         @associations = @owner.paper_trail.version_association_class
         @column = @versions.arel_table[:item_id]
@@ -108,20 +109,20 @@ module PaperTrailDiff
       # The types a polymorphic key's rows name, the only way to know its targets.
       #: () -> Array[String]
       def target_types
-        candidates(@versions, owner_rows(foreign_key_name: @reflection.foreign_key.to_s))
+        candidates(@versions, owner_rows(foreign_key_name: @reflection.foreign_key))
           .distinct.pluck(@associations.arel_table[:foreign_type]).compact
       end
 
       #: (untyped) -> untyped
       def relation(filter)
-        conditions = { foreign_key_name: @reflection.foreign_key.to_s, foreign_key_id: filter }
-        conditions[:foreign_type] = @foreign_types if @foreign_types
+        conditions = { foreign_key_name: @reflection.foreign_key, foreign_key_id: filter }
+        conditions[:foreign_type] = @foreign_type if @foreign_type
         candidates(@versions, owner_rows(conditions))
       end
 
       private
 
-      # @rbs @foreign_types: Array[String]?
+      # @rbs @foreign_type: String?
       # @rbs @versions: untyped
       # @rbs @associations: untyped
 
@@ -138,21 +139,16 @@ module PaperTrailDiff
       #: (untyped, TimeRange?) -> void
       def initialize(reflection, time_range)
         super
-        @table = arel.const_get(:Table).new(reflection.join_table)
+        @table = arel::Table.new(reflection.join_table)
         columns = join_columns
-        @type = columns[reflection.foreign_key.to_s]
-        @filter_type = columns[reflection.association_foreign_key.to_s]
+        @type = columns.fetch(reflection.foreign_key)
+        @filter_type = columns.fetch(reflection.association_foreign_key)
         @column = quoted_owner_column
-      end
-
-      #: () -> bool
-      def available?
-        true
       end
 
       #: (untyped) -> untyped
       def relation(filter)
-        target = @table[@reflection.association_foreign_key.to_s]
+        target = @table[@reflection.association_foreign_key]
         @owner.base_class.unscoped.from(@table).where(target.in(arel_value(filter)))
       end
 
@@ -163,27 +159,33 @@ module PaperTrailDiff
       #: () -> Hash[String, Symbol?]
       def join_columns
         connected do |connection|
-          connection.columns(@reflection.join_table.to_s).to_h do |column|
-            [column.name, column.type]
-          end
+          connection.columns(@reflection.join_table).to_h { |column| [column.name, column.type] }
         end
       end
 
+      # Some adapters take the quoted name as a plain string too, but a raw SQL
+      # check may not, so it is marked as SQL; no SQLite spec can tell.
+      # mutant:disable
       #: () -> untyped
       def quoted_owner_column
         connected do |connection|
-          arel.sql("#{connection.quote_table_name(@reflection.join_table.to_s)}." \
-                   "#{connection.quote_column_name(@reflection.foreign_key.to_s)}")
+          arel.sql("#{connection.quote_table_name(@reflection.join_table)}." \
+                   "#{connection.quote_column_name(@reflection.foreign_key)}")
         end
       end
 
-      # Arel ships no signatures; see VersionQuery.
+      # Arel ships no signatures; see VersionQuery. Any spelling of the
+      # constant finds the same module.
+      # mutant:disable
       #: () -> untyped
       def arel
         Object.const_get(:Arel)
       end
 
       # Active Record 7.1 has no `with_connection`; see VersionAssociationCandidateScope.
+      # Only that version takes the fallback, so no spec run on a newer one can
+      # tell its mutations apart.
+      # mutant:disable
       #: [T] () { (untyped) -> T } -> T
       def connected(&block)
         return @owner.with_connection(&block) if @owner.respond_to?(:with_connection)
@@ -212,7 +214,7 @@ module PaperTrailDiff
 
       #: (untyped) -> untyped
       def relation(filter)
-        transactions = @associations.where(foreign_key_name: @reflection.name.to_s,
+        transactions = @associations.where(foreign_key_name: @reflection.name,
                                            foreign_key_id: filter).select(:version_id)
         relation = @versions.where(item_type: @owner.base_class.name, transaction_id: transactions)
         range = @time_range

@@ -50,11 +50,12 @@ module PaperTrailDiff
     def initialize(scope, time_range:, limit:, historical_filter: nil, # rubocop:disable Metrics/ParameterLists
                    max_filter_versions: HistoricalFilter::DEFAULT_VERSION_LIMIT, activity_tree: nil)
       @scope = normalize_scope(scope)
+      reject_unversioned!
       @time_range = time_range
       @limit = validate_limit(limit)
-      @related = unless activity_tree.nil? || activity_tree.empty?
-                   AssociationActivitySelection.new(@scope.model, tree: activity_tree,
-                                                                  time_range: time_range)
+      @related = if activity_tree
+                   AssociationActivitySelection.new(model, tree: activity_tree,
+                                                           time_range: time_range)
                  end
       @historical_filter = unless historical_filter.nil?
                              HistoricalFilter.new(base_class, predicate: historical_filter,
@@ -100,38 +101,32 @@ module PaperTrailDiff
     def subqueries(related)
       return unless @historical_filter.nil? && comparable_keys?
 
-      queries = [] #: Array[AssociationActivitySelection::Query]
-      related.each do |ids|
-        queries << ids if ids.is_a?(AssociationActivitySelection::Query) && ids.type == key_type
-      end
-      queries if queries.length == related.length
+      queries = related.grep(AssociationActivitySelection::Query) #: Array[AssociationActivitySelection::Query]
+      matching = queries.select { |ids| ids.type == key_type }
+      matching if matching.length == related.length
     end
 
     #: (Array[String]) -> Result
     def plucked_selection(candidates)
-      candidates = @historical_filter.call(candidates) if @historical_filter && candidates.any?
-      return Result.new(records: [], unreachable: []) if candidates.empty?
-
+      candidates = @historical_filter.call(candidates) if @historical_filter
       live = live_ids(candidates)
       Result.new(
-        records: live.empty? ? [] : selected_records([live]),
-        unreachable: (candidates - live).map { |id| identity(id) }.freeze
+        records: selected_records([live]),
+        unreachable: (candidates - live).sort.map { |id| identity(id) }.freeze
       )
     end
 
     # Comparing the two columns in SQL needs them to share a type: PostgreSQL
-    # rejects an integer key against a string item_id outright.
+    # rejects an integer key against a string item_id outright. A composite
+    # key names no single attribute, so it has no type and never matches.
     #: () -> bool
     def comparable_keys?
-      return false unless primary_key.is_a?(String)
-
-      item_id = version_class.columns_hash['item_id']&.type
-      !item_id.nil? && item_id == key_type
+      version_class.type_for_attribute('item_id').type == key_type
     end
 
     #: () -> Symbol?
     def key_type
-      base_class.columns_hash[primary_key.to_s]&.type
+      base_class.type_for_attribute(primary_key).type
     end
 
     #: (Array[AssociationActivitySelection::Query]) -> Array[String]
@@ -144,8 +139,7 @@ module PaperTrailDiff
     # of comparing two plucked lists.
     #: () -> Array[String]
     def missing_ids
-      live = base_class.unscoped.select(primary_key)
-      window_versions.where.not(item_id: live).distinct.pluck(:item_id).map(&:to_s).uniq.sort
+      window_versions.where.not(item_id: base_class.unscoped).distinct.pluck(:item_id).map(&:to_s)
     end
 
     #: () -> untyped
@@ -164,16 +158,21 @@ module PaperTrailDiff
         raise ConfigurationError, 'scope: must be an ActiveRecord relation or model class'
       end
 
-      relation = scope.all
-      return relation if Support.versioned?(relation.model)
-
-      raise UnversionedAssociationError,
-            "scope: #{relation.model.name} is not versioned, so it has no history to select from"
+      scope.all
     end
 
+    #: () -> void
+    def reject_unversioned!
+      return if Support.versioned?(model)
+
+      raise UnversionedAssociationError,
+            "scope: #{model} is not versioned, so it has no history to select from"
+    end
+
+    # No Integer subclass has instances, so this is `is_a?` by another name.
     #: (Integer) -> Integer
     def validate_limit(limit)
-      return limit if limit.is_a?(Integer) && limit.positive?
+      return limit if limit.instance_of?(Integer) && limit.positive?
 
       raise ConfigurationError, 'limit: must be a positive Integer'
     end
@@ -183,7 +182,7 @@ module PaperTrailDiff
     # version table alone so that it does not depend on rows still existing.
     #: () -> Array[String]
     def versioned_ids
-      window_versions.distinct.pluck(:item_id).map(&:to_s).uniq
+      window_versions.distinct.pluck(:item_id).map(&:to_s)
     end
 
     # Which of those candidates still have a row, asked without the relation's
@@ -229,7 +228,7 @@ module PaperTrailDiff
       count = page_limit(consumed)
       return [] if count.zero?
 
-      relation.offset((@scope.offset_value || 0) + consumed).limit(count).to_a
+      relation.offset((@scope.offset_value || 0) + consumed).limit(count)
     end
 
     # Preserve explicit ordering: SQL Server rejects duplicate ORDER BY columns,
@@ -263,22 +262,30 @@ module PaperTrailDiff
 
     #: () -> String
     def item_type
-      base_class.name.to_s
+      base_class.name
+    end
+
+    # A relation delegates class methods to its model, so every mutation here,
+    # which drops `.model`, answers the same.
+    # mutant:disable
+    #: () -> untyped
+    def model
+      @scope.model
     end
 
     #: () -> untyped
     def base_class
-      @scope.model.base_class
+      model.base_class
     end
 
     #: () -> untyped
     def primary_key
-      @scope.model.primary_key
+      model.primary_key
     end
 
     #: () -> untyped
     def version_class
-      @scope.model.paper_trail.version_class
+      model.paper_trail.version_class
     end
   end
 end

@@ -56,6 +56,17 @@ project follows [Semantic Versioning](https://semver.org/).
 - `include_deleted: true` with `activity: true` reports the association
   activity of a deleted record that did not change itself in the window. Its
   analysis used to be empty.
+- History of an association to an STI subclass, such as
+  `has_many :pinned_badges, class_name: 'PinnedBadge'`, holds only that class
+  and its subclasses, as the live association does. It used to hold the
+  sibling classes' records too, so a range ending at the current record
+  reported them as removed.
+- `activity_timeline`, and `analyze` with `activity: true`, return no steps for
+  a range that ends at a version when `version_scope:` keeps none of its
+  versions, as a checkpoint timeline does. They used to raise `NoMethodError`.
+- `analyze_scope` and `report` list `unreachable` in the same sorted order
+  whatever the type of `versions.item_id`. With a string `item_id` it used to
+  follow the database's order.
 - On SQL Server, activity places a version saved within two milliseconds of a
   window's start or end on the side it was saved. The window's bounds used to
   be rounded to 1/300 second, so such a version could be read as outside the
@@ -71,6 +82,12 @@ project follows [Semantic Versioning](https://semver.org/).
   are caught.
 - Mutation testing also covers `RecordedChanges`; all 257 of its mutations are
   caught.
+- Mutation testing also covers the association code: `ScopedRootSelection`,
+  `AssociationActivitySelection`, `AssociationActivityEdge`,
+  `ActivityTargetCandidateLoader`, `PreparedHistoryLoader`,
+  `PreparedEdgeLoader`, `ActivityTimelineBuilder`,
+  `ActivityTransactionGrouper`, and `BatchSafety`, each with a spec of its
+  own. All 10,732 mutations across the 24 classes are caught.
 
 ## [0.13.1] - 2026-10-28
 

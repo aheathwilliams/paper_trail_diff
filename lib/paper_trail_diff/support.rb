@@ -124,9 +124,9 @@ module PaperTrailDiff
         raise(ConfigurationError, 'versions have incomparable timestamps')
     end
 
-    #: (String, String) -> String
+    #: (String, String | Symbol) -> String
     def association_path(parent, name)
-      parent.empty? ? name : "#{parent}.#{name}"
+      parent.empty? ? name.to_s : "#{parent}.#{name}"
     end
 
     #: (Hash[String, Hash[Symbol, untyped]], Hash[String, Hash[Symbol, untyped]]) -> Hash[String, Hash[Symbol, untyped]]

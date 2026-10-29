@@ -59,7 +59,6 @@ module PaperTrailDiff
     #: (untyped, tree: AssociationTree, time_range: TimeRange?) -> void
     def initialize(model, tree:, time_range:)
       @model = model
-      @tree = tree
       @traversal = AssociationTraversal.new(tree)
       @time_range = time_range
     end
@@ -67,42 +66,33 @@ module PaperTrailDiff
     # The roots' ids, each source a subquery or an array of values.
     #: () -> Array[source]
     def call
-      return [] if @tree.empty?
-
-      reach(@model, @tree, '')
+      reach(@model, @traversal.tree, '')
     end
 
     private
 
     # @rbs @model: untyped
-    # @rbs @tree: AssociationTree
     # @rbs @traversal: AssociationTraversal
     # @rbs @time_range: TimeRange?
 
-    # Ids of `model` records with a change somewhere below them in `tree`.
+    # Ids of `model` records with a change somewhere below them in `tree`: the
+    # targets that changed, or that reach a change further down.
     #: (untyped, AssociationTree, String) -> Array[source]
     def reach(model, tree, path)
       @traversal.reflections_for(model, tree, path: path).flat_map do |reflection|
         next polymorphic_owners(reflection) if reflection.polymorphic?
 
-        child_path = Support.association_path(path, reflection.name.to_s)
-        owners(reflection, targets(reflection.klass, tree.child(reflection.name), child_path))
+        target = reflection.klass
+        subtree = tree.child(reflection.name) #: AssociationTree
+        child_path = Support.association_path(path, reflection.name)
+        owners(reflection, changed(target) + reach(target, subtree, child_path))
       end
-    end
-
-    # Target records that changed, or that reach a change further down.
-    #: (untyped, AssociationTree?, String) -> Array[source]
-    def targets(model, subtree, path)
-      found = changed(model)
-      return found unless subtree && !subtree.empty?
-
-      found + reach(model, subtree, path)
     end
 
     #: (untyped, Array[source]) -> Array[source]
     def owners(reflection, ids)
       return [] if ids.empty?
-      return through_owners(reflection, ids) if reflection.options[:through]
+      return through_owners(reflection, ids) if reflection.through_reflection?
 
       edges(reflection).flat_map { |edge| follow(edge, ids) }
     end
@@ -120,15 +110,9 @@ module PaperTrailDiff
     #: (untyped) -> Array[source]
     def polymorphic_owners(reflection)
       edge = AssociationActivityEdge::BelongsTo.new(reflection, @time_range)
-      return [] unless edge.available?
-
       edge.target_types.flat_map do |name|
-        model = target_class(name)
-        next [] unless model
-
-        typed = AssociationActivityEdge::BelongsTo.new(reflection, @time_range,
-                                                       foreign_types: [name])
-        follow(typed, changed(model))
+        typed = AssociationActivityEdge::BelongsTo.new(reflection, @time_range, foreign_type: name)
+        follow(typed, changed(target_class(name)))
       end
     end
 
@@ -152,7 +136,8 @@ module PaperTrailDiff
       relation = versions.where(item_type: model.base_class.name)
       range = @time_range
       relation = range.scope(relation) if range
-      [Query.new(relation, versions.arel_table[:item_id], versions.columns_hash['item_id']&.type)]
+      [Query.new(relation, versions.arel_table[:item_id],
+                 versions.type_for_attribute('item_id').type)]
     end
 
     # One edge for each source. A subquery whose column type matches the
@@ -161,11 +146,10 @@ module PaperTrailDiff
     #: (AssociationActivityEdge, Array[source]) -> Array[source]
     def follow(edge, sources)
       sources.filter_map do |source|
-        if source.is_a?(Query) && comparable?(source, edge.filter_type)
-          next Query.new(edge.relation(source.relation), edge.column, edge.type)
-        end
+        query = subquery(source, edge.filter_type)
+        next Query.new(edge.relation(query.relation), edge.column, edge.type) if query
 
-        found = read(edge, source.is_a?(Query) ? source.values : source)
+        found = read(edge, self.class.values([source]))
         found unless found.empty?
       end
     end
@@ -173,19 +157,23 @@ module PaperTrailDiff
     #: (AssociationActivityEdge, Array[untyped]) -> Array[untyped]
     def read(edge, values)
       values.each_slice(SLICE).flat_map do |slice|
-        edge.relation(slice).distinct.pluck(edge.column)
+        edge.relation(slice).pluck(edge.column)
       end.compact.uniq
     end
 
-    #: (Query, Symbol?) -> bool
-    def comparable?(query, type)
-      !type.nil? && query.type == type
+    # Sources are only ever a Query or a plain Array, so the one mutation
+    # left, `instance_of?` for `is_a?`, cannot change an answer.
+    # mutant:disable
+    #: (source, Symbol?) -> Query?
+    def subquery(source, type)
+      source if source.is_a?(Query) && source.type == type
     end
 
+    # A type naming no class has no versions to read; `changed` skips one that
+    # names an unversioned class.
     #: (String) -> untyped
     def target_class(name)
-      model = Object.const_get(name)
-      model if Support.versioned?(model)
+      Object.const_get(name)
     rescue NameError
       nil
     end
