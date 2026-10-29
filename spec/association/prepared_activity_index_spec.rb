@@ -114,26 +114,26 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
   it 'keeps the records and versions an STI subclass had, leaving out its siblings' do
     origin = Time.now.utc
     plain = IndexSpecPage.create!(title: 'Plain')
-    sibling, joining = %w[Sibling Joining].map { |title| IndexSpecArchivePage.create!(title: title) }
+    sibling, joining = %w[Sibling Joining].map { |name| IndexSpecArchivePage.create!(title: name) }
     leaving = IndexSpecLandingPage.create!(title: 'Leaving')
     promo = IndexSpecPromoPage.create!(title: 'Promo')
     pages = [plain, sibling, joining, leaving, promo]
     start = Time.now.utc
     pages.each { |page| page.update!(title: "#{page.title} again") }
-    joined = IndexSpecPage.find(joining.id).tap { |page| page.update!(type: 'IndexSpecLandingPage') }
-    left = IndexSpecPage.find(leaving.id).tap { |page| page.update!(type: 'IndexSpecArchivePage') }
+    joined = IndexSpecPage.find(joining.id).tap { |row| row.update!(type: 'IndexSpecLandingPage') }
+    left = IndexSpecPage.find(leaving.id).tap { |row| row.update!(type: 'IndexSpecArchivePage') }
     [joined, left].each { |page| page.update!(title: 'Moved') }
     ids = pages.map(&:id)
     index = index_for(origin, { IndexSpecPage => ids })
     window = range(start, Time.now.utc)
-    in_window = ->(page) { page.versions.reorder(:id).select { |version| window.include?(version) } }
+    inside = ->(page) { page.versions.reorder(:id).select { |version| window.include?(version) } }
 
     expect(index.member_ids(IndexSpecLandingPage, ids)).to eq([joining.id, leaving.id, promo.id])
     expect(index.member_versions(IndexSpecLandingPage, ids, window).map(&:id))
-      .to eq([*in_window.call(joining).drop(1), *in_window.call(leaving).take(2),
-              *in_window.call(promo)].map(&:id))
+      .to eq([*inside.call(joining).drop(1), *inside.call(leaving).take(2),
+              *inside.call(promo)].map(&:id))
     expect(index.member_versions(IndexSpecPage, ids, window))
-      .to eq(pages.flat_map { |page| in_window.call(page) })
+      .to eq(pages.flat_map { |page| inside.call(page) })
   end
 
   # A base class takes every row, so it reads nothing from the record index.
