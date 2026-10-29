@@ -30,6 +30,12 @@ end
 class IndexSpecLandingPage < IndexSpecPage
 end
 
+class IndexSpecPromoPage < IndexSpecLandingPage
+end
+
+class IndexSpecArchivePage < IndexSpecPage
+end
+
 class IndexSpecSection < ActiveRecord::Base
   belongs_to :page, class_name: 'IndexSpecPage', optional: true, inverse_of: :sections
   belongs_to :featured_page, class_name: 'IndexSpecPage', optional: true,
@@ -100,6 +106,46 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
                             range(origin, Time.now.utc))
 
     expect(found).to match_array(kept.map(&:id))
+  end
+
+  # Children are found by key across the whole table, so a subclass keeps the
+  # records that had its class or a descendant's at some point, and of those
+  # the versions in the range that had it before or after.
+  it 'keeps the records and versions an STI subclass had, leaving out its siblings' do
+    origin = Time.now.utc
+    plain = IndexSpecPage.create!(title: 'Plain')
+    sibling, joining = %w[Sibling Joining].map { |title| IndexSpecArchivePage.create!(title: title) }
+    leaving = IndexSpecLandingPage.create!(title: 'Leaving')
+    promo = IndexSpecPromoPage.create!(title: 'Promo')
+    pages = [plain, sibling, joining, leaving, promo]
+    start = Time.now.utc
+    pages.each { |page| page.update!(title: "#{page.title} again") }
+    joined = IndexSpecPage.find(joining.id).tap { |page| page.update!(type: 'IndexSpecLandingPage') }
+    left = IndexSpecPage.find(leaving.id).tap { |page| page.update!(type: 'IndexSpecArchivePage') }
+    [joined, left].each { |page| page.update!(title: 'Moved') }
+    ids = pages.map(&:id)
+    index = index_for(origin, { IndexSpecPage => ids })
+    window = range(start, Time.now.utc)
+    in_window = ->(page) { page.versions.reorder(:id).select { |version| window.include?(version) } }
+
+    expect(index.member_ids(IndexSpecLandingPage, ids)).to eq([joining.id, leaving.id, promo.id])
+    expect(index.member_versions(IndexSpecLandingPage, ids, window).map(&:id))
+      .to eq([*in_window.call(joining).drop(1), *in_window.call(leaving).take(2),
+              *in_window.call(promo)].map(&:id))
+    expect(index.member_versions(IndexSpecPage, ids, window))
+      .to eq(pages.flat_map { |page| in_window.call(page) })
+  end
+
+  # A base class takes every row, so it reads nothing from the record index.
+  it 'keeps every record and version of a base class without reading their history' do
+    origin = Time.now.utc
+    page = IndexSpecPage.create!(title: 'Unloaded')
+    version = page.versions.last
+    index = index_for(origin, {}, root_versions: [version])
+
+    expect(index.member_ids(IndexSpecPage, [page.id, 0])).to eq([page.id, 0])
+    expect(index.member_versions(IndexSpecPage, [page.id], range(origin, Time.now.utc)))
+      .to eq([version])
   end
 
   # PT-AT records a version's foreign keys after its change: the latest one
