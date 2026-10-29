@@ -9,6 +9,9 @@ module PaperTrailDiff
     def self.belongs_to_target: (untyped, untyped) -> untyped
 
     # The class a stored type names, or nil when it names none.
+    # This class defines no constants of its own, so the one mutation left,
+    # `const_get` on it rather than on Object, finds the same class.
+    # mutant:disable
     # : (String) -> untyped
     def self.named_class: (String) -> untyped
 
@@ -48,9 +51,13 @@ module PaperTrailDiff
     # : (untyped) -> void
     def reject_live_habtm_activity!: (untyped) -> void
 
+    # A model and a tree resolve to the same reflections at any path; the path
+    # only names a failure, and a failure is not cached.
     # : (untyped, AssociationTree, path: String) -> Array[untyped]
     def reflections_for: (untyped, AssociationTree, path: String) -> Array[untyped]
 
+    # Active Record names keys as strings. A polymorphic child also points back
+    # with its type column; `type` is nil for any other.
     # : (untyped) -> Array[String]
     def incoming_relationship_columns: (untyped) -> Array[String]
 
@@ -77,13 +84,24 @@ module PaperTrailDiff
     # : (untyped, String, String) -> untyped
     def resolve_reflection: (untyped, String, String) -> untyped
 
+    # Active Record joins a HABTM through a hidden model of its own, which has
+    # no versions and no reader that PT-AT or prepared history can follow, so a
+    # through that crosses one would fail partway through reconstruction.
+    # : (untyped, String) -> void
+    def reject_habtm_through!: (untyped, String) -> void
+
+    # The through and source reflections of a through are the hidden ones, a
+    # has_many in place of each HABTM, so only the public reflection of the
+    # same name shows the HABTM. Active Record's own check, which it runs on
+    # first use anyway, explains a through it cannot follow before the chain
+    # below it is read.
+    # : (untyped) -> untyped
+    def habtm_in_chain: (untyped) -> untyped
+
     # : (untyped, untyped) -> bool
     def paper_trail_versions?: (untyped, untyped) -> bool
 
     # : (untyped) -> bool
     def habtm_reflection?: (untyped) -> bool
-
-    # : (String, String) -> String
-    def join_path: (String, String) -> String
   end
 end
