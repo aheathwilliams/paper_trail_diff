@@ -103,6 +103,15 @@ project follows [Semantic Versioning](https://semver.org/).
   `belongs_to`, likewise raises Active Record's own error in every method,
   where historical work used to fail partway with `ArgumentError` or
   `NoMethodError`.
+- `association_paths` leaves out a `has_many :through` that goes through a
+  `has_and_belongs_to_many`, so every path it lists can be requested. It
+  decides with the same check a request makes. It used to list such a path,
+  and a settings screen built from it offered one that failed when picked. A
+  model it reaches with a `has_many :through` Active Record cannot follow,
+  such as one through a polymorphic `belongs_to`, raises Active Record's own
+  error, where discovery used to raise `ArgumentError`, `NameError`, or
+  `NoMethodError` from inside the reflection, or list a path that raised when
+  requested.
 
 ### Development
 
@@ -121,7 +130,7 @@ project follows [Semantic Versioning](https://semver.org/).
   `ActivityTransactionGrouper`, and `BatchSafety`, each with a spec of its
   own. All 10,732 mutations across the 24 classes are caught.
 - Mutation testing also covers `AssociationTraversal`, which decides which
-  association paths a request accepts, with a spec of its own; all 755 of its
+  association paths a request accepts, with a spec of its own; all 764 of its
   mutations are caught.
 
 ## [0.13.1] - 2026-10-28

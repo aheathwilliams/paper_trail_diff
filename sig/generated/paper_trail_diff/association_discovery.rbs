@@ -45,11 +45,9 @@ module PaperTrailDiff
     # : (untyped, String, untyped, bool) -> AssociationDescriptor
     def descriptor_for: (untyped, String, untyped, bool) -> AssociationDescriptor
 
+    # Only what a request accepts, so every listed path can be requested.
     # : (untyped) -> Array[untyped]
     def supported_reflections: (untyped) -> Array[untyped]
-
-    # : (untyped, untyped) -> bool
-    def paper_trail_versions?: (untyped, untyped) -> bool
 
     # : (untyped) -> untyped
     def reflection_target: (untyped) -> untyped

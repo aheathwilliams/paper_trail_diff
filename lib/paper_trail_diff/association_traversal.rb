@@ -40,6 +40,51 @@ module PaperTrailDiff
     end
     private_class_method :polymorphic_target
 
+    # Why a request cannot name this association of the model, or nil when it
+    # can. Discovery lists only the associations this accepts, so every path it
+    # lists can be requested. A has_many :through Active Record cannot follow
+    # raises Active Record's own error.
+    #: (untyped, untyped) -> String?
+    def self.unsupported_reason(model_class, reflection)
+      return 'PaperTrail versions' if paper_trail_versions?(model_class, reflection)
+      return reflection.macro.to_s unless SUPPORTED_ASSOCIATION_MACROS.include?(reflection.macro)
+
+      habtm = habtm_in_chain(reflection)
+      return unless habtm
+
+      "it goes through #{habtm.active_record.name}##{habtm.name}, a has_and_belongs_to_many, " \
+        'whose hidden join model has no history to compare'
+    end
+
+    #: (untyped, untyped) -> bool
+    def self.paper_trail_versions?(model_class, reflection)
+      model_class.respond_to?(:versions_association_name) &&
+        reflection.name.to_s == model_class.versions_association_name.to_s
+    end
+    private_class_method :paper_trail_versions?
+
+    # Active Record joins a HABTM through a hidden model of its own, which has
+    # no versions and no reader that PT-AT or prepared history can follow, so a
+    # through that crosses one would fail partway through reconstruction.
+    #
+    # The through and source reflections of a through are the hidden ones, a
+    # has_many in place of each HABTM, so only the public reflection of the
+    # same name shows the HABTM. Active Record's own check, which it runs on
+    # first use anyway, explains a through it cannot follow before the chain
+    # below it is read.
+    #: (untyped) -> untyped
+    def self.habtm_in_chain(reflection)
+      return unless reflection.through_reflection?
+
+      reflection.check_validity!
+      parts = [reflection.through_reflection, reflection.source_reflection]
+      parts.filter_map do |part|
+        link = part.active_record.reflect_on_association(part.name)
+        link.macro == :has_and_belongs_to_many ? link : habtm_in_chain(link)
+      end.first
+    end
+    private_class_method :habtm_in_chain
+
     attr_reader :tree #: AssociationTree
 
     # Whether a row belongs to an association whose class is `model_class`.
@@ -170,54 +215,10 @@ module PaperTrailDiff
       reflection = model_class.reflect_on_association(name)
       raise UnknownAssociationError, "unknown association: #{full_path}" unless reflection
 
-      if paper_trail_versions?(model_class, reflection)
-        message = "unsupported association #{full_path}: PaperTrail versions"
-        raise UnsupportedAssociationError, message
-      end
-      unless SUPPORTED_ASSOCIATION_MACROS.include?(reflection.macro)
-        raise UnsupportedAssociationError,
-              "unsupported association #{full_path}: #{reflection.macro}"
-      end
-      reject_habtm_through!(reflection, full_path)
+      reason = self.class.unsupported_reason(model_class, reflection)
+      raise UnsupportedAssociationError, "unsupported association #{full_path}: #{reason}" if reason
 
       reflection
-    end
-
-    # Active Record joins a HABTM through a hidden model of its own, which has
-    # no versions and no reader that PT-AT or prepared history can follow, so a
-    # through that crosses one would fail partway through reconstruction.
-    #: (untyped, String) -> void
-    def reject_habtm_through!(reflection, path)
-      habtm = habtm_in_chain(reflection)
-      return unless habtm
-
-      raise UnsupportedAssociationError,
-            "unsupported association #{path}: it goes through " \
-            "#{habtm.active_record.name}##{habtm.name}, a has_and_belongs_to_many, " \
-            'whose hidden join model has no history to compare'
-    end
-
-    # The through and source reflections of a through are the hidden ones, a
-    # has_many in place of each HABTM, so only the public reflection of the
-    # same name shows the HABTM. Active Record's own check, which it runs on
-    # first use anyway, explains a through it cannot follow before the chain
-    # below it is read.
-    #: (untyped) -> untyped
-    def habtm_in_chain(reflection)
-      return unless reflection.through_reflection?
-
-      reflection.check_validity!
-      parts = [reflection.through_reflection, reflection.source_reflection]
-      parts.filter_map do |part|
-        link = part.active_record.reflect_on_association(part.name)
-        habtm_reflection?(link) ? link : habtm_in_chain(link)
-      end.first
-    end
-
-    #: (untyped, untyped) -> bool
-    def paper_trail_versions?(model_class, reflection)
-      model_class.respond_to?(:versions_association_name) &&
-        reflection.name.to_s == model_class.versions_association_name.to_s
     end
 
     #: (untyped) -> bool
