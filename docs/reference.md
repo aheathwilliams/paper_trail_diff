@@ -693,6 +693,16 @@ comments.changed.first.associations["replies"].added
   model with no versions, so the through cannot be rebuilt from history.
   Replace the HABTM with a `has_many :through` a versioned join model to
   compare it. `association_paths` leaves such a through out.
+- A HABTM can only be rebuilt on the root record. PT-AT records membership
+  when the record that owns it saves a version, in rows that name the
+  transaction and the association but not the owner, so a root checkpoint
+  holds the root's membership and no one else's. A HABTM later in a path, such
+  as `"tags.articles"` or `"author.articles.tags"`, raises
+  `UnsupportedAssociationError` up front in every method, even when the path
+  leads back to the root, as `"comments.article.tags"` does.
+  `association_paths` leaves such a path out. To follow another record's
+  memberships, compare that record's own checkpoints, or replace the HABTM
+  with a `has_many :through` a versioned join model.
 - Requesting associations for a historical state without PT-AT raises
   `AssociationTrackingUnavailableError`. Unknown names raise
   `UnknownAssociationError`; unsupported macros raise
@@ -949,10 +959,11 @@ Each descriptor has `path`, `kind`, `target_type`, `through`, `polymorphic`,
 and `cycle`. Cycles are marked and not followed.
 
 Only associations a request accepts are listed, so each path can be passed to
-`associations:`. The PaperTrail versions association and a `has_many :through`
-that goes through a HABTM are left out. A `has_many :through` Active Record
-cannot follow, such as one through a polymorphic `belongs_to`, raises Active
-Record's own error from any model discovery reaches, as requesting it does.
+`associations:`. The PaperTrail versions association, a `has_many :through`
+that goes through a HABTM, and a HABTM below the root are left out. A
+`has_many :through` Active Record cannot follow, such as one through a
+polymorphic `belongs_to`, raises Active Record's own error from any model
+discovery reaches, as requesting it does.
 
 Check two versions for known problems before relying on association history:
 
@@ -1049,7 +1060,7 @@ All errors inherit from `PaperTrailDiff::Error`.
 | `FilterLimitExceededError` | `historical_filter:` needs more than `max_filter_versions:` |
 | `AssociationTrackingUnavailableError` | Association history is requested without PT-AT |
 | `UnknownAssociationError` | An association name does not exist |
-| `UnsupportedAssociationError` | An association's macro is not supported, a path continues past a polymorphic `belongs_to`, or a `has_many :through` goes through a HABTM |
+| `UnsupportedAssociationError` | An association's macro is not supported, a path continues past a polymorphic `belongs_to`, a `has_many :through` goes through a HABTM, or a HABTM is below the root |
 | `UnversionedAssociationError` | An association's target model has no `has_paper_trail`, including the class a polymorphic `belongs_to` names |
 | `IncompleteAssociationHistoryError` | PT-AT did not record enough to rebuild an association, such as HABTM without a transaction, or a polymorphic type names no class |
 | `UnsupportedLiveActivityError` | A HABTM activity range ends at the current record |
@@ -1068,7 +1079,9 @@ Results can only be as complete as the history PaperTrail and PT-AT recorded.
 - Several queries against the current record are not one database snapshot.
   Use a transaction with a suitable isolation level if that matters.
 - HABTM membership history exists only where PT-AT recorded it in a
-  transaction. HABTM changes cannot become their own activity steps.
+  transaction, and only for the root record: a HABTM below the root raises
+  `UnsupportedAssociationError`. HABTM changes cannot become their own
+  activity steps.
 - PT-AT has its own
   [limitations](https://github.com/westonganger/paper_trail-association_tracking#limitations),
   especially for some `has_one` histories. The gem follows PT-AT's configured

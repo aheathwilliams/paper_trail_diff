@@ -23,6 +23,17 @@ project follows [Semantic Versioning](https://semver.org/).
 - A path that continues past a polymorphic `belongs_to`, such as
   `"notable.comments"`, raises `UnsupportedAssociationError`. The part after
   it used to be ignored without a word.
+- A HABTM below the root, such as `"tags.articles"`, `"author.articles.tags"`,
+  or `"comments.article.tags"`, raises `UnsupportedAssociationError` up front
+  in every method, naming the path and the HABTM. `association_paths` leaves
+  such a path out. PT-AT records HABTM membership only when its owner saves a
+  version, in rows that do not name the owner, so a root checkpoint holds the
+  root's membership alone. These paths read the root's rows instead and
+  returned a wrong diff. An article that joined a tag went unreported, and
+  against the current record every member read as added. A sibling article
+  reached through its author was given the root's tags. `activity_timeline`
+  raised `KeyError`. Only a path that led back to the root, like
+  `"comments.article.tags"`, read correctly; request `"tags"` instead.
 
 ### Added
 
