@@ -47,9 +47,13 @@ An association scope or a target's default scope is read once into a
 when each is an equality, `IN`, or `nil` test, or a negation of one, on the
 target's own column of a type Ruby compares as the database does. A record
 belongs to the association at a point when its key matches and its state
-there meets the condition. Activity reads a scoped branch again at each event
+there meets the condition. A `limit`, `offset`, or `has_one` order is read
+into a `ScopeRanking` when its order is total and every key compares in Ruby
+as the database sorts it, including where each adapter puts NULL; the records
+that meet the condition are then sorted, offset, and limited as the
+association's query would. Activity reads a scoped branch again at each event
 on it rather than patching the previous snapshot, since any edit can move a
-record into or out of the scope.
+record into or out of the scope, and with a ranking, move another record too.
 
 Each rebuilt state is an immutable snapshot. Activity timelines carry the
 previous snapshot forward and replace only the parts an event changed, so an
@@ -62,8 +66,9 @@ These association shapes cannot be read from the loaded history. The gem asks
 PT-AT to rebuild them at each point instead, which costs queries per record and
 resolves association membership by timestamp only:
 
-- associations with a scope the gem cannot read as plain conditions, including
-  `limit` and owner-dependent scopes;
+- associations with a scope the gem cannot read as plain conditions and an
+  exact ranking, including owner-dependent scopes and a `limit` without a
+  total integer order;
 - targets with such a default scope;
 - targets that are not versioned;
 - composite foreign keys.

@@ -58,6 +58,7 @@ matcher:
     - PaperTrailDiff::ActivityTransactionGrouper*
     - PaperTrailDiff::BatchSafety*
     - PaperTrailDiff::ScopeCondition*
+    - PaperTrailDiff::ScopeRanking*
     - PaperTrailDiff::AssociationTraversal*
     - PaperTrailDiff::HabtmTransactionOwners*
     - PaperTrailDiff::ActivityRange*

@@ -48,6 +48,12 @@ class BatchSafetyArticle < ActiveRecord::Base
   has_many :comment_articles, through: :authorship_comments, source: :article
   has_many :editorship_comments, through: :editorships, source: :comments
   has_many :editorship_comment_articles, through: :editorship_comments, source: :article
+  # A string order follows a collation, so its ranking is not read.
+  has_many :body_ranked_comments, -> { order(:body, :id).limit(1) },
+           class_name: 'TrackedComment', foreign_key: :article_id
+  has_many :first_comments, -> { order(:id).limit(1) }, class_name: 'TrackedComment',
+                                                        foreign_key: :article_id
+  has_many :first_comment_replies, through: :first_comments, source: :replies
 end
 
 RSpec.describe PaperTrailDiff::BatchSafety do
@@ -65,9 +71,10 @@ RSpec.describe PaperTrailDiff::BatchSafety do
 
   it 'accepts scopes and default scopes it can read as conditions on stored attributes' do
     expect do
-      safety(%i[unreviewed_comments reviewed_comments first_authors]).call(BatchSafetyArticle)
-    end
-      .not_to raise_error
+      safety(%i[unreviewed_comments reviewed_comments first_authors first_comments])
+        .call(BatchSafetyArticle)
+    end.not_to raise_error
+    expect { safety(%i[limited_comments offset_comments]).call(TrackedArticle) }.not_to raise_error
     expect { safety(['authorships.plain_author']).call(BatchSafetyArticle) }.not_to raise_error
   end
 
@@ -78,11 +85,20 @@ RSpec.describe PaperTrailDiff::BatchSafety do
   end
 
   it 'rejects scopes with an actionable opt-in' do
-    %i[limited_comments owner_comments].each do |path|
-      expect { safety([path]).call(TrackedArticle) }
-        .to raise_error(PaperTrailDiff::UnsupportedBatchPathError, /#{path}.*allow_expensive: true/)
-      expect { safety([path], allow_expensive: true).call(TrackedArticle) }.not_to raise_error
-    end
+    [[TrackedArticle, :owner_comments], [BatchSafetyArticle, :body_ranked_comments]]
+      .each do |model, path|
+        expect { safety([path]).call(model) }
+          .to raise_error(PaperTrailDiff::UnsupportedBatchPathError,
+                          /#{path}.*allow_expensive: true/)
+        expect { safety([path], allow_expensive: true).call(model) }.not_to raise_error
+      end
+  end
+
+  # Active Record reads only the conditions of a through's parts.
+  it 'rejects a through that passes a limited part, though the part alone is read' do
+    expect { safety([:first_comment_replies]).call(BatchSafetyArticle) }
+      .to raise_error(PaperTrailDiff::UnsupportedBatchPathError,
+                      /\Aassociation first_comment_replies .*\(limit, offset or has_one order/)
   end
 
   it 'requires an explicit boolean opt-in' do
@@ -131,8 +147,8 @@ RSpec.describe PaperTrailDiff::BatchSafety do
     allow(TrackedArticle).to receive(:pluck).and_call_original
     expect do
       PaperTrailDiff.report(TrackedArticle, since: Time.now.utc - 60,
-                                            limit: 5, associations: [:limited_comments])
-    end.to raise_error(PaperTrailDiff::UnsupportedBatchPathError, /limited_comments/)
+                                            limit: 5, associations: [:owner_comments])
+    end.to raise_error(PaperTrailDiff::UnsupportedBatchPathError, /owner_comments/)
     expect(TrackedArticle).not_to have_received(:pluck)
   end
 

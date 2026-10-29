@@ -49,6 +49,9 @@ module PaperTrailDiff
     #: (untyped) -> String?
     def reason_for(reflection)
       return ('association scope' if reflection.scope) if reflection.polymorphic?
+      if ScopeCondition.ranked_through?(reflection)
+        return 'limit, offset or has_one order inside a through'
+      end
       return if ScopeCondition.build(reflection)
 
       reflection.scope ? 'association scope' : 'default-scoped target'

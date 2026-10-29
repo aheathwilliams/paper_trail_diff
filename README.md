@@ -295,8 +295,11 @@ record and direct-association histories can be read without creating a model
 instance for every historical state.
 
 Scopes and default scopes made of plain conditions, such as
-`-> { where(archived: false) }`, are batched too. Some associations still need
-per-record queries, such as scopes with `limit` or scopes that take the owner.
+`-> { where(archived: false) }`, are batched too, and so is a `limit` or
+`offset` ordered by integer or boolean columns down to the primary key, such as
+`-> { order(:position, :id).limit(3) }`. Some associations still need
+per-record queries, such as a `limit` ordered by a string or scopes that take
+the owner.
 Batch methods reject those by default with `UnsupportedBatchPathError`. The
 error names the association. Remove it from `associations:`, or pass
 `allow_expensive: true` if you accept that cost.

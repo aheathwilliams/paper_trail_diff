@@ -101,11 +101,14 @@ module PaperTrailDiff
       active_record.const_get(:Associations).const_get(:Preloader)
     end
 
+    # The preloader applies a limit or offset to all owners' records at once,
+    # not to each owner's, so such an association is loaded per record. A
+    # has_one is no exception.
     #: (untyped, untyped) -> bool
     def batch_safe?(record, reflection)
       scope = reflection.scope
       return false if scope && !scope.arity.zero?
-      return true unless reflection.collection?
+      return true unless reflection.collection? || reflection.has_one?
 
       relation = record.association(reflection.name).scope
       relation.limit_value.nil? && relation.offset_value.nil?

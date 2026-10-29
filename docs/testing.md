@@ -64,7 +64,8 @@ passes is behavior nothing checks. `mutant.yml` lists the classes it mutates:
 - whether a transaction's HABTM members are one record's:
   `HabtmTransactionOwners`;
 - which association paths a batch refuses: `BatchSafety`;
-- which records an association scope admits: `ScopeCondition`.
+- which records an association scope admits, and how it ranks them:
+  `ScopeCondition` and `ScopeRanking`.
 
 The specs for the classes that read the database use tables of their own
 (`spec/support/filter_database.rb`, `spec/support/normalizer_database.rb`,

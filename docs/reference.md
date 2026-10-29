@@ -649,10 +649,30 @@ PostgreSQL, and only without a column collation: MySQL and SQL Server compare
 strings without regard to case or trailing spaces by default, which the gem
 cannot repeat.
 
-A few associations still need queries per record: scopes with `limit` or
-`offset`, scopes that take the owner (`->(article) { ... }`), scopes written as
-SQL strings or ranges, scopes that join or select, and conditions on other
-column types or other tables. Batch methods raise `UnsupportedBatchPathError`
+A `limit` or `offset`, and the order of a `has_one`, are read the same way
+when the order is total and the gem can repeat it:
+
+```ruby
+has_many :first_comments, -> { order(:position, :id).limit(3) }
+has_one :latest_comment, -> { order(id: :desc) }
+```
+
+At every point the gem ranks the records that meet the scope's conditions by
+the order, then skips the offset and keeps the limit, as the association's own
+query would have. The order must reach the primary key, so that no two records
+tie, and each key before it must be an integer, boolean, or integer enum column
+of the target, ascending or descending. NULL sorts where the database puts it
+by default: last in an ascending order on PostgreSQL, first on SQLite, MySQL,
+and SQL Server. This works on a direct `has_many` or `has_one`; a `has_many
+:through` whose own scope or whose parts have a limit, an offset, or a
+`has_one` order is not read, since Active Record applies only the conditions of
+a through's parts.
+
+A few associations still need queries per record: a `limit` or `offset` whose
+order is not total or sorts by another column type (strings follow a
+collation, and times the precision each history kept), scopes that take the
+owner (`->(article) { ... }`), scopes written as SQL strings or ranges, scopes
+that join or select, and conditions on other column types or other tables. Batch methods raise `UnsupportedBatchPathError`
 for these by default and name the association. Remove it from
 `associations:`, or pass `allow_expensive: true` to accept the per-record
 cost. Single-record methods always allow them.
