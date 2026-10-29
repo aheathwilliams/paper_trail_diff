@@ -64,8 +64,13 @@ module PaperTrailDiff
     # : (Array[Array[untyped]]) -> void
     def inspect_targets: (Array[Array[untyped]]) -> void
 
-    # : (Array[Array[untyped]]) -> void
-    def inspect_habtm: (Array[Array[untyped]]) -> void
+    # : (untyped, Array[Array[untyped]]) -> void
+    def inspect_habtm: (untyped, Array[Array[untyped]]) -> void
+
+    # PT-AT does not record which owner a HABTM member belongs to, so a
+    # transaction that more than one owner recorded members in cannot be read.
+    # : (untyped, Array[Array[untyped]]) -> void
+    def inspect_shared_transactions: (untyped, Array[Array[untyped]]) -> void
 
     # : () -> void
     def inspect_version_sequence: () -> void

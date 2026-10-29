@@ -135,11 +135,27 @@ RSpec.describe PaperTrailDiff::PreparedHistory do
       ).first
     ).to be(false)
 
+    parity_tree = PaperTrailDiff::AssociationTree.build(associations - ['author.comments'])
+    parity = PaperTrailDiff::AssociationTraversal.new(parity_tree)
     root_versions.each do |version|
-      indexed = normalize_version(version, tree, traversal, history: history)
-      point = normalize_version(version, tree, traversal)
+      indexed = normalize_version(version, parity_tree, parity, history: history)
+      point = normalize_version(version, parity_tree, parity)
       expect(indexed.to_h).to eq(point.to_h), "prepared mismatch at root version #{version.id}"
     end
+
+    # PT-AT finds an author's articles by the keys versions recorded after
+    # their change, so at the version that moved the article to Grace it finds
+    # none for Ada. The article was still Ada's before that change.
+    comments_tree = PaperTrailDiff::AssociationTree.build(['author.comments'])
+    comments = PaperTrailDiff::AssociationTraversal.new(comments_tree)
+    authors = root_versions.map do |version|
+      snapshot = normalize_version(version, comments_tree, comments, history: history)
+      author = snapshot.associations.fetch('author').records.first
+      [author.id, author.associations.fetch('comments').records.map { |c| c.attributes['body'] }]
+    end
+    expect(authors).to eq([[first_author.id, ['Comment before', 'Removed comment']],
+                           [first_author.id, ['Comment before', 'Removed comment']],
+                           [second_author.id, ['Comment after', 'Added comment']]])
   end
 
   it 'delegates a reflection when prepared resolution is unavailable' do

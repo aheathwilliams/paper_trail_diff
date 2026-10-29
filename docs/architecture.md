@@ -54,17 +54,18 @@ resolves association membership by timestamp only:
 - associations with a scope, including `limit` and owner-dependent scopes;
 - targets with a default scope;
 - targets that are not versioned;
-- composite foreign keys;
-- `has_many :through` associations whose source is not a `belongs_to`.
+- composite foreign keys.
 
-Batch methods reject the scoped and through cases unless you pass
+Batch methods reject the scoped cases unless you pass
 `allow_expensive: true`; see [costly associations](reference.md#costly-associations).
 
 HABTM membership comes from the snapshots PT-AT records with each transaction,
 so it is only known at root versions saved in a transaction. Those snapshots
 name the transaction and the association but not the owner, so they give only
 the root's own membership, and a HABTM below the root is rejected before any
-history is read.
+history is read. Even at the root, a transaction in which another record with a
+HABTM of the same name saved a version holds both records' members;
+`HabtmTransactionOwners` finds those transactions, and reading one raises.
 
 ## Database indexes
 

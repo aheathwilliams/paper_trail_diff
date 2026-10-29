@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative 'database_connection'
+require_relative 'monotonic_clock'
 require 'paper_trail-association_tracking'
 
 PaperTrail.config.track_associations = true

@@ -322,6 +322,28 @@ RSpec.describe PaperTrailDiff::PreparedEdgeLoader do
       expect(ignored.transaction_id).not_to eq(second.transaction_id)
     end
 
+    # The members of a shared transaction cannot be told apart, so its read is
+    # left to HistoricalAssociationReifier, which raises.
+    it 'leaves out a transaction that another owner recorded members in' do
+      article = TrackedArticle.create!(title: 'Tagged')
+      other = TrackedArticle.create!(title: 'Other')
+      ruby = TrackedTag.create!(name: 'ruby')
+      article.tags << ruby
+      other.tags << TrackedTag.create!(name: 'rails')
+      TrackedArticle.transaction do
+        [article, other].each do |owner|
+          TrackedArticle.find(owner.id).paper_trail.save_with_version
+        end
+      end
+      shared = versions_of(article).last
+      own = tag_version(article)
+
+      groups, memberships = load_edge(TrackedArticle, [article.id], :tags, [shared, own])
+
+      expect(groups.fetch('TrackedTag').fetch(:ids)).to include(ruby.id)
+      expect(memberships).to eq(own.transaction_id.to_s => [ruby.id])
+    end
+
     it 'skips root versions saved outside a transaction' do
       article = TrackedArticle.create!(title: 'Tagged')
       version = tag_version(article, TrackedTag.create!(name: 'ruby'))

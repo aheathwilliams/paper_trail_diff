@@ -38,6 +38,9 @@ module PaperTrailDiff
     # : (untyped, Array[untyped], untyped) -> Hash[String, Hash[Symbol, untyped]]
     def prepare_reflection: (untyped, Array[untyped], untyped) -> Hash[String, Hash[Symbol, untyped]]
 
+    # Either part can itself be a through, which has no key of its own to
+    # read, so each part is prepared as what it is. Like an edge, it returns
+    # every group it holds, not only those of these owners.
     # : (untyped, Array[untyped], untyped) -> Hash[String, Hash[Symbol, untyped]]
     def prepare_through: (untyped, Array[untyped], untyped) -> Hash[String, Hash[Symbol, untyped]]
 

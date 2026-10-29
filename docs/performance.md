@@ -8,13 +8,28 @@ does not establish that a batch API meets that purpose.
 The [follow-up reconstruction investigation](../benchmark/investigation/README.md)
 records the pre-fix N+1 paths and direct-snapshot experiments. Production now uses
 prepared event successors even without changesets, and directly normalizes plain
-root/direct-child states. Scoped and collection-source through batch paths require
+root/direct-child states. Scoped and default-scoped batch paths require
 `allow_expensive: true`; that opt-in can still cause N+1 work. Model callbacks,
 custom types and callable predicates also remain outside a flat-query guarantee.
 
 The benchmark exercises `analyze_scope` with genuine PaperTrail history. It is
 a local SQLite baseline for finding work inside the gem, not a production
 latency guarantee or a comparison of SQL dialects.
+
+## Through associations: 2026-10-29
+
+A `has_many :through` whose source is a `has_many` used to fall back to PT-AT
+for every record, so batch methods required `allow_expensive: true` for it. It
+now reads prepared history like any other through. The five-root
+`through_has_many` probe below, an author's comments through articles:
+
+| Code | SQL at 1 / 5 / 20 roots | `reify` calls at 1 / 5 / 20 roots |
+| --- | --- | --- |
+| Before, with `allow_expensive: true` | 56 / 200 / 740 | 15 / 75 / 300 |
+| After, without an opt-in | 20 / 20 / 20 | 7 / 35 / 140 |
+
+The `reify` calls still grow with the roots: each root's own versions are
+still rebuilt that way.
 
 ## Direct reconstruction follow-up: 2026-09-07
 
@@ -58,7 +73,7 @@ scripts are not included in the installed gem), reproduce these checks with:
 ```console
 PTD_PRODUCTION=1 mise exec -- bundle exec ruby benchmark/investigation/scalar_parity.rb
 mise exec -- bundle exec ruby benchmark/investigation/reconstruction.rb comments_without_changes 20
-PTD_PROBE_ALLOW_EXPENSIVE=1 mise exec -- bundle exec ruby benchmark/investigation/reconstruction.rb through_has_many 5
+mise exec -- bundle exec ruby benchmark/investigation/reconstruction.rb through_has_many 5
 ```
 
 ## Reproduce
@@ -309,5 +324,5 @@ Deleted history has no original timed counterpart here. Its five queries at both
   stay in subqueries unless `versions.item_id` and the keys differ in type, in
   which case they are read in slices of 250.
 
-Further batching of advanced association fallbacks needs temporal parity tests,
-especially around ownership changes.
+Batching scoped associations needs tests of membership over time like those
+for `has_many :through`, especially around ownership changes.

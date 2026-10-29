@@ -24,7 +24,8 @@ module PaperTrailDiff
       @habtm = {} #: Hash[Array[String], Hash[String, Array[untyped]]]
     end
 
-    #: (untyped, untyped, Hash[String, Hash[Symbol, untyped]]) -> void
+    # Returns every group the edge now holds.
+    #: (untyped, untyped, Hash[String, Hash[Symbol, untyped]]) -> Hash[String, Hash[Symbol, untyped]]
     def merge_edge(owner_class, reflection, groups)
       key = edge_key(owner_class, reflection)
       empty = {} #: Hash[String, Hash[Symbol, untyped]]
