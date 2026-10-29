@@ -1,0 +1,77 @@
+# Generated from lib/paper_trail_diff/activity_target_candidate_loader.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Loads the `belongs_to` targets owners pointed at during one activity range:
+  # at its start and after each change inside it.
+  #
+  # PT-AT records a version's foreign keys as they stood after its change, so
+  # the target at the start comes from the latest version before it. Reading
+  # only the owners' versions inside the range misses a target whose owner did
+  # not change there -- an author renamed under an article nobody edited.
+  class ActivityTargetCandidateLoader
+    # A plain class rather than Data.define, which arrived in Ruby 3.2 while this
+    # gem supports 3.1.
+    class Row
+      attr_reader owner_id: untyped
+
+      attr_reader foreign_key_id: untyped
+
+      attr_reader foreign_type: String?
+
+      attr_reader created_at: untyped
+
+      attr_reader event: String?
+
+      # : (untyped, untyped, String?, ?untyped, ?String?) -> void
+      def initialize: (untyped, untyped, String?, ?untyped, ?String?) -> void
+    end
+
+    # : (untyped, Array[untyped], untyped, ActivityRange) -> void
+    def initialize: (untyped, Array[untyped], untyped, ActivityRange) -> void
+
+    # : () -> Array[Row]
+    def call: () -> Array[Row]
+
+    # One shared query keeps the owner and timestamp needed to partition a
+    # batch's candidates back into each root's exact activity range.
+    # : () -> Array[Row]
+    def historical_rows: () -> Array[Row]
+
+    # The live row holds the state at a range that ends at the current record.
+    # : () -> Array[Row]
+    def current_rows: () -> Array[Row]
+
+    private
+
+    @owner_class: untyped
+
+    @owner_ids: Array[untyped]
+
+    @range: ActivityRange
+
+    @reflection: untyped
+
+    # : (untyped) -> untyped
+    def historical_relation: (untyped) -> untyped
+
+    # : (untyped) -> Array[untyped]
+    def historical_columns: (untyped) -> Array[untyped]
+
+    # : () -> untyped
+    def live_relation: () -> untyped
+
+    # A polymorphic key names its target in a type column; any other names it
+    # in the reflection, so no type is read.
+    # : () -> Array[String]
+    def live_columns: () -> Array[String]
+
+    # : (untyped) -> VersionAssociationCandidateScope
+    def candidate_scope: (untyped) -> VersionAssociationCandidateScope
+
+    # : () -> untyped
+    def association_class: () -> untyped
+
+    # : () -> bool
+    def scalar_foreign_key?: () -> bool
+  end
+end

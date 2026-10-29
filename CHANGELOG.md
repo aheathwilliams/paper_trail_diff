@@ -11,6 +11,14 @@ project follows [Semantic Versioning](https://semver.org/).
   before deletion, which a record created inside the window has no other
   snapshot of.
 
+### Fixed
+
+- Activity reports a change to a `belongs_to` target, or to the source of a
+  `has_many :through`, when the record pointing at it did not change in the
+  window: an author renamed under an article nobody edited. It used to report
+  nothing. A record that changed its target in the window also reports
+  changes to the target it pointed at before.
+
 ### Development
 
 - Mutation testing also covers `TimeRange`, `VersionRange`,

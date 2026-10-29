@@ -43,8 +43,8 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
         PaperTrail::Version, range.start_time, end_at: range.end_time
       ).call(relation).pluck(:id)
       actual = candidates.select do |version|
-        row = [1, version.item_id, version.created_at, version.event]
-        index.send(:eligible_child?, TrackedComment, row, range)
+        index.send(:eligible_version?, TrackedComment, version.item_id, version.created_at,
+                   version.event, range)
       end.map(&:id)
 
       expect(actual).to match_array(expected)
