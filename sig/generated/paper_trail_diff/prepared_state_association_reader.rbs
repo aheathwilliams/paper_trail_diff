@@ -4,26 +4,31 @@ module PaperTrailDiff
   # Reads plain edges without creating AR records for their members: direct
   # edges, polymorphic `belongs_to`, and `has_many :through` built from them.
   class PreparedStateAssociationReader
-    # : (PreparedRecordIndex, untyped) -> void
-    def initialize: (PreparedRecordIndex, untyped) -> void
+    # : (PreparedRecordIndex, untyped, ScopeCondition::Cache) -> void
+    def initialize: (PreparedRecordIndex, untyped, ScopeCondition::Cache) -> void
 
     # : (PreparedRecordState, untyped, untyped) -> [bool, Array[PreparedRecordState]]
     def call: (PreparedRecordState, untyped, untyped) -> [ bool, Array[PreparedRecordState] ]
 
     private
 
+    @conditions: ScopeCondition::Cache
+
     @edges: untyped
 
     @records: PreparedRecordIndex
 
     # A polymorphic target's class is known only once a record names it, so
-    # `target` checks its default scopes instead.
+    # `target` reads its scope for each record instead.
     # : (untyped) -> bool
     def supported?: (untyped) -> bool
 
-    # A type that names no class, or a default-scoped one, is left to the
-    # record path, which raises for the first and reads the second through
-    # its association.
+    # : (PreparedRecordState, untyped, ?untyped) -> bool
+    def in_scope?: (PreparedRecordState, untyped, ?untyped) -> bool
+
+    # A type that names no class, or a class whose scope cannot be read as
+    # conditions, is left to the record path, which raises for the first and
+    # reads the second through its association.
     # : (PreparedRecordState, untyped, untyped) -> [bool, Array[PreparedRecordState]]
     def target: (PreparedRecordState, untyped, untyped) -> [ bool, Array[PreparedRecordState] ]
 
@@ -35,6 +40,11 @@ module PaperTrailDiff
     # `source_type:`, only join records of that type count.
     # : (PreparedRecordState, untyped, untyped) -> [bool, Array[PreparedRecordState]]
     def through: (PreparedRecordState, untyped, untyped) -> [ bool, Array[PreparedRecordState] ]
+
+    # A record reached through two join records is one member, and the
+    # through's own scope applies after its parts' scopes.
+    # : (untyped, Array[PreparedRecordState]) -> Array[PreparedRecordState]
+    def through_members: (untyped, Array[PreparedRecordState]) -> Array[PreparedRecordState]
 
     # : (untyped, PreparedRecordState) -> bool
     def typed_join?: (untyped, PreparedRecordState) -> bool

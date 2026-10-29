@@ -45,11 +45,20 @@ module PaperTrailDiff
 
     #: (untyped) -> bool
     def plain_model?(model)
-      !model.primary_key.is_a?(Array) && !model.default_scopes? &&
+      !model.primary_key.is_a?(Array) && !scope_assigns_attributes?(model) &&
         model._initialize_callbacks.empty? &&
         %i[initialize attributes []= write_attribute id].all? do |name|
           framework_class?(model.instance_method(name).owner)
         end
+    end
+
+    # A default scope's equality conditions are assigned to every new record,
+    # through the model's writers, before a reified version's attributes are.
+    # A subclass's own type is assigned with or without one.
+    #: (untyped) -> bool
+    def scope_assigns_attributes?(model)
+      model.default_scopes? &&
+        model.default_scoped.scope_for_create != model.unscoped.scope_for_create
     end
 
     #: (untyped) -> bool

@@ -63,8 +63,17 @@ project follows [Semantic Versioning](https://semver.org/).
   attributes like other associations. In the reconstruction probe, `report`
   over a through went from 7 `reify` calls per root to none and builds about
   half as many model instances. Results are unchanged. A type that names no
-  class, a default-scoped or unversioned target, and scoped associations still
-  take the record path.
+  class, an unversioned target, and a scope that cannot be read as conditions
+  still take the record path.
+- Batch methods read an association scope, or a target's default scope, made
+  of plain conditions on the target's columns (equality, `IN`, `nil`, their
+  `where.not` forms, combined with `and` and `or`) from prepared history, so
+  they no longer need `allow_expensive: true` for it and its query count no
+  longer grows with the records. String conditions are read this way only on
+  SQLite and PostgreSQL. Scopes with `limit` or `offset`, scopes that take the
+  owner, and other conditions are still rejected without the opt-in. A
+  default-scoped model whose scope assigns no attributes is read without
+  `reify`.
 - The README recipe for deleted records also reads each record as it was just
   before deletion, which a record created inside the window has no other
   snapshot of.
@@ -105,6 +114,13 @@ project follows [Semantic Versioning](https://semver.org/).
   `report`. The current record was read correctly, so a comparison with it
   reported the tag as removed. A join record whose type changes now adds or
   removes its target in the step of that version.
+- A scoped or default-scoped association read from history now holds the
+  records that met the scope at each point. It used to ignore the scope's
+  conditions for history: a record that left the scope was reported as
+  changed instead of removed, one that entered it as changed instead of
+  added, and a record outside the scope could be reported as removed when it
+  was destroyed or moved. Activity reports entering or leaving the scope as
+  an addition or removal at the version that did it.
 - `compare` and `compare_many` between two versions report a `has_many` child
   that moved to another owner afterwards. They reported no change: the
   comparison read associations through PT-AT, which finds children by the keys
@@ -187,6 +203,8 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Development
 
+- Mutation testing also covers `ScopeCondition`, which decides the records an
+  association scope admits. The reconstruction probe has a `scoped` scenario.
 - The consistency specs also check that activity selection includes every
   record whose analysis reports a change.
 - Mutation testing also covers `TimeRange`, `VersionRange`,

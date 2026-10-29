@@ -17,6 +17,11 @@ module PaperTrailDiff
 
     @route_finder: ActivityEventRouteFinder
 
+    # An edit can move a target into or out of a scope, which a replacement
+    # in place cannot show, so a scoped route's branch is read again instead.
+    # : (Array[Array[untyped]]) -> bool
+    def scoped_route?: (Array[Array[untyped]]) -> bool
+
     # : (Array[untyped], untyped, SnapshotNormalizer, untyped, untyped) -> RecordSnapshot?
     def normalized_route_record: (Array[untyped], untyped, SnapshotNormalizer, untyped, untyped) -> RecordSnapshot?
 

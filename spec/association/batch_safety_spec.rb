@@ -2,17 +2,26 @@
 
 require_relative '../support/association_database'
 
-# Only reflections are read, so these reuse the fixture tables.
+# Only reflections are read, so these reuse the fixture tables. Scopes written
+# as SQL strings cannot be read from stored attributes; hash conditions on
+# integer columns can, on every adapter.
 class BatchSafetyComment < ActiveRecord::Base
   self.table_name = 'tracked_comments'
-  default_scope { where.not(body: '') }
+  default_scope { where("body <> ''") }
+end
+
+class BatchSafetyReviewedComment < ActiveRecord::Base
+  self.table_name = 'tracked_comments'
+  default_scope { where.not(reviewer_id: nil) }
 end
 
 class BatchSafetyAuthorship < ActiveRecord::Base
   self.table_name = 'tracked_authorships'
   belongs_to :author, class_name: 'TrackedAuthor'
-  belongs_to :scoped_author, -> { where.not(name: '') }, class_name: 'TrackedAuthor',
+  belongs_to :scoped_author, -> { where("name <> ''") }, class_name: 'TrackedAuthor',
                                                          foreign_key: :author_id
+  belongs_to :plain_author, -> { where(id: [1, 2]) }, class_name: 'TrackedAuthor',
+                                                      foreign_key: :author_id
   has_many :comments, class_name: 'TrackedComment', foreign_key: :article_id,
                       primary_key: :article_id
 end
@@ -20,10 +29,19 @@ end
 class BatchSafetyArticle < ActiveRecord::Base
   self.table_name = 'tracked_articles'
   belongs_to :owner, polymorphic: true, optional: true
+  belongs_to :scoped_owner, -> { where(id: 1) }, polymorphic: true, optional: true,
+                                                 foreign_key: :owner_id, foreign_type: :owner_type
   has_many :default_scoped_comments, class_name: 'BatchSafetyComment', foreign_key: :article_id
+  has_many :reviewed_comments, class_name: 'BatchSafetyReviewedComment', foreign_key: :article_id
+  has_many :unreviewed_comments, -> { where(reviewer_id: nil) }, class_name: 'TrackedComment',
+                                                                 foreign_key: :article_id
   has_many :authorships, class_name: 'BatchSafetyAuthorship', foreign_key: :article_id
-  has_many :editorships, -> { where(role: 'editor') }, class_name: 'BatchSafetyAuthorship',
-                                                       foreign_key: :article_id
+  has_many :editorships, -> { where('role = ?', 'editor') }, class_name: 'BatchSafetyAuthorship',
+                                                             foreign_key: :article_id
+  has_many :first_authorships, -> { where(author_id: 1) }, class_name: 'BatchSafetyAuthorship',
+                                                           foreign_key: :article_id
+  has_many :first_authors, -> { where.not(id: nil) }, through: :first_authorships,
+                                                      source: :plain_author
   has_many :editors, through: :editorships, source: :author
   has_many :scoped_contributors, through: :authorships, source: :scoped_author
   has_many :authorship_comments, through: :authorships, source: :comments
@@ -43,6 +61,20 @@ RSpec.describe PaperTrailDiff::BatchSafety do
     expect { safety([:comments]).call(TrackedAuthor) }.not_to raise_error
     expect { safety(%i[authorship_comments comment_articles]).call(BatchSafetyArticle) }
       .not_to raise_error
+  end
+
+  it 'accepts scopes and default scopes it can read as conditions on stored attributes' do
+    expect do
+      safety(%i[unreviewed_comments reviewed_comments first_authors]).call(BatchSafetyArticle)
+    end
+      .not_to raise_error
+    expect { safety(['authorships.plain_author']).call(BatchSafetyArticle) }.not_to raise_error
+  end
+
+  it 'rejects a scope on a polymorphic belongs_to, whose target class is not known' do
+    expect { safety([:scoped_owner]).call(BatchSafetyArticle) }
+      .to raise_error(PaperTrailDiff::UnsupportedBatchPathError,
+                      /\Aassociation scoped_owner .*\(association scope\)/)
   end
 
   it 'rejects scopes with an actionable opt-in' do

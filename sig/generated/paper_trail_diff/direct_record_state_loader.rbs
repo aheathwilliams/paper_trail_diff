@@ -27,6 +27,12 @@ module PaperTrailDiff
     # : (untyped) -> bool
     def plain_model?: (untyped) -> bool
 
+    # A default scope's equality conditions are assigned to every new record,
+    # through the model's writers, before a reified version's attributes are.
+    # A subclass's own type is assigned with or without one.
+    # : (untyped) -> bool
+    def scope_assigns_attributes?: (untyped) -> bool
+
     # : (untyped) -> bool
     def plain_attributes?: (untyped) -> bool
 

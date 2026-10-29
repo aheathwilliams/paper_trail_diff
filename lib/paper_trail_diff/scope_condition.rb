@@ -1,0 +1,268 @@
+# frozen_string_literal: true
+# rbs_inline: enabled
+
+module PaperTrailDiff
+  # An association scope, or its target's default scope, read as conditions
+  # on stored attributes, so membership at a boundary can be decided from each
+  # record's state there rather than by a query. It reads the relation the
+  # scope builds once and never runs application code per record. A scope it
+  # cannot read exactly builds no condition, and the caller keeps its slower
+  # path.
+  class ScopeCondition
+    # Relation parts that leave membership to the where clause alone.
+    RELATION_VALUES = %i[where order reordering readonly strict_loading extending].freeze
+    # Types whose stored values compare in Ruby as the database compares them,
+    # named rather than referenced so that loading needs no Active Model.
+    VALUE_TYPES = %w[ActiveModel::Type::Integer ActiveModel::Type::Boolean
+                     ActiveModel::Type::ImmutableString].freeze
+    TEXT_TYPE = 'ActiveModel::Type::ImmutableString'
+    ENUM_TYPE = 'ActiveRecord::Enum::EnumType'
+    BIND_PARAM = 'Arel::Nodes::BindParam'
+    ATTRIBUTE = 'Arel::Attributes::Attribute'
+    # Adapters that compare strings exactly by default. MySQL and SQL Server
+    # ignore case and trailing spaces by default, which Ruby cannot follow.
+    EXACT_TEXT_ADAPTERS = %w[sqlite3 postgresql].freeze
+
+    # Raised while reading a node that has no exact plain-Ruby reading.
+    class Unreadable < StandardError; end
+    private_constant :Unreadable
+
+    # Whether the reflection filters its target beyond its keys at all.
+    #: (untyped) -> bool
+    def self.scoped?(reflection)
+      !reflection.scope.nil? || reflection.klass.default_scopes?
+    end
+
+    # A through also filters by the scopes of each reflection it passes.
+    #: (untyped) -> bool
+    def self.scoped_path?(reflection)
+      return !reflection.scope.nil? if reflection.polymorphic?
+      return true if scoped?(reflection)
+      return false unless reflection.through_reflection?
+
+      scoped_path?(reflection.through_reflection) || scoped_path?(reflection.source_reflection)
+    end
+
+    # Returns nil when the scope cannot be read as plain conditions.
+    #: (untyped, ?untyped) -> ScopeCondition?
+    def self.build(reflection, model_class = reflection.klass)
+      relation = scoped_relation(reflection, model_class)
+      return unless relation && plain_relation?(relation, reflection)
+
+      clause = relation.where_clause - model_class.unscoped.where_clause
+      new(model_class, Reader.new(model_class).call(clause.ast))
+    rescue Unreadable
+      nil
+    end
+
+    # A scope that takes the owner differs per record, so it is never read.
+    #: (untyped, untyped) -> untyped
+    def self.scoped_relation(reflection, model_class)
+      scope = reflection.scope
+      relation = model_class.default_scoped
+      return relation unless scope
+      return unless scope.arity.zero?
+
+      reflection.scope_for(relation)
+    end
+    private_class_method :scoped_relation
+
+    # A has_one takes the first record its order names, which is a ranking,
+    # not a condition. Some parts, such as the having clause `or` sets, may
+    # be present but empty.
+    #: (untyped, untyped) -> bool
+    def self.plain_relation?(relation, reflection)
+      extra = relation.values.except(*RELATION_VALUES).values
+      return false unless extra.all? { |value| value.respond_to?(:empty?) && value.empty? }
+
+      reflection.collection? || reflection.belongs_to? || relation.order_values.empty?
+    end
+    private_class_method :plain_relation?
+
+    #: (untyped, Array[untyped]) -> void
+    def initialize(model_class, predicate)
+      @model_class = model_class
+      @predicate = predicate
+      freeze
+    end
+
+    #: (Hash[String, untyped]) -> bool
+    def matches?(attributes)
+      evaluate(@predicate, attributes)
+    end
+
+    # SQL compares NULL with nothing, so only an IS NULL test, an equality
+    # with nil, matches it.
+    COMPARISONS = {
+      eq: ->(value, expected) { value == expected },
+      not_eq: ->(value, expected) { !value.nil? && value != expected },
+      in: ->(value, expected) { !value.nil? && expected.include?(value) },
+      not_in: ->(value, expected) { !value.nil? && !expected.include?(value) }
+    }.freeze
+    private_constant :COMPARISONS
+
+    private
+
+    # @rbs @model_class: untyped
+    # @rbs @predicate: Array[untyped]
+
+    #: (Array[untyped], Hash[String, untyped]) -> bool
+    def evaluate(predicate, attributes)
+      operator, first, second = predicate
+      case operator
+      when :and then first.all? { |part| evaluate(part, attributes) }
+      when :or then first.any? { |part| evaluate(part, attributes) }
+      else COMPARISONS.fetch(operator).call(stored(first, attributes), second)
+      end
+    end
+
+    # The form the database holds, as the scope's own values were cast.
+    #: (String, Hash[String, untyped]) -> untyped
+    def stored(name, attributes)
+      @model_class.type_for_attribute(name).serialize(attributes[name])
+    end
+
+    # Builds each reflection's condition once per target class.
+    class Cache
+      #: () -> void
+      def initialize
+        @conditions = {} #: Hash[Array[untyped], ScopeCondition?]
+      end
+
+      # nil when the scope cannot be read from stored attributes.
+      #: (untyped, ?untyped) -> ScopeCondition?
+      def call(reflection, model_class = reflection.klass)
+        key = [reflection, model_class]
+        return @conditions.fetch(key) if @conditions.key?(key)
+
+        @conditions[key] = ScopeCondition.build(reflection, model_class)
+      end
+
+      # The records the reflection's scope admits. Its condition must exist.
+      #: (untyped, Array[untyped], ?untyped) -> Array[untyped]
+      def select(reflection, records, model_class = reflection.klass)
+        condition = call(reflection, model_class) #: ScopeCondition
+        records.select { |record| condition.matches?(record.attributes) }
+      end
+
+      # @rbs @conditions: Hash[Array[untyped], ScopeCondition?]
+    end
+
+    # Compiles a where clause into nested arrays of plain comparisons.
+    class Reader
+      #: (untyped) -> void
+      def initialize(model_class)
+        @model_class = model_class
+      end
+
+      #: (untyped) -> Array[untyped]
+      def call(node)
+        case node.class.name
+        when 'Arel::Nodes::And' then [:and, node.children.map { |child| call(child) }]
+        when 'Arel::Nodes::Or' then [:or, either(node).map { |child| call(child) }]
+        when 'Arel::Nodes::Grouping' then call(node.expr)
+        else comparison(node)
+        end
+      end
+
+      private
+
+      # @rbs @model_class: untyped
+
+      # An Or is binary before Rails 7.2 and n-ary from it.
+      #: (untyped) -> Array[untyped]
+      def either(node)
+        node.respond_to?(:children) ? node.children : [node.left, node.right]
+      end
+
+      #: (untyped) -> Array[untyped]
+      def comparison(node)
+        case node.class.name
+        when 'Arel::Nodes::Equality' then binary(:eq, node)
+        when 'Arel::Nodes::NotEqual' then binary(:not_eq, node)
+        when 'Arel::Nodes::HomogeneousIn' then homogeneous_in(node)
+        when 'Arel::Nodes::In' then list(:in, node.left, values(node.right))
+        when 'Arel::Nodes::NotIn' then list(:not_in, node.left, values(node.right))
+        else raise Unreadable
+        end
+      end
+
+      #: (Symbol, untyped) -> Array[untyped]
+      def binary(operator, node)
+        [operator, column(node.left), value(node.right)]
+      end
+
+      #: (untyped) -> Array[untyped]
+      def homogeneous_in(node)
+        list(node.type == :in ? :in : :not_in, node.attribute, node.casted_values)
+      end
+
+      # Active Record writes an empty NOT IN as a condition that is always
+      # true, and a NOT IN list holding NULL matches no row.
+      #: (Symbol, untyped, Array[untyped]) -> Array[untyped]
+      def list(operator, attribute, expected)
+        name = column(attribute)
+        return [operator, name, expected] if operator == :in
+        return [:and, []] if expected.empty?
+
+        expected.include?(nil) ? [:or, []] : [operator, name, expected]
+      end
+
+      # Ruby comparison stands in for SQL only on the record's own column of
+      # a type both compare alike.
+      #: (untyped) -> String
+      def column(attribute)
+        raise Unreadable unless ATTRIBUTE.eql?(attribute.class.name)
+
+        table = attribute.relation
+        raise Unreadable unless table.name == @model_class.table_name && table.table_alias.nil?
+
+        name = attribute.name
+        raise Unreadable unless comparable?(name)
+
+        name
+      end
+
+      #: (String) -> bool
+      def comparable?(name)
+        column = @model_class.columns_hash[name]
+        kinds = value_type(@model_class.type_for_attribute(name)).class.ancestors.map(&:name)
+        return false unless column && VALUE_TYPES.intersect?(kinds)
+        return true unless kinds.include?(TEXT_TYPE)
+
+        EXACT_TEXT_ADAPTERS.include?(@model_class.connection_db_config.adapter) &&
+          column.collation.nil?
+      end
+
+      # An enum compares the values it stores, which its subtype describes. A
+      # wrapper such as a serialized or encrypted type is none of these.
+      #: (untyped) -> untyped
+      def value_type(type)
+        ENUM_TYPE.eql?(type.class.name) ? type.subtype : type
+      end
+
+      # A list that is not plain values, such as a subquery, is unreadable.
+      #: (untyped) -> Array[untyped]
+      def values(nodes)
+        raise Unreadable unless nodes.instance_of?(Array)
+
+        nodes.map { |node| value(node) }
+      end
+
+      # A value out of the column's range makes Active Record write a
+      # constant condition instead, so it is left unread. Active Record
+      # writes IS NULL for a value that is nil before casting, but `= NULL`,
+      # which matches nothing, for one that only casts to nil.
+      #: (untyped) -> untyped
+      def value(node)
+        node = node.value if BIND_PARAM.eql?(node.class.name)
+        raise Unreadable unless node.respond_to?(:value_for_database)
+        raise Unreadable if node.respond_to?(:unboundable?) && node.unboundable?
+        return if node.nil?
+
+        node.value_for_database.tap { |value| raise Unreadable if value.nil? }
+      end
+    end
+    private_constant :Reader
+  end
+end

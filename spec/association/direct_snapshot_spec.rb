@@ -65,6 +65,17 @@ RSpec.describe 'direct snapshot compatibility' do
     expect(result.from_snapshot.attributes.fetch('name')).to eq('Scope default')
   end
 
+  it 'reads a default-scoped model directly when its scope assigns no attributes' do
+    stub_const('FilteredSnapshotDocument', Class.new(PreparedDocument))
+    FilteredSnapshotDocument.class_eval { default_scope { where.not(name: 'Hidden') } }
+    document, version = version_for(FilteredSnapshotDocument)
+    omit_name(version)
+
+    expect(PaperTrailDiff::DirectRecordStateLoader.new.call(version)).not_to be_nil
+    result = PaperTrailDiff.analyze(document, from: version, to: document)
+    expect(result.from_snapshot.attributes.fetch('name')).to eq(version.reify.name)
+  end
+
   it 'preserves application defaults that must be evaluated during initialization' do
     stub_const('DefaultSnapshotDocument', Class.new(PreparedDocument))
     DefaultSnapshotDocument.attribute :name, :string, default: -> { 'Runtime default' }

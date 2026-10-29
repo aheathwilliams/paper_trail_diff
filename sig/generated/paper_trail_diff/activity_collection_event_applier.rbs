@@ -25,6 +25,11 @@ module PaperTrailDiff
     # : (RecordSnapshot, Array[untyped], untyped, ActivitySnapshotDelta?, Array[untyped], SnapshotNormalizer, Array[untyped], ?direct: bool) -> RecordSnapshot
     def apply_route: (RecordSnapshot, Array[untyped], untyped, ActivitySnapshotDelta?, Array[untyped], SnapshotNormalizer, Array[untyped], ?direct: bool) -> RecordSnapshot
 
+    # Any edit can move a record into or out of a scope, so a scoped route's
+    # branch is read again from history instead.
+    # : (Array[Array[untyped]]) -> bool
+    def scoped_route?: (Array[Array[untyped]]) -> bool
+
     # : (Array[Array[untyped]], untyped) -> bool
     def unsafe_through_membership_event?: (Array[Array[untyped]], untyped) -> bool
 

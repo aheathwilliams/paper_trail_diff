@@ -7,7 +7,7 @@ require 'json'
 require 'paper_trail'
 require_relative '../../lib/paper_trail_diff'
 
-scenarios = %w[scalar comments checkpoints belongs_to limited owner default_scope
+scenarios = %w[scalar comments checkpoints belongs_to limited owner default_scope scoped
                through_has_many callback callable without_changes comments_without_changes
                polymorphic_belongs_to source_type_through]
 scenario = ARGV.fetch(0)
@@ -21,6 +21,10 @@ require_relative '../../spec/support/source_type_database' if polymorphic
 
 if scenario == 'default_scope'
   TrackedComment.class_eval { default_scope { where.not(body: 'hidden') } }
+end
+if scenario == 'scoped'
+  TrackedArticle.has_many :scoped_comments, -> { where(reviewer_id: nil) },
+                          class_name: 'TrackedComment', foreign_key: :article_id
 end
 TrackedArticle.after_initialize { TrackedTag.count } if scenario == 'callback'
 
@@ -97,6 +101,7 @@ association = { 'comments' => :comments, 'comments_without_changes' => :comments
                 'checkpoints' => :comments, 'belongs_to' => :author,
                 'limited' => :limited_comments,
                 'owner' => :owner_comments, 'default_scope' => :comments,
+                'scoped' => :scoped_comments,
                 'through_has_many' => :comments, 'polymorphic_belongs_to' => :target,
                 'source_type_through' => :linked_authors }[scenario]
 options = { since: Time.now.utc - 3600, limit: size, snapshots: true,

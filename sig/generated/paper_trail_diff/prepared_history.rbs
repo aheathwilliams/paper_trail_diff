@@ -37,6 +37,8 @@ module PaperTrailDiff
 
     private
 
+    @conditions: ScopeCondition::Cache
+
     @edges: Hash[Array[String], Hash[String, Hash[Symbol, untyped]]]
 
     @habtm: Hash[Array[String], Hash[String, Array[untyped]]]
@@ -48,7 +50,7 @@ module PaperTrailDiff
     @unsupported: Hash[Array[String], bool]
 
     # A polymorphic target's class is known only once a record names it, so
-    # belongs_to_records checks its default scopes for each record instead.
+    # belongs_to_records reads its scope for each record instead.
     # : (untyped, untyped) -> bool
     def supported?: (untyped, untyped) -> bool
 

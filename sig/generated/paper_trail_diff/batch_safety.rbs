@@ -18,6 +18,9 @@ module PaperTrailDiff
     # : (untyped, String) -> void
     def check: (untyped, String) -> void
 
+    # A scope prepared history can read as conditions on stored attributes
+    # is batched like any other path. A polymorphic target's class, and so
+    # its scope, is known only per record.
     # : (untyped) -> String?
     def reason_for: (untyped) -> String?
   end

@@ -14,7 +14,8 @@ module PaperTrailDiff
 
     #: (Array[Array[untyped]], untyped, ActivitySnapshotDelta?) -> bool
     def safe?(routes, version, delta)
-      !unsafe_through_membership_event?(routes, version) &&
+      !scoped_route?(routes) &&
+        !unsafe_through_membership_event?(routes, version) &&
         !unsafe_nested_membership_delta?(routes, delta)
     end
 
@@ -60,6 +61,15 @@ module PaperTrailDiff
         replacement: replacement
       )
       @route_updater.call(snapshot, change).fetch(0)
+    end
+
+    # Any edit can move a record into or out of a scope, so a scoped route's
+    # branch is read again from history instead.
+    #: (Array[Array[untyped]]) -> bool
+    def scoped_route?(routes)
+      routes.any? do |route|
+        route.any? { |entry| ScopeCondition.scoped_path?(entry.fetch(1)) }
+      end
     end
 
     #: (Array[Array[untyped]], untyped) -> bool

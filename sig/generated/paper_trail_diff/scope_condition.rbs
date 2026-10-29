@@ -1,0 +1,150 @@
+# Generated from lib/paper_trail_diff/scope_condition.rb with RBS::Inline
+
+module PaperTrailDiff
+  # An association scope, or its target's default scope, read as conditions
+  # on stored attributes, so membership at a boundary can be decided from each
+  # record's state there rather than by a query. It reads the relation the
+  # scope builds once and never runs application code per record. A scope it
+  # cannot read exactly builds no condition, and the caller keeps its slower
+  # path.
+  class ScopeCondition
+    # Relation parts that leave membership to the where clause alone.
+    RELATION_VALUES: untyped
+
+    # Types whose stored values compare in Ruby as the database compares them,
+    # named rather than referenced so that loading needs no Active Model.
+    VALUE_TYPES: untyped
+
+    TEXT_TYPE: ::String
+
+    ENUM_TYPE: ::String
+
+    BIND_PARAM: ::String
+
+    ATTRIBUTE: ::String
+
+    # Adapters that compare strings exactly by default. MySQL and SQL Server
+    # ignore case and trailing spaces by default, which Ruby cannot follow.
+    EXACT_TEXT_ADAPTERS: untyped
+
+    # Raised while reading a node that has no exact plain-Ruby reading.
+    class Unreadable < StandardError
+    end
+
+    # Whether the reflection filters its target beyond its keys at all.
+    # : (untyped) -> bool
+    def self.scoped?: (untyped) -> bool
+
+    # A through also filters by the scopes of each reflection it passes.
+    # : (untyped) -> bool
+    def self.scoped_path?: (untyped) -> bool
+
+    # Returns nil when the scope cannot be read as plain conditions.
+    # : (untyped, ?untyped) -> ScopeCondition?
+    def self.build: (untyped, ?untyped) -> ScopeCondition?
+
+    # A scope that takes the owner differs per record, so it is never read.
+    # : (untyped, untyped) -> untyped
+    def self.scoped_relation: (untyped, untyped) -> untyped
+
+    # A has_one takes the first record its order names, which is a ranking,
+    # not a condition. Some parts, such as the having clause `or` sets, may
+    # be present but empty.
+    # : (untyped, untyped) -> bool
+    def self.plain_relation?: (untyped, untyped) -> bool
+
+    # : (untyped, Array[untyped]) -> void
+    def initialize: (untyped, Array[untyped]) -> void
+
+    # : (Hash[String, untyped]) -> bool
+    def matches?: (Hash[String, untyped]) -> bool
+
+    # SQL compares NULL with nothing, so only an IS NULL test, an equality
+    # with nil, matches it.
+    COMPARISONS: untyped
+
+    private
+
+    @model_class: untyped
+
+    @predicate: Array[untyped]
+
+    # : (Array[untyped], Hash[String, untyped]) -> bool
+    def evaluate: (Array[untyped], Hash[String, untyped]) -> bool
+
+    # The form the database holds, as the scope's own values were cast.
+    # : (String, Hash[String, untyped]) -> untyped
+    def stored: (String, Hash[String, untyped]) -> untyped
+
+    # Builds each reflection's condition once per target class.
+    class Cache
+      # : () -> void
+      def initialize: () -> void
+
+      # nil when the scope cannot be read from stored attributes.
+      # : (untyped, ?untyped) -> ScopeCondition?
+      def call: (untyped, ?untyped) -> ScopeCondition?
+
+      # The records the reflection's scope admits. Its condition must exist.
+      # : (untyped, Array[untyped], ?untyped) -> Array[untyped]
+      def select: (untyped, Array[untyped], ?untyped) -> Array[untyped]
+
+      @conditions: Hash[Array[untyped], ScopeCondition?]
+    end
+
+    # Compiles a where clause into nested arrays of plain comparisons.
+    class Reader
+      # : (untyped) -> void
+      def initialize: (untyped) -> void
+
+      # : (untyped) -> Array[untyped]
+      def call: (untyped) -> Array[untyped]
+
+      private
+
+      @model_class: untyped
+
+      # An Or is binary before Rails 7.2 and n-ary from it.
+      # : (untyped) -> Array[untyped]
+      def either: (untyped) -> Array[untyped]
+
+      # : (untyped) -> Array[untyped]
+      def comparison: (untyped) -> Array[untyped]
+
+      # : (Symbol, untyped) -> Array[untyped]
+      def binary: (Symbol, untyped) -> Array[untyped]
+
+      # : (untyped) -> Array[untyped]
+      def homogeneous_in: (untyped) -> Array[untyped]
+
+      # Active Record writes an empty NOT IN as a condition that is always
+      # true, and a NOT IN list holding NULL matches no row.
+      # : (Symbol, untyped, Array[untyped]) -> Array[untyped]
+      def list: (Symbol, untyped, Array[untyped]) -> Array[untyped]
+
+      # Ruby comparison stands in for SQL only on the record's own column of
+      # a type both compare alike.
+      # : (untyped) -> String
+      def column: (untyped) -> String
+
+      # : (String) -> bool
+      def comparable?: (String) -> bool
+
+      # An enum compares the values it stores, which its subtype describes. A
+      # wrapper such as a serialized or encrypted type is none of these.
+      # : (untyped) -> untyped
+      def value_type: (untyped) -> untyped
+
+      # A list that is not plain values, such as a subquery, is unreadable.
+      # : (untyped) -> Array[untyped]
+      def values: (untyped) -> Array[untyped]
+
+      # A value out of the column's range makes Active Record write a
+      # constant condition instead, so it is left unread. Active Record
+      # writes IS NULL for a value that is nil before casting, but `= NULL`,
+      # which matches nothing, for one that only casts to nil.
+      # : (untyped) -> untyped
+      def value: (untyped) -> untyped
+    end
+  end
+end
