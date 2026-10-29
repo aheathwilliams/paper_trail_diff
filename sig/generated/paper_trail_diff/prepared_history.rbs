@@ -10,8 +10,9 @@ module PaperTrailDiff
     # : (PreparedRecordIndex, ?activity_index: PreparedActivityIndex?) -> void
     def initialize: (PreparedRecordIndex, ?activity_index: PreparedActivityIndex?) -> void
 
-    # : (untyped, untyped, Hash[String, Hash[Symbol, untyped]]) -> void
-    def merge_edge: (untyped, untyped, Hash[String, Hash[Symbol, untyped]]) -> void
+    # Returns every group the edge now holds.
+    # : (untyped, untyped, Hash[String, Hash[Symbol, untyped]]) -> Hash[String, Hash[Symbol, untyped]]
+    def merge_edge: (untyped, untyped, Hash[String, Hash[Symbol, untyped]]) -> Hash[String, Hash[Symbol, untyped]]
 
     # : (untyped, untyped) -> Hash[String, Hash[Symbol, untyped]]
     def edge: (untyped, untyped) -> Hash[String, Hash[Symbol, untyped]]

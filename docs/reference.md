@@ -620,8 +620,7 @@ model instance and may run queries of its own.
 
 Most associations are loaded for all records together. A few still need queries
 per record: associations with a scope (including `limit` or owner-dependent
-scopes), targets with a default scope, and `has_many :through` associations
-whose source is not a `belongs_to`. Batch methods raise
+scopes) and targets with a default scope. Batch methods raise
 `UnsupportedBatchPathError` for these by default and name the association.
 Remove it from `associations:`, or pass `allow_expensive: true` to accept the
 per-record cost. Single-record methods always allow them.
@@ -684,6 +683,10 @@ comments.changed.first.associations["replies"].added
 - `has_many :through` uses the versioned join model's history, so join-model
   attributes are available. HABTM reports membership and the target's
   attributes; it has no join model, so it has no join attributes.
+- A `has_many :through` holds, at each point, the records the owner reached
+  through the join records it had then. A record that moves to another join
+  record leaves one owner and joins the other, and so does every record under
+  a join record that moves to another owner.
 - A `has_many :through` that goes through a HABTM, as its `through:`, its
   `source:`, or further down its chain, raises `UnsupportedAssociationError`
   up front in every method. Active Record joins a HABTM through a hidden

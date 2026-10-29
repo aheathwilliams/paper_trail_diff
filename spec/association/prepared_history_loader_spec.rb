@@ -127,7 +127,7 @@ RSpec.describe PaperTrailDiff::PreparedHistoryLoader do
       .to be(true)
   end
 
-  it 'marks through paths whose source is not belongs_to as unsupported' do
+  it 'reads a through whose source is a has_many like any other through' do
     author = TrackedAuthor.create!(name: 'Author')
     article = TrackedArticle.create!(title: 'Article', author: author)
     comment = article.comments.create!(body: 'comment')
@@ -135,8 +135,8 @@ RSpec.describe PaperTrailDiff::PreparedHistoryLoader do
     history = load_history(author, [:comments])
 
     expect(ids(history, TrackedAuthor, :comments, 'TrackedComment')).to eq([comment.id])
-    expect(supported?(history, TrackedAuthor, :comments)).to be(false)
-    expect(supported?(history, TrackedAuthor, :articles)).to be(true)
+    expect(ids(history, TrackedArticle, :comments, 'TrackedComment')).to eq([comment.id])
+    expect(supported?(history, TrackedAuthor, :comments)).to be(true)
   end
 
   it 'marks an edge into an unversioned model as unsupported, without loading it' do

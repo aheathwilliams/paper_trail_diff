@@ -6,8 +6,8 @@ module PaperTrailDiff
     # : (AssociationTraversal, allow_expensive: bool) -> void
     def initialize: (AssociationTraversal, allow_expensive: bool) -> void
 
-    # : (untyped, ?historical: bool) -> void
-    def call: (untyped, ?historical: bool) -> void
+    # : (untyped) -> void
+    def call: (untyped) -> void
 
     private
 
@@ -15,10 +15,10 @@ module PaperTrailDiff
 
     @traversal: AssociationTraversal
 
-    # : (untyped, String, bool) -> void
-    def check: (untyped, String, bool) -> void
+    # : (untyped, String) -> void
+    def check: (untyped, String) -> void
 
-    # : (untyped, bool) -> String?
-    def reason_for: (untyped, bool) -> String?
+    # : (untyped) -> String?
+    def reason_for: (untyped) -> String?
   end
 end

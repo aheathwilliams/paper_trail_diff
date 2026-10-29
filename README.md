@@ -295,7 +295,7 @@ record and direct-association histories can be read without creating a model
 instance for every historical state.
 
 Some associations still need per-record queries. Batch methods reject scoped
-associations and certain `has_many :through` histories by default with
+and default-scoped associations by default with
 `UnsupportedBatchPathError`. The error names the association. Remove it from
 `associations:`, or pass `allow_expensive: true` if you accept that cost.
 Callbacks and callable historical filters can also issue queries. See the

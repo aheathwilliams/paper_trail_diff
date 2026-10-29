@@ -48,6 +48,11 @@ project follows [Semantic Versioning](https://semver.org/).
 - The README has a recipe that turns a report into one row per changed field,
   with the record, whether it changed, appeared, or disappeared, and the step's
   author, event, and time.
+- Batch methods no longer need `allow_expensive: true` for a
+  `has_many :through` whose source is a `has_many`, such as an author's
+  comments through articles. It is read from prepared history like the other
+  associations, so its queries no longer grow with the records: the five-record
+  probe in `docs/performance.md` went from 200 queries to 20.
 
 ### Fixed
 
@@ -112,6 +117,13 @@ project follows [Semantic Versioning](https://semver.org/).
   error, where discovery used to raise `ArgumentError`, `NameError`, or
   `NoMethodError` from inside the reflection, or list a path that raised when
   requested.
+- A `has_many :through` whose source is a `has_many` follows records that
+  move. A comment moved to another article leaves the first article's author
+  and joins the other's, and an article that moves to another author takes its
+  comments with it. Analyses, timelines, and comparisons with the current
+  record used to report no change for such a move, and could report a record
+  that left and came back as changed. They read these associations through
+  PT-AT, which finds a record by the keys its later versions recorded.
 - A `has_many :through` whose `through:` is itself a `has_many :through`, such
   as `has_many :comment_reviewers, through: :comments, source: :reviewer` with
   `comments` through `articles`, reports its changes in analyses, timelines,
@@ -141,6 +153,14 @@ project follows [Semantic Versioning](https://semver.org/).
   `ActivityRange`, `VersionAssociationCandidateScope`, and
   `PreparedActivityIndex`, each with a spec of its own; all 1,507 of their
   mutations are caught.
+- `benchmark/investigation/reconstruction.rb` runs again: the association
+  fixtures load the monotonic test clock they use. Its `prepared-through`
+  experiment and `benchmark/investigation/prepared_through_override.rb` are
+  removed, since the gem now reads those throughs that way.
+- `spec/association/through_membership_spec.rb` writes out the expected
+  membership of a `has_many :through` with a `has_many` source over moves,
+  deletions, transactions, and changes saved without a version, alone and in
+  a batch.
 
 ## [0.13.1] - 2026-10-28
 

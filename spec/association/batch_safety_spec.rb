@@ -28,6 +28,8 @@ class BatchSafetyArticle < ActiveRecord::Base
   has_many :scoped_contributors, through: :authorships, source: :scoped_author
   has_many :authorship_comments, through: :authorships, source: :comments
   has_many :comment_articles, through: :authorship_comments, source: :article
+  has_many :editorship_comments, through: :editorships, source: :comments
+  has_many :editorship_comment_articles, through: :editorship_comments, source: :article
 end
 
 RSpec.describe PaperTrailDiff::BatchSafety do
@@ -36,8 +38,11 @@ RSpec.describe PaperTrailDiff::BatchSafety do
     described_class.new(traversal, allow_expensive: false, **options)
   end
 
-  it 'accepts ordinary direct and belongs-to through paths' do
+  it 'accepts direct paths and throughs of any source, nested throughs included' do
     expect { safety(%i[comments contributors]).call(TrackedArticle) }.not_to raise_error
+    expect { safety([:comments]).call(TrackedAuthor) }.not_to raise_error
+    expect { safety(%i[authorship_comments comment_articles]).call(BatchSafetyArticle) }
+      .not_to raise_error
   end
 
   it 'rejects scopes with an actionable opt-in' do
@@ -46,12 +51,6 @@ RSpec.describe PaperTrailDiff::BatchSafety do
         .to raise_error(PaperTrailDiff::UnsupportedBatchPathError, /#{path}.*allow_expensive: true/)
       expect { safety([path], allow_expensive: true).call(TrackedArticle) }.not_to raise_error
     end
-  end
-
-  it 'rejects historical collection through sources but allows live loading' do
-    expect { safety([:comments]).call(TrackedAuthor) }
-      .to raise_error(PaperTrailDiff::UnsupportedBatchPathError, /through source/)
-    expect { safety([:comments]).call(TrackedAuthor, historical: false) }.not_to raise_error
   end
 
   it 'requires an explicit boolean opt-in' do
@@ -79,25 +78,15 @@ RSpec.describe PaperTrailDiff::BatchSafety do
     expect { safety([:editors]).call(BatchSafetyArticle) }
       .to raise_error(PaperTrailDiff::UnsupportedBatchPathError,
                       /\Aassociation editors .*\(association scope\)/)
-    expect { safety([:scoped_contributors]).call(BatchSafetyArticle, historical: false) }
+    expect { safety([:scoped_contributors]).call(BatchSafetyArticle) }
       .to raise_error(PaperTrailDiff::UnsupportedBatchPathError,
                       /\Aassociation scoped_contributors .*\(association scope\)/)
   end
 
-  it 'reports a through source that is not belongs_to only for history' do
-    expect { safety([:authorship_comments]).call(BatchSafetyArticle) }
+  it 'checks the parts of a through that is itself the through half' do
+    expect { safety([:editorship_comment_articles]).call(BatchSafetyArticle) }
       .to raise_error(PaperTrailDiff::UnsupportedBatchPathError,
-                      /\(through source is not belongs_to\)/)
-    expect { safety([:authorship_comments]).call(BatchSafetyArticle, historical: false) }
-      .not_to raise_error
-  end
-
-  it 'checks the through half of a through path for history too' do
-    expect { safety([:comment_articles]).call(BatchSafetyArticle) }
-      .to raise_error(PaperTrailDiff::UnsupportedBatchPathError,
-                      /\Aassociation comment_articles .*\(through source is not belongs_to\)/)
-    expect { safety([:comment_articles]).call(BatchSafetyArticle, historical: false) }
-      .not_to raise_error
+                      /\Aassociation editorship_comment_articles .*\(association scope\)/)
   end
 
   it 'checks nested paths below the root' do

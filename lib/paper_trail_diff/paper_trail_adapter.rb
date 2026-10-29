@@ -181,7 +181,7 @@ module PaperTrailDiff
 
     #: (untyped, historical: bool) -> void
     def prepare_batch_model(model, historical:)
-      @batch_safety.call(model, historical: historical)
+      @batch_safety.call(model)
       @traversal_preparer.call(model, historical: historical)
     end
 

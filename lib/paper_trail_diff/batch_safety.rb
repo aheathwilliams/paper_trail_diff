@@ -14,12 +14,12 @@ module PaperTrailDiff
       @allow_expensive = allow_expensive
     end
 
-    #: (untyped, ?historical: bool) -> void
-    def call(model, historical: true)
+    #: (untyped) -> void
+    def call(model)
       return if @allow_expensive
 
       @traversal.selected_reflections(model).each do |path, reflection|
-        check(reflection, path, historical)
+        check(reflection, path)
       end
     end
 
@@ -28,9 +28,9 @@ module PaperTrailDiff
     # @rbs @traversal: AssociationTraversal
     # @rbs @allow_expensive: bool
 
-    #: (untyped, String, bool) -> void
-    def check(reflection, path, historical)
-      reason = reason_for(reflection, historical)
+    #: (untyped, String) -> void
+    def check(reflection, path)
+      reason = reason_for(reflection)
       if reason
         raise UnsupportedBatchPathError,
               "association #{path} requires per-record reconstruction (#{reason}); " \
@@ -39,18 +39,15 @@ module PaperTrailDiff
       return unless reflection.through_reflection?
 
       [reflection.through_reflection, reflection.source_reflection].each do |part|
-        check(part, path, historical)
+        check(part, path)
       end
     end
 
-    #: (untyped, bool) -> String?
-    def reason_for(reflection, historical)
+    #: (untyped) -> String?
+    def reason_for(reflection)
       return 'association scope' if reflection.scope
-      return 'default-scoped target' if !reflection.polymorphic? && reflection.klass.default_scopes?
-      return unless historical && reflection.through_reflection?
-      return if reflection.source_reflection.belongs_to?
 
-      'through source is not belongs_to'
+      'default-scoped target' if !reflection.polymorphic? && reflection.klass.default_scopes?
     end
   end
 end

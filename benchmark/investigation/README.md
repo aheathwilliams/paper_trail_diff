@@ -85,6 +85,16 @@ needs explicit temporal-membership tests, including moves, deletions, transactio
 boundaries, and source/through scopes. Matching PT-AT alone is not a substitute
 for establishing the intended historical result.
 
+**Resolved 2026-10-29.** The mismatch was PT-AT's. That test's root article
+reaches itself again through `author.comments`, and at its own version, the one
+that moved it to another author, PT-AT finds the author's articles by the keys
+versions recorded after their change, so it finds none. The article was still
+the first author's before that change. The same lookup also misses any child
+that later moved to another owner. `spec/association/through_membership_spec.rb`
+now writes out the expected membership for moves, deletions, transactions and
+unrecorded changes, and the prepared resolver reads these throughs; see
+[the performance guide](../../docs/performance.md#through-associations-2026-10-29).
+
 ### Scope fallbacks are intentional but still costly
 
 `LiveEndpointBatchLoader#batch_safe?` routes owner-dependent scopes and collection
@@ -190,7 +200,6 @@ installed gem. They use disposable in-memory data and do not modify application 
 mise exec -- bundle exec ruby benchmark/investigation/reconstruction.rb comments_without_changes 20
 mise exec -- bundle exec ruby benchmark/investigation/reconstruction.rb through_has_many 20
 mise exec -- bundle exec ruby benchmark/investigation/reconstruction.rb checkpoints 5
-mise exec -- bundle exec ruby benchmark/investigation/reconstruction.rb through_has_many 5 prepared-through
 mise exec -- bundle exec ruby benchmark/investigation/scalar_cost.rb baseline 500
 mise exec -- bundle exec ruby benchmark/investigation/scalar_cost.rb direct 500
 mise exec -- bundle exec ruby benchmark/investigation/scalar_parity.rb
@@ -199,9 +208,3 @@ mise exec -- bundle exec ruby benchmark/investigation/scalar_parity.rb
 Run sizes 1, 5, and 20 to inspect query growth. Run each scalar mode three times
 for the timing comparison. `scalar_parity.rb` reports known mismatches as data;
 they are intentional evidence that the prototype is not a compatible replacement.
-
-To reproduce the failing through-prototype parity check across the existing suite:
-
-```console
-PAPER_TRAIL_DIFF_COVERAGE=associations mise exec -- bundle exec ruby -Ilib -Ispec -rspec_helper -r./benchmark/investigation/prepared_through_override -S rspec --pattern 'spec/{unit,association}/**/*_spec.rb' --exclude-pattern spec/unit/loading_spec.rb
-```

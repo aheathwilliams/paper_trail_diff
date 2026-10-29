@@ -71,7 +71,8 @@ module PaperTrailDiff
     end
 
     # Either part can itself be a through, which has no key of its own to
-    # read, so each part is prepared as what it is.
+    # read, so each part is prepared as what it is. Like an edge, it returns
+    # every group it holds, not only those of these owners.
     #: (untyped, Array[untyped], untyped) -> Hash[String, Hash[Symbol, untyped]]
     def prepare_through(owner_class, owner_ids, reflection)
       through_groups = prepare_reflection(owner_class, owner_ids, reflection.through_reflection)
@@ -82,11 +83,6 @@ module PaperTrailDiff
         targets = merge_groups(targets, source)
       end
       @history.merge_edge(owner_class, reflection, targets)
-      # Only a belongs_to source is read from prepared history.
-      unless reflection.source_reflection.belongs_to?
-        @history.mark_unsupported(owner_class, reflection)
-      end
-      targets
     end
 
     #: (untyped, Array[untyped], untyped) -> Hash[String, Hash[Symbol, untyped]]
