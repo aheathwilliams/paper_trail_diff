@@ -26,6 +26,9 @@ project follows [Semantic Versioning](https://semver.org/).
   and that a step's diff is exactly what its event changed. Ending a range at a
   version leaves out only the writes after it. Specs pin this behavior, which
   is unchanged.
+- The README has a recipe that turns a report into one row per changed field,
+  with the record, whether it changed, appeared, or disappeared, and the step's
+  author, event, and time.
 
 ### Development
 

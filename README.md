@@ -210,6 +210,61 @@ for pagination, deleted records, and selecting by past values with
 For a fixed past window, use `analyze_scope(Article.all, within: start_time...end_time,
 limit: 100)`.
 
+## 4. Turn a report into rows
+
+For a history table or an export, flatten a report into one row per changed
+field. Each row names the record, the change, and who made it. This example
+requires the association setup in the quickstart:
+
+<!-- executable:recipe-summary -->
+```ruby
+report = PaperTrailDiff.report(
+  Article.all, since: 1.day.ago, limit: 100,
+  associations: [:comments], include_deleted: true
+)
+analyses = report.analyses.merge(report.deleted.compact)
+
+rows = analyses.flat_map do |root, analysis|
+  analysis.activity_timeline.flat_map do |step|
+    source = step.source_boundary
+    step.diff.each_entry.filter_map do |entry|
+      next unless entry.attribute # skip entries for whole records and associations
+
+      from, to, change =
+        if entry.change?
+          [entry.value.from, entry.value.to, :changed]
+        elsif entry.state == :after
+          [nil, entry.value, :added]
+        else
+          [entry.value, nil, :removed]
+        end
+      next if from.nil? && to.nil? # a blank field of an added or removed record
+
+      record = entry.record # nil for the article itself
+
+      {
+        root: root,
+        association: entry.association_path.join("."), # "" for the article itself
+        record: record ? [record.type, record.id.to_s] : root,
+        change: change, attribute: entry.attribute, from: from, to: to,
+        actor: source.whodunnit, event: source.event, recorded_at: source.recorded_at
+      }
+    end
+  end
+end
+```
+
+`change` is `:changed` for an edited field. It is `:added` or `:removed` for
+each field of a record that appeared or disappeared: the article was created
+or deleted, or a comment joined or left it. A comment moved from another
+article is also `:added`; its `event` is then `"update"` rather than
+`"create"`. `actor`, `event`, and `recorded_at` describe the step's source
+version. With `group: :transaction`, that is the transaction's first event.
+
+Rows follow the report's record order, with deleted records last, then each
+record's steps in time order. Labels, grouping, and formatting are left to your
+application.
+
 ## Choose a method
 
 | What you need | Method |
