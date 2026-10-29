@@ -68,7 +68,10 @@ RSpec.describe PaperTrailDiff::HabtmTransactionOwners do
     it 'counts a model whose subclass declares the HABTM' do
       habtm = Struct.new(:macro).new(:has_and_belongs_to_many)
       base = Class.new { def self.reflect_on_association(_name) = nil }
-      Class.new(base).define_singleton_method(:reflect_on_association) do |name|
+      # `descendants` holds subclasses weakly; the local keeps this one from
+      # being collected before `shared` looks for it.
+      subclass = Class.new(base)
+      subclass.define_singleton_method(:reflect_on_association) do |name|
         habtm if name == 'tags'
       end
       traversal = PaperTrailDiff::AssociationTraversal
