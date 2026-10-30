@@ -126,6 +126,7 @@ require_relative 'paper_trail_diff/paper_trail_adapter'
 #       close_on: Symbol?, snapshots: bool, group: Symbol?
 #     }
 #     type ignore_option = Array[String | Symbol] | Hash[String | Symbol, untyped]
+#     type association_option = String | Symbol | Array[untyped] | Hash[untyped, untyped]
 #     type reference_key = :type | :id | "type" | "id"
 #     type traversal_context = :change | :included_state
 #     type traversal_state = :before | :after
@@ -146,7 +147,7 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
 
   class << self # rubocop:disable Metrics/ClassLength
     # Compares net state between explicit PaperTrail-version or current-record endpoints.
-    #: (untyped, untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?reload_live_endpoints: bool, ?allow_approximate: bool) -> Diff
+    #: (untyped, untyped, ?associations: association_option, ?ignore: ignore_option, ?reload_live_endpoints: bool, ?allow_approximate: bool) -> Diff
     def compare( # rubocop:disable Metrics/ParameterLists
       from_version,
       to_version,
@@ -164,7 +165,7 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
     end
 
     # Compares many independent endpoint pairs while batching current-record loading.
-    #: (Array[comparison_input], ?associations: Array[String | Symbol], ?ignore: ignore_option, ?reload_live_endpoints: bool, ?allow_expensive: bool, ?allow_approximate: bool) -> comparison_results
+    #: (Array[comparison_input], ?associations: association_option, ?ignore: ignore_option, ?reload_live_endpoints: bool, ?allow_expensive: bool, ?allow_approximate: bool) -> comparison_results
     def compare_many( # rubocop:disable Metrics/ParameterLists
       comparisons,
       associations: [],
@@ -183,7 +184,7 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
 
     # Compares every adjacent reconstructed state in an inclusive version range,
     # by default the record's whole history through its current state.
-    #: (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?version_scope: untyped, ?close_on: Symbol?, ?allow_approximate: bool) -> Array[Step]
+    #: (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: association_option, ?ignore: ignore_option, ?version_scope: untyped, ?close_on: Symbol?, ?allow_approximate: bool) -> Array[Step]
     def timeline( # rubocop:disable Metrics/ParameterLists
       record,
       from: nil,
@@ -212,7 +213,7 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
     # `reload_live_endpoints:` applies whenever the range ends at the current
     # record: an explicit `to:` record, the default range, or a window with no
     # later version.
-    #: (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?reload_live_endpoints: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?recorded_changes: bool, ?allow_approximate: bool) -> Array[ActivityStep]
+    #: (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: association_option, ?ignore: ignore_option, ?reload_live_endpoints: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?recorded_changes: bool, ?allow_approximate: bool) -> Array[ActivityStep]
     def activity_timeline( # rubocop:disable Metrics/ParameterLists
       record,
       from: nil,
@@ -245,7 +246,7 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
     end
 
     # Builds an endpoint diff and root-checkpoint timeline while normalizing each version once.
-    #: (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?recorded_changes: bool, ?allow_approximate: bool) -> Analysis
+    #: (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: association_option, ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?recorded_changes: bool, ?allow_approximate: bool) -> Analysis
     def analyze( # rubocop:disable Metrics/ParameterLists
       record,
       from: nil,
@@ -283,7 +284,7 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
     # returns a frozen Hash keyed by identity. Roots with nothing to report in
     # the window return an empty `Analysis`. To let a relation choose the
     # records, use `analyze_scope`.
-    #: (Array[untyped], ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?allow_expensive: bool, ?recorded_changes: bool, ?allow_approximate: bool) -> Hash[identity, Analysis]
+    #: (Array[untyped], ?within: untyped, ?associations: association_option, ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?allow_expensive: bool, ?recorded_changes: bool, ?allow_approximate: bool) -> Hash[identity, Analysis]
     def analyze_many( # rubocop:disable Metrics/ParameterLists
       records,
       within: nil,
@@ -332,7 +333,7 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
     # Note also that a relation selects on current state, not on state during
     # the window: `where(status: 'published')` means published *now*, which is a
     # different set from what was published while the window was open.
-    #: (untyped, limit: Integer?, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?historical_filter: untyped, ?max_filter_versions: Integer, ?include_deleted: bool, ?allow_expensive: bool, ?recorded_changes: bool, ?allow_approximate: bool) -> ScopedAnalysis
+    #: (untyped, limit: Integer?, ?within: untyped, ?associations: association_option, ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?historical_filter: untyped, ?max_filter_versions: Integer, ?include_deleted: bool, ?allow_expensive: bool, ?recorded_changes: bool, ?allow_approximate: bool) -> ScopedAnalysis
     def analyze_scope( # rubocop:disable Metrics/ParameterLists
       scope,
       limit:,
@@ -368,7 +369,7 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
     # for every root that changed or whose requested associations did.
     # Historical windows remain explicit on analyze_scope; this entry point is
     # deliberately named for a report through now rather than an as-of query.
-    #: (untyped, since: untyped, limit: Integer, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?snapshots: bool, ?group: Symbol?, ?include_deleted: bool, ?historical_filter: untyped, ?max_filter_versions: Integer, ?allow_expensive: bool, ?recorded_changes: bool, ?allow_approximate: bool) -> ScopedAnalysis
+    #: (untyped, since: untyped, limit: Integer, ?associations: association_option, ?ignore: ignore_option, ?snapshots: bool, ?group: Symbol?, ?include_deleted: bool, ?historical_filter: untyped, ?max_filter_versions: Integer, ?allow_expensive: bool, ?recorded_changes: bool, ?allow_approximate: bool) -> ScopedAnalysis
     def report( # rubocop:disable Metrics/ParameterLists
       scope, since:, limit:, associations: [], ignore: DEFAULT_IGNORED_ATTRIBUTES,
       snapshots: false, group: nil, include_deleted: false, historical_filter: nil,
@@ -404,7 +405,7 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
     end
 
     # Reports known reconstruction hazards without mutating application state.
-    #: (untyped, untyped, ?associations: Array[String | Symbol]) -> DiagnosticReport
+    #: (untyped, untyped, ?associations: association_option) -> DiagnosticReport
     def diagnose(from_version, to_version, associations: [])
       HistoryDiagnostics.new(from_version, to_version, associations: associations).call
     end

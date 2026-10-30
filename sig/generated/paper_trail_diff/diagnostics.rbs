@@ -42,8 +42,8 @@ module PaperTrailDiff
 
   # Performs read-only checks for known PaperTrail/PT-AT reconstruction hazards.
   class HistoryDiagnostics
-    # : (untyped, untyped, associations: Array[String | Symbol]) -> void
-    def initialize: (untyped, untyped, associations: Array[String | Symbol]) -> void
+    # : (untyped, untyped, associations: association_option) -> void
+    def initialize: (untyped, untyped, associations: association_option) -> void
 
     # : () -> DiagnosticReport
     def call: () -> DiagnosticReport

@@ -7,18 +7,39 @@ module PaperTrailDiff
     attr_reader :children #: Hash[String, AssociationTree]
 
     class << self
+      # Takes what `includes` takes: a name, a dotted path, a hash of names to
+      # what to include below them, or an array of any of these.
       #: (untyped) -> AssociationTree
       def build(values)
-        unless valid_values?(values)
-          raise ConfigurationError, 'associations: must be an array of strings or symbols'
-        end
-
         tree = {} #: Hash[String, untyped]
-        values.each { |value| add_path(tree, value.to_s) }
+        paths(values, nil).each { |path| add_path(tree, path) }
         from_hash(tree)
       end
 
       private
+
+      #: (untyped, String?) -> Array[String]
+      def paths(value, prefix)
+        case value
+        when String, Symbol then [joined(prefix, value)]
+        when Array then value.flat_map { |item| paths(item, prefix) }
+        when Hash then value.flat_map { |name, nested| nested_paths(name, nested, prefix) }
+        else
+          raise ConfigurationError,
+                'associations: must be names, dotted paths, hashes of them, or arrays of these'
+        end
+      end
+
+      # `{ comments: :replies }` names comments as well as their replies.
+      #: (untyped, untyped, String?) -> Array[String]
+      def nested_paths(name, nested, prefix)
+        paths(name, prefix).flat_map { |path| [path, *paths(nested, path)] }
+      end
+
+      #: (String?, String | Symbol) -> String
+      def joined(prefix, name)
+        prefix ? "#{prefix}.#{name}" : name.to_s
+      end
 
       #: (Hash[String, untyped], String) -> void
       def add_path(tree, path)
@@ -38,13 +59,6 @@ module PaperTrailDiff
           [name, from_hash(branch)]
         end
         new(children)
-      end
-
-      #: (untyped) -> bool
-      def valid_values?(values)
-        values.is_a?(Array) && values.all? do |value|
-          value.is_a?(String) || value.is_a?(Symbol)
-        end
       end
     end
 

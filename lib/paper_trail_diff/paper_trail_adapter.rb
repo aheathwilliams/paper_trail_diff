@@ -12,7 +12,7 @@ module PaperTrailDiff
 
     # `recorded_changes:` reads what each activity boundary's version recorded.
     # `allow_approximate:` accepts association paths read with PT-AT.
-    #: (associations: Array[String | Symbol], ignore: ignore_option, ?reload_live_endpoints: bool, ?allow_expensive: bool, ?recorded_changes: bool, ?allow_approximate: bool) -> void
+    #: (associations: association_option, ignore: ignore_option, ?reload_live_endpoints: bool, ?allow_expensive: bool, ?recorded_changes: bool, ?allow_approximate: bool) -> void
     def initialize(associations:, ignore:, reload_live_endpoints: true, allow_expensive: false, recorded_changes: false, allow_approximate: false) # rubocop:disable Metrics/MethodLength, Metrics/ParameterLists, Layout/LineLength
       @association_tree = AssociationTree.build(associations)
       @ignore_policy = IgnorePolicy.build(ignore, association_paths: @association_tree.paths)

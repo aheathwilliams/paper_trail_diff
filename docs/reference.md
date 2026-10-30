@@ -812,6 +812,10 @@ paths; the parents in a path are included automatically:
 diff = PaperTrailDiff.compare(from, to, associations: [:author, "comments.replies"])
 ```
 
+`associations:` also takes what `includes` takes: a single name
+(`associations: :comments`) or hashes of names to what to include below them
+(`associations: [:author, { comments: :replies }]`).
+
 Supported: `belongs_to`, `has_one`, `has_many` (including `:through`), and
 `has_and_belongs_to_many`. Associated models must use `has_paper_trail`, and
 historical states need PT-AT installed and enabled

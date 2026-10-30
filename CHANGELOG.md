@@ -60,6 +60,11 @@ project follows [Semantic Versioning](https://semver.org/).
   for whole records, so a record added or removed with only blank fields left
   no trace.
 
+- `associations:` takes what `includes` takes: a single name
+  (`associations: :comments`) or hashes of names to what to include below them
+  (`associations: [:author, { comments: :replies }]`), as well as the arrays of
+  names and dotted paths it took before.
+
 ### Changed
 
 - `close_on:` is deprecated and warns through the new

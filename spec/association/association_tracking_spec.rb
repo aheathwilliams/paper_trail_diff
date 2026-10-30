@@ -191,6 +191,17 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     expect(comments.added.first.attributes).not_to have_key('article_id')
   end
 
+  it 'takes associations as a single name or as nested hashes, as includes does' do
+    graph = article_with_graph
+    graph[:kept_comment].update!(body: 'Live after')
+    compared = lambda do |associations|
+      PaperTrailDiff.compare(graph[:before], graph[:article], associations: associations).to_h
+    end
+
+    expect(compared.call({ comments: :replies })).to eq(compared.call(['comments.replies']))
+    expect(compared.call(:comments)).to eq(compared.call(['comments']))
+  end
+
   it 'bulk-compares historical graphs with preloaded nested live associations' do
     graphs = Array.new(2) do |index|
       graph = article_with_graph

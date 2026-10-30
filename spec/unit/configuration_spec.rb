@@ -11,9 +11,24 @@ RSpec.describe PaperTrailDiff::AssociationTree do
     expect(tree.children).to be_frozen
   end
 
+  # As `includes` takes them.
+  it 'takes a single name, and hashes of names to what to include below them' do
+    expect(described_class.build(:comments).paths).to eq(%w[comments])
+    expect(described_class.build('comments.replies').paths).to eq(%w[comments comments.replies])
+    nested = described_class.build([:tags, { comments: [:replies, { author: :articles }] },
+                                    { 'profile' => [] }])
+    expect(nested.paths).to eq(%w[comments comments.author comments.author.articles
+                                  comments.replies profile tags])
+    expect(described_class.build({ comments: 'replies.author' }).paths)
+      .to eq(%w[comments comments.replies comments.replies.author])
+    expect(described_class.build([]).paths).to eq([])
+  end
+
   it 'rejects malformed association paths and option values' do
-    expect { described_class.build('comments') }
-      .to raise_error(PaperTrailDiff::ConfigurationError, /array/)
+    [nil, 1, [nil], { comments: 1 }, { 1 => :replies }].each do |value|
+      expect { described_class.build(value) }
+        .to raise_error(PaperTrailDiff::ConfigurationError, /must be names, dotted paths/)
+    end
     expect { described_class.build(['comments..replies']) }
       .to raise_error(PaperTrailDiff::ConfigurationError, /association path/)
     expect { described_class.build(['$']) }

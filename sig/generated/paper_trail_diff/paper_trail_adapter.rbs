@@ -11,8 +11,8 @@ module PaperTrailDiff
 
     # `recorded_changes:` reads what each activity boundary's version recorded.
     # `allow_approximate:` accepts association paths read with PT-AT.
-    # : (associations: Array[String | Symbol], ignore: ignore_option, ?reload_live_endpoints: bool, ?allow_expensive: bool, ?recorded_changes: bool, ?allow_approximate: bool) -> void
-    def initialize: (associations: Array[String | Symbol], ignore: ignore_option, ?reload_live_endpoints: bool, ?allow_expensive: bool, ?recorded_changes: bool, ?allow_approximate: bool) -> void
+    # : (associations: association_option, ignore: ignore_option, ?reload_live_endpoints: bool, ?allow_expensive: bool, ?recorded_changes: bool, ?allow_approximate: bool) -> void
+    def initialize: (associations: association_option, ignore: ignore_option, ?reload_live_endpoints: bool, ?allow_expensive: bool, ?recorded_changes: bool, ?allow_approximate: bool) -> void
 
     # : (untyped, untyped) -> Diff
     def compare: (untyped, untyped) -> Diff
