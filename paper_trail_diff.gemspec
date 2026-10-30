@@ -30,6 +30,9 @@ Gem::Specification.new do |spec|
   end
   spec.require_paths = ['lib']
 
+  # The versions CI tests. The gem reads Active Record's relations and Arel
+  # nodes directly, which change between minor releases.
+  spec.add_dependency 'activerecord', '>= 7.1', '< 8.2'
   spec.add_dependency 'paper_trail', '>= 16', '< 18'
 
   spec.metadata['allowed_push_host'] = 'https://rubygems.org'

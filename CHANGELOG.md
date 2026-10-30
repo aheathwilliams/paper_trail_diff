@@ -67,6 +67,9 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- The gemspec requires Active Record 7.1 to 8.1, the versions CI tests. It
+  named only PaperTrail, so Bundler could install the gem with Active Record
+  6.1 or 7.0, whose relations and Arel nodes the gem reads differently.
 - `close_on:` is deprecated and warns through the new
   `PaperTrailDiff.deprecator`. It has had no effect since a window began
   closing on the current record by default; remove it. In a Rails app,
