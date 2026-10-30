@@ -151,6 +151,15 @@ window = Time.zone.parse("2026-08-01")...Time.zone.parse("2026-09-01")
 steps = PaperTrailDiff.timeline(article, within: window)
 ```
 
+A window edge that falls inside a transaction moves back to where that
+transaction began, so the whole transaction is in the later window, as it is
+when a range [starts or ends at a version](#choosing-a-range). This applies to
+transactions that saved a version of the root record, such as a comment edit
+and the `touch: true` article version saved with it. So back-to-back windows,
+or a `report` with `since:` after an earlier report, show each change exactly
+once, credited to the transaction that made it. Each root moves its own edges,
+so in a batch two roots can start a few moments apart.
+
 To show what the window's last change produced, the gem reads the state just
 before the next change after the window:
 

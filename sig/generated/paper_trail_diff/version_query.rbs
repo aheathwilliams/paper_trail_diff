@@ -15,7 +15,12 @@ module PaperTrailDiff
     # : (untyped) ?{ (untyped) -> untyped } -> untyped
     def self?.no_earlier_version: (untyped) ?{ (untyped) -> untyped } -> untyped
 
-    # : (untyped, untyped) ?{ (untyped) -> untyped } -> untyped
-    def self?.earlier_version: (untyped, untyped) ?{ (untyped) -> untyped } -> untyped
+    # The same for either side of an instant: each item's earliest version
+    # when the versions lie after it, and its latest when they lie before.
+    # : (untyped, later: bool) ?{ (untyped) -> untyped } -> untyped
+    def self?.no_nearer_version: (untyped, later: bool) ?{ (untyped) -> untyped } -> untyped
+
+    # : (untyped, untyped, later: bool) ?{ (untyped) -> untyped } -> untyped
+    def self?.nearer_version: (untyped, untyped, later: bool) ?{ (untyped) -> untyped } -> untyped
   end
 end

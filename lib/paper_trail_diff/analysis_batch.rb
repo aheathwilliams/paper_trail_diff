@@ -25,16 +25,17 @@ module PaperTrailDiff
     def call
       records = validated_records
       loaded = @live_loader.call(records)
+      windows = TransactionCut.batch_windows(records, @time_range)
       selected = BatchedRootVersions.new(
         records, time_range: @time_range, version_scope: @version_scope,
                  live_endpoints: (loaded if @close_on_current),
-                 context_required: @context_required
+                 context_required: @context_required, windows: windows
       ).call
-      prepare(records, selected, loaded)
+      prepare(records, selected, loaded, windows)
       records.to_h do |record|
         key = Endpoint.identity(record)
         plan = selected.fetch(key, RootVersionPlan.empty)
-        [Support.immutable_copy(key), analysis_for(record, plan)]
+        [Support.immutable_copy(key), analysis_for(record, plan, windows.fetch(key, @time_range))]
       end.freeze
     end
 
@@ -74,8 +75,8 @@ module PaperTrailDiff
     # The roots are preloaded first, because preparation reads their current
     # association state as a fallback and would otherwise walk it one root at a
     # time.
-    #: (Array[untyped], Hash[Array[String], RootVersionPlan], Hash[Array[String], untyped]) -> void
-    def prepare(records, selected, loaded)
+    #: (Array[untyped], Hash[Array[String], RootVersionPlan], Hash[Array[String], untyped], Hash[Array[String], TimeRange]) -> void
+    def prepare(records, selected, loaded, windows)
       records.group_by(&:class).each_value do |grouped|
         versions = grouped.flat_map do |record|
           selected.fetch(Endpoint.identity(record), RootVersionPlan.empty).reconstruction_versions
@@ -84,7 +85,7 @@ module PaperTrailDiff
 
         roots = grouped.map { |record| loaded.fetch(Endpoint.identity(record), record) }
         live = closes_live?(grouped, selected)
-        @history_preparer.call(roots, versions, **preparation_range(versions, live: live))
+        @history_preparer.call(roots, versions, **preparation_range(versions, windows, live: live))
       end
     end
 
@@ -97,21 +98,21 @@ module PaperTrailDiff
 
     # A plan closing on the live record reads history up to now; the others
     # stop at the window, so a past window does not load everything since.
-    #: (Array[untyped], ?live: bool) -> Hash[Symbol, untyped]
-    def preparation_range(versions, live: @close_on_current)
-      last = versions.map(&:created_at).max
-      end_at = [last, @time_range&.end_time, (Time.now.utc if live)].compact.max
-      { start_at: @time_range&.begin_time || versions.map(&:created_at).min, end_at: end_at }
+    #: (Array[untyped], Hash[Array[String], TimeRange], ?live: bool) -> Hash[Symbol, untyped]
+    def preparation_range(versions, windows, live: @close_on_current)
+      times = versions.map(&:created_at)
+      end_at = [times.max, @time_range&.end_time, (Time.now.utc if live)].compact.max
+      { start_at: TransactionCut.earliest_start(@time_range, windows) || times.min, end_at: end_at }
     end
 
     # A root with no versions in range has nothing to report, which is an empty
     # result rather than a failed request -- unless an activity view closes it
     # on current state, where its descendants may still have moved.
-    #: (untyped, RootVersionPlan) -> Analysis
-    def analysis_for(record, plan)
+    #: (untyped, RootVersionPlan, TimeRange?) -> Analysis
+    def analysis_for(record, plan, window)
       return Analysis.empty if plan.empty? && !plan.closing_record
 
-      @analyzer.call(record, plan)
+      @analyzer.call(record, plan, window)
     end
   end
 end

@@ -19,23 +19,32 @@ module PaperTrailDiff
     # correlated NOT EXISTS stays portable where window functions are not.
     #: (untyped) ?{ (untyped) -> untyped } -> untyped
     def no_earlier_version(table, &block)
+      no_nearer_version(table, later: true, &block)
+    end
+
+    # The same for either side of an instant: each item's earliest version
+    # when the versions lie after it, and its latest when they lie before.
+    #: (untyped, later: bool) ?{ (untyped) -> untyped } -> untyped
+    def no_nearer_version(table, later:, &block)
       arel = Object.const_get(:Arel) #: untyped
-      earlier = table.alias('paper_trail_diff_earlier_versions')
+      other = table.alias('paper_trail_diff_earlier_versions')
       arel.const_get(:SelectManager).new
-          .from(earlier)
+          .from(other)
           .project(arel.sql('1'))
-          .where(earlier_version(table, earlier, &block))
+          .where(nearer_version(table, other, later: later, &block))
           .exists
           .not
     end
 
-    #: (untyped, untyped) ?{ (untyped) -> untyped } -> untyped
-    def earlier_version(table, earlier)
-      same_item = earlier[:item_type].eq(table[:item_type])
-                                     .and(earlier[:item_id].eq(table[:item_id]))
-                                     .and(earlier[:created_at].lt(table[:created_at]))
-      block_given? ? same_item.and(yield(earlier)) : same_item
+    #: (untyped, untyped, later: bool) ?{ (untyped) -> untyped } -> untyped
+    def nearer_version(table, other, later:)
+      created_at = other[:created_at]
+      nearer = later ? created_at.lt(table[:created_at]) : created_at.gt(table[:created_at])
+      same_item = other[:item_type].eq(table[:item_type])
+                                   .and(other[:item_id].eq(table[:item_id]))
+                                   .and(nearer)
+      block_given? ? same_item.and(yield(other)) : same_item
     end
-    private_class_method :earlier_version
+    private_class_method :nearer_version
   end
 end

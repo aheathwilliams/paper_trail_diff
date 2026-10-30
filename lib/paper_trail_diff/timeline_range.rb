@@ -122,9 +122,17 @@ module PaperTrailDiff
       VersionQuery.chronological(Endpoint.versions(@record))
     end
 
+    # A batch passes each root the window it already moved to transaction
+    # edges; a single record's window is moved here.
     #: (untyped) -> TimeRange?
     def build_time_range(within)
-      TimeRange.new(within) unless within.nil?
+      return if within.nil?
+      return within if within.instance_of?(TimeRange)
+
+      range = TimeRange.new(within)
+      return range unless Support.versioned?(@record.class)
+
+      TransactionCut.windows(@record.class, [@record], range).fetch(@record.id.to_s, range)
     end
 
     #: () -> void

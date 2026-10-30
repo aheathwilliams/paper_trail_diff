@@ -107,8 +107,6 @@ RSpec.describe 'Rebuilt article history against the recorded states' do
 
   context 'with two windows that meet inside a transaction' do
     it 'reads each activity step in exactly one of them' do
-      pending 'the part of a transaction before the boundary is reported in neither window, ' \
-              'or at a later transaction'
       failures = Oracle.seeds([1, 2, 3]).map do |seed|
         Oracle.reset!
         history = Oracle::ArticleHistory.new(seed, steps: Oracle.steps(18)).build

@@ -43,6 +43,7 @@ matcher:
     - PaperTrailDiff::RootVersionPlan*
     - PaperTrailDiff::HistoricalFilter*
     - PaperTrailDiff::TimeRange*
+    - PaperTrailDiff::TransactionCut*
     - PaperTrailDiff::VersionRange*
     - PaperTrailDiff::TimeVersionRange*
     - PaperTrailDiff::BatchedRootVersions*

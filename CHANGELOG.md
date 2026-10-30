@@ -87,6 +87,15 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- A `within:` or `since:` window whose edge falls inside a transaction that
+  saved a version of the root record reports the whole transaction in the
+  later window. A window starting between a comment edit and the `touch: true`
+  article version saved with it showed the edit at the article's next change,
+  credited to that change's author, and the window ending there left it out;
+  when the article saved first, its version was in one window and the comment
+  edit in the other. Each root's edges move back to the transaction's start,
+  read in a fixed number of queries per batch.
+
 - `activity_timeline`, and `analyze` with `activity: true`, no longer report a
   child version saved in the same transaction as the root version that ends
   the range. A `touch: true` parent version is saved this way after every
@@ -162,11 +171,11 @@ project follows [Semantic Versioning](https://semver.org/).
   an article graph one transaction at a time, records the live state after
   each, and compares every endpoint, timeline step, activity step, window, and
   batch result with those states. It also checks that two windows meeting
-  between transactions report each step once, scoped membership against Active
-  Record, and a tree of one model whose children have encrypted, serialized,
-  enum, custom-type, decimal, and JSON attributes. `rake spec` runs it, so CI
-  runs it on every database. `ORACLE_SEEDS` and `ORACLE_STEPS` widen a run.
-  See `docs/testing.md`.
+  between transactions or inside one report each step once, scoped membership
+  against Active Record, and a tree of one model whose children have
+  encrypted, serialized, enum, custom-type, decimal, and JSON attributes.
+  `rake spec` runs it, so CI runs it on every database. `ORACLE_SEEDS` and
+  `ORACLE_STEPS` widen a run. See `docs/testing.md`.
 
 ## [0.14.0] - 2026-10-29
 

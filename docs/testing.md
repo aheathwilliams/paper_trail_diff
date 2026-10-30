@@ -53,8 +53,8 @@ share passes. `spec/oracle` compares them with the truth instead:
 3. Every endpoint pair, every timeline step, every activity step (grouped and
    not), and windows through `analyze`, `analyze_many`, and `analyze_scope`
    are compared with the recorded states. Two windows that meet between
-   transactions must report each step once, as the window spanning both does.
-   Two that meet inside a transaction do not yet, so that example is pending.
+   transactions, or inside one, must report each step once, as the window
+   spanning both does, through both `activity_timeline` and `analyze_many`.
 
 Two more generators cover other shapes. `scoped_membership_spec.rb` moves
 notes in and out of scoped associations (conditions, order, limit, and

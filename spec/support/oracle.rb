@@ -326,6 +326,14 @@ module Oracle
     end
   end
 
+  # The activity timeline of one root over a window, read alone and in a batch.
+  SPLIT_READERS = {
+    activity_timeline: ->(root, **options) { PaperTrailDiff.activity_timeline(root, **options) },
+    analyze_many: lambda do |root, **options|
+      PaperTrailDiff.analyze_many([root], activity: true, **options).values.first.activity_timeline
+    end
+  }.freeze
+
   # Compares every reconstruction of one history with its recorded states.
   class Checker
     GROUPS = [nil, :transaction].freeze
@@ -429,11 +437,16 @@ module Oracle
 
     private
 
+    # Through a single-record method and a batch, which move window edges apart.
     def split(pivot, group)
       whole = PaperTrail::Version.minimum(:created_at)..@recorder.final.after
-      left = pivot > whole.begin ? split_steps(whole.begin...pivot, group) : []
-      @failures.check("windows split at #{pivot.utc.iso8601(6)} (group: #{group.inspect})",
-                      split_steps(whole, group), left + split_steps(pivot..whole.end, group))
+      SPLIT_READERS.each do |method, reader|
+        options = { associations: @paths, group: group }
+        steps = ->(within) { split_steps(reader.call(@root, within: within, **options)) }
+        left = pivot > whole.begin ? steps.call(whole.begin...pivot) : []
+        label = "#{method} windows split at #{pivot.utc.iso8601(6)} (group: #{group.inspect})"
+        @failures.check(label, steps.call(whole), left + steps.call(pivot..whole.end))
+      end
     end
 
     def version_time(id)
@@ -442,10 +455,9 @@ module Oracle
 
     # Each step's change and the transactions it is credited to. Without
     # grouping, which event of a transaction a change appears at may differ.
-    def split_steps(within, group)
-      PaperTrailDiff.activity_timeline(@root, within: within, associations: @paths, group: group)
-                    .reject(&:empty?)
-                    .map { |step| [step.sources.map(&:transaction_id).uniq, step.diff.to_h] }
+    def split_steps(steps)
+      steps.reject(&:empty?)
+           .map { |step| [step.sources.map(&:transaction_id).uniq, step.diff.to_h] }
     end
 
     def root_versions

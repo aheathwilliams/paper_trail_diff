@@ -7,8 +7,9 @@ module PaperTrailDiff
     # : (tree: AssociationTree, timeline_snapshotter: untyped, activity_snapshotter: untyped, preparer: untyped, activity: bool, ?within: untyped, ?snapshots: bool, ?group: Symbol?, ?recorded: IgnorePolicy?) -> void
     def initialize: (tree: AssociationTree, timeline_snapshotter: untyped, activity_snapshotter: untyped, preparer: untyped, activity: bool, ?within: untyped, ?snapshots: bool, ?group: Symbol?, ?recorded: IgnorePolicy?) -> void
 
-    # : (untyped, RootVersionPlan) -> Analysis
-    def call: (untyped, RootVersionPlan) -> Analysis
+    # `window` is the root's window as the batch moved it to transaction edges.
+    # : (untyped, RootVersionPlan, ?TimeRange?) -> Analysis
+    def call: (untyped, RootVersionPlan, ?TimeRange?) -> Analysis
 
     private
 
@@ -30,7 +31,7 @@ module PaperTrailDiff
 
     @within: untyped
 
-    # : (untyped, RootVersionPlan) -> Analysis
-    def activity_analysis: (untyped, RootVersionPlan) -> Analysis
+    # : (untyped, RootVersionPlan, TimeRange?) -> Analysis
+    def activity_analysis: (untyped, RootVersionPlan, TimeRange?) -> Analysis
   end
 end

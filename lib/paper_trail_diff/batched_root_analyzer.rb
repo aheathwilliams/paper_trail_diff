@@ -18,10 +18,11 @@ module PaperTrailDiff
       @recorded = recorded
     end
 
-    #: (untyped, RootVersionPlan) -> Analysis
-    def call(record, plan)
+    # `window` is the root's window as the batch moved it to transaction edges.
+    #: (untyped, RootVersionPlan, ?TimeRange?) -> Analysis
+    def call(record, plan, window = nil)
       @preparer.call(record.class, historical: true)
-      return activity_analysis(record, plan) if @activity
+      return activity_analysis(record, plan, window) if @activity
 
       TimelineBuilder.new(
         record,
@@ -45,12 +46,12 @@ module PaperTrailDiff
     # @rbs @group: Symbol?
     # @rbs @recorded: IgnorePolicy?
 
-    #: (untyped, RootVersionPlan) -> Analysis
-    def activity_analysis(record, plan)
+    #: (untyped, RootVersionPlan, TimeRange?) -> Analysis
+    def activity_analysis(record, plan, window)
       range = TimelineRange.new(
         record, from: (@within ? nil : plan.versions.first),
                 to: (@within ? nil : plan.closing_record || plan.versions.last),
-                within: @within, plan: plan
+                within: (window || @within if @within), plan: plan
       )
       ActivityTimelineBuilder.new(
         record, range: range, tree: @tree, snapshotter: @activity_snapshotter,
