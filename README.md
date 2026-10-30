@@ -299,6 +299,17 @@ cost. See [costly associations](docs/reference.md#costly-associations).
 Callbacks and callable historical filters can also issue queries. See the
 [performance guide](docs/performance.md) for measured behavior and limitations.
 
+On a large version table, add these indexes, or every `since:` or `within:`
+report reads all of the model's versions. See
+[database indexes](docs/architecture.md#database-indexes) for why.
+
+```ruby
+add_index :versions, %i[item_type item_id created_at id],
+          name: "index_versions_on_item_and_timeline"
+add_index :versions, %i[item_type created_at item_id],
+          name: "index_versions_on_type_and_time"
+```
+
 - `updated_at` is ignored. Passing `ignore:` replaces the default list.
 - Records passed as current state must be saved and have no unsaved changes.
   They are reloaded from the database.

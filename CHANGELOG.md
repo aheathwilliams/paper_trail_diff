@@ -71,6 +71,11 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- The README and architecture guide recommend a second version index,
+  `(item_type, created_at, item_id)`. Batch methods with `since:` or
+  `within:` find changed records by type and time, which the one index they
+  recommended cannot narrow, so each report read every version of the model:
+  about 230 ms instead of 2 ms on PostgreSQL with 5 million versions.
 - The gemspec requires Active Record 7.1 to 8.1, the versions CI tests. It
   named only PaperTrail, so Bundler could install the gem with Active Record
   6.1 or 7.0, whose relations and Arel nodes the gem reads differently.

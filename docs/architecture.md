@@ -91,18 +91,32 @@ HABTM of the same name saved a version holds both records' members;
 
 ## Database indexes
 
-For large histories, add a composite index that matches how the gem reads
-versions:
+For large histories, add two indexes to each version table, one for each way
+the gem reads versions:
 
 ```ruby
 add_index :versions, %i[item_type item_id created_at id],
           name: "index_versions_on_item_and_timeline"
+add_index :versions, %i[item_type created_at item_id],
+          name: "index_versions_on_type_and_time"
 ```
 
-It helps most with repeated `within:` queries, which filter by `item_type`,
-`item_id`, and `created_at`, then order by time and ID. Keep PT-AT's own index
-on `version_associations` (`foreign_key_name`, `foreign_key_id`,
-`foreign_type`).
+The first serves reading one record's history: it filters by `item_type` and
+`item_id`, then by time, in time and ID order. It covers PaperTrail's own
+`(item_type, item_id)` index, which you can then drop.
+
+The second serves finding which records changed in a window, as `report`,
+`analyze_scope`, and the other batch methods do with `since:` or `within:`.
+They filter by `item_type` and `created_at` alone, which the first index cannot
+narrow, so without the second the database reads every version of the model.
+On PostgreSQL with 5 million article versions, a report on five articles
+changed in the last hour took about 230 ms without it and 2 ms with it.
+Ending the index with `item_id` lets the database answer from the index alone,
+and SQLite, which keeps no table statistics unless you run `ANALYZE`, picks it
+only then.
+
+Keep PT-AT's own index on `version_associations` (`foreign_key_name`,
+`foreign_key_id`, `foreign_type`).
 
 ## Remaining costs
 

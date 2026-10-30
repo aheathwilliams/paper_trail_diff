@@ -388,6 +388,9 @@ window to select that article.
   comments does not automatically include every association on each comment.
 - Historical output cannot contain data that PaperTrail or PT-AT did not record
   or can no longer reconstruct.
+- A report with `since:` or `within:` gets slow as the version table grows
+  unless you add the
+  [two version indexes](docs/architecture.md#database-indexes).
 
 For association support, performance, error handling, ignore rules, and all
 available result methods, see the
