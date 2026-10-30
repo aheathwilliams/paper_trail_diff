@@ -42,6 +42,13 @@ project follows [Semantic Versioning](https://semver.org/).
   `compare` and `timeline` already did. End at a later version or at the
   current record to include the change, with `group: :transaction` to credit it
   to the child's version.
+- A range that starts at a version now starts before that version's
+  transaction, as one that ends there already ended. A child version saved
+  earlier in the same transaction, such as the update behind a `touch: true`
+  parent version, was read after its change, so `compare`, `analyze`,
+  `timeline`, and `activity_timeline` from that version left the change out.
+  It was also missing from the range ending there, so a history split at that
+  version reported it nowhere. It is now inside the range that starts there.
 
 ### Development
 

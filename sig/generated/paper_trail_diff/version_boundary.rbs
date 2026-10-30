@@ -11,6 +11,23 @@ module PaperTrailDiff
     # : (untyped, untyped) -> bool
     def self?.at_or_after?: (untyped, untyped) -> bool
 
+    # A range starting at a version starts before that version's transaction,
+    # as PT-AT reads associations there. A version saved earlier in the same
+    # transaction, such as the child update behind a `touch: true` parent
+    # version, can be recorded before the start, so the start moves back to
+    # the earliest version of each root's first transaction in the range.
+    # History loaded from the start alone would read that child after its
+    # change.
+    # : (Array[untyped], untyped) -> untyped
+    def self?.transaction_start: (Array[untyped], untyped) -> untyped
+
+    # The transaction of each root's first version at or after the start.
+    # : (Array[untyped], untyped) -> Array[untyped]
+    def self?.opening_transactions: (Array[untyped], untyped) -> Array[untyped]
+
+    # : (untyped) -> untyped
+    def self?.transaction_id: (untyped) -> untyped
+
     # : (untyped) -> bool
     def self?.version_record?: (untyped) -> bool
 

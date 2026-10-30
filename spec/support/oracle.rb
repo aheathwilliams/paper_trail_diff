@@ -210,7 +210,7 @@ module Oracle
       create_reply edit_reply destroy_reply move_reply
       create_profile edit_profile destroy_profile
       create_authorship edit_authorship destroy_authorship reassign_authorship
-      edit_other combo
+      edit_other combo touch
     ].freeze
 
     attr_reader :root, :recorder
@@ -314,6 +314,12 @@ module Oracle
       edit_root
       create_comment
       edit_comment
+    end
+
+    # A child version saved before the root's, as `touch: true` saves them.
+    def touch
+      edit_comment
+      edit_root
     end
   end
 

@@ -27,7 +27,7 @@ RSpec.describe 'Rebuilt article history against the recorded states' do
         PaperTrail.serializer = original
       end
 
-      Oracle.seeds([1, 2]).each do |seed|
+      Oracle.seeds([1, 3]).each do |seed|
         it "rebuilds every endpoint and activity step (seed #{seed})" do
           expect_recorded_states(seed) do |_history, checker|
             checker.membership

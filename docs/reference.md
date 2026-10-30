@@ -128,12 +128,12 @@ PaperTrailDiff.timeline(article, within: 1.week.ago..Time.current)
 - `to:` defaults to the record itself, meaning its current state. Pass a
   version instead for a result that never changes when the record is edited
   again.
-- A range that ends at a version ends before that version's transaction, since
-  PT-AT rebuilds associations as they were before it. Child changes saved in
-  the same transaction, such as the update behind a `touch: true` parent
-  version, fall after the end. `activity_timeline` leaves them out, as
-  `compare` does. To include them, end the range at a later version or at the
-  current record.
+- A version stands for the state before its transaction, since PT-AT rebuilds
+  associations as they were before it. Child changes saved in the same
+  transaction, such as the update behind a `touch: true` parent version, fall
+  after a range that ends there and inside a range that starts there. So a
+  history split at that version reports each such change exactly once, in the
+  later part.
 - Versions must belong to the record and be given in time order.
 - A record with no versions has an empty history, not an error.
 

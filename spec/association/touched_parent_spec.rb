@@ -69,6 +69,26 @@ RSpec.describe 'Activity for a parent touched by its children' do
     end).to eq(['before'])
   end
 
+  # The other half of the split: a range starting at the touch version starts
+  # before its transaction too, so the child change saved just before it is
+  # inside. Read from that point alone, the child was already changed, and the
+  # change was in neither part of a history split there.
+  it 'starts a range at a touch version before the child change it was saved with' do
+    parent, = history
+    touch = parent.versions.last
+    parent.update!(title: 'Later')
+    later = parent.versions.last
+    changes = [later, parent].map do |to|
+      diff = PaperTrailDiff.compare(touch, to, associations: [:children])
+      diff.associations.fetch('children').changed.map { |record| record.attributes['name'].to_h }
+    end
+
+    expect(changes).to eq([[{ from: 'before', to: 'after' }]] * 2)
+    steps = PaperTrailDiff.activity_timeline(parent, from: touch, to: later,
+                                                     associations: [:children], group: :transaction)
+    expect(name_changes(steps)).to eq([['TouchedChild', { from: 'before', to: 'after' }]])
+  end
+
   it 'credits the change to the child when the range reaches past the touch' do
     parent, child = history
     steps = PaperTrailDiff.activity_timeline(parent, from: parent.versions.first,
