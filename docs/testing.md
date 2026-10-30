@@ -8,7 +8,7 @@ mise exec -- bundle exec rake
 ```
 
 The default task runs the core specs without PT-AT loaded, the association specs
-in a separate process, RuboCop (with the rubocop-performance and rubocop-rspec
+and the [oracle checks](#oracle-checks) each in a separate process, RuboCop (with the rubocop-performance and rubocop-rspec
 plugins), generated-signature verification, and Steep.
 Ruby blocks in the README, quickstart, and API reference marked with
 `<!-- executable:... -->` run inside those specs, so documented examples stay
@@ -36,6 +36,39 @@ chain into the final state. They run over random windows as well as the whole
 history, with integer and string `versions.item_id`, YAML and JSON history, and
 a `has_paper_trail skip:` column. When one fails, its seed reproduces it. Add a
 variant here when a bug turns out to depend on a schema or configuration.
+
+## Oracle checks
+
+The consistency checks compare gem methods with each other, so a bug they
+share passes. `spec/oracle` compares them with the truth instead:
+
+1. A seeded generator (`spec/support/oracle.rb`) makes random edits to an
+   article graph, one transaction each: root edits and checkpoints, comments
+   and replies created, edited, moved, and deleted, an author, a profile, and
+   authorships with their authors. Some transactions write several versions.
+2. After each transaction it records the live state, keyed by the versions
+   that transaction wrote, so every version names the state just before it.
+   The state comes from the gem's current-record path, which is plain Active
+   Record, and is checked against an independent read of each association.
+3. Every endpoint pair, every activity step (grouped and not), and windows
+   through `analyze`, `analyze_many`, and `analyze_scope` are compared with
+   the recorded states.
+
+```console
+mise exec -- bundle exec rake spec_oracle
+ORACLE_SEEDS=1..200 ORACLE_STEPS=40 mise exec -- bundle exec rake spec_oracle
+```
+
+The default seeds keep the run to a few seconds; `rake spec` includes it, so
+the database jobs run it too. Mutant does not, because it would slow every
+mutation. A failure prints its seed and the transactions it made. To fix one,
+reproduce it with that seed, reduce it to the few edits that matter, and add
+that as a named spec beside the code it covers, so the cause is readable
+without the generator.
+
+When a bug turns out to depend on a schema, configuration, or kind of edit,
+add it to the generator or as a new context, so the whole class of bug stays
+covered.
 
 ## Mutation testing
 

@@ -43,6 +43,15 @@ project follows [Semantic Versioning](https://semver.org/).
   current record to include the change, with `group: :transaction` to credit it
   to the child's version.
 
+### Development
+
+- A new oracle suite, `rake spec_oracle`, checks rebuilt history against the
+  truth rather than against other gem methods. It makes seeded random edits to
+  an article graph one transaction at a time, records the live state after
+  each, and compares every endpoint, activity step, window, and batch result
+  with those states. `rake spec` runs it, so CI runs it on every database.
+  `ORACLE_SEEDS` and `ORACLE_STEPS` widen a run. See `docs/testing.md`.
+
 ## [0.14.0] - 2026-10-29
 
 ### Breaking changes

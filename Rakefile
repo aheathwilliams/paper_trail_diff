@@ -25,8 +25,20 @@ RSpec::Core::RakeTask.new(:spec_associations) do |task|
 end
 Rake::Task[:spec_associations].enhance([:association_coverage])
 
-desc 'Run all specs in isolated core and association-tracking processes'
-task spec: %i[spec_core spec_associations]
+# Checks rebuilt history against states recorded while it was written; see
+# docs/testing.md. Kept out of the association suite so mutant, which runs that
+# suite for every mutation, stays fast.
+RSpec::Core::RakeTask.new(:spec_oracle) do |task|
+  task.pattern = 'spec/oracle/**/*_spec.rb'
+end
+
+task :oracle_coverage do
+  ENV['PAPER_TRAIL_DIFF_COVERAGE'] = 'oracle'
+end
+Rake::Task[:spec_oracle].enhance([:oracle_coverage])
+
+desc 'Run all specs in isolated core, association-tracking, and oracle processes'
+task spec: %i[spec_core spec_associations spec_oracle]
 
 RuboCop::RakeTask.new(:rubocop)
 

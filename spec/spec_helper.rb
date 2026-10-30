@@ -5,11 +5,12 @@ $LOAD_PATH.unshift File.expand_path('../lib', __dir__)
 require_relative 'support/monotonic_clock'
 
 # Mutant runs a few examples per mutation, so a coverage floor would fail every
-# run; coverage is measured by the ordinary suites instead.
-unless ENV['PAPER_TRAIL_DIFF_MUTANT']
+# run; coverage is measured by the ordinary suites instead. The oracle suite
+# reaches only the paths its histories exercise, so it sets no floor either.
+coverage_name = ENV.fetch('PAPER_TRAIL_DIFF_COVERAGE', 'core')
+unless ENV['PAPER_TRAIL_DIFF_MUTANT'] || coverage_name == 'oracle'
   require 'simplecov'
 
-  coverage_name = ENV.fetch('PAPER_TRAIL_DIFF_COVERAGE', 'core')
   SimpleCov.command_name(coverage_name)
   SimpleCov.use_merging false
   SimpleCov.start do
