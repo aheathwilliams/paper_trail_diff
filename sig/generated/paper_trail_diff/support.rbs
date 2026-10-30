@@ -35,6 +35,14 @@ module PaperTrailDiff
     # : (Array[untyped]) -> Array[untyped]?
     def self?.ambiguous_pair: (Array[untyped]) -> Array[untyped]?
 
+    # Ids order versions saved in one instant only when they count up in one
+    # table. Two version tables count separately, so ids there say nothing.
+    # : (untyped, untyped) -> bool
+    def self?.orderable_tie?: (untyped, untyped) -> bool
+
+    # : (untyped) -> untyped
+    def self?.version_table: (untyped) -> untyped
+
     # Versions sharing a timestamp, whether or not their ids order them. PT-AT
     # indexes association membership per version but resolves it by timestamp,
     # so association state cannot be told apart across such a pair even when the

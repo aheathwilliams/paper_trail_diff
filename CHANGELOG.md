@@ -102,6 +102,11 @@ project follows [Semantic Versioning](https://semver.org/).
   symbol (`{ status: :published }`), and a date or time read from a `json` or
   `jsonb` version column, which PaperTrail returns as a string, never matched,
   so the report silently selected nothing.
+- Versions from two version tables saved in the same instant raise
+  `AmbiguousVersionOrderError`, as the reference promises, instead of being
+  ordered by their ids. Each table counts its ids separately, so their order
+  said nothing about which change came first, and an activity timeline built
+  from them could credit a change to the wrong step.
 - A snapshot's collections list their records by type, then ID, as the
   reference says, wherever the snapshot was read from. Snapshots rebuilt from
   history or carried through an activity timeline listed them in the order

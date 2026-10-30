@@ -1223,9 +1223,10 @@ always runs. `ok?` does not prove the history is complete.
 ### Version order
 
 Versions are ordered by `created_at`, then by ID when timestamps are equal. That
-works when IDs increase with each insert, as autoincrement IDs do. UUID version
-IDs do not, so two UUID versions with the same timestamp cannot be ordered; the
-gem raises `AmbiguousVersionOrderError` naming both instead of guessing.
+works when IDs increase with each insert, as autoincrement IDs do, in one
+table. UUID version IDs do not, and models with their own version tables count
+IDs separately, so two such versions with the same timestamp cannot be ordered;
+the gem raises `AmbiguousVersionOrderError` naming both instead of guessing.
 Timestamps stored to the second, as on a MySQL `datetime` column, make ties
 common. `diagnose` reports this as an error.
 

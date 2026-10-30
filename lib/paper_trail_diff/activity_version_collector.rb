@@ -22,13 +22,15 @@ module PaperTrailDiff
       @registry = ActivityEventRegistry.new
     end
 
+    # A tie between version tables, or between ids that do not count up,
+    # raises rather than building a timeline in an arbitrary order.
     #: () -> Array[ActivityEvent]
     def call
       @registry.add(@root_versions)
       collect_tree(@record.class, [@record.id], @tree, path: '', branch: nil) unless @tree.empty?
-      @registry.to_a.sort_by do |event|
-        Support.chronological_version_key(event.version)
-      end.freeze
+      events = @registry.to_a.sort_by { |event| Support.chronological_version_key(event.version) }
+      pair = Support.ambiguous_pair(events.map(&:version))
+      pair ? raise(AmbiguousVersionOrderError, Support.ambiguous_message(pair)) : events.freeze
     end
 
     private

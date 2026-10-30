@@ -33,8 +33,5 @@ module PaperTrailDiff
 
     # : (untyped, untyped) -> bool
     def self?.same_version?: (untyped, untyped) -> bool
-
-    # : (untyped, untyped) -> bool
-    def self?.orderable_tie?: (untyped, untyped) -> bool
   end
 end

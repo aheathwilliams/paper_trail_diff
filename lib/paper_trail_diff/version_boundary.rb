@@ -18,7 +18,7 @@ module PaperTrailDiff
       return true unless version_record?(boundary)
       return true if same_version?(candidate, boundary)
 
-      unless orderable_tie?(candidate, boundary)
+      unless Support.orderable_tie?(candidate, boundary)
         raise AmbiguousVersionOrderError, Support.ambiguous_message([boundary, candidate])
       end
 
@@ -71,12 +71,5 @@ module PaperTrailDiff
       left.class.table_name == right.class.table_name && left.id.to_s == right.id.to_s
     end
     private_class_method :same_version?
-
-    #: (untyped, untyped) -> bool
-    def orderable_tie?(left, right)
-      left.class.table_name == right.class.table_name &&
-        Support.sequential_id?(left.id) && Support.sequential_id?(right.id)
-    end
-    private_class_method :orderable_tie?
   end
 end

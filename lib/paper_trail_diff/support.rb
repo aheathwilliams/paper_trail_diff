@@ -84,10 +84,23 @@ module PaperTrailDiff
     #: (Array[untyped]) -> Array[untyped]?
     def ambiguous_pair(sorted)
       sorted.each_cons(2).find do |left, right|
-        left.created_at == right.created_at &&
-          !(sequential_id?(left.id) && sequential_id?(right.id))
+        left.created_at == right.created_at && !orderable_tie?(left, right)
       end
     end
+
+    # Ids order versions saved in one instant only when they count up in one
+    # table. Two version tables count separately, so ids there say nothing.
+    #: (untyped, untyped) -> bool
+    def orderable_tie?(left, right)
+      version_table(left) == version_table(right) &&
+        sequential_id?(left.id) && sequential_id?(right.id)
+    end
+
+    #: (untyped) -> untyped
+    def version_table(version)
+      version.class.respond_to?(:table_name) ? version.class.table_name : version.class.name
+    end
+    private_class_method :version_table
 
     # Versions sharing a timestamp, whether or not their ids order them. PT-AT
     # indexes association membership per version but resolves it by timestamp,
