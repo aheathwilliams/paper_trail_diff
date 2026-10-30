@@ -28,11 +28,23 @@ RSpec.describe 'Rebuilt article history against the recorded states' do
         PaperTrail.serializer = original
       end
 
+      # The SQL Server adapter hands PaperTrail's JSON encoder a type wrapper
+      # that refuses `as_json`, so no history can be written there.
+      before do
+        TrackedAuthor.transaction do
+          TrackedAuthor.create!(name: 'probe')
+          raise ActiveRecord::Rollback
+        end
+      rescue StandardError => e
+        skip "PaperTrail cannot record #{format} history here: #{e.class}: #{e.message}"
+      end
+
       Oracle.seeds([1, 3]).each do |seed|
-        it "rebuilds every endpoint and activity step (seed #{seed})" do
+        it "rebuilds every endpoint, timeline step and activity step (seed #{seed})" do
           expect_recorded_states(seed) do |_history, checker|
             checker.membership
             checker.endpoints
+            checker.timeline
             checker.activity
             checker.activity(group: :transaction)
           end
@@ -80,6 +92,32 @@ RSpec.describe 'Rebuilt article history against the recorded states' do
           checker.windows_ending_at(window_end, Random.new(seed))
         end
       end
+    end
+  end
+
+  context 'with two windows that meet between transactions' do
+    Oracle.seeds([1, 2, 5]).each do |seed|
+      it "reads each activity step in exactly one of them (seed #{seed})" do
+        expect_recorded_states(seed) do |_history, checker|
+          checker.splits(Random.new(seed))
+        end
+      end
+    end
+  end
+
+  context 'with two windows that meet inside a transaction' do
+    it 'reads each activity step in exactly one of them' do
+      pending 'the part of a transaction before the boundary is reported in neither window, ' \
+              'or at a later transaction'
+      failures = Oracle.seeds([1, 2, 3]).map do |seed|
+        Oracle.reset!
+        history = Oracle::ArticleHistory.new(seed, steps: Oracle.steps(18)).build
+        Oracle::Failures.new(seed, history.recorder).tap do |list|
+          Oracle::Checker.new(history, list).splits_inside_transactions
+        end
+      end
+
+      expect(failures).to all(be_empty), -> { failures.reject(&:empty?).map(&:message).join("\n") }
     end
   end
 

@@ -50,9 +50,19 @@ share passes. `spec/oracle` compares them with the truth instead:
    that transaction wrote, so every version names the state just before it.
    The state comes from the gem's current-record path, which is plain Active
    Record, and is checked against an independent read of each association.
-3. Every endpoint pair, every activity step (grouped and not), and windows
-   through `analyze`, `analyze_many`, and `analyze_scope` are compared with
-   the recorded states.
+3. Every endpoint pair, every timeline step, every activity step (grouped and
+   not), and windows through `analyze`, `analyze_many`, and `analyze_scope`
+   are compared with the recorded states. Two windows that meet between
+   transactions must report each step once, as the window spanning both does.
+   Two that meet inside a transaction do not yet, so that example is pending.
+
+Two more generators cover other shapes. `scoped_membership_spec.rb` moves
+notes in and out of scoped associations (conditions, order, limit, and
+offset) and compares the members at every version with Active Record's own
+answer. `tree_history_spec.rb` edits a tree of one model, so a root can sit
+inside another root's tree, with children whose attributes are encrypted,
+serialized, enums stored as strings, custom types, decimals, and JSON. It reads
+the expected states with plain Active Record, not through the gem.
 
 ```console
 mise exec -- bundle exec rake spec_oracle

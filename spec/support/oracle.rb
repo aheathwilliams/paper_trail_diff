@@ -56,11 +56,13 @@ module Oracle
 
   # The live state after each transaction, by the versions it wrote.
   class Recorder
-    Entry = Struct.new(:name, :version_ids, :state, :membership, :after, keyword_init: true)
+    Entry = Struct.new(:name, :version_ids, :state, :membership, :snapshot, :after,
+                       keyword_init: true)
 
     attr_reader :entries
 
-    # `observe` returns [state, membership] for the record as it is now.
+    # `observe` returns [state, membership] for the record as it is now, and
+    # optionally the snapshot the state was read from, to diff states with.
     def initialize(&observe)
       @observe = observe
       @entries = [Entry.new(name: :none, version_ids: [])]
@@ -70,9 +72,9 @@ module Oracle
       before = PaperTrail::Version.maximum(:id) || 0
       ActiveRecord::Base.transaction(&block)
       ids = PaperTrail::Version.where('id > ?', before).order(:id).pluck(:id)
-      state, membership = @observe.call
+      state, membership, snapshot = @observe.call
       @entries << Entry.new(name: name, version_ids: ids, state: state, membership: membership,
-                            after: Time.now.utc)
+                            snapshot: snapshot, after: Time.now.utc)
     end
 
     # The state before the transaction that wrote the version.
@@ -252,7 +254,7 @@ module Oracle
       root = TrackedArticle.find(@root.id)
       analysis = PaperTrailDiff.analyze(root, from: root.versions.first, to: root,
                                               associations: PATHS)
-      [Oracle.snapshot(analysis.to_snapshot), Membership.live(root)]
+      [Oracle.snapshot(analysis.to_snapshot), Membership.live(root), analysis.to_snapshot]
     end
 
     def next_number
@@ -326,6 +328,8 @@ module Oracle
 
   # Compares every reconstruction of one history with its recorded states.
   class Checker
+    GROUPS = [nil, :transaction].freeze
+
     def initialize(history, failures, paths: ArticleHistory::PATHS)
       @recorder = history.recorder
       @root = history.root
@@ -384,7 +388,65 @@ module Oracle
       end
     end
 
+    # Each step of the root's timeline, from its first version to now, against
+    # the states recorded just before each root version's transaction.
+    def timeline
+      versions = root_versions
+      steps = PaperTrailDiff.timeline(@root, from: versions.first, to: @root, associations: @paths)
+      ends = [*versions.drop(1).map { |version| @recorder.before(version.id) }, @recorder.final]
+      if steps.length != ends.length
+        return @failures.add('timeline step count', [steps.length, ends.length])
+      end
+
+      steps.zip(versions, ends).each do |step, from, last|
+        expected = PaperTrailDiff::Engine.compare(@recorder.before(from.id).snapshot, last.snapshot)
+        @failures.check("timeline step from #{from.id}", expected.to_h, step.diff.to_h)
+      end
+    end
+
+    # Two windows that meet between transactions read each activity step
+    # exactly once, credited to the same transaction, as the window spanning
+    # both does. They meet at the start of a transaction or at a quiet moment
+    # after one.
+    def splits(random, count: 6)
+      entries = @recorder.entries.reject { |entry| entry.version_ids.empty? }
+      count.times do
+        entry = entries.sample(random: random)
+        pivot = random.rand < 0.5 ? version_time(entry.version_ids.min) : entry.after
+        split(pivot, GROUPS.sample(random: random))
+      end
+    end
+
+    # The same, with the windows meeting inside a transaction that wrote
+    # several versions: at each of its versions after the first.
+    def splits_inside_transactions
+      @recorder.entries.each do |entry|
+        entry.version_ids.sort.drop(1).each do |id|
+          GROUPS.each { |group| split(version_time(id), group) }
+        end
+      end
+    end
+
     private
+
+    def split(pivot, group)
+      whole = PaperTrail::Version.minimum(:created_at)..@recorder.final.after
+      left = pivot > whole.begin ? split_steps(whole.begin...pivot, group) : []
+      @failures.check("windows split at #{pivot.utc.iso8601(6)} (group: #{group.inspect})",
+                      split_steps(whole, group), left + split_steps(pivot..whole.end, group))
+    end
+
+    def version_time(id)
+      PaperTrail::Version.find(id).created_at
+    end
+
+    # Each step's change and the transactions it is credited to. Without
+    # grouping, which event of a transaction a change appears at may differ.
+    def split_steps(within, group)
+      PaperTrailDiff.activity_timeline(@root, within: within, associations: @paths, group: group)
+                    .reject(&:empty?)
+                    .map { |step| [step.sources.map(&:transaction_id).uniq, step.diff.to_h] }
+    end
 
     def root_versions
       @root.versions.reorder(:created_at, :id).to_a

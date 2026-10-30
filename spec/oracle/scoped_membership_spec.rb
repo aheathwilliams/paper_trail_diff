@@ -46,6 +46,11 @@ class OraclePost < ActiveRecord::Base
   has_many :later_notes, -> { order(:id).offset(1) }, **notes
   has_many :visible_page, -> { where(hidden: false).order(:position, :id).offset(1).limit(2) },
            **notes
+  has_many :hidden_or_unknown_notes, -> { where(hidden: [true, nil]) }, **notes
+  has_many :hidden_first_notes, -> { order(:hidden, :id).limit(2) }, **notes
+  has_many :status_ranked_notes, -> { order(status: :desc, id: :asc).limit(2) }, **notes
+  has_many :last_page_notes, -> { order(position: :desc, id: :desc).offset(1).limit(2) }, **notes
+  has_many :not_live_and_hidden_notes, -> { where.not(status: :live, hidden: true) }, **notes
   has_one :latest_note, -> { order(id: :desc) }, **notes
   has_one :lowest_kept_note, -> { where(deleted_at: nil).order(:position, :id) }, **notes
   has_paper_trail synchronize_version_creation_timestamp: false
