@@ -31,6 +31,16 @@ module PaperTrailDiff
       freeze
     end
 
+    # Every activity step's rows, in time order. Only the activity timeline says
+    # who made each change, so an analysis built without it has no rows to give.
+    #: () -> Array[ChangeRow]
+    def change_rows
+      steps = activity_timeline
+      raise ConfigurationError, 'change_rows requires activity: true' unless steps
+
+      steps.flat_map(&:change_rows).freeze
+    end
+
     # Reconstructed endpoint states are opt-in, because they carry the whole
     # selected graph whether or not anything changed, which dwarfs the rest of
     # the payload for a wide graph.

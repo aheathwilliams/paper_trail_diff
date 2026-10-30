@@ -972,6 +972,7 @@ for numeric IDs).
 | `Step` | one `timeline` step |
 | `ActivityStep` | one `activity_timeline` step |
 | `ActivityBoundary` | one end of a step |
+| `ChangeRow` | one row from `change_rows` |
 | `Analysis` | result of `analyze` |
 | `ScopedAnalysis` | result of `analyze_scope` and `report` |
 | `TraversalEntry`, `RecordReference` | entries from `each_change` and `each_entry` |
@@ -1020,6 +1021,38 @@ end
 
 Both return an `Enumerator` without a block. They never query the database. A
 record reachable through two requested paths appears at both.
+
+### Change rows
+
+For a table or an export, `change_rows` flattens activity into one row per
+change, each attributed to its step's source version:
+
+```ruby
+steps.last.change_rows                    # one activity step
+analysis.change_rows                      # an Analysis built with activity: true
+report.change_rows                        # { identity => rows }, deleted records last
+
+row = report.change_rows.values.first.first
+row.change           # :changed, :added, or :removed
+row.attribute        # "body", or nil for a row about a whole record
+row.from             # nil for :added
+row.to               # nil for :removed
+row.record           # a RecordReference, or nil for the root
+row.association_path # ["comments"], or [] for the root
+row.source           # the step's source_boundary
+row.to_h             # the above, plus version_id, event, whodunnit, recorded_at,
+                     # and transaction_id
+```
+
+- An edited field is one `:changed` row. A record that appeared or disappeared
+  gets an `:added` or `:removed` row with `attribute` `nil`, then a row for each
+  field that has a value and for each record it holds.
+- A replaced `belongs_to` or `has_one` target gives the old record `:removed`
+  rows, then the new one `:added` rows.
+- Rows follow the diff's walking order, and an analysis's rows follow its steps
+  in time order.
+- `Analysis#change_rows` raises `ConfigurationError` without `activity: true`.
+  `report.change_rows` leaves out a deleted record without destroy history.
 
 ## JSON columns
 

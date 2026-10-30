@@ -226,6 +226,12 @@ module PaperTrailDiff
     #: () -> ActivityBoundary
     def source_boundary = from_boundary
 
+    # The diff as flat rows, each attributed to `source_boundary`.
+    #: () -> Array[ChangeRow]
+    def change_rows
+      ChangeRows.call(diff, source: source_boundary)
+    end
+
     # `metadata: true` also lists `sources`, since who made a change is
     # metadata as much as the source boundary's own author is.
     #: (?metadata: bool, ?snapshots: bool) -> Hash[Symbol, untyped]

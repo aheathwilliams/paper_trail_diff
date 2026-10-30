@@ -51,6 +51,7 @@ passes is behavior nothing checks. `mutant.yml` lists the classes it mutates:
 - which versions a batch or filter reads: `BatchedRootVersions`,
   `DeletedAnalysisBatch`, and `HistoricalFilter`;
 - what a version recorded: `RecordedChanges`;
+- how a step flattens into rows: `ChangeRow` and `ChangeRows`;
 - which records a scope or report selects: `ScopedRootSelection`,
   `AssociationActivitySelection`, and `AssociationActivityEdge`;
 - which children and targets a record had at each point:

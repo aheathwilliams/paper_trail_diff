@@ -27,7 +27,11 @@ RSpec.describe 'README report rows recipe' do
     context.local_variable_get(:rows)
   end
 
-  it 'gives one row per field, with its record, change, and source, deleted records included' do
+  def reference(record)
+    { type: record.class.name, id: record.id }
+  end
+
+  it 'gives a row per field and per record, with its source, deleted records included' do
     article = actor('alice') { Article.create!(title: 'Draft') }
     comment = actor('bob') { article.comments.create!(body: 'First') }
     actor('carol') { article.update!(title: 'Published') }
@@ -36,32 +40,34 @@ RSpec.describe 'README report rows recipe' do
     gone = actor('frank') { Article.create!(title: 'Gone') }
     actor('frank') { gone.destroy! }
 
-    article_id = identity(article)
-    comment_id = identity(comment)
-    gone_id = identity(gone)
     all_rows = recipe_rows
-    shown = %w[title body]
+    shown = [nil, 'title', 'body']
     rows = all_rows.select { |row| shown.include?(row.fetch(:attribute)) }
 
     # author_id and reviewer_id stay blank throughout, so they have no rows.
     expect(all_rows.map { |row| row.fetch(:attribute) }.uniq)
-      .to contain_exactly('body', 'created_at', 'title')
-    expect(rows.map { |row| row.values_at(:root, :association, :record, :change) })
-      .to eq([[article_id, '', article_id, :added],
-              [article_id, 'comments', comment_id, :added],
-              [article_id, '', article_id, :changed],
-              [article_id, 'comments', comment_id, :changed],
-              [article_id, 'comments', comment_id, :removed],
-              [gone_id, '', gone_id, :added],
-              [gone_id, '', gone_id, :removed]])
-    expect(rows.map { |row| row.values_at(:attribute, :from, :to, :actor, :event) })
-      .to eq([%w[title] + [nil, 'Draft', 'alice', 'create'],
-              %w[body] + [nil, 'First', 'bob', 'create'],
+      .to contain_exactly(nil, 'body', 'created_at', 'title')
+    expect(rows.map { |row| row.values_at(:root, :association_path, :record, :change) })
+      .to eq([[identity(article), [], nil, :added],
+              [identity(article), [], nil, :added],
+              [identity(article), ['comments'], reference(comment), :added],
+              [identity(article), ['comments'], reference(comment), :added],
+              [identity(article), [], nil, :changed],
+              [identity(article), ['comments'], reference(comment), :changed],
+              [identity(article), ['comments'], reference(comment), :removed],
+              [identity(article), ['comments'], reference(comment), :removed],
+              [identity(gone), [], nil, :added],
+              [identity(gone), [], nil, :added],
+              [identity(gone), [], nil, :removed],
+              [identity(gone), [], nil, :removed]])
+    expect(rows.map { |row| row.values_at(:attribute, :from, :to, :whodunnit, :event) })
+      .to eq([[nil, nil, nil, 'alice', 'create'], ['title', nil, 'Draft', 'alice', 'create'],
+              [nil, nil, nil, 'bob', 'create'], ['body', nil, 'First', 'bob', 'create'],
               %w[title Draft Published carol update],
               %w[body First Edited dave update],
-              %w[body Edited] + [nil, 'erin', 'destroy'],
-              %w[title] + [nil, 'Gone', 'frank', 'create'],
-              %w[title Gone] + [nil, 'frank', 'destroy']])
+              [nil, nil, nil, 'erin', 'destroy'], ['body', 'Edited', nil, 'erin', 'destroy'],
+              [nil, nil, nil, 'frank', 'create'], ['title', nil, 'Gone', 'frank', 'create'],
+              [nil, nil, nil, 'frank', 'destroy'], ['title', 'Gone', nil, 'frank', 'destroy']])
     expect(rows.first.fetch(:recorded_at)).to eq(article.versions.first.created_at)
   end
 end

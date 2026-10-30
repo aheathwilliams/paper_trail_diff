@@ -23,6 +23,11 @@ module PaperTrailDiff
     # : (diff: Diff, timeline: Array[Step], ?activity_timeline: Array[ActivityStep]?, ?from_snapshot: RecordSnapshot?, ?to_snapshot: RecordSnapshot?) -> void
     def initialize: (diff: Diff, timeline: Array[Step], ?activity_timeline: Array[ActivityStep]?, ?from_snapshot: RecordSnapshot?, ?to_snapshot: RecordSnapshot?) -> void
 
+    # Every activity step's rows, in time order. Only the activity timeline says
+    # who made each change, so an analysis built without it has no rows to give.
+    # : () -> Array[ChangeRow]
+    def change_rows: () -> Array[ChangeRow]
+
     # Reconstructed endpoint states are opt-in, because they carry the whole
     # selected graph whether or not anything changed, which dwarfs the rest of
     # the payload for a wide graph.

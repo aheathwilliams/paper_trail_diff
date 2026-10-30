@@ -104,4 +104,47 @@ RSpec.describe 'activity attribution and serialization' do
       expect(nothing.to_h(metadata: true).fetch(:recorded_changes)).to be_nil
     end
   end
+
+  describe 'change rows' do
+    def analysis(steps)
+      PaperTrailDiff::Analysis.new(diff: step.diff, timeline: [], activity_timeline: steps)
+    end
+
+    def labels(rows)
+      rows.map { |row| [row.source.whodunnit, row.change, row.attribute] }
+    end
+
+    it "attributes a step's rows to its source" do
+      expect(labels(step.change_rows))
+        .to eq([['alice', :added, nil], ['alice', :added, 'title']])
+    end
+
+    it "lists an analysis's rows step by step, and needs its activity timeline" do
+      later = PaperTrailDiff::ActivityStep.between(
+        from_boundary: destination, to_boundary: destination, from_snapshot: snapshot,
+        to_snapshot: nil, retain: false
+      )
+
+      expect(labels(analysis([step, later]).change_rows))
+        .to eq([['alice', :added, nil], ['alice', :added, 'title'],
+                ['bob', :removed, nil], ['bob', :removed, 'title']])
+      expect(analysis([step]).change_rows).to be_frozen
+      expect { PaperTrailDiff::Analysis.new(diff: step.diff, timeline: []).change_rows }
+        .to raise_error(PaperTrailDiff::ConfigurationError, 'change_rows requires activity: true')
+    end
+
+    it "keys a scoped analysis's rows like its analyses, deleted roots last" do
+      scoped = PaperTrailDiff::ScopedAnalysis.new(
+        analyses: { %w[Article 3] => analysis([step]) },
+        unreachable: [%w[Article 4], %w[Article 5]],
+        deleted: { %w[Article 4] => analysis([]), %w[Article 5] => nil }
+      )
+
+      rows = scoped.change_rows
+      expect(rows.keys).to eq([%w[Article 3], %w[Article 4]])
+      expect(labels(rows.fetch(%w[Article 3]))).to eq(labels(step.change_rows))
+      expect(rows.fetch(%w[Article 4])).to eq([])
+      expect(rows).to be_frozen
+    end
+  end
 end

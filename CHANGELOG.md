@@ -22,6 +22,14 @@ project follows [Semantic Versioning](https://semver.org/).
   left out, and so are names on the root path, `"$"`, for the root's own
   versions. Names on an association path are not, because a child's version
   does not say which path reached it.
+- `change_rows` on an activity step, on an `Analysis` built with
+  `activity: true`, and on a `report` or `analyze_scope` result flattens
+  activity into `ChangeRow` objects: one per edited field, and one per record
+  that appeared or disappeared followed by its fields. Each names its record,
+  association path, and source version, and `to_h` gives a flat hash. It
+  replaces the README recipe for turning a report into rows, which had no rows
+  for whole records, so a record added or removed with only blank fields left
+  no trace.
 
 ### Fixed
 
