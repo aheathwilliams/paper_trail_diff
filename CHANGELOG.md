@@ -100,6 +100,12 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- `timeline`, `activity_timeline`, `analyze`, and `analyze_many` raise
+  `InvalidEndpointError` naming what they were given when it is not a record
+  of a versioned model, such as `nil`, a model class, a relation, or a
+  version. They raised a bare `NoMethodError`, or said to provide `from` and
+  `to`. `report` names `since` when it is `nil` or a range.
+
 - A scope ordered by a datetime, such as
   `-> { order(created_at: :desc, id: :desc).limit(3) }`, is read from history
   under Rails' default time-zone-aware attributes. Rails wraps those

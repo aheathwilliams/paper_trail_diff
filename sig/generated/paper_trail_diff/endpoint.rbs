@@ -21,6 +21,15 @@ module PaperTrailDiff
     # : (untyped) -> void
     def self?.validate!: (untyped) -> void
 
+    # The record a method reads the history of: a record, saved or destroyed,
+    # of a model PaperTrail versions.
+    # : (untyped) -> void
+    def self?.validate_root!: (untyped) -> void
+
+    # A relation is named rather than inspected, which would load it.
+    # : (untyped) -> String
+    def self?.described: (untyped) -> String
+
     # : (untyped) -> bool
     def self?.version?: (untyped) -> bool
 

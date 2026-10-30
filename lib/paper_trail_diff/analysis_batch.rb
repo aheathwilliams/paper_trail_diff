@@ -63,7 +63,10 @@ module PaperTrailDiff
     def validated_records
       raise ConfigurationError, 'records: must be an array' unless @records.is_a?(Array)
 
-      @records.each { |record| Endpoint.validate!(record) }
+      @records.each do |record|
+        Endpoint.validate_root!(record)
+        Endpoint.validate!(record)
+      end
       identities = @records.map { |record| Endpoint.identity(record) }
       return @records if identities.uniq.length == identities.length
 

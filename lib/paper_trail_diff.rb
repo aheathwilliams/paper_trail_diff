@@ -379,6 +379,12 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
       max_filter_versions: HistoricalFilter::DEFAULT_VERSION_LIMIT, allow_expensive: false,
       recorded_changes: false, allow_approximate: false
     )
+      # A range here would become the start of another range.
+      if since.nil? || since.is_a?(Range)
+        raise InvalidTimeRangeError, '`since` must be a time, date, or string; for a range, ' \
+                                     'pass it as `within:` to analyze_scope'
+      end
+
       analyze_scope(
         scope,
         within: since..Time.now.utc, limit: limit, associations: associations,

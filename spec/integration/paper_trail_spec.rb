@@ -1252,7 +1252,7 @@ RSpec.describe PaperTrailDiff do
       expect { described_class.timeline(article, from: published, to: create_version) }
         .to raise_error(PaperTrailDiff::InvalidTimelineRangeError, /must not follow/)
       expect { described_class.timeline(Object.new, from: draft, to: published) }
-        .to raise_error(PaperTrailDiff::InvalidTimelineRangeError, /version history/)
+        .to raise_error(PaperTrailDiff::InvalidEndpointError, 'expected a record, got Object')
     end
 
     it 'loads only the requested slice of a long root history' do

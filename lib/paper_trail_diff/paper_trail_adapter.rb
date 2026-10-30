@@ -63,6 +63,7 @@ module PaperTrailDiff
 
     #: (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped, ?close_on: Symbol?) -> Array[Step]
     def timeline(record, from:, to:, within:, version_scope: nil, close_on: nil) # rubocop:disable Metrics/ParameterLists
+      Endpoint.validate_root!(record)
       @traversal_preparer.call(record.class, historical: true)
       from, to = default_range(record, from, to, within)
       TimelineBuilder.new(
@@ -78,6 +79,7 @@ module PaperTrailDiff
 
     #: (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?) -> Array[ActivityStep]
     def activity_timeline(record, from:, to:, within:, version_scope: nil, close_on: nil, snapshots: false, group: nil) # rubocop:disable Metrics/ParameterLists, Layout/LineLength
+      Endpoint.validate_root!(record)
       payload = @instrumentation_payload.merge(model_type: record.class.base_class.name.to_s)
       Instrumentation.instrument('activity_timeline', payload) do
         @traversal_preparer.call(record.class, historical: true)
@@ -95,6 +97,7 @@ module PaperTrailDiff
     #: (untyped, from: untyped, to: untyped, within: untyped, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?) -> Analysis
     def analyze(record, from:, to:, within:, activity: false, version_scope: nil, close_on: nil, snapshots: false, group: nil) # rubocop:disable Metrics/ParameterLists, Layout/LineLength
       validate_activity_options!(group, activity, snapshots)
+      Endpoint.validate_root!(record)
       @traversal_preparer.call(record.class, historical: true)
       from, to = default_range(record, from, to, within)
       live = live_endpoint_for(record, close_on, within)
