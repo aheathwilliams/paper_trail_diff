@@ -100,6 +100,12 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- A scope ordered by a datetime, such as
+  `-> { order(created_at: :desc, id: :desc).limit(3) }`, is read from history
+  under Rails' default time-zone-aware attributes. Rails wraps those
+  attributes' types, which hid the datetime, so every method raised
+  `UnsupportedAssociationError` for the documented recipe.
+
 - A `Date` bound of `within:` or `since:` is a whole day in `Time.zone`, and
   a string a time in `Time.zone`, or in UTC without one. They were read in
   the server's own zone, so the same window covered different hours on

@@ -13,6 +13,10 @@ module PaperTrailDiff
 
     ENUM_TYPE: ::String
 
+    # Rails wraps a time-zone-aware attribute's type, by default every
+    # datetime's, in this delegator; the time it stores is the wrapped type's.
+    TIME_ZONE_TYPE: ::String
+
     # Integers, booleans and dates sort alike everywhere. Strings follow a
     # collation, so they are not read.
     ORDER_TYPES: untyped
@@ -66,6 +70,10 @@ module PaperTrailDiff
 
     # : (untyped, String) -> bool
     def self.orderable?: (untyped, String) -> bool
+
+    # The type of the value a column stores, under an enum or time zone wrapper.
+    # : (untyped) -> untyped
+    def self.stored_type: (untyped) -> untyped
 
     # Active Record truncates a time to its column's precision before writing
     # it, so history holds the stored value when it keeps that many digits.
