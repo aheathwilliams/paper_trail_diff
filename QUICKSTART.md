@@ -37,6 +37,19 @@ table. `--with-changes` adds `object_changes`, which PaperTrail uses for
 for each event. This gem can also compare the full earlier records saved in
 PaperTrail's `object` column.
 
+PaperTrail stores earlier records as YAML, and Rails reads back only the YAML
+classes you allow. Without this, reading the first version raises
+`Psych::DisallowedClass`. Add PaperTrail's list to `config/application.rb`,
+inside `class Application`:
+
+<!-- executable:quickstart-config -->
+```ruby
+config.active_record.yaml_column_permitted_classes = [
+  ActiveRecord::Type::Time::Value, ActiveSupport::TimeWithZone, ActiveSupport::TimeZone,
+  BigDecimal, Date, Symbol, Time
+]
+```
+
 ## 2. Version a model
 
 Create an article model and tell PaperTrail to track its changes:

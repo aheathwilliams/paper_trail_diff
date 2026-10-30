@@ -22,6 +22,44 @@ RSpec.describe 'core documentation examples' do
     )
   end
 
+  def with_permitted_classes(permitted)
+    saved = ActiveRecord.yaml_column_permitted_classes
+    ActiveRecord.yaml_column_permitted_classes = permitted
+    yield
+  ensure
+    ActiveRecord.yaml_column_permitted_classes = saved
+  end
+
+  def quickstart_permitted_classes
+    settings = Struct.new(:yaml_column_permitted_classes).new
+    config = Struct.new(:active_record).new(settings)
+    run_quickstart('quickstart-config', binding)
+    config.active_record.yaml_column_permitted_classes
+  end
+
+  # A new Rails 8.1 app's versions hold its timestamps as
+  # ActiveSupport::TimeWithZone, which Psych loads only when permitted.
+  def rails_app_version
+    article = DocumentationArticle.create!(title: 'Draft')
+    article.update!(title: 'Published')
+    version = article.versions.last
+    now = Time.now.in_time_zone('Eastern Time (US & Canada)')
+    stamps = { 'created_at' => now, 'updated_at' => now }
+    version.update_columns(object: YAML.dump({ 'id' => article.id, 'title' => 'Draft', **stamps }))
+    version
+  end
+
+  it 'reads a new Rails app\'s history with the YAML classes the quickstart permits' do
+    version = rails_app_version
+
+    with_permitted_classes([Symbol, Time, Date]) do
+      expect { version.reload.reify }.to raise_error(Psych::DisallowedClass, /TimeWithZone/)
+    end
+    with_permitted_classes(quickstart_permitted_classes) do
+      expect(version.reload.reify.title).to eq('Draft')
+    end
+  end
+
   it 'executes the basic quickstart as one stateful console session' do
     context = documentation_binding
 

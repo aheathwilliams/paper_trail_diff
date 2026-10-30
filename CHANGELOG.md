@@ -79,6 +79,11 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- The quickstart sets PaperTrail's `yaml_column_permitted_classes`. In a new
+  Rails 8.1 app, versions hold timestamps as `ActiveSupport::TimeWithZone`,
+  and the quickstart's first `reify` raised `Psych::DisallowedClass` without
+  it. Its documentation spec now reads a version in that form.
+
 - The README and architecture guide recommend a second version index,
   `(item_type, created_at, item_id)`. Batch methods with `since:` or
   `within:` find changed records by type and time, which the one index they
