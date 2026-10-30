@@ -196,8 +196,11 @@ Three selection rules matter:
   `associations: [:comments]`, editing only a comment selects its article, and
   the article's report shows the edit.
 - A relation such as `Article.where(status: "open")` checks today's values.
-  It cannot establish whether deleted articles matched that condition. Deleted
-  records are therefore listed separately.
+  Deleted records have none, so they are listed separately. With
+  `include_deleted: true`, the gem tests each against the relation as it was
+  when destroyed and keeps only those that match, so a report on one account's
+  records holds only that account's deletions. That needs plain conditions on
+  the model's own columns; a join or SQL text raises `ConfigurationError`.
 - `limit: 100` is a safety ceiling, not pagination. Selecting too many records
   raises `BatchLimitExceededError`. With `include_deleted: true`, both existing
   and deleted records count toward it. Use a narrower relation or time window,

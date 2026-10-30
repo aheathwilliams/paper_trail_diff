@@ -14,6 +14,8 @@ module PaperTrailDiff
     # ranking alone.
     RELATION_VALUES = %i[where order reordering limit offset readonly strict_loading
                          extending].freeze
+    # Relation parts that load or shape rows without choosing them.
+    LOADING_VALUES = %i[includes preload select distinct].freeze
     # Types whose stored values compare in Ruby as the database compares them,
     # named rather than referenced so that loading needs no Active Model.
     VALUE_TYPES = %w[ActiveModel::Type::Integer ActiveModel::Type::Boolean
@@ -59,6 +61,23 @@ module PaperTrailDiff
       clause = relation.where_clause - model_class.unscoped.where_clause
       predicate = Reader.new(model_class).call(clause.ast)
       new(model_class, predicate, (ranking(relation, reflection, model_class) if ranked))
+    rescue Unreadable
+      nil
+    end
+
+    # A relation's own where clause, default scope included, read as
+    # conditions on stored attributes; nil when it cannot be. Its order,
+    # limit, and offset choose a page of current rows rather than membership,
+    # and loading or selecting columns changes neither, so they are left out.
+    # A single-table subclass's type condition is left to the caller, as for
+    # an association.
+    #: (untyped, untyped) -> ScopeCondition?
+    def self.for_relation(relation, model_class)
+      extra = relation.values.except(*RELATION_VALUES, *LOADING_VALUES).values
+      return unless extra.all? { |value| value.respond_to?(:empty?) && value.empty? }
+
+      clause = relation.where_clause - model_class.unscoped.where_clause
+      new(model_class, Reader.new(model_class).call(clause.ast))
     rescue Unreadable
       nil
     end

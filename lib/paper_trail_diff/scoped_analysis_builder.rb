@@ -19,8 +19,8 @@ module PaperTrailDiff
                historical_filter: historical_filter, max_filter_versions: max_filter_versions,
                activity_tree: activity_tree
       )
+      @deleted_filter = DeletedRootFilter.new(scope.all) if include_deleted
       @limit = limit
-      @include_deleted = include_deleted
       @analyzer = analyzer
       @deleted_analyzer = deleted_analyzer
     end
@@ -28,20 +28,28 @@ module PaperTrailDiff
     #: () -> ScopedAnalysis
     def call
       selection = @selection.call
-      if @include_deleted && selection.records.length + selection.unreachable.length > @limit
+      deleted_filter = @deleted_filter
+      return analysis(selection, selection.unreachable, {}) unless deleted_filter
+
+      unreachable = deleted_filter.call(selection.unreachable)
+      if selection.records.length + unreachable.length > @limit
         raise BatchLimitExceededError, 'include_deleted: live and missing roots exceed limit:'
       end
 
-      ScopedAnalysis.new(
-        analyses: @analyzer.call(selection.records), roots: selection.records,
-        unreachable: selection.unreachable,
-        deleted: @include_deleted ? @deleted_analyzer.call(selection.unreachable) : {}
-      )
+      analysis(selection, unreachable, @deleted_analyzer.call(unreachable))
+    end
+
+    private
+
+    #: (ScopedRootSelection::Result, Array[Array[String]], Hash[Array[String], Analysis?]) -> ScopedAnalysis
+    def analysis(selection, unreachable, deleted)
+      ScopedAnalysis.new(analyses: @analyzer.call(selection.records), roots: selection.records,
+                         unreachable: unreachable, deleted: deleted)
     end
 
     # @rbs @selection: ScopedRootSelection
+    # @rbs @deleted_filter: DeletedRootFilter?
     # @rbs @limit: Integer
-    # @rbs @include_deleted: bool
     # @rbs @analyzer: untyped
     # @rbs @deleted_analyzer: untyped
   end

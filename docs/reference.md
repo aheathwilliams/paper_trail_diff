@@ -641,15 +641,26 @@ It accepts `associations:`, `ignore:`, `snapshots:`, `group:`,
 
 ### Deleted records
 
-A deleted record cannot be tested against a relation's conditions, because it
-has no row. Records that changed in the window but no longer exist are listed in
+A relation's conditions read the table, and a deleted record has no row.
+Records that changed in the window but no longer exist are listed in
 `unreachable`, including those selected by a change to their associations. It
-is not paginated and does not mean those records matched the relation.
+is not paginated and, without `include_deleted:`, does not mean those records
+matched the relation.
 
-`include_deleted: true` also analyzes them from their `destroy` versions and
-returns the results in `deleted`, keyed the same way. A value is `nil` when no
-`destroy` version was recorded. With this option, existing and deleted records
-together count toward `limit:`.
+`include_deleted: true` tests each of them against the relation's conditions,
+as it stood when it was destroyed, and keeps only those that match. So a
+report on `Article.where(account_id: account.id)` returns that account's
+deletions, not every account's. The relation's conditions must be plain
+conditions on the model's own columns, as a [readable association
+scope's](#costly-associations) must; anything else, such as a join or SQL
+text, raises `ConfigurationError`. Its order, limit, and offset are ignored
+here, since they choose a page of existing rows. A record whose destroy
+PaperTrail did not record has no state to test and stays listed.
+
+It then analyzes the kept records from their `destroy` versions and returns the
+results in `deleted`, keyed the same way. A value is `nil` when no `destroy`
+version was recorded. With this option, existing and deleted records together
+count toward `limit:`.
 
 ```ruby
 missing_history = report.deleted.select { |_identity, analysis| analysis.nil? }.keys

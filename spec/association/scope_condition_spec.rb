@@ -453,6 +453,44 @@ RSpec.describe PaperTrailDiff::ScopeCondition do
   end
 
   # A has_many through keeps only its parts' conditions.
+  describe '.for_relation' do
+    def relation_matches(relation, *rows)
+      condition = described_class.for_relation(relation, relation.model)
+      rows.map { |row| condition.matches?(row.transform_keys(&:to_s)) }
+    end
+
+    it "reads a relation's conditions and default scope, leaving out its page and loading" do
+      relation = ScopeConditionItem.where(rank: 1).or(ScopeConditionItem.where(flag: true))
+      expect(relation_matches(relation, { rank: 1 }, { flag: true }, { rank: 2, flag: false }))
+        .to eq([true, true, false])
+      expect(relation_matches(ScopeConditionItem.all, { rank: nil })).to eq([true])
+
+      stub_const('ScopeConditionDefaulted', Class.new(ScopeConditionItem))
+      ScopeConditionDefaulted.class_eval { default_scope { where(flag: true) } }
+      paged = ScopeConditionDefaulted.where(rank: 1).order(:id).limit(1).offset(1)
+                                     .includes(:none).preload(:none).select(:id).distinct
+      expect(relation_matches(paged, { rank: 1, flag: true }, { rank: 1, flag: false }))
+        .to eq([true, false])
+    end
+
+    it 'leaves out the type condition of a single-table subclass' do
+      stub_const('ScopeConditionKind', Class.new(ScopeConditionItem))
+      allow(ScopeConditionKind).to receive(:finder_needs_type_condition?).and_return(true)
+
+      expect(relation_matches(ScopeConditionKind.where(rank: 1), { rank: 1 })).to eq([true])
+    end
+
+    it 'declines a relation that joins, groups, or that it cannot read' do
+      [ScopeConditionItem.joins('JOIN tracked_articles ON 1 = 1'), ScopeConditionItem.group(:rank),
+       ScopeConditionItem.where('rank = 1'), ScopeConditionItem.where(seen_at: Time.utc(2026)),
+       ScopeConditionItem.having('COUNT(*) > 1'), ScopeConditionItem.from('scope_condition_items'),
+       ScopeConditionItem.lock]
+        .each do |relation|
+          expect(described_class.for_relation(relation, relation.model)).to be_nil
+        end
+    end
+  end
+
   describe '.ranked_through?' do
     before do
       ScopeConditionOwner.has_one :lead_item, -> { order(:id) }, class_name: 'ScopeConditionItem',

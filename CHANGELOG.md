@@ -26,6 +26,13 @@ project follows [Semantic Versioning](https://semver.org/).
   added. Single-record methods did this without warning, and batch methods
   described it only as costly. Batch methods still also need
   `allow_expensive: true` for such a path.
+- `include_deleted: true` keeps only the deleted records that met the
+  relation's conditions when they were destroyed, in both `deleted` and
+  `unreachable`. It returned every deleted record of the model that changed in
+  the window, so a report on one account's articles included other accounts'
+  deleted articles with their contents. The relation's conditions must be
+  plain conditions on the model's own columns; a join or SQL text raises
+  `ConfigurationError`.
 
 ### Added
 

@@ -13,6 +13,9 @@ module PaperTrailDiff
     # ranking alone.
     RELATION_VALUES: untyped
 
+    # Relation parts that load or shape rows without choosing them.
+    LOADING_VALUES: untyped
+
     # Types whose stored values compare in Ruby as the database compares them,
     # named rather than referenced so that loading needs no Active Model.
     VALUE_TYPES: untyped
@@ -46,6 +49,15 @@ module PaperTrailDiff
     # through's query keeps only its conditions.
     # : (untyped, ?untyped, ?ranked: bool) -> ScopeCondition?
     def self.build: (untyped, ?untyped, ?ranked: bool) -> ScopeCondition?
+
+    # A relation's own where clause, default scope included, read as
+    # conditions on stored attributes; nil when it cannot be. Its order,
+    # limit, and offset choose a page of current rows rather than membership,
+    # and loading or selecting columns changes neither, so they are left out.
+    # A single-table subclass's type condition is left to the caller, as for
+    # an association.
+    # : (untyped, untyped) -> ScopeCondition?
+    def self.for_relation: (untyped, untyped) -> ScopeCondition?
 
     # nil when the relation picks its members by conditions alone.
     # : (untyped, untyped, untyped) -> ScopeRanking?

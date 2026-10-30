@@ -9,11 +9,16 @@ module PaperTrailDiff
     # : () -> ScopedAnalysis
     def call: () -> ScopedAnalysis
 
+    private
+
+    # : (ScopedRootSelection::Result, Array[Array[String]], Hash[Array[String], Analysis?]) -> ScopedAnalysis
+    def analysis: (ScopedRootSelection::Result, Array[Array[String]], Hash[Array[String], Analysis?]) -> ScopedAnalysis
+
     @analyzer: untyped
 
     @deleted_analyzer: untyped
 
-    @include_deleted: bool
+    @deleted_filter: DeletedRootFilter?
 
     @limit: Integer
 
