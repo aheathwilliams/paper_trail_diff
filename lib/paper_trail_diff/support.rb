@@ -44,6 +44,20 @@ module PaperTrailDiff
       end
     end
 
+    # Records sort by type first so that mixed id types stay comparable, then
+    # naturally within one type. Ordering by the printed form instead would put
+    # id 10 before id 2, which is deterministic but reads as unsorted wherever a
+    # result is rendered.
+    #: (untyped, untyped) -> Array[untyped]
+    def sortable_identity(type, id)
+      key = case id
+            when Numeric then [0, id]
+            when String, Symbol then [1, id.to_s]
+            else [2, id.inspect]
+            end
+      [type.to_s, key]
+    end
+
     #: (untyped) -> Array[untyped]
     def chronological_version_key(version)
       version_key(version.created_at, version.id)

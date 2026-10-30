@@ -3,6 +3,8 @@
 
 module PaperTrailDiff
   # Compares collection snapshots with a low-allocation path for stable membership.
+  # Snapshots hold their records in type and ID order, so results follow it
+  # without sorting here.
   class CollectionComparator
     #: (AssociationSnapshot, AssociationSnapshot, record_comparer: untyped) -> void
     def initialize(from_association, to_association, record_comparer:)
@@ -50,9 +52,7 @@ module PaperTrailDiff
       pairs = aligned_changed_pairs
       return unless pairs
 
-      pairs.sort_by { |_from, to| sortable_identity(to.identity) }.filter_map do |pair|
-        @record_comparer.call(pair.fetch(0), pair.fetch(1))
-      end
+      pairs.filter_map { |pair| @record_comparer.call(pair.fetch(0), pair.fetch(1)) }
     end
 
     #: () -> Array[[RecordSnapshot, RecordSnapshot]]?
@@ -105,13 +105,12 @@ module PaperTrailDiff
 
     #: (Hash[identity, RecordSnapshot], Hash[identity, RecordSnapshot]) -> Array[RecordSnapshot]
     def records_missing_from(records, other_records)
-      identities = sorted_identities(records.keys - other_records.keys)
-      identities.map { |identity| records.fetch(identity) }
+      (records.keys - other_records.keys).map { |identity| records.fetch(identity) }
     end
 
     #: (Hash[identity, RecordSnapshot], Hash[identity, RecordSnapshot]) -> Array[RecordChange]
     def changed_records(from_records, to_records)
-      sorted_identities(from_records.keys & to_records.keys).filter_map do |identity|
+      (from_records.keys & to_records.keys).filter_map do |identity|
         from_record = from_records.fetch(identity)
         to_record = to_records.fetch(identity)
         next if from_record.equal?(to_record)
@@ -130,32 +129,6 @@ module PaperTrailDiff
         index[identity] = record
       end
       index
-    end
-
-    #: (Array[identity]) -> Array[identity]
-    def sorted_identities(identities)
-      identities.sort_by { |identity| sortable_identity(identity) }
-    end
-
-    # Identities sort by type first so that mixed id types stay comparable, then
-    # naturally within one type. Ordering by the printed form instead would put
-    # id 10 before id 2, which is deterministic but reads as unsorted wherever a
-    # result is rendered.
-    #: (identity) -> Array[untyped]
-    def sortable_identity(identity)
-      [identity.fetch(0), sortable_id(identity.fetch(1))]
-    end
-
-    # Only the order of the group numbers matters, so moving the lowest one
-    # down or the highest one up changes nothing; the spec checks the order.
-    # mutant:disable
-    #: (untyped) -> Array[untyped]
-    def sortable_id(id)
-      case id
-      when Numeric then [0, id]
-      when String, Symbol then [1, id.to_s]
-      else [2, id.inspect]
-      end
     end
 
     #: (identity) -> void

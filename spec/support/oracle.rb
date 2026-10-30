@@ -16,9 +16,6 @@ require_relative 'association_database'
 # Seeds and steps are fixed so a failure reproduces. `ORACLE_SEEDS=1..200` and
 # `ORACLE_STEPS=40` widen a run.
 module Oracle
-  # Rebuilt collections do not yet follow the documented order.
-  ORDERED = false
-
   # Collections are compared in the order the gem returns them. The reference
   # promises record type, then ID.
   def self.canon(value)
@@ -31,11 +28,7 @@ module Oracle
   end
 
   def self.canon_hash(value)
-    hash = value.to_h { |key, item| [key, canon(item)] }.sort_by { |key, _| key.to_s }.to_h
-    records = hash[:records]
-    return hash if ORDERED || !records.is_a?(Array)
-
-    hash.merge(records: records.sort_by { |record| [record[:type], record[:id]] })
+    value.to_h { |key, item| [key, canon(item)] }.sort_by { |key, _| key.to_s }.to_h
   end
 
   def self.snapshot(snapshot)

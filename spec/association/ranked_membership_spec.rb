@@ -68,7 +68,8 @@ RSpec.describe 'A ranked association over time' do
   let(:day) { Date.new(2026, 1, 1) }
   let(:checkpoints) { [] }
 
-  # One version per list, saved together, with each association's live members.
+  # One version per list, saved together, with each association's live members
+  # in the order a snapshot lists them, by ID.
   def checkpoint(*lists)
     versions = RankList.transaction do
       lists.to_h do |list|
@@ -79,7 +80,7 @@ RSpec.describe 'A ranked association over time' do
     end
     live = lists.to_h do |list|
       fresh = RankList.find(list.id)
-      [list.id, paths.to_h { |path| [path.to_s, Array(fresh.public_send(path)).map(&:id)] }]
+      [list.id, paths.to_h { |path| [path.to_s, Array(fresh.public_send(path)).map(&:id).sort] }]
     end
     checkpoints << [versions, live]
   end
@@ -127,7 +128,7 @@ RSpec.describe 'A ranked association over time' do
     checkpoints.each_cons(2).to_a + [[checkpoints.first, checkpoints.last]]
   end
 
-  it 'reads each boundary as the association’s own query returned it' do
+  it 'reads each boundary with the members the association’s own query returned' do
     lists = [RankList.create!(name: 'first'), RankList.create!(name: 'second')]
     history(*lists)
 

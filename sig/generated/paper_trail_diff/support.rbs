@@ -12,6 +12,13 @@ module PaperTrailDiff
     # : (untyped) -> untyped
     def self?.serialize: (untyped) -> untyped
 
+    # Records sort by type first so that mixed id types stay comparable, then
+    # naturally within one type. Ordering by the printed form instead would put
+    # id 10 before id 2, which is deterministic but reads as unsorted wherever a
+    # result is rendered.
+    # : (untyped, untyped) -> Array[untyped]
+    def self?.sortable_identity: (untyped, untyped) -> Array[untyped]
+
     # : (untyped) -> Array[untyped]
     def self?.chronological_version_key: (untyped) -> Array[untyped]
 

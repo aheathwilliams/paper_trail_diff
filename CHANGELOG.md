@@ -102,6 +102,11 @@ project follows [Semantic Versioning](https://semver.org/).
   symbol (`{ status: :published }`), and a date or time read from a `json` or
   `jsonb` version column, which PaperTrail returns as a string, never matched,
   so the report silently selected nothing.
+- A snapshot's collections list their records by type, then ID, as the
+  reference says, wherever the snapshot was read from. Snapshots rebuilt from
+  history or carried through an activity timeline listed them in the order
+  they were found, and a ranked association in its query's order, so `to_h` of
+  the same state differed between methods. Diffs were already ordered.
 - With a `json` or `jsonb` `object` column, an activity step no longer
   reports an unchanged timestamp as changed. PaperTrail returns such a
   column's times as strings, and a step after a child's update carried them
