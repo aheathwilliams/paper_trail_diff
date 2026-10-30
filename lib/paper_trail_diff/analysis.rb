@@ -11,7 +11,9 @@ module PaperTrailDiff
     attr_reader :to_snapshot #: RecordSnapshot?
 
     # The result for a record whose requested history contains no versions,
-    # which is an empty history rather than a failed request.
+    # which is an empty history rather than a failed request. Its snapshots
+    # are nil because no state was read, not because the record was absent:
+    # reading one would rebuild the whole graph, per record in a batch.
     #: () -> Analysis
     def self.empty
       timeline = [] #: Array[Step]

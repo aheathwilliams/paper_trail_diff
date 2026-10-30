@@ -537,6 +537,12 @@ analysis.to_h(snapshots: true, metadata: true)
 ```
 
 - It accepts the same ranges as `timeline`.
+- When nothing in the range is reported, the analysis is empty: an empty
+  `diff` and timelines, and `nil` for `from_snapshot` and `to_snapshot`. Here
+  `nil` means no state was read, not that the record did not exist; reading
+  one would rebuild the record's whole graph, a cost per record in a batch.
+  Use `compare` with a version and the record to see a state that did not
+  change.
 - `activity: true` also builds the activity timeline. `snapshots:`, `group:`,
   and `recorded_changes:` apply to the activity timeline and require
   `activity: true`.
@@ -566,7 +572,8 @@ results.fetch(["Order", order.id.to_s]).diff
 
 - Without `within:`, each record's whole history through its current state is
   analyzed.
-- A record with nothing to report gets an empty `Analysis`.
+- A record with nothing to report gets an empty `Analysis`, whose snapshots
+  are `nil` (see [analyze](#analyze)).
 - Records must be saved and unique.
 - Options: `within:`, `associations:`, `ignore:`, `activity:`, `version_scope:`,
   `snapshots:`, `group:`, `recorded_changes:`, `allow_expensive:`,
