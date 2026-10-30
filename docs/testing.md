@@ -94,7 +94,8 @@ passes is behavior nothing checks. `mutant.yml` lists the classes it mutates:
   query reads: `ActivityRange` and `VersionAssociationCandidateScope`;
 - what activity a record shows: `ActivityTimelineBuilder` and
   `ActivityTransactionGrouper`;
-- which association paths a request accepts: `AssociationTraversal`;
+- which association paths a request accepts: `AssociationTraversal` and
+  `AssociationKey`;
 - whether a transaction's HABTM members are one record's:
   `HabtmTransactionOwners`;
 - which association paths a batch refuses: `BatchSafety`;

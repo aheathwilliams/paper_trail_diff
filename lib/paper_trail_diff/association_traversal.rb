@@ -69,7 +69,7 @@ module PaperTrailDiff
       return habtm_reason(reflection, root) if reflection.macro == :has_and_belongs_to_many
 
       habtm = habtm_in_chain(reflection)
-      return unless habtm
+      return AssociationKey.unsupported_reason(reflection) unless habtm
 
       "it goes through #{habtm.active_record.name}##{habtm.name}, a has_and_belongs_to_many, " \
         'whose hidden join model has no history to compare'

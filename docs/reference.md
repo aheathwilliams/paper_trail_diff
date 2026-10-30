@@ -851,6 +851,13 @@ comments.changed.first.associations["replies"].added
   member history cannot show. Replace it with a `has_many :through` a
   versioned join model, which can be scoped. `association_paths` leaves it
   out.
+- An association keyed on a column other than a primary key, such as
+  `has_many :comments, primary_key: :legacy_id`, raises
+  `UnsupportedAssociationError` up front in every method, and so does a
+  `has_many :through` with such a part. PT-AT records which record a child
+  pointed at by that record's ID, so history read that way would show other
+  records' children. `association_paths` leaves it out. Naming the primary key
+  itself, `primary_key: :id`, is accepted.
 - A root that uses single-table inheritance gets the associations of the
   class it had at each version, so you can request one that only a subclass
   declares. Without an `item_subtype` column, PaperTrail stores only the base
@@ -1152,8 +1159,8 @@ and `cycle`. Cycles are marked and not followed.
 
 Only associations a request accepts are listed, so each path can be passed to
 `associations:`. The PaperTrail versions association, a `has_many :through`
-that goes through a HABTM, a scoped HABTM, and a HABTM below the root are left
-out. A
+that goes through a HABTM, a scoped HABTM, a HABTM below the root, and an
+association keyed on a column other than a primary key are left out. A
 `has_many :through` Active Record cannot follow, such as one through a
 polymorphic `belongs_to`, raises Active Record's own error from any model
 discovery reaches, as requesting it does.
@@ -1253,7 +1260,7 @@ All errors inherit from `PaperTrailDiff::Error`.
 | `FilterLimitExceededError` | `historical_filter:` needs more than `max_filter_versions:` |
 | `AssociationTrackingUnavailableError` | Association history is requested without PT-AT |
 | `UnknownAssociationError` | An association name does not exist |
-| `UnsupportedAssociationError` | An association's macro is not supported, a path continues past a polymorphic `belongs_to`, a `has_many :through` goes through a HABTM, or a HABTM is scoped or below the root |
+| `UnsupportedAssociationError` | An association's macro is not supported, a path continues past a polymorphic `belongs_to`, a `has_many :through` goes through a HABTM, a HABTM is scoped or below the root, or an association is keyed on a column other than a primary key |
 | `UnversionedAssociationError` | An association's target model has no `has_paper_trail`, including the class a polymorphic `belongs_to` names |
 | `IncompleteAssociationHistoryError` | PT-AT did not record enough to rebuild an association, such as HABTM without a transaction or in a transaction another record with that HABTM also saved a version in, or a polymorphic type names no class |
 | `UnsupportedLiveActivityError` | A HABTM activity range ends at the current record |

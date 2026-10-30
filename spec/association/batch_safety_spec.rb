@@ -22,8 +22,7 @@ class BatchSafetyAuthorship < ActiveRecord::Base
                                                          foreign_key: :author_id
   belongs_to :plain_author, -> { where(id: [1, 2]) }, class_name: 'TrackedAuthor',
                                                       foreign_key: :author_id
-  has_many :comments, class_name: 'TrackedComment', foreign_key: :article_id,
-                      primary_key: :article_id
+  has_many :comments, through: :author, source: :reviewed_comments
 end
 
 class BatchSafetyArticle < ActiveRecord::Base

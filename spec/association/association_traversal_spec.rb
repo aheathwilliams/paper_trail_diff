@@ -58,6 +58,12 @@ class TraversalAuthor < ActiveRecord::Base
   has_paper_trail
 end
 
+class TraversalKeyedArticle < ActiveRecord::Base
+  self.table_name = 'tracked_articles'
+  has_many :author_comments, class_name: 'TrackedComment', foreign_key: :reviewer_id,
+                             primary_key: :author_id
+end
+
 class TraversalDocument < PreparedDocument
 end
 
@@ -210,6 +216,12 @@ RSpec.describe PaperTrailDiff::AssociationTraversal do
       expect(reason(TraversalArticle, :default_named_tags))
         .to eq(scoped('TraversalArticle#default_named_tags'))
       expect(reason(TraversalArticle, :labels)).to be_nil
+    end
+
+    # AssociationKey's spec covers each kind of key.
+    it 'names an association keyed on a column other than a primary key' do
+      expect(reason(TraversalKeyedArticle, :author_comments))
+        .to start_with('TraversalKeyedArticle#author_comments matches records by author_id')
     end
 
     it 'names the PaperTrail versions association' do

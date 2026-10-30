@@ -61,6 +61,7 @@ matcher:
     - PaperTrailDiff::ScopeCondition*
     - PaperTrailDiff::ScopeRanking*
     - PaperTrailDiff::AssociationTraversal*
+    - PaperTrailDiff::AssociationKey*
     - PaperTrailDiff::HabtmTransactionOwners*
     - PaperTrailDiff::ActivityRange*
     - PaperTrailDiff::VersionAssociationCandidateScope*

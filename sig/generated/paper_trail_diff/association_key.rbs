@@ -1,0 +1,29 @@
+# Generated from lib/paper_trail_diff/association_key.rb with RBS::Inline
+
+module PaperTrailDiff
+  # PT-AT records which record a child pointed at by that record's id, and
+  # history matches children to owners and targets by id. An association
+  # keyed on another column (`primary_key:`) would read other records'
+  # history, so it is refused.
+  module AssociationKey
+    # Why the association, or a part of a through, cannot be read by id.
+    # : (untyped) -> String?
+    def self.unsupported_reason: (untyped) -> String?
+
+    # The reflection, or the first part of a through, keyed on a column other
+    # than its owner's or target's primary key.
+    # : (untyped) -> untyped
+    def self.keyed_part: (untyped) -> untyped
+
+    # A belongs_to names a key of its target; any other macro, one of its
+    # owner. A polymorphic target has no single primary key to compare with.
+    # : (untyped) -> bool
+    def self.other_key?: (untyped) -> bool
+
+    # Column names are strings once the key is, so the one mutation left,
+    # `eql?` for `==`, answers the same.
+    # mutant:disable
+    # : (untyped, untyped) -> bool
+    def self.same_column?: (untyped, untyped) -> bool
+  end
+end

@@ -5,6 +5,17 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+### Breaking changes
+
+- An association keyed on a column other than a primary key
+  (`primary_key: :legacy_id`), or a `has_many :through` with such a part,
+  raises `UnsupportedAssociationError` up front in every method, and
+  `association_paths` leaves it out. PT-AT records which record a child
+  pointed at by that record's ID, and history matched children by ID, so an
+  article's history showed another article's comments, and a comment's past
+  article was the wrong one. Comparisons against the current record were
+  right, so the same range disagreed with itself.
+
 ### Added
 
 - Activity steps list the events whose changes they show as `step.sources`,
