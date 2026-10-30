@@ -128,6 +128,12 @@ PaperTrailDiff.timeline(article, within: 1.week.ago..Time.current)
 - `to:` defaults to the record itself, meaning its current state. Pass a
   version instead for a result that never changes when the record is edited
   again.
+- A range that ends at a version ends before that version's transaction, since
+  PT-AT rebuilds associations as they were before it. Child changes saved in
+  the same transaction, such as the update behind a `touch: true` parent
+  version, fall after the end. `activity_timeline` leaves them out, as
+  `compare` does. To include them, end the range at a later version or at the
+  current record.
 - Versions must belong to the record and be given in time order.
 - A record with no versions has an empty history, not an error.
 
@@ -398,7 +404,9 @@ PaperTrailDiff.activity_timeline(article, associations: [:comments], group: :tra
 Without grouping, a step inside a transaction can look empty. A child's new
 value is only visible at the next recorded event, and inside a transaction that
 event is often another part of the same save. Nothing is lost; the change
-appears one step later.
+appears one step later. When the range ends at the version that closes that
+save, there is no later step, so the change is
+[outside the range](#choosing-a-range).
 
 ### Keeping snapshots: `snapshots: true`
 

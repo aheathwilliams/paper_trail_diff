@@ -146,7 +146,7 @@ module PaperTrailDiff
       range_start: root_versions.first,
       range_end: root_versions.last
     )
-      ActivityVersionCollector.new(
+      events = ActivityVersionCollector.new(
         @record,
         root_versions: root_versions,
         tree: @tree,
@@ -154,6 +154,7 @@ module PaperTrailDiff
         range_start: range_start,
         range_end: range_end
       ).call
+      ActivityTransactionGroups.before_closing(events, range_end)
     end
 
     #: (Array[untyped], ?end_at: untyped) -> void
