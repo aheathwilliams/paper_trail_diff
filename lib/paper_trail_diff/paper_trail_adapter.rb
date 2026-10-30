@@ -11,14 +11,16 @@ module PaperTrailDiff
     CLOSE_ON_CURRENT = :current
 
     # `recorded_changes:` reads what each activity boundary's version recorded.
-    #: (associations: Array[String | Symbol], ignore: ignore_option, ?reload_live_endpoints: bool, ?allow_expensive: bool, ?recorded_changes: bool) -> void
-    def initialize(associations:, ignore:, reload_live_endpoints: true, allow_expensive: false, recorded_changes: false) # rubocop:disable Metrics/MethodLength, Layout/LineLength
+    # `allow_approximate:` accepts association paths read with PT-AT.
+    #: (associations: Array[String | Symbol], ignore: ignore_option, ?reload_live_endpoints: bool, ?allow_expensive: bool, ?recorded_changes: bool, ?allow_approximate: bool) -> void
+    def initialize(associations:, ignore:, reload_live_endpoints: true, allow_expensive: false, recorded_changes: false, allow_approximate: false) # rubocop:disable Metrics/MethodLength, Metrics/ParameterLists, Layout/LineLength
       @association_tree = AssociationTree.build(associations)
       @ignore_policy = IgnorePolicy.build(ignore, association_paths: @association_tree.paths)
       @recorded = (@ignore_policy if recorded_changes)
       @traversal = AssociationTraversal.new(@association_tree)
       @batch_safety = BatchSafety.new(@traversal, allow_expensive: allow_expensive)
-      @traversal_preparer = TraversalPreparer.new(tree: @association_tree, traversal: @traversal)
+      @traversal_preparer = TraversalPreparer.new(tree: @association_tree, traversal: @traversal,
+                                                  allow_approximate: allow_approximate)
       @live_endpoints = LiveEndpointProvider.new(
         tree: @association_tree, traversal: @traversal, reload: reload_live_endpoints
       )

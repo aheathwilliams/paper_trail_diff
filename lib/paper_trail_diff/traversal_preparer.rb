@@ -5,10 +5,16 @@ module PaperTrailDiff
   # Checks that a model can be traversed before any reconstruction starts, and
   # that association tracking is actually available when history is involved.
   class TraversalPreparer
-    #: (tree: AssociationTree, traversal: AssociationTraversal) -> void
-    def initialize(tree:, traversal:)
+    #: (tree: AssociationTree, traversal: AssociationTraversal, ?allow_approximate: bool) -> void
+    def initialize(tree:, traversal:, allow_approximate: false)
+      unless [true, false].include?(allow_approximate)
+        raise ConfigurationError, 'allow_approximate: must be true or false'
+      end
+
       @tree = tree
       @traversal = traversal
+      @allow_approximate = allow_approximate
+      @exact = {} #: Hash[untyped, bool]
     end
 
     #: (untyped, historical: bool) -> void
@@ -17,13 +23,39 @@ module PaperTrailDiff
 
       ensure_association_tracking! if historical
       @traversal.validate!(model_class)
-      ensure_versioned_targets!(model_class) if historical
+      return unless historical
+
+      ensure_versioned_targets!(model_class)
+      ensure_exact_membership!(model_class)
     end
 
     private
 
     # @rbs @tree: AssociationTree
     # @rbs @traversal: AssociationTraversal
+    # @rbs @allow_approximate: bool
+    # @rbs @exact: Hash[untyped, bool]
+
+    # A path prepared history cannot read is read with PT-AT, which rebuilds
+    # an association from its current members, swapping in older versions of
+    # them. A record that entered the association since, such as one moved
+    # into a scope or restored from a soft delete, then reads as a member it
+    # was not, and one that left reads as missing. Only a caller who accepts
+    # that may read such a path.
+    #: (untyped) -> void
+    def ensure_exact_membership!(model_class)
+      return if @allow_approximate || @exact[model_class]
+
+      path, reason = BatchSafety.fallback_paths(@traversal, model_class).first
+      if path
+        raise UnsupportedAssociationError,
+              "association #{path} cannot be read exactly from history (#{reason}): " \
+              'PT-AT rebuilds it from its current members, so a record that entered or ' \
+              'left it since is reported wrongly; remove this path, make its scope plain ' \
+              'conditions on the target\'s own columns, or pass allow_approximate: true'
+      end
+      @exact[model_class] = true
+    end
 
     # A model PaperTrail never versioned has no history to reconstruct, so a
     # comparison over it can only ever answer "nothing changed" -- which is a

@@ -248,8 +248,9 @@ diff.to_h
   deleted.
 - A current record must be saved, not destroyed, and have no unsaved changes.
   The gem reloads it, so in-memory edits and cached associations are ignored.
-- Options: `associations:`, `ignore:`, and `reload_live_endpoints:` (see
-  [reusing loaded records](#reusing-loaded-records)).
+- Options: `associations:`, `ignore:`, `reload_live_endpoints:` (see
+  [reusing loaded records](#reusing-loaded-records)), and `allow_approximate:`
+  (see [costly associations](#costly-associations)).
 
 ## compare_many
 
@@ -273,8 +274,9 @@ diffs.fetch(["Order", orders.first.id.to_s]) # => PaperTrailDiff::Diff
   record, so `{ from: :first, to: :first }` raises.
 - A record with no versions gets an empty `Diff`.
 - Each record can appear in only one pair, because results are keyed by record.
-- Options: `associations:`, `ignore:`, `reload_live_endpoints:`, and
-  `allow_expensive:` (see [costly associations](#costly-associations)).
+- Options: `associations:`, `ignore:`, `reload_live_endpoints:`,
+  `allow_expensive:`, and `allow_approximate:` (see
+  [costly associations](#costly-associations)).
 
 If you look up versions yourself, do it in bulk. Looking up one record at a
 time brings back the per-record queries this method avoids.
@@ -329,7 +331,7 @@ steps.reject(&:empty?)      # hide steps with no reported changes
   `item_type`, `item_id`, and `recorded_at`. `to_h(metadata: true)` adds author,
   event, transaction ID, and record to each boundary.
 - Options: `from:`, `to:`, `within:`, `associations:`, `ignore:`,
-  `version_scope:`, `close_on:`.
+  `version_scope:`, `close_on:`, `allow_approximate:`.
 
 ## activity_timeline
 
@@ -365,7 +367,7 @@ end
   current record. You do not need to save the article after each comment change.
 - Options: `from:`, `to:`, `within:`, `associations:`, `ignore:`,
   `version_scope:`, `close_on:`, `reload_live_endpoints:`, `snapshots:`,
-  `group:`, `recorded_changes:`.
+  `group:`, `recorded_changes:`, `allow_approximate:`.
 
 ### One person's changes
 
@@ -537,7 +539,8 @@ analysis.to_h(snapshots: true, metadata: true)
   and `recorded_changes:` apply to the activity timeline and require
   `activity: true`.
 - Options: `from:`, `to:`, `within:`, `associations:`, `ignore:`, `activity:`,
-  `version_scope:`, `close_on:`, `snapshots:`, `group:`, `recorded_changes:`.
+  `version_scope:`, `close_on:`, `snapshots:`, `group:`, `recorded_changes:`,
+  `allow_approximate:`.
 
 ## Reports for many records
 
@@ -564,7 +567,8 @@ results.fetch(["Order", order.id.to_s]).diff
 - A record with nothing to report gets an empty `Analysis`.
 - Records must be saved and unique.
 - Options: `within:`, `associations:`, `ignore:`, `activity:`, `version_scope:`,
-  `close_on:`, `snapshots:`, `group:`, `recorded_changes:`, `allow_expensive:`.
+  `close_on:`, `snapshots:`, `group:`, `recorded_changes:`, `allow_expensive:`,
+  `allow_approximate:`.
 
 ### analyze_scope
 
@@ -602,8 +606,8 @@ report = PaperTrailDiff.report(Article.all, since: 1.day.ago, limit: 100)
 ```
 
 It accepts `associations:`, `ignore:`, `snapshots:`, `group:`,
-`recorded_changes:`, `include_deleted:`, `historical_filter:`, `max_filter_versions:`, and
-`allow_expensive:`.
+`recorded_changes:`, `include_deleted:`, `historical_filter:`, `max_filter_versions:`,
+`allow_expensive:`, and `allow_approximate:`.
 
 ### Which records are selected
 
@@ -707,12 +711,15 @@ default_scope { where.not(hidden: true) }
 
 The gem reads such a scope once and checks each record's stored values against
 it at every point, so a record that moves into or out of the scope is added or
-removed at the version that moved it. It reads equality, `IN`, `nil`, their
-`where.not` forms, and `and`/`or` combinations of them on integer, boolean,
-and enum columns. String and text columns are read only on SQLite and
-PostgreSQL, and only without a column collation: MySQL and SQL Server compare
-strings without regard to case or trailing spaces by default, which the gem
-cannot repeat.
+removed at the version that moved it. It reads equality, `IN`, their
+`where.not` forms, and `and`/`or`/`not` combinations of them on integer,
+boolean, and enum columns, with SQL's rules for NULL. A `nil` test
+(`IS NULL`, `IS NOT NULL`) is read on a column of any type, so a soft-delete
+scope such as `where(deleted_at: nil)` is read too. String and text columns
+are read only on SQLite and PostgreSQL, and only without a column collation:
+MySQL and SQL Server compare strings without regard to case or trailing spaces
+by default, which the gem cannot repeat, and neither is PostgreSQL's
+`citext`.
 
 A `limit` or `offset`, and the order of a `has_one`, are read the same way
 when the order is total and the gem can repeat it:
@@ -750,14 +757,25 @@ join records fills two places, as in the query. A `has_one :through` whose
 own scope or whose parts have a limit, an offset, or a `has_one` order is not
 read.
 
-A few associations still need queries per record: a `limit` or `offset` whose
-order is not total or sorts by another column type (strings follow a
-collation) or by a datetime history cannot rank exactly, scopes that take the
-owner (`->(article) { ... }`), scopes written as SQL strings or ranges, scopes
-that join or select, and conditions on other column types or other tables. Batch methods raise `UnsupportedBatchPathError`
-for these by default and name the association. Remove it from
-`associations:`, or pass `allow_expensive: true` to accept the per-record
-cost. Single-record methods always allow them.
+The gem cannot read the rest: a `limit` or `offset` whose order is not total
+or sorts by another column type (strings follow a collation) or by a datetime
+history cannot rank exactly, scopes that take the owner
+(`->(article) { ... }`), scopes written as SQL strings or ranges, scopes that
+join or select, and conditions on other column types or other tables, such as
+a string column on MySQL. For these it asks PT-AT, which costs queries per
+record and is approximate: PT-AT rebuilds an association from its current
+members, swapping in their older versions, and never checks the scope against
+them. A record that entered the scope since is reported as a member it was
+not, so a comment moved into `-> { where("position > 2") }`, or restored from
+a soft delete, shows as changed rather than added.
+
+So every method that reads history raises `UnsupportedAssociationError` for
+such a path and names it. Remove it from `associations:`, rewrite its scope as
+plain conditions on the target's own columns, or pass `allow_approximate:
+true` to accept PT-AT's answer. Batch methods also raise
+`UnsupportedBatchPathError` for it unless you pass `allow_expensive: true` to
+accept the per-record cost, so a batch needs both. A comparison of two current
+records reads no history and needs neither.
 
 A polymorphic `belongs_to` is loaded together too, with one query per target
 class. Its classes are known only from the records, though, so batch methods
@@ -1262,7 +1280,7 @@ All errors inherit from `PaperTrailDiff::Error`.
 | `FilterLimitExceededError` | `historical_filter:` needs more than `max_filter_versions:` |
 | `AssociationTrackingUnavailableError` | Association history is requested without PT-AT |
 | `UnknownAssociationError` | An association name does not exist |
-| `UnsupportedAssociationError` | An association's macro is not supported, a path continues past a polymorphic `belongs_to`, a `has_many :through` goes through a HABTM, a HABTM is scoped or below the root, or an association is keyed on a column other than a primary key |
+| `UnsupportedAssociationError` | An association's macro is not supported, a path continues past a polymorphic `belongs_to`, a `has_many :through` goes through a HABTM, a HABTM is scoped or below the root, an association is keyed on a column other than a primary key, or history cannot read a [costly association](#costly-associations) and `allow_approximate: true` was not passed |
 | `UnversionedAssociationError` | An association's target model has no `has_paper_trail`, including the class a polymorphic `belongs_to` names |
 | `IncompleteAssociationHistoryError` | PT-AT did not record enough to rebuild an association, such as HABTM without a transaction or in a transaction another record with that HABTM also saved a version in, or a polymorphic type names no class |
 | `UnsupportedLiveActivityError` | A HABTM activity range ends at the current record |

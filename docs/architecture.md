@@ -66,7 +66,9 @@ PT-AT transaction are applied together.
 
 These association shapes cannot be read from the loaded history. The gem asks
 PT-AT to rebuild them at each point instead, which costs queries per record and
-resolves association membership by timestamp only:
+resolves association membership by timestamp only. PT-AT starts from the
+association's current members and swaps in their older versions, without
+checking a scope against them, so its membership is approximate:
 
 - associations with a scope the gem cannot read as plain conditions and an
   exact ranking, including owner-dependent scopes and a `limit` without a
@@ -75,8 +77,9 @@ resolves association membership by timestamp only:
 - targets that are not versioned;
 - composite foreign keys.
 
-Batch methods reject the scoped cases unless you pass
-`allow_expensive: true`; see [costly associations](reference.md#costly-associations).
+Every method that reads history rejects the scoped cases unless you pass
+`allow_approximate: true`, and batch methods also need `allow_expensive: true`;
+see [costly associations](reference.md#costly-associations).
 
 HABTM membership comes from the snapshots PT-AT records with each transaction,
 so it is only known at root versions saved in a transaction. Those snapshots

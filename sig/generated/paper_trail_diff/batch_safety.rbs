@@ -9,22 +9,25 @@ module PaperTrailDiff
     # : (untyped) -> void
     def call: (untyped) -> void
 
-    private
-
-    @allow_expensive: bool
-
-    @traversal: AssociationTraversal
+    # Each requested path whose history prepared history cannot read, with
+    # why. Such a path is read with PT-AT, one record at a time.
+    # : (AssociationTraversal, untyped) -> Array[[String, String]]
+    def self.fallback_paths: (AssociationTraversal, untyped) -> Array[[ String, String ]]
 
     # A has_many through reads its parts' conditions only, at any depth. A
     # has_one through over a ranked part is refused whole, so its parts, too,
     # are checked for conditions alone.
-    # : (untyped, String, ?ranked: bool) -> void
-    def check: (untyped, String, ?ranked: bool) -> void
+    # : (untyped, ranked: bool) -> String?
+    def self.fallback_reason: (untyped, ranked: bool) -> String?
 
     # A scope prepared history can read as conditions on stored attributes
     # is batched like any other path. A polymorphic target's class, and so
     # its scope, is known only per record.
     # : (untyped, bool) -> String?
-    def reason_for: (untyped, bool) -> String?
+    def self.reason_for: (untyped, bool) -> String?
+
+    @allow_expensive: bool
+
+    @traversal: AssociationTraversal
   end
 end

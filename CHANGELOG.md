@@ -15,6 +15,17 @@ project follows [Semantic Versioning](https://semver.org/).
   article's history showed another article's comments, and a comment's past
   article was the wrong one. Comparisons against the current record were
   right, so the same range disagreed with itself.
+- An association path history cannot read, such as one with a scope written
+  as SQL text, a scope that takes the owner, or a condition on a string
+  column on MySQL or SQL Server, raises `UnsupportedAssociationError` in every
+  method that reads history, unless you pass the new `allow_approximate: true`.
+  The gem reads such a path with PT-AT, which rebuilds an association from its
+  current members and never checks the scope against them: a record that
+  entered the scope since was reported as a member it was not, so a comment
+  moved into `-> { where("position > 2") }` showed as changed rather than
+  added. Single-record methods did this without warning, and batch methods
+  described it only as costly. Batch methods still also need
+  `allow_expensive: true` for such a path.
 
 ### Added
 
@@ -71,6 +82,14 @@ project follows [Semantic Versioning](https://semver.org/).
   checked only the root's own versions. `timeline`, and `analyze` without
   `activity:`, still run their last step to the root's next version or the
   current record; the reference now says so.
+- Association scopes read from history now cover `IS NULL` and `IS NOT NULL`
+  on a column of any type, such as a soft-delete scope's
+  `where(deleted_at: nil)`, and `NOT` with SQL's rules for NULL, such as
+  `where.not(position: [1, nil])`. These were read with PT-AT before, so a
+  record restored from a soft delete showed as changed rather than added, and
+  batch methods refused them without `allow_expensive: true`. A condition on a
+  PostgreSQL `citext` column, which compares without regard to case, is no
+  longer read as exact text.
 - With a `json` or `jsonb` `object` column, an activity step no longer
   reports an unchanged timestamp as changed. PaperTrail returns such a
   column's times as strings, and a step after a child's update carried them

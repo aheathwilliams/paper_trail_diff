@@ -249,18 +249,21 @@ RSpec.describe 'PaperTrailDiff association tracking' do
       'offset_comments.replies',
       'owner_comments.replies'
     ]
+    # A scope that takes the owner is read with PT-AT, whose membership is
+    # approximate; these comparisons stay inside what it reads correctly.
     expected = comparisons.to_h do |comparison|
       identity = PaperTrailDiff::Endpoint.identity(comparison.fetch(:from))
       diff = PaperTrailDiff.compare(
         comparison.fetch(:from),
         comparison.fetch(:to),
-        associations: associations
+        associations: associations, allow_approximate: true
       )
       [identity, diff.to_h]
     end
 
     actual = PaperTrailDiff.compare_many(comparisons, associations: associations,
-                                                      allow_expensive: true)
+                                                      allow_expensive: true,
+                                                      allow_approximate: true)
 
     expect(actual.transform_values(&:to_h)).to eq(expected)
     expect(actual.values).to all(satisfy do |diff|

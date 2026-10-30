@@ -286,12 +286,13 @@ Scopes and default scopes made of plain conditions, such as
 `-> { where(archived: false) }`, are batched too, and so is a `limit` or
 `offset` ordered by integer, boolean, date, or datetime columns down to the
 primary key, such as `-> { order(:position, :id).limit(3) }`, on a direct
-association or a `has_many :through`. Some associations still need per-record
-queries, such as a `limit` ordered by a string or scopes that take
-the owner.
-Batch methods reject those by default with `UnsupportedBatchPathError`. The
-error names the association. Remove it from `associations:`, or pass
-`allow_expensive: true` if you accept that cost.
+association or a `has_many :through`. History cannot read a few scopes, such
+as a `limit` ordered by a string, a scope that takes the owner, or SQL text.
+PT-AT reads those instead, one record at a time and only approximately, so
+every method raises `UnsupportedAssociationError` naming the association.
+Remove it from `associations:`, or pass `allow_approximate: true` to accept
+PT-AT's answer; batch methods also need `allow_expensive: true` to accept the
+cost. See [costly associations](docs/reference.md#costly-associations).
 Callbacks and callable historical filters can also issue queries. See the
 [performance guide](docs/performance.md) for measured behavior and limitations.
 

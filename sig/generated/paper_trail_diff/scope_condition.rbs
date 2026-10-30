@@ -78,6 +78,8 @@ module PaperTrailDiff
     # : (untyped, Array[untyped], ?ScopeRanking?) -> void
     def initialize: (untyped, Array[untyped], ?ScopeRanking?) -> void
 
+    # SQL admits a row only when its condition is true, not when it is
+    # unknown.
     # : (Hash[String, untyped]) -> bool
     def matches?: (Hash[String, untyped]) -> bool
 
@@ -91,8 +93,10 @@ module PaperTrailDiff
     # : (Array[untyped]) -> Array[untyped]
     def rank: (Array[untyped]) -> Array[untyped]
 
-    # SQL compares NULL with nothing, so only an IS NULL test, an equality
-    # with nil, matches it.
+    # SQL's three values: a comparison with NULL is unknown (nil) rather than
+    # false, except an IS NULL or IS NOT NULL test, an equality with nil, which
+    # is always known. Unknown matters only under NOT, which leaves it
+    # unknown where false would become true.
     COMPARISONS: untyped
 
     private
@@ -103,8 +107,20 @@ module PaperTrailDiff
 
     @ranking: ScopeRanking?
 
-    # : (Array[untyped], Hash[String, untyped]) -> bool
-    def evaluate: (Array[untyped], Hash[String, untyped]) -> bool
+    # true, false, or nil for unknown.
+    # : (Array[untyped], Hash[String, untyped]) -> bool?
+    def evaluate: (Array[untyped], Hash[String, untyped]) -> bool?
+
+    # False if any part is, otherwise unknown if any part is.
+    # : (Array[bool?]) -> bool?
+    def all: (Array[bool?]) -> bool?
+
+    # True if any part is, otherwise unknown if any part is.
+    # : (Array[bool?]) -> bool?
+    def any: (Array[bool?]) -> bool?
+
+    # : (bool?) -> bool?
+    def negate: (bool?) -> bool?
 
     # The form the database holds, as the scope's own values were cast.
     # : (String, Hash[String, untyped]) -> untyped
@@ -146,6 +162,7 @@ module PaperTrailDiff
       # : (untyped) -> Array[untyped]
       def comparison: (untyped) -> Array[untyped]
 
+      # Whether a value is NULL compares alike on every type.
       # : (Symbol, untyped) -> Array[untyped]
       def binary: (Symbol, untyped) -> Array[untyped]
 
@@ -158,12 +175,17 @@ module PaperTrailDiff
       def list: (Symbol, untyped, Array[untyped]) -> Array[untyped]
 
       # Ruby comparison stands in for SQL only on the record's own column of
-      # a type both compare alike.
-      # : (untyped) -> String
-      def column: (untyped) -> String
+      # a type both compare alike. Whether a value is NULL, any column's
+      # type compares alike.
+      # : (untyped, ?null_test: bool) -> String
+      def column: (untyped, ?null_test: bool) -> String
 
-      # : (String) -> bool
-      def comparable?: (String) -> bool
+      # : (String, untyped) -> bool
+      def comparable?: (String, untyped) -> bool
+
+      # PostgreSQL's citext is text that compares without regard to case.
+      # : (untyped) -> bool
+      def exact_text?: (untyped) -> bool
 
       # An enum compares the values it stores, which its subtype describes. A
       # wrapper such as a serialized or encrypted type is none of these.

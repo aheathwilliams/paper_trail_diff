@@ -10,8 +10,9 @@ module PaperTrailDiff
     CLOSE_ON_CURRENT: ::Symbol
 
     # `recorded_changes:` reads what each activity boundary's version recorded.
-    # : (associations: Array[String | Symbol], ignore: ignore_option, ?reload_live_endpoints: bool, ?allow_expensive: bool, ?recorded_changes: bool) -> void
-    def initialize: (associations: Array[String | Symbol], ignore: ignore_option, ?reload_live_endpoints: bool, ?allow_expensive: bool, ?recorded_changes: bool) -> void
+    # `allow_approximate:` accepts association paths read with PT-AT.
+    # : (associations: Array[String | Symbol], ignore: ignore_option, ?reload_live_endpoints: bool, ?allow_expensive: bool, ?recorded_changes: bool, ?allow_approximate: bool) -> void
+    def initialize: (associations: Array[String | Symbol], ignore: ignore_option, ?reload_live_endpoints: bool, ?allow_expensive: bool, ?recorded_changes: bool, ?allow_approximate: bool) -> void
 
     # : (untyped, untyped) -> Diff
     def compare: (untyped, untyped) -> Diff
