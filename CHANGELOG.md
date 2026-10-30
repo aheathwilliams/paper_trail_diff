@@ -49,6 +49,17 @@ project follows [Semantic Versioning](https://semver.org/).
   `timeline`, and `activity_timeline` from that version left the change out.
   It was also missing from the range ending there, so a history split at that
   version reported it nowhere. It is now inside the range that starts there.
+- A past `within:` window in `activity_timeline`, and in `analyze`,
+  `analyze_many`, `analyze_scope`, and `report` with `activity: true`, no
+  longer includes association changes made after it. When the root had no
+  version after the window, the window closed on current state, so a comment
+  edited in August appeared in a July window, in its last step, `to_snapshot`,
+  and `diff`; with a later root version the same window was right. It now
+  closes on current state only when nothing on a requested path was recorded
+  after it. The reasoning in 0.8.0, that nothing had been recorded since,
+  checked only the root's own versions. `timeline`, and `analyze` without
+  `activity:`, still run their last step to the root's next version or the
+  current record; the reference now says so.
 
 ### Development
 

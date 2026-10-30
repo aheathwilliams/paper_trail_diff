@@ -241,6 +241,14 @@ module Oracle
       self
     end
 
+    # Ends the history with association edits only, so a window before them
+    # has no root version after it.
+    def close_with_association_edits(count)
+      count.times { run(%i[edit_comment create_reply edit_profile].sample(random: @random)) }
+      @root.reload
+      self
+    end
+
     private
 
     def run(operation)
@@ -372,6 +380,14 @@ module Oracle
       count.times do
         first, last = (1...entries.length).to_a.sample(2, random: random).sort
         window(entries.fetch(first), entries.fetch(last), "window #{first}..#{last}")
+      end
+    end
+
+    # Windows that all end after one transaction.
+    def windows_ending_at(index, random, count: 4)
+      entries = @recorder.entries
+      (1...index).to_a.sample(count, random: random).each do |first|
+        window(entries.fetch(first), entries.fetch(index), "window #{first}..#{index}")
       end
     end
 

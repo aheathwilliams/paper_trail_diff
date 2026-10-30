@@ -151,10 +151,19 @@ window = Time.zone.parse("2026-08-01")...Time.zone.parse("2026-09-01")
 steps = PaperTrailDiff.timeline(article, within: window)
 ```
 
-To show what the window's last change produced, the gem reads the next version
-after the window. If there is none, nothing has been recorded since, so it reads
-the current record instead. The step's `to_boundary.kind` is then `:current`.
-This works the same for a window that ends now and one that ended long ago.
+To show what the window's last change produced, the gem reads the state just
+before the next change after the window:
+
+- With `activity_timeline`, or `analyze` with `activity: true`, that is the next
+  version of the record or of any record on a requested association path. If
+  none was recorded after the window, it reads the current record instead,
+  and the last step's `to_boundary.kind` is `:current`. So a window that ended
+  long ago ends at its own end, even when only a comment changed since.
+- `timeline`, and `analyze` without `activity:`, compare the record's own
+  versions. The last step runs to the record's next version, or to the
+  current record when it has none, and an association change made in between
+  is part of that step, credited to its author. Use `activity: true` to keep
+  a past window's associations as they were at its end.
 
 Reading the current record has one consequence: it includes changes PaperTrail
 never recorded, such as an `update_columns` call. Like any

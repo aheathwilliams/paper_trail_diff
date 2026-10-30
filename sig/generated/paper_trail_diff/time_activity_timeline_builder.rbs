@@ -20,6 +20,11 @@ module PaperTrailDiff
 
     @record: untyped
 
+    # A window that closes on the current record ends there; one that ends
+    # before a later event ends at the state that event found.
+    # : (ActivityHistory, RootVersionPlan, ActivityStep?, RecordSnapshot?) -> RecordSnapshot?
+    def final_snapshot: (ActivityHistory, RootVersionPlan, ActivityStep?, RecordSnapshot?) -> RecordSnapshot?
+
     @recorded: IgnorePolicy?
 
     @snapshots: bool
@@ -64,8 +69,13 @@ module PaperTrailDiff
     # A window either closes on the absence its final destruction leaves, or on
     # current state when it reaches past everything recorded. Both are boundaries
     # no version can supply.
-    # : (ActivityHistory, ActivityEvent?, RootVersionPlan, untyped, RecordSnapshot?) -> ActivityStep?
-    def closing_step: (ActivityHistory, ActivityEvent?, RootVersionPlan, untyped, RecordSnapshot?) -> ActivityStep?
+    #
+    # Everything recorded means on every requested path, not only the root's
+    # own versions. When an association changed after the window, its last
+    # step already ends at that change, at the state the window left; closing
+    # on current state would add the later change to a window it was not in.
+    # : (ActivityHistory, ActivityEvent?, RootVersionPlan, untyped, RecordSnapshot?, Array[ActivityEvent]) -> ActivityStep?
+    def closing_step: (ActivityHistory, ActivityEvent?, RootVersionPlan, untyped, RecordSnapshot?, Array[ActivityEvent]) -> ActivityStep?
 
     # : (ActivityHistory, ActivityEvent) -> ActivityStep
     def destroyed_step: (ActivityHistory, ActivityEvent) -> ActivityStep

@@ -57,6 +57,18 @@ RSpec.describe 'Rebuilt article history against the recorded states' do
     end
   end
 
+  context 'with windows followed only by association edits' do
+    Oracle.seeds([6, 7]).each do |seed|
+      it "ends each window at its own end, not at the current record (seed #{seed})" do
+        expect_recorded_states(seed) do |history, checker|
+          window_end = history.recorder.entries.length - 1
+          history.close_with_association_edits(3)
+          checker.windows_ending_at(window_end, Random.new(seed))
+        end
+      end
+    end
+  end
+
   context 'with windows that have a root version after them' do
     Oracle.seeds([4, 5]).each do |seed|
       it "rebuilds each window in every method (seed #{seed})" do

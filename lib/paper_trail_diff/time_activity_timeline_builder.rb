@@ -29,7 +29,7 @@ module PaperTrailDiff
     #: () -> Analysis
     def analyze
       history, plan, closing, closing_snapshot, captured_at = history_and_versions
-      final = plan.closes_on_destroy ? nil : closing_snapshot || history.last_snapshot
+      final = final_snapshot(history, plan, closing, closing_snapshot)
       Analysis.new(
         diff: Engine.compare(history.first_snapshot, final),
         timeline: ActivityRootSteps.call(
@@ -46,6 +46,16 @@ module PaperTrailDiff
 
     # @rbs @record: untyped
     # @rbs @range: TimelineRange
+
+    # A window that closes on the current record ends there; one that ends
+    # before a later event ends at the state that event found.
+    #: (ActivityHistory, RootVersionPlan, ActivityStep?, RecordSnapshot?) -> RecordSnapshot?
+    def final_snapshot(history, plan, closing, closing_snapshot)
+      return if plan.closes_on_destroy
+      return history.last_snapshot unless closing&.to_boundary&.kind == :current
+
+      closing_snapshot
+    end
     # @rbs @tree: AssociationTree
     # @rbs @snapshotter: untyped
     # @rbs @snapshots: bool
@@ -81,7 +91,7 @@ module PaperTrailDiff
 
       history = build_history(root_versions, events, current: plan.closing_record)
       snapshot = current_snapshot(plan)
-      closing = closing_step(history, selected.last, plan, captured_at, snapshot)
+      closing = closing_step(history, selected.last, plan, captured_at, snapshot, events)
       [history, plan, closing, snapshot, captured_at]
     end
 
@@ -139,11 +149,17 @@ module PaperTrailDiff
     # A window either closes on the absence its final destruction leaves, or on
     # current state when it reaches past everything recorded. Both are boundaries
     # no version can supply.
-    #: (ActivityHistory, ActivityEvent?, RootVersionPlan, untyped, RecordSnapshot?) -> ActivityStep?
-    def closing_step(history, event, plan, captured_at, snapshot)
+    #
+    # Everything recorded means on every requested path, not only the root's
+    # own versions. When an association changed after the window, its last
+    # step already ends at that change, at the state the window left; closing
+    # on current state would add the later change to a window it was not in.
+    #: (ActivityHistory, ActivityEvent?, RootVersionPlan, untyped, RecordSnapshot?, Array[ActivityEvent]) -> ActivityStep?
+    def closing_step(history, event, plan, captured_at, snapshot, events) # rubocop:disable Metrics/ParameterLists
       return unless event
       return destroyed_step(history, event) if terminal_destroy?(event)
       return unless plan.closing_record
+      return if events.any? { |later| !@range.include?(later.version) }
 
       current_step(history, plan.closing_record, captured_at, snapshot)
     end
