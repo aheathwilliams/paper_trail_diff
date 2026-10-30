@@ -34,6 +34,20 @@ module PaperTrailDiff
 
   # Resolves the branch union that PT-AT exposes atomically for one transaction.
   class ActivityTransactionGroups
+    # A range ending at a version ends at the state before that version's
+    # transaction: PT-AT rebuilds its associations without the changes saved
+    # alongside it. A descendant version from that transaction, such as the
+    # child update behind a `touch: true` parent version, is therefore past the
+    # end. Kept, it would open a step whose change the closing state cannot
+    # show, and that change would be reported nowhere. A range ending at a time
+    # has no transaction to stop before.
+    # : (Array[ActivityEvent], untyped) -> Array[ActivityEvent]
+    def self.before_closing: (Array[ActivityEvent], untyped) -> Array[ActivityEvent]
+
+    # A version without a transaction shares one with nothing.
+    # : (untyped) -> Array[untyped]?
+    def self.transaction_key: (untyped) -> Array[untyped]?
+
     # : (Array[ActivityEvent]) -> void
     def initialize: (Array[ActivityEvent]) -> void
 

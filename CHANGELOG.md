@@ -3,6 +3,20 @@
 All notable changes to this project will be documented in this file. The
 project follows [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Fixed
+
+- `activity_timeline`, and `analyze` with `activity: true`, no longer report a
+  child version saved in the same transaction as the root version that ends
+  the range. A `touch: true` parent version is saved this way after every
+  child save. PT-AT rebuilds the parent's associations at that version as they
+  were before the transaction, so the child's step was always empty and its
+  change was reported nowhere. The range now ends before that transaction, as
+  `compare` and `timeline` already did. End at a later version or at the
+  current record to include the change, with `group: :transaction` to credit it
+  to the child's version.
+
 ## [0.14.0] - 2026-10-29
 
 ### Breaking changes

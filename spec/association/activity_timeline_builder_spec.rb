@@ -103,6 +103,28 @@ RSpec.describe PaperTrailDiff::ActivityTimelineBuilder do
       expect(result.timeline.last.to_boundary.kind).to eq(:version)
     end
 
+    # As `touch: true` does: the child's version comes first, but the closing
+    # version's state is the state before their shared transaction.
+    it 'ends before a child change saved in the transaction of its last version' do
+      article = TrackedArticle.create!(title: 'Article')
+      comment = article.comments.create!(body: 'one')
+      from = checkpoint(article)
+      TrackedArticle.transaction do
+        comment.update!(body: 'two')
+        TrackedArticle.find(article.id).paper_trail.save_with_version
+      end
+      to = version_of(article)
+      expect(version_of(comment).transaction_id).to eq(to.transaction_id)
+
+      steps = timeline(article, from: from, to: to, snapshots: true)
+      result = analysis(article, from: from, to: to)
+
+      expect(kinds(steps)).to eq([%w[TrackedArticle update version]])
+      expect(bodies(steps.last.to_snapshot)).to eq(['one'])
+      expect(kinds(result.activity_timeline)).to eq(kinds(steps))
+      expect(bodies(result.to_snapshot)).to eq(['one'])
+    end
+
     it 'does not add a removal when the range does not end on a destroy' do
       article, _comment, from, to = edited_history
 
