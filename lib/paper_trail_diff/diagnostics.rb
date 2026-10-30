@@ -202,12 +202,14 @@ module PaperTrailDiff
       )
     end
 
+    # An error, as for a target: a through reads past membership from the
+    # versions of the model it goes through, so comparisons raise.
     #: (untyped, String) -> void
     def inspect_through_model(reflection, path)
       model_class = reflection.through_reflection.klass
       return if model_versioned?(model_class)
 
-      add_warning(
+      add_error(
         :unversioned_through_model,
         "#{model_class.name} does not appear to have PaperTrail enabled",
         path

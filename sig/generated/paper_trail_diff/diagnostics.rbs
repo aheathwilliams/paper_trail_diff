@@ -84,6 +84,8 @@ module PaperTrailDiff
     # : (untyped, String) -> void
     def inspect_versioned_model: (untyped, String) -> void
 
+    # An error, as for a target: a through reads past membership from the
+    # versions of the model it goes through, so comparisons raise.
     # : (untyped, String) -> void
     def inspect_through_model: (untyped, String) -> void
 

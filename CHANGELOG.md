@@ -95,6 +95,12 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- A `has_many :through` whose join model is not versioned raises
+  `UnversionedAssociationError` naming the join model when its history is
+  read, and `diagnose` reports it as an error, so `ok?` is false. A
+  comparison raised a bare `KeyError` while `diagnose` reported only a
+  warning.
+
 - `reload_live_endpoints: false` reads an association with a `limit` or
   `offset`, directly or in a part it goes through, or a scope that takes the
   owner, again for each record. Active Record's `preload` applies the limit across all the records

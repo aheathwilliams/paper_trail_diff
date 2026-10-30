@@ -67,13 +67,34 @@ module PaperTrailDiff
         # A polymorphic target is not known until a row names it; `diagnose`
         # reports that separately rather than guessing here.
         next if reflection.polymorphic?
-        next if versioned?(reflection.klass)
 
-        raise UnversionedAssociationError,
-              "association #{path} cannot be compared historically: " \
-              "#{reflection.klass.name} is not versioned. Add `has_paper_trail` to it, " \
-              'or mirror the fields you need onto a model that has it.'
+        target = reflection.klass
+        ensure_versioned!(path, target, "#{target.name} is not versioned")
+        through_models(reflection).each do |model|
+          ensure_versioned!(path, model, "it goes through #{model.name}, which is not versioned")
+        end
       end
+    end
+
+    # A has_many :through reads past membership from the versions of the
+    # models it goes through, so each of them needs history too.
+    #: (untyped) -> Array[untyped]
+    def through_models(reflection)
+      return [] unless reflection.through_reflection?
+
+      [reflection.through_reflection, reflection.source_reflection].flat_map do |part|
+        part.polymorphic? ? through_models(part) : [part.klass, *through_models(part)]
+      end.uniq - [reflection.klass]
+    end
+
+    #: (String, untyped, String) -> void
+    def ensure_versioned!(path, model_class, problem)
+      return if versioned?(model_class)
+
+      raise UnversionedAssociationError,
+            "association #{path} cannot be compared historically: #{problem}. " \
+            "Add `has_paper_trail` to #{model_class.name}, or mirror the fields you need onto " \
+            'a model that has it.'
     end
 
     #: (untyped) -> bool

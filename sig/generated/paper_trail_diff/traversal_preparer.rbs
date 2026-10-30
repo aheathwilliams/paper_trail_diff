@@ -36,6 +36,14 @@ module PaperTrailDiff
     # : (untyped) -> void
     def ensure_versioned_targets!: (untyped) -> void
 
+    # A has_many :through reads past membership from the versions of the
+    # models it goes through, so each of them needs history too.
+    # : (untyped) -> Array[untyped]
+    def through_models: (untyped) -> Array[untyped]
+
+    # : (String, untyped, String) -> void
+    def ensure_versioned!: (String, untyped, String) -> void
+
     # : (untyped) -> bool
     def versioned?: (untyped) -> bool
 
