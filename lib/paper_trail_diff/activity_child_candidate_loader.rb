@@ -62,7 +62,8 @@ module PaperTrailDiff
 
     #: (untyped) -> untyped
     def historical_relation(version_class)
-      @parent_class.paper_trail.version_association_class.joins(:version).where(
+      associations = @parent_class.paper_trail.version_association_class
+      VersionTable.joined(associations, version_class).where(
         foreign_key_name: @reflection.foreign_key.to_s,
         foreign_key_id: @parent_ids,
         foreign_type: parent_types

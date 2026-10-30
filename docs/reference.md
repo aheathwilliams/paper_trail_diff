@@ -1242,7 +1242,14 @@ always runs. `ok?` does not prove the history is complete.
 - **Non-integer primary keys**, such as UUIDs, are supported, and so is a string
   `versions.item_id` column.
 - **Custom version classes** (`has_paper_trail versions: { class_name: }`) are
-  supported.
+  supported. For association history, a model and each association you ask
+  for must keep their versions, and their PT-AT version associations, in the
+  same tables. PT-AT reads an association's history from its owner's tables
+  and numbers transactions within one table, so it cannot follow an
+  association into a different version table. Such an association raises
+  `UnsupportedAssociationError` naming both tables, and `association_paths`
+  leaves it out. One custom table shared by the models works like
+  PaperTrail's own.
 
 ### Version order
 

@@ -74,10 +74,10 @@ module PaperTrailDiff
       #: (untyped) -> untyped
       def relation(filter)
         versions = { item_type: @reflection.klass.base_class.name, item_id: filter }
-        relation = @associations.joins(:version)
-                                .where(foreign_key_name: @reflection.foreign_key,
-                                       foreign_type: owner_types)
-                                .where(@versions.table_name => versions)
+        relation = VersionTable.joined(@associations, @versions)
+                               .where(foreign_key_name: @reflection.foreign_key,
+                                      foreign_type: owner_types)
+                               .where(@versions.table_name => versions)
         candidates(@versions, relation)
       end
 
@@ -136,8 +136,8 @@ module PaperTrailDiff
 
       #: (Hash[Symbol, untyped]) -> untyped
       def owner_rows(conditions)
-        @associations.joins(:version).where(conditions)
-                     .where(@versions.table_name => { item_type: @owner.base_class.name })
+        VersionTable.joined(@associations, @versions).where(conditions)
+                    .where(@versions.table_name => { item_type: @owner.base_class.name })
       end
     end
 

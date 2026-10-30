@@ -7,6 +7,14 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Breaking changes
 
+- An association whose model keeps its versions, or its PT-AT version
+  associations, in different tables than its owner's raises
+  `UnsupportedAssociationError` in every method, and `association_paths`
+  leaves it out. History read through it was wrong: PT-AT records a child's
+  membership with the child's versions but reads it from the owner's tables,
+  so a child that moved to another owner was never reported as removed, and a
+  root with its own version table raised `ActiveRecord::StatementInvalid`.
+
 - An association keyed on a column other than a primary key
   (`primary_key: :legacy_id`), or a `has_many :through` with such a part,
   raises `UnsupportedAssociationError` up front in every method, and
@@ -86,6 +94,11 @@ project follows [Semantic Versioning](https://semver.org/).
   `Rails.application.deprecators[:paper_trail_diff] = PaperTrailDiff.deprecator`.
 
 ### Fixed
+
+- A root and its associations that share one version table other than
+  PaperTrail's `versions` can be compared. Association lookups joined PT-AT's
+  version associations to the `versions` table whatever table the versions
+  were in, so every method raised `ActiveRecord::StatementInvalid`.
 
 - A `within:` or `since:` window whose edge falls inside a transaction that
   saved a version of the root record reports the whole transaction in the

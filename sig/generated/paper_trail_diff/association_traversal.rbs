@@ -39,6 +39,10 @@ module PaperTrailDiff
     # : (untyped, untyped, root: bool) -> String?
     def self.unsupported_reason: (untyped, untyped, root: bool) -> String?
 
+    # History matches records by primary key, within one set of version tables.
+    # : (untyped) -> String?
+    def self.storage_reason: (untyped) -> String?
+
     # PT-AT records a HABTM's membership only when its owner saves a version,
     # in rows keyed by transaction and association name, not by owner. A root
     # checkpoint so holds the root's membership and no one else's: another

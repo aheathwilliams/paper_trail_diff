@@ -1,0 +1,30 @@
+# Generated from lib/paper_trail_diff/version_table.rb with RBS::Inline
+
+module PaperTrailDiff
+  # PT-AT reads an association's history from its owner's version tables: it
+  # looks for a child's versions in the owner's version table, and numbers a
+  # transaction by the first version saved in it, in whichever table. A model
+  # whose versions, or version associations, live in another table than its
+  # owner's would read other records' versions or none, so it is refused.
+  module VersionTable
+    # Why the association, or a part of a through, cannot be read across
+    # version tables.
+    # : (untyped) -> String?
+    def self.unsupported_reason: (untyped) -> String?
+
+    # The reflection, or the first part of a through, whose ends keep versions
+    # in different tables. A polymorphic belongs_to names no single target,
+    # and an unversioned target has no history to compare.
+    # : (untyped) -> untyped
+    def self.separate_part: (untyped) -> untyped
+
+    # PT-AT's version association rows joined to the versions they were saved
+    # with. Its `belongs_to :version` names PaperTrail's default class whatever
+    # table a model's versions are in, so the join names the table instead.
+    # : (untyped, untyped) -> untyped
+    def self.joined: (untyped, untyped) -> untyped
+
+    # : (untyped) -> String
+    def self.tables: (untyped) -> String
+  end
+end

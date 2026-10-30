@@ -3,7 +3,7 @@
 
 module PaperTrailDiff
   # Resolves and validates ActiveRecord reflections for a bounded association tree.
-  class AssociationTraversal
+  class AssociationTraversal # rubocop:disable Metrics/ClassLength
     # The class a `belongs_to` points at for this record, reading a polymorphic
     # type column when there is one. Nil when the record points at nothing.
     #: (untyped, untyped) -> untyped
@@ -66,14 +66,23 @@ module PaperTrailDiff
     def self.unsupported_reason(model_class, reflection, root:)
       return 'PaperTrail versions' if paper_trail_versions?(model_class, reflection)
       return reflection.macro.to_s unless SUPPORTED_ASSOCIATION_MACROS.include?(reflection.macro)
-      return habtm_reason(reflection, root) if reflection.macro == :has_and_belongs_to_many
+      if reflection.macro == :has_and_belongs_to_many
+        return habtm_reason(reflection, root) || VersionTable.unsupported_reason(reflection)
+      end
 
       habtm = habtm_in_chain(reflection)
-      return AssociationKey.unsupported_reason(reflection) unless habtm
+      return storage_reason(reflection) unless habtm
 
       "it goes through #{habtm.active_record.name}##{habtm.name}, a has_and_belongs_to_many, " \
         'whose hidden join model has no history to compare'
     end
+
+    # History matches records by primary key, within one set of version tables.
+    #: (untyped) -> String?
+    def self.storage_reason(reflection)
+      AssociationKey.unsupported_reason(reflection) || VersionTable.unsupported_reason(reflection)
+    end
+    private_class_method :storage_reason
 
     # PT-AT records a HABTM's membership only when its owner saves a version,
     # in rows keyed by transaction and association name, not by owner. A root
