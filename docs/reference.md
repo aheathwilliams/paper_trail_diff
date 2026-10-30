@@ -151,6 +151,11 @@ window = Time.zone.parse("2026-08-01")...Time.zone.parse("2026-09-01")
 steps = PaperTrailDiff.timeline(article, within: window)
 ```
 
+A `Date` bound is a whole day in `Time.zone`, so `Date.today..Date.today` is
+all of today and `august...september` stops before September 1. A string is a
+time in `Time.zone` unless it names an offset. Without `Time.zone`, both are
+read in UTC, never in the server's own zone.
+
 A window edge that falls inside a transaction moves back to where that
 transaction began, so the whole transaction is in the later window, as it is
 when a range [starts or ends at a version](#choosing-a-range). This applies to

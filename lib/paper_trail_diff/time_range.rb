@@ -3,6 +3,10 @@
 
 module PaperTrailDiff
   # Validates and applies a finite wall-clock range without loading model state.
+  #
+  # A Date is a whole day and a String a local time, both in Time.zone, as
+  # Rails reads them, or in UTC without one: never the server's own zone. An
+  # inclusive Date end runs through that day.
   class TimeRange
     attr_reader :begin_time #: Time
     attr_reader :end_time #: Time
@@ -14,8 +18,8 @@ module PaperTrailDiff
       end
 
       @begin_time = coerce_time(value.begin, boundary: :begin)
-      @end_time = coerce_time(value.end, boundary: :end)
-      @exclude_end = value.exclude_end?
+      @exclude_end = value.exclude_end? || calendar_date?(value.end)
+      @end_time = coerce_time(end_value(value), boundary: :end)
       validate_order!
       freeze
     end
@@ -79,16 +83,34 @@ module PaperTrailDiff
       raise InvalidTimeRangeError, "`within` #{boundary} must be time-like"
     end
 
-    # Active Support 8.0 and older warn, once per process, that `to_time` will
-    # change on a zoned time, so read zoned values without it. Every branch
-    # gives the same instant, so no spec (and no mutation) can tell them apart.
-    # mutant:disable
-    #: (untyped) -> Time
+    # Anything else names its instant, and `getutc` reads it without
+    # `to_time`, which Active Support 8.0 and older warn will change on a
+    # zoned time, and without changing the caller's own value as `utc` does.
+    #: (untyped) -> untyped
     def time_value(value)
-      return value if value.is_a?(Time)
+      return zone.parse(value) || raise(ArgumentError) if value.is_a?(String)
+      return zone.local(value.year, value.month, value.day) if calendar_date?(value)
 
-      utc = value.utc if value.respond_to?(:utc)
-      utc.is_a?(Time) ? utc : value.to_time
+      value
+    end
+
+    # An inclusive date end runs through the day: to the next one's start.
+    #: (Range[untyped]) -> untyped
+    def end_value(range)
+      last = range.end
+      calendar_date?(last) && !range.exclude_end? ? last.next_day : last
+    end
+
+    # A DateTime is a Date too, but names its instant.
+    #: (untyped) -> bool
+    def calendar_date?(value)
+      value.instance_of?(Date)
+    end
+
+    #: () -> untyped
+    def zone
+      time = Time #: untyped
+      time.zone || time.find_zone!('UTC')
     end
 
     #: () -> void

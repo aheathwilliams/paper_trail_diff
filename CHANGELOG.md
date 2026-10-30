@@ -100,6 +100,12 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- A `Date` bound of `within:` or `since:` is a whole day in `Time.zone`, and
+  a string a time in `Time.zone`, or in UTC without one. They were read in
+  the server's own zone, so the same window covered different hours on
+  different servers, and a same-day `Date..Date` window covered one instant
+  and found nothing.
+
 - A `has_many :through` whose join model is not versioned raises
   `UnversionedAssociationError` naming the join model when its history is
   read, and `diagnose` reports it as an error, so `ok?` is false. A
