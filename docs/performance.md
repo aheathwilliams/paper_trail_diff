@@ -18,6 +18,25 @@ The benchmark exercises `analyze_scope` with genuine PaperTrail history. It is
 a local SQLite baseline for finding work inside the gem, not a production
 latency guarantee or a comparison of SQL dialects.
 
+## Plain `has_one` and current roots in batches: 2026-10-30
+
+Two costs grew with the number of records in batch methods. Every `has_one`
+was loaded once per record, because the check meant for a `has_one` with a
+declared limit or offset also caught Active Record's own `limit(1)`. And
+activity through a `has_many :through` after a root's last version read that
+root's row again, although the batch had just loaded it. The audit probe
+reports articles with `comments.replies`, `author`, `profile`, and
+`contributors`:
+
+| Method | SQL at 10 / 40 roots, before | after |
+| --- | --- | --- |
+| `report` | 61 / 121 | 43 / 43 |
+| `analyze_many(activity: true)` | 53 / 113 | 35 / 35 |
+| `analyze_many` | 31 / 61 | 23 / 23 |
+| `compare_many` | 31 / 61 | 23 / 23 |
+
+`spec/association/reconstruction_performance_spec.rb` keeps both flat.
+
 ## Limited associations: 2026-10-29
 
 A `limit` or `offset` with a total order on integer or boolean columns, and an
@@ -382,9 +401,10 @@ Deleted history has no original timed counterpart here. Its five queries at both
   queries, network calls, or CPU work inside application callbacks. Hash predicates
   still deserialize candidate states and are not SQL-indexed historical searches.
 - **Advanced association fallbacks can still query per record.** Scoped or
-  default-scoped paths and other graphs that need PT-AT fallback reconstruction
-  require explicit `allow_expensive: true` for batch APIs and must be measured
-  before being offered in a large report. The flat-query tests
+  default-scoped paths that history cannot read fall back to PT-AT, which is
+  approximate and queries per record. They require `allow_approximate: true`
+  in every method and also `allow_expensive: true` in batch methods, and must
+  be measured before being offered in a large report. The flat-query tests
   do not establish a guarantee for every association configuration.
 - **Limits are not streaming.** Candidate identities are still selected up front;
   a small root ceiling can load a full 250-candidate version batch, subject to the

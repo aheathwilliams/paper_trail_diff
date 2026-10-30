@@ -76,6 +76,34 @@ RSpec.describe 'bounded event reconstruction' do
     TrackedProfile.delete_all
   end
 
+  # Through activity after a root's last version reads the root's current
+  # row, which the batch has already loaded.
+  it "reads each root's current row once in a report with through activity" do
+    counts = [1, 4].map do |added|
+      added.times do
+        article = seed
+        TrackedAuthorship.create!(article: article, author: TrackedAuthor.create!(name: 'A'),
+                                  role: 'writer')
+      end
+      report_queries(%i[contributors])
+    end
+
+    expect(counts.last).to eq(counts.first)
+  ensure
+    TrackedAuthorship.delete_all
+    TrackedAuthor.delete_all
+  end
+
+  def report_queries(associations)
+    count = 0
+    callback = ->(*args) { count += 1 unless %w[SCHEMA TRANSACTION].include?(args.last[:name]) }
+    ActiveSupport::Notifications.subscribed(callback, 'sql.active_record') do
+      PaperTrailDiff.report(TrackedArticle, since: Time.now.utc - 3600, limit: 10,
+                                            associations: associations)
+    end
+    count
+  end
+
   it 'uses handled absence without asking a version for a successor or live row' do
     version = instance_double(PaperTrail::Version, event: 'update')
     resolver = PaperTrailDiff::ActivityEventRecordResolver.new(

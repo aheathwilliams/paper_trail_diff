@@ -15,6 +15,7 @@ module PaperTrailDiff
       @snapshots = {} #: Hash[Array[untyped], RecordSnapshot?]
       @prepared_history = nil #: PreparedHistory?
       @prepared_histories = {} #: Hash[Array[untyped], PreparedHistory]
+      @live_roots = {} #: Hash[identity, untyped]
     end
 
     #: (untyped, Array[untyped], ?start_at: untyped, ?end_at: untyped) -> void
@@ -46,6 +47,9 @@ module PaperTrailDiff
       Instrumentation.instrument('prepare_history', batch_payload(records, root_versions)) do
         register_batch(records, root_versions, start_at: start_at, end_at: end_at)
       end
+      # A batch passes its roots as it just loaded them, so the current state
+      # they close on is read from them rather than once more per root.
+      records.each { |record| @live_roots[Endpoint.identity(record)] = record }
     end
 
     # Missing roots, and roots compared only between versions, have no live
@@ -68,12 +72,7 @@ module PaperTrailDiff
 
     #: (untyped, untyped) -> RecordSnapshot?
     def uncached(root_endpoint, context_endpoint)
-      custom(
-        root_endpoint,
-        context_endpoint,
-        tree: @tree,
-        normalizer: @normalizer
-      )
+      custom(root_endpoint, context_endpoint, tree: @tree, normalizer: @normalizer)
     end
 
     #: (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer) -> RecordSnapshot?
@@ -87,12 +86,7 @@ module PaperTrailDiff
         )
       end
 
-      snapshot_from_live_root(
-        root_endpoint,
-        context_endpoint,
-        tree: tree,
-        normalizer: normalizer
-      )
+      snapshot_from_live_root(root_endpoint, context_endpoint, tree: tree, normalizer: normalizer)
     end
 
     #: (untyped, habtm_version: untyped) -> untyped
@@ -142,6 +136,7 @@ module PaperTrailDiff
     # @rbs @snapshots: Hash[Array[untyped], RecordSnapshot?]
     # @rbs @prepared_history: PreparedHistory?
     # @rbs @prepared_histories: Hash[Array[untyped], PreparedHistory]
+    # @rbs @live_roots: Hash[identity, untyped]
 
     #: (untyped) -> Array[untyped]
     def context_key(endpoint)
@@ -189,10 +184,21 @@ module PaperTrailDiff
 
     #: (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer) -> RecordSnapshot?
     def snapshot_from_live_root(root_record, context_version, tree:, normalizer:)
-      record = Endpoint.reload_record(root_record)
+      record = live_root(root_record)
       @preparer.call(record.class, historical: true)
       normalize(record, context_version, tree: tree, normalizer: normalizer,
                                          habtm_version: context_version)
+    end
+
+    # Rebuilding a version's associations writes them onto the record, so each
+    # snapshot gets its own copy of a batch's loaded row, built from the row's
+    # stored values without a query.
+    #: (untyped) -> untyped
+    def live_root(root_record)
+      loaded = @live_roots[Endpoint.identity(root_record)]
+      return Endpoint.reload_record(root_record) unless loaded
+
+      loaded.class.instantiate(loaded.attributes_before_type_cast)
     end
 
     #: (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer, habtm_version: untyped) -> RecordSnapshot?

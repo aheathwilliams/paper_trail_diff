@@ -43,6 +43,8 @@ module PaperTrailDiff
 
     @live_graph_collector: LiveGraphCollector
 
+    @live_roots: Hash[identity, untyped]
+
     @normalizer: SnapshotNormalizer
 
     @prepared_histories: Hash[Array[untyped], PreparedHistory]
@@ -73,6 +75,12 @@ module PaperTrailDiff
 
     # : (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer) -> RecordSnapshot?
     def snapshot_from_live_root: (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer) -> RecordSnapshot?
+
+    # Rebuilding a version's associations writes them onto the record, so each
+    # snapshot gets its own copy of a batch's loaded row, built from the row's
+    # stored values without a query.
+    # : (untyped) -> untyped
+    def live_root: (untyped) -> untyped
 
     # : (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer, habtm_version: untyped) -> RecordSnapshot?
     def normalize: (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer, habtm_version: untyped) -> RecordSnapshot?

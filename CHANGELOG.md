@@ -113,6 +113,10 @@ project follows [Semantic Versioning](https://semver.org/).
   record, but checked the association's scope, to which Active Record adds
   `limit(1)` for every `has_one`, so every `has_one` cost one query per
   record.
+- `report`, `analyze_scope`, and `analyze_many` with `activity: true` no
+  longer read a root's current row once more for activity through a
+  `has_many :through` after its last version. The batch has already loaded
+  it, so the query count no longer grows with the number of roots.
 - A snapshot's collections list their records by type, then ID, as the
   reference says, wherever the snapshot was read from. Snapshots rebuilt from
   history or carried through an activity timeline listed them in the order
