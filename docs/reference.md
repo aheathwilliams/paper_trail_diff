@@ -1215,7 +1215,9 @@ PaperTrail's JSON serializer, and a `json` or `jsonb` `object` column, store
 times to milliseconds by default (`ActiveSupport::JSON::Encoding.time_precision`).
 For those histories the gem compares all times at that precision, so an
 unchanged timestamp is not reported as changed. A change smaller than that
-precision was never recorded and cannot be reported.
+precision was never recorded and cannot be reported. A `json` or `jsonb`
+column also returns times and dates as strings, which PaperTrail leaves as
+they are; the gem casts them back to the attribute's type.
 
 ## Instrumentation
 

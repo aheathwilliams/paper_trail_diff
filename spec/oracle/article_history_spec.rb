@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative '../support/oracle'
+require_relative '../support/json_versions_table'
 
 RSpec.describe 'Rebuilt article history against the recorded states' do
   before { Oracle.reset! }
@@ -35,6 +36,19 @@ RSpec.describe 'Rebuilt article history against the recorded states' do
             checker.activity
             checker.activity(group: :transaction)
           end
+        end
+      end
+    end
+  end
+
+  context 'with json object columns, which PaperTrail does not cast back' do
+    around { |example| JsonVersionsTable.with_json_columns(&example) }
+
+    Oracle.seeds([1, 2]).each do |seed|
+      it "rebuilds every endpoint and activity step (seed #{seed})" do
+        expect_recorded_states(seed) do |_history, checker|
+          checker.endpoints
+          checker.activity
         end
       end
     end

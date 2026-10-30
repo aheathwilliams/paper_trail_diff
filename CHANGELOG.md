@@ -71,6 +71,13 @@ project follows [Semantic Versioning](https://semver.org/).
   checked only the root's own versions. `timeline`, and `analyze` without
   `activity:`, still run their last step to the root's next version or the
   current record; the reference now says so.
+- With a `json` or `jsonb` `object` column, an activity step no longer
+  reports an unchanged timestamp as changed. PaperTrail returns such a
+  column's times as strings, and a step after a child's update carried them
+  into the snapshot as they were, so the next step that read the child again
+  reported `created_at` changing from a string to the same time. Activity now
+  casts them as it does every other recorded state. The specs had covered the
+  JSON serializer on a text column only, which PaperTrail casts.
 
 ### Development
 
