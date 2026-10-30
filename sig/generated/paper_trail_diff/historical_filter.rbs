@@ -38,6 +38,14 @@ module PaperTrailDiff
     # : (untyped) -> untyped
     def validate_predicate: (untyped) -> untyped
 
+    # Expected and recorded values compare as the attribute casts them, as
+    # `where` reads its values: an enum's symbol names its stored value, and a
+    # `json` or `jsonb` version column, which PaperTrail does not cast, holds
+    # dates and times as strings. Casting also copies a mutable value, so the
+    # filter keeps its own.
+    # : (String, untyped) -> untyped
+    def cast: (String, untyped) -> untyped
+
     # : (untyped) -> Integer
     def validate_budget: (untyped) -> Integer
 

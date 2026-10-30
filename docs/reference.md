@@ -676,7 +676,10 @@ report = PaperTrailDiff.report(
 
 The filter checks the record as it was when the window started and after each
 change made inside it. A record matches if any of those states match. With a
-hash, every key must be equal (`==`). Values are read from the stored history
+hash, every key must be equal (`==`) once both sides are cast to the
+attribute's type, as `where` casts its values: `{ status: :published }` matches
+an enum, and a date or time matches whether the history stored it as YAML or
+as a string in a `json` column. Values are read from the stored history
 without calling `reify`, and unknown or unrecorded attributes raise an error
 instead of matching `nil`. For other checks, pass a callable such as
 `->(article) { article.title.start_with?("Pub") }`; it receives each state as a

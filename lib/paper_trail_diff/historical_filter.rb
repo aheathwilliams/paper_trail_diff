@@ -64,7 +64,17 @@ module PaperTrailDiff
               "unknown historical attributes: #{unknown.join(', ')}"
       end
 
-      Support.immutable_copy(attributes)
+      attributes.to_h { |name, value| [name, cast(name, value)] }
+    end
+
+    # Expected and recorded values compare as the attribute casts them, as
+    # `where` reads its values: an enum's symbol names its stored value, and a
+    # `json` or `jsonb` version column, which PaperTrail does not cast, holds
+    # dates and times as strings. Casting also copies a mutable value, so the
+    # filter keeps its own.
+    #: (String, untyped) -> untyped
+    def cast(name, value)
+      @model.type_for_attribute(name).cast(value)
     end
 
     #: (untyped) -> Integer
@@ -162,7 +172,7 @@ module PaperTrailDiff
                 "historical_filter: #{name} was not recorded in version #{version.id}"
         end
 
-        state.attributes.fetch(name) == expected
+        cast(name, state.attributes.fetch(name)) == expected
       end
     end
 

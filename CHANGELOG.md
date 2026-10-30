@@ -90,6 +90,11 @@ project follows [Semantic Versioning](https://semver.org/).
   batch methods refused them without `allow_expensive: true`. A condition on a
   PostgreSQL `citext` column, which compares without regard to case, is no
   longer read as exact text.
+- A `historical_filter:` hash casts its values, and the recorded ones, to each
+  attribute's type before comparing them, as `where` does. An enum given as a
+  symbol (`{ status: :published }`), and a date or time read from a `json` or
+  `jsonb` version column, which PaperTrail returns as a string, never matched,
+  so the report silently selected nothing.
 - With a `json` or `jsonb` `object` column, an activity step no longer
   reports an unchanged timestamp as changed. PaperTrail returns such a
   column's times as strings, and a step after a child's update carried them
