@@ -79,6 +79,10 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- The reference says how a record created without a version, such as one
+  imported with `insert_all`, and history pruned with `has_paper_trail
+  limit:` read.
+
 - `UnsupportedBatchPathError` names both `allow_approximate: true` and
   `allow_expensive: true`: such a path is read approximately too, so naming
   only `allow_expensive:` led to a second error. `IncompleteTimeRangeError`

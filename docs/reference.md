@@ -61,7 +61,7 @@ Take an article created as `"Draft"`, then updated to `"Published"`, then to
                                              only in the table
 ```
 
-Four things follow from this:
+Six things follow from this:
 
 - **A `create` version stands for "no record yet".** Its `reify` returns `nil`.
   Comparing it with a later state reports the record as added
@@ -79,6 +79,16 @@ Four things follow from this:
   Ending a range at a version leaves out only the writes after it.
   [`recorded_changes`](#what-a-version-recorded) reads what a version itself
   recorded, and activity steps can [include it](#what-each-event-recorded-recorded_changes-true).
+- **A record created without a version looks as if it always existed.** A
+  row written with versioning off, or imported with `insert_all`, has no
+  `create` version, so history never reports it as added: its earliest
+  version's stored values are its state from before history began, and an
+  association includes it there. Rows from before PaperTrail was installed
+  are the same, which is usually what you want.
+- **Pruned history is gone.** With `has_paper_trail limit:`, PaperTrail
+  deletes a record's oldest versions, and the earliest one left becomes its
+  start: states before it cannot be read, and an older version passed in is
+  no longer there to pass.
 
 ## Choosing a method
 
