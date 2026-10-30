@@ -5,6 +5,23 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+### Added
+
+- Activity steps list the events whose changes they show as `step.sources`,
+  oldest first. A step from `group: :transaction` lists every event in the
+  transaction, each with its own author, record, and version ID, where
+  `source_boundary` names only the first. `to_h(metadata: true)` adds a
+  `sources` list.
+- `recorded_changes: true` on `activity_timeline`, on `analyze`, `analyze_many`,
+  and `analyze_scope` with `activity: true`, and on `report` gives each
+  boundary the changes its version recorded, as `recorded_changes(version)`
+  returns them. The versions are already loaded, so it adds no queries, and it
+  replaces the reference recipe that loaded every step's version again.
+  Without the option, `boundary.recorded_changes` raises `ConfigurationError`
+  rather than returning `nil`. Names in `ignore:` or `ignore: { all: }` are
+  left out; path-specific names are not, because a version does not say which
+  path reached it.
+
 ### Fixed
 
 - `activity_timeline`, and `analyze` with `activity: true`, no longer report a

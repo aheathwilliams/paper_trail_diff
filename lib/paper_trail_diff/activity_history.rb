@@ -30,9 +30,10 @@ module PaperTrailDiff
 
   # Builds activity steps while retaining root snapshots for combined analysis.
   class ActivityHistoryBuilder
-    #: (Array[untyped], Array[ActivityEvent], untyped, ?current: untyped, ?include_step: untyped, ?snapshots: bool) -> void
+    #: (Array[untyped], Array[ActivityEvent], untyped, ?current: untyped, ?include_step: untyped, ?snapshots: bool, ?recorded: Array[String]?) -> void
     def initialize( # rubocop:disable Metrics/ParameterLists
-      root_versions, events, snapshotter, current: nil, include_step: nil, snapshots: false
+      root_versions, events, snapshotter, current: nil, include_step: nil, snapshots: false,
+      recorded: nil
     )
       @root_versions = root_versions
       @events = events
@@ -40,6 +41,7 @@ module PaperTrailDiff
       @current = current
       @include_step = include_step
       @snapshots = snapshots
+      @recorded = recorded
     end
 
     #: () -> ActivityHistory
@@ -64,6 +66,7 @@ module PaperTrailDiff
     # @rbs @current: untyped
     # @rbs @include_step: untyped
     # @rbs @snapshots: bool
+    # @rbs @recorded: Array[String]?
     # @rbs @steps: Array[ActivityStep]
     # @rbs @root_snapshots: Hash[Array[untyped], RecordSnapshot?]
     # @rbs @first_snapshot: RecordSnapshot?
@@ -97,7 +100,7 @@ module PaperTrailDiff
     #: (ActivityEvent, RecordSnapshot?) -> void
     def consume(event, snapshot)
       capture_first(snapshot)
-      boundary = ActivityBoundary.from_version(event.version)
+      boundary = ActivityBoundary.from_version(event.version, recorded: @recorded)
       @root_snapshots[version_key(event.version)] = snapshot if event.root?
       append_step(boundary, snapshot) if @previous_boundary
       @previous_boundary = boundary

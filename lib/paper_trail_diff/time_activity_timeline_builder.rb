@@ -6,10 +6,11 @@ module PaperTrailDiff
   class TimeActivityTimelineBuilder
     include ActivityGrouping
 
-    #: (untyped, range: TimelineRange, tree: AssociationTree, snapshotter: untyped, ?snapshots: bool, ?group: Symbol?) -> void
-    def initialize(record, range:, tree:, snapshotter:, snapshots: false, group: nil) # rubocop:disable Metrics/ParameterLists
+    #: (untyped, range: TimelineRange, tree: AssociationTree, snapshotter: untyped, ?snapshots: bool, ?group: Symbol?, ?recorded: Array[String]?) -> void
+    def initialize(record, range:, tree:, snapshotter:, snapshots: false, group: nil, recorded: nil) # rubocop:disable Metrics/ParameterLists
       @snapshots = snapshots
       @group = group
+      @recorded = recorded
       # Merging a group compares its outer states, so the snapshots must survive
       # the build even when the caller did not ask to keep them.
       @retain = snapshots || grouping?
@@ -48,6 +49,7 @@ module PaperTrailDiff
     # @rbs @tree: AssociationTree
     # @rbs @snapshotter: untyped
     # @rbs @snapshots: bool
+    # @rbs @recorded: Array[String]?
 
     #: () -> [ActivityHistory, RootVersionPlan, ActivityStep?, RecordSnapshot?, untyped]
     def history_and_versions
@@ -109,7 +111,8 @@ module PaperTrailDiff
         @snapshotter,
         current: current,
         include_step: ->(event) { @range.include?(event.version) },
-        snapshots: @retain
+        snapshots: @retain,
+        recorded: @recorded
       ).call
     end
 
@@ -149,8 +152,8 @@ module PaperTrailDiff
     def destroyed_step(history, event)
       version = event.version
       ActivityStep.between(
-        from_boundary: ActivityBoundary.from_version(version),
-        to_boundary: ActivityBoundary.destroyed(version),
+        from_boundary: ActivityBoundary.from_version(version, recorded: @recorded),
+        to_boundary: ActivityBoundary.destroyed(version, recorded: @recorded),
         from_snapshot: history.root_snapshots[ActivityRootSteps.version_key(version)],
         to_snapshot: nil, retain: @retain
       )
@@ -166,7 +169,8 @@ module PaperTrailDiff
 
       ActivityStep.between(
         from_boundary: previous,
-        to_boundary: ActivityBoundary.current(record, captured_at: captured_at),
+        to_boundary: ActivityBoundary.current(record, captured_at: captured_at,
+                                                      recorded: @recorded),
         from_snapshot: history.last_event_snapshot, to_snapshot: snapshot, retain: @retain
       )
     end

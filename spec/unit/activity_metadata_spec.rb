@@ -48,4 +48,60 @@ RSpec.describe 'activity attribution and serialization' do
     expect(analysis.to_h(metadata: true, snapshots: true).fetch(:activity_timeline))
       .to eq([step.to_h(metadata: true, snapshots: true)])
   end
+
+  it 'lists the source as the only source of a step that is not a group' do
+    expect(step.sources).to eq([source])
+    expect(step.sources).to be_frozen
+    expect(step.to_h.keys).to eq(%i[from to diff])
+    expect(step.to_h(metadata: true).fetch(:sources)).to eq([source.to_h(metadata: true)])
+  end
+
+  it 'lists sources with their metadata even when the step omits it' do
+    other = PaperTrailDiff::ActivityStep.new(
+      from_boundary: source, to_boundary: destination, diff: step.diff,
+      sources: [source, destination]
+    )
+
+    expect(other.to_h(metadata: true).fetch(:sources).map { |item| item.fetch(:whodunnit) })
+      .to eq(%w[alice bob])
+  end
+
+  describe 'recorded changes' do
+    def boundary_with(recorded_changes)
+      PaperTrailDiff::ActivityBoundary.new(
+        kind: :version, version_id: 3, item_type: 'Comment', item_id: 7,
+        recorded_at: Time.utc(2026), event: 'update', recorded_changes: recorded_changes
+      )
+    end
+
+    def recorded
+      boundary_with('body' => PaperTrailDiff::ValueChange.new(from: 'a', to: 'b'))
+    end
+
+    def nothing
+      boundary_with(nil)
+    end
+
+    it 'refuses to answer when they were not read, rather than claim nothing was recorded' do
+      expect(source.recorded_changes?).to be(false)
+      expect { source.recorded_changes }
+        .to raise_error(PaperTrailDiff::ConfigurationError,
+                        'recorded changes were not read; pass recorded_changes: true')
+      expect(source.to_h(metadata: true)).not_to have_key(:recorded_changes)
+    end
+
+    it 'returns them, and nil for a version that recorded nothing' do
+      expect(recorded.recorded_changes?).to be(true)
+      expect(recorded.recorded_changes.fetch('body').to_h).to eq(from: 'a', to: 'b')
+      expect(nothing.recorded_changes?).to be(true)
+      expect(nothing.recorded_changes).to be_nil
+    end
+
+    it 'serializes them with the metadata only' do
+      expect(recorded.to_h).not_to have_key(:recorded_changes)
+      expect(recorded.to_h(metadata: true).fetch(:recorded_changes))
+        .to eq('body' => { from: 'a', to: 'b' })
+      expect(nothing.to_h(metadata: true).fetch(:recorded_changes)).to be_nil
+    end
+  end
 end

@@ -7,16 +7,17 @@ module PaperTrailDiff
   # window -- but a transaction has to collapse the same way in both, or the
   # same history would read differently depending on how it was asked for.
   module ActivityGrouping
-    #: (Symbol?, ?activity: bool, ?snapshots: bool) -> void
-    def self.validate!(group, activity: true, snapshots: false)
+    #: (Symbol?, ?activity: bool, ?snapshots: bool, ?recorded_changes: bool) -> void
+    def self.validate!(group, activity: true, snapshots: false, recorded_changes: false)
       unless group.nil? || group == :transaction
         raise ConfigurationError, 'group: must be :transaction or nil'
       end
-      raise ConfigurationError, 'snapshots: requires activity: true' if snapshots && !activity
+      return if activity
 
-      return if group.nil? || activity
-
-      raise ConfigurationError, 'group: requires activity: true'
+      { snapshots: snapshots, recorded_changes: recorded_changes, group: !group.nil? }
+        .each do |name, given|
+          raise ConfigurationError, "#{name}: requires activity: true" if given
+        end
     end
 
     private

@@ -85,4 +85,20 @@ RSpec.describe PaperTrailDiff::ActivityTransactionGrouper do
     expect(dropped.map { |step| [step.from_snapshot, step.to_snapshot] })
       .to eq([[nil, nil], [nil, nil]])
   end
+
+  it 'names every event a merged step holds as its sources, in order' do
+    result = group([7, 7, 7, 8])
+
+    expect(result.map { |step| step.sources.map(&:version_id) }).to eq([[0, 1, 2], [3]])
+    expect(result.first.source_boundary).to equal(result.first.sources.first)
+    expect(result.first.sources).to be_frozen
+  end
+
+  it 'keeps the sources of steps that were already groups' do
+    first, second = steps([1, 1])
+    merged = described_class.new([first, second], retain: true).call
+    again = described_class.new(merged, retain: true).call
+
+    expect(again.first.sources.map(&:version_id)).to eq([0, 1])
+  end
 end

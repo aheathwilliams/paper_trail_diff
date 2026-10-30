@@ -203,7 +203,7 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
     # `reload_live_endpoints:` applies whenever the range ends at the current
     # record: an explicit `to:` record, the default range, or a window with no
     # later version.
-    #: (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?reload_live_endpoints: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?) -> Array[ActivityStep]
+    #: (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?reload_live_endpoints: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?recorded_changes: bool) -> Array[ActivityStep]
     def activity_timeline( # rubocop:disable Metrics/ParameterLists
       record,
       from: nil,
@@ -215,12 +215,14 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
       version_scope: nil,
       close_on: nil,
       snapshots: false,
-      group: nil
+      group: nil,
+      recorded_changes: false
     )
       PaperTrailAdapter.new(
         associations: associations,
         ignore: ignore,
-        reload_live_endpoints: reload_live_endpoints
+        reload_live_endpoints: reload_live_endpoints,
+        recorded_changes: recorded_changes
       ).activity_timeline(
         record,
         from: from,
@@ -234,7 +236,7 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
     end
 
     # Builds an endpoint diff and root-checkpoint timeline while normalizing each version once.
-    #: (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?) -> Analysis
+    #: (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?recorded_changes: bool) -> Analysis
     def analyze( # rubocop:disable Metrics/ParameterLists
       record,
       from: nil,
@@ -246,9 +248,12 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
       version_scope: nil,
       close_on: nil,
       snapshots: false,
-      group: nil
+      group: nil,
+      recorded_changes: false
     )
-      PaperTrailAdapter.new(associations: associations, ignore: ignore).analyze(
+      PaperTrailAdapter.new(
+        associations: associations, ignore: ignore, recorded_changes: recorded_changes
+      ).analyze(
         record,
         from: from,
         to: to,
@@ -266,7 +271,7 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
     # returns a frozen Hash keyed by identity. Roots with nothing to report in
     # the window return an empty `Analysis`. To let a relation choose the
     # records, use `analyze_scope`.
-    #: (Array[untyped], ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?allow_expensive: bool) -> Hash[identity, Analysis]
+    #: (Array[untyped], ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?allow_expensive: bool, ?recorded_changes: bool) -> Hash[identity, Analysis]
     def analyze_many( # rubocop:disable Metrics/ParameterLists
       records,
       within: nil,
@@ -277,10 +282,12 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
       close_on: nil,
       snapshots: false,
       group: nil,
-      allow_expensive: false
+      allow_expensive: false,
+      recorded_changes: false
     )
       PaperTrailAdapter.new(
-        associations: associations, ignore: ignore, allow_expensive: allow_expensive
+        associations: associations, ignore: ignore, allow_expensive: allow_expensive,
+        recorded_changes: recorded_changes
       ).analyze_many(records, within: within, activity: activity, version_scope: version_scope,
                               close_on: close_on, snapshots: snapshots, group: group)
     end
@@ -311,7 +318,7 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
     # Note also that a relation selects on current state, not on state during
     # the window: `where(status: 'published')` means published *now*, which is a
     # different set from what was published while the window was open.
-    #: (untyped, limit: Integer?, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?historical_filter: untyped, ?max_filter_versions: Integer, ?include_deleted: bool, ?allow_expensive: bool) -> ScopedAnalysis
+    #: (untyped, limit: Integer?, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?historical_filter: untyped, ?max_filter_versions: Integer, ?include_deleted: bool, ?allow_expensive: bool, ?recorded_changes: bool) -> ScopedAnalysis
     def analyze_scope( # rubocop:disable Metrics/ParameterLists
       scope,
       limit:,
@@ -326,10 +333,12 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
       historical_filter: nil,
       max_filter_versions: HistoricalFilter::DEFAULT_VERSION_LIMIT,
       include_deleted: false,
-      allow_expensive: false
+      allow_expensive: false,
+      recorded_changes: false
     )
       adapter = PaperTrailAdapter.new(associations: associations, ignore: ignore,
-                                      allow_expensive: allow_expensive)
+                                      allow_expensive: allow_expensive,
+                                      recorded_changes: recorded_changes)
       adapter.analyze_scope(
         scope, limit: limit, within: within, activity: activity,
                version_scope: version_scope, close_on: close_on, snapshots: snapshots, group: group,
@@ -342,18 +351,20 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
     # for every root that changed or whose requested associations did.
     # Historical windows remain explicit on analyze_scope; this entry point is
     # deliberately named for a report through now rather than an as-of query.
-    #: (untyped, since: untyped, limit: Integer, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?snapshots: bool, ?group: Symbol?, ?include_deleted: bool, ?historical_filter: untyped, ?max_filter_versions: Integer, ?allow_expensive: bool) -> ScopedAnalysis
+    #: (untyped, since: untyped, limit: Integer, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?snapshots: bool, ?group: Symbol?, ?include_deleted: bool, ?historical_filter: untyped, ?max_filter_versions: Integer, ?allow_expensive: bool, ?recorded_changes: bool) -> ScopedAnalysis
     def report( # rubocop:disable Metrics/ParameterLists
       scope, since:, limit:, associations: [], ignore: DEFAULT_IGNORED_ATTRIBUTES,
       snapshots: false, group: nil, include_deleted: false, historical_filter: nil,
-      max_filter_versions: HistoricalFilter::DEFAULT_VERSION_LIMIT, allow_expensive: false
+      max_filter_versions: HistoricalFilter::DEFAULT_VERSION_LIMIT, allow_expensive: false,
+      recorded_changes: false
     )
       analyze_scope(
         scope,
         within: since..Time.now.utc, limit: limit, associations: associations,
         ignore: ignore, activity: true, close_on: :current, snapshots: snapshots, group: group,
         include_deleted: include_deleted, historical_filter: historical_filter,
-        max_filter_versions: max_filter_versions, allow_expensive: allow_expensive
+        max_filter_versions: max_filter_versions, allow_expensive: allow_expensive,
+        recorded_changes: recorded_changes
       )
     end
 
@@ -404,9 +415,7 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
 
     # Reads what PaperTrail recorded with one version: its `object_changes`,
     # typed by the version's model, as `{ "title" => <from "Draft" to "Published"> }`.
-    #
-    #   versions = PaperTrail::Version.where(id: steps.map { _1.source_boundary.version_id })
-    #   versions.to_h { [_1.id, PaperTrailDiff.recorded_changes(_1)] }
+    # Activity methods read it for every step source with `recorded_changes: true`.
     #
     # A step's diff compares the states before and after an event, so it also
     # includes anything saved without a version in between; this does not.

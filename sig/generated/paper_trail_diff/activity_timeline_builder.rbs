@@ -5,8 +5,8 @@ module PaperTrailDiff
   class ActivityTimelineBuilder
     include ActivityGrouping
 
-    # : (untyped, range: TimelineRange, tree: AssociationTree, snapshotter: untyped, snapshots: bool, group: Symbol?) -> void
-    def initialize: (untyped, range: TimelineRange, tree: AssociationTree, snapshotter: untyped, snapshots: bool, group: Symbol?) -> void
+    # : (untyped, range: TimelineRange, tree: AssociationTree, snapshotter: untyped, snapshots: bool, group: Symbol?, ?recorded: Array[String]?) -> void
+    def initialize: (untyped, range: TimelineRange, tree: AssociationTree, snapshotter: untyped, snapshots: bool, group: Symbol?, ?recorded: Array[String]?) -> void
 
     # : () -> Array[ActivityStep]
     def build: () -> Array[ActivityStep]
@@ -20,6 +20,8 @@ module PaperTrailDiff
     @range: TimelineRange
 
     @record: untyped
+
+    @recorded: Array[String]?
 
     @snapshots: bool
 
@@ -56,6 +58,9 @@ module PaperTrailDiff
     # mutant:disable
     # : (RootVersionPlan) -> [RootVersionPlan, Array[ActivityEvent], ActivityHistory, RecordSnapshot?, ActivityBoundary?]
     def empty_history: (RootVersionPlan) -> [ RootVersionPlan, Array[ActivityEvent], ActivityHistory, RecordSnapshot?, ActivityBoundary? ]
+
+    # : (untyped) -> ActivityBoundary
+    def current_boundary: (untyped) -> ActivityBoundary
 
     # : () -> [RecordSnapshot?, untyped]
     def capture_current: () -> [ RecordSnapshot?, untyped ]
