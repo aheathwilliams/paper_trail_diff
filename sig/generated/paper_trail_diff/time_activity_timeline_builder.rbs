@@ -5,8 +5,8 @@ module PaperTrailDiff
   class TimeActivityTimelineBuilder
     include ActivityGrouping
 
-    # : (untyped, range: TimelineRange, tree: AssociationTree, snapshotter: untyped, ?snapshots: bool, ?group: Symbol?) -> void
-    def initialize: (untyped, range: TimelineRange, tree: AssociationTree, snapshotter: untyped, ?snapshots: bool, ?group: Symbol?) -> void
+    # : (untyped, range: TimelineRange, tree: AssociationTree, snapshotter: untyped, ?snapshots: bool, ?group: Symbol?, ?recorded: IgnorePolicy?) -> void
+    def initialize: (untyped, range: TimelineRange, tree: AssociationTree, snapshotter: untyped, ?snapshots: bool, ?group: Symbol?, ?recorded: IgnorePolicy?) -> void
 
     # : () -> Array[ActivityStep]
     def build: () -> Array[ActivityStep]
@@ -19,6 +19,8 @@ module PaperTrailDiff
     @range: TimelineRange
 
     @record: untyped
+
+    @recorded: IgnorePolicy?
 
     @snapshots: bool
 

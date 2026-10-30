@@ -3,14 +3,15 @@
 
 module PaperTrailDiff
   # Compares adjacent root and selected-descendant activity boundaries.
-  class ActivityTimelineBuilder
+  class ActivityTimelineBuilder # rubocop:disable Metrics/ClassLength
     include ActivityGrouping
 
-    #: (untyped, range: TimelineRange, tree: AssociationTree, snapshotter: untyped, snapshots: bool, group: Symbol?) -> void
-    def initialize(record, range:, tree:, snapshotter:, snapshots:, group:) # rubocop:disable Metrics/ParameterLists
+    #: (untyped, range: TimelineRange, tree: AssociationTree, snapshotter: untyped, snapshots: bool, group: Symbol?, ?recorded: IgnorePolicy?) -> void
+    def initialize(record, range:, tree:, snapshotter:, snapshots:, group:, recorded: nil) # rubocop:disable Metrics/ParameterLists
       ActivityGrouping.validate!(group)
       @snapshots = snapshots
       @group = group
+      @recorded = recorded
       # Merging a group compares its outer states, so the snapshots must survive
       # the build even when the caller did not ask to keep them.
       @retain = snapshots || grouping?
@@ -55,6 +56,7 @@ module PaperTrailDiff
     # @rbs @tree: AssociationTree
     # @rbs @snapshotter: untyped
     # @rbs @snapshots: bool
+    # @rbs @recorded: IgnorePolicy?
 
     #: () -> Array[ActivityStep]
     def no_steps
@@ -113,7 +115,7 @@ module PaperTrailDiff
       prepare_history(versions, end_at: captured_at)
       events = collect_events(versions, range_end: captured_at || versions.last)
       history = event_history(versions, events, current: plan.closing_record)
-      boundary = ActivityBoundary.current(@to, captured_at: captured_at) if plan.closing_record
+      boundary = current_boundary(captured_at) if plan.closing_record
       [plan, events, history, snapshot, boundary]
     end
 
@@ -123,6 +125,16 @@ module PaperTrailDiff
     #: (RootVersionPlan) -> [RootVersionPlan, Array[ActivityEvent], ActivityHistory, RecordSnapshot?, ActivityBoundary?]
     def empty_history(plan)
       [plan, [], ActivityHistory.empty, nil, nil]
+    end
+
+    #: () -> Array[String]?
+    def root_recorded
+      @recorded&.recorded_attributes(root: true)
+    end
+
+    #: (untyped) -> ActivityBoundary
+    def current_boundary(captured_at)
+      ActivityBoundary.current(@to, captured_at: captured_at, recorded: root_recorded)
     end
 
     #: () -> [RecordSnapshot?, untyped]
@@ -174,7 +186,9 @@ module PaperTrailDiff
       if final_boundary
         last_event = events.last #: ActivityEvent
         steps << ActivityStep.between(
-          from_boundary: ActivityBoundary.from_version(last_event.version),
+          from_boundary: ActivityBoundary.from_version(
+            last_event.version, recorded: @recorded&.recorded_attributes(root: last_event.root?)
+          ),
           to_boundary: final_boundary,
           from_snapshot: history.last_snapshot, to_snapshot: final_snapshot,
           retain: @retain
@@ -190,7 +204,7 @@ module PaperTrailDiff
       version = root_versions.last
       return unless version.event == 'destroy'
 
-      ActivityBoundary.destroyed(version)
+      ActivityBoundary.destroyed(version, recorded: root_recorded)
     end
 
     #: (Array[untyped], Array[ActivityEvent], ?current: untyped) -> ActivityHistory
@@ -200,7 +214,8 @@ module PaperTrailDiff
         events,
         @snapshotter,
         current: current,
-        snapshots: @retain
+        snapshots: @retain,
+        recorded: @recorded
       ).call
     end
 
@@ -224,7 +239,7 @@ module PaperTrailDiff
     def time_builder
       TimeActivityTimelineBuilder.new(@record, range: @range, tree: @tree,
                                                snapshotter: @snapshotter, snapshots: @snapshots,
-                                               group: @group)
+                                               group: @group, recorded: @recorded)
     end
   end
 end

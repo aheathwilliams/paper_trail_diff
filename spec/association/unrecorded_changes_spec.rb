@@ -86,16 +86,20 @@ RSpec.describe 'Changes saved without a version' do
     expect(PaperTrailDiff.recorded_changes(bob).fetch('body').to_h).to eq(from: nil, to: 'First')
   end
 
-  it 'runs the reference example, loading every step source in one query' do
-    steps = PaperTrailDiff.activity_timeline(history, associations: [:comments])
+  it 'runs the reference example, reading every step source without a query' do
+    article = history
     context = Object.new.instance_eval { binding }
-    context.local_variable_set(:steps, steps)
-    queries = []
-    record_query = lambda do |*, payload|
-      queries << payload.fetch(:sql) unless payload[:name] == 'SCHEMA'
+    context.local_variable_set(:article, article)
+    queries = Hash.new { |hash, key| hash[key] = [] }
+    count = lambda do |key, &block|
+      record_query = lambda do |*, payload|
+        queries[key] << payload.fetch(:sql) unless payload[:name] == 'SCHEMA'
+      end
+      ActiveSupport::Notifications.subscribed(record_query, 'sql.active_record', &block)
     end
 
-    results = ActiveSupport::Notifications.subscribed(record_query, 'sql.active_record') do
+    count.call(:plain) { PaperTrailDiff.activity_timeline(article, associations: [:comments]) }
+    results = count.call(:recorded) do
       DocumentationExamples.evaluate(
         File.expand_path('../../docs/reference.md', __dir__),
         session: 'reference-recorded-changes', context: context
@@ -104,7 +108,35 @@ RSpec.describe 'Changes saved without a version' do
 
     expect(results.last.transform_values(&:to_h))
       .to eq('body' => { from: 'Unrecorded body', to: 'Edited' })
-    expect(context.local_variable_get(:recorded).size).to eq(steps.size)
-    expect(queries.size).to eq(1)
+    expect(context.local_variable_get(:steps).map { |step| step.source_boundary.whodunnit })
+      .to eq(%w[alice bob carol dave])
+    expect(queries.fetch(:recorded).size).to eq(queries.fetch(:plain).size)
+  end
+
+  it 'runs the reference example that lists every source with what it recorded' do
+    article = history
+    PaperTrail.request(whodunnit: 'erin') do
+      TrackedArticle.transaction do
+        article.update!(title: 'Final')
+        article.comments.first.update!(body: 'Final')
+      end
+    end
+    context = Object.new.instance_eval { binding }
+    context.local_variable_set(:article, article)
+
+    rows = DocumentationExamples.evaluate(
+      File.expand_path('../../docs/reference.md', __dir__),
+      session: 'reference-step-sources', context: context
+    ).last
+
+    expect(rows.map { |row| [row.fetch(:actor), row.fetch(:event), row.fetch(:record)[:type]] })
+      .to eq([%w[alice create TrackedArticle], %w[bob create TrackedComment],
+              %w[carol update TrackedArticle], %w[dave update TrackedComment],
+              %w[erin update TrackedArticle], %w[erin update TrackedComment]])
+    erin = rows.last(2)
+    expect(erin.map { |row| row.fetch(:transaction_id) }.uniq.size).to eq(1)
+    expect(erin.map { |row| row.fetch(:changes).transform_values(&:to_h) })
+      .to eq([{ 'title' => { from: 'Unrecorded title', to: 'Final' } },
+              { 'body' => { from: 'Edited', to: 'Final' } }])
   end
 end

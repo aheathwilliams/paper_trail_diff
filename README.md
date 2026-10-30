@@ -122,13 +122,14 @@ and `item_id`. Its `recorded_at` is the version's `created_at`.
 Use this source information for attribution: the version used to read the
 resulting state, exposed as `to_boundary`, may have been saved by someone else.
 A change saved without a version, such as with `update_columns`, appears in the
-step for that record's previous recorded change. To read only what a version
-recorded, use `PaperTrailDiff.recorded_changes(version)`; see
-[what a version recorded](docs/reference.md#what-a-version-recorded).
+step for that record's previous recorded change. To also read only what each
+version recorded, pass `recorded_changes: true` and read
+`step.source_boundary.recorded_changes`; see
+[what each event recorded](docs/reference.md#what-each-event-recorded-recorded_changes-true).
 
 `group: :transaction` combines changes from one database transaction. Its source
-information comes from the first event in that group. Omit `group:` if you need
-to attribute each version separately.
+information comes from the first event in that group, and `step.sources` lists
+every event in it, each with its own author.
 
 `snapshots: true` also keeps copies of the compared records' data, including
 unchanged fields. These read-only copies are called snapshots. Access them as
@@ -215,9 +216,9 @@ own.
 
 ## 4. Turn a report into rows
 
-For a history table or an export, flatten a report into one row per changed
-field. Each row names the record, the change, and who made it. This example
-requires the association setup in the quickstart:
+For a history table or an export, `change_rows` flattens a report into one row
+per change. Each row names the record, the change, and the version it came
+from. This example requires the association setup in the quickstart:
 
 <!-- executable:recipe-summary -->
 ```ruby
@@ -225,48 +226,35 @@ report = PaperTrailDiff.report(
   Article.all, since: 1.day.ago, limit: 100,
   associations: [:comments], include_deleted: true
 )
-analyses = report.analyses.merge(report.deleted.compact)
 
-rows = analyses.flat_map do |root, analysis|
-  analysis.activity_timeline.flat_map do |step|
-    source = step.source_boundary
-    step.diff.each_entry.filter_map do |entry|
-      next unless entry.attribute # skip entries for whole records and associations
-
-      from, to, change =
-        if entry.change?
-          [entry.value.from, entry.value.to, :changed]
-        elsif entry.state == :after
-          [nil, entry.value, :added]
-        else
-          [entry.value, nil, :removed]
-        end
-      next if from.nil? && to.nil? # a blank field of an added or removed record
-
-      record = entry.record # nil for the article itself
-
-      {
-        root: root,
-        association: entry.association_path.join("."), # "" for the article itself
-        record: record ? [record.type, record.id.to_s] : root,
-        change: change, attribute: entry.attribute, from: from, to: to,
-        actor: source.whodunnit, event: source.event, recorded_at: source.recorded_at
-      }
-    end
-  end
+rows = report.change_rows.flat_map do |root, changes|
+  changes.map { |row| row.to_h.merge(root: root) }
 end
 ```
 
-`change` is `:changed` for an edited field. It is `:added` or `:removed` for
-each field of a record that appeared or disappeared: the article was created
-or deleted, or a comment joined or left it. A comment moved from another
-article is also `:added`; its `event` is then `"update"` rather than
-`"create"`. `actor`, `event`, and `recorded_at` describe the step's source
-version. With `group: :transaction`, that is the transaction's first event.
+`report.change_rows` is a hash keyed like `report.analyses`, with deleted
+records last. Each value lists that record's rows in time order. Each row
+covers one of two things:
 
-Rows follow the report's record order, with deleted records last, then each
-record's steps in time order. Labels, grouping, and formatting are left to your
-application.
+- **A field**: `attribute` names it, and `change` is `:changed` for an edit.
+  For a record that appeared or disappeared, each of its fields gets an
+  `:added` or `:removed` row, holding its value in `to` or `from`. Blank
+  fields of such a record get no row.
+- **A whole record**: `attribute` is `nil`, and `change` is `:added` or
+  `:removed`. The record was created or deleted, a comment joined or left the
+  article, or a `belongs_to` pointed somewhere new, which gives a `:removed`
+  row for the old record and an `:added` row for the new one. A comment moved
+  from another article is `:added` too; its `event` is then `"update"`.
+
+`record` is the record the row is about, or `nil` for the article itself, and
+`association_path` is how it was reached, such as `["comments"]`. `to_h` adds
+the step's source version: `version_id`, `event`, `whodunnit`, `recorded_at`,
+and `transaction_id`. With `group: :transaction`, that is the transaction's
+first event; `step.sources` lists every event. `row.source` is the
+`ActivityBoundary` itself.
+
+`change_rows` is also on an `Analysis` built with `activity: true` and on each
+activity step. Labels, grouping, and formatting are left to your application.
 
 ## Choose a method
 

@@ -9,8 +9,9 @@ module PaperTrailDiff
     # The only thing a wall-clock window can close on besides a later version.
     CLOSE_ON_CURRENT: ::Symbol
 
-    # : (associations: Array[String | Symbol], ignore: ignore_option, ?reload_live_endpoints: bool, ?allow_expensive: bool) -> void
-    def initialize: (associations: Array[String | Symbol], ignore: ignore_option, ?reload_live_endpoints: bool, ?allow_expensive: bool) -> void
+    # `recorded_changes:` reads what each activity boundary's version recorded.
+    # : (associations: Array[String | Symbol], ignore: ignore_option, ?reload_live_endpoints: bool, ?allow_expensive: bool, ?recorded_changes: bool) -> void
+    def initialize: (associations: Array[String | Symbol], ignore: ignore_option, ?reload_live_endpoints: bool, ?allow_expensive: bool, ?recorded_changes: bool) -> void
 
     # : (untyped, untyped) -> Diff
     def compare: (untyped, untyped) -> Diff
@@ -40,6 +41,9 @@ module PaperTrailDiff
     def analyze_scope: (untyped, limit: Integer?, within: untyped, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?historical_filter: untyped, ?max_filter_versions: Integer, ?include_deleted: bool) -> ScopedAnalysis
 
     private
+
+    # : (Symbol?, bool, bool) -> void
+    def validate_activity_options!: (Symbol?, bool, bool) -> void
 
     # Selecting by activity reads association history, so it must be available
     # before the first selection query rather than once analysis starts.
@@ -73,6 +77,8 @@ module PaperTrailDiff
     @live_endpoints: LiveEndpointProvider
 
     @normalizer: SnapshotNormalizer
+
+    @recorded: IgnorePolicy?
 
     @snapshot_pool: SnapshotPool
 

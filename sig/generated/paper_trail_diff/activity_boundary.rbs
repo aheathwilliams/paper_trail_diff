@@ -24,17 +24,29 @@ module PaperTrailDiff
     # report one save as one step rather than as its parts.
     attr_reader transaction_id: untyped
 
-    # : (untyped) -> ActivityBoundary
-    def self.from_version: (untyped) -> ActivityBoundary
+    @recorded_changes: untyped
 
-    # : (untyped, captured_at: untyped) -> ActivityBoundary
-    def self.current: (untyped, captured_at: untyped) -> ActivityBoundary
+    # Stands for recorded changes nobody asked to read, which differs from a
+    # version that recorded nothing (nil).
+    NOT_READ: untyped
+
+    NOT_READ_MESSAGE: ::String
+
+    # `recorded:` names the attributes to leave out of the version's recorded
+    # changes, or is nil when they were not asked for. Reading them decodes
+    # `object_changes`, which a caller who does not want them should not pay.
+    # : (untyped, ?recorded: Array[String]?) -> ActivityBoundary
+    def self.from_version: (untyped, ?recorded: Array[String]?) -> ActivityBoundary
+
+    # The current record has no version, so it recorded nothing.
+    # : (untyped, captured_at: untyped, ?recorded: Array[String]?) -> ActivityBoundary
+    def self.current: (untyped, captured_at: untyped, ?recorded: Array[String]?) -> ActivityBoundary
 
     # The state a `destroy` version leaves behind. A version records the state
     # before its own event, so the boundary built from a destroy version still
     # holds the record; this one is the absence that follows it.
-    # : (untyped) -> ActivityBoundary
-    def self.destroyed: (untyped) -> ActivityBoundary
+    # : (untyped, ?recorded: Array[String]?) -> ActivityBoundary
+    def self.destroyed: (untyped, ?recorded: Array[String]?) -> ActivityBoundary
 
     # A custom version class need not carry the column, and PaperTrail leaves
     # it nil outside a transaction. Both read as "no transaction here", which
@@ -42,8 +54,25 @@ module PaperTrailDiff
     # : (untyped) -> untyped
     def self.transaction_id: (untyped) -> untyped
 
-    # : (kind: Symbol, version_id: untyped, item_type: untyped, item_id: untyped, recorded_at: untyped, ?event: untyped, ?whodunnit: untyped, ?transaction_id: untyped) -> void
-    def initialize: (kind: Symbol, version_id: untyped, item_type: untyped, item_id: untyped, recorded_at: untyped, ?event: untyped, ?whodunnit: untyped, ?transaction_id: untyped) -> void
+    # : (untyped, Array[String]?) -> untyped
+    private def self.recorded_changes: (untyped, Array[String]?) -> untyped
+
+    # `recorded_changes:` takes what `PaperTrailDiff.recorded_changes` returns
+    # for the version; leave it out when they were not read.
+    # : (kind: Symbol, version_id: untyped, item_type: untyped, item_id: untyped, recorded_at: untyped, ?event: untyped, ?whodunnit: untyped, ?transaction_id: untyped, ?recorded_changes: untyped) -> void
+    def initialize: (kind: Symbol, version_id: untyped, item_type: untyped, item_id: untyped, recorded_at: untyped, ?event: untyped, ?whodunnit: untyped, ?transaction_id: untyped, ?recorded_changes: untyped) -> void
+
+    # What PaperTrail recorded with this boundary's version, as
+    # `PaperTrailDiff.recorded_changes` returns it: nil when nothing was
+    # recorded, and always nil for the current record, which has no version.
+    # Raises unless the timeline was built with `recorded_changes: true`, so a
+    # forgotten option cannot pass for a version that recorded nothing.
+    # : () -> Hash[String, ValueChange]?
+    def recorded_changes: () -> Hash[String, ValueChange]?
+
+    # Whether this boundary's recorded changes were read.
+    # : () -> bool
+    def recorded_changes?: () -> bool
 
     # : () -> bool
     def version?: () -> bool
@@ -75,14 +104,20 @@ module PaperTrailDiff
 
     attr_reader to_snapshot: RecordSnapshot?
 
+    # The events whose changes this step reports, in the order they happened.
+    # That is `source_boundary` alone, unless the step is a transaction group,
+    # which holds every event in it: an attribution that names only the first
+    # would credit the rest of the save to whoever opened it.
+    attr_reader sources: Array[ActivityBoundary]
+
     # Compares two reconstructed states and keeps them only when asked, which is
     # every caller's shape: the diff always comes from the pair, the pair itself
     # is retained on request.
-    # : (from_boundary: ActivityBoundary, to_boundary: ActivityBoundary, from_snapshot: RecordSnapshot?, to_snapshot: RecordSnapshot?, retain: bool) -> ActivityStep
-    def self.between: (from_boundary: ActivityBoundary, to_boundary: ActivityBoundary, from_snapshot: RecordSnapshot?, to_snapshot: RecordSnapshot?, retain: bool) -> ActivityStep
+    # : (from_boundary: ActivityBoundary, to_boundary: ActivityBoundary, from_snapshot: RecordSnapshot?, to_snapshot: RecordSnapshot?, retain: bool, ?sources: Array[ActivityBoundary]?) -> ActivityStep
+    def self.between: (from_boundary: ActivityBoundary, to_boundary: ActivityBoundary, from_snapshot: RecordSnapshot?, to_snapshot: RecordSnapshot?, retain: bool, ?sources: Array[ActivityBoundary]?) -> ActivityStep
 
-    # : (from_boundary: ActivityBoundary, to_boundary: ActivityBoundary, diff: Diff, ?from_snapshot: RecordSnapshot?, ?to_snapshot: RecordSnapshot?) -> void
-    def initialize: (from_boundary: ActivityBoundary, to_boundary: ActivityBoundary, diff: Diff, ?from_snapshot: RecordSnapshot?, ?to_snapshot: RecordSnapshot?) -> void
+    # : (from_boundary: ActivityBoundary, to_boundary: ActivityBoundary, diff: Diff, ?from_snapshot: RecordSnapshot?, ?to_snapshot: RecordSnapshot?, ?sources: Array[ActivityBoundary]?) -> void
+    def initialize: (from_boundary: ActivityBoundary, to_boundary: ActivityBoundary, diff: Diff, ?from_snapshot: RecordSnapshot?, ?to_snapshot: RecordSnapshot?, ?sources: Array[ActivityBoundary]?) -> void
 
     # : () -> bool
     def empty?: () -> bool
@@ -92,6 +127,12 @@ module PaperTrailDiff
     # : () -> ActivityBoundary
     def source_boundary: () -> ActivityBoundary
 
+    # The diff as flat rows, each attributed to `source_boundary`.
+    # : () -> Array[ChangeRow]
+    def change_rows: () -> Array[ChangeRow]
+
+    # `metadata: true` also lists `sources`, since who made a change is
+    # metadata as much as the source boundary's own author is.
     # : (?metadata: bool, ?snapshots: bool) -> Hash[Symbol, untyped]
     def to_h: (?metadata: bool, ?snapshots: bool) -> Hash[Symbol, untyped]
   end

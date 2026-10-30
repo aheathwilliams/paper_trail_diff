@@ -78,7 +78,7 @@ Four things follow from this:
   for that record's previous recorded change and is attributed to its author.
   Ending a range at a version leaves out only the writes after it.
   [`recorded_changes`](#what-a-version-recorded) reads what a version itself
-  recorded.
+  recorded, and activity steps can [include it](#what-each-event-recorded-recorded_changes-true).
 
 ## Choosing a method
 
@@ -346,14 +346,17 @@ end
   `:destroyed` (after a deletion). They also have `event`, `whodunnit`,
   `recorded_at`, `item_type`, `item_id`, `transaction_id`, and `record`, and
   the predicates `version?`, `current?`, and `destroyed?`.
+- `step.sources` lists the events whose changes the step shows, oldest first.
+  That is just `source_boundary`, unless the step is a
+  [transaction group](#one-step-per-transaction-group-transaction).
 - `step.to_h` returns `{ from:, to:, diff: }`. `to_h(metadata: true)` adds
-  author, event, transaction ID, and record. `to_h(snapshots: true)` adds the
-  retained snapshots.
+  author, event, transaction ID, and record, and a `sources` list.
+  `to_h(snapshots: true)` adds the retained snapshots.
 - A child's change becomes visible at the next recorded event, or at the
   current record. You do not need to save the article after each comment change.
 - Options: `from:`, `to:`, `within:`, `associations:`, `ignore:`,
   `version_scope:`, `close_on:`, `reload_live_endpoints:`, `snapshots:`,
-  `group:`.
+  `group:`, `recorded_changes:`.
 
 ### One person's changes
 
@@ -396,7 +399,8 @@ PaperTrailDiff.activity_timeline(article, associations: [:comments], group: :tra
 - A combined step compares the state before the transaction with the state after
   it. A field set and then restored inside the transaction is not reported.
 - Its `source_boundary` is the first event in the transaction. That event's
-  author is not necessarily the author of every grouped change.
+  author is not necessarily the author of every grouped change. `step.sources`
+  lists every event in the transaction, each with its own author.
 - Versions without a `transaction_id` are never grouped.
 - Also accepted by `analyze`, `analyze_many`, and `analyze_scope` with
   `activity: true`, and by `report`.
@@ -424,6 +428,49 @@ step.from_snapshot.associations["comments"].records.first.attributes["author"]
   do use memory, because each one contains every chosen association.
 - `from_snapshot` is `nil` for a step starting at a `create` version, because the
   record did not exist yet.
+- Also accepted by `analyze`, `analyze_many`, and `analyze_scope` with
+  `activity: true`, and by `report`.
+
+### What each event recorded: `recorded_changes: true`
+
+A step's `diff` compares the state before and after an event. To also see what
+PaperTrail [stored with each version](#what-a-version-recorded), such as for an
+audit log, pass `recorded_changes: true`:
+
+<!-- executable:reference-step-sources -->
+```ruby
+steps = PaperTrailDiff.activity_timeline(
+  article, associations: [:comments], group: :transaction, recorded_changes: true
+)
+
+steps.reject(&:empty?).flat_map(&:sources).map do |source|
+  {
+    version_id: source.version_id,
+    record: source.record.to_h,     # { type: "Comment", id: 7 }
+    event: source.event,
+    actor: source.whodunnit,
+    recorded_at: source.recorded_at,
+    transaction_id: source.transaction_id,
+    changes: source.recorded_changes # { "body" => <from "Old" to "New"> }
+  }
+end
+```
+
+- Each boundary's `recorded_changes` is what
+  `PaperTrailDiff.recorded_changes(version)` returns for its version: `nil`
+  when nothing was recorded, and always `nil` for the current record. The
+  versions are already loaded, so this adds no queries, but decoding each
+  version's changes takes time: about a third more for a `report` of 200
+  articles with comments, with history stored as YAML. Pass it only when you
+  use them.
+- Without the option, `recorded_changes` raises `ConfigurationError` instead of
+  returning `nil`, so a missing option cannot look like a version that recorded
+  nothing.
+- `to_h(metadata: true)` includes them on each boundary and source.
+- Names in `ignore:`, or in `ignore: { all: }`, are left out. So are names
+  ignored on the root path, `"$"`, for the root's own versions. Names ignored
+  on an association path are not left out, because a child's version does not
+  say which path reached it.
 - Also accepted by `analyze`, `analyze_many`, and `analyze_scope` with
   `activity: true`, and by `report`.
 
@@ -477,10 +524,11 @@ analysis.to_h(snapshots: true, metadata: true)
 ```
 
 - It accepts the same ranges as `timeline`.
-- `activity: true` also builds the activity timeline. `snapshots:` and `group:`
-  apply to the activity timeline and require `activity: true`.
+- `activity: true` also builds the activity timeline. `snapshots:`, `group:`,
+  and `recorded_changes:` apply to the activity timeline and require
+  `activity: true`.
 - Options: `from:`, `to:`, `within:`, `associations:`, `ignore:`, `activity:`,
-  `version_scope:`, `close_on:`, `snapshots:`, `group:`.
+  `version_scope:`, `close_on:`, `snapshots:`, `group:`, `recorded_changes:`.
 
 ## Reports for many records
 
@@ -507,7 +555,7 @@ results.fetch(["Order", order.id.to_s]).diff
 - A record with nothing to report gets an empty `Analysis`.
 - Records must be saved and unique.
 - Options: `within:`, `associations:`, `ignore:`, `activity:`, `version_scope:`,
-  `close_on:`, `snapshots:`, `group:`, `allow_expensive:`.
+  `close_on:`, `snapshots:`, `group:`, `recorded_changes:`, `allow_expensive:`.
 
 ### analyze_scope
 
@@ -545,7 +593,7 @@ report = PaperTrailDiff.report(Article.all, since: 1.day.ago, limit: 100)
 ```
 
 It accepts `associations:`, `ignore:`, `snapshots:`, `group:`,
-`include_deleted:`, `historical_filter:`, `max_filter_versions:`, and
+`recorded_changes:`, `include_deleted:`, `historical_filter:`, `max_filter_versions:`, and
 `allow_expensive:`.
 
 ### Which records are selected
@@ -924,6 +972,7 @@ for numeric IDs).
 | `Step` | one `timeline` step |
 | `ActivityStep` | one `activity_timeline` step |
 | `ActivityBoundary` | one end of a step |
+| `ChangeRow` | one row from `change_rows` |
 | `Analysis` | result of `analyze` |
 | `ScopedAnalysis` | result of `analyze_scope` and `report` |
 | `TraversalEntry`, `RecordReference` | entries from `each_change` and `each_entry` |
@@ -972,6 +1021,38 @@ end
 
 Both return an `Enumerator` without a block. They never query the database. A
 record reachable through two requested paths appears at both.
+
+### Change rows
+
+For a table or an export, `change_rows` flattens activity into one row per
+change, each attributed to its step's source version:
+
+```ruby
+steps.last.change_rows                    # one activity step
+analysis.change_rows                      # an Analysis built with activity: true
+report.change_rows                        # { identity => rows }, deleted records last
+
+row = report.change_rows.values.first.first
+row.change           # :changed, :added, or :removed
+row.attribute        # "body", or nil for a row about a whole record
+row.from             # nil for :added
+row.to               # nil for :removed
+row.record           # a RecordReference, or nil for the root
+row.association_path # ["comments"], or [] for the root
+row.source           # the step's source_boundary
+row.to_h             # the above, plus version_id, event, whodunnit, recorded_at,
+                     # and transaction_id
+```
+
+- An edited field is one `:changed` row. A record that appeared or disappeared
+  gets an `:added` or `:removed` row with `attribute` `nil`, then a row for each
+  field that has a value and for each record it holds.
+- A replaced `belongs_to` or `has_one` target gives the old record `:removed`
+  rows, then the new one `:added` rows.
+- Rows follow the diff's walking order, and an analysis's rows follow its steps
+  in time order.
+- `Analysis#change_rows` raises `ConfigurationError` without `activity: true`.
+  `report.change_rows` leaves out a deleted record without destroy history.
 
 ## JSON columns
 
@@ -1033,17 +1114,18 @@ Other details:
   saves a query per version, and a deleted record's values keep their types,
   such as an enum's label rather than the integer PaperTrail stored.
 
-Steps name their source version by ID. Load the versions in one query rather
-than one per step; a model with its own version class needs that class here:
+For activity steps, pass `recorded_changes: true` instead of loading the
+versions again. Each step's sources then carry what their versions recorded,
+with no extra queries; see
+[what each event recorded](#what-each-event-recorded-recorded_changes-true):
 
 <!-- executable:reference-recorded-changes -->
 ```ruby
-ids = steps.map { |step| step.source_boundary.version_id }
-recorded = PaperTrail::Version.where(id: ids).to_h do |version|
-  [version.id, PaperTrailDiff.recorded_changes(version)]
-end
+steps = PaperTrailDiff.activity_timeline(
+  article, associations: [:comments], recorded_changes: true
+)
 
-recorded.fetch(steps.last.source_boundary.version_id)
+steps.last.source_boundary.recorded_changes
 ```
 
 ## Checking your setup

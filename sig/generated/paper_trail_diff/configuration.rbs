@@ -63,5 +63,12 @@ module PaperTrailDiff
 
     # : (String) -> Array[String]
     def attributes_for: (String) -> Array[String]
+
+    # The names to leave out of what a version recorded. A root version is
+    # known to be the root's, so its own path's names apply; any other version
+    # does not say which path reached it, so only the names ignored everywhere
+    # do.
+    # : (root: bool) -> Array[String]
+    def recorded_attributes: (root: bool) -> Array[String]
   end
 end

@@ -431,4 +431,235 @@ RSpec.describe PaperTrailDiff::ActivityTimelineBuilder do
     added = steps.flat_map { |step| step.diff.associations['comments']&.added || [] }
     expect(added.map(&:id)).to eq([comment.id])
   end
+
+  describe 'recorded_changes: true' do
+    def recorded(boundary)
+      boundary.recorded_changes&.transform_values(&:to_h)
+    end
+
+    def sources(step)
+      step.sources.map { |source| [source.item_type, recorded(source)] }
+    end
+
+    it 'gives every boundary the changes its own version recorded' do
+      article, _comment, from, to = edited_history
+
+      steps = timeline(article, from: from, to: to, recorded_changes: true)
+
+      expect(steps.map { |step| recorded(step.from_boundary) })
+        .to eq([{}, { 'body' => { from: 'one', to: 'two' } },
+                { 'body' => { from: 'two', to: 'three' } }])
+      expect(recorded(steps.last.to_boundary)).to eq({})
+      expect(steps.map { |step| sources(step) })
+        .to eq(steps.map { |step| [[step.from_boundary.item_type, recorded(step.from_boundary)]] })
+    end
+
+    it 'reads them in an analysis too' do
+      article, _comment, from, to = edited_history
+
+      steps = analysis(article, from: from, to: to, recorded_changes: true).activity_timeline
+
+      expect(recorded(steps.last.source_boundary)).to eq('body' => { from: 'two', to: 'three' })
+    end
+
+    it 'does not read them unless asked' do
+      article, _comment, from, to = edited_history
+
+      steps = timeline(article, from: from, to: to)
+
+      expect(steps.map { |step| step.from_boundary.recorded_changes? }).to all(be(false))
+    end
+
+    it 'reads the destroy that closes a deleted root, at both of its boundaries' do
+      article, comment, from, = edited_history
+      comment.destroy!
+      article.reload.destroy!
+      destroy = version_of(article)
+
+      closing = timeline(article, from: from, to: destroy, recorded_changes: true).last
+
+      expect(closing.to_boundary.kind).to eq(:destroyed)
+      expect(recorded(closing.to_boundary)).to include('title' => { from: 'Article', to: nil })
+      expect(recorded(closing.from_boundary)).to eq(recorded(closing.to_boundary))
+    end
+
+    it 'gives the live row no recorded changes, since it has no version' do
+      article, comment, from, = edited_history
+      comment.update!(body: 'live')
+
+      [timeline(article, from: from, to: article, recorded_changes: true),
+       timeline(article, within: (Time.now.utc - 60)..Time.now.utc, close_on: :current,
+                         recorded_changes: true)].each do |steps|
+        closing = steps.last
+        expect(closing.to_boundary.kind).to eq(:current)
+        expect(closing.to_boundary.recorded_changes?).to be(true)
+        expect(closing.to_boundary.recorded_changes).to be_nil
+        expect(recorded(closing.from_boundary)).to eq('body' => { from: 'three', to: 'live' })
+      end
+    end
+
+    it 'reads them in a window' do
+      article = TrackedArticle.create!(title: 'Article')
+      comment = article.comments.create!(body: 'one')
+      start = Time.now.utc
+      comment.update!(body: 'two')
+
+      steps = timeline(article, within: start..Time.now.utc, recorded_changes: true)
+
+      expect(steps.map { |step| recorded(step.source_boundary) })
+        .to eq([{ 'body' => { from: 'one', to: 'two' } }])
+    end
+
+    it 'reads the destroy that closes a window' do
+      article = TrackedArticle.create!(title: 'Article')
+      start = Time.now.utc
+      article.destroy!
+
+      closing = timeline(article, within: start..Time.now.utc, recorded_changes: true).last
+
+      expect(closing.to_boundary.kind).to eq(:destroyed)
+      expect(recorded(closing.to_boundary)).to include('title' => { from: 'Article', to: nil })
+      expect(recorded(closing.from_boundary)).to eq(recorded(closing.to_boundary))
+    end
+
+    it 'names every version in a transaction group, each with what it recorded' do
+      article = TrackedArticle.create!(title: 'Article')
+      comment = article.comments.create!(body: 'one')
+      from = checkpoint(article)
+      TrackedArticle.transaction do
+        article.update!(title: 'Retitled')
+        comment.update!(body: 'two')
+      end
+      to = checkpoint(article)
+
+      [timeline(article, from: from, to: to, group: :transaction, recorded_changes: true),
+       timeline(article, within: from.created_at..to.created_at, group: :transaction,
+                         recorded_changes: true)].each do |steps|
+        group = steps.find { |step| step.sources.length > 1 }
+        expect(sources(group))
+          .to eq([['TrackedArticle', { 'title' => { from: 'Article', to: 'Retitled' } }],
+                  ['TrackedComment', { 'body' => { from: 'one', to: 'two' } }]])
+      end
+    end
+
+    it 'leaves out the attributes ignored everywhere, but not those of one path' do
+      article, _comment, from, to = edited_history
+
+      everywhere = timeline(article, from: from, to: to, recorded_changes: true,
+                                     ignore: %w[body updated_at])
+      one_path = timeline(article, from: from, to: to, recorded_changes: true,
+                                   ignore: { paths: { 'comments' => ['body'] } })
+
+      expect(everywhere.map { |step| recorded(step.from_boundary) }).to eq([{}, {}, {}])
+      expect(recorded(one_path.last.from_boundary).keys).to eq(%w[body updated_at])
+    end
+
+    # The root path is the one a version can be placed on: the root's own.
+    describe 'with names ignored on the root path' do
+      let(:ignore) { { all: ['updated_at'], paths: { '$' => %w[title body] } } }
+
+      def retitled
+        article = TrackedArticle.create!(title: 'Article')
+        comment = article.comments.create!(body: 'one')
+        from = checkpoint(article)
+        article.update!(title: 'Retitled', author_id: 1)
+        comment.update!(body: 'two')
+        [article, comment, from]
+      end
+
+      it "leaves them out of the root's versions only" do
+        article, _comment, from = retitled
+        to = checkpoint(article)
+
+        steps = timeline(article, from: from, to: to, recorded_changes: true, ignore: ignore)
+
+        expect(steps.map { |step| [step.from_boundary.item_type, recorded(step.from_boundary)] })
+          .to eq([['TrackedArticle', {}],
+                  ['TrackedArticle', { 'author_id' => { from: nil, to: 1 } }],
+                  ['TrackedComment', { 'body' => { from: 'one', to: 'two' } }]])
+      end
+
+      it 'applies them to the event that closes on the live row' do
+        article, comment, from = retitled
+        comment.update!(body: 'three')
+        article.update!(title: 'Live', author_id: 2)
+
+        [timeline(article, from: from, to: article, recorded_changes: true, ignore: ignore),
+         timeline(article, within: from.created_at..Time.now.utc, close_on: :current,
+                           recorded_changes: true, ignore: ignore)].each do |steps|
+          expect(recorded(steps.last.from_boundary))
+            .to eq('author_id' => { from: 1, to: 2 })
+        end
+      end
+
+      it 'applies them to the event a live row closes when a child changed last' do
+        article, comment, from = retitled
+        comment.update!(body: 'three')
+
+        closing = timeline(article, from: from, to: article, recorded_changes: true,
+                                    ignore: ignore).last
+
+        expect(closing.from_boundary.item_type).to eq('TrackedComment')
+        expect(recorded(closing.from_boundary)).to eq('body' => { from: 'two', to: 'three' })
+      end
+
+      it 'applies them to a closing destroy' do
+        article, comment, from = retitled
+        comment.destroy!
+        article.reload.destroy!
+        destroy = version_of(article)
+
+        [timeline(article, from: from, to: destroy, recorded_changes: true, ignore: ignore),
+         timeline(article, within: from.created_at..Time.now.utc, recorded_changes: true,
+                           ignore: ignore)].each do |steps|
+          closing = steps.last
+          expect(closing.to_boundary.kind).to eq(:destroyed)
+          [closing.from_boundary, closing.to_boundary].each do |boundary|
+            expect(recorded(boundary).keys).not_to include('title')
+            expect(recorded(boundary)).to include('author_id' => { from: 1, to: nil })
+          end
+        end
+      end
+    end
+
+    it 'requires activity' do
+      article = TrackedArticle.create!(title: 'Article')
+
+      expect { PaperTrailDiff.analyze(article, recorded_changes: true) }
+        .to raise_error(PaperTrailDiff::ConfigurationError,
+                        'recorded_changes: requires activity: true')
+      expect { PaperTrailDiff.analyze_many([article], recorded_changes: true) }
+        .to raise_error(PaperTrailDiff::ConfigurationError, /recorded_changes:/)
+      expect { PaperTrailDiff.analyze_scope(TrackedArticle, limit: 1, recorded_changes: true) }
+        .to raise_error(PaperTrailDiff::ConfigurationError, /recorded_changes:/)
+    end
+
+    it 'reads them in single, batch, scope, deleted, and report calls alike' do
+      article = TrackedArticle.create!(title: 'Before')
+      gone = TrackedArticle.create!(title: 'Gone')
+      start = Time.now.utc
+      article.update!(title: 'After')
+      gone.destroy!
+      options = { within: start..(Time.now.utc + 60), close_on: :current, activity: true,
+                  recorded_changes: true }
+      expected = [{ 'title' => { from: 'Before', to: 'After' } }]
+      titles = lambda do |result|
+        result.activity_timeline.map { |step| recorded(step.source_boundary) }
+      end
+
+      scope = PaperTrailDiff.analyze_scope(TrackedArticle, limit: 2, include_deleted: true,
+                                                           **options)
+      report = PaperTrailDiff.report(TrackedArticle, since: start, limit: 2, include_deleted: true,
+                                                     recorded_changes: true)
+
+      expect(titles.call(PaperTrailDiff.analyze(article, **options))).to eq(expected)
+      expect(titles.call(PaperTrailDiff.analyze_many([article], **options).values.fetch(0)))
+        .to eq(expected)
+      [scope, report].each do |result|
+        expect(titles.call(result.analyses.values.fetch(0))).to eq(expected)
+        expect(titles.call(result.deleted.values.fetch(0)).last)
+          .to include('title' => { from: 'Gone', to: nil })
+      end
+    end
+  end
 end

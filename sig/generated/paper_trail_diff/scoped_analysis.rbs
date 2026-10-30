@@ -29,6 +29,12 @@ module PaperTrailDiff
     # : (analyses: Hash[Array[String], Analysis], unreachable: Array[Array[String]], ?roots: Array[untyped], ?deleted: Hash[Array[String], Analysis?]) -> void
     def initialize: (analyses: Hash[Array[String], Analysis], unreachable: Array[Array[String]], ?roots: Array[untyped], ?deleted: Hash[Array[String], Analysis?]) -> void
 
+    # Each root's change rows, keyed as `analyses` is: the roots that still
+    # exist, then the deleted ones that have history to report. A deleted root
+    # without destroy history has no rows and is left out.
+    # : () -> Hash[Array[String], Array[ChangeRow]]
+    def change_rows: () -> Hash[Array[String], Array[ChangeRow]]
+
     # Two elements, not three: `roots` is reached by name so that existing
     # destructuring keeps working.
     # : () -> [Hash[Array[String], Analysis], Array[Array[String]]]

@@ -10,10 +10,12 @@ module PaperTrailDiff
     # The only thing a wall-clock window can close on besides a later version.
     CLOSE_ON_CURRENT = :current
 
-    #: (associations: Array[String | Symbol], ignore: ignore_option, ?reload_live_endpoints: bool, ?allow_expensive: bool) -> void
-    def initialize(associations:, ignore:, reload_live_endpoints: true, allow_expensive: false)
+    # `recorded_changes:` reads what each activity boundary's version recorded.
+    #: (associations: Array[String | Symbol], ignore: ignore_option, ?reload_live_endpoints: bool, ?allow_expensive: bool, ?recorded_changes: bool) -> void
+    def initialize(associations:, ignore:, reload_live_endpoints: true, allow_expensive: false, recorded_changes: false) # rubocop:disable Metrics/MethodLength, Layout/LineLength
       @association_tree = AssociationTree.build(associations)
       @ignore_policy = IgnorePolicy.build(ignore, association_paths: @association_tree.paths)
+      @recorded = (@ignore_policy if recorded_changes)
       @traversal = AssociationTraversal.new(@association_tree)
       @batch_safety = BatchSafety.new(@traversal, allow_expensive: allow_expensive)
       @traversal_preparer = TraversalPreparer.new(tree: @association_tree, traversal: @traversal)
@@ -90,7 +92,7 @@ module PaperTrailDiff
 
     #: (untyped, from: untyped, to: untyped, within: untyped, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?) -> Analysis
     def analyze(record, from:, to:, within:, activity: false, version_scope: nil, close_on: nil, snapshots: false, group: nil) # rubocop:disable Metrics/ParameterLists, Layout/LineLength
-      ActivityGrouping.validate!(group, activity: activity, snapshots: snapshots)
+      validate_activity_options!(group, activity, snapshots)
       @traversal_preparer.call(record.class, historical: true)
       from, to = default_range(record, from, to, within)
       live = live_endpoint_for(record, close_on, within)
@@ -110,7 +112,7 @@ module PaperTrailDiff
     # Analyzes many roots over one shared range, preparing their history once.
     #: (Array[untyped], within: untyped, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?) -> Hash[identity, Analysis]
     def analyze_many(records, within:, activity: false, version_scope: nil, close_on: nil, snapshots: false, group: nil) # rubocop:disable Metrics/ParameterLists, Layout/LineLength
-      ActivityGrouping.validate!(group, activity: activity, snapshots: snapshots)
+      validate_activity_options!(group, activity, snapshots)
       count = records.is_a?(Array) ? records.length : 0
       payload = @instrumentation_payload.merge(comparison_count: count)
       Instrumentation.instrument('analyze_many', payload) do
@@ -133,7 +135,7 @@ module PaperTrailDiff
     # rather than dropped -- see `PaperTrailDiff.analyze_scope`.
     #: (untyped, limit: Integer?, within: untyped, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?historical_filter: untyped, ?max_filter_versions: Integer, ?include_deleted: bool) -> ScopedAnalysis
     def analyze_scope(scope, limit:, within:, activity: false, version_scope: nil, close_on: nil, snapshots: false, group: nil, historical_filter: nil, max_filter_versions: HistoricalFilter::DEFAULT_VERSION_LIMIT, include_deleted: false) # rubocop:disable Metrics/ParameterLists, Layout/LineLength
-      ActivityGrouping.validate!(group, activity: activity, snapshots: snapshots)
+      validate_activity_options!(group, activity, snapshots)
       check_scope(scope, activity)
       # @type var options: report_options
       options = { within: within, activity: activity, version_scope: version_scope,
@@ -152,6 +154,12 @@ module PaperTrailDiff
     end
 
     private
+
+    #: (Symbol?, bool, bool) -> void
+    def validate_activity_options!(group, activity, snapshots)
+      ActivityGrouping.validate!(group, activity: activity, snapshots: snapshots,
+                                        recorded_changes: !@recorded.nil?)
+    end
 
     # Selecting by activity reads association history, so it must be available
     # before the first selection query rather than once analysis starts.
@@ -209,6 +217,7 @@ module PaperTrailDiff
     # @rbs @live_endpoints: LiveEndpointProvider
     # @rbs @instrumentation_payload: Hash[Symbol, untyped]
     # @rbs @ignore_policy: IgnorePolicy
+    # @rbs @recorded: IgnorePolicy?
     # @rbs @traversal: AssociationTraversal
     # @rbs @traversal_preparer: TraversalPreparer
     # @rbs @snapshot_pool: SnapshotPool
@@ -298,7 +307,8 @@ module PaperTrailDiff
         timeline_snapshotter: @timeline_snapshotter,
         activity_snapshotter: @activity_snapshotter,
         preparer: @traversal_preparer.method(:call),
-        activity: activity, within: within, snapshots: snapshots, group: group
+        activity: activity, within: within, snapshots: snapshots, group: group,
+        recorded: @recorded
       )
     end
 
@@ -342,7 +352,8 @@ module PaperTrailDiff
         tree: @association_tree,
         snapshotter: @activity_snapshotter,
         snapshots: snapshots,
-        group: group
+        group: group,
+        recorded: @recorded
       )
     end
 

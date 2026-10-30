@@ -48,6 +48,7 @@ matcher:
     - PaperTrailDiff::BatchedRootVersions*
     - PaperTrailDiff::DeletedAnalysisBatch*
     - PaperTrailDiff::RecordedChanges*
+    - PaperTrailDiff::ChangeRow*
     - PaperTrailDiff::AssociationActivitySelection*
     - PaperTrailDiff::AssociationActivityEdge*
     - PaperTrailDiff::ActivityTargetCandidateLoader*

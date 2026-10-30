@@ -36,6 +36,17 @@ module PaperTrailDiff
       freeze
     end
 
+    # Each root's change rows, keyed as `analyses` is: the roots that still
+    # exist, then the deleted ones that have history to report. A deleted root
+    # without destroy history has no rows and is left out.
+    #: () -> Hash[Array[String], Array[ChangeRow]]
+    def change_rows
+      rows = {} #: Hash[Array[String], Array[ChangeRow]]
+      analyses.each { |identity, analysis| rows[identity] = analysis.change_rows }
+      deleted.each { |identity, analysis| rows[identity] = analysis.change_rows if analysis }
+      rows.freeze
+    end
+
     # Two elements, not three: `roots` is reached by name so that existing
     # destructuring keeps working.
     #: () -> [Hash[Array[String], Analysis], Array[Array[String]]]
