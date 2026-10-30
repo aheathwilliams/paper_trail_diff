@@ -1134,8 +1134,10 @@ PaperTrailDiff.nested_changes(from_value, to_value) # also accepts two values
   inside arrays are compared whole.
 - A missing key is `PaperTrailDiff::NestedComparator::ABSENT`, not `nil`, because
   `{"a": null}` and `{}` are different.
-- A value that is not JSON on both sides returns `{}`; the attribute diff still
-  has the whole change.
+- Two arrays at the top, as a `json` column can hold, return one `ArrayChange`
+  at the empty path: `{ [] => <added [3], removed [2]> }`.
+- A value that is not JSON on both sides, or an object facing an array, returns
+  `{}`; the attribute diff still has the whole change.
 - Keys such as `:a` and `"a"` in one object raise `AmbiguousNestedKeyError`.
 
 ## What a version recorded

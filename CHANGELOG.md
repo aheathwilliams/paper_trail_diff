@@ -65,6 +65,10 @@ project follows [Semantic Versioning](https://semver.org/).
   (`associations: [:author, { comments: :replies }]`), as well as the arrays of
   names and dotted paths it took before.
 
+- `nested_changes` compares two top-level arrays, as a `json` column can hold,
+  and reports one `ArrayChange` at the empty path, `[]`. It returned `{}`,
+  although arrays nested in an object were compared.
+
 ### Changed
 
 - The gemspec requires Active Record 7.1 to 8.1, the versions CI tests. It

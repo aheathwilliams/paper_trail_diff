@@ -43,6 +43,7 @@ module PaperTrailDiff
     # Returns the changed paths, or an empty hash when the pair is not two
     # structures this can look inside. An empty result therefore means "nothing
     # to report at this depth", and the caller still has the whole-value change.
+    # Two arrays at the top are one membership change, at the empty path.
     # : () -> nested_changes
     def call: () -> nested_changes
 
@@ -52,14 +53,16 @@ module PaperTrailDiff
 
     @to_value: untyped
 
-    # Both sides have to be readable as a Hash for a nested answer to mean
-    # anything. A column that held text on one side and JSON on the other
-    # changed wholesale, and saying so is the accurate report.
-    # : () -> [Hash[untyped, untyped]?, Hash[untyped, untyped]?]
-    def structures: () -> [ Hash[untyped, untyped]?, Hash[untyped, untyped]? ]
+    # Both sides have to be readable as the same kind of structure for a
+    # nested answer to mean anything. A column that held text on one side and
+    # JSON on the other changed wholesale, and saying so is the accurate report.
+    # : () -> [untyped, untyped]
+    def structures: () -> [ untyped, untyped ]
 
-    # : (untyped) -> Hash[untyped, untyped]?
-    def structure: (untyped) -> Hash[untyped, untyped]?
+    # A string is read as JSON; anything else, or JSON that is neither an
+    # object nor an array, is left for #call to decline.
+    # : (untyped) -> untyped
+    def structure: (untyped) -> untyped
 
     # : (Hash[untyped, untyped], Hash[untyped, untyped], Array[String], nested_changes) -> void
     def walk: (Hash[untyped, untyped], Hash[untyped, untyped], Array[String], nested_changes) -> void
