@@ -6,7 +6,7 @@ module PaperTrailDiff
   class ActivityTimelineBuilder # rubocop:disable Metrics/ClassLength
     include ActivityGrouping
 
-    #: (untyped, range: TimelineRange, tree: AssociationTree, snapshotter: untyped, snapshots: bool, group: Symbol?, ?recorded: Array[String]?) -> void
+    #: (untyped, range: TimelineRange, tree: AssociationTree, snapshotter: untyped, snapshots: bool, group: Symbol?, ?recorded: IgnorePolicy?) -> void
     def initialize(record, range:, tree:, snapshotter:, snapshots:, group:, recorded: nil) # rubocop:disable Metrics/ParameterLists
       ActivityGrouping.validate!(group)
       @snapshots = snapshots
@@ -56,7 +56,7 @@ module PaperTrailDiff
     # @rbs @tree: AssociationTree
     # @rbs @snapshotter: untyped
     # @rbs @snapshots: bool
-    # @rbs @recorded: Array[String]?
+    # @rbs @recorded: IgnorePolicy?
 
     #: () -> Array[ActivityStep]
     def no_steps
@@ -127,9 +127,14 @@ module PaperTrailDiff
       [plan, [], ActivityHistory.empty, nil, nil]
     end
 
+    #: () -> Array[String]?
+    def root_recorded
+      @recorded&.recorded_attributes(root: true)
+    end
+
     #: (untyped) -> ActivityBoundary
     def current_boundary(captured_at)
-      ActivityBoundary.current(@to, captured_at: captured_at, recorded: @recorded)
+      ActivityBoundary.current(@to, captured_at: captured_at, recorded: root_recorded)
     end
 
     #: () -> [RecordSnapshot?, untyped]
@@ -181,7 +186,9 @@ module PaperTrailDiff
       if final_boundary
         last_event = events.last #: ActivityEvent
         steps << ActivityStep.between(
-          from_boundary: ActivityBoundary.from_version(last_event.version, recorded: @recorded),
+          from_boundary: ActivityBoundary.from_version(
+            last_event.version, recorded: @recorded&.recorded_attributes(root: last_event.root?)
+          ),
           to_boundary: final_boundary,
           from_snapshot: history.last_snapshot, to_snapshot: final_snapshot,
           retain: @retain
@@ -197,7 +204,7 @@ module PaperTrailDiff
       version = root_versions.last
       return unless version.event == 'destroy'
 
-      ActivityBoundary.destroyed(version, recorded: @recorded)
+      ActivityBoundary.destroyed(version, recorded: root_recorded)
     end
 
     #: (Array[untyped], Array[ActivityEvent], ?current: untyped) -> ActivityHistory

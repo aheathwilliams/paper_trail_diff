@@ -554,6 +554,74 @@ RSpec.describe PaperTrailDiff::ActivityTimelineBuilder do
       expect(recorded(one_path.last.from_boundary).keys).to eq(%w[body updated_at])
     end
 
+    # The root path is the one a version can be placed on: the root's own.
+    describe 'with names ignored on the root path' do
+      let(:ignore) { { all: ['updated_at'], paths: { '$' => %w[title body] } } }
+
+      def retitled
+        article = TrackedArticle.create!(title: 'Article')
+        comment = article.comments.create!(body: 'one')
+        from = checkpoint(article)
+        article.update!(title: 'Retitled', author_id: 1)
+        comment.update!(body: 'two')
+        [article, comment, from]
+      end
+
+      it "leaves them out of the root's versions only" do
+        article, _comment, from = retitled
+        to = checkpoint(article)
+
+        steps = timeline(article, from: from, to: to, recorded_changes: true, ignore: ignore)
+
+        expect(steps.map { |step| [step.from_boundary.item_type, recorded(step.from_boundary)] })
+          .to eq([['TrackedArticle', {}],
+                  ['TrackedArticle', { 'author_id' => { from: nil, to: 1 } }],
+                  ['TrackedComment', { 'body' => { from: 'one', to: 'two' } }]])
+      end
+
+      it 'applies them to the event that closes on the live row' do
+        article, comment, from = retitled
+        comment.update!(body: 'three')
+        article.update!(title: 'Live', author_id: 2)
+
+        [timeline(article, from: from, to: article, recorded_changes: true, ignore: ignore),
+         timeline(article, within: from.created_at..Time.now.utc, close_on: :current,
+                           recorded_changes: true, ignore: ignore)].each do |steps|
+          expect(recorded(steps.last.from_boundary))
+            .to eq('author_id' => { from: 1, to: 2 })
+        end
+      end
+
+      it 'applies them to the event a live row closes when a child changed last' do
+        article, comment, from = retitled
+        comment.update!(body: 'three')
+
+        closing = timeline(article, from: from, to: article, recorded_changes: true,
+                                    ignore: ignore).last
+
+        expect(closing.from_boundary.item_type).to eq('TrackedComment')
+        expect(recorded(closing.from_boundary)).to eq('body' => { from: 'two', to: 'three' })
+      end
+
+      it 'applies them to a closing destroy' do
+        article, comment, from = retitled
+        comment.destroy!
+        article.reload.destroy!
+        destroy = version_of(article)
+
+        [timeline(article, from: from, to: destroy, recorded_changes: true, ignore: ignore),
+         timeline(article, within: from.created_at..Time.now.utc, recorded_changes: true,
+                           ignore: ignore)].each do |steps|
+          closing = steps.last
+          expect(closing.to_boundary.kind).to eq(:destroyed)
+          [closing.from_boundary, closing.to_boundary].each do |boundary|
+            expect(recorded(boundary).keys).not_to include('title')
+            expect(recorded(boundary)).to include('author_id' => { from: 1, to: nil })
+          end
+        end
+      end
+    end
+
     it 'requires activity' do
       article = TrackedArticle.create!(title: 'Article')
 

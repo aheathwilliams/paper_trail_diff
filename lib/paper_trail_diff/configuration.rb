@@ -166,5 +166,14 @@ module PaperTrailDiff
       external_path = path.empty? ? ROOT_PATH : path
       (all + paths.fetch(external_path, [])).uniq.freeze
     end
+
+    # The names to leave out of what a version recorded. A root version is
+    # known to be the root's, so its own path's names apply; any other version
+    # does not say which path reached it, so only the names ignored everywhere
+    # do.
+    #: (root: bool) -> Array[String]
+    def recorded_attributes(root:)
+      root ? attributes_for('') : all
+    end
   end
 end

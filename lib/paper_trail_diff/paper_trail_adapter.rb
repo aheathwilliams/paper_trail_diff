@@ -11,13 +11,11 @@ module PaperTrailDiff
     CLOSE_ON_CURRENT = :current
 
     # `recorded_changes:` reads what each activity boundary's version recorded.
-    # A version does not say which association path reached it, so only the
-    # attributes ignored everywhere are left out of those changes.
     #: (associations: Array[String | Symbol], ignore: ignore_option, ?reload_live_endpoints: bool, ?allow_expensive: bool, ?recorded_changes: bool) -> void
     def initialize(associations:, ignore:, reload_live_endpoints: true, allow_expensive: false, recorded_changes: false) # rubocop:disable Metrics/MethodLength, Layout/LineLength
       @association_tree = AssociationTree.build(associations)
       @ignore_policy = IgnorePolicy.build(ignore, association_paths: @association_tree.paths)
-      @recorded = (@ignore_policy.all if recorded_changes)
+      @recorded = (@ignore_policy if recorded_changes)
       @traversal = AssociationTraversal.new(@association_tree)
       @batch_safety = BatchSafety.new(@traversal, allow_expensive: allow_expensive)
       @traversal_preparer = TraversalPreparer.new(tree: @association_tree, traversal: @traversal)
@@ -219,7 +217,7 @@ module PaperTrailDiff
     # @rbs @live_endpoints: LiveEndpointProvider
     # @rbs @instrumentation_payload: Hash[Symbol, untyped]
     # @rbs @ignore_policy: IgnorePolicy
-    # @rbs @recorded: Array[String]?
+    # @rbs @recorded: IgnorePolicy?
     # @rbs @traversal: AssociationTraversal
     # @rbs @traversal_preparer: TraversalPreparer
     # @rbs @snapshot_pool: SnapshotPool

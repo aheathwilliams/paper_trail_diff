@@ -6,7 +6,7 @@ module PaperTrailDiff
   class TimeActivityTimelineBuilder
     include ActivityGrouping
 
-    #: (untyped, range: TimelineRange, tree: AssociationTree, snapshotter: untyped, ?snapshots: bool, ?group: Symbol?, ?recorded: Array[String]?) -> void
+    #: (untyped, range: TimelineRange, tree: AssociationTree, snapshotter: untyped, ?snapshots: bool, ?group: Symbol?, ?recorded: IgnorePolicy?) -> void
     def initialize(record, range:, tree:, snapshotter:, snapshots: false, group: nil, recorded: nil) # rubocop:disable Metrics/ParameterLists
       @snapshots = snapshots
       @group = group
@@ -49,7 +49,7 @@ module PaperTrailDiff
     # @rbs @tree: AssociationTree
     # @rbs @snapshotter: untyped
     # @rbs @snapshots: bool
-    # @rbs @recorded: Array[String]?
+    # @rbs @recorded: IgnorePolicy?
 
     #: () -> [ActivityHistory, RootVersionPlan, ActivityStep?, RecordSnapshot?, untyped]
     def history_and_versions
@@ -151,9 +151,10 @@ module PaperTrailDiff
     #: (ActivityHistory, ActivityEvent) -> ActivityStep
     def destroyed_step(history, event)
       version = event.version
+      recorded = @recorded&.recorded_attributes(root: true)
       ActivityStep.between(
-        from_boundary: ActivityBoundary.from_version(version, recorded: @recorded),
-        to_boundary: ActivityBoundary.destroyed(version, recorded: @recorded),
+        from_boundary: ActivityBoundary.from_version(version, recorded: recorded),
+        to_boundary: ActivityBoundary.destroyed(version, recorded: recorded),
         from_snapshot: history.root_snapshots[ActivityRootSteps.version_key(version)],
         to_snapshot: nil, retain: @retain
       )
@@ -167,10 +168,10 @@ module PaperTrailDiff
       previous = history.last_boundary
       return unless previous
 
+      recorded = @recorded&.recorded_attributes(root: true)
       ActivityStep.between(
         from_boundary: previous,
-        to_boundary: ActivityBoundary.current(record, captured_at: captured_at,
-                                                      recorded: @recorded),
+        to_boundary: ActivityBoundary.current(record, captured_at: captured_at, recorded: recorded),
         from_snapshot: history.last_event_snapshot, to_snapshot: snapshot, retain: @retain
       )
     end

@@ -19,8 +19,9 @@ project follows [Semantic Versioning](https://semver.org/).
   replaces the reference recipe that loaded every step's version again.
   Without the option, `boundary.recorded_changes` raises `ConfigurationError`
   rather than returning `nil`. Names in `ignore:` or `ignore: { all: }` are
-  left out; path-specific names are not, because a version does not say which
-  path reached it.
+  left out, and so are names on the root path, `"$"`, for the root's own
+  versions. Names on an association path are not, because a child's version
+  does not say which path reached it.
 
 ### Fixed
 

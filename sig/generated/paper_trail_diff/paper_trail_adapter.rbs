@@ -10,8 +10,6 @@ module PaperTrailDiff
     CLOSE_ON_CURRENT: ::Symbol
 
     # `recorded_changes:` reads what each activity boundary's version recorded.
-    # A version does not say which association path reached it, so only the
-    # attributes ignored everywhere are left out of those changes.
     # : (associations: Array[String | Symbol], ignore: ignore_option, ?reload_live_endpoints: bool, ?allow_expensive: bool, ?recorded_changes: bool) -> void
     def initialize: (associations: Array[String | Symbol], ignore: ignore_option, ?reload_live_endpoints: bool, ?allow_expensive: bool, ?recorded_changes: bool) -> void
 
@@ -80,7 +78,7 @@ module PaperTrailDiff
 
     @normalizer: SnapshotNormalizer
 
-    @recorded: Array[String]?
+    @recorded: IgnorePolicy?
 
     @snapshot_pool: SnapshotPool
 

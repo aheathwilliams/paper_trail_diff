@@ -464,9 +464,10 @@ end
   returning `nil`, so a missing option cannot look like a version that recorded
   nothing.
 - `to_h(metadata: true)` includes them on each boundary and source.
-- Names in `ignore:`, or in `ignore: { all: }`, are left out. Names under
-  `ignore: { paths: }` are not, because a version does not say which path
-  reached it.
+- Names in `ignore:`, or in `ignore: { all: }`, are left out. So are names
+  ignored on the root path, `"$"`, for the root's own versions. Names ignored
+  on an association path are not left out, because a child's version does not
+  say which path reached it.
 - Also accepted by `analyze`, `analyze_many`, and `analyze_scope` with
   `activity: true`, and by `report`.
 
