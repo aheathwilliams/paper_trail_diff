@@ -459,7 +459,10 @@ end
 - Each boundary's `recorded_changes` is what
   `PaperTrailDiff.recorded_changes(version)` returns for its version: `nil`
   when nothing was recorded, and always `nil` for the current record. The
-  versions are already loaded, so this adds no queries.
+  versions are already loaded, so this adds no queries, but decoding each
+  version's changes takes time: about a third more for a `report` of 200
+  articles with comments, with history stored as YAML. Pass it only when you
+  use them.
 - Without the option, `recorded_changes` raises `ConfigurationError` instead of
   returning `nil`, so a missing option cannot look like a version that recorded
   nothing.
