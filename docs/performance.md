@@ -77,8 +77,9 @@ Model initializations fell from 17 / 85 / 340 (`scoped`) and 19 / 95 / 380
 default-scoped comments are read without `reify` because their scope assigns
 no attributes to a new record; one such as `where(hidden: false)` does, so
 those records are still rebuilt with `reify`, though the query count stays
-flat. `limited` (`order(:id).limit(1)`) and `owner` (a scope that takes the
-article) still raise without the opt-in, and cost what they did.
+flat. `owner` (a scope that takes the article) still raises without the
+opt-ins, and costs what it did. `limited` (`order(:id).limit(1)`) is now read
+from history too; see [limited associations](#limited-associations-2026-10-29).
 
 ## Fewer `reify` calls: 2026-10-29
 
@@ -141,9 +142,9 @@ development checks, so they do not establish a controlled speedup.
 
 Live records and version rows still instantiate when loaded in batches. Zero
 historical instances does not mean zero allocation or constant total CPU cost.
-The missing-changeset case previously used 15 / 27 / 72 queries. Limited,
-owner-scoped, default-scoped and collection-source through paths now refuse
-before report SQL by default. With explicit opt-in, the five-root through probe
+The missing-changeset case previously used 15 / 27 / 72 queries. Owner-scoped,
+some default-scoped, and collection-source through paths refuse before report
+SQL by default; limited paths are now read from history. With explicit opt-in, the five-root through probe
 used 199 queries and 75 reify calls, but no unrelated authorship loads.
 
 Three diagnostic samples at 500 roots had median 742.3 ms for checkpoints and

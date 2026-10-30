@@ -123,7 +123,8 @@ RSpec.describe PaperTrailDiff::BatchSafety do
       .to raise_error(
         PaperTrailDiff::UnsupportedBatchPathError,
         'association default_scoped_comments requires per-record reconstruction ' \
-        '(default-scoped target); remove this path or explicitly pass allow_expensive: true'
+        '(default-scoped target); remove this path, or pass allow_approximate: true and ' \
+        "allow_expensive: true to accept PT-AT's approximate reading, one record at a time"
       )
   end
 

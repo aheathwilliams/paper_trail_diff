@@ -206,7 +206,8 @@ RSpec.describe PaperTrailDiff::ScopeCondition do
     end
 
     it 'reads every side of an OR node that has more than two' do
-      unless Arel::Nodes::Or < Arel::Nodes::Nary
+      # Rails 7.1 has no Nary node to compare with.
+      unless defined?(Arel::Nodes::Nary) && Arel::Nodes::Or < Arel::Nodes::Nary
         skip 'OR nodes have exactly two sides before Rails 7.2'
       end
       any = -> { where(Arel::Nodes::Or.new([1, 2, 3].map { |rank| table[:rank].eq(rank) })) }

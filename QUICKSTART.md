@@ -246,10 +246,11 @@ The same `within:` option works on `activity_timeline`, `analyze`,
 | Recent activity through now, for the records a relation selects | `report(scope, since:, limit:)` |
 
 Use the batch methods for many records so they can share database queries.
-Some scoped associations and `has_many :through` histories still need queries
-for each record. Batch calls reject those with `UnsupportedBatchPathError`.
-The error names the association. `allow_expensive: true` permits that extra work;
-see the [performance guide](docs/performance.md) before using it in a large report.
+A few scoped associations, such as one whose scope is SQL text, can be read
+only with PT-AT, approximately and one record at a time. Batch calls reject
+them with `UnsupportedBatchPathError`, naming the association; passing
+`allow_approximate: true` and `allow_expensive: true` accepts both costs. See
+[costly associations](docs/reference.md#costly-associations).
 
 When associations are included, `timeline` compares their values at the article's
 versions. `activity_timeline` also reports the comments' own version events, even

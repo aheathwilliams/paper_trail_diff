@@ -1227,8 +1227,12 @@ and `cycle`. Cycles are marked and not followed.
 
 Only associations a request accepts are listed, so each path can be passed to
 `associations:`. The PaperTrail versions association, a `has_many :through`
-that goes through a HABTM, a scoped HABTM, a HABTM below the root, and an
-association keyed on a column other than a primary key are left out. A
+that goes through a HABTM, a scoped HABTM, a HABTM below the root, an
+association keyed on a column other than a primary key, and one whose ends
+keep their versions in different tables are left out. A path history can
+read only approximately, such as one with a scope written as SQL text, is
+listed, but requesting it also takes `allow_approximate: true` (see
+[costly associations](#costly-associations)). A
 `has_many :through` Active Record cannot follow, such as one through a
 polymorphic `belongs_to`, raises Active Record's own error from any model
 discovery reaches, as requesting it does.

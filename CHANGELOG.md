@@ -79,6 +79,14 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- `UnsupportedBatchPathError` names both `allow_approximate: true` and
+  `allow_expensive: true`: such a path is read approximately too, so naming
+  only `allow_expensive:` led to a second error. `IncompleteTimeRangeError`
+  no longer advises the deprecated `close_on: :current`. The quickstart and
+  performance guide no longer say that `has_many :through` or limited
+  associations need the opt-ins, and the reference says that
+  `association_paths` lists paths that need `allow_approximate: true`.
+
 - The quickstart sets PaperTrail's `yaml_column_permitted_classes`. In a new
   Rails 8.1 app, versions hold timestamps as `ActiveSupport::TimeWithZone`,
   and the quickstart's first `reify` raised `Psych::DisallowedClass` without
@@ -89,9 +97,10 @@ project follows [Semantic Versioning](https://semver.org/).
   `within:` find changed records by type and time, which the one index they
   recommended cannot narrow, so each report read every version of the model:
   about 230 ms instead of 2 ms on PostgreSQL with 5 million versions.
-- The gemspec requires Active Record 7.1 to 8.1, the versions CI tests. It
-  named only PaperTrail, so Bundler could install the gem with Active Record
-  6.1 or 7.0, whose relations and Arel nodes the gem reads differently.
+- The gemspec requires Active Record 7.1 to 8.1. CI tests 7.2 through 8.1,
+  and the suite passes on 7.1. It named only PaperTrail, so Bundler could
+  install the gem with Active Record 6.1 or 7.0, whose relations and Arel
+  nodes the gem reads differently.
 - `close_on:` is deprecated and warns through the new
   `PaperTrailDiff.deprecator`. It has had no effect since a window began
   closing on the current record by default; remove it. In a Rails app,

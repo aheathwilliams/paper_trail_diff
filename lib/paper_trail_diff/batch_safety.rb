@@ -21,9 +21,12 @@ module PaperTrailDiff
       path, reason = self.class.fallback_paths(@traversal, model).first
       return unless path
 
+      # Such a path is read approximately too, so both opt-ins are named:
+      # naming one only led to an error asking for the other.
       raise UnsupportedBatchPathError,
             "association #{path} requires per-record reconstruction (#{reason}); " \
-            'remove this path or explicitly pass allow_expensive: true'
+            'remove this path, or pass allow_approximate: true and allow_expensive: true ' \
+            "to accept PT-AT's approximate reading, one record at a time"
     end
 
     # Each requested path whose history prepared history cannot read, with
