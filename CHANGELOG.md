@@ -107,6 +107,12 @@ project follows [Semantic Versioning](https://semver.org/).
   ordered by their ids. Each table counts its ids separately, so their order
   said nothing about which change came first, and an activity timeline built
   from them could credit a change to the wrong step.
+- `compare_many`, `analyze_many`, `analyze_scope`, and `report` load a
+  `has_one` of every current record in one query again, as before 0.14.0.
+  0.14.0 meant to load only a `has_one` with a declared limit or offset per
+  record, but checked the association's scope, to which Active Record adds
+  `limit(1)` for every `has_one`, so every `has_one` cost one query per
+  record.
 - A snapshot's collections list their records by type, then ID, as the
   reference says, wherever the snapshot was read from. Snapshots rebuilt from
   history or carried through an activity timeline listed them in the order
