@@ -51,3 +51,7 @@ unless ENV['PAPER_TRAIL_DIFF_MUTANT'] || coverage_name == 'oracle'
 end
 
 require 'paper_trail_diff'
+
+# Specs still pass deprecated options to check they keep working; the
+# deprecation spec checks the warning itself.
+PaperTrailDiff.deprecator.behavior = :silence

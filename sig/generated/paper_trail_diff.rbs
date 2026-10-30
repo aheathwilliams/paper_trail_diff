@@ -76,6 +76,10 @@ module PaperTrailDiff
   # : (untyped, since: untyped, limit: Integer, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?snapshots: bool, ?group: Symbol?, ?include_deleted: bool, ?historical_filter: untyped, ?max_filter_versions: Integer, ?allow_expensive: bool, ?recorded_changes: bool, ?allow_approximate: bool) -> ScopedAnalysis
   def self.report: (untyped, since: untyped, limit: Integer, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?snapshots: bool, ?group: Symbol?, ?include_deleted: bool, ?historical_filter: untyped, ?max_filter_versions: Integer, ?allow_expensive: bool, ?recorded_changes: bool, ?allow_approximate: bool) -> ScopedAnalysis
 
+  # Warns about deprecated options; see Deprecation.
+  # : () -> untyped
+  def self.deprecator: () -> untyped
+
   # Returns the association macros this release can normalize.
   # : () -> Array[Symbol]
   def self.supported_association_macros: () -> Array[Symbol]

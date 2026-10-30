@@ -641,6 +641,23 @@ RSpec.describe PaperTrailDiff do
       expect(counts).to eq([1, 1])
     end
 
+    it 'warns that close_on: is deprecated, once per call, in every method that takes it' do
+      articles, window = open_window_articles(1)
+      article = articles.fetch(0)
+      allow(described_class.deprecator).to receive(:warn)
+
+      described_class.timeline(article, within: window, close_on: :current)
+      described_class.activity_timeline(article, within: window, close_on: :current)
+      described_class.analyze(article, within: window, close_on: :current)
+      described_class.analyze_many([article], within: window, close_on: :current)
+      described_class.analyze_scope(CoreArticle, within: window, limit: 5, close_on: :current)
+      described_class.report(CoreArticle, since: window.begin, limit: 5)
+      described_class.timeline(article, within: window)
+
+      expect(described_class.deprecator).to have_received(:warn)
+        .with(/close_on: is deprecated and has no effect/).exactly(5).times
+    end
+
     it 'rejects a closing endpoint the range cannot use' do
       articles, window = open_window_articles(1)
       article = articles.fetch(0)

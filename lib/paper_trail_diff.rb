@@ -9,6 +9,7 @@ require_relative 'paper_trail_diff/version_query'
 require_relative 'paper_trail_diff/stored_time_precision'
 require_relative 'paper_trail_diff/version_boundary'
 require_relative 'paper_trail_diff/instrumentation'
+require_relative 'paper_trail_diff/deprecation'
 require_relative 'paper_trail_diff/errors'
 require_relative 'paper_trail_diff/configuration'
 require_relative 'paper_trail_diff/endpoint'
@@ -194,6 +195,7 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
       close_on: nil,
       allow_approximate: false
     )
+      Deprecation.close_on!(close_on)
       PaperTrailAdapter.new(
         associations: associations, ignore: ignore, allow_approximate: allow_approximate
       ).timeline(
@@ -226,6 +228,7 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
       recorded_changes: false,
       allow_approximate: false
     )
+      Deprecation.close_on!(close_on)
       PaperTrailAdapter.new(
         associations: associations, ignore: ignore, reload_live_endpoints: reload_live_endpoints,
         recorded_changes: recorded_changes, allow_approximate: allow_approximate
@@ -258,6 +261,7 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
       recorded_changes: false,
       allow_approximate: false
     )
+      Deprecation.close_on!(close_on)
       PaperTrailAdapter.new(
         associations: associations, ignore: ignore, recorded_changes: recorded_changes,
         allow_approximate: allow_approximate
@@ -294,6 +298,7 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
       recorded_changes: false,
       allow_approximate: false
     )
+      Deprecation.close_on!(close_on)
       PaperTrailAdapter.new(
         associations: associations, ignore: ignore, allow_expensive: allow_expensive,
         recorded_changes: recorded_changes, allow_approximate: allow_approximate
@@ -346,6 +351,7 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
       recorded_changes: false,
       allow_approximate: false
     )
+      Deprecation.close_on!(close_on)
       adapter = PaperTrailAdapter.new(associations: associations, ignore: ignore,
                                       allow_expensive: allow_expensive,
                                       recorded_changes: recorded_changes,
@@ -372,11 +378,17 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
       analyze_scope(
         scope,
         within: since..Time.now.utc, limit: limit, associations: associations,
-        ignore: ignore, activity: true, close_on: :current, snapshots: snapshots, group: group,
+        ignore: ignore, activity: true, snapshots: snapshots, group: group,
         include_deleted: include_deleted, historical_filter: historical_filter,
         max_filter_versions: max_filter_versions, allow_expensive: allow_expensive,
         recorded_changes: recorded_changes, allow_approximate: allow_approximate
       )
+    end
+
+    # Warns about deprecated options; see Deprecation.
+    #: () -> untyped
+    def deprecator
+      Deprecation.deprecator
     end
 
     # Returns the association macros this release can normalize.

@@ -60,6 +60,14 @@ project follows [Semantic Versioning](https://semver.org/).
   for whole records, so a record added or removed with only blank fields left
   no trace.
 
+### Changed
+
+- `close_on:` is deprecated and warns through the new
+  `PaperTrailDiff.deprecator`. It has had no effect since a window began
+  closing on the current record by default; remove it. In a Rails app,
+  register the deprecator with
+  `Rails.application.deprecators[:paper_trail_diff] = PaperTrailDiff.deprecator`.
+
 ### Fixed
 
 - `activity_timeline`, and `analyze` with `activity: true`, no longer report a

@@ -173,8 +173,10 @@ in the step for that record's last recorded change.
 If the window's last change destroyed the record, the window closes on that
 deletion instead. See [a destroyed record](#a-destroyed-record).
 
-`close_on: :current` asks for the behavior above explicitly. It is the default
-now and is still accepted.
+`close_on: :current` is deprecated and has no effect; passing it warns through
+`PaperTrailDiff.deprecator`. Remove it. In a Rails app, register the deprecator
+with `Rails.application.deprecators[:paper_trail_diff] = PaperTrailDiff.deprecator`
+to handle its warnings as the app's own.
 
 `timeline` returns no steps for a window with no versions of the root record.
 `activity_timeline` still reports chosen associations that changed in such a
@@ -331,7 +333,7 @@ steps.reject(&:empty?)      # hide steps with no reported changes
   `item_type`, `item_id`, and `recorded_at`. `to_h(metadata: true)` adds author,
   event, transaction ID, and record to each boundary.
 - Options: `from:`, `to:`, `within:`, `associations:`, `ignore:`,
-  `version_scope:`, `close_on:`, `allow_approximate:`.
+  `version_scope:`, `allow_approximate:`.
 
 ## activity_timeline
 
@@ -366,7 +368,7 @@ end
 - A child's change becomes visible at the next recorded event, or at the
   current record. You do not need to save the article after each comment change.
 - Options: `from:`, `to:`, `within:`, `associations:`, `ignore:`,
-  `version_scope:`, `close_on:`, `reload_live_endpoints:`, `snapshots:`,
+  `version_scope:`, `reload_live_endpoints:`, `snapshots:`,
   `group:`, `recorded_changes:`, `allow_approximate:`.
 
 ### One person's changes
@@ -539,7 +541,7 @@ analysis.to_h(snapshots: true, metadata: true)
   and `recorded_changes:` apply to the activity timeline and require
   `activity: true`.
 - Options: `from:`, `to:`, `within:`, `associations:`, `ignore:`, `activity:`,
-  `version_scope:`, `close_on:`, `snapshots:`, `group:`, `recorded_changes:`,
+  `version_scope:`, `snapshots:`, `group:`, `recorded_changes:`,
   `allow_approximate:`.
 
 ## Reports for many records
@@ -567,7 +569,7 @@ results.fetch(["Order", order.id.to_s]).diff
 - A record with nothing to report gets an empty `Analysis`.
 - Records must be saved and unique.
 - Options: `within:`, `associations:`, `ignore:`, `activity:`, `version_scope:`,
-  `close_on:`, `snapshots:`, `group:`, `recorded_changes:`, `allow_expensive:`,
+  `snapshots:`, `group:`, `recorded_changes:`, `allow_expensive:`,
   `allow_approximate:`.
 
 ### analyze_scope

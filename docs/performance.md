@@ -190,7 +190,7 @@ validate the selected root count; the refusal scenario must raise
 Each article has a title, status, and 1 KiB body, using PaperTrail's default YAML
 serializer. Except for the long-history case, each has one create and five update
 versions; `deleted_roots` adds a destroy event. The window includes all seeded
-versions and uses `close_on: :current`.
+versions and closes on the current record.
 There are no associations. The fixture has an `(item_type, item_id)` version
 index; a different schema, serializer, database, or graph needs its own run.
 

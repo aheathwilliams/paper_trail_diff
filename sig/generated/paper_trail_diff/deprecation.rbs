@@ -1,0 +1,18 @@
+# Generated from lib/paper_trail_diff/deprecation.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Warns about options that do nothing any more and will be removed. In a
+  # Rails app, register the deprecator to configure it with the app's own:
+  #
+  #   Rails.application.deprecators[:paper_trail_diff] = PaperTrailDiff.deprecator
+  module Deprecation
+    CLOSE_ON: ::String
+
+    # Required when first used, as the library loads nothing it does not need.
+    # : () -> untyped
+    def self.deprecator: () -> untyped
+
+    # : (Symbol?) -> void
+    def self.close_on!: (Symbol?) -> void
+  end
+end
