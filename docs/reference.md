@@ -312,6 +312,13 @@ The values then come from your objects, so keeping them fresh is up to you. A
 requested association that is not loaded raises `UnloadedAssociationError`
 instead of quietly running a query per record.
 
+One kind of association is read again anyway: one with a `limit` or
+`offset`, directly or in a part it goes through, or a scope that takes the
+owner. Active Record's
+`preload` applies a limit to all the records it loads together, not to each
+one, so the loaded records cannot be trusted. Each such association costs a
+query per record, as it does when records are reloaded.
+
 ## timeline
 
 `timeline(record)` returns one step for each pair of neighboring versions of the

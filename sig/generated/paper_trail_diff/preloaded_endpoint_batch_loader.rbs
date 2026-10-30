@@ -1,7 +1,8 @@
 # Generated from lib/paper_trail_diff/preloaded_endpoint_batch_loader.rb with RBS::Inline
 
 module PaperTrailDiff
-  # Validates and reuses caller-owned live records without issuing association queries.
+  # Validates and reuses caller-owned live records, reading again only the
+  # associations a preload of many records cannot have loaded correctly.
   class PreloadedEndpointBatchLoader
     # : (tree: AssociationTree, traversal: AssociationTraversal) -> void
     def initialize: (tree: AssociationTree, traversal: AssociationTraversal) -> void
@@ -20,5 +21,12 @@ module PaperTrailDiff
 
     # : (untyped, AssociationTree, String, untyped) -> void
     def validate_association: (untyped, AssociationTree, String, untyped) -> void
+
+    # Preloading many records applies a limit or offset to all of them
+    # together, so what a caller preloaded cannot be trusted: one record keeps
+    # another's share, or none. Such an association is read again for each
+    # record, as reloading reads it.
+    # : (untyped) -> void
+    def read_alone: (untyped) -> void
   end
 end

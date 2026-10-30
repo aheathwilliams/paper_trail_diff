@@ -95,6 +95,12 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- `reload_live_endpoints: false` reads an association with a `limit` or
+  `offset`, directly or in a part it goes through, or a scope that takes the
+  owner, again for each record. Active Record's `preload` applies the limit across all the records
+  it loads, so with three articles preloaded, two kept one comment each and
+  the third none, and their unchanged comments were reported as removed.
+
 - A root and its associations that share one version table other than
   PaperTrail's `versions` can be compared. Association lookups joined PT-AT's
   version associations to the `versions` table whatever table the versions

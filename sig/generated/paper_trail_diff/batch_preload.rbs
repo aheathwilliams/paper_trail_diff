@@ -1,0 +1,29 @@
+# Generated from lib/paper_trail_diff/batch_preload.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Which associations Active Record's preloader loads correctly for many
+  # owners at once.
+  module BatchPreload
+    # The preloader applies a limit or offset to all owners' records at once,
+    # not to each owner's, so such an association is loaded per record. A
+    # has_one is no exception. Through a part with a limit, an offset or a
+    # has_one cut, the preloader keeps what the part alone would load, while
+    # the through's own query keeps the part's conditions only.
+    #
+    # The declared scope is read, not a record's association scope: Active
+    # Record adds `limit(1)` to every has_one's, which would load every
+    # has_one per record.
+    # : (untyped) -> bool
+    def self.safe?: (untyped) -> bool
+
+    # : (untyped) -> untyped
+    def self.declared_relation: (untyped) -> untyped
+
+    # : (untyped) -> bool
+    def self.cut_part?: (untyped) -> bool
+
+    # Every part a through passes, at any depth.
+    # : (untyped) -> Array[untyped]
+    def self.through_parts: (untyped) -> Array[untyped]
+  end
+end
