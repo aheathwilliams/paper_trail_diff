@@ -83,6 +83,16 @@ RSpec.describe PaperTrailDiff::TimeRange do
       Time.use_zone(name, &)
     end
 
+    # Without Time.zone, in a host zone other than UTC, so that reading the
+    # host's zone is not mistaken for reading UTC on a UTC host, such as CI's.
+    def without_zone(&)
+      host = ENV.fetch('TZ', nil)
+      ENV['TZ'] = 'America/Chicago'
+      in_zone(nil, &)
+    ensure
+      ENV['TZ'] = host
+    end
+
     def chicago(range)
       in_zone('America/Chicago') { described_class.new(range) }
     end
@@ -111,7 +121,7 @@ RSpec.describe PaperTrailDiff::TimeRange do
     end
 
     it 'reads a date in UTC without Time.zone' do
-      range = in_zone(nil) { described_class.new(day..day) }
+      range = without_zone { described_class.new(day..day) }
 
       expect([range.begin_time, range.end_time]).to eq([Time.utc(2032, 1, 1), Time.utc(2032, 1, 2)])
     end
@@ -126,13 +136,13 @@ RSpec.describe PaperTrailDiff::TimeRange do
 
     it 'reads text of any String class, such as html_safe text' do
       start = '2032-01-01 06:00'.html_safe
-      range = in_zone(nil) { described_class.new(start..'2032-01-01 07:00') }
+      range = without_zone { described_class.new(start..'2032-01-01 07:00') }
 
       expect(range.begin_time).to eq(Time.utc(2032, 1, 1, 6))
     end
 
     it 'reads text in UTC without Time.zone' do
-      range = in_zone(nil) { described_class.new('2032-01-01 06:00'..'2032-01-01 07:00') }
+      range = without_zone { described_class.new('2032-01-01 06:00'..'2032-01-01 07:00') }
 
       expect(range.begin_time).to eq(Time.utc(2032, 1, 1, 6))
     end
