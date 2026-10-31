@@ -189,7 +189,7 @@ module PaperTrailDiff
     # A version without a transaction id names no rows, so it can stay in.
     #: (Array[untyped]) -> Array[untyped]
     def transaction_ids(versions)
-      versions.map { |version| version.transaction_id if version.respond_to?(:transaction_id) }.uniq
+      versions.map { |version| VersionBoundary.transaction_id(version) }.uniq
     end
   end
 end

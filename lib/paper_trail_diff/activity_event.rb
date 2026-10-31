@@ -94,9 +94,8 @@ module PaperTrailDiff
     # A version without a transaction shares one with nothing.
     #: (untyped) -> Array[untyped]?
     def self.transaction_key(version)
-      return unless version.respond_to?(:transaction_id) && version.transaction_id
-
-      [version.class.name, version.transaction_id]
+      transaction_id = VersionBoundary.transaction_id(version)
+      [version.class.name, transaction_id] if transaction_id
     end
 
     #: (Array[ActivityEvent]) -> void

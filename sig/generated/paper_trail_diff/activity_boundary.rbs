@@ -48,12 +48,6 @@ module PaperTrailDiff
     # : (untyped, ?recorded: Array[String]?) -> ActivityBoundary
     def self.destroyed: (untyped, ?recorded: Array[String]?) -> ActivityBoundary
 
-    # A custom version class need not carry the column, and PaperTrail leaves
-    # it nil outside a transaction. Both read as "no transaction here", which
-    # groups with nothing.
-    # : (untyped) -> untyped
-    def self.transaction_id: (untyped) -> untyped
-
     # : (untyped, Array[String]?) -> untyped
     private def self.recorded_changes: (untyped, Array[String]?) -> untyped
 

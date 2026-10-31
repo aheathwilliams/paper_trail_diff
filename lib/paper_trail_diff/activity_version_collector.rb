@@ -143,7 +143,7 @@ module PaperTrailDiff
         return identity_groups(rows, reflection)
       end
       transaction_ids = parent_versions.filter_map do |version|
-        version.transaction_id if version.respond_to?(:transaction_id)
+        VersionBoundary.transaction_id(version)
       end
       rows = parent_class.paper_trail.version_association_class.where(
         version_id: transaction_ids,

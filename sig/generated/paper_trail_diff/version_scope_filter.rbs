@@ -6,6 +6,10 @@ module PaperTrailDiff
   # caller, because the one that reveals the last selected mutation is drawn
   # from them.
   class VersionScopeFilter
+    # A filter is a callable that narrows the version relation.
+    # : (untyped) -> untyped
+    def self.validated: (untyped) -> untyped
+
     # : (untyped) -> void
     def initialize: (untyped) -> void
 
@@ -16,11 +20,6 @@ module PaperTrailDiff
     # : (untyped) -> Set[untyped]?
     def chosen_ids: (untyped) -> Set[untyped]?
 
-    private
-
     @scope: untyped
-
-    # : (untyped) -> untyped
-    def validated: (untyped) -> untyped
   end
 end

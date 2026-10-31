@@ -27,11 +27,6 @@ module PaperTrailDiff
 
     @version_scope: untyped
 
-    # A filter is a callable that narrows the version relation, so it is checked
-    # up front rather than failing partway through a batch.
-    # : (untyped) -> untyped
-    def validated_scope: (untyped) -> untyped
-
     # : () -> Array[untyped]
     def validated_records: () -> Array[untyped]
 

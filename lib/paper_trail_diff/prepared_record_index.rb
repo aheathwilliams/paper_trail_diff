@@ -228,7 +228,7 @@ module PaperTrailDiff
 
     #: (untyped) -> Integer?
     def transaction_index(boundary)
-      transaction_id = boundary.transaction_id if boundary.respond_to?(:transaction_id)
+      transaction_id = VersionBoundary.transaction_id(boundary)
       return unless transaction_id
 
       @transaction_positions[transaction_id]
@@ -238,9 +238,7 @@ module PaperTrailDiff
     def build_transaction_positions
       positions = {} #: Hash[untyped, Integer]
       @versions.each_with_index do |version, index|
-        next unless version.respond_to?(:transaction_id)
-
-        transaction_id = version.transaction_id
+        transaction_id = VersionBoundary.transaction_id(version)
         positions[transaction_id] ||= index if transaction_id
       end
       positions.freeze

@@ -53,11 +53,13 @@ module PaperTrailDiff
     end
     private_class_method :opening_transactions
 
+    # A custom version class need not carry the column, and PaperTrail leaves
+    # it nil outside a transaction. Both read as "no transaction here", which
+    # groups with nothing.
     #: (untyped) -> untyped
     def transaction_id(version)
       version.transaction_id if version.respond_to?(:transaction_id)
     end
-    private_class_method :transaction_id
 
     #: (untyped) -> bool
     def version_record?(value)

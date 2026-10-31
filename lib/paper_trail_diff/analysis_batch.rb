@@ -14,7 +14,8 @@ module PaperTrailDiff
       @records = records
       @context_required = context_required
       @time_range = time_range
-      @version_scope = validated_scope(version_scope)
+      # Checked up front rather than failing partway through a batch.
+      @version_scope = VersionScopeFilter.validated(version_scope)
       @live_loader = live_loader
       @history_preparer = history_preparer
       @analyzer = analyzer
@@ -47,15 +48,6 @@ module PaperTrailDiff
     # @rbs @live_loader: untyped
     # @rbs @history_preparer: untyped
     # @rbs @analyzer: untyped
-
-    # A filter is a callable that narrows the version relation, so it is checked
-    # up front rather than failing partway through a batch.
-    #: (untyped) -> untyped
-    def validated_scope(scope)
-      return scope if scope.nil? || scope.respond_to?(:call)
-
-      raise ConfigurationError, 'version_scope: must respond to call'
-    end
 
     #: () -> Array[untyped]
     def validated_records

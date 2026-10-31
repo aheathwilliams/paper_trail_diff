@@ -25,6 +25,9 @@ module PaperTrailDiff
     # : (Array[untyped], untyped) -> Array[untyped]
     def self?.opening_transactions: (Array[untyped], untyped) -> Array[untyped]
 
+    # A custom version class need not carry the column, and PaperTrail leaves
+    # it nil outside a transaction. Both read as "no transaction here", which
+    # groups with nothing.
     # : (untyped) -> untyped
     def self?.transaction_id: (untyped) -> untyped
 

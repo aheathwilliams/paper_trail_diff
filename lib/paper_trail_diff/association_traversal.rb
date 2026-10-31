@@ -175,7 +175,7 @@ module PaperTrailDiff
     def ensure_habtm_history!(model_class, version)
       paths = habtm_paths(model_class)
       return if paths.empty?
-      return if version.respond_to?(:transaction_id) && version.transaction_id
+      return if VersionBoundary.transaction_id(version)
 
       message = "HABTM history is incomplete at version #{version.id}: #{paths.join(', ')}"
       raise IncompleteAssociationHistoryError, message

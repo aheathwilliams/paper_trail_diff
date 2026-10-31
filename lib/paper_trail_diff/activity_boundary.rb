@@ -39,7 +39,7 @@ module PaperTrailDiff
           recorded_at: version.created_at,
           event: version.event,
           whodunnit: version.whodunnit,
-          transaction_id: transaction_id(version),
+          transaction_id: VersionBoundary.transaction_id(version),
           recorded_changes: recorded_changes(version, recorded)
         )
       end
@@ -70,17 +70,9 @@ module PaperTrailDiff
           recorded_at: version.created_at,
           event: version.event,
           whodunnit: version.whodunnit,
-          transaction_id: transaction_id(version),
+          transaction_id: VersionBoundary.transaction_id(version),
           recorded_changes: recorded_changes(version, recorded)
         )
-      end
-
-      # A custom version class need not carry the column, and PaperTrail leaves
-      # it nil outside a transaction. Both read as "no transaction here", which
-      # groups with nothing.
-      #: (untyped) -> untyped
-      def transaction_id(version)
-        version.transaction_id if version.respond_to?(:transaction_id)
       end
 
       private

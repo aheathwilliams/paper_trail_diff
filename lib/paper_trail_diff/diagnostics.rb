@@ -166,9 +166,7 @@ module PaperTrailDiff
     # transaction that more than one owner recorded members in cannot be read.
     #: (untyped, Array[Array[untyped]]) -> void
     def inspect_shared_transactions(model_class, habtm)
-      versions = @versions.select do |version|
-        version.respond_to?(:transaction_id) && version.transaction_id
-      end
+      versions = @versions.select { |version| VersionBoundary.transaction_id(version) }
       habtm.each do |path, reflection|
         owners = HabtmTransactionOwners.new(model_class, reflection)
         versions.each do |version|
