@@ -970,7 +970,8 @@ another record with the same HABTM also saved a version (see the
 
 `has_one_attached` and `has_many_attached` point to ActiveStorage's own models,
 which PaperTrail does not version. Comparing them historically raises
-`UnversionedAssociationError` rather than claiming nothing changed. Versioning
+`UnversionedAssociationError` rather than claiming nothing changed, and
+`association_paths` leaves them out. Versioning
 ActiveStorage's models does not help either, because `has_one_attached` is a
 scoped `has_one`.
 
@@ -1232,14 +1233,15 @@ and `cycle`. Cycles are marked and not followed.
 Only associations a request accepts are listed, so each path can be passed to
 `associations:`. The PaperTrail versions association, a `has_many :through`
 that goes through a HABTM, a scoped HABTM, a HABTM below the root, an
-association keyed on a column other than a primary key, and one whose ends
-keep their versions in different tables are left out. A path history can
-read only approximately, such as one with a scope written as SQL text, is
-listed, but requesting it also takes `allow_approximate: true` (see
-[costly associations](#costly-associations)). A
-`has_many :through` Active Record cannot follow, such as one through a
-polymorphic `belongs_to`, raises Active Record's own error from any model
-discovery reaches, as requesting it does.
+association keyed on a column other than a primary key, one whose ends keep
+their versions in different tables, and one whose target, or a model its
+`has_many :through` goes through, has no `has_paper_trail` are left out. A path
+history can read only approximately, such as one with a scope written as SQL
+text, is listed, but requesting it also takes `allow_approximate: true` (see
+[costly associations](#costly-associations)). A `has_many :through` Active
+Record cannot follow, such as one through a polymorphic `belongs_to`, raises
+Active Record's own error from any model discovery reaches, as requesting it
+does.
 
 Check a comparison's endpoints for known problems before relying on
 association history. They are what `compare` takes: two versions, or a version

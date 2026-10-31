@@ -154,6 +154,12 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- `association_paths` leaves out an association whose target, or a model its
+  `has_many :through` goes through, has no `has_paper_trail`, such as the
+  `file_attachment` and `file_blob` that `has_one_attached` defines. Every
+  request that reads history refused them with `UnversionedAssociationError`,
+  so a settings screen built from the list offered paths that always failed.
+
 - `diagnose` reports `:tied_version_timestamps`, and `compare` emits
   `ambiguous_association_boundary.paper_trail_diff`, only when the request can
   read a path with PT-AT: one history reads only approximately, a composite

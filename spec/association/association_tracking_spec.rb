@@ -779,12 +779,14 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     )
     expect(by_path.fetch('comments.article').cycle).to be(true)
     expect(by_path.fetch('author.comments').through).to eq('articles')
+    # unversioned_attachments is left out: its target has no versions, so every
+    # request that reads history refuses it.
     expect(PaperTrailDiff.association_paths(TrackedArticle).map(&:path))
       .to eq(%w[author authorships comments contributors limited_comments offset_comments
-                owner_comments profile tags unversioned_attachments])
+                owner_comments profile tags])
     expect(PaperTrailDiff.association_paths(TrackedArticle.new).map(&:path))
       .to eq(%w[author authorships comments contributors limited_comments offset_comments
-                owner_comments profile tags unversioned_attachments])
+                owner_comments profile tags])
   end
 
   it 'separates descendant updates into activity timeline steps' do
