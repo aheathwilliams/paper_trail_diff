@@ -171,8 +171,10 @@ they resynchronize, which made window-based specs fail at random.
 `spec/support/monotonic_clock.rb` therefore makes `Time.now` strictly
 increasing, in whole microseconds, for the test process. ActiveRecord
 timestamps, PaperTrail's `created_at`, and windows built from `Time.now` all
-read it, so they stay consistent however the host clock moves. It affects only
-the test process; the gem itself reads the ordinary clock.
+read it, so they stay consistent however the host clock moves. The benchmark
+workload, `benchmark/support/workload.rb`, loads it too, because a step back
+could date a root's destroy before its last update. It affects only the specs
+and the benchmark; the gem itself reads the ordinary clock.
 
 ## Other databases locally
 

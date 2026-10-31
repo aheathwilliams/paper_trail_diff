@@ -3,6 +3,10 @@
 require 'active_record'
 require 'paper_trail'
 require 'paper_trail_diff'
+# Versions are ordered by created_at, stamped from Time.now. A host clock that
+# steps backwards, as WSL2's does, could date a destroy before the update it
+# follows; the specs' clock keeps every reading in this process increasing.
+require_relative '../../spec/support/monotonic_clock'
 
 module ReportingBenchmark
   # Seeds genuine PaperTrail history in a process-local database, never an app database.

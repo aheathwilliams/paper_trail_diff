@@ -306,6 +306,15 @@ project follows [Semantic Versioning](https://semver.org/).
   version times through SQL text, which the SQL Server adapter writes as
   `datetime` values up to 1/300 s off, and after the host clock stepped back
   the test clock packed versions microseconds apart until it caught up.
+- The reporting benchmark loads the monotonic test clock, so its results no
+  longer depend on the host clock. A clock that stepped backwards, as WSL2's
+  does, could date a root's destroy before its last update, and
+  `deleted_roots` then raised `IncompleteTimeRangeError`. The seeded history
+  and query counts are unchanged. Allocations rise by under 1% in
+  `many_roots` and `retained_activity`, where the gem reads the clock once
+  per root. The investigation scripts that seed through the same workload
+  load the clock too; `scalar_cost.rb` freezes time in front of it, so its
+  parity check still sees one instant.
 
 ## [0.14.0] - 2026-10-29
 
