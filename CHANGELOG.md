@@ -44,6 +44,12 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `diagnose` takes the current record as either endpoint, as `compare` does,
+  so `compare(version, record)` can be checked before it runs. Its version
+  checks then run from the version to the latest one. An endpoint that is
+  neither a version nor a saved record raises `InvalidEndpointError` naming
+  that, rather than `VersionMismatchError`.
+
 - Activity steps list the events whose changes they show as `step.sources`,
   oldest first. A step from `group: :transaction` lists every event in the
   transaction, each with its own author, record, and version ID, where

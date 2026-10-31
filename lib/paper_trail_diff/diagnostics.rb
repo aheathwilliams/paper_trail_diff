@@ -64,53 +64,59 @@ module PaperTrailDiff
   end
 
   # Performs read-only checks for known PaperTrail/PT-AT reconstruction hazards.
+  #
+  # The endpoints are a comparison's: two versions, or a version and the
+  # current record, in either order. Two current records read no history, so
+  # nothing is checked.
   class HistoryDiagnostics
     #: (untyped, untyped, associations: association_option) -> void
-    def initialize(from_version, to_version, associations:)
-      @from_version = from_version
-      @to_version = to_version
+    def initialize(from, to, associations:)
+      @versions = validated_versions(from, to)
       @tree = AssociationTree.build(associations)
       @issues = [] #: Array[DiagnosticIssue]
     end
 
     #: () -> DiagnosticReport
     def call
-      model_class = validated_model_class
-      # Runs whether or not associations are selected: unorderable versions
-      # corrupt a scalar timeline just as surely, and a report that inspected
-      # nothing has no business answering `ok?`.
-      inspect_version_sequence
-      return DiagnosticReport.new(issues: @issues) if @tree.empty?
-
-      unless association_tracking_available?
-        add_error(:association_tracking_unavailable, tracking_unavailable_message)
-        return DiagnosticReport.new(issues: @issues)
+      unless @versions.empty?
+        model_class = Endpoint.model_class(@versions.fetch(0))
+        # Runs whether or not associations are selected: unorderable versions
+        # corrupt a scalar timeline just as surely, and a report that inspected
+        # nothing has no business answering `ok?`.
+        inspect_version_sequence
+        inspect_associations(model_class) unless @tree.empty?
       end
-
-      traversal = AssociationTraversal.new(@tree)
-      selected = traversal.selected_reflections(model_class)
-      inspect_targets(selected)
-      inspect_checkpoint_timestamp(model_class)
-      inspect_habtm(model_class, selected)
       DiagnosticReport.new(issues: @issues)
     end
 
     private
 
-    # @rbs @from_version: untyped
-    # @rbs @to_version: untyped
+    #: (untyped) -> void
+    def inspect_associations(model_class)
+      unless association_tracking_available?
+        return add_error(:association_tracking_unavailable, tracking_unavailable_message)
+      end
+
+      selected = AssociationTraversal.new(@tree).selected_reflections(model_class)
+      inspect_targets(selected)
+      inspect_checkpoint_timestamp(model_class)
+      inspect_habtm(model_class, selected)
+    end
+
+    # @rbs @versions: Array[untyped]
     # @rbs @tree: AssociationTree
     # @rbs @issues: Array[DiagnosticIssue]
 
-    #: () -> untyped
-    def validated_model_class
-      unless version_identity(@from_version) == version_identity(@to_version)
-        raise VersionMismatchError, 'versions must belong to the same PaperTrail item'
+    # The endpoints that are versions, in the order given.
+    #: (untyped, untyped) -> Array[untyped]
+    def validated_versions(from, to)
+      Endpoint.validate!(from)
+      Endpoint.validate!(to)
+      unless Endpoint.identity(from) == Endpoint.identity(to)
+        raise VersionMismatchError, 'endpoints must belong to the same PaperTrail item'
       end
 
-      Object.const_get(version_type(@from_version))
-    rescue NoMethodError => e
-      raise VersionMismatchError, 'expected PaperTrail version endpoints', cause: e
+      [from, to].select { |endpoint| Endpoint.version?(endpoint) }
     end
 
     #: (Array[Array[untyped]]) -> void
@@ -139,7 +145,7 @@ module PaperTrailDiff
     # transaction that more than one owner recorded members in cannot be read.
     #: (untyped, Array[Array[untyped]]) -> void
     def inspect_shared_transactions(model_class, habtm)
-      versions = [@from_version, @to_version].select do |version|
+      versions = @versions.select do |version|
         version.respond_to?(:transaction_id) && version.transaction_id
       end
       habtm.each do |path, reflection|
@@ -154,12 +160,13 @@ module PaperTrailDiff
       end
     end
 
+    # With the current record as one endpoint there is one version, and the
+    # sequence runs on from it.
     #: () -> void
     def inspect_version_sequence
+      first, last = @versions
       @issues.concat(
-        VersionSequenceDiagnostics.new(
-          @from_version, @to_version, associations_selected: !@tree.empty?
-        ).call
+        VersionSequenceDiagnostics.new(first, last, associations_selected: !@tree.empty?).call
       )
     end
 
@@ -173,7 +180,7 @@ module PaperTrailDiff
 
     #: (Array[String]) -> void
     def inspect_transaction_metadata(paths)
-      [@from_version, @to_version].each do |version|
+      @versions.each do |version|
         if !version.respond_to?(:transaction_id)
           add_error(:transaction_id_column_missing, 'version has no transaction_id column')
         elsif version.transaction_id.nil?
@@ -235,17 +242,6 @@ module PaperTrailDiff
       config = paper_trail.config #: untyped
       !!(defined?(::PaperTrailAssociationTracking) &&
         config.respond_to?(:track_associations?) && config.track_associations?)
-    end
-
-    #: (untyped) -> Array[String]
-    def version_identity(version)
-      [version.item_type.to_s, version.item_id.to_s]
-    end
-
-    #: (untyped) -> String
-    def version_type(version)
-      subtype = version.item_subtype if version.respond_to?(:item_subtype)
-      subtype.to_s.empty? ? version.item_type.to_s : subtype.to_s
     end
 
     #: () -> String

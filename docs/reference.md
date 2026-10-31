@@ -1255,10 +1255,12 @@ listed, but requesting it also takes `allow_approximate: true` (see
 polymorphic `belongs_to`, raises Active Record's own error from any model
 discovery reaches, as requesting it does.
 
-Check two versions for known problems before relying on association history:
+Check a comparison's endpoints for known problems before relying on
+association history. They are what `compare` takes: two versions, or a version
+and the current record.
 
 ```ruby
-report = PaperTrailDiff.diagnose(from_version, to_version, associations: [:tags, "comments.replies"])
+report = PaperTrailDiff.diagnose(from_version, article, associations: [:tags, "comments.replies"])
 
 report.ok?                  # no errors among the checks that ran
 report.errors.map(&:code)

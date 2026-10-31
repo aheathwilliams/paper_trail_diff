@@ -69,14 +69,26 @@ module PaperTrailDiff
 
     #: () -> Array[untyped]
     def ordered_range_versions
-      bounds = [@from_version.created_at, @to_version.created_at].compact.sort
-      return [] unless bounds.length == 2
+      range = time_range
+      return [] unless range
 
       @from_version.class
                    .where(item_type: @from_version.item_type, item_id: @from_version.item_id)
-                   .where(created_at: bounds.first..bounds.last)
+                   .where(created_at: range)
                    .to_a
                    .sort_by { |version| Support.chronological_version_key(version) }
+    end
+
+    # Between the two versions, in either order, or from the one version on
+    # when the other endpoint is the current record. A version that recorded
+    # no time bounds nothing.
+    #: () -> Range[untyped]?
+    def time_range
+      from = @from_version.created_at
+      return from && (from..) unless @to_version
+
+      bounds = [from, @to_version.created_at].compact.sort
+      bounds.first..bounds.last if bounds.length == 2
     end
   end
 end

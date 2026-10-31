@@ -543,10 +543,12 @@ RSpec.describe PaperTrailDiff do
       versions = UuidVersion.where(item_id: article.id.to_s)
                             .to_a.sort_by { |version| [version.created_at, version.id] }
 
-      report = described_class.diagnose(versions.first, versions.last)
+      [versions.last, article].each do |to|
+        report = described_class.diagnose(versions.first, to)
 
-      expect(report).not_to be_ok
-      expect(report.errors.map(&:code)).to eq([:ambiguous_version_order])
+        expect(report).not_to be_ok
+        expect(report.errors.map(&:code)).to eq([:ambiguous_version_order])
+      end
     end
   end
 
@@ -1652,6 +1654,35 @@ RSpec.describe PaperTrailDiff do
 
       expect { described_class.diagnose(draft, other.versions.first) }
         .to raise_error(PaperTrailDiff::VersionMismatchError, /same PaperTrail item/)
+      expect { described_class.diagnose(draft, other) }
+        .to raise_error(PaperTrailDiff::VersionMismatchError, /same PaperTrail item/)
+    end
+
+    # As `compare(version, record)` takes them, in either order.
+    it 'checks a comparison with the current record' do
+      article, _create, draft, = create_history
+
+      [[draft, article], [article, draft]].each do |from, to|
+        report = described_class.diagnose(from, to)
+        expect(report.to_h).to eq(ok: true, issues: [])
+      end
+    end
+
+    it 'names an endpoint that is neither a version nor a record' do
+      _article, _create, draft, = create_history
+
+      [[draft, nil], [nil, draft], [draft, CoreArticle]].each do |from, to|
+        expect { described_class.diagnose(from, to) }
+          .to raise_error(PaperTrailDiff::InvalidEndpointError, /version or persisted record/)
+      end
+    end
+
+    # Two current records read no history, so there is nothing to check.
+    it 'passes two current records of one item' do
+      article, = create_history
+
+      expect(described_class.diagnose(article, CoreArticle.find(article.id)).to_h)
+        .to eq(ok: true, issues: [])
     end
   end
 end

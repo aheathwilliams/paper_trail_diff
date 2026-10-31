@@ -88,7 +88,9 @@ module PaperTrailDiff
   # : (untyped, ?max_depth: Integer) -> Array[AssociationDescriptor]
   def self.association_paths: (untyped, ?max_depth: Integer) -> Array[AssociationDescriptor]
 
-  # Reports known reconstruction hazards without mutating application state.
+  # Reports known reconstruction hazards without mutating application state,
+  # for the endpoints `compare` takes: two versions, or a version and the
+  # current record.
   # : (untyped, untyped, ?associations: association_option) -> DiagnosticReport
   def self.diagnose: (untyped, untyped, ?associations: association_option) -> DiagnosticReport
 

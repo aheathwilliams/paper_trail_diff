@@ -62,9 +62,11 @@ RSpec.describe 'A has_many :through an unversioned join model' do
   it 'is an error diagnose reports' do
     from, to = rack.versions.reorder(:created_at, :id).to_a
 
-    report = PaperTrailDiff.diagnose(from, to, associations: [:loose_items])
+    [to, rack].each do |later|
+      report = PaperTrailDiff.diagnose(from, later, associations: [:loose_items])
 
-    expect(report).not_to be_ok
-    expect(report.errors.map(&:code)).to include(:unversioned_through_model)
+      expect(report).not_to be_ok
+      expect(report.errors.map(&:code)).to include(:unversioned_through_model)
+    end
   end
 end

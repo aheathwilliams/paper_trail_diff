@@ -635,10 +635,12 @@ RSpec.describe 'PaperTrailDiff association tracking' do
       expect { PaperTrailDiff.activity_timeline(root, from: shared, to: after, **options) }
         .to raise_error(*error)
 
-      report = PaperTrailDiff.diagnose(shared, after, **options)
-      expect(report).not_to be_ok
-      expect(report.errors.map { |issue| [issue.code, issue.path, issue.version_id] })
-        .to eq([[:habtm_transaction_shared, 'tags', shared.id]])
+      [after, root].each do |to|
+        report = PaperTrailDiff.diagnose(shared, to, **options)
+        expect(report).not_to be_ok
+        expect(report.errors.map { |issue| [issue.code, issue.path, issue.version_id] })
+          .to eq([[:habtm_transaction_shared, 'tags', shared.id]])
+      end
     end
 
     it 'still reads a transaction where no owner recorded a member' do

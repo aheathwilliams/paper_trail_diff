@@ -414,10 +414,12 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
       AssociationDiscovery.new(model_or_record, max_depth: max_depth).call
     end
 
-    # Reports known reconstruction hazards without mutating application state.
+    # Reports known reconstruction hazards without mutating application state,
+    # for the endpoints `compare` takes: two versions, or a version and the
+    # current record.
     #: (untyped, untyped, ?associations: association_option) -> DiagnosticReport
-    def diagnose(from_version, to_version, associations: [])
-      HistoryDiagnostics.new(from_version, to_version, associations: associations).call
+    def diagnose(from, to, associations: [])
+      HistoryDiagnostics.new(from, to, associations: associations).call
     end
 
     # Looks inside an attribute the database stores whole, such as a JSON or

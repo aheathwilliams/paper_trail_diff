@@ -35,5 +35,11 @@ module PaperTrailDiff
 
     # : () -> Array[untyped]
     def ordered_range_versions: () -> Array[untyped]
+
+    # Between the two versions, in either order, or from the one version on
+    # when the other endpoint is the current record. A version that recorded
+    # no time bounds nothing.
+    # : () -> Range[untyped]?
+    def time_range: () -> Range[untyped]?
   end
 end
