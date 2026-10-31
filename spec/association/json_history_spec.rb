@@ -66,6 +66,17 @@ RSpec.describe 'Association history stored as JSON' do
     TrackedArticle.delete_all
   end
 
+  # See spec/integration/json_history_spec.rb: some PaperTrail, Ruby, and
+  # adapter combinations cannot write JSON history at all.
+  def skip_unless_json_history_writable
+    TrackedArticle.transaction do
+      TrackedArticle.create!(title: 'Probe')
+      raise ActiveRecord::Rollback
+    end
+  rescue StandardError => e
+    skip "PaperTrail cannot record JSON history here: #{e.class}: #{e.message}"
+  end
+
   context 'with the JSON serializer on a text column' do
     around do |example|
       original = PaperTrail.serializer
@@ -77,17 +88,6 @@ RSpec.describe 'Association history stored as JSON' do
 
     before { skip_unless_json_history_writable }
 
-    # See spec/integration/json_history_spec.rb: some PaperTrail, Ruby, and
-    # adapter combinations cannot write JSON history at all.
-    def skip_unless_json_history_writable
-      TrackedArticle.transaction do
-        TrackedArticle.create!(title: 'Probe')
-        raise ActiveRecord::Rollback
-      end
-    rescue StandardError => e
-      skip "PaperTrail cannot record JSON history here: #{e.class}: #{e.message}"
-    end
-
     it_behaves_like 'association history without timestamp noise'
   end
 
@@ -96,6 +96,8 @@ RSpec.describe 'Association history stored as JSON' do
   # serializer on a text column casts them.
   context 'with json object columns' do
     around { |example| JsonVersionsTable.with_json_columns(&example) }
+
+    before { skip_unless_json_history_writable }
 
     it_behaves_like 'association history without timestamp noise'
   end

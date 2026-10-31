@@ -13,6 +13,18 @@ RSpec.describe 'Rebuilt article history against the recorded states' do
     expect(failures).to be_empty, -> { failures.message }
   end
 
+  # The SQL Server adapter hands PaperTrail's JSON encoder a type wrapper that
+  # refuses `as_json`, and some JSON and Active Support versions cannot encode
+  # json columns, so no history can be written there.
+  def skip_unless_history_writable(format)
+    TrackedAuthor.transaction do
+      TrackedAuthor.create!(name: 'probe')
+      raise ActiveRecord::Rollback
+    end
+  rescue StandardError => e
+    skip "PaperTrail cannot record #{format} history here: #{e.class}: #{e.message}"
+  end
+
   serializers = {
     'YAML' => PaperTrail::Serializers::YAML,
     'JSON' => PaperTrail::Serializers::JSON
@@ -28,16 +40,7 @@ RSpec.describe 'Rebuilt article history against the recorded states' do
         PaperTrail.serializer = original
       end
 
-      # The SQL Server adapter hands PaperTrail's JSON encoder a type wrapper
-      # that refuses `as_json`, so no history can be written there.
-      before do
-        TrackedAuthor.transaction do
-          TrackedAuthor.create!(name: 'probe')
-          raise ActiveRecord::Rollback
-        end
-      rescue StandardError => e
-        skip "PaperTrail cannot record #{format} history here: #{e.class}: #{e.message}"
-      end
+      before { skip_unless_history_writable(format) }
 
       Oracle.seeds([1, 3]).each do |seed|
         it "rebuilds every endpoint, timeline step and activity step (seed #{seed})" do
@@ -55,6 +58,8 @@ RSpec.describe 'Rebuilt article history against the recorded states' do
 
   context 'with json object columns, which PaperTrail does not cast back' do
     around { |example| JsonVersionsTable.with_json_columns(&example) }
+
+    before { skip_unless_history_writable('json column') }
 
     Oracle.seeds([1, 2]).each do |seed|
       it "rebuilds every endpoint and activity step (seed #{seed})" do
