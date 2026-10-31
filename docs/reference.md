@@ -274,9 +274,9 @@ diff.to_h
   deleted.
 - A current record must be saved, not destroyed, and have no unsaved changes.
   The gem reloads it, so in-memory edits and cached associations are ignored.
-- Options: `associations:`, `ignore:`, `reload_live_endpoints:` (see
-  [reusing loaded records](#reusing-loaded-records)), and `allow_approximate:`
-  (see [costly associations](#costly-associations)).
+- Options: `associations:`, `ignore:`, and `allow_approximate:` (see
+  [costly associations](#costly-associations)). `reload_live_endpoints:` is
+  deprecated (see [reusing loaded records](#reusing-loaded-records)).
 
 ## compare_many
 
@@ -300,38 +300,26 @@ diffs.fetch(["Order", orders.first.id.to_s]) # => PaperTrailDiff::Diff
   record, so `{ from: :first, to: :first }` raises.
 - A record with no versions gets an empty `Diff`.
 - Each record can appear in only one pair, because results are keyed by record.
-- Options: `associations:`, `ignore:`, `reload_live_endpoints:`, and
-  `allow_approximate:` (see [costly associations](#costly-associations)).
+- Options: `associations:`, `ignore:`, and `allow_approximate:` (see
+  [costly associations](#costly-associations)).
 
 If you look up versions yourself, do it in bulk. Looking up one record at a
 time brings back the per-record queries this method avoids.
 
 ### Reusing loaded records
 
-`compare`, `compare_many`, and `activity_timeline` reload current records by
-default. If you already loaded them with every requested association, you can
-skip the reload:
-
-```ruby
-orders = Order.where(id: order_ids).preload(line_items: :product).to_a
-
-diffs = PaperTrailDiff.compare_many(
-  orders.map { |order| { from: :first, to: order } },
-  associations: ["line_items.product"],
-  reload_live_endpoints: false
-)
-```
-
-The values then come from your objects, so keeping them fresh is up to you. A
-requested association that is not loaded raises `UnloadedAssociationError`
-instead of quietly running a query per record.
-
-One kind of association is read again anyway: one with a `limit` or
-`offset`, directly or in a part it goes through, or a scope that takes the
-owner. Active Record's
-`preload` applies a limit to all the records it loads together, not to each
-one, so the loaded records cannot be trusted. Each such association costs a
-query per record, as it does when records are reloaded.
+Every method reloads the current records it compares with, together with the
+requested associations, in a query for the records and one per association
+level. `reload_live_endpoints: false` on `compare`, `compare_many`, and
+`activity_timeline` skips that reload and reads your loaded objects instead.
+It is deprecated and will be removed: it saves those few queries per call (2
+for 500 articles with their comments), and the values then come from objects
+that may be stale. Until it is removed it still works,
+with a warning. A requested association that is not loaded raises
+`UnloadedAssociationError`, and one with a `limit` or `offset`, directly or in
+a part it goes through, or a scope that takes the owner, is read again for
+each record, because Active Record's `preload` applies a limit to all the
+records it loads together.
 
 ## timeline
 
@@ -401,8 +389,9 @@ end
 - A child's change becomes visible at the next recorded event, or at the
   current record. You do not need to save the article after each comment change.
 - Options: `from:`, `to:`, `within:`, `associations:`, `ignore:`,
-  `version_scope:`, `reload_live_endpoints:`, `snapshots:`,
-  `group:`, `recorded_changes:`, `allow_approximate:`.
+  `version_scope:`, `snapshots:`, `group:`, `recorded_changes:`,
+  `allow_approximate:`. `reload_live_endpoints:` is deprecated (see
+  [reusing loaded records](#reusing-loaded-records)).
 
 ### One person's changes
 
@@ -1362,7 +1351,7 @@ All errors inherit from `PaperTrailDiff::Error`.
 | `ConfigurationError` | An option is invalid |
 | `UnsupportedBatchPathError` | No longer raised; kept until `allow_expensive:` is removed |
 | `InvalidEndpointError` | A record is unsaved, destroyed, or has unsaved changes, or `recorded_changes` is given something other than a version |
-| `UnloadedAssociationError` | `reload_live_endpoints: false` and an association is not loaded |
+| `UnloadedAssociationError` | The deprecated `reload_live_endpoints: false`, and an association is not loaded |
 | `VersionMismatchError` | Two endpoints belong to different records |
 | `ReversedEndpointsError` | Two versions are given newest first |
 | `InvalidTimelineRangeError` | A range is invalid, for example `within:` with `from:`, or `:last` |

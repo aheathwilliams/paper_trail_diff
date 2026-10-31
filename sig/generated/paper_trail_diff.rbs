@@ -9,12 +9,12 @@ module PaperTrailDiff
   SUPPORTED_ASSOCIATION_MACROS: untyped
 
   # Compares net state between explicit PaperTrail-version or current-record endpoints.
-  # : (untyped, untyped, ?associations: association_option, ?ignore: ignore_option, ?reload_live_endpoints: bool, ?allow_approximate: bool) -> Diff
-  def self.compare: (untyped, untyped, ?associations: association_option, ?ignore: ignore_option, ?reload_live_endpoints: bool, ?allow_approximate: bool) -> Diff
+  # : (untyped, untyped, ?associations: association_option, ?ignore: ignore_option, ?reload_live_endpoints: bool?, ?allow_approximate: bool) -> Diff
+  def self.compare: (untyped, untyped, ?associations: association_option, ?ignore: ignore_option, ?reload_live_endpoints: bool?, ?allow_approximate: bool) -> Diff
 
   # Compares many independent endpoint pairs while batching current-record loading.
-  # : (Array[comparison_input], ?associations: association_option, ?ignore: ignore_option, ?reload_live_endpoints: bool, ?allow_expensive: bool?, ?allow_approximate: bool) -> comparison_results
-  def self.compare_many: (Array[comparison_input], ?associations: association_option, ?ignore: ignore_option, ?reload_live_endpoints: bool, ?allow_expensive: bool?, ?allow_approximate: bool) -> comparison_results
+  # : (Array[comparison_input], ?associations: association_option, ?ignore: ignore_option, ?reload_live_endpoints: bool?, ?allow_expensive: bool?, ?allow_approximate: bool) -> comparison_results
+  def self.compare_many: (Array[comparison_input], ?associations: association_option, ?ignore: ignore_option, ?reload_live_endpoints: bool?, ?allow_expensive: bool?, ?allow_approximate: bool) -> comparison_results
 
   # Compares every adjacent reconstructed state in an inclusive version range,
   # by default the record's whole history through its current state.
@@ -22,11 +22,8 @@ module PaperTrailDiff
   def self.timeline: (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: association_option, ?ignore: ignore_option, ?version_scope: untyped, ?close_on: Symbol?, ?allow_approximate: bool) -> Array[Step]
 
   # Compares adjacent root and selected-descendant activity boundaries.
-  # `reload_live_endpoints:` applies whenever the range ends at the current
-  # record: an explicit `to:` record, the default range, or a window with no
-  # later version.
-  # : (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: association_option, ?ignore: ignore_option, ?reload_live_endpoints: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?recorded_changes: bool, ?allow_approximate: bool) -> Array[ActivityStep]
-  def self.activity_timeline: (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: association_option, ?ignore: ignore_option, ?reload_live_endpoints: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?recorded_changes: bool, ?allow_approximate: bool) -> Array[ActivityStep]
+  # : (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: association_option, ?ignore: ignore_option, ?reload_live_endpoints: bool?, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?recorded_changes: bool, ?allow_approximate: bool) -> Array[ActivityStep]
+  def self.activity_timeline: (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: association_option, ?ignore: ignore_option, ?reload_live_endpoints: bool?, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?recorded_changes: bool, ?allow_approximate: bool) -> Array[ActivityStep]
 
   # Builds an endpoint diff and root-checkpoint timeline while normalizing each version once.
   # : (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: association_option, ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?recorded_changes: bool, ?allow_approximate: bool) -> Analysis

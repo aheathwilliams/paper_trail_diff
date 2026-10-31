@@ -73,7 +73,8 @@ explains why.
 - **A limited association on the current record.** Active Record's `preload`
   applies a `limit` or `offset` across all the records it loads, so each
   record's limited association is loaded on its own: one query per record.
-  With `reload_live_endpoints: false`, the same goes for one you preloaded.
+  The deprecated `reload_live_endpoints: false` does the same for one you
+  preloaded.
 - **Your own code.** Model callbacks that query, such as an `after_initialize`,
   custom attribute types, and a callable `historical_filter:` run for each
   state they are given.

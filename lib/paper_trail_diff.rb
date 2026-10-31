@@ -151,30 +151,30 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
 
   class << self # rubocop:disable Metrics/ClassLength
     # Compares net state between explicit PaperTrail-version or current-record endpoints.
-    #: (untyped, untyped, ?associations: association_option, ?ignore: ignore_option, ?reload_live_endpoints: bool, ?allow_approximate: bool) -> Diff
+    #: (untyped, untyped, ?associations: association_option, ?ignore: ignore_option, ?reload_live_endpoints: bool?, ?allow_approximate: bool) -> Diff
     def compare( # rubocop:disable Metrics/ParameterLists
       from_version,
       to_version,
       associations: [],
       ignore: DEFAULT_IGNORED_ATTRIBUTES,
-      reload_live_endpoints: true,
+      reload_live_endpoints: nil,
       allow_approximate: false
     )
       PaperTrailAdapter.new(
         associations: associations,
         ignore: ignore,
-        reload_live_endpoints: reload_live_endpoints,
+        reload_live_endpoints: Deprecation.reload_live_endpoints!(reload_live_endpoints),
         allow_approximate: allow_approximate
       ).compare(from_version, to_version)
     end
 
     # Compares many independent endpoint pairs while batching current-record loading.
-    #: (Array[comparison_input], ?associations: association_option, ?ignore: ignore_option, ?reload_live_endpoints: bool, ?allow_expensive: bool?, ?allow_approximate: bool) -> comparison_results
+    #: (Array[comparison_input], ?associations: association_option, ?ignore: ignore_option, ?reload_live_endpoints: bool?, ?allow_expensive: bool?, ?allow_approximate: bool) -> comparison_results
     def compare_many( # rubocop:disable Metrics/ParameterLists
       comparisons,
       associations: [],
       ignore: DEFAULT_IGNORED_ATTRIBUTES,
-      reload_live_endpoints: true,
+      reload_live_endpoints: nil,
       allow_expensive: nil,
       allow_approximate: false
     )
@@ -182,7 +182,7 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
       PaperTrailAdapter.new(
         associations: associations,
         ignore: ignore,
-        reload_live_endpoints: reload_live_endpoints,
+        reload_live_endpoints: Deprecation.reload_live_endpoints!(reload_live_endpoints),
         allow_approximate: allow_approximate
       ).compare_many(comparisons)
     end
@@ -214,10 +214,7 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
     end
 
     # Compares adjacent root and selected-descendant activity boundaries.
-    # `reload_live_endpoints:` applies whenever the range ends at the current
-    # record: an explicit `to:` record, the default range, or a window with no
-    # later version.
-    #: (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: association_option, ?ignore: ignore_option, ?reload_live_endpoints: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?recorded_changes: bool, ?allow_approximate: bool) -> Array[ActivityStep]
+    #: (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: association_option, ?ignore: ignore_option, ?reload_live_endpoints: bool?, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?recorded_changes: bool, ?allow_approximate: bool) -> Array[ActivityStep]
     def activity_timeline( # rubocop:disable Metrics/ParameterLists
       record,
       from: nil,
@@ -225,7 +222,7 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
       within: nil,
       associations: [],
       ignore: DEFAULT_IGNORED_ATTRIBUTES,
-      reload_live_endpoints: true,
+      reload_live_endpoints: nil,
       version_scope: nil,
       close_on: nil,
       snapshots: false,
@@ -235,7 +232,8 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
     )
       Deprecation.close_on!(close_on, within)
       PaperTrailAdapter.new(
-        associations: associations, ignore: ignore, reload_live_endpoints: reload_live_endpoints,
+        associations: associations, ignore: ignore,
+        reload_live_endpoints: Deprecation.reload_live_endpoints!(reload_live_endpoints),
         recorded_changes: recorded_changes, allow_approximate: allow_approximate
       ).activity_timeline(
         record,

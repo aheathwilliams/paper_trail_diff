@@ -325,7 +325,7 @@ RSpec.describe PaperTrailDiff do
         /not preloaded: comments/
       )
       expect do
-        described_class.compare_many([], reload_live_endpoints: nil)
+        described_class.compare_many([], reload_live_endpoints: 'yes')
       end.to raise_error(PaperTrailDiff::ConfigurationError, /must be true or false/)
     end
 
@@ -673,6 +673,23 @@ RSpec.describe PaperTrailDiff do
 
       expect(described_class.deprecator).to have_received(:warn)
         .with(/allow_expensive: is deprecated and has no effect/).exactly(4).times
+    end
+
+    it 'warns that reload_live_endpoints: is deprecated, and still honors it' do
+      articles, = open_window_articles(1)
+      article = articles.fetch(0)
+      allow(described_class.deprecator).to receive(:warn)
+      allow(CoreArticle).to receive(:unscoped).and_call_original
+
+      described_class.compare(article.versions.first, article, reload_live_endpoints: false)
+      described_class.activity_timeline(article, reload_live_endpoints: false)
+      expect(CoreArticle).not_to have_received(:unscoped)
+      described_class.compare_many([{ from: :first, to: article }], reload_live_endpoints: true)
+      described_class.compare(article.versions.first, article)
+
+      expect(described_class.deprecator).to have_received(:warn)
+        .with(/reload_live_endpoints: is deprecated/).exactly(3).times
+      expect(CoreArticle).to have_received(:unscoped).twice
     end
 
     it 'rejects a closing endpoint the range cannot use' do

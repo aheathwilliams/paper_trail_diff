@@ -145,6 +145,12 @@ project follows [Semantic Versioning](https://semver.org/).
   method, and `UnsupportedBatchPathError` is no longer raised. Batch methods
   refuse such a path before their first query, as before, now with
   `UnsupportedAssociationError`.
+- `reload_live_endpoints:` is deprecated and warns. It still works until it
+  is removed. Skipping the reload saves a query for the records and one per
+  association level in each call, 2 for 500 articles with their comments,
+  and reads values from objects that may be stale; it also needs every
+  requested association loaded, and reads limited ones again anyway. It was
+  on `compare`, `compare_many`, and `activity_timeline` only. Remove it.
 
 ### Fixed
 

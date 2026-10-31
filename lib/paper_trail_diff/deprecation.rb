@@ -13,6 +13,9 @@ module PaperTrailDiff
     ALLOW_EXPENSIVE = 'allow_expensive: is deprecated and has no effect: allow_approximate: true ' \
                       'alone accepts a path read with PT-AT, in batch methods too. Remove the ' \
                       'option.'
+    RELOAD_LIVE_ENDPOINTS = 'reload_live_endpoints: is deprecated and will be removed: skipping ' \
+                            'the reload saves a query for the records and one per association ' \
+                            'level, and reads values that may be stale. Remove the option.'
 
     # Required when first used, as the library loads nothing it does not need.
     #: () -> untyped
@@ -43,6 +46,16 @@ module PaperTrailDiff
     #: (untyped) -> void
     def self.allow_expensive!(allow_expensive)
       deprecator.warn(ALLOW_EXPENSIVE) unless allow_expensive.nil?
+    end
+
+    # The value to use: the option still works until it is removed, and nil
+    # stands for its old default.
+    #: (untyped) -> untyped
+    def self.reload_live_endpoints!(reload)
+      return true if reload.nil?
+
+      deprecator.warn(RELOAD_LIVE_ENDPOINTS)
+      reload
     end
   end
 end

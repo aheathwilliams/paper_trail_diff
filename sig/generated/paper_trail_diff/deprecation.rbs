@@ -10,6 +10,8 @@ module PaperTrailDiff
 
     ALLOW_EXPENSIVE: ::String
 
+    RELOAD_LIVE_ENDPOINTS: ::String
+
     # Required when first used, as the library loads nothing it does not need.
     # : () -> untyped
     def self.deprecator: () -> untyped
@@ -24,5 +26,10 @@ module PaperTrailDiff
 
     # : (untyped) -> void
     def self.allow_expensive!: (untyped) -> void
+
+    # The value to use: the option still works until it is removed, and nil
+    # stands for its old default.
+    # : (untyped) -> untyped
+    def self.reload_live_endpoints!: (untyped) -> untyped
   end
 end
