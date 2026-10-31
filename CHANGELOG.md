@@ -96,6 +96,15 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- The reference describes how PT-AT records HABTM membership and how the gem
+  credits it. A change made between two root versions is credited to the
+  step after the earlier one, so a checkpoint's capture is credited to whoever
+  saved the version before it; a checkpoint just before the change as well
+  credits it to its author. Only the first version an instance saves after
+  changing a HABTM is right; PT-AT never forgets the instance's changes, not
+  even on `reload`. A later save from it records the old membership, and the
+  gem reports members removed and added again that never left.
+
 - The performance guide describes current behavior instead of logging each
   past change: what the batch methods cost, what still grows with a report,
   the version indexes, what costs a query per record, historical filters,
@@ -153,6 +162,27 @@ project follows [Semantic Versioning](https://semver.org/).
   on `compare`, `compare_many`, and `activity_timeline` only. Remove it.
 
 ### Fixed
+
+- A HABTM member created in the same transaction as the checkpoint that
+  records it is a member at that checkpoint, as a member attached there
+  already was. It was left out, because it had no state before the
+  transaction, so the checkpoint missed it and a comparison from the
+  checkpoint to now reported it added.
+
+- `association_paths` leaves out an association whose target, or a model its
+  `has_many :through` goes through, has no `has_paper_trail`, such as the
+  `file_attachment` and `file_blob` that `has_one_attached` defines. Every
+  request that reads history refused them with `UnversionedAssociationError`,
+  so a settings screen built from the list offered paths that always failed.
+
+- `diagnose` reports `:tied_version_timestamps`, and `compare` emits
+  `ambiguous_association_boundary.paper_trail_diff`, only when the request can
+  read a path with PT-AT: one history reads only approximately, a composite
+  foreign key, or a polymorphic `belongs_to`. PT-AT places association changes
+  by timestamp alone. For every other path, since 0.14.0, versions that share a
+  timestamp are ordered by ID, so a change between them is reported, yet both
+  warned that it could not be detected. A request refused for a path PT-AT
+  would read now raises before the notification.
 
 - `timeline`, `activity_timeline`, and `analyze` read every version of a
   model whose versions association has a scope

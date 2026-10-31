@@ -543,6 +543,27 @@ and members were recorded there, reading the root's membership at that version
 raises `IncompleteAssociationHistoryError` instead of mixing both records'
 members. Save each HABTM owner's versions in a transaction of its own.
 
+PT-AT records membership only when the owner saves a version, so the gem knows
+it only at root versions. A change made between two root versions is reported
+in the first step after the earlier one, and credited to that step's source:
+usually the earlier root version, which someone else may have saved. A member
+created between them is reported in the step that starts with its creation
+instead. A change attached before a checkpoint is therefore credited to
+whoever saved the version before the checkpoint, not to the checkpoint's
+author. To credit a change to the person who made it, save a checkpoint just
+before the change as well as after it: the step between the two checkpoints is
+theirs.
+
+PT-AT works out the membership a version records from the instance that saves
+it: the instance's current members, with the changes that instance made undone,
+so that the version holds the membership from before its own event. It never
+forgets those changes, not even on `reload`. Only the first version an instance
+saves after changing a HABTM is right; each later save from it records the
+membership from before that change again. The gem then reports the change late,
+or reports a member that never left as removed and added again. Load the record
+again, with `find`, before saving it a second time, and save checkpoints from a
+freshly loaded record, as the [checkpoint recipe](#saving-a-checkpoint) does.
+
 ## analyze
 
 `analyze(record)` returns an `Analysis` with the net `diff` and the `timeline`
@@ -964,13 +985,19 @@ Without `synchronize_version_creation_timestamp: false`, the checkpoint takes th
 record's old `updated_at` as its time and lands in the past. Save one record per
 transaction: HABTM membership cannot be read from a transaction in which
 another record with the same HABTM also saved a version (see the
-[HABTM limitation](#habtm-limitation)).
+[HABTM limitation](#habtm-limitation)). A checkpoint records membership as it
+is when saved, including a member attached or created earlier in the same
+transaction. A change it captures is credited to the step before it, so its
+author is whoever saved the version before the checkpoint, unless that is a
+checkpoint the same person saved just before the change. Don't save the
+instance that made the HABTM change again; it records the old membership.
 
 ### Files from ActiveStorage
 
 `has_one_attached` and `has_many_attached` point to ActiveStorage's own models,
 which PaperTrail does not version. Comparing them historically raises
-`UnversionedAssociationError` rather than claiming nothing changed. Versioning
+`UnversionedAssociationError` rather than claiming nothing changed, and
+`association_paths` leaves them out. Versioning
 ActiveStorage's models does not help either, because `has_one_attached` is a
 scoped `has_one`.
 
@@ -1232,14 +1259,15 @@ and `cycle`. Cycles are marked and not followed.
 Only associations a request accepts are listed, so each path can be passed to
 `associations:`. The PaperTrail versions association, a `has_many :through`
 that goes through a HABTM, a scoped HABTM, a HABTM below the root, an
-association keyed on a column other than a primary key, and one whose ends
-keep their versions in different tables are left out. A path history can
-read only approximately, such as one with a scope written as SQL text, is
-listed, but requesting it also takes `allow_approximate: true` (see
-[costly associations](#costly-associations)). A
-`has_many :through` Active Record cannot follow, such as one through a
-polymorphic `belongs_to`, raises Active Record's own error from any model
-discovery reaches, as requesting it does.
+association keyed on a column other than a primary key, one whose ends keep
+their versions in different tables, and one whose target, or a model its
+`has_many :through` goes through, has no `has_paper_trail` are left out. A path
+history can read only approximately, such as one with a scope written as SQL
+text, is listed, but requesting it also takes `allow_approximate: true` (see
+[costly associations](#costly-associations)). A `has_many :through` Active
+Record cannot follow, such as one through a polymorphic `belongs_to`, raises
+Active Record's own error from any model discovery reaches, as requesting it
+does.
 
 Check a comparison's endpoints for known problems before relying on
 association history. They are what `compare` takes: two versions, or a version
@@ -1299,11 +1327,14 @@ earlier time. Keep server clocks synchronized.
 
 Association changes between versions with the same timestamp are placed using
 the same order. A few association shapes fall back to PT-AT's own reifier, which
-uses timestamps only: scoped associations, unversioned targets, and the others
-listed in the [architecture notes](architecture.md). For those, `diagnose` warns
-about tied timestamps, and a comparison between two tied versions emits the
-`ambiguous_association_boundary.paper_trail_diff` notification. Recording
-timestamps below one second avoids the problem. On SQL Server, PT-AT compares
+uses timestamps only: a path history reads only approximately, which takes
+`allow_approximate: true`, a composite foreign key, and a polymorphic
+`belongs_to` whose target's default scope history cannot read. The
+[architecture notes](architecture.md) list them. When a request includes such a
+path, or any polymorphic `belongs_to`, whose targets are known only per record,
+`diagnose` warns about tied timestamps and a comparison between two tied
+versions emits the `ambiguous_association_boundary.paper_trail_diff`
+notification. Recording timestamps below one second avoids the problem. On SQL Server, PT-AT compares
 those timestamps only to about 3 milliseconds (a `datetime` tick, 1/300 s),
 because the adapter writes the times in its queries that way, so for these
 shapes two versions saved closer together than that may be read in the wrong

@@ -20,6 +20,20 @@ module PaperTrailDiff
       def initialize: (untyped, Symbol, String, ?String?) -> void
     end
 
+    PROBLEMS: untyped
+
+    # Each model a path's history needs versions of and has none, with the
+    # refusal's code: the target, then each model a has_many :through goes
+    # through. A polymorphic target is not known until a row names it;
+    # `diagnose` reports that separately rather than guessing here.
+    # : (untyped) -> Array[[Symbol, untyped]]
+    def self.unversioned_models: (untyped) -> Array[[ Symbol, untyped ]]
+
+    # A has_many :through reads past membership from the versions of the
+    # models it goes through, so each of them needs history too.
+    # : (untyped) -> Array[untyped]
+    def self.through_models: (untyped) -> Array[untyped]
+
     # : (tree: AssociationTree, traversal: AssociationTraversal, ?allow_approximate: bool) -> void
     def initialize: (tree: AssociationTree, traversal: AssociationTraversal, ?allow_approximate: bool) -> void
 
@@ -64,13 +78,8 @@ module PaperTrailDiff
     # : (untyped) -> Array[Refusal]
     def unversioned_refusals: (untyped) -> Array[Refusal]
 
-    # A has_many :through reads past membership from the versions of the
-    # models it goes through, so each of them needs history too.
-    # : (untyped) -> Array[untyped]
-    def through_models: (untyped) -> Array[untyped]
-
-    # : (String, untyped, Symbol, String) -> Array[Refusal]
-    def unversioned: (String, untyped, Symbol, String) -> Array[Refusal]
+    # : (String, untyped, Symbol) -> Refusal
+    def unversioned: (String, untyped, Symbol) -> Refusal
 
     # : () -> bool
     def association_tracking?: () -> bool

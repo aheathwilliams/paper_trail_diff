@@ -561,6 +561,91 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     expect(step_tags.to_h).to eq(tags.to_h)
   end
 
+  # A checkpoint records membership as it is when saved, so a tag attached
+  # earlier in its own transaction is a member there. A tag created in that
+  # transaction used to be dropped, as it had no state before the transaction,
+  # so the checkpoint missed it and a comparison with now reported it added.
+  it "reads a tag attached in a checkpoint's own transaction as a member there" do
+    article = TrackedArticle.create!(title: 'T')
+    existing = TrackedTag.create!(name: 'Existing')
+    before = habtm_boundary_for(article)
+    TrackedArticle.transaction do
+      created = TrackedTag.create!(name: 'Created with the checkpoint')
+      TrackedArticle.find(article.id).tags << [existing, created]
+      habtm_boundary_for(article)
+    end
+    after = article.versions.reload.last
+
+    tags = PaperTrailDiff.compare(before, after, associations: [:tags]).associations.fetch('tags')
+    since = PaperTrailDiff.compare(after, article, associations: [:tags])
+
+    expect(tags.added.map { |tag| tag.attributes.fetch('name') })
+      .to eq(['Existing', 'Created with the checkpoint'])
+    expect(since.associations).not_to have_key('tags')
+  end
+
+  # Documented in the reference's HABTM limitation, and pinned here so that a
+  # change in PT-AT, or in how the gem reads it, is noticed.
+  describe 'HABTM membership as PT-AT records it' do
+    it 'credits a change between root versions to the step after the earlier one' do
+      article = TrackedArticle.create!(title: 'T')
+      tag = TrackedTag.create!(name: 'Attached by the second author')
+      PaperTrail.request(whodunnit: 'first') { article.update!(title: 'By the first author') }
+      by_first = article.versions.reload.last
+      PaperTrail.request(whodunnit: 'second') do
+        TrackedArticle.find(article.id).tags << tag
+        habtm_boundary_for(article)
+      end
+      by_second = article.versions.reload.last
+
+      steps = PaperTrailDiff.activity_timeline(article, from: by_first, to: by_second,
+                                                        associations: [:tags])
+
+      credited = steps.reject(&:empty?).map do |step|
+        [step.source_boundary.whodunnit, step.diff.associations.keys]
+      end
+      expect(credited).to eq([['first', ['tags']]])
+    end
+
+    it 'credits a change to its author when they checkpoint just before it too' do
+      article = TrackedArticle.create!(title: 'T')
+      tag = TrackedTag.create!(name: 'Attached by the second author')
+      PaperTrail.request(whodunnit: 'first') { article.update!(title: 'By the first author') }
+      by_first = article.versions.reload.last
+      PaperTrail.request(whodunnit: 'second') do
+        habtm_boundary_for(article)
+        TrackedArticle.find(article.id).tags << tag
+        habtm_boundary_for(article)
+      end
+
+      steps = PaperTrailDiff.activity_timeline(article, from: by_first,
+                                                        to: article.versions.reload.last,
+                                                        associations: [:tags])
+
+      credited = steps.reject(&:empty?).map do |step|
+        [step.source_boundary.whodunnit, step.diff.associations.keys]
+      end
+      expect(credited).to eq([['first', []], ['second', ['tags']]])
+    end
+
+    it "records the old membership again at an instance's later save" do
+      article = TrackedArticle.create!(title: 'T')
+      tag = TrackedTag.create!(name: 'Kept throughout')
+      article.tags << tag
+      habtm_boundary_for(article)
+      checkpoint = article.versions.reload.last
+      article.reload
+      article.update!(title: 'Saved again from the same instance')
+      stale = article.versions.reload.last
+
+      tags = PaperTrailDiff.compare(checkpoint, stale, associations: [:tags])
+                           .associations.fetch('tags')
+
+      # The tag never left: PT-AT undid the instance's earlier change again.
+      expect(tags.removed.map(&:id)).to eq([tag.id])
+    end
+  end
+
   # The root's checkpoints record the root's tags and nothing else, so the
   # tag's articles used to read as empty at both: `Other` joining the tag went
   # unreported, and against the current record both articles read as added.
@@ -779,12 +864,14 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     )
     expect(by_path.fetch('comments.article').cycle).to be(true)
     expect(by_path.fetch('author.comments').through).to eq('articles')
+    # unversioned_attachments is left out: its target has no versions, so every
+    # request that reads history refuses it.
     expect(PaperTrailDiff.association_paths(TrackedArticle).map(&:path))
       .to eq(%w[author authorships comments contributors limited_comments offset_comments
-                owner_comments profile tags unversioned_attachments])
+                owner_comments profile tags])
     expect(PaperTrailDiff.association_paths(TrackedArticle.new).map(&:path))
       .to eq(%w[author authorships comments contributors limited_comments offset_comments
-                owner_comments profile tags unversioned_attachments])
+                owner_comments profile tags])
   end
 
   it 'separates descendant updates into activity timeline steps' do
@@ -2102,65 +2189,88 @@ RSpec.describe 'PaperTrailDiff association tracking' do
   end
 
   describe 'versions that share a timestamp' do
-    # Association membership is recorded per version but resolved by timestamp,
-    # so a tie makes two boundaries indistinguishable for association purposes
-    # even when their ids order them perfectly.
+    # Loaded history orders versions that share a timestamp by id, so a change
+    # between two tied checkpoints is still placed between them. PT-AT, which
+    # reads a path history cannot read exactly, places changes by timestamp
+    # alone, so only such a path is reported as a hazard.
+    def checkpoint(article)
+      TrackedArticle.transaction { TrackedArticle.find(article.id).paper_trail.save_with_version }
+      article.versions.reload.last
+    end
+
     def tied_boundaries
       article = TrackedArticle.create!(title: 'T')
+      comment = article.comments.create!(body: 'Before the boundaries')
       tag = TrackedTag.create!(name: 'Added between the boundaries')
-      before = article.versions.reload.last
-      article.tags << tag
-      article.reload
-      TrackedArticle.transaction { TrackedArticle.find(article.id).paper_trail.save_with_version }
-      after = article.versions.reload.last
-      PaperTrail::Version.where(id: after.id).update_all(created_at: before.created_at)
-      [article, before.reload, after.reload]
+      before = checkpoint(article)
+      TrackedArticle.find(article.id).tags << tag
+      comment.update!(body: 'Edited between the boundaries')
+      after = checkpoint(article)
+      PaperTrail::Version.where('id > ?', before.id).update_all(created_at: before.created_at)
+      { before: before.reload, after: after.reload, tag: tag, comment: comment }
     end
 
-    it 'cannot see an association change across the tie' do
-      _article, before, after = tied_boundaries
-
-      diff = PaperTrailDiff.compare(before, after, associations: ['tags'])
-
-      # Documented limitation rather than desired behaviour: the change is
-      # invisible, so the gem cannot report it as absent either.
-      expect(diff.associations).not_to have_key('tags')
-    end
-
-    it 'reports the condition through instrumentation when associations are selected' do
-      _article, before, after = tied_boundaries
+    def ambiguous_events(&block)
       events = []
       callback = proc { |name, _s, _f, _id, payload| events << [name, payload] }
-
-      ActiveSupport::Notifications.subscribed(callback, /paper_trail_diff/) do
-        PaperTrailDiff.compare(before, after, associations: ['tags'])
-      end
-
-      ambiguous = events.select { |name, _| name.start_with?('ambiguous_association_boundary') }
-      expect(ambiguous.length).to eq(1)
-      expect(ambiguous.dig(0, 1, :version_ids)).to eq([before.id, after.id])
+      ActiveSupport::Notifications.subscribed(callback, /paper_trail_diff/, &block)
+      events.select { |name, _| name.start_with?('ambiguous_association_boundary') }
     end
 
-    it 'stays silent when no associations are selected, since nothing can be lost' do
-      _article, before, after = tied_boundaries
-      events = []
-      callback = proc { |name, _s, _f, _id, _payload| events << name }
+    it 'places a change between tied checkpoints by id' do
+      tied = tied_boundaries
 
-      ActiveSupport::Notifications.subscribed(callback, /paper_trail_diff/) do
-        PaperTrailDiff.compare(before, after)
-      end
+      diff = PaperTrailDiff.compare(tied[:before], tied[:after], associations: %w[tags comments])
 
-      expect(events.grep(/ambiguous_association_boundary/)).to be_empty
+      expect(diff.associations.fetch('tags').added.map(&:id)).to eq([tied[:tag].id])
+      expect(diff.associations.fetch('comments').changed.map { |change| change.record.id })
+        .to eq([tied[:comment].id])
     end
 
-    it 'warns from diagnose, without failing a comparison that may be correct' do
-      _article, before, after = tied_boundaries
+    it 'reports no hazard for paths read from loaded history' do
+      tied = tied_boundaries
+      options = { associations: %w[tags comments] }
 
-      report = PaperTrailDiff.diagnose(before, after, associations: ['tags'])
+      events = ambiguous_events { PaperTrailDiff.compare(tied[:before], tied[:after], **options) }
+      report = PaperTrailDiff.diagnose(tied[:before], tied[:after], **options)
 
+      expect(events).to be_empty
+      expect(report.warnings.map(&:code)).not_to include(:tied_version_timestamps)
+    end
+
+    it 'warns and notifies for a path PT-AT reads, without failing the comparison' do
+      tied = tied_boundaries
+      options = { associations: ['owner_comments'], allow_approximate: true }
+
+      events = ambiguous_events { PaperTrailDiff.compare(tied[:before], tied[:after], **options) }
+      report = PaperTrailDiff.diagnose(tied[:before], tied[:after], **options)
+
+      expect(events.map { |_, payload| payload[:version_ids] })
+        .to eq([[tied[:before].id, tied[:after].id]])
       expect(report.warnings.map(&:code)).to include(:tied_version_timestamps)
       # A tie only *may* hide a change, so it never becomes an error.
       expect(report).to be_ok
+    end
+
+    it 'refuses a path PT-AT would read before reporting the tie' do
+      tied = tied_boundaries
+      events = []
+      callback = proc { |name, *| events << name }
+
+      ActiveSupport::Notifications.subscribed(callback, /ambiguous_association_boundary/) do
+        expect do
+          PaperTrailDiff.compare(tied[:before], tied[:after], associations: ['owner_comments'])
+        end.to raise_error(PaperTrailDiff::UnsupportedAssociationError, /owner_comments/)
+      end
+      expect(events).to be_empty
+    end
+
+    it 'stays silent when no associations are selected, since nothing can be lost' do
+      tied = tied_boundaries
+
+      events = ambiguous_events { PaperTrailDiff.compare(tied[:before], tied[:after]) }
+
+      expect(events).to be_empty
     end
   end
 

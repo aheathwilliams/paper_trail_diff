@@ -49,6 +49,11 @@ module PaperTrailDiff
     # : (untyped, root: bool) -> Array[untyped]
     def supported_reflections: (untyped, root: bool) -> Array[untyped]
 
+    # Every request that reads history refuses a path whose target, or a
+    # model its has_many :through goes through, has no versions.
+    # : (untyped) -> bool
+    def unversioned?: (untyped) -> bool
+
     # : (untyped) -> untyped
     def reflection_target: (untyped) -> untyped
 

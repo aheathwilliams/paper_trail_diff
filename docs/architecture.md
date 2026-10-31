@@ -73,8 +73,8 @@ checking a scope against them, so its membership is approximate:
 - associations with a scope the gem cannot read as plain conditions and an
   exact ranking, including owner-dependent scopes and a `limit` without a
   total integer order;
-- targets with such a default scope;
-- targets that are not versioned;
+- targets with such a default scope, including a polymorphic `belongs_to`
+  target, whose class and scope are known only from each record;
 - composite foreign keys.
 
 Every method that reads history rejects the scoped cases unless you pass

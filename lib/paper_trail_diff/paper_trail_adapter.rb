@@ -227,16 +227,13 @@ module PaperTrailDiff
     # @rbs @timeline_snapshotter: TimelineSnapshotProvider
     # @rbs @activity_snapshotter: ActivitySnapshotProvider
 
-    # Association membership is resolved by timestamp, so endpoints sharing one
-    # cannot be told apart and any association change between them is invisible.
-    # The result may still be correct -- nothing associated may have changed --
-    # and the gem cannot tell which, since not seeing the change is the symptom.
-    # So it reports the condition and leaves the judgement to the application.
+    # The result may still be correct -- nothing the path reaches may have
+    # changed -- and the gem cannot tell which, since not seeing the change is
+    # the symptom. So it reports the condition and leaves the judgement to the
+    # application.
     #: (untyped, untyped) -> void
     def notify_ambiguous_association_boundary(from_endpoint, to_endpoint)
-      return if @association_tree.empty?
-      return unless Endpoint.version?(from_endpoint) && Endpoint.version?(to_endpoint)
-      return unless from_endpoint.created_at == to_endpoint.created_at
+      return unless ambiguous_association_boundary?(from_endpoint, to_endpoint)
 
       Instrumentation.notify(
         'ambiguous_association_boundary',
@@ -246,6 +243,21 @@ module PaperTrailDiff
           recorded_at: from_endpoint.created_at
         )
       )
+    end
+
+    # Loaded history orders two versions that share a timestamp by id, but
+    # PT-AT places association changes by timestamp alone, so only a path it
+    # reads can lose a change between them. A request the preparer refuses
+    # raises here, before anything is reported.
+    #: (untyped, untyped) -> bool
+    def ambiguous_association_boundary?(from_endpoint, to_endpoint)
+      return false if @association_tree.empty?
+      return false unless Endpoint.version?(from_endpoint) && Endpoint.version?(to_endpoint)
+      return false unless from_endpoint.created_at == to_endpoint.created_at
+
+      model_class = RecordedClass.for(from_endpoint)
+      @traversal_preparer.call(model_class, historical: true)
+      FallbackPaths.any?(@traversal, model_class, approximate: true)
     end
 
     # With neither a window nor endpoints, a range is the record's whole

@@ -24,6 +24,38 @@ module PaperTrailDiff
       end
     end
 
+    PROBLEMS = {
+      unversioned_association_target: '%<model>s is not versioned',
+      unversioned_through_model: 'it goes through %<model>s, which is not versioned'
+    }.freeze
+
+    # Each model a path's history needs versions of and has none, with the
+    # refusal's code: the target, then each model a has_many :through goes
+    # through. A polymorphic target is not known until a row names it;
+    # `diagnose` reports that separately rather than guessing here.
+    #: (untyped) -> Array[[Symbol, untyped]]
+    def self.unversioned_models(reflection)
+      return [] if reflection.polymorphic?
+
+      target = [:unversioned_association_target, reflection.klass] #: [Symbol, untyped]
+      through = through_models(reflection).map do |model|
+        [:unversioned_through_model, model] #: [Symbol, untyped]
+      end
+      [target, *through].reject { |_code, model| Support.versioned?(model) }
+    end
+
+    # A has_many :through reads past membership from the versions of the
+    # models it goes through, so each of them needs history too.
+    #: (untyped) -> Array[untyped]
+    def self.through_models(reflection)
+      return [] unless reflection.through_reflection?
+
+      [reflection.through_reflection, reflection.source_reflection].flat_map do |part|
+        part.polymorphic? ? through_models(part) : [part.klass, *through_models(part)]
+      end.uniq - [reflection.klass]
+    end
+    private_class_method :through_models
+
     #: (tree: AssociationTree, traversal: AssociationTraversal, ?allow_approximate: bool) -> void
     def initialize(tree:, traversal:, allow_approximate: false)
       unless [true, false].include?(allow_approximate)
@@ -105,39 +137,19 @@ module PaperTrailDiff
     #: (untyped) -> Array[Refusal]
     def unversioned_refusals(model_class)
       @traversal.selected_reflections(model_class).flat_map do |path, reflection|
-        # A polymorphic target is not known until a row names it; `diagnose`
-        # reports that separately rather than guessing here.
-        next [] if reflection.polymorphic?
-
-        target = reflection.klass
-        through = through_models(reflection).flat_map do |model|
-          unversioned(path, model, :unversioned_through_model,
-                      "it goes through #{model.name}, which is not versioned")
+        self.class.unversioned_models(reflection).map do |code, model|
+          unversioned(path, model, code)
         end
-        unversioned(path, target, :unversioned_association_target,
-                    "#{target.name} is not versioned") + through
       end
     end
 
-    # A has_many :through reads past membership from the versions of the
-    # models it goes through, so each of them needs history too.
-    #: (untyped) -> Array[untyped]
-    def through_models(reflection)
-      return [] unless reflection.through_reflection?
-
-      [reflection.through_reflection, reflection.source_reflection].flat_map do |part|
-        part.polymorphic? ? through_models(part) : [part.klass, *through_models(part)]
-      end.uniq - [reflection.klass]
-    end
-
-    #: (String, untyped, Symbol, String) -> Array[Refusal]
-    def unversioned(path, model_class, code, problem)
-      return [] if Support.versioned?(model_class)
-
+    #: (String, untyped, Symbol) -> Refusal
+    def unversioned(path, model_class, code)
+      problem = format(PROBLEMS.fetch(code), model: model_class.name)
       message = "association #{path} cannot be compared historically: #{problem}. " \
                 "Add `has_paper_trail` to #{model_class.name}, or mirror the fields you need " \
                 'onto a model that has it.'
-      [Refusal.new(UnversionedAssociationError, code, message, path)]
+      Refusal.new(UnversionedAssociationError, code, message, path)
     end
 
     #: () -> bool

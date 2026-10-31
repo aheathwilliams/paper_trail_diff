@@ -249,8 +249,10 @@ RSpec.describe PaperTrailDiff::AssociationTraversal do
     # A settings screen offers what discovery lists, so a path it lists must be
     # one a request accepts.
     it 'is what discovery leaves out, so every path it lists can be requested' do
+      # notes is left out too: TraversalNote has no versions, so every request
+      # that reads history refuses it.
       expect(PaperTrailDiff.association_paths(TraversalArticle).map(&:path))
-        .to eq(%w[author comments labels notes tags])
+        .to eq(%w[author comments labels tags])
       article_paths = PaperTrailDiff.association_paths(TrackedArticle, max_depth: 2).map(&:path)
       expect(article_paths).to include('tags', 'comments.article')
       expect(article_paths).not_to include('tags.articles')

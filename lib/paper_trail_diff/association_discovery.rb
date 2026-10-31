@@ -102,9 +102,17 @@ module PaperTrailDiff
     #: (untyped, root: bool) -> Array[untyped]
     def supported_reflections(model_class, root:)
       reflections = model_class.reflect_on_all_associations.reject do |reflection|
-        AssociationTraversal.unsupported_reason(model_class, reflection, root: root)
+        AssociationTraversal.unsupported_reason(model_class, reflection, root: root) ||
+          unversioned?(reflection)
       end
       reflections.sort_by { |reflection| reflection.name.to_s }
+    end
+
+    # Every request that reads history refuses a path whose target, or a
+    # model its has_many :through goes through, has no versions.
+    #: (untyped) -> bool
+    def unversioned?(reflection)
+      TraversalPreparer.unversioned_models(reflection).any?
     end
 
     #: (untyped) -> untyped

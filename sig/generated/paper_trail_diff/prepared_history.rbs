@@ -74,6 +74,11 @@ module PaperTrailDiff
     # : (Hash[Symbol, untyped], untyped) -> Array[untyped]
     def child_ids_for: (Hash[Symbol, untyped], untyped) -> Array[untyped]
 
+    # PT-AT records a checkpoint's membership as it is when the checkpoint is
+    # saved, so a tag attached earlier in the checkpoint's own transaction is a
+    # member there, unlike other associations, which a version reads as they
+    # were before its transaction. A member created in that transaction has no
+    # earlier state, so it is read as it was created.
     # : (untyped, untyped, untyped, untyped, bool) -> Array[untyped]?
     def habtm_records: (untyped, untyped, untyped, untyped, bool) -> Array[untyped]?
 
