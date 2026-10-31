@@ -106,7 +106,11 @@ association = { 'comments' => :comments, 'comments_without_changes' => :comments
                 'source_type_through' => :linked_authors }[scenario]
 options = { since: Time.now.utc - 3600, limit: size, snapshots: true,
             associations: Array(association) }
-options[:allow_expensive] = true if ENV['PTD_PROBE_ALLOW_EXPENSIVE'] == '1'
+# A path PT-AT reads is approximate and per record, so it takes both opt-ins.
+if ENV['PTD_PROBE_ALLOW_EXPENSIVE'] == '1'
+  options[:allow_expensive] = true
+  options[:allow_approximate] = true
+end
 options[:historical_filter] = ->(state) { state.comments.exists? } if scenario == 'callable'
 model = case scenario
         when 'through_has_many' then TrackedAuthor
@@ -139,7 +143,7 @@ begin
       if scenario == 'checkpoints'
         PaperTrailDiff.analyze_scope(
           model, limit: size, associations: [:comments],
-                 within: options[:since]..Time.now.utc, close_on: :current
+                 within: options[:since]..Time.now.utc
         )
       else
         PaperTrailDiff.report(model, **options)

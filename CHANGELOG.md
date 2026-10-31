@@ -85,6 +85,12 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- The performance guide describes current behavior instead of logging each
+  past change: what the batch methods cost, what still grows with a report,
+  the version indexes, what costs a query per record, historical filters,
+  large reports, and how to measure. Its measurements were taken again. The
+  earlier ones remain in `benchmark/results/` and in the changelog.
+
 - `historical_filter:` reads the history of the relation's records only, and
   of deleted records, which a relation cannot test. It read every record of
   the model that changed in the window, so a report on one account's articles
@@ -261,6 +267,9 @@ project follows [Semantic Versioning](https://semver.org/).
   encrypted, serialized, enum, custom-type, decimal, and JSON attributes.
   `rake spec` runs it, so CI runs it on every database. `ORACLE_SEEDS` and
   `ORACLE_STEPS` widen a run. See `docs/testing.md`.
+- `PTD_PROBE_ALLOW_EXPENSIVE=1` makes the reconstruction probe pass
+  `allow_approximate: true` too, so its PT-AT-read scenario runs rather than
+  raising, and neither benchmark passes the deprecated `close_on:` any more.
 - On SQL Server the association specs keep their versions 5 ms apart. Specs
   that compare the gem with PT-AT failed at random there: PT-AT compares
   version times through SQL text, which the SQL Server adapter writes as
