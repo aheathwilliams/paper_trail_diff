@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative '../support/association_database'
+require_relative '../support/full_snapshotter'
 
 # Driven through the public entry points, which build one of these for every
 # version-bounded activity timeline and analysis.
@@ -324,10 +325,10 @@ RSpec.describe PaperTrailDiff::ActivityTimelineBuilder do
       expect(steps.last.from_boundary.version_id).to eq(to.id)
     end
 
-    it 'reads the same activity from a snapshotter that cannot prepare' do
+    it 'reads the same activity from a snapshotter that rebuilds every state' do
       article, comment, from, to = edited_history
       comment.update!(body: 'live')
-      plain = adapter.method(:snapshot_at)
+      plain = FullSnapshotter.new(adapter.method(:snapshot_at))
       calls = collector_calls
 
       expected = [builder(article, from: from, to: to).build,

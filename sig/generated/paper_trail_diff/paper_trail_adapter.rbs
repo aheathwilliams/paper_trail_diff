@@ -129,9 +129,6 @@ module PaperTrailDiff
     # : (untyped) -> RecordSnapshot?
     def historical_snapshot: (untyped) -> RecordSnapshot?
 
-    # : (untyped) -> RecordSnapshot?
-    def uncached_historical_snapshot: (untyped) -> RecordSnapshot?
-
     # : (untyped, untyped) -> RecordSnapshot?
     def snapshot_at: (untyped, untyped) -> RecordSnapshot?
 

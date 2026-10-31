@@ -169,7 +169,7 @@ module PaperTrailDiff
         @record,
         root_versions: root_versions,
         tree: @tree,
-        prepared: (@snapshotter.activity_index if @snapshotter.respond_to?(:activity_index)),
+        prepared: @snapshotter.activity_index,
         range_start: range_start,
         range_end: range_end
       ).call
@@ -178,7 +178,6 @@ module PaperTrailDiff
 
     #: (Array[untyped], ?end_at: untyped) -> void
     def prepare_history(root_versions, end_at: nil)
-      return unless @snapshotter.respond_to?(:prepare)
       return @snapshotter.prepare(@record, root_versions) unless end_at
 
       @snapshotter.prepare(@record, root_versions, end_at: end_at)

@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative '../support/association_database'
+require_relative '../support/full_snapshotter'
 
 RSpec.describe 'PaperTrailDiff association tracking' do
   before do
@@ -98,7 +99,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
       record,
       range: PaperTrailDiff::TimelineRange.new(record, from: from, to: to, within: nil),
       tree: tree,
-      snapshotter: adapter.method(:snapshot_at),
+      snapshotter: FullSnapshotter.new(adapter.method(:snapshot_at)),
       snapshots: false,
       group: nil
     ).build
@@ -1059,13 +1060,14 @@ RSpec.describe 'PaperTrailDiff association tracking' do
       associations: associations,
       ignore: PaperTrailDiff::DEFAULT_IGNORED_ATTRIBUTES
     )
+    store = adapter.instance_variable_get(:@historical_store)
     reference = nil
     reference_queries = sql_query_count do
       reference = PaperTrailDiff::TimelineBuilder.new(
         graph[:article],
         from: graph[:before],
         to: after,
-        snapshotter: adapter.method(:uncached_historical_snapshot)
+        snapshotter: FullSnapshotter.new(->(version) { store.uncached(version, version) })
       ).analyze
     end
 

@@ -116,7 +116,7 @@ module PaperTrailDiff
         incremental_root?(previous_event)
 
       branches = @transaction_groups.branches_for(previous_event)
-      return full_snapshot(event) unless branches && @snapshotter.respond_to?(:refresh)
+      return full_snapshot(event) unless branches
 
       @snapshotter.refresh(
         root_endpoint(event.version),
@@ -130,8 +130,7 @@ module PaperTrailDiff
 
     #: (ActivityEvent) -> bool
     def incremental_root?(event)
-      event.root? && @transaction_groups.isolated?(event) &&
-        @snapshotter.respond_to?(:advance_root)
+      event.root? && @transaction_groups.isolated?(event)
     end
 
     #: (ActivityEvent, ActivityEvent, RecordSnapshot?) -> RecordSnapshot?

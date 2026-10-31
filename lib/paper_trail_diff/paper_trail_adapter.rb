@@ -347,11 +347,6 @@ module PaperTrailDiff
       snapshot_at(version, version)
     end
 
-    #: (untyped) -> RecordSnapshot?
-    def uncached_historical_snapshot(version)
-      @historical_store.uncached(version, version)
-    end
-
     #: (untyped, untyped) -> RecordSnapshot?
     def snapshot_at(root_endpoint, context_endpoint)
       return live_snapshot(root_endpoint) if Endpoint.record?(context_endpoint)
