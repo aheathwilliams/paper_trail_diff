@@ -607,6 +607,27 @@ RSpec.describe 'PaperTrailDiff association tracking' do
       expect(credited).to eq([['first', ['tags']]])
     end
 
+    it 'credits a change to its author when they checkpoint just before it too' do
+      article = TrackedArticle.create!(title: 'T')
+      tag = TrackedTag.create!(name: 'Attached by the second author')
+      PaperTrail.request(whodunnit: 'first') { article.update!(title: 'By the first author') }
+      by_first = article.versions.reload.last
+      PaperTrail.request(whodunnit: 'second') do
+        habtm_boundary_for(article)
+        TrackedArticle.find(article.id).tags << tag
+        habtm_boundary_for(article)
+      end
+
+      steps = PaperTrailDiff.activity_timeline(article, from: by_first,
+                                                        to: article.versions.reload.last,
+                                                        associations: [:tags])
+
+      credited = steps.reject(&:empty?).map do |step|
+        [step.source_boundary.whodunnit, step.diff.associations.keys]
+      end
+      expect(credited).to eq([['first', []], ['second', ['tags']]])
+    end
+
     it "records the old membership again at an instance's later save" do
       article = TrackedArticle.create!(title: 'T')
       tag = TrackedTag.create!(name: 'Kept throughout')

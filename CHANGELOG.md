@@ -99,7 +99,8 @@ project follows [Semantic Versioning](https://semver.org/).
 - The reference describes how PT-AT records HABTM membership and how the gem
   credits it. A change made between two root versions is credited to the
   step after the earlier one, so a checkpoint's capture is credited to whoever
-  saved the version before it. Only the first version an instance saves after
+  saved the version before it; a checkpoint just before the change as well
+  credits it to its author. Only the first version an instance saves after
   changing a HABTM is right; PT-AT never forgets the instance's changes, not
   even on `reload`. A later save from it records the old membership, and the
   gem reports members removed and added again that never left.

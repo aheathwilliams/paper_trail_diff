@@ -550,8 +550,9 @@ usually the earlier root version, which someone else may have saved. A member
 created between them is reported in the step that starts with its creation
 instead. A change attached before a checkpoint is therefore credited to
 whoever saved the version before the checkpoint, not to the checkpoint's
-author. Credit HABTM changes with that in mind, or describe them by the versions
-around them.
+author. To credit a change to the person who made it, save a checkpoint just
+before the change as well as after it: the step between the two checkpoints is
+theirs.
 
 PT-AT works out the membership a version records from the instance that saves
 it: the instance's current members, with the changes that instance made undone,
@@ -987,7 +988,8 @@ another record with the same HABTM also saved a version (see the
 [HABTM limitation](#habtm-limitation)). A checkpoint records membership as it
 is when saved, including a member attached or created earlier in the same
 transaction. A change it captures is credited to the step before it, so its
-author is whoever saved the version before the checkpoint. Don't save the
+author is whoever saved the version before the checkpoint, unless that is a
+checkpoint the same person saved just before the change. Don't save the
 instance that made the HABTM change again; it records the old membership.
 
 ### Files from ActiveStorage
