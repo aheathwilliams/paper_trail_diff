@@ -79,6 +79,14 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- `historical_filter:` reads the history of the relation's records only, and
+  of deleted records, which a relation cannot test. It read every record of
+  the model that changed in the window, so a report on one account's articles
+  raised `BatchLimitExceededError` when another account had more matching
+  articles than `limit:`, and spent `max_filter_versions:` on their versions.
+  Matching deleted records no longer count toward `limit:` unless
+  `include_deleted: true` is given, as without a filter.
+
 - The reference says how a record created without a version, such as one
   imported with `insert_all`, and history pruned with `has_paper_trail
   limit:` read.

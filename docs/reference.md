@@ -742,14 +742,18 @@ model instance and may run queries of its own.
 
 - It looks only at the record itself, not its associations, and does not check
   whether a value was held for the whole window.
-- The relation still filters current rows. Matching deleted records are listed
+- Only the history of records the relation selects is read, and the relation's
+  order, `limit`, and `offset` then page the ones that match. Deleted records,
+  which a relation cannot test, are read too, and those that match are listed
   in `unreachable`.
-- Every matching record counts toward `limit:`, including deleted ones and ones
-  the relation later excludes. Matching stops as soon as the limit is exceeded.
+- Matching records the relation selects count toward `limit:`, and matching
+  stops as soon as the limit is exceeded. Matching deleted records count only
+  with `include_deleted: true`, as without a filter.
 - `max_filter_versions:` limits how many versions the filter loads, including
-  the one version after the window it reads for each record. The default is
-  10,000. Going over raises `FilterLimitExceededError` before the extra batch is
-  checked. It does not limit queries inside a callable.
+  the one version after the window it reads for each record, and the versions
+  of deleted records. The default is 10,000. Going over raises
+  `FilterLimitExceededError` before the extra batch is checked. It does not
+  limit queries inside a callable.
 - `version_scope:` narrows which changes are reported, not which states are
   tested here.
 - It is accepted by `analyze_scope` and `report`, which select records from a

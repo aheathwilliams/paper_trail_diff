@@ -307,6 +307,12 @@ RSpec.describe PaperTrailDiff::HistoricalFilter do
       )
     end
 
+    it 'does not count matches the caller does not count' do
+      ids = Array.new(2) { history.first.id.to_s }
+
+      expect(filter({ title: 'Draft' }, limit: 1).call(ids, counted: false)).to eq(ids)
+    end
+
     it 'stops at more versions than the budget, counting the version after the window' do
       article, created, edited, = history
       message = 'historical_filter: exceeds max_filter_versions: 1; ' \

@@ -1052,10 +1052,9 @@ RSpec.describe PaperTrailDiff do
         expect(reified).to eq(12)
       end
 
-      # The early exit must refuse rather than stop scanning: breaking would end
-      # the pass while later candidates could still have been selected, handing
-      # back a quietly short report instead of an error.
-      it 'refuses rather than returning a short result when matches are destroyed' do
+      # Destroyed matches are listed, as without a filter, and count toward
+      # `limit:` only when they are analyzed too, so none is quietly left out.
+      it 'lists every destroyed match, and refuses too many only to analyze them' do
         start_at = Time.now.utc - 3600
         doomed = Array.new(6) do |index|
           article = CoreArticle.create!(title: "gone #{index}", internal_note: 'wanted')
@@ -1064,12 +1063,12 @@ RSpec.describe PaperTrailDiff do
         end
         doomed.each(&:destroy!)
         window = start_at..(Time.now.utc + 3600)
+        options = { within: window, limit: 2, historical_filter: was_review_or_wanted }
 
-        expect do
-          described_class.analyze_scope(CoreArticle, within: window, limit: 2,
-                                                     close_on: :current,
-                                                     historical_filter: was_review_or_wanted)
-        end.to raise_error(PaperTrailDiff::BatchLimitExceededError)
+        expect(described_class.analyze_scope(CoreArticle, **options).unreachable)
+          .to match_array(doomed.map { |article| ['CoreArticle', article.id.to_s] })
+        expect { described_class.analyze_scope(CoreArticle, include_deleted: true, **options) }
+          .to raise_error(PaperTrailDiff::BatchLimitExceededError, /include_deleted/)
       end
 
       it 'preserves activity options alongside the filter' do

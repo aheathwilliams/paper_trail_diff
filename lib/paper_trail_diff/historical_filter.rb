@@ -24,8 +24,10 @@ module PaperTrailDiff
       @state_loader = PreparedVersionStateLoader.new
     end
 
-    #: (Array[String]) -> Array[String]
-    def call(candidates)
+    # More matches than the limit raise, unless the caller does not count
+    # them: candidates it only lists, such as deleted roots.
+    #: (Array[String], ?counted: bool) -> Array[String]
+    def call(candidates, counted: true)
       matched = [] #: Array[String]
       candidates.each_slice(CANDIDATE_BATCH) do |slice|
         versions = candidate_versions(slice)
@@ -34,7 +36,7 @@ module PaperTrailDiff
           next unless held?(versions.fetch(id, []), closing[id])
 
           matched << id
-          reject_root_limit! if matched.length > @limit
+          reject_root_limit! if counted && matched.length > @limit
         end
       end
       matched
