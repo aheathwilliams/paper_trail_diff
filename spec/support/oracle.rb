@@ -35,6 +35,17 @@ module Oracle
     snapshot && canon(snapshot.to_h)
   end
 
+  # Every record in a recorded state's associations, at any depth.
+  def self.identities(state)
+    return [] unless state
+
+    state.fetch(:associations, {}).each_value.flat_map do |association|
+      association.fetch(:records).flat_map do |record|
+        [[record[:type], record[:id]], *identities(record)]
+      end
+    end
+  end
+
   def self.seeds(default)
     value = ENV.fetch('ORACLE_SEEDS', nil)
     return default unless value
@@ -83,6 +94,26 @@ module Oracle
       raise "no recorded transaction wrote version #{version_id}" unless index&.positive?
 
       @entries.fetch(index - 1)
+    end
+
+    # The steps' sources other than the root's own versions and those of
+    # records in its tree before or after the transaction that wrote them.
+    def strays(root, steps)
+      steps.flat_map(&:sources).filter_map do |source|
+        identity = [source.item_type, source.item_id]
+        next if identity == [root.class.name, root.id]
+        next if around(source.version_id).any? do |entry|
+          Oracle.identities(entry.state).include?(identity)
+        end
+
+        [*identity, source.version_id]
+      end
+    end
+
+    # The states before and after the transaction that wrote the version.
+    def around(version_id)
+      before = before(version_id)
+      [before, @entries.fetch(@entries.index(before) + 1)]
     end
 
     # The state a step boundary stands for: before a version's transaction,
@@ -477,6 +508,7 @@ module Oracle
     end
 
     def step_states(label, step, grouped:)
+      @failures.check("#{label} stray sources", [], @recorder.strays(@root, [step]))
       return if !grouped && shared?(step)
 
       @failures.check("#{label} from", @recorder.before(step.source_boundary.version_id).state,
@@ -498,15 +530,16 @@ module Oracle
       within = first.after..last.after
       analysis = PaperTrailDiff.analyze(@root, within: within, associations: @paths, activity: true,
                                                snapshots: true)
-      if analysis.activity_timeline.empty?
+      steps = analysis.activity_timeline
+      if steps.empty?
         @failures.check("#{label} is empty although the state changed", first.state, last.state)
         return
       end
 
       @failures.check("#{label} from", first.state, Oracle.snapshot(analysis.from_snapshot))
       @failures.check("#{label} to", last.state, Oracle.snapshot(analysis.to_snapshot))
-      @failures.check("#{label} last step to", last.state,
-                      Oracle.snapshot(analysis.activity_timeline.last.to_snapshot))
+      @failures.check("#{label} last step to", last.state, Oracle.snapshot(steps.last.to_snapshot))
+      @failures.check("#{label} stray sources", [], @recorder.strays(@root, steps))
       batches(within, analysis, label)
     end
 

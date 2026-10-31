@@ -393,6 +393,9 @@ end
 - `step.sources` lists the events whose changes the step shows, oldest first.
   That is just `source_boundary`, unless the step is a
   [transaction group](#one-step-per-transaction-group-transaction).
+- A record's versions are steps only while it is in the tree. A comment edited
+  on another article and moved to this one later shows up when it moves, not
+  when it was edited there.
 - `step.to_h` returns `{ from:, to:, diff: }`. `to_h(metadata: true)` adds
   author, event, transaction ID, and record, and a `sources` list.
   `to_h(snapshots: true)` adds the retained snapshots.
@@ -444,7 +447,8 @@ PaperTrailDiff.activity_timeline(article, associations: [:comments], group: :tra
   it. A field set and then restored inside the transaction is not reported.
 - Its `source_boundary` is the first event in the transaction. That event's
   author is not necessarily the author of every grouped change. `step.sources`
-  lists every event in the transaction, each with its own author.
+  lists every event in the transaction, each with its own author, except
+  those of records that were outside the tree before and after it.
 - Versions without a `transaction_id` are never grouped.
 - Also accepted by `analyze`, `analyze_many`, and `analyze_scope` with
   `activity: true`, and by `report`.

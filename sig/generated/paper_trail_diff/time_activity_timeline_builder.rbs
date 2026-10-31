@@ -52,8 +52,8 @@ module PaperTrailDiff
 
     # Events after the last root version read the root from the live record
     # when the window closes on it, as an explicit `to: record` range does.
-    # : (Array[untyped], Array[ActivityEvent], ?current: untyped) -> ActivityHistory
-    def build_history: (Array[untyped], Array[ActivityEvent], ?current: untyped) -> ActivityHistory
+    # : (Array[untyped], Array[ActivityEvent], current: untyped, closing: RecordSnapshot?) -> ActivityHistory
+    def build_history: (Array[untyped], Array[ActivityEvent], current: untyped, closing: RecordSnapshot?) -> ActivityHistory
 
     # : (ActivityHistory, ActivityStep?) -> Array[ActivityStep]
     def activity_steps: (ActivityHistory, ActivityStep?) -> Array[ActivityStep]

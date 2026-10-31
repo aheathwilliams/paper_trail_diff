@@ -89,8 +89,9 @@ module PaperTrailDiff
         return [ActivityHistory.empty, plan, nil, nil, nil]
       end
 
-      history = build_history(root_versions, events, current: plan.closing_record)
       snapshot = current_snapshot(plan)
+      history = build_history(root_versions, events, current: plan.closing_record,
+                                                     closing: snapshot)
       closing = closing_step(history, selected.last, plan, captured_at, snapshot, events)
       [history, plan, closing, snapshot, captured_at]
     end
@@ -113,16 +114,15 @@ module PaperTrailDiff
 
     # Events after the last root version read the root from the live record
     # when the window closes on it, as an explicit `to: record` range does.
-    #: (Array[untyped], Array[ActivityEvent], ?current: untyped) -> ActivityHistory
-    def build_history(root_versions, events, current: nil)
+    #: (Array[untyped], Array[ActivityEvent], current: untyped, closing: RecordSnapshot?) -> ActivityHistory
+    def build_history(root_versions, events, current:, closing:)
       ActivityHistoryBuilder.new(
-        root_versions,
-        events,
-        @snapshotter,
+        root_versions, events, @snapshotter,
         current: current,
         include_step: ->(event) { @range.include?(event.version) },
         snapshots: @retain,
-        recorded: @recorded
+        recorded: @recorded,
+        closing: closing
       ).call
     end
 

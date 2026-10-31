@@ -50,14 +50,19 @@ module PaperTrailDiff
 
     # The explicit live endpoint and a batch's live closing endpoint use the
     # same selected plan. A version filter can close earlier, on its successor.
-    # : () -> [RootVersionPlan, Array[ActivityEvent], ActivityHistory, RecordSnapshot?, ActivityBoundary?]
-    def current_history: () -> [ RootVersionPlan, Array[ActivityEvent], ActivityHistory, RecordSnapshot?, ActivityBoundary? ]
+    # : () -> [RootVersionPlan, ActivityHistory, RecordSnapshot?, ActivityBoundary?]
+    def current_history: () -> [ RootVersionPlan, ActivityHistory, RecordSnapshot?, ActivityBoundary? ]
 
-    # Without a closing boundary nothing reads the events or the closing pair,
-    # so their mutations cannot change an answer.
+    # Events up to the instant the current record was read. A range that a
+    # version filter closes earlier ends at that version, with no snapshot.
+    # : (RootVersionPlan, RecordSnapshot?, untyped) -> ActivityHistory
+    def history_until: (RootVersionPlan, RecordSnapshot?, untyped) -> ActivityHistory
+
+    # Without a closing boundary nothing reads the closing pair, so its
+    # mutations cannot change an answer.
     # mutant:disable
-    # : (RootVersionPlan) -> [RootVersionPlan, Array[ActivityEvent], ActivityHistory, RecordSnapshot?, ActivityBoundary?]
-    def empty_history: (RootVersionPlan) -> [ RootVersionPlan, Array[ActivityEvent], ActivityHistory, RecordSnapshot?, ActivityBoundary? ]
+    # : (RootVersionPlan) -> [RootVersionPlan, ActivityHistory, RecordSnapshot?, ActivityBoundary?]
+    def empty_history: (RootVersionPlan) -> [ RootVersionPlan, ActivityHistory, RecordSnapshot?, ActivityBoundary? ]
 
     # : () -> Array[String]?
     def root_recorded: () -> Array[String]?
@@ -79,23 +84,24 @@ module PaperTrailDiff
 
     # Appends the transition into an explicit closing boundary, which is either
     # a requested current record or the absence a final root destroy leaves.
-    # Either follows the root versions, which are themselves events.
-    # : (ActivityHistory, Array[ActivityEvent], ActivityBoundary?, RecordSnapshot?) -> Array[ActivityStep]
-    def activity_steps: (ActivityHistory, Array[ActivityEvent], ActivityBoundary?, RecordSnapshot?) -> Array[ActivityStep]
+    # Either follows the root versions, which are themselves events, so the
+    # last boundary the history kept opens it.
+    # : (ActivityHistory, ActivityBoundary?, RecordSnapshot?) -> Array[ActivityStep]
+    def activity_steps: (ActivityHistory, ActivityBoundary?, RecordSnapshot?) -> Array[ActivityStep]
 
     # A destroyed root has no later version, but its own event states that
     # nothing follows it, so the removal can still close the timeline.
     # : (Array[untyped]) -> ActivityBoundary?
     def destroyed_boundary: (Array[untyped]) -> ActivityBoundary?
 
-    # : (Array[untyped], Array[ActivityEvent], ?current: untyped) -> ActivityHistory
-    def event_history: (Array[untyped], Array[ActivityEvent], ?current: untyped) -> ActivityHistory
+    # : (Array[untyped], Array[ActivityEvent], ?current: untyped, ?closing: RecordSnapshot?) -> ActivityHistory
+    def event_history: (Array[untyped], Array[ActivityEvent], ?current: untyped, ?closing: RecordSnapshot?) -> ActivityHistory
 
     # Only the activity view gains the closing removal. The endpoint diff and
     # the root timeline keep their `compare` and `timeline` semantics, under
     # which the state at a destroy version is the state before the deletion.
-    # : (RootVersionPlan, Array[ActivityEvent], ActivityHistory) -> Analysis
-    def build_analysis: (RootVersionPlan, Array[ActivityEvent], ActivityHistory) -> Analysis
+    # : (RootVersionPlan, ActivityHistory) -> Analysis
+    def build_analysis: (RootVersionPlan, ActivityHistory) -> Analysis
 
     # : () -> TimeActivityTimelineBuilder
     def time_builder: () -> TimeActivityTimelineBuilder

@@ -113,6 +113,16 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Activity steps leave out the versions a record saved while it was outside
+  the root's tree. A comment edited on another article, then moved to this
+  one, brought that edit into the article's timeline as a step, and a
+  transaction group's `sources` listed it. Saved together with a comment added
+  to the article, the edit took the credit for the addition. The same went for
+  a comment edited after it moved away or left a scope, and for an author
+  renamed after the article changed authors. A version now counts when its
+  record is in the tree before or after its transaction. The versions of a
+  `has_many :through`'s join rows are all still kept.
+
 - `timeline`, `activity_timeline`, `analyze`, and `analyze_many` raise
   `InvalidEndpointError` naming what they were given when it is not a record
   of a versioned model, such as `nil`, a model class, a relation, or a

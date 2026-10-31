@@ -48,6 +48,23 @@ RSpec.describe PaperTrailDiff::ActivityTimelineBuilder do
     end
   end
 
+  # The current record shows what the last transaction left in the tree, so a
+  # comment it added is that transaction's activity, credited to its version.
+  it 'credits a comment added in the last transaction before the current record to it' do
+    article = TrackedArticle.create!(title: 'Article')
+    added = TrackedArticle.transaction do
+      article.update!(title: 'Renamed')
+      article.comments.create!(body: 'added')
+    end
+
+    steps = timeline(article.reload, from: article.versions.reorder(:created_at, :id).first,
+                                     to: article)
+    adding = steps.find { |step| step.diff.associations['comments']&.added&.any? }
+
+    expect([adding.source_boundary.item_type, adding.source_boundary.item_id])
+      .to eq(['TrackedComment', added.id])
+  end
+
   # An article with one comment edited twice between two article versions.
   def edited_history
     article = TrackedArticle.create!(title: 'Article')

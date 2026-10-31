@@ -24,13 +24,18 @@ module PaperTrailDiff
 
   # Builds activity steps while retaining root snapshots for combined analysis.
   class ActivityHistoryBuilder
-    # : (Array[untyped], Array[ActivityEvent], untyped, ?current: untyped, ?include_step: untyped, ?snapshots: bool, ?recorded: IgnorePolicy?) -> void
-    def initialize: (Array[untyped], Array[ActivityEvent], untyped, ?current: untyped, ?include_step: untyped, ?snapshots: bool, ?recorded: IgnorePolicy?) -> void
+    # `closing` is the snapshot after the last event when the range closes on
+    # the current record. Any other range ends at a root event, or at events
+    # after a window whose steps are not reported, so nothing reads it.
+    # : (Array[untyped], Array[ActivityEvent], untyped, ?current: untyped, ?include_step: untyped, ?snapshots: bool, ?recorded: IgnorePolicy?, ?closing: RecordSnapshot?) -> void
+    def initialize: (Array[untyped], Array[ActivityEvent], untyped, ?current: untyped, ?include_step: untyped, ?snapshots: bool, ?recorded: IgnorePolicy?, ?closing: RecordSnapshot?) -> void
 
     # : () -> ActivityHistory
     def call: () -> ActivityHistory
 
     private
+
+    @closing: RecordSnapshot?
 
     @current: untyped
 
@@ -39,6 +44,8 @@ module PaperTrailDiff
     @first_snapshot: RecordSnapshot?
 
     @include_step: untyped
+
+    @passed_reported: bool
 
     @previous_boundary: ActivityBoundary?
 
@@ -63,11 +70,19 @@ module PaperTrailDiff
     # : () -> void
     def reset: () -> void
 
+    # : () -> ActivityTreeFilter
+    def filter: () -> ActivityTreeFilter
+
     # : () -> ActivitySnapshotSequence
     def sequence: () -> ActivitySnapshotSequence
 
-    # : (ActivityEvent, RecordSnapshot?) -> void
-    def consume: (ActivityEvent, RecordSnapshot?) -> void
+    # A left-out event bounds nothing. A reported step it would have opened
+    # still moves the reported range's end past it, to the next boundary.
+    # : (ActivityEvent, RecordSnapshot?, bool) -> void
+    def consume: (ActivityEvent, RecordSnapshot?, bool) -> void
+
+    # : (ActivityEvent) -> void
+    def pass: (ActivityEvent) -> void
 
     # : (RecordSnapshot?) -> void
     def capture_first: (RecordSnapshot?) -> void

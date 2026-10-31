@@ -45,7 +45,7 @@ module PaperTrailDiff
       root_versions = plan.reconstruction_versions
       prepare_history(root_versions)
       events = collect_events(root_versions)
-      build_analysis(plan, events, event_history(root_versions, events))
+      build_analysis(plan, event_history(root_versions, events))
     end
 
     private
@@ -78,18 +78,18 @@ module PaperTrailDiff
       prepare_history(root_versions)
       events = collect_events(root_versions)
       history = event_history(root_versions, events)
-      activity_steps(history, events, destroyed_boundary(root_versions), nil)
+      activity_steps(history, destroyed_boundary(root_versions), nil)
     end
 
     #: () -> Array[ActivityStep]
     def build_to_current
-      _plan, events, history, snapshot, boundary = current_history
-      activity_steps(history, events, boundary, snapshot)
+      _plan, history, snapshot, boundary = current_history
+      activity_steps(history, boundary, snapshot)
     end
 
     #: () -> Analysis
     def analyze_current
-      plan, events, history, snapshot, boundary = current_history
+      plan, history, snapshot, boundary = current_history
       final = boundary ? snapshot : history.last_snapshot
       Analysis.new(
         diff: Engine.compare(history.first_snapshot, final),
@@ -97,34 +97,41 @@ module PaperTrailDiff
           plan, history.root_snapshots, closing_snapshot: snapshot,
                                         captured_at: boundary&.recorded_at
         ),
-        activity_timeline: activity_steps(history, events, boundary, snapshot),
+        activity_timeline: activity_steps(history, boundary, snapshot),
         from_snapshot: history.first_snapshot, to_snapshot: final
       )
     end
 
     # The explicit live endpoint and a batch's live closing endpoint use the
     # same selected plan. A version filter can close earlier, on its successor.
-    #: () -> [RootVersionPlan, Array[ActivityEvent], ActivityHistory, RecordSnapshot?, ActivityBoundary?]
+    #: () -> [RootVersionPlan, ActivityHistory, RecordSnapshot?, ActivityBoundary?]
     def current_history
       validate_current_range!
       plan = @range.select_plan
       return empty_history(plan) if plan.empty?
 
       snapshot, captured_at = capture_current if plan.closing_record
+      history = history_until(plan, snapshot, captured_at)
+      boundary = current_boundary(captured_at) if plan.closing_record
+      [plan, history, snapshot, boundary]
+    end
+
+    # Events up to the instant the current record was read. A range that a
+    # version filter closes earlier ends at that version, with no snapshot.
+    #: (RootVersionPlan, RecordSnapshot?, untyped) -> ActivityHistory
+    def history_until(plan, snapshot, captured_at)
       versions = plan.reconstruction_versions
       prepare_history(versions, end_at: captured_at)
       events = collect_events(versions, range_end: captured_at || versions.last)
-      history = event_history(versions, events, current: plan.closing_record)
-      boundary = current_boundary(captured_at) if plan.closing_record
-      [plan, events, history, snapshot, boundary]
+      event_history(versions, events, current: plan.closing_record, closing: snapshot)
     end
 
-    # Without a closing boundary nothing reads the events or the closing pair,
-    # so their mutations cannot change an answer.
+    # Without a closing boundary nothing reads the closing pair, so its
+    # mutations cannot change an answer.
     # mutant:disable
-    #: (RootVersionPlan) -> [RootVersionPlan, Array[ActivityEvent], ActivityHistory, RecordSnapshot?, ActivityBoundary?]
+    #: (RootVersionPlan) -> [RootVersionPlan, ActivityHistory, RecordSnapshot?, ActivityBoundary?]
     def empty_history(plan)
-      [plan, [], ActivityHistory.empty, nil, nil]
+      [plan, ActivityHistory.empty, nil, nil]
     end
 
     #: () -> Array[String]?
@@ -179,18 +186,16 @@ module PaperTrailDiff
 
     # Appends the transition into an explicit closing boundary, which is either
     # a requested current record or the absence a final root destroy leaves.
-    # Either follows the root versions, which are themselves events.
-    #: (ActivityHistory, Array[ActivityEvent], ActivityBoundary?, RecordSnapshot?) -> Array[ActivityStep]
-    def activity_steps(history, events, final_boundary, final_snapshot)
+    # Either follows the root versions, which are themselves events, so the
+    # last boundary the history kept opens it.
+    #: (ActivityHistory, ActivityBoundary?, RecordSnapshot?) -> Array[ActivityStep]
+    def activity_steps(history, final_boundary, final_snapshot)
       steps = history.steps.dup
       if final_boundary
-        last_event = events.last #: ActivityEvent
+        last_boundary = history.last_boundary #: ActivityBoundary
         steps << ActivityStep.between(
-          from_boundary: ActivityBoundary.from_version(
-            last_event.version, recorded: @recorded&.recorded_attributes(root: last_event.root?)
-          ),
-          to_boundary: final_boundary,
-          from_snapshot: history.last_snapshot, to_snapshot: final_snapshot,
+          from_boundary: last_boundary, to_boundary: final_boundary,
+          from_snapshot: history.last_event_snapshot, to_snapshot: final_snapshot,
           retain: @retain
         )
       end
@@ -207,28 +212,29 @@ module PaperTrailDiff
       ActivityBoundary.destroyed(version, recorded: root_recorded)
     end
 
-    #: (Array[untyped], Array[ActivityEvent], ?current: untyped) -> ActivityHistory
-    def event_history(root_versions, events, current: nil)
+    #: (Array[untyped], Array[ActivityEvent], ?current: untyped, ?closing: RecordSnapshot?) -> ActivityHistory
+    def event_history(root_versions, events, current: nil, closing: nil)
       ActivityHistoryBuilder.new(
         root_versions,
         events,
         @snapshotter,
         current: current,
         snapshots: @retain,
-        recorded: @recorded
+        recorded: @recorded,
+        closing: closing
       ).call
     end
 
     # Only the activity view gains the closing removal. The endpoint diff and
     # the root timeline keep their `compare` and `timeline` semantics, under
     # which the state at a destroy version is the state before the deletion.
-    #: (RootVersionPlan, Array[ActivityEvent], ActivityHistory) -> Analysis
-    def build_analysis(plan, events, history)
+    #: (RootVersionPlan, ActivityHistory) -> Analysis
+    def build_analysis(plan, history)
       Analysis.new(
         diff: Engine.compare(history.first_snapshot, history.last_snapshot),
         timeline: ActivityRootSteps.call(plan, history.root_snapshots),
         activity_timeline: activity_steps(
-          history, events, destroyed_boundary(plan.reconstruction_versions), nil
+          history, destroyed_boundary(plan.reconstruction_versions), nil
         ),
         from_snapshot: history.first_snapshot,
         to_snapshot: history.last_snapshot

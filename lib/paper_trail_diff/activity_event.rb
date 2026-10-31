@@ -7,10 +7,11 @@ module PaperTrailDiff
     attr_reader :version #: untyped
     attr_reader :branches #: Array[String]?
 
-    #: (version: untyped, branches: Array[String]?) -> void
-    def initialize(version:, branches:)
+    #: (version: untyped, branches: Array[String]?, ?join: bool) -> void
+    def initialize(version:, branches:, join: false)
       @version = version
       @branches = branches ? branches.map(&:to_s).uniq.sort.freeze : nil
+      @join = join
       freeze
     end
 
@@ -18,6 +19,15 @@ module PaperTrailDiff
     def root?
       branches.nil?
     end
+
+    # Whether the version is of a through's join row, which links the root to
+    # a target without being one.
+    #: () -> bool
+    def join?
+      @join
+    end
+
+    # @rbs @join: bool
   end
 
   # Accumulates each version once while retaining every selected root branch.
@@ -26,14 +36,15 @@ module PaperTrailDiff
       @events = {} #: Hash[Array[untyped], Hash[Symbol, untyped]]
     end
 
-    #: (Array[untyped], ?branch: String?) -> void
-    def add(versions, branch: nil)
+    #: (Array[untyped], ?branch: String?, ?join: bool) -> void
+    def add(versions, branch: nil, join: false)
       versions.each do |version|
         key = [version.class.name, version.id]
         existing = @events[key]
         @events[key] = {
           version: version,
-          branches: merged_branches(existing, branch)
+          branches: merged_branches(existing, branch),
+          join: join || existing&.fetch(:join) || false
         }
       end
     end
@@ -43,7 +54,8 @@ module PaperTrailDiff
       @events.values.map do |event|
         ActivityEvent.new(
           version: event.fetch(:version),
-          branches: event.fetch(:branches)
+          branches: event.fetch(:branches),
+          join: event.fetch(:join)
         )
       end
     end
