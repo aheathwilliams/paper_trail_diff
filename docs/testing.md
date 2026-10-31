@@ -204,6 +204,11 @@ PaperTrail's default YAML serializer, the fixtures explicitly permit
 `ActiveRecord.yaml_column_permitted_classes` configuration. The gem does not
 change an application's YAML configuration.
 
+PT-AT compares version times through SQL text, which SQL Server's adapter
+writes as `datetime` values, up to 1/300 s off. So on SQL Server the
+association specs keep their versions 5 ms apart, or the specs that compare
+the gem with PT-AT would fail whenever versions were saved closer together.
+
 The CI service configuration is in `.github/workflows/ci.yml`. PostgreSQL and
 MySQL create the named database during container initialization. The SQL Server
 jobs create it explicitly after the service passes its health check.

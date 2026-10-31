@@ -261,6 +261,11 @@ project follows [Semantic Versioning](https://semver.org/).
   encrypted, serialized, enum, custom-type, decimal, and JSON attributes.
   `rake spec` runs it, so CI runs it on every database. `ORACLE_SEEDS` and
   `ORACLE_STEPS` widen a run. See `docs/testing.md`.
+- On SQL Server the association specs keep their versions 5 ms apart. Specs
+  that compare the gem with PT-AT failed at random there: PT-AT compares
+  version times through SQL text, which the SQL Server adapter writes as
+  `datetime` values up to 1/300 s off, and after the host clock stepped back
+  the test clock packed versions microseconds apart until it caught up.
 
 ## [0.14.0] - 2026-10-29
 

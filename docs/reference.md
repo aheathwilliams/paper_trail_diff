@@ -1307,7 +1307,11 @@ uses timestamps only: scoped associations, unversioned targets, and the others
 listed in the [architecture notes](architecture.md). For those, `diagnose` warns
 about tied timestamps, and a comparison between two tied versions emits the
 `ambiguous_association_boundary.paper_trail_diff` notification. Recording
-timestamps below one second avoids the problem.
+timestamps below one second avoids the problem. On SQL Server, PT-AT compares
+those timestamps only to about 3 milliseconds (a `datetime` tick, 1/300 s),
+because the adapter writes the times in its queries that way, so for these
+shapes two versions saved closer together than that may be read in the wrong
+order.
 
 ### History stored as JSON
 
