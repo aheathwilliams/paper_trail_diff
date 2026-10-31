@@ -1,23 +1,33 @@
 # Generated from lib/paper_trail_diff/timeline_snapshot_provider.rb with RBS::Inline
 
 module PaperTrailDiff
-  # Gives TimelineBuilder one-argument access to a range-prepared snapshot store.
+  # Prepares the snapshot store for TimelineBuilder, one root at a time.
   class TimelineSnapshotProvider
     # : (HistoricalSnapshotStore, live_snapshotter: untyped) -> void
     def initialize: (HistoricalSnapshotStore, live_snapshotter: untyped) -> void
 
-    # : (untyped, Array[untyped]) -> void
-    def prepare: (untyped, Array[untyped]) -> void
+    # : (untyped, Array[untyped]) -> PreparedTimelineSnapshots
+    def prepare: (untyped, Array[untyped]) -> PreparedTimelineSnapshots
+
+    @live_snapshotter: untyped
+
+    @store: HistoricalSnapshotStore
+  end
+
+  # One root's timeline snapshots, read with the history prepared for it.
+  # Adjacent steps share endpoints, so each immutable snapshot, including a
+  # nil create state, is kept for this root only and released with it, and
+  # batch memory does not retain every reconstructed graph.
+  class PreparedTimelineSnapshots
+    # : (PreparedHistory?, store: HistoricalSnapshotStore, live_snapshotter: untyped) -> void
+    def initialize: (PreparedHistory?, store: HistoricalSnapshotStore, live_snapshotter: untyped) -> void
 
     # A window closing on current state ends at the live record rather than at a
     # version, which is the one endpoint no version history can reconstruct.
     # : (untyped) -> RecordSnapshot?
     def call: (untyped) -> RecordSnapshot?
 
-    private
-
-    # : (untyped) -> RecordSnapshot?
-    def live_snapshot: (untyped) -> RecordSnapshot?
+    @history: PreparedHistory?
 
     @live_snapshotter: untyped
 

@@ -38,6 +38,10 @@ module PaperTrailDiff
     # : () -> Array[ActivityStep]
     def build_between_versions: () -> Array[ActivityStep]
 
+    # Activity from the first to the last of the root versions.
+    # : (Array[untyped]) -> ActivityHistory
+    def version_history: (Array[untyped]) -> ActivityHistory
+
     # : () -> Array[ActivityStep]
     def build_to_current: () -> Array[ActivityStep]
 
@@ -72,11 +76,11 @@ module PaperTrailDiff
     # : () -> void
     def validate_current_range!: () -> void
 
-    # : (Array[untyped], ?range_start: untyped, ?range_end: untyped) -> Array[ActivityEvent]
-    def collect_events: (Array[untyped], ?range_start: untyped, ?range_end: untyped) -> Array[ActivityEvent]
+    # : (Array[untyped], untyped, ?range_start: untyped, ?range_end: untyped) -> Array[ActivityEvent]
+    def collect_events: (Array[untyped], untyped, ?range_start: untyped, ?range_end: untyped) -> Array[ActivityEvent]
 
-    # : (Array[untyped], ?end_at: untyped) -> void
-    def prepare_history: (Array[untyped], ?end_at: untyped) -> void
+    # : (Array[untyped], ?end_at: untyped) -> untyped
+    def prepare_history: (Array[untyped], ?end_at: untyped) -> untyped
 
     # Appends the transition into an explicit closing boundary, which is either
     # a requested current record or the absence a final root destroy leaves.
@@ -90,8 +94,8 @@ module PaperTrailDiff
     # : (Array[untyped]) -> ActivityBoundary?
     def destroyed_boundary: (Array[untyped]) -> ActivityBoundary?
 
-    # : (Array[untyped], Array[ActivityEvent], ?current: untyped, ?closing: RecordSnapshot?) -> ActivityHistory
-    def event_history: (Array[untyped], Array[ActivityEvent], ?current: untyped, ?closing: RecordSnapshot?) -> ActivityHistory
+    # : (Array[untyped], Array[ActivityEvent], untyped, ?current: untyped, ?closing: RecordSnapshot?) -> ActivityHistory
+    def event_history: (Array[untyped], Array[ActivityEvent], untyped, ?current: untyped, ?closing: RecordSnapshot?) -> ActivityHistory
 
     # Only the activity view gains the closing removal. The endpoint diff and
     # the root timeline keep their `compare` and `timeline` semantics, under

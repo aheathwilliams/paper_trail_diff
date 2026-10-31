@@ -278,7 +278,10 @@ module PaperTrailDiff
       @timeline_snapshotter = TimelineSnapshotProvider.new(
         @historical_store, live_snapshotter: method(:live_snapshot)
       )
-      @activity_snapshotter = build_activity_snapshotter
+      @activity_snapshotter = ActivitySnapshotProvider.new(
+        store: @historical_store, snapshotter: method(:snapshot_at),
+        refresher: method(:branch_refresher)
+      )
     end
 
     #: (bool, within: untyped, view: ActivityView) -> BatchedRootAnalyzer
@@ -302,22 +305,18 @@ module PaperTrailDiff
       )
     end
 
-    #: () -> ActivitySnapshotProvider
-    def build_activity_snapshotter
-      refresher = BranchSnapshotRefresher.new(
+    # Refreshes one root's snapshots, reading with the history prepared for it.
+    #: (PreparedActivitySnapshots) -> BranchSnapshotRefresher
+    def branch_refresher(snapshots)
+      BranchSnapshotRefresher.new(
         tree: @association_tree, ignore_policy: @ignore_policy,
         traversal: @traversal, pool: @snapshot_pool,
         normalizer: @normalizer,
-        full_snapshotter: method(:snapshot_at),
-        partial_snapshotter: @historical_store.method(:custom),
-        association_reader: @historical_store.method(:association_reader),
-        record_transition: @historical_store.method(:record_transition),
-        prepared_record_after: @historical_store.method(:record_after)
-      )
-      ActivitySnapshotProvider.new(
-        snapshotter: method(:snapshot_at), refresher: refresher,
-        preparer: @historical_store.method(:prepare),
-        activity_index: @historical_store.method(:activity_index)
+        full_snapshotter: snapshots.method(:call),
+        partial_snapshotter: snapshots.method(:custom),
+        association_reader: snapshots.method(:association_reader),
+        record_transition: snapshots.method(:record_transition),
+        prepared_record_after: snapshots.method(:record_after)
       )
     end
 
@@ -345,11 +344,11 @@ module PaperTrailDiff
       snapshot_at(version, version)
     end
 
-    #: (untyped, untyped) -> RecordSnapshot?
-    def snapshot_at(root_endpoint, context_endpoint)
+    #: (untyped, untyped, ?history: PreparedHistory?) -> RecordSnapshot?
+    def snapshot_at(root_endpoint, context_endpoint, history: nil)
       return live_snapshot(root_endpoint) if Endpoint.record?(context_endpoint)
 
-      @historical_store.call(root_endpoint, context_endpoint)
+      @historical_store.call(root_endpoint, context_endpoint, history: history)
     end
 
     #: (untyped) -> RecordSnapshot

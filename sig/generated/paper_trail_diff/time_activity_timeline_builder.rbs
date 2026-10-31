@@ -43,13 +43,13 @@ module PaperTrailDiff
     # : (RootVersionPlan) -> RecordSnapshot?
     def current_snapshot: (RootVersionPlan) -> RecordSnapshot?
 
-    # : (Array[untyped], untyped) -> Array[ActivityEvent]
-    def events_through: (Array[untyped], untyped) -> Array[ActivityEvent]
+    # : (Array[untyped], untyped) -> [untyped, Array[ActivityEvent]]
+    def events_through: (Array[untyped], untyped) -> [ untyped, Array[ActivityEvent] ]
 
     # Events after the last root version read the root from the live record
     # when the window closes on it, as an explicit `to: record` range does.
-    # : (Array[untyped], Array[ActivityEvent], current: untyped, closing: RecordSnapshot?) -> ActivityHistory
-    def build_history: (Array[untyped], Array[ActivityEvent], current: untyped, closing: RecordSnapshot?) -> ActivityHistory
+    # : (Array[untyped], Array[ActivityEvent], untyped, current: untyped, closing: RecordSnapshot?) -> ActivityHistory
+    def build_history: (Array[untyped], Array[ActivityEvent], untyped, current: untyped, closing: RecordSnapshot?) -> ActivityHistory
 
     # : (ActivityHistory, ActivityStep?) -> Array[ActivityStep]
     def activity_steps: (ActivityHistory, ActivityStep?) -> Array[ActivityStep]
@@ -85,11 +85,11 @@ module PaperTrailDiff
     # : (ActivityEvent?) -> bool
     def terminal_destroy?: (ActivityEvent?) -> bool
 
-    # : (Array[untyped], ?end_at: untyped) -> void
-    def prepare_history: (Array[untyped], ?end_at: untyped) -> void
+    # : (Array[untyped], ?end_at: untyped) -> untyped
+    def prepare_history: (Array[untyped], ?end_at: untyped) -> untyped
 
-    # : (Array[untyped], ?range_end: untyped) -> Array[ActivityEvent]
-    def collect_events: (Array[untyped], ?range_end: untyped) -> Array[ActivityEvent]
+    # : (Array[untyped], untyped, ?range_end: untyped) -> Array[ActivityEvent]
+    def collect_events: (Array[untyped], untyped, ?range_end: untyped) -> Array[ActivityEvent]
 
     # : (Array[ActivityEvent], Array[ActivityEvent], RootVersionPlan) -> bool
     def time_events?: (Array[ActivityEvent], Array[ActivityEvent], RootVersionPlan) -> bool

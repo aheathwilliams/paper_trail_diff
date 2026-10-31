@@ -23,8 +23,8 @@ module PaperTrailDiff
     # : (RootVersionPlan) -> [Array[Step], RecordSnapshot?, RecordSnapshot?]
     def compare_history: (RootVersionPlan) -> [ Array[Step], RecordSnapshot?, RecordSnapshot? ]
 
-    # : (RootVersionPlan) -> Array[Step]
-    def build_steps: (RootVersionPlan) -> Array[Step]
+    # : (RootVersionPlan, untyped) -> Array[Step]
+    def build_steps: (RootVersionPlan, untyped) -> Array[Step]
 
     # : () -> [Array[Step], nil, nil]
     def empty_history: () -> [ Array[Step], nil, nil ]

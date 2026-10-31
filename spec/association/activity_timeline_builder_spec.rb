@@ -305,7 +305,10 @@ RSpec.describe PaperTrailDiff::ActivityTimelineBuilder do
 
     it 'prepares history over the root versions and reads events from the first to the last' do
       article, _comment, from, to = edited_history
-      allow(provider).to receive(:prepare).and_call_original
+      prepared = []
+      allow(provider).to receive(:prepare).and_wrap_original do |original, *args, **options|
+        original.call(*args, **options).tap { |snapshots| prepared << snapshots }
+      end
       calls = collector_calls
 
       builder(article, from: from, to: to).build
@@ -317,7 +320,7 @@ RSpec.describe PaperTrailDiff::ActivityTimelineBuilder do
       expect(calls.map { |call| call.slice(:root_versions, :range_start, :range_end) })
         .to eq([{ root_versions: versions, range_start: from, range_end: to }] * 2)
       expect(calls.map { |call| call[:prepared] }).to all(be_a(PaperTrailDiff::PreparedActivityIndex))
-      expect(calls.last[:prepared]).to equal(provider.activity_index)
+      expect(calls.last[:prepared]).to equal(prepared.last.activity_index)
     end
 
     it 'prepares history up to the moment it captures the live row' do

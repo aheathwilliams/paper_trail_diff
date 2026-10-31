@@ -34,10 +34,7 @@ module PaperTrailDiff
       plan = @range.select_plan
       return Analysis.empty if plan.empty?
 
-      root_versions = plan.reconstruction_versions
-      prepare_history(root_versions)
-      events = collect_events(root_versions)
-      build_analysis(plan, event_history(root_versions, events))
+      build_analysis(plan, version_history(plan.reconstruction_versions))
     end
 
     private
@@ -66,10 +63,15 @@ module PaperTrailDiff
       return no_steps if plan.empty?
 
       root_versions = plan.reconstruction_versions
-      prepare_history(root_versions)
-      events = collect_events(root_versions)
-      history = event_history(root_versions, events)
-      activity_steps(history, destroyed_boundary(root_versions), nil)
+      activity_steps(version_history(root_versions), destroyed_boundary(root_versions), nil)
+    end
+
+    # Activity from the first to the last of the root versions.
+    #: (Array[untyped]) -> ActivityHistory
+    def version_history(root_versions)
+      snapshots = prepare_history(root_versions)
+      events = collect_events(root_versions, snapshots)
+      event_history(root_versions, events, snapshots)
     end
 
     #: () -> Array[ActivityStep]
@@ -112,9 +114,9 @@ module PaperTrailDiff
     #: (RootVersionPlan, RecordSnapshot?, untyped) -> ActivityHistory
     def history_until(plan, snapshot, captured_at)
       versions = plan.reconstruction_versions
-      prepare_history(versions, end_at: captured_at)
-      events = collect_events(versions, range_end: captured_at || versions.last)
-      event_history(versions, events, current: plan.closing_record, closing: snapshot)
+      snapshots = prepare_history(versions, end_at: captured_at)
+      events = collect_events(versions, snapshots, range_end: captured_at || versions.last)
+      event_history(versions, events, snapshots, current: plan.closing_record, closing: snapshot)
     end
 
     # Without a closing boundary nothing reads the closing pair, so its
@@ -150,9 +152,10 @@ module PaperTrailDiff
       AssociationTraversal.new(@tree).reject_live_habtm_activity!(@record.class)
     end
 
-    #: (Array[untyped], ?range_start: untyped, ?range_end: untyped) -> Array[ActivityEvent]
+    #: (Array[untyped], untyped, ?range_start: untyped, ?range_end: untyped) -> Array[ActivityEvent]
     def collect_events(
       root_versions,
+      snapshots,
       range_start: root_versions.first,
       range_end: root_versions.last
     )
@@ -160,14 +163,14 @@ module PaperTrailDiff
         @record,
         root_versions: root_versions,
         tree: @tree,
-        prepared: @snapshotter.activity_index,
+        prepared: snapshots.activity_index,
         range_start: range_start,
         range_end: range_end
       ).call
       ActivityTransactionGroups.before_closing(events, range_end)
     end
 
-    #: (Array[untyped], ?end_at: untyped) -> void
+    #: (Array[untyped], ?end_at: untyped) -> untyped
     def prepare_history(root_versions, end_at: nil)
       return @snapshotter.prepare(@record, root_versions) unless end_at
 
@@ -202,12 +205,12 @@ module PaperTrailDiff
       ActivityBoundary.destroyed(version, recorded: root_recorded)
     end
 
-    #: (Array[untyped], Array[ActivityEvent], ?current: untyped, ?closing: RecordSnapshot?) -> ActivityHistory
-    def event_history(root_versions, events, current: nil, closing: nil)
+    #: (Array[untyped], Array[ActivityEvent], untyped, ?current: untyped, ?closing: RecordSnapshot?) -> ActivityHistory
+    def event_history(root_versions, events, snapshots, current: nil, closing: nil)
       ActivityHistoryBuilder.new(
         root_versions,
         events,
-        @snapshotter,
+        snapshots,
         current: current,
         view: @view,
         closing: closing

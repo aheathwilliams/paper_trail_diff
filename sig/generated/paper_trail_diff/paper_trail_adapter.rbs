@@ -120,8 +120,9 @@ module PaperTrailDiff
     # : () -> HistoricalSnapshotStore
     def build_historical_store: () -> HistoricalSnapshotStore
 
-    # : () -> ActivitySnapshotProvider
-    def build_activity_snapshotter: () -> ActivitySnapshotProvider
+    # Refreshes one root's snapshots, reading with the history prepared for it.
+    # : (PreparedActivitySnapshots) -> BranchSnapshotRefresher
+    def branch_refresher: (PreparedActivitySnapshots) -> BranchSnapshotRefresher
 
     # : (untyped, from: untyped, to: untyped, within: untyped, version_scope: untyped, live_endpoint: untyped, view: ActivityView) -> ActivityTimelineBuilder
     def activity_builder: (untyped, from: untyped, to: untyped, within: untyped, version_scope: untyped, live_endpoint: untyped, view: ActivityView) -> ActivityTimelineBuilder
@@ -132,8 +133,8 @@ module PaperTrailDiff
     # : (untyped) -> RecordSnapshot?
     def historical_snapshot: (untyped) -> RecordSnapshot?
 
-    # : (untyped, untyped) -> RecordSnapshot?
-    def snapshot_at: (untyped, untyped) -> RecordSnapshot?
+    # : (untyped, untyped, ?history: PreparedHistory?) -> RecordSnapshot?
+    def snapshot_at: (untyped, untyped, ?history: PreparedHistory?) -> RecordSnapshot?
 
     # : (untyped) -> RecordSnapshot
     def live_snapshot: (untyped) -> RecordSnapshot

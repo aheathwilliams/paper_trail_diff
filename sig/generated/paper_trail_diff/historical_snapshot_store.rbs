@@ -1,13 +1,16 @@
 # Generated from lib/paper_trail_diff/historical_snapshot_store.rb with RBS::Inline
 
 module PaperTrailDiff
-  # Reconstructs and caches immutable historical snapshots for one adapter configuration.
+  # Reconstructs and caches immutable historical snapshots for one adapter
+  # configuration. It keeps the histories batches prepare, by root version;
+  # one prepared for a single root goes back to the caller, who passes it to
+  # every read for that root.
   class HistoricalSnapshotStore
     # : (tree: AssociationTree, traversal: AssociationTraversal, normalizer: SnapshotNormalizer, preparer: untyped) -> void
     def initialize: (tree: AssociationTree, traversal: AssociationTraversal, normalizer: SnapshotNormalizer, preparer: untyped) -> void
 
-    # : (untyped, Array[untyped], ?start_at: untyped, ?end_at: untyped) -> void
-    def prepare: (untyped, Array[untyped], ?start_at: untyped, ?end_at: untyped) -> void
+    # : (untyped, Array[untyped], ?start_at: untyped, ?end_at: untyped) -> PreparedHistory?
+    def prepare: (untyped, Array[untyped], ?start_at: untyped, ?end_at: untyped) -> PreparedHistory?
 
     # : (Array[untyped], Array[untyped], ?start_at: untyped, ?end_at: untyped) -> void
     def prepare_batch: (Array[untyped], Array[untyped], ?start_at: untyped, ?end_at: untyped) -> void
@@ -18,26 +21,18 @@ module PaperTrailDiff
     # : (Array[untyped], Array[untyped], ?start_at: untyped, ?end_at: untyped) -> void
     def prepare_deleted_batch: (Array[untyped], Array[untyped], ?start_at: untyped, ?end_at: untyped) -> void
 
-    # : (untyped, untyped) -> RecordSnapshot?
-    def call: (untyped, untyped) -> RecordSnapshot?
+    # `history` is the one `prepare` returned for this root, if any.
+    # : (untyped, untyped, ?history: PreparedHistory?) -> RecordSnapshot?
+    def call: (untyped, untyped, ?history: PreparedHistory?) -> RecordSnapshot?
 
-    # : (untyped, untyped) -> RecordSnapshot?
-    def uncached: (untyped, untyped) -> RecordSnapshot?
+    # : (untyped, untyped, ?history: PreparedHistory?) -> RecordSnapshot?
+    def uncached: (untyped, untyped, ?history: PreparedHistory?) -> RecordSnapshot?
 
-    # : (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer) -> RecordSnapshot?
-    def custom: (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer) -> RecordSnapshot?
+    # : (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer, ?history: PreparedHistory?) -> RecordSnapshot?
+    def custom: (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer, ?history: PreparedHistory?) -> RecordSnapshot?
 
-    # : (untyped, habtm_version: untyped) -> untyped
-    def association_reader: (untyped, habtm_version: untyped) -> untyped
-
-    # : () -> PreparedActivityIndex?
-    def activity_index: () -> PreparedActivityIndex?
-
-    # : (untyped) -> [Hash[untyped, untyped], Hash[untyped, untyped]]?
-    def record_transition: (untyped) -> [ Hash[untyped, untyped], Hash[untyped, untyped] ]?
-
-    # : (untyped, ?direct: bool) -> [bool, untyped]
-    def record_after: (untyped, ?direct: bool) -> [ bool, untyped ]
+    # : (untyped, habtm_version: untyped, ?history: PreparedHistory?) -> untyped
+    def association_reader: (untyped, habtm_version: untyped, ?history: PreparedHistory?) -> untyped
 
     private
 
@@ -49,8 +44,6 @@ module PaperTrailDiff
 
     @prepared_histories: Hash[Array[untyped], PreparedHistory]
 
-    @prepared_history: PreparedHistory?
-
     @prepared_snapshotter: PreparedSnapshotBuilder
 
     @preparer: untyped
@@ -61,6 +54,10 @@ module PaperTrailDiff
 
     @tree: AssociationTree
 
+    # A batch's history for the version wins over the one a caller passes.
+    # : (untyped, PreparedHistory?) -> PreparedHistory?
+    def history_for: (untyped, PreparedHistory?) -> PreparedHistory?
+
     # : (untyped) -> Array[untyped]
     def context_key: (untyped) -> Array[untyped]
 
@@ -70,11 +67,11 @@ module PaperTrailDiff
     # : (Array[untyped], Array[untyped], ?live_records: Array[untyped], ?start_at: untyped, ?end_at: untyped) -> void
     def register_batch: (Array[untyped], Array[untyped], ?live_records: Array[untyped], ?start_at: untyped, ?end_at: untyped) -> void
 
-    # : (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer) -> RecordSnapshot?
-    def snapshot_from_version: (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer) -> RecordSnapshot?
+    # : (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer, history: PreparedHistory?) -> RecordSnapshot?
+    def snapshot_from_version: (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer, history: PreparedHistory?) -> RecordSnapshot?
 
-    # : (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer) -> RecordSnapshot?
-    def snapshot_from_live_root: (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer) -> RecordSnapshot?
+    # : (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer, history: PreparedHistory?) -> RecordSnapshot?
+    def snapshot_from_live_root: (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer, history: PreparedHistory?) -> RecordSnapshot?
 
     # Rebuilding a version's associations writes them onto the record, so each
     # snapshot gets its own copy of a batch's loaded row, built from the row's
@@ -82,8 +79,8 @@ module PaperTrailDiff
     # : (untyped) -> untyped
     def live_root: (untyped) -> untyped
 
-    # : (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer, habtm_version: untyped) -> RecordSnapshot?
-    def normalize: (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer, habtm_version: untyped) -> RecordSnapshot?
+    # : (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer, habtm_version: untyped, history: PreparedHistory?) -> RecordSnapshot?
+    def normalize: (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer, habtm_version: untyped, history: PreparedHistory?) -> RecordSnapshot?
 
     # : (untyped, untyped) -> Array[untyped]
     def snapshot_key: (untyped, untyped) -> Array[untyped]

@@ -75,15 +75,15 @@ module PaperTrailDiff
     #: (RootVersionPlan, untyped) -> [ActivityHistory, RootVersionPlan, ActivityStep?, RecordSnapshot?, untyped]
     def history_for(plan, captured_at)
       root_versions = plan.reconstruction_versions
-      events = events_through(root_versions, captured_at)
+      snapshots, events = events_through(root_versions, captured_at)
       selected = selected_events(events, plan)
       unless time_events?(selected, events, plan)
         return [ActivityHistory.empty, plan, nil, nil, nil]
       end
 
       snapshot = current_snapshot(plan)
-      history = build_history(root_versions, events, current: plan.closing_record,
-                                                     closing: snapshot)
+      history = build_history(root_versions, events, snapshots, current: plan.closing_record,
+                                                                closing: snapshot)
       closing = closing_step(history, selected.last, plan, captured_at, snapshot, events)
       [history, plan, closing, snapshot, captured_at]
     end
@@ -98,18 +98,18 @@ module PaperTrailDiff
       @snapshotter.call(record, record)
     end
 
-    #: (Array[untyped], untyped) -> Array[ActivityEvent]
+    #: (Array[untyped], untyped) -> [untyped, Array[ActivityEvent]]
     def events_through(root_versions, captured_at)
-      prepare_history(root_versions, end_at: captured_at)
-      collect_events(root_versions, range_end: captured_at)
+      snapshots = prepare_history(root_versions, end_at: captured_at)
+      [snapshots, collect_events(root_versions, snapshots, range_end: captured_at)]
     end
 
     # Events after the last root version read the root from the live record
     # when the window closes on it, as an explicit `to: record` range does.
-    #: (Array[untyped], Array[ActivityEvent], current: untyped, closing: RecordSnapshot?) -> ActivityHistory
-    def build_history(root_versions, events, current:, closing:)
+    #: (Array[untyped], Array[ActivityEvent], untyped, current: untyped, closing: RecordSnapshot?) -> ActivityHistory
+    def build_history(root_versions, events, snapshots, current:, closing:)
       ActivityHistoryBuilder.new(
-        root_versions, events, @snapshotter,
+        root_versions, events, snapshots,
         current: current,
         include_step: ->(event) { @range.include?(event.version) },
         view: @view,
@@ -190,7 +190,7 @@ module PaperTrailDiff
       event.root? && event.version.event.to_s == 'destroy'
     end
 
-    #: (Array[untyped], ?end_at: untyped) -> void
+    #: (Array[untyped], ?end_at: untyped) -> untyped
     def prepare_history(root_versions, end_at: nil)
       start_at = @range.begin_time
       return @snapshotter.prepare(@record, root_versions, start_at: start_at) unless end_at
@@ -198,13 +198,13 @@ module PaperTrailDiff
       @snapshotter.prepare(@record, root_versions, start_at: start_at, end_at: end_at)
     end
 
-    #: (Array[untyped], ?range_end: untyped) -> Array[ActivityEvent]
-    def collect_events(root_versions, range_end: nil)
+    #: (Array[untyped], untyped, ?range_end: untyped) -> Array[ActivityEvent]
+    def collect_events(root_versions, snapshots, range_end: nil)
       ActivityVersionCollector.new(
         @record,
         root_versions: root_versions,
         tree: @tree,
-        prepared: @snapshotter.activity_index,
+        prepared: snapshots.activity_index,
         range_start: @range.begin_time,
         range_end: range_end || root_versions.last
       ).call

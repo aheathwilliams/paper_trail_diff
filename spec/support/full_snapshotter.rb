@@ -8,7 +8,9 @@ class FullSnapshotter
     @snapshotter = snapshotter
   end
 
-  def prepare(*, **); end
+  def prepare(*, **)
+    self
+  end
 
   def call(*endpoints)
     @snapshotter.call(*endpoints)
