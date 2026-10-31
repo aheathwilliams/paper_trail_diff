@@ -58,7 +58,7 @@ RSpec.describe 'An association scope history cannot read' do
       .to raise_error(PaperTrailDiff::UnsupportedAssociationError, message)
     expect { PaperTrailDiff.activity_timeline(board, **options) }
       .to raise_error(PaperTrailDiff::UnsupportedAssociationError, message)
-    expect { PaperTrailDiff.analyze_many([board], allow_expensive: true, **options) }
+    expect { PaperTrailDiff.analyze_many([board], **options) }
       .to raise_error(PaperTrailDiff::UnsupportedAssociationError, message)
     expect { PaperTrailDiff.compare(board, board, **options) }.not_to raise_error
   end
@@ -68,8 +68,7 @@ RSpec.describe 'An association scope history cannot read' do
     options = { associations: [:high_cards], allow_approximate: true }
 
     expect { PaperTrailDiff.compare(from, board, **options) }.not_to raise_error
-    expect { PaperTrailDiff.analyze_many([board], allow_expensive: true, **options) }
-      .not_to raise_error
+    expect { PaperTrailDiff.analyze_many([board], **options) }.not_to raise_error
   end
 
   it 'is an error diagnose reports, and a warning once allowed' do

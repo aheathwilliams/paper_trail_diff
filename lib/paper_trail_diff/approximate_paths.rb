@@ -2,37 +2,12 @@
 # rbs_inline: enabled
 
 module PaperTrailDiff
-  # Refuses known per-record association loading before a batch reconstructs it.
-  class BatchSafety
-    #: (AssociationTraversal, allow_expensive: bool) -> void
-    def initialize(traversal, allow_expensive:)
-      unless [true, false].include?(allow_expensive)
-        raise ConfigurationError, 'allow_expensive: must be true or false'
-      end
-
-      @traversal = traversal
-      @allow_expensive = allow_expensive
-    end
-
-    #: (untyped) -> void
-    def call(model)
-      return if @allow_expensive
-
-      path, reason = self.class.fallback_paths(@traversal, model).first
-      return unless path
-
-      # Such a path is read approximately too, so both opt-ins are named:
-      # naming one only led to an error asking for the other.
-      raise UnsupportedBatchPathError,
-            "association #{path} requires per-record reconstruction (#{reason}); " \
-            'remove this path, or pass allow_approximate: true and allow_expensive: true ' \
-            "to accept PT-AT's approximate reading, one record at a time"
-    end
-
-    # Each requested path whose history prepared history cannot read, with
-    # why. Such a path is read with PT-AT, one record at a time.
+  # The requested paths prepared history cannot read exactly, each with why.
+  # PT-AT reads such a path instead, one record at a time, when the caller
+  # passes `allow_approximate: true`.
+  module ApproximatePaths
     #: (AssociationTraversal, untyped) -> Array[[String, String]]
-    def self.fallback_paths(traversal, model)
+    def self.call(traversal, model)
       traversal.selected_reflections(model).filter_map do |path, reflection|
         reason = fallback_reason(reflection, ranked: true)
         [path, reason] if reason
@@ -69,8 +44,5 @@ module PaperTrailDiff
       reflection.scope ? 'association scope' : 'default-scoped target'
     end
     private_class_method :reason_for
-
-    # @rbs @traversal: AssociationTraversal
-    # @rbs @allow_expensive: bool
   end
 end

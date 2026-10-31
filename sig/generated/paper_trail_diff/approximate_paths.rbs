@@ -1,18 +1,12 @@
-# Generated from lib/paper_trail_diff/batch_safety.rb with RBS::Inline
+# Generated from lib/paper_trail_diff/approximate_paths.rb with RBS::Inline
 
 module PaperTrailDiff
-  # Refuses known per-record association loading before a batch reconstructs it.
-  class BatchSafety
-    # : (AssociationTraversal, allow_expensive: bool) -> void
-    def initialize: (AssociationTraversal, allow_expensive: bool) -> void
-
-    # : (untyped) -> void
-    def call: (untyped) -> void
-
-    # Each requested path whose history prepared history cannot read, with
-    # why. Such a path is read with PT-AT, one record at a time.
+  # The requested paths prepared history cannot read exactly, each with why.
+  # PT-AT reads such a path instead, one record at a time, when the caller
+  # passes `allow_approximate: true`.
+  module ApproximatePaths
     # : (AssociationTraversal, untyped) -> Array[[String, String]]
-    def self.fallback_paths: (AssociationTraversal, untyped) -> Array[[ String, String ]]
+    def self.call: (AssociationTraversal, untyped) -> Array[[ String, String ]]
 
     # A has_many through reads its parts' conditions only, at any depth. A
     # has_one through over a ranked part is refused whole, so its parts, too,
@@ -25,9 +19,5 @@ module PaperTrailDiff
     # its scope, is known only per record.
     # : (untyped, bool) -> String?
     def self.reason_for: (untyped, bool) -> String?
-
-    @allow_expensive: bool
-
-    @traversal: AssociationTraversal
   end
 end

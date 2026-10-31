@@ -109,7 +109,7 @@ passes is behavior nothing checks. `mutant.yml` lists the classes it mutates:
   `AssociationKey`;
 - whether a transaction's HABTM members are one record's:
   `HabtmTransactionOwners`;
-- which association paths a batch refuses: `BatchSafety`;
+- which association paths history cannot read exactly: `ApproximatePaths`;
 - which records an association scope admits, and how it ranks them:
   `ScopeCondition` and `ScopeRanking`.
 

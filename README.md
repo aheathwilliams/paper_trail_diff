@@ -294,8 +294,8 @@ as a `limit` ordered by a string, a scope that takes the owner, or SQL text.
 PT-AT reads those instead, one record at a time and only approximately, so
 every method raises `UnsupportedAssociationError` naming the association.
 Remove it from `associations:`, or pass `allow_approximate: true` to accept
-PT-AT's answer; batch methods also need `allow_expensive: true` to accept the
-cost. See [costly associations](docs/reference.md#costly-associations).
+PT-AT's answer and its cost. See
+[costly associations](docs/reference.md#costly-associations).
 Callbacks and callable historical filters can also issue queries. See the
 [performance guide](docs/performance.md) for measured behavior and limitations.
 

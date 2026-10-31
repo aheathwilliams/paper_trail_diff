@@ -10,6 +10,9 @@ module PaperTrailDiff
     CLOSE_ON = 'close_on: is deprecated and has no effect: a window already closes on the ' \
                'current record when nothing on its requested paths was recorded after it. ' \
                'Remove the option.'
+    ALLOW_EXPENSIVE = 'allow_expensive: is deprecated and has no effect: allow_approximate: true ' \
+                      'alone accepts a path read with PT-AT, in batch methods too. Remove the ' \
+                      'option.'
 
     # Required when first used, as the library loads nothing it does not need.
     #: () -> untyped
@@ -24,6 +27,11 @@ module PaperTrailDiff
     #: (Symbol?) -> void
     def self.close_on!(close_on)
       deprecator.warn(CLOSE_ON) unless close_on.nil?
+    end
+
+    #: (untyped) -> void
+    def self.allow_expensive!(allow_expensive)
+      deprecator.warn(ALLOW_EXPENSIVE) unless allow_expensive.nil?
     end
   end
 end

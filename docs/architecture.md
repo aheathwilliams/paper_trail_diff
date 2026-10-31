@@ -78,8 +78,7 @@ checking a scope against them, so its membership is approximate:
 - composite foreign keys.
 
 Every method that reads history rejects the scoped cases unless you pass
-`allow_approximate: true`, and batch methods also need `allow_expensive: true`;
-see [costly associations](reference.md#costly-associations).
+`allow_approximate: true`; see [costly associations](reference.md#costly-associations).
 
 HABTM membership comes from the snapshots PT-AT records with each transaction,
 so it is only known at root versions saved in a transaction. Those snapshots

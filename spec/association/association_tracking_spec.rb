@@ -273,7 +273,6 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     end
 
     actual = PaperTrailDiff.compare_many(comparisons, associations: associations,
-                                                      allow_expensive: true,
                                                       allow_approximate: true)
 
     expect(actual.transform_values(&:to_h)).to eq(expected)

@@ -61,7 +61,7 @@ matcher:
     - PaperTrailDiff::ActivityTimelineBuilder*
     - PaperTrailDiff::ActivityTreeFilter*
     - PaperTrailDiff::ActivityTransactionGrouper*
-    - PaperTrailDiff::BatchSafety*
+    - PaperTrailDiff::ApproximatePaths*
     - PaperTrailDiff::ScopeCondition*
     - PaperTrailDiff::ScopeRanking*
     - PaperTrailDiff::AssociationTraversal*

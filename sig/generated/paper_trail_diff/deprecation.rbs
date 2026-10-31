@@ -8,11 +8,16 @@ module PaperTrailDiff
   module Deprecation
     CLOSE_ON: ::String
 
+    ALLOW_EXPENSIVE: ::String
+
     # Required when first used, as the library loads nothing it does not need.
     # : () -> untyped
     def self.deprecator: () -> untyped
 
     # : (Symbol?) -> void
     def self.close_on!: (Symbol?) -> void
+
+    # : (untyped) -> void
+    def self.allow_expensive!: (untyped) -> void
   end
 end

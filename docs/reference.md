@@ -300,9 +300,8 @@ diffs.fetch(["Order", orders.first.id.to_s]) # => PaperTrailDiff::Diff
   record, so `{ from: :first, to: :first }` raises.
 - A record with no versions gets an empty `Diff`.
 - Each record can appear in only one pair, because results are keyed by record.
-- Options: `associations:`, `ignore:`, `reload_live_endpoints:`,
-  `allow_expensive:`, and `allow_approximate:` (see
-  [costly associations](#costly-associations)).
+- Options: `associations:`, `ignore:`, `reload_live_endpoints:`, and
+  `allow_approximate:` (see [costly associations](#costly-associations)).
 
 If you look up versions yourself, do it in bulk. Looking up one record at a
 time brings back the per-record queries this method avoids.
@@ -611,8 +610,7 @@ results.fetch(["Order", order.id.to_s]).diff
   are `nil` (see [analyze](#analyze)).
 - Records must be saved and unique.
 - Options: `within:`, `associations:`, `ignore:`, `activity:`, `version_scope:`,
-  `snapshots:`, `group:`, `recorded_changes:`, `allow_expensive:`,
-  `allow_approximate:`.
+  `snapshots:`, `group:`, `recorded_changes:`, `allow_approximate:`.
 
 ### analyze_scope
 
@@ -651,7 +649,7 @@ report = PaperTrailDiff.report(Article.all, since: 1.day.ago, limit: 100)
 
 It accepts `associations:`, `ignore:`, `snapshots:`, `group:`,
 `recorded_changes:`, `include_deleted:`, `historical_filter:`, `max_filter_versions:`,
-`allow_expensive:`, and `allow_approximate:`.
+and `allow_approximate:`.
 
 ### Which records are selected
 
@@ -834,10 +832,9 @@ a soft delete, shows as changed rather than added.
 So every method that reads history raises `UnsupportedAssociationError` for
 such a path and names it. Remove it from `associations:`, rewrite its scope as
 plain conditions on the target's own columns, or pass `allow_approximate:
-true` to accept PT-AT's answer. Batch methods also raise
-`UnsupportedBatchPathError` for it unless you pass `allow_expensive: true` to
-accept the per-record cost, so a batch needs both. A comparison of two current
-records reads no history and needs neither.
+true` to accept PT-AT's answer, which also accepts its cost of queries per
+record in batch methods. A comparison of two current records reads no history
+and needs no opt-in. `allow_expensive:` is deprecated and has no effect.
 
 A polymorphic `belongs_to` is loaded together too, with one query per target
 class. Its classes are known only from the records, though, so batch methods
@@ -1363,7 +1360,7 @@ All errors inherit from `PaperTrailDiff::Error`.
 | Error | Raised when |
 | --- | --- |
 | `ConfigurationError` | An option is invalid |
-| `UnsupportedBatchPathError` | A batch requests a [costly association](#costly-associations) without `allow_expensive: true` |
+| `UnsupportedBatchPathError` | No longer raised; kept until `allow_expensive:` is removed |
 | `InvalidEndpointError` | A record is unsaved, destroyed, or has unsaved changes, or `recorded_changes` is given something other than a version |
 | `UnloadedAssociationError` | `reload_live_endpoints: false` and an association is not loaded |
 | `VersionMismatchError` | Two endpoints belong to different records |

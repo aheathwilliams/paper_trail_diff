@@ -68,8 +68,8 @@ explains why.
 - **A path PT-AT reads.** History cannot read a few scopes, such as one that
   takes the owner, SQL text, or a `limit` ordered by a string. PT-AT reads
   those, one record at a time and only approximately, so every method refuses
-  them unless you pass `allow_approximate: true`, and batch methods also need
-  `allow_expensive: true`. See [costly associations](reference.md#costly-associations).
+  them unless you pass `allow_approximate: true`. See
+  [costly associations](reference.md#costly-associations).
 - **A limited association on the current record.** Active Record's `preload`
   applies a `limit` or `offset` across all the records it loads, so each
   record's limited association is loaded on its own: one query per record.
@@ -109,7 +109,8 @@ mise exec -- bundle exec ruby benchmark/reporting.rb --case many_roots --samples
 
 `reconstruction.rb` prints the queries, `reify` calls, and model instances
 one `report` makes for a scenario and a number of records; the table above
-comes from its scenarios. `PTD_PROBE_ALLOW_EXPENSIVE=1` passes both opt-ins.
+comes from its scenarios. `PTD_PROBE_ALLOW_APPROXIMATE=1` passes
+`allow_approximate: true`.
 `reporting.rb` times `analyze_scope` over articles with no associations, each
 in a fresh process, and records memory; `--output` keeps the raw samples.
 Both use an in-memory SQLite database, never your application's. Compare

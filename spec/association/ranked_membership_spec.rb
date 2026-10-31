@@ -221,7 +221,7 @@ RSpec.describe 'A ranked association over time' do
     window = (Time.now.utc - 60)..Time.now.utc
     %i[titled_items tied_items].each do |path|
       expect { PaperTrailDiff.analyze_many([list], within: window, associations: [path]) }
-        .to raise_error(PaperTrailDiff::UnsupportedBatchPathError, /#{path}/)
+        .to raise_error(PaperTrailDiff::UnsupportedAssociationError, /#{path}/)
     end
   end
 end

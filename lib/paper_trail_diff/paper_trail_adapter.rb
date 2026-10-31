@@ -12,13 +12,12 @@ module PaperTrailDiff
 
     # `recorded_changes:` reads what each activity boundary's version recorded.
     # `allow_approximate:` accepts association paths read with PT-AT.
-    #: (associations: association_option, ignore: ignore_option, ?reload_live_endpoints: bool, ?allow_expensive: bool, ?recorded_changes: bool, ?allow_approximate: bool) -> void
-    def initialize(associations:, ignore:, reload_live_endpoints: true, allow_expensive: false, recorded_changes: false, allow_approximate: false) # rubocop:disable Metrics/MethodLength, Metrics/ParameterLists, Layout/LineLength
+    #: (associations: association_option, ignore: ignore_option, ?reload_live_endpoints: bool, ?recorded_changes: bool, ?allow_approximate: bool) -> void
+    def initialize(associations:, ignore:, reload_live_endpoints: true, recorded_changes: false, allow_approximate: false) # rubocop:disable Metrics/MethodLength, Layout/LineLength
       @association_tree = AssociationTree.build(associations)
       @ignore_policy = IgnorePolicy.build(ignore, association_paths: @association_tree.paths)
       @recorded = (@ignore_policy if recorded_changes)
       @traversal = AssociationTraversal.new(@association_tree)
-      @batch_safety = BatchSafety.new(@traversal, allow_expensive: allow_expensive)
       @traversal_preparer = TraversalPreparer.new(tree: @association_tree, traversal: @traversal,
                                                   allow_approximate: allow_approximate)
       @live_endpoints = LiveEndpointProvider.new(
@@ -57,7 +56,7 @@ module PaperTrailDiff
       count = comparisons.is_a?(Array) ? comparisons.length : 0
       payload = @instrumentation_payload.merge(comparison_count: count)
       Instrumentation.instrument('compare_many', payload) do
-        comparison_batch(comparisons, preparer: method(:prepare_batch_model)).call
+        comparison_batch(comparisons, preparer: @traversal_preparer.method(:call)).call
       end
     end
 
@@ -141,7 +140,7 @@ module PaperTrailDiff
     #: (untyped, limit: Integer?, within: untyped, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?historical_filter: untyped, ?max_filter_versions: Integer, ?include_deleted: bool) -> ScopedAnalysis
     def analyze_scope(scope, limit:, within:, activity: false, version_scope: nil, close_on: nil, snapshots: false, group: nil, historical_filter: nil, max_filter_versions: HistoricalFilter::DEFAULT_VERSION_LIMIT, include_deleted: false) # rubocop:disable Metrics/ParameterLists, Layout/LineLength
       validate_activity_options!(group, activity, snapshots)
-      check_scope(scope, activity)
+      check_scope(scope)
       # @type var options: report_options
       options = { within: within, activity: activity, version_scope: version_scope,
                   close_on: close_on, snapshots: snapshots, group: group }
@@ -166,14 +165,13 @@ module PaperTrailDiff
                                         recorded_changes: !@recorded.nil?)
     end
 
-    # Selecting by activity reads association history, so it must be available
-    # before the first selection query rather than once analysis starts.
-    #: (untyped, bool) -> void
-    def check_scope(scope, activity)
+    # Analysis reads association history, so a request it would refuse is
+    # refused before the first selection query rather than once analysis starts.
+    #: (untyped) -> void
+    def check_scope(scope)
       return unless scope.respond_to?(:all) && scope.respond_to?(:where)
 
-      @batch_safety.call(scope.all.model)
-      @traversal_preparer.call(scope.all.model, historical: true) if activity
+      @traversal_preparer.call(scope.all.model, historical: true)
     end
 
     #: (Array[comparison_input], preparer: untyped) -> ComparisonBatch
@@ -188,19 +186,12 @@ module PaperTrailDiff
       )
     end
 
+    # Refused before the current records load, rather than once analysis starts.
     #: (Array[untyped]) -> Hash[identity, untyped]
     def load_batch_endpoints(records)
-      records.map(&:class).uniq.each { |model| @batch_safety.call(model) }
+      records.map(&:class).uniq.each { |model| @traversal_preparer.call(model, historical: true) }
       @live_endpoints.call(records)
     end
-
-    #: (untyped, historical: bool) -> void
-    def prepare_batch_model(model, historical:)
-      @batch_safety.call(model)
-      @traversal_preparer.call(model, historical: historical)
-    end
-
-    # @rbs @batch_safety: BatchSafety
 
     #: (untyped, Array[Array[String]], Hash[Symbol, untyped]) -> Hash[Array[String], Analysis?]
     def analyze_deleted(model, identities, options)

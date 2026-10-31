@@ -42,7 +42,9 @@ module PaperTrailDiff
   # Historical candidate loading exceeded its explicitly bounded work budget.
   class FilterLimitExceededError < Error; end
 
-  # A batch selected a known expensive association without explicitly opting in.
+  # No longer raised: `allow_approximate: true` alone accepts the paths it
+  # refused. Kept until `allow_expensive:` is removed, so code that rescues it
+  # still loads.
   class UnsupportedBatchPathError < ConfigurationError; end
 
   # Raised when a requested ActiveRecord association does not exist.

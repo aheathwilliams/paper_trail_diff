@@ -146,7 +146,7 @@ module PaperTrailDiff
     # Accepted, but read the way `allow_approximate:` describes.
     #: (untyped) -> void
     def inspect_approximate_paths(model_class)
-      BatchSafety.fallback_paths(@traversal, model_class).each do |path, reason|
+      ApproximatePaths.call(@traversal, model_class).each do |path, reason|
         add_warning(:approximate_association,
                     "association #{path} is read approximately with PT-AT (#{reason}): a " \
                     'record that entered or left it since is reported wrongly', path)

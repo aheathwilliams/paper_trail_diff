@@ -19,7 +19,7 @@ require_relative 'paper_trail_diff/version_table'
 require_relative 'paper_trail_diff/association_traversal'
 require_relative 'paper_trail_diff/scope_ranking'
 require_relative 'paper_trail_diff/scope_condition'
-require_relative 'paper_trail_diff/batch_safety'
+require_relative 'paper_trail_diff/approximate_paths'
 require_relative 'paper_trail_diff/traversal_preparer'
 require_relative 'paper_trail_diff/association_discovery'
 require_relative 'paper_trail_diff/diagnostics'
@@ -169,19 +169,20 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
     end
 
     # Compares many independent endpoint pairs while batching current-record loading.
-    #: (Array[comparison_input], ?associations: association_option, ?ignore: ignore_option, ?reload_live_endpoints: bool, ?allow_expensive: bool, ?allow_approximate: bool) -> comparison_results
+    #: (Array[comparison_input], ?associations: association_option, ?ignore: ignore_option, ?reload_live_endpoints: bool, ?allow_expensive: bool?, ?allow_approximate: bool) -> comparison_results
     def compare_many( # rubocop:disable Metrics/ParameterLists
       comparisons,
       associations: [],
       ignore: DEFAULT_IGNORED_ATTRIBUTES,
       reload_live_endpoints: true,
-      allow_expensive: false,
+      allow_expensive: nil,
       allow_approximate: false
     )
+      Deprecation.allow_expensive!(allow_expensive)
       PaperTrailAdapter.new(
         associations: associations,
         ignore: ignore,
-        reload_live_endpoints: reload_live_endpoints, allow_expensive: allow_expensive,
+        reload_live_endpoints: reload_live_endpoints,
         allow_approximate: allow_approximate
       ).compare_many(comparisons)
     end
@@ -288,7 +289,7 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
     # returns a frozen Hash keyed by identity. Roots with nothing to report in
     # the window return an empty `Analysis`. To let a relation choose the
     # records, use `analyze_scope`.
-    #: (Array[untyped], ?within: untyped, ?associations: association_option, ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?allow_expensive: bool, ?recorded_changes: bool, ?allow_approximate: bool) -> Hash[identity, Analysis]
+    #: (Array[untyped], ?within: untyped, ?associations: association_option, ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?allow_expensive: bool?, ?recorded_changes: bool, ?allow_approximate: bool) -> Hash[identity, Analysis]
     def analyze_many( # rubocop:disable Metrics/ParameterLists
       records,
       within: nil,
@@ -299,13 +300,14 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
       close_on: nil,
       snapshots: false,
       group: nil,
-      allow_expensive: false,
+      allow_expensive: nil,
       recorded_changes: false,
       allow_approximate: false
     )
       Deprecation.close_on!(close_on)
+      Deprecation.allow_expensive!(allow_expensive)
       PaperTrailAdapter.new(
-        associations: associations, ignore: ignore, allow_expensive: allow_expensive,
+        associations: associations, ignore: ignore,
         recorded_changes: recorded_changes, allow_approximate: allow_approximate
       ).analyze_many(records, within: within, activity: activity, version_scope: version_scope,
                               close_on: close_on, snapshots: snapshots, group: group)
@@ -337,7 +339,7 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
     # Note also that a relation selects on current state, not on state during
     # the window: `where(status: 'published')` means published *now*, which is a
     # different set from what was published while the window was open.
-    #: (untyped, limit: Integer?, ?within: untyped, ?associations: association_option, ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?historical_filter: untyped, ?max_filter_versions: Integer, ?include_deleted: bool, ?allow_expensive: bool, ?recorded_changes: bool, ?allow_approximate: bool) -> ScopedAnalysis
+    #: (untyped, limit: Integer?, ?within: untyped, ?associations: association_option, ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?historical_filter: untyped, ?max_filter_versions: Integer, ?include_deleted: bool, ?allow_expensive: bool?, ?recorded_changes: bool, ?allow_approximate: bool) -> ScopedAnalysis
     def analyze_scope( # rubocop:disable Metrics/ParameterLists
       scope,
       limit:,
@@ -352,13 +354,13 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
       historical_filter: nil,
       max_filter_versions: HistoricalFilter::DEFAULT_VERSION_LIMIT,
       include_deleted: false,
-      allow_expensive: false,
+      allow_expensive: nil,
       recorded_changes: false,
       allow_approximate: false
     )
       Deprecation.close_on!(close_on)
+      Deprecation.allow_expensive!(allow_expensive)
       adapter = PaperTrailAdapter.new(associations: associations, ignore: ignore,
-                                      allow_expensive: allow_expensive,
                                       recorded_changes: recorded_changes,
                                       allow_approximate: allow_approximate)
       adapter.analyze_scope(
@@ -373,11 +375,11 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
     # for every root that changed or whose requested associations did.
     # Historical windows remain explicit on analyze_scope; this entry point is
     # deliberately named for a report through now rather than an as-of query.
-    #: (untyped, since: untyped, limit: Integer, ?associations: association_option, ?ignore: ignore_option, ?snapshots: bool, ?group: Symbol?, ?include_deleted: bool, ?historical_filter: untyped, ?max_filter_versions: Integer, ?allow_expensive: bool, ?recorded_changes: bool, ?allow_approximate: bool) -> ScopedAnalysis
+    #: (untyped, since: untyped, limit: Integer, ?associations: association_option, ?ignore: ignore_option, ?snapshots: bool, ?group: Symbol?, ?include_deleted: bool, ?historical_filter: untyped, ?max_filter_versions: Integer, ?allow_expensive: bool?, ?recorded_changes: bool, ?allow_approximate: bool) -> ScopedAnalysis
     def report( # rubocop:disable Metrics/ParameterLists
       scope, since:, limit:, associations: [], ignore: DEFAULT_IGNORED_ATTRIBUTES,
       snapshots: false, group: nil, include_deleted: false, historical_filter: nil,
-      max_filter_versions: HistoricalFilter::DEFAULT_VERSION_LIMIT, allow_expensive: false,
+      max_filter_versions: HistoricalFilter::DEFAULT_VERSION_LIMIT, allow_expensive: nil,
       recorded_changes: false, allow_approximate: false
     )
       # A range here would become the start of another range.

@@ -660,6 +660,21 @@ RSpec.describe PaperTrailDiff do
         .with(/close_on: is deprecated and has no effect/).exactly(5).times
     end
 
+    it 'warns that allow_expensive: is deprecated, once per call, in every method that takes it' do
+      articles, window = open_window_articles(1)
+      article = articles.fetch(0)
+      allow(described_class.deprecator).to receive(:warn)
+
+      described_class.compare_many([{ from: :first, to: article }], allow_expensive: true)
+      described_class.analyze_many([article], within: window, allow_expensive: false)
+      described_class.analyze_scope(CoreArticle, within: window, limit: 5, allow_expensive: true)
+      described_class.report(CoreArticle, since: window.begin, limit: 5, allow_expensive: true)
+      described_class.analyze_many([article], within: window)
+
+      expect(described_class.deprecator).to have_received(:warn)
+        .with(/allow_expensive: is deprecated and has no effect/).exactly(4).times
+    end
+
     it 'rejects a closing endpoint the range cannot use' do
       articles, window = open_window_articles(1)
       article = articles.fetch(0)

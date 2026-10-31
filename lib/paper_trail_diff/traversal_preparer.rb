@@ -89,7 +89,7 @@ module PaperTrailDiff
     def approximate_refusals(model_class)
       return [] if @allow_approximate
 
-      BatchSafety.fallback_paths(@traversal, model_class).map do |path, reason|
+      ApproximatePaths.call(@traversal, model_class).map do |path, reason|
         message = "association #{path} cannot be read exactly from history (#{reason}): " \
                   'PT-AT rebuilds it from its current members, so a record that entered or ' \
                   'left it since is reported wrongly; remove this path, make its scope plain ' \

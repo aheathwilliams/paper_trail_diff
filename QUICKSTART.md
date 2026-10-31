@@ -247,9 +247,9 @@ The same `within:` option works on `activity_timeline`, `analyze`,
 
 Use the batch methods for many records so they can share database queries.
 A few scoped associations, such as one whose scope is SQL text, can be read
-only with PT-AT, approximately and one record at a time. Batch calls reject
-them with `UnsupportedBatchPathError`, naming the association; passing
-`allow_approximate: true` and `allow_expensive: true` accepts both costs. See
+only with PT-AT, approximately and one record at a time. Every method rejects
+them with `UnsupportedAssociationError`, naming the association; passing
+`allow_approximate: true` accepts both costs. See
 [costly associations](docs/reference.md#costly-associations).
 
 When associations are included, `timeline` compares their values at the article's

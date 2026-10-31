@@ -32,8 +32,7 @@ project follows [Semantic Versioning](https://semver.org/).
   entered the scope since was reported as a member it was not, so a comment
   moved into `-> { where("position > 2") }` showed as changed rather than
   added. Single-record methods did this without warning, and batch methods
-  described it only as costly. Batch methods still also need
-  `allow_expensive: true` for such a path.
+  described it only as costly.
 - `include_deleted: true` keeps only the deleted records that met the
   relation's conditions when they were destroyed, in both `deleted` and
   `unreachable`. It returned every deleted record of the model that changed in
@@ -115,13 +114,11 @@ project follows [Semantic Versioning](https://semver.org/).
   imported with `insert_all`, and history pruned with `has_paper_trail
   limit:` read.
 
-- `UnsupportedBatchPathError` names both `allow_approximate: true` and
-  `allow_expensive: true`: such a path is read approximately too, so naming
-  only `allow_expensive:` led to a second error. `IncompleteTimeRangeError`
-  no longer advises the deprecated `close_on: :current`. The quickstart and
-  performance guide no longer say that `has_many :through` or limited
-  associations need the opt-ins, and the reference says that
-  `association_paths` lists paths that need `allow_approximate: true`.
+- `IncompleteTimeRangeError` no longer advises the deprecated
+  `close_on: :current`. The quickstart and performance guide no longer say
+  that `has_many :through` or limited associations need the opt-ins, and the
+  reference says that `association_paths` lists paths that need
+  `allow_approximate: true`.
 
 - The quickstart sets PaperTrail's `yaml_column_permitted_classes`. In a new
   Rails 8.1 app, versions hold timestamps as `ActiveSupport::TimeWithZone`,
@@ -142,6 +139,12 @@ project follows [Semantic Versioning](https://semver.org/).
   closing on the current record by default; remove it. In a Rails app,
   register the deprecator with
   `Rails.application.deprecators[:paper_trail_diff] = PaperTrailDiff.deprecator`.
+- `allow_expensive:` is deprecated and has no effect. It refused exactly the
+  paths `allow_approximate:` refuses, so batch methods needed both or
+  neither; `allow_approximate: true` alone now accepts such a path in every
+  method, and `UnsupportedBatchPathError` is no longer raised. Batch methods
+  refuse such a path before their first query, as before, now with
+  `UnsupportedAssociationError`.
 
 ### Fixed
 
@@ -289,8 +292,8 @@ project follows [Semantic Versioning](https://semver.org/).
   encrypted, serialized, enum, custom-type, decimal, and JSON attributes.
   `rake spec` runs it, so CI runs it on every database. `ORACLE_SEEDS` and
   `ORACLE_STEPS` widen a run. See `docs/testing.md`.
-- `PTD_PROBE_ALLOW_EXPENSIVE=1` makes the reconstruction probe pass
-  `allow_approximate: true` too, so its PT-AT-read scenario runs rather than
+- `PTD_PROBE_ALLOW_APPROXIMATE=1` makes the reconstruction probe pass
+  `allow_approximate: true`, so its PT-AT-read scenario runs rather than
   raising, and neither benchmark passes the deprecated `close_on:` any more.
 - On SQL Server the association specs keep their versions 5 ms apart. Specs
   that compare the gem with PT-AT failed at random there: PT-AT compares
