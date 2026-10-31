@@ -91,7 +91,7 @@ module PaperTrailDiff
         # Runs whether or not associations are selected: unorderable versions
         # corrupt a scalar timeline just as surely, and a report that inspected
         # nothing has no business answering `ok?`.
-        inspect_version_sequence
+        inspect_version_sequence(model_class)
         inspect_associations(model_class) unless @tree.empty?
       end
       DiagnosticReport.new(issues: @issues)
@@ -181,12 +181,25 @@ module PaperTrailDiff
 
     # With the current record as one endpoint there is one version, and the
     # sequence runs on from it.
-    #: () -> void
-    def inspect_version_sequence
+    #: (untyped) -> void
+    def inspect_version_sequence(model_class)
       first, last = @versions
       @issues.concat(
-        VersionSequenceDiagnostics.new(first, last, associations_selected: !@tree.empty?).call
+        VersionSequenceDiagnostics.new(first, last,
+                                       fallback_selected: fallback_selected?(model_class)).call
       )
+    end
+
+    # Only a path PT-AT reads can lose a change between tied versions, and a
+    # traversal that does not resolve reads nothing at all.
+    #: (untyped) -> bool
+    def fallback_selected?(model_class)
+      return false if @tree.empty?
+
+      refusals = @preparer.refusals(model_class, historical: true)
+      return false if refusals.any? { |refusal| STOPPING_CODES.include?(refusal.code) }
+
+      FallbackPaths.any?(@traversal, model_class, approximate: @allow_approximate)
     end
 
     #: (untyped) -> void

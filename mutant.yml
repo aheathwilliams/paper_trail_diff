@@ -63,6 +63,7 @@ matcher:
     - PaperTrailDiff::ActivityTransactionGrouper*
     - PaperTrailDiff::ActivityView*
     - PaperTrailDiff::ApproximatePaths*
+    - PaperTrailDiff::FallbackPaths*
     - PaperTrailDiff::ScopeCondition*
     - PaperTrailDiff::ScopeRanking*
     - PaperTrailDiff::AssociationTraversal*

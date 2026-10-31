@@ -1,0 +1,22 @@
+# Generated from lib/paper_trail_diff/fallback_paths.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Whether a request may read a path with PT-AT's reifier rather than from
+  # loaded history. PT-AT places association changes by timestamp alone, so
+  # only such a path can miss a change between two versions that share one;
+  # loaded history orders those versions by id.
+  module FallbackPaths
+    # A path history reads only approximately counts when it is allowed: a
+    # request that does not allow it is refused before anything is read.
+    # : (AssociationTraversal, untyped, approximate: bool) -> bool
+    def self.any?: (AssociationTraversal, untyped, approximate: bool) -> bool
+
+    # Loaded history cannot index a composite foreign key, and a polymorphic
+    # belongs_to's target, with its default scope, is known only per record.
+    # : (untyped) -> bool
+    def self.per_record?: (untyped) -> bool
+
+    # : (untyped) -> bool
+    def self.composite_key?: (untyped) -> bool
+  end
+end

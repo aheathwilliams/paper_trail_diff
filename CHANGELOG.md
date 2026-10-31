@@ -154,6 +154,15 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- `diagnose` reports `:tied_version_timestamps`, and `compare` emits
+  `ambiguous_association_boundary.paper_trail_diff`, only when the request can
+  read a path with PT-AT: one history reads only approximately, a composite
+  foreign key, or a polymorphic `belongs_to`. PT-AT places association changes
+  by timestamp alone. For every other path, since 0.14.0, versions that share a
+  timestamp are ordered by ID, so a change between them is reported, yet both
+  warned that it could not be detected. A request refused for a path PT-AT
+  would read now raises before the notification.
+
 - `timeline`, `activity_timeline`, and `analyze` read every version of a
   model whose versions association has a scope
   (`has_paper_trail versions: { scope: }`), as the other methods already did.

@@ -2102,65 +2102,88 @@ RSpec.describe 'PaperTrailDiff association tracking' do
   end
 
   describe 'versions that share a timestamp' do
-    # Association membership is recorded per version but resolved by timestamp,
-    # so a tie makes two boundaries indistinguishable for association purposes
-    # even when their ids order them perfectly.
+    # Loaded history orders versions that share a timestamp by id, so a change
+    # between two tied checkpoints is still placed between them. PT-AT, which
+    # reads a path history cannot read exactly, places changes by timestamp
+    # alone, so only such a path is reported as a hazard.
+    def checkpoint(article)
+      TrackedArticle.transaction { TrackedArticle.find(article.id).paper_trail.save_with_version }
+      article.versions.reload.last
+    end
+
     def tied_boundaries
       article = TrackedArticle.create!(title: 'T')
+      comment = article.comments.create!(body: 'Before the boundaries')
       tag = TrackedTag.create!(name: 'Added between the boundaries')
-      before = article.versions.reload.last
-      article.tags << tag
-      article.reload
-      TrackedArticle.transaction { TrackedArticle.find(article.id).paper_trail.save_with_version }
-      after = article.versions.reload.last
-      PaperTrail::Version.where(id: after.id).update_all(created_at: before.created_at)
-      [article, before.reload, after.reload]
+      before = checkpoint(article)
+      TrackedArticle.find(article.id).tags << tag
+      comment.update!(body: 'Edited between the boundaries')
+      after = checkpoint(article)
+      PaperTrail::Version.where('id > ?', before.id).update_all(created_at: before.created_at)
+      { before: before.reload, after: after.reload, tag: tag, comment: comment }
     end
 
-    it 'cannot see an association change across the tie' do
-      _article, before, after = tied_boundaries
-
-      diff = PaperTrailDiff.compare(before, after, associations: ['tags'])
-
-      # Documented limitation rather than desired behaviour: the change is
-      # invisible, so the gem cannot report it as absent either.
-      expect(diff.associations).not_to have_key('tags')
-    end
-
-    it 'reports the condition through instrumentation when associations are selected' do
-      _article, before, after = tied_boundaries
+    def ambiguous_events(&block)
       events = []
       callback = proc { |name, _s, _f, _id, payload| events << [name, payload] }
-
-      ActiveSupport::Notifications.subscribed(callback, /paper_trail_diff/) do
-        PaperTrailDiff.compare(before, after, associations: ['tags'])
-      end
-
-      ambiguous = events.select { |name, _| name.start_with?('ambiguous_association_boundary') }
-      expect(ambiguous.length).to eq(1)
-      expect(ambiguous.dig(0, 1, :version_ids)).to eq([before.id, after.id])
+      ActiveSupport::Notifications.subscribed(callback, /paper_trail_diff/, &block)
+      events.select { |name, _| name.start_with?('ambiguous_association_boundary') }
     end
 
-    it 'stays silent when no associations are selected, since nothing can be lost' do
-      _article, before, after = tied_boundaries
-      events = []
-      callback = proc { |name, _s, _f, _id, _payload| events << name }
+    it 'places a change between tied checkpoints by id' do
+      tied = tied_boundaries
 
-      ActiveSupport::Notifications.subscribed(callback, /paper_trail_diff/) do
-        PaperTrailDiff.compare(before, after)
-      end
+      diff = PaperTrailDiff.compare(tied[:before], tied[:after], associations: %w[tags comments])
 
-      expect(events.grep(/ambiguous_association_boundary/)).to be_empty
+      expect(diff.associations.fetch('tags').added.map(&:id)).to eq([tied[:tag].id])
+      expect(diff.associations.fetch('comments').changed.map { |change| change.record.id })
+        .to eq([tied[:comment].id])
     end
 
-    it 'warns from diagnose, without failing a comparison that may be correct' do
-      _article, before, after = tied_boundaries
+    it 'reports no hazard for paths read from loaded history' do
+      tied = tied_boundaries
+      options = { associations: %w[tags comments] }
 
-      report = PaperTrailDiff.diagnose(before, after, associations: ['tags'])
+      events = ambiguous_events { PaperTrailDiff.compare(tied[:before], tied[:after], **options) }
+      report = PaperTrailDiff.diagnose(tied[:before], tied[:after], **options)
 
+      expect(events).to be_empty
+      expect(report.warnings.map(&:code)).not_to include(:tied_version_timestamps)
+    end
+
+    it 'warns and notifies for a path PT-AT reads, without failing the comparison' do
+      tied = tied_boundaries
+      options = { associations: ['owner_comments'], allow_approximate: true }
+
+      events = ambiguous_events { PaperTrailDiff.compare(tied[:before], tied[:after], **options) }
+      report = PaperTrailDiff.diagnose(tied[:before], tied[:after], **options)
+
+      expect(events.map { |_, payload| payload[:version_ids] })
+        .to eq([[tied[:before].id, tied[:after].id]])
       expect(report.warnings.map(&:code)).to include(:tied_version_timestamps)
       # A tie only *may* hide a change, so it never becomes an error.
       expect(report).to be_ok
+    end
+
+    it 'refuses a path PT-AT would read before reporting the tie' do
+      tied = tied_boundaries
+      events = []
+      callback = proc { |name, *| events << name }
+
+      ActiveSupport::Notifications.subscribed(callback, /ambiguous_association_boundary/) do
+        expect do
+          PaperTrailDiff.compare(tied[:before], tied[:after], associations: ['owner_comments'])
+        end.to raise_error(PaperTrailDiff::UnsupportedAssociationError, /owner_comments/)
+      end
+      expect(events).to be_empty
+    end
+
+    it 'stays silent when no associations are selected, since nothing can be lost' do
+      tied = tied_boundaries
+
+      events = ambiguous_events { PaperTrailDiff.compare(tied[:before], tied[:after]) }
+
+      expect(events).to be_empty
     end
   end
 

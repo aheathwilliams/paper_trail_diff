@@ -1299,11 +1299,14 @@ earlier time. Keep server clocks synchronized.
 
 Association changes between versions with the same timestamp are placed using
 the same order. A few association shapes fall back to PT-AT's own reifier, which
-uses timestamps only: scoped associations, unversioned targets, and the others
-listed in the [architecture notes](architecture.md). For those, `diagnose` warns
-about tied timestamps, and a comparison between two tied versions emits the
-`ambiguous_association_boundary.paper_trail_diff` notification. Recording
-timestamps below one second avoids the problem. On SQL Server, PT-AT compares
+uses timestamps only: a path history reads only approximately, which takes
+`allow_approximate: true`, a composite foreign key, and a polymorphic
+`belongs_to` whose target's default scope history cannot read. The
+[architecture notes](architecture.md) list them. When a request includes such a
+path, or any polymorphic `belongs_to`, whose targets are known only per record,
+`diagnose` warns about tied timestamps and a comparison between two tied
+versions emits the `ambiguous_association_boundary.paper_trail_diff`
+notification. Recording timestamps below one second avoids the problem. On SQL Server, PT-AT compares
 those timestamps only to about 3 milliseconds (a `datetime` tick, 1/300 s),
 because the adapter writes the times in its queries that way, so for these
 shapes two versions saved closer together than that may be read in the wrong

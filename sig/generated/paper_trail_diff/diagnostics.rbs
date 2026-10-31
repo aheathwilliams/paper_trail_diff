@@ -95,8 +95,13 @@ module PaperTrailDiff
 
     # With the current record as one endpoint there is one version, and the
     # sequence runs on from it.
-    # : () -> void
-    def inspect_version_sequence: () -> void
+    # : (untyped) -> void
+    def inspect_version_sequence: (untyped) -> void
+
+    # Only a path PT-AT reads can lose a change between tied versions, and a
+    # traversal that does not resolve reads nothing at all.
+    # : (untyped) -> bool
+    def fallback_selected?: (untyped) -> bool
 
     # : (untyped) -> void
     def inspect_checkpoint_timestamp: (untyped) -> void
