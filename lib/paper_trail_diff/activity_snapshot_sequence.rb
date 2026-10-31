@@ -14,6 +14,10 @@ module PaperTrailDiff
       @refresher = refresher
     end
 
+    # Roots a batch prepared together share its history, so consecutive ones
+    # share these snapshots too, and the caches their refresher builds. They
+    # are the same for any root with that history, so reusing them depends on
+    # nothing but the history.
     #: (untyped, Array[untyped], ?start_at: untyped, ?end_at: untyped) -> PreparedActivitySnapshots
     def prepare(
       record,
@@ -22,8 +26,11 @@ module PaperTrailDiff
       end_at: root_versions.last.created_at
     )
       history = @store.prepare(record, root_versions, start_at: start_at, end_at: end_at)
-      PreparedActivitySnapshots.new(history, store: @store, snapshotter: @snapshotter,
-                                             refresher: @refresher)
+      last = @last
+      return last if last && last.history.equal?(history)
+
+      @last = PreparedActivitySnapshots.new(history, store: @store, snapshotter: @snapshotter,
+                                                     refresher: @refresher)
     end
 
     #: (untyped, untyped) -> RecordSnapshot?
@@ -34,12 +41,15 @@ module PaperTrailDiff
     # @rbs @store: HistoricalSnapshotStore
     # @rbs @snapshotter: untyped
     # @rbs @refresher: untyped
+    # @rbs @last: PreparedActivitySnapshots?
   end
 
   # One root's full and incremental snapshots during an activity build. Each
   # read passes along the history prepared for this root, so none depends on
   # which root was prepared last.
   class PreparedActivitySnapshots
+    attr_reader :history #: PreparedHistory?
+
     #: (PreparedHistory?, store: HistoricalSnapshotStore, snapshotter: untyped, refresher: untyped) -> void
     def initialize(history, store:, snapshotter:, refresher:)
       @history = history
@@ -92,7 +102,6 @@ module PaperTrailDiff
                              direct: direct) || [false, nil]
     end
 
-    # @rbs @history: PreparedHistory?
     # @rbs @store: HistoricalSnapshotStore
     # @rbs @snapshotter: untyped
     # @rbs @refresher: untyped

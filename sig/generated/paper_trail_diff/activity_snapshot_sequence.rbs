@@ -9,11 +9,17 @@ module PaperTrailDiff
     # : (store: HistoricalSnapshotStore, snapshotter: untyped, refresher: untyped) -> void
     def initialize: (store: HistoricalSnapshotStore, snapshotter: untyped, refresher: untyped) -> void
 
+    # Roots a batch prepared together share its history, so consecutive ones
+    # share these snapshots too, and the caches their refresher builds. They
+    # are the same for any root with that history, so reusing them depends on
+    # nothing but the history.
     # : (untyped, Array[untyped], ?start_at: untyped, ?end_at: untyped) -> PreparedActivitySnapshots
     def prepare: (untyped, Array[untyped], ?start_at: untyped, ?end_at: untyped) -> PreparedActivitySnapshots
 
     # : (untyped, untyped) -> RecordSnapshot?
     def call: (untyped, untyped) -> RecordSnapshot?
+
+    @last: PreparedActivitySnapshots?
 
     @refresher: untyped
 
@@ -26,6 +32,8 @@ module PaperTrailDiff
   # read passes along the history prepared for this root, so none depends on
   # which root was prepared last.
   class PreparedActivitySnapshots
+    attr_reader history: PreparedHistory?
+
     # : (PreparedHistory?, store: HistoricalSnapshotStore, snapshotter: untyped, refresher: untyped) -> void
     def initialize: (PreparedHistory?, store: HistoricalSnapshotStore, snapshotter: untyped, refresher: untyped) -> void
 
@@ -53,8 +61,6 @@ module PaperTrailDiff
 
     # : (untyped, ?direct: bool) -> [bool, untyped]
     def record_after: (untyped, ?direct: bool) -> [ bool, untyped ]
-
-    @history: PreparedHistory?
 
     @refresher: untyped
 
