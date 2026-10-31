@@ -27,8 +27,8 @@ module PaperTrailDiff
     # `closing` is the snapshot after the last event when the range closes on
     # the current record. Any other range ends at a root event, or at events
     # after a window whose steps are not reported, so nothing reads it.
-    # : (Array[untyped], Array[ActivityEvent], untyped, ?current: untyped, ?include_step: untyped, ?snapshots: bool, ?recorded: IgnorePolicy?, ?closing: RecordSnapshot?) -> void
-    def initialize: (Array[untyped], Array[ActivityEvent], untyped, ?current: untyped, ?include_step: untyped, ?snapshots: bool, ?recorded: IgnorePolicy?, ?closing: RecordSnapshot?) -> void
+    # : (Array[untyped], Array[ActivityEvent], untyped, view: ActivityView, ?current: untyped, ?include_step: untyped, ?closing: RecordSnapshot?) -> void
+    def initialize: (Array[untyped], Array[ActivityEvent], untyped, view: ActivityView, ?current: untyped, ?include_step: untyped, ?closing: RecordSnapshot?) -> void
 
     # : () -> ActivityHistory
     def call: () -> ActivityHistory
@@ -53,19 +53,17 @@ module PaperTrailDiff
 
     @previous_snapshot: RecordSnapshot?
 
-    @recorded: IgnorePolicy?
-
     @root_snapshots: Hash[Array[untyped], RecordSnapshot?]
 
     @root_versions: Array[untyped]
 
     @selected_last_snapshot: RecordSnapshot?
 
-    @snapshots: bool
-
     @snapshotter: untyped
 
     @steps: Array[ActivityStep]
+
+    @view: ActivityView
 
     # : () -> void
     def reset: () -> void

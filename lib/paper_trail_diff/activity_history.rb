@@ -33,18 +33,16 @@ module PaperTrailDiff
     # `closing` is the snapshot after the last event when the range closes on
     # the current record. Any other range ends at a root event, or at events
     # after a window whose steps are not reported, so nothing reads it.
-    #: (Array[untyped], Array[ActivityEvent], untyped, ?current: untyped, ?include_step: untyped, ?snapshots: bool, ?recorded: IgnorePolicy?, ?closing: RecordSnapshot?) -> void
+    #: (Array[untyped], Array[ActivityEvent], untyped, view: ActivityView, ?current: untyped, ?include_step: untyped, ?closing: RecordSnapshot?) -> void
     def initialize( # rubocop:disable Metrics/ParameterLists
-      root_versions, events, snapshotter, current: nil, include_step: nil, snapshots: false,
-      recorded: nil, closing: nil
+      root_versions, events, snapshotter, view:, current: nil, include_step: nil, closing: nil
     )
       @root_versions = root_versions
       @events = events
       @snapshotter = snapshotter
+      @view = view
       @current = current
       @include_step = include_step
-      @snapshots = snapshots
-      @recorded = recorded
       @closing = closing
     end
 
@@ -69,8 +67,7 @@ module PaperTrailDiff
     # @rbs @snapshotter: untyped
     # @rbs @current: untyped
     # @rbs @include_step: untyped
-    # @rbs @snapshots: bool
-    # @rbs @recorded: IgnorePolicy?
+    # @rbs @view: ActivityView
     # @rbs @closing: RecordSnapshot?
     # @rbs @steps: Array[ActivityStep]
     # @rbs @root_snapshots: Hash[Array[untyped], RecordSnapshot?]
@@ -117,7 +114,7 @@ module PaperTrailDiff
       return pass(event) unless kept
 
       boundary = ActivityBoundary.from_version(
-        event.version, recorded: @recorded&.recorded_attributes(root: event.root?)
+        event.version, recorded: @view.recorded_attributes(root: event.root?)
       )
       @root_snapshots[version_key(event.version)] = snapshot if event.root?
       append_step(boundary, snapshot) if @previous_boundary
@@ -150,7 +147,7 @@ module PaperTrailDiff
 
       @steps << ActivityStep.between(
         from_boundary: previous_boundary, to_boundary: boundary,
-        from_snapshot: @previous_snapshot, to_snapshot: snapshot, retain: @snapshots
+        from_snapshot: @previous_snapshot, to_snapshot: snapshot, retain: @view.retain?
       )
       @selected_last_snapshot = snapshot
     end

@@ -5,17 +5,15 @@ module PaperTrailDiff
   # Builds one root's Analysis inside a batch, from versions the batch already
   # selected and history it already prepared.
   class BatchedRootAnalyzer
-    #: (tree: AssociationTree, timeline_snapshotter: untyped, activity_snapshotter: untyped, preparer: untyped, activity: bool, ?within: untyped, ?snapshots: bool, ?group: Symbol?, ?recorded: IgnorePolicy?) -> void
-    def initialize(tree:, timeline_snapshotter:, activity_snapshotter:, preparer:, activity:, within: nil, snapshots: false, group: nil, recorded: nil) # rubocop:disable Metrics/ParameterLists, Layout/LineLength
+    #: (tree: AssociationTree, timeline_snapshotter: untyped, activity_snapshotter: untyped, preparer: untyped, activity: bool, view: ActivityView, ?within: untyped) -> void
+    def initialize(tree:, timeline_snapshotter:, activity_snapshotter:, preparer:, activity:, view:, within: nil) # rubocop:disable Metrics/ParameterLists, Layout/LineLength
       @tree = tree
       @timeline_snapshotter = timeline_snapshotter
       @activity_snapshotter = activity_snapshotter
       @preparer = preparer
       @activity = activity
+      @view = view
       @within = within
-      @snapshots = snapshots
-      @group = group
-      @recorded = recorded
     end
 
     # `window` is the root's window as the batch moved it to transaction edges.
@@ -42,9 +40,7 @@ module PaperTrailDiff
     # @rbs @preparer: untyped
     # @rbs @activity: bool
     # @rbs @within: untyped
-    # @rbs @snapshots: bool
-    # @rbs @group: Symbol?
-    # @rbs @recorded: IgnorePolicy?
+    # @rbs @view: ActivityView
 
     #: (untyped, RootVersionPlan, TimeRange?) -> Analysis
     def activity_analysis(record, plan, window)
@@ -54,8 +50,7 @@ module PaperTrailDiff
                 within: (window || @within if @within), plan: plan
       )
       ActivityTimelineBuilder.new(
-        record, range: range, tree: @tree, snapshotter: @activity_snapshotter,
-                snapshots: @snapshots, group: @group, recorded: @recorded
+        record, range: range, tree: @tree, snapshotter: @activity_snapshotter, view: @view
       ).analyze
     end
   end

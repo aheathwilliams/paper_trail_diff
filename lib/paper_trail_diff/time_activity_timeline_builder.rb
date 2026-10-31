@@ -4,16 +4,9 @@
 module PaperTrailDiff
   # Builds activity views for mutations selected by a wall-clock range.
   class TimeActivityTimelineBuilder
-    include ActivityGrouping
-
-    #: (untyped, range: TimelineRange, tree: AssociationTree, snapshotter: untyped, ?snapshots: bool, ?group: Symbol?, ?recorded: IgnorePolicy?) -> void
-    def initialize(record, range:, tree:, snapshotter:, snapshots: false, group: nil, recorded: nil) # rubocop:disable Metrics/ParameterLists
-      @snapshots = snapshots
-      @group = group
-      @recorded = recorded
-      # Merging a group compares its outer states, so the snapshots must survive
-      # the build even when the caller did not ask to keep them.
-      @retain = snapshots || grouping?
+    #: (untyped, range: TimelineRange, tree: AssociationTree, snapshotter: untyped, view: ActivityView) -> void
+    def initialize(record, range:, tree:, snapshotter:, view:)
+      @view = view
       @record = record
       @range = range
       @tree = tree
@@ -58,8 +51,7 @@ module PaperTrailDiff
     end
     # @rbs @tree: AssociationTree
     # @rbs @snapshotter: untyped
-    # @rbs @snapshots: bool
-    # @rbs @recorded: IgnorePolicy?
+    # @rbs @view: ActivityView
 
     #: () -> [ActivityHistory, RootVersionPlan, ActivityStep?, RecordSnapshot?, untyped]
     def history_and_versions
@@ -120,8 +112,7 @@ module PaperTrailDiff
         root_versions, events, @snapshotter,
         current: current,
         include_step: ->(event) { @range.include?(event.version) },
-        snapshots: @retain,
-        recorded: @recorded,
+        view: @view,
         closing: closing
       ).call
     end
@@ -129,7 +120,7 @@ module PaperTrailDiff
     #: (ActivityHistory, ActivityStep?) -> Array[ActivityStep]
     def activity_steps(history, closing)
       steps = closing ? history.steps + [closing] : history.steps
-      group_steps(steps).freeze
+      @view.present(steps).freeze
     end
 
     # Root versions inside the window that the plan does not report are context
@@ -167,12 +158,12 @@ module PaperTrailDiff
     #: (ActivityHistory, ActivityEvent) -> ActivityStep
     def destroyed_step(history, event)
       version = event.version
-      recorded = @recorded&.recorded_attributes(root: true)
+      recorded = @view.recorded_attributes(root: true)
       ActivityStep.between(
         from_boundary: ActivityBoundary.from_version(version, recorded: recorded),
         to_boundary: ActivityBoundary.destroyed(version, recorded: recorded),
         from_snapshot: history.root_snapshots[ActivityRootSteps.version_key(version)],
-        to_snapshot: nil, retain: @retain
+        to_snapshot: nil, retain: @view.retain?
       )
     end
 
@@ -184,11 +175,11 @@ module PaperTrailDiff
       previous = history.last_boundary
       return unless previous
 
-      recorded = @recorded&.recorded_attributes(root: true)
+      recorded = @view.recorded_attributes(root: true)
       ActivityStep.between(
         from_boundary: previous,
         to_boundary: ActivityBoundary.current(record, captured_at: captured_at, recorded: recorded),
-        from_snapshot: history.last_event_snapshot, to_snapshot: snapshot, retain: @retain
+        from_snapshot: history.last_event_snapshot, to_snapshot: snapshot, retain: @view.retain?
       )
     end
 

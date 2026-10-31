@@ -4,8 +4,8 @@ module PaperTrailDiff
   # Builds one root's Analysis inside a batch, from versions the batch already
   # selected and history it already prepared.
   class BatchedRootAnalyzer
-    # : (tree: AssociationTree, timeline_snapshotter: untyped, activity_snapshotter: untyped, preparer: untyped, activity: bool, ?within: untyped, ?snapshots: bool, ?group: Symbol?, ?recorded: IgnorePolicy?) -> void
-    def initialize: (tree: AssociationTree, timeline_snapshotter: untyped, activity_snapshotter: untyped, preparer: untyped, activity: bool, ?within: untyped, ?snapshots: bool, ?group: Symbol?, ?recorded: IgnorePolicy?) -> void
+    # : (tree: AssociationTree, timeline_snapshotter: untyped, activity_snapshotter: untyped, preparer: untyped, activity: bool, view: ActivityView, ?within: untyped) -> void
+    def initialize: (tree: AssociationTree, timeline_snapshotter: untyped, activity_snapshotter: untyped, preparer: untyped, activity: bool, view: ActivityView, ?within: untyped) -> void
 
     # `window` is the root's window as the batch moved it to transaction edges.
     # : (untyped, RootVersionPlan, ?TimeRange?) -> Analysis
@@ -17,17 +17,13 @@ module PaperTrailDiff
 
     @activity_snapshotter: untyped
 
-    @group: Symbol?
-
     @preparer: untyped
-
-    @recorded: IgnorePolicy?
-
-    @snapshots: bool
 
     @timeline_snapshotter: untyped
 
     @tree: AssociationTree
+
+    @view: ActivityView
 
     @within: untyped
 

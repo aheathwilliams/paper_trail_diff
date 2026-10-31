@@ -40,8 +40,14 @@ module PaperTrailDiff
 
     private
 
-    # : (Symbol?, bool, bool) -> void
-    def validate_activity_options!: (Symbol?, bool, bool) -> void
+    # : (bool, bool, Symbol?) -> ActivityView
+    def activity_view: (bool, bool, Symbol?) -> ActivityView
+
+    # : (untyped) -> Hash[Symbol, untyped]
+    def model_payload: (untyped) -> Hash[Symbol, untyped]
+
+    # : (Array[untyped], within: untyped, activity: bool, version_scope: untyped, view: ActivityView) -> Hash[identity, Analysis]
+    def analyze_batch: (Array[untyped], within: untyped, activity: bool, version_scope: untyped, view: ActivityView) -> Hash[identity, Analysis]
 
     # Analysis reads association history, so a request it would refuse is
     # refused before the first selection query rather than once analysis starts.
@@ -82,9 +88,6 @@ module PaperTrailDiff
 
     @traversal_preparer: TraversalPreparer
 
-    # : (untyped, from: untyped, to: untyped, within: untyped, version_scope: untyped, live_endpoint: untyped, ?snapshots: bool, ?group: Symbol?) -> Analysis
-    def analyze_activity: (untyped, from: untyped, to: untyped, within: untyped, version_scope: untyped, live_endpoint: untyped, ?snapshots: bool, ?group: Symbol?) -> Analysis
-
     # Association membership is resolved by timestamp, so endpoints sharing one
     # cannot be told apart and any association change between them is invisible.
     # The result may still be correct -- nothing associated may have changed --
@@ -111,8 +114,8 @@ module PaperTrailDiff
     # : () -> void
     def build_snapshotters: () -> void
 
-    # : (bool, within: untyped, snapshots: bool, group: Symbol?) -> BatchedRootAnalyzer
-    def batched_root_analyzer: (bool, within: untyped, snapshots: bool, group: Symbol?) -> BatchedRootAnalyzer
+    # : (bool, within: untyped, view: ActivityView) -> BatchedRootAnalyzer
+    def batched_root_analyzer: (bool, within: untyped, view: ActivityView) -> BatchedRootAnalyzer
 
     # : () -> HistoricalSnapshotStore
     def build_historical_store: () -> HistoricalSnapshotStore
@@ -120,8 +123,8 @@ module PaperTrailDiff
     # : () -> ActivitySnapshotProvider
     def build_activity_snapshotter: () -> ActivitySnapshotProvider
 
-    # : (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped, ?live_endpoint: untyped, ?snapshots: bool, ?group: Symbol?) -> ActivityTimelineBuilder
-    def activity_builder: (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped, ?live_endpoint: untyped, ?snapshots: bool, ?group: Symbol?) -> ActivityTimelineBuilder
+    # : (untyped, from: untyped, to: untyped, within: untyped, version_scope: untyped, live_endpoint: untyped, view: ActivityView) -> ActivityTimelineBuilder
+    def activity_builder: (untyped, from: untyped, to: untyped, within: untyped, version_scope: untyped, live_endpoint: untyped, view: ActivityView) -> ActivityTimelineBuilder
 
     # : (untyped) -> RecordSnapshot?
     def snapshot_for_endpoint: (untyped) -> RecordSnapshot?

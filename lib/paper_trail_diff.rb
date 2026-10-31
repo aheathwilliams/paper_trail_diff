@@ -78,7 +78,7 @@ require_relative 'paper_trail_diff/activity_event_snapshot_refresher'
 require_relative 'paper_trail_diff/activity_root_snapshot_refresher'
 require_relative 'paper_trail_diff/branch_snapshot_refresher'
 require_relative 'paper_trail_diff/activity_boundary'
-require_relative 'paper_trail_diff/activity_grouping'
+require_relative 'paper_trail_diff/activity_view'
 require_relative 'paper_trail_diff/activity_transaction_grouper'
 require_relative 'paper_trail_diff/step'
 require_relative 'paper_trail_diff/analysis'
@@ -126,8 +126,7 @@ require_relative 'paper_trail_diff/paper_trail_adapter'
 #     type comparison_input = Hash[String | Symbol, untyped]
 #     type comparison_results = Hash[identity, Diff]
 #     type report_options = {
-#       within: untyped, activity: bool, version_scope: untyped,
-#       snapshots: bool, group: Symbol?
+#       within: untyped, activity: bool, version_scope: untyped, view: ActivityView
 #     }
 #     type ignore_option = Array[String | Symbol] | Hash[String | Symbol, untyped]
 #     type association_option = String | Symbol | Array[untyped] | Hash[untyped, untyped]

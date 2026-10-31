@@ -150,7 +150,7 @@ module PaperTrailDiff
 
   type comparison_results = Hash[identity, Diff]
 
-  type report_options = { within: untyped, activity: bool, version_scope: untyped, snapshots: bool, group: Symbol? }
+  type report_options = { within: untyped, activity: bool, version_scope: untyped, view: ActivityView }
 
   type ignore_option = Array[String | Symbol] | Hash[String | Symbol, untyped]
 

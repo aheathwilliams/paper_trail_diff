@@ -3,10 +3,8 @@
 module PaperTrailDiff
   # Builds activity views for mutations selected by a wall-clock range.
   class TimeActivityTimelineBuilder
-    include ActivityGrouping
-
-    # : (untyped, range: TimelineRange, tree: AssociationTree, snapshotter: untyped, ?snapshots: bool, ?group: Symbol?, ?recorded: IgnorePolicy?) -> void
-    def initialize: (untyped, range: TimelineRange, tree: AssociationTree, snapshotter: untyped, ?snapshots: bool, ?group: Symbol?, ?recorded: IgnorePolicy?) -> void
+    # : (untyped, range: TimelineRange, tree: AssociationTree, snapshotter: untyped, view: ActivityView) -> void
+    def initialize: (untyped, range: TimelineRange, tree: AssociationTree, snapshotter: untyped, view: ActivityView) -> void
 
     # : () -> Array[ActivityStep]
     def build: () -> Array[ActivityStep]
@@ -25,13 +23,11 @@ module PaperTrailDiff
     # : (ActivityHistory, RootVersionPlan, ActivityStep?, RecordSnapshot?) -> RecordSnapshot?
     def final_snapshot: (ActivityHistory, RootVersionPlan, ActivityStep?, RecordSnapshot?) -> RecordSnapshot?
 
-    @recorded: IgnorePolicy?
-
-    @snapshots: bool
-
     @snapshotter: untyped
 
     @tree: AssociationTree
+
+    @view: ActivityView
 
     # : () -> [ActivityHistory, RootVersionPlan, ActivityStep?, RecordSnapshot?, untyped]
     def history_and_versions: () -> [ ActivityHistory, RootVersionPlan, ActivityStep?, RecordSnapshot?, untyped ]

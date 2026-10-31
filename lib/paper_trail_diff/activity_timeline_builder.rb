@@ -4,17 +4,9 @@
 module PaperTrailDiff
   # Compares adjacent root and selected-descendant activity boundaries.
   class ActivityTimelineBuilder # rubocop:disable Metrics/ClassLength
-    include ActivityGrouping
-
-    #: (untyped, range: TimelineRange, tree: AssociationTree, snapshotter: untyped, snapshots: bool, group: Symbol?, ?recorded: IgnorePolicy?) -> void
-    def initialize(record, range:, tree:, snapshotter:, snapshots:, group:, recorded: nil) # rubocop:disable Metrics/ParameterLists
-      ActivityGrouping.validate!(group)
-      @snapshots = snapshots
-      @group = group
-      @recorded = recorded
-      # Merging a group compares its outer states, so the snapshots must survive
-      # the build even when the caller did not ask to keep them.
-      @retain = snapshots || grouping?
+    #: (untyped, range: TimelineRange, tree: AssociationTree, snapshotter: untyped, view: ActivityView) -> void
+    def initialize(record, range:, tree:, snapshotter:, view:)
+      @view = view
       @record = record
       @to = range.to
       @range = range
@@ -55,8 +47,7 @@ module PaperTrailDiff
     # @rbs @range: TimelineRange
     # @rbs @tree: AssociationTree
     # @rbs @snapshotter: untyped
-    # @rbs @snapshots: bool
-    # @rbs @recorded: IgnorePolicy?
+    # @rbs @view: ActivityView
 
     #: () -> Array[ActivityStep]
     def no_steps
@@ -136,7 +127,7 @@ module PaperTrailDiff
 
     #: () -> Array[String]?
     def root_recorded
-      @recorded&.recorded_attributes(root: true)
+      @view.recorded_attributes(root: true)
     end
 
     #: (untyped) -> ActivityBoundary
@@ -195,10 +186,10 @@ module PaperTrailDiff
         steps << ActivityStep.between(
           from_boundary: last_boundary, to_boundary: final_boundary,
           from_snapshot: history.last_event_snapshot, to_snapshot: final_snapshot,
-          retain: @retain
+          retain: @view.retain?
         )
       end
-      group_steps(steps).freeze
+      @view.present(steps).freeze
     end
 
     # A destroyed root has no later version, but its own event states that
@@ -218,8 +209,7 @@ module PaperTrailDiff
         events,
         @snapshotter,
         current: current,
-        snapshots: @retain,
-        recorded: @recorded,
+        view: @view,
         closing: closing
       ).call
     end
@@ -243,8 +233,7 @@ module PaperTrailDiff
     #: () -> TimeActivityTimelineBuilder
     def time_builder
       TimeActivityTimelineBuilder.new(@record, range: @range, tree: @tree,
-                                               snapshotter: @snapshotter, snapshots: @snapshots,
-                                               group: @group, recorded: @recorded)
+                                               snapshotter: @snapshotter, view: @view)
     end
   end
 end

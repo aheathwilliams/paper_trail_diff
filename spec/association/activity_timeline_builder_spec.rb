@@ -253,6 +253,18 @@ RSpec.describe PaperTrailDiff::ActivityTimelineBuilder do
       .to all(be_a(PaperTrailDiff::RecordSnapshot))
   end
 
+  it 'keeps snapshots only when asked on the step that closes on the live row' do
+    article, comment, from, = edited_history
+    comment.update!(body: 'live')
+
+    closing = timeline(article, from: from, to: article).last
+    kept = timeline(article, from: from, to: article, snapshots: true).last
+
+    expect(closing.to_boundary.kind).to eq(:current)
+    expect([closing.from_snapshot, closing.to_snapshot]).to eq([nil, nil])
+    expect([kept.from_snapshot, kept.to_snapshot]).to all(be_a(PaperTrailDiff::RecordSnapshot))
+  end
+
   it 'hands a window to the time-based builder' do
     article = TrackedArticle.create!(title: 'Article')
     comment = article.comments.create!(body: 'one')
@@ -278,7 +290,7 @@ RSpec.describe PaperTrailDiff::ActivityTimelineBuilder do
                                                         live_endpoint: live)
       tree = PaperTrailDiff::AssociationTree.build([:comments])
       described_class.new(record, range: range, tree: tree, snapshotter: snapshotter,
-                                  snapshots: false, group: nil)
+                                  view: PaperTrailDiff::ActivityView.new)
     end
 
     def collector_calls
