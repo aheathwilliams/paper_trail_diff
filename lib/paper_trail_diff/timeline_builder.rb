@@ -46,21 +46,21 @@ module PaperTrailDiff
       return empty_history if plan.empty?
 
       versions = plan.versions
-      @snapshotter.prepare(@record, versions) if @snapshotter.respond_to?(:prepare)
-      steps = build_steps(plan)
-      final = plan.closes_on_destroy ? nil : @snapshotter.call(plan.final_endpoint)
-      [steps, @snapshotter.call(versions.first), final]
+      snapshots = @snapshotter.prepare(@record, versions)
+      steps = build_steps(plan, snapshots)
+      final = plan.closes_on_destroy ? nil : snapshots.call(plan.final_endpoint)
+      [steps, snapshots.call(versions.first), final]
     end
 
-    #: (RootVersionPlan) -> Array[Step]
-    def build_steps(plan)
+    #: (RootVersionPlan, untyped) -> Array[Step]
+    def build_steps(plan, snapshots)
       captured_at = Time.now.utc if plan.closing_record
       plan.steps.map do |from_endpoint, to_endpoint|
         Step.new(
           from_version: from_endpoint,
           to_version: to_endpoint,
           captured_at: captured_at,
-          diff: Engine.compare(@snapshotter.call(from_endpoint), @snapshotter.call(to_endpoint))
+          diff: Engine.compare(snapshots.call(from_endpoint), snapshots.call(to_endpoint))
         )
       end.freeze
     end

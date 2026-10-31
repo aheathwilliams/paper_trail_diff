@@ -92,13 +92,32 @@ RSpec.describe PaperTrailDiff::ScopeCondition do
     it 'combines conditions with AND, OR and grouping' do
       both = build(-> { where(rank: 1, flag: true) })
       expect(matches(both, { rank: 1, flag: true }, { rank: 1, flag: false },
-                     { rank: 2, flag: true }))
-        .to eq([true, false, false])
+                     { rank: 2, flag: true }, { rank: nil, flag: true }))
+        .to eq([true, false, false, false])
       either = build(-> { where(rank: 1).or(where(flag: true)) })
       expect(matches(either, { rank: 1, flag: false }, { rank: 2, flag: true },
                      { rank: 2, flag: false })).to eq([true, true, false])
       expect(matches(build(-> { where(rank: [1, nil]) }), { rank: nil }, { rank: 1 }, { rank: 2 }))
         .to eq([true, true, false])
+    end
+
+    # SQL's NOT leaves an unknown comparison unknown, so a NULL that fails a
+    # condition fails its negation too, where plain negation would admit it.
+    it 'reads NOT as SQL does, leaving a comparison with NULL unknown' do
+      expect(matches(build(-> { where.not(rank: [1, nil]) }), { rank: 2 }, { rank: 1 },
+                     { rank: nil })).to eq([true, false, false])
+      both = build(-> { where.not(rank: 1, flag: true) })
+      expect(matches(both, { rank: 1, flag: false }, { rank: 1, flag: true },
+                     { rank: nil, flag: true }, { rank: nil, flag: false }))
+        .to eq([true, false, false, true])
+      expect(matches(build(-> { where(table[:rank].eq(1).not) }), { rank: 2 }, { rank: 1 },
+                     { rank: nil })).to eq([true, false, false])
+      unknown = build(-> { where.not(rank: 1).or(where.not(flag: true)) })
+      expect(matches(unknown, { rank: nil, flag: nil }, { rank: nil, flag: false }))
+        .to eq([false, true])
+      neither = build(-> { where(table[:rank].eq(1).or(table[:flag].eq(true)).not) })
+      expect(matches(neither, { rank: nil, flag: false }, { rank: 2, flag: false }))
+        .to eq([false, true])
     end
 
     it 'reads a default scope of the target together with the association scope' do
@@ -128,8 +147,8 @@ RSpec.describe PaperTrailDiff::ScopeCondition do
     end
 
     # Column objects are frozen, so the columns are replaced through the model.
-    def collation(value)
-      column = Struct.new(:collation).new(value)
+    def collation(value, sql_type: 'varchar')
+      column = Struct.new(:collation, :sql_type).new(value, sql_type)
       columns = ScopeConditionItem.columns_hash.merge('label' => column, 'note' => column)
       allow(ScopeConditionItem).to receive(:columns_hash).and_return(columns)
     end
@@ -154,6 +173,17 @@ RSpec.describe PaperTrailDiff::ScopeCondition do
       expect(build(-> { where(rank: 1) })).not_to be_nil
     end
 
+    # citext compares without regard to case, and Active Record reads it as a
+    # plain string.
+    it 'leaves a PostgreSQL citext column unread' do
+      allow(ScopeConditionItem.connection_db_config).to receive(:adapter).and_return('postgresql')
+      collation(nil, sql_type: 'citext')
+
+      expect(build(-> { where(label: 'a') })).to be_nil
+      expect(matches(build(-> { where(label: nil) }), { label: nil }, { label: 'a' }))
+        .to eq([true, false])
+    end
+
     # Active Record before 7.2 wraps each bound value in a BindParam node.
     it 'reads a value wrapped in a bind parameter' do
       bound = lambda do
@@ -176,15 +206,27 @@ RSpec.describe PaperTrailDiff::ScopeCondition do
     end
 
     it 'reads every side of an OR node that has more than two' do
-      unless Arel::Nodes::Or < Arel::Nodes::Nary
+      # Rails 7.1 has no Nary node to compare with.
+      unless defined?(Arel::Nodes::Nary) && Arel::Nodes::Or < Arel::Nodes::Nary
         skip 'OR nodes have exactly two sides before Rails 7.2'
       end
       any = -> { where(Arel::Nodes::Or.new([1, 2, 3].map { |rank| table[:rank].eq(rank) })) }
       expect(matches(build(any), { rank: 3 }, { rank: 4 })).to eq([true, false])
     end
 
+    # Whether a value is NULL compares alike on every type, as a soft-delete
+    # scope's `deleted_at IS NULL` needs.
+    it 'reads IS NULL and IS NOT NULL on a column of any type' do
+      expect(matches(build(-> { where(seen_at: nil) }), { seen_at: nil },
+                     { seen_at: Time.utc(2026) })).to eq([true, false])
+      expect(matches(build(-> { where.not(amount: nil) }), { amount: nil }, { amount: 1 }))
+        .to eq([false, true])
+    end
+
     it 'declines column types whose values Ruby cannot compare as SQL does' do
       expect(build(-> { where(seen_at: Time.utc(2026)) })).to be_nil
+      expect(build(-> { where.not(seen_at: Time.utc(2026)) })).to be_nil
+      expect(build(-> { where(seen_at: [Time.utc(2026), Time.utc(2027)]) })).to be_nil
       expect(build(-> { where(amount: 1) })).to be_nil
       stub_const('ScopeConditionSerialized', Class.new(ScopeConditionItem))
       ScopeConditionSerialized.serialize :note, coder: YAML
@@ -192,6 +234,7 @@ RSpec.describe PaperTrailDiff::ScopeCondition do
       stub_const('ScopeConditionVirtual', Class.new(ScopeConditionItem))
       ScopeConditionVirtual.attribute :virtual_rank, :integer
       expect(build(-> { where(virtual_rank: 1) }, target: 'ScopeConditionVirtual')).to be_nil
+      expect(build(-> { where(virtual_rank: nil) }, target: 'ScopeConditionVirtual')).to be_nil
     end
 
     it 'declines SQL strings, ranges, subqueries and other tables or columns' do
@@ -199,7 +242,8 @@ RSpec.describe PaperTrailDiff::ScopeCondition do
        -> { where(rank: ScopeConditionItem.select(:rank)) },
        -> { where(owner_id: ScopeConditionOwner.where(rank: 1).select(:id).arel) },
        -> { where(table[:rank].eq(table[:owner_id])) },
-       -> { where(Arel::Nodes::Equality.new(Arel.sql('rank'), 1)) },
+       -> { where(Arel::Nodes::Equality.new(Arel.sql('rank'), table[:rank].eq(1).right)) },
+       -> { where(Arel::Nodes::Equality.new(Arel.sql('rank'), table[:rank].eq(nil).right)) },
        -> { where(Arel::Table.new(:scope_condition_items, as: 'aliased')[:rank].eq(1)) },
        -> { where(Arel::Table.new(:tracked_articles)[:id].eq(1)) },
        -> { where(rank: 2**70) }].each do |scope|
@@ -410,6 +454,44 @@ RSpec.describe PaperTrailDiff::ScopeCondition do
   end
 
   # A has_many through keeps only its parts' conditions.
+  describe '.for_relation' do
+    def relation_matches(relation, *rows)
+      condition = described_class.for_relation(relation, relation.model)
+      rows.map { |row| condition.matches?(row.transform_keys(&:to_s)) }
+    end
+
+    it "reads a relation's conditions and default scope, leaving out its page and loading" do
+      relation = ScopeConditionItem.where(rank: 1).or(ScopeConditionItem.where(flag: true))
+      expect(relation_matches(relation, { rank: 1 }, { flag: true }, { rank: 2, flag: false }))
+        .to eq([true, true, false])
+      expect(relation_matches(ScopeConditionItem.all, { rank: nil })).to eq([true])
+
+      stub_const('ScopeConditionDefaulted', Class.new(ScopeConditionItem))
+      ScopeConditionDefaulted.class_eval { default_scope { where(flag: true) } }
+      paged = ScopeConditionDefaulted.where(rank: 1).order(:id).limit(1).offset(1)
+                                     .includes(:none).preload(:none).select(:id).distinct
+      expect(relation_matches(paged, { rank: 1, flag: true }, { rank: 1, flag: false }))
+        .to eq([true, false])
+    end
+
+    it 'leaves out the type condition of a single-table subclass' do
+      stub_const('ScopeConditionKind', Class.new(ScopeConditionItem))
+      allow(ScopeConditionKind).to receive(:finder_needs_type_condition?).and_return(true)
+
+      expect(relation_matches(ScopeConditionKind.where(rank: 1), { rank: 1 })).to eq([true])
+    end
+
+    it 'declines a relation that joins, groups, or that it cannot read' do
+      [ScopeConditionItem.joins('JOIN tracked_articles ON 1 = 1'), ScopeConditionItem.group(:rank),
+       ScopeConditionItem.where('rank = 1'), ScopeConditionItem.where(seen_at: Time.utc(2026)),
+       ScopeConditionItem.having('COUNT(*) > 1'), ScopeConditionItem.from('scope_condition_items'),
+       ScopeConditionItem.lock]
+        .each do |relation|
+          expect(described_class.for_relation(relation, relation.model)).to be_nil
+        end
+    end
+  end
+
   describe '.ranked_through?' do
     before do
       ScopeConditionOwner.has_one :lead_item, -> { order(:id) }, class_name: 'ScopeConditionItem',

@@ -81,7 +81,7 @@ module ReportingBenchmark
     end
 
     def options
-      result = { within: Time.at(0).utc..(Time.now.utc + 60), limit: limit, close_on: :current }
+      result = { within: Time.at(0).utc..(Time.now.utc + 60), limit: limit }
       if name == 'retained_activity'
         result[:activity] = true
         result[:snapshots] = true

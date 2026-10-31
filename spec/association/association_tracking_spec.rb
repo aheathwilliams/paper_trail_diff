@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative '../support/association_database'
+require_relative '../support/full_snapshotter'
 
 RSpec.describe 'PaperTrailDiff association tracking' do
   before do
@@ -98,9 +99,8 @@ RSpec.describe 'PaperTrailDiff association tracking' do
       record,
       range: PaperTrailDiff::TimelineRange.new(record, from: from, to: to, within: nil),
       tree: tree,
-      snapshotter: adapter.method(:snapshot_at),
-      snapshots: false,
-      group: nil
+      snapshotter: FullSnapshotter.new(adapter.method(:snapshot_at)),
+      view: PaperTrailDiff::ActivityView.new
     ).build
   end
 
@@ -191,6 +191,17 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     expect(comments.added.first.attributes).not_to have_key('article_id')
   end
 
+  it 'takes associations as a single name or as nested hashes, as includes does' do
+    graph = article_with_graph
+    graph[:kept_comment].update!(body: 'Live after')
+    compared = lambda do |associations|
+      PaperTrailDiff.compare(graph[:before], graph[:article], associations: associations).to_h
+    end
+
+    expect(compared.call({ comments: :replies })).to eq(compared.call(['comments.replies']))
+    expect(compared.call(:comments)).to eq(compared.call(['comments']))
+  end
+
   it 'bulk-compares historical graphs with preloaded nested live associations' do
     graphs = Array.new(2) do |index|
       graph = article_with_graph
@@ -249,18 +260,20 @@ RSpec.describe 'PaperTrailDiff association tracking' do
       'offset_comments.replies',
       'owner_comments.replies'
     ]
+    # A scope that takes the owner is read with PT-AT, whose membership is
+    # approximate; these comparisons stay inside what it reads correctly.
     expected = comparisons.to_h do |comparison|
       identity = PaperTrailDiff::Endpoint.identity(comparison.fetch(:from))
       diff = PaperTrailDiff.compare(
         comparison.fetch(:from),
         comparison.fetch(:to),
-        associations: associations
+        associations: associations, allow_approximate: true
       )
       [identity, diff.to_h]
     end
 
     actual = PaperTrailDiff.compare_many(comparisons, associations: associations,
-                                                      allow_expensive: true)
+                                                      allow_approximate: true)
 
     expect(actual.transform_values(&:to_h)).to eq(expected)
     expect(actual.values).to all(satisfy do |diff|
@@ -571,7 +584,8 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     end
     expect { PaperTrailDiff.activity_timeline(root, from: before, to: after, **options) }
       .to raise_error(*error)
-    expect { PaperTrailDiff.diagnose(before, after, **options) }.to raise_error(*error)
+    expect(PaperTrailDiff.diagnose(before, after, **options).errors.map { |e| [e.code, e.message] })
+      .to match([[:unsupported_association, error.last]])
 
     tags = PaperTrailDiff.compare(before, after, associations: [:tags]).associations.fetch('tags')
     expect(tags.changed.map { |change| change.attributes.fetch('name').to_h })
@@ -621,10 +635,12 @@ RSpec.describe 'PaperTrailDiff association tracking' do
       expect { PaperTrailDiff.activity_timeline(root, from: shared, to: after, **options) }
         .to raise_error(*error)
 
-      report = PaperTrailDiff.diagnose(shared, after, **options)
-      expect(report).not_to be_ok
-      expect(report.errors.map { |issue| [issue.code, issue.path, issue.version_id] })
-        .to eq([[:habtm_transaction_shared, 'tags', shared.id]])
+      [after, root].each do |to|
+        report = PaperTrailDiff.diagnose(shared, to, **options)
+        expect(report).not_to be_ok
+        expect(report.errors.map { |issue| [issue.code, issue.path, issue.version_id] })
+          .to eq([[:habtm_transaction_shared, 'tags', shared.id]])
+      end
     end
 
     it 'still reads a transaction where no owner recorded a member' do
@@ -1043,13 +1059,14 @@ RSpec.describe 'PaperTrailDiff association tracking' do
       associations: associations,
       ignore: PaperTrailDiff::DEFAULT_IGNORED_ATTRIBUTES
     )
+    store = adapter.instance_variable_get(:@historical_store)
     reference = nil
     reference_queries = sql_query_count do
       reference = PaperTrailDiff::TimelineBuilder.new(
         graph[:article],
         from: graph[:before],
         to: after,
-        snapshotter: adapter.method(:uncached_historical_snapshot)
+        snapshotter: FullSnapshotter.new(->(version) { store.uncached(version, version) })
       ).analyze
     end
 
@@ -2022,9 +2039,9 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     expect(report).to be_ok
     expect(report.issues).to be_empty
     expect(PaperTrailDiff.diagnose(graph[:before], after)).to be_ok
-    expect do
-      PaperTrailDiff.diagnose(graph[:before], after, associations: [:missing])
-    end.to raise_error(PaperTrailDiff::UnknownAssociationError, /missing/)
+    missing = PaperTrailDiff.diagnose(graph[:before], after, associations: [:missing])
+    expect(missing.errors.map { |issue| [issue.code, issue.message] })
+      .to eq([[:unknown_association, 'unknown association: missing']])
   end
 
   describe 'an association whose target is not versioned' do

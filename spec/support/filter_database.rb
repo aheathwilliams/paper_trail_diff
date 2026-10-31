@@ -18,6 +18,28 @@ ActiveRecord::Schema.define do
     table.datetime :created_at
   end
 
+  # PaperTrail writes a json object column as JSON types and does not cast
+  # them back, so dates and times come back as strings.
+  create_table :filter_json_versions, force: true do |table|
+    table.string :item_type, null: false
+    table.integer :item_id, null: false
+    table.string :event, null: false
+    table.string :whodunnit
+    table.json :object
+    table.json :object_changes
+    table.integer :transaction_id
+    table.datetime :created_at
+  end
+
+  create_table :filter_events, force: true do |table|
+    table.integer :status, null: false, default: 0
+    table.date :due_on
+    table.datetime :starts_at
+    table.json :details
+    table.text :labels
+    table.timestamps null: false
+  end
+
   create_table :filter_articles, force: true do |table|
     table.string :type
     table.string :title, null: false
@@ -37,3 +59,18 @@ class FilterArticle < ActiveRecord::Base
 end
 
 class FilterFeature < FilterArticle; end
+
+class FilterJsonVersion < ActiveRecord::Base
+  include PaperTrail::VersionConcern
+end
+
+class FilterEvent < ActiveRecord::Base
+  enum :status, { draft: 0, published: 1 }
+  serialize :labels, coder: JSON
+  has_paper_trail versions: { class_name: 'FilterVersion' }
+end
+
+class FilterJsonEvent < ActiveRecord::Base
+  self.table_name = 'filter_events'
+  has_paper_trail versions: { class_name: 'FilterJsonVersion' }
+end

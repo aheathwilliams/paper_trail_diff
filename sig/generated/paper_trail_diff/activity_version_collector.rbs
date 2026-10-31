@@ -6,6 +6,8 @@ module PaperTrailDiff
     # : (untyped, root_versions: Array[untyped], tree: AssociationTree, ?range_start: untyped, ?range_end: untyped, ?prepared: PreparedActivityIndex?) -> void
     def initialize: (untyped, root_versions: Array[untyped], tree: AssociationTree, ?range_start: untyped, ?range_end: untyped, ?prepared: PreparedActivityIndex?) -> void
 
+    # A tie between version tables, or between ids that do not count up,
+    # raises rather than building a timeline in an arbitrary order.
     # : () -> Array[ActivityEvent]
     def call: () -> Array[ActivityEvent]
 

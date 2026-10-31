@@ -76,6 +76,37 @@ RSpec.describe 'Association history with tied version timestamps' do
     end
   end
 
+  def tied_version(table, id)
+    version_class = Struct.new(:id, :created_at, :item_type, :item_id) do
+      define_singleton_method(:table_name) { table }
+    end
+    version_class.new(id, Time.utc(2026, 1, 1), 'TrackedArticle', 1)
+  end
+
+  # Each version table counts its own ids, so ids from two tables say nothing
+  # about which version came first.
+  it 'refuses a tie between version tables, even with sequential ids' do
+    versions = tied_version('versions', 7)
+    comments = tied_version('comments', 3)
+
+    expect(PaperTrailDiff::Support.ambiguous_pair([versions, comments]))
+      .to eq([versions, comments])
+    expect(PaperTrailDiff::Support.ambiguous_pair([versions, tied_version('versions', 8)]))
+      .to be_nil
+    expect { PaperTrailDiff::VersionBoundary.at_or_after?(comments, versions) }
+      .to raise_error(PaperTrailDiff::AmbiguousVersionOrderError)
+  end
+
+  it 'refuses to build activity from events it cannot order' do
+    article = TrackedArticle.create!(title: 'Tied')
+    tied = [tied_version('versions', 7), tied_version('comments', 3)]
+    collector = PaperTrailDiff::ActivityVersionCollector.new(
+      article, root_versions: tied, tree: PaperTrailDiff::AssociationTree.build([])
+    )
+
+    expect { collector.call }.to raise_error(PaperTrailDiff::AmbiguousVersionOrderError)
+  end
+
   it 'refuses a tie its version ids cannot order' do
     version_class = Struct.new(:id, :created_at, :item_type) do
       def self.table_name = 'uuid_versions'

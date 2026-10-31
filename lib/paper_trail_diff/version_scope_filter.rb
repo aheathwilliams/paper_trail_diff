@@ -7,9 +7,17 @@ module PaperTrailDiff
   # caller, because the one that reveals the last selected mutation is drawn
   # from them.
   class VersionScopeFilter
+    # A filter is a callable that narrows the version relation.
+    #: (untyped) -> untyped
+    def self.validated(scope)
+      return scope if scope.nil? || scope.respond_to?(:call)
+
+      raise ConfigurationError, 'version_scope: must respond to call'
+    end
+
     #: (untyped) -> void
     def initialize(scope)
-      @scope = validated(scope)
+      @scope = self.class.validated(scope)
     end
 
     #: (untyped, Array[untyped]) -> Array[untyped]
@@ -31,15 +39,6 @@ module PaperTrailDiff
       Set.new(scope.call(relation).pluck(:id))
     end
 
-    private
-
     # @rbs @scope: untyped
-
-    #: (untyped) -> untyped
-    def validated(scope)
-      return scope if scope.nil? || scope.respond_to?(:call)
-
-      raise ConfigurationError, 'version_scope: must respond to call'
-    end
   end
 end

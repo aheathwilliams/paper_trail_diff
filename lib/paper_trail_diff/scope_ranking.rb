@@ -11,6 +11,9 @@ module PaperTrailDiff
     DIRECTIONS = { 'Arel::Nodes::Ascending' => false, 'Arel::Nodes::Descending' => true }.freeze
     ATTRIBUTE = 'Arel::Attributes::Attribute'
     ENUM_TYPE = 'ActiveRecord::Enum::EnumType'
+    # Rails wraps a time-zone-aware attribute's type, by default every
+    # datetime's, in this delegator; the time it stores is the wrapped type's.
+    TIME_ZONE_TYPE = 'ActiveRecord::AttributeMethods::TimeZoneConversion::TimeZoneConverter'
     # Integers, booleans and dates sort alike everywhere. Strings follow a
     # collation, so they are not read.
     ORDER_TYPES = %w[ActiveModel::Type::Integer ActiveModel::Type::Boolean
@@ -107,13 +110,20 @@ module PaperTrailDiff
     def self.orderable?(model_class, name)
       return false unless model_class.columns_hash.key?(name)
 
-      type = model_class.type_for_attribute(name)
-      type = type.subtype if ENUM_TYPE.eql?(type.class.name)
+      type = stored_type(model_class.type_for_attribute(name))
       kinds = type.class.ancestors.map(&:name)
       ORDER_TYPES.intersect?(kinds) ||
         (kinds.include?(DATETIME_TYPE) && exact_time?(model_class, type))
     end
     private_class_method :orderable?
+
+    # The type of the value a column stores, under an enum or time zone wrapper.
+    #: (untyped) -> untyped
+    def self.stored_type(type)
+      type = type.subtype if ENUM_TYPE.eql?(type.class.name)
+      TIME_ZONE_TYPE.eql?(type.class.name) ? type.__getobj__ : type
+    end
+    private_class_method :stored_type
 
     # Active Record truncates a time to its column's precision before writing
     # it, so history holds the stored value when it keeps that many digits.

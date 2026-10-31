@@ -10,6 +10,13 @@ PaperTrail::Version.include(PaperTrailAssociationTracking::VersionConcern)
 # PT-AT reconstructs associations by timestamp and is nondeterministic when
 # the database stores multiple versions at the same instant. Keep test-created
 # versions strictly ordered without sleeps or production-side clock changes.
+#
+# PT-AT compares those timestamps through SQL string conditions. The SQL
+# Server adapter quotes a time there as a legacy `datetime`, up to a tick of
+# 1/300 s away from it, so versions saved within a tick of each other can
+# compare in the wrong order. Inserts are usually slower than that, but after
+# the host clock steps back the test clock hands out consecutive microseconds
+# until it catches up, so on SQL Server versions are kept 5 ms apart.
 module AssociationSpecVersionClock
   class << self
     def reset!
@@ -18,11 +25,21 @@ module AssociationSpecVersionClock
 
     def next(timestamp)
       current = timestamp || Time.now.utc
-      current = @last + Rational(1, 1_000_000) if @last && current <= @last
+      current = @last + gap if @last && current < @last + gap
       # A bumped timestamp may run ahead of the clock; keep later readings,
       # such as a report's window end, after it.
       MonotonicTestClock.advance_past(current)
       @last = current
+    end
+
+    private
+
+    def gap
+      @gap ||= if ActiveRecord::Base.connection.adapter_name == 'SQLServer'
+                 Rational(1, 200)
+               else
+                 Rational(1, 1_000_000)
+               end
     end
   end
 end

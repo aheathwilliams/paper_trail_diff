@@ -90,8 +90,8 @@ module PaperTrailDiff
     # : (untyped) -> Array[PreparedRecordState]
     def states_around: (untyped) -> Array[PreparedRecordState]
 
-    # : (untyped) -> [Hash[untyped, untyped], Hash[untyped, untyped]]?
-    def transition: (untyped) -> [ Hash[untyped, untyped], Hash[untyped, untyped] ]?
+    # : (untyped) -> [PreparedRecordState, PreparedRecordState]?
+    def transition: (untyped) -> [ PreparedRecordState, PreparedRecordState ]?
 
     private
 
@@ -147,6 +147,9 @@ module PaperTrailDiff
     # : (untyped, untyped, untyped) -> [bool, PreparedRecordState?]
     def snapshot_state_before: (untyped, untyped, untyped) -> [ bool, PreparedRecordState? ]
 
+    # Typed as a reified record's attributes are. A JSON or JSONB `object`
+    # column stores times and dates as strings, which PaperTrail does not cast
+    # back, and the transition is carried into snapshots built from records.
     # : (untyped, untyped, untyped) -> [Hash[untyped, untyped], Hash[untyped, untyped]]?
     def transition: (untyped, untyped, untyped) -> [ Hash[untyped, untyped], Hash[untyped, untyped] ]?
 
@@ -172,6 +175,11 @@ module PaperTrailDiff
     def loaded?: (untyped, untyped) -> bool
 
     private
+
+    # A model whose records need their own initialization is cast by
+    # instantiating it, as reify does.
+    # : (PreparedRecordState) -> Hash[untyped, untyped]
+    def typed_attributes: (PreparedRecordState) -> Hash[untyped, untyped]
 
     # : (untyped, String) -> bool
     def generated_reader?: (untyped, String) -> bool

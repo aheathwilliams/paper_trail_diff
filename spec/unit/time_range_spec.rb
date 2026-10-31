@@ -47,7 +47,14 @@ RSpec.describe PaperTrailDiff::TimeRange do
     expect { described_class.new(start_time..end_time).include?(:soon) }
       .to invalid('`within` timestamp must be time-like')
     expect { described_class.new('nonsense'..'now') }
-      .to(raise_error { |error| expect(error.cause).to be_a(NoMethodError) })
+      .to(raise_error { |error| expect(error.cause).to be_a(ArgumentError) })
+  end
+
+  it "leaves the caller's time in its own zone" do
+    local = Time.new(2032, 1, 1, 6, 0, 0, '-06:00')
+
+    expect(described_class.new(local..(local + 60)).begin_time).to eq(Time.utc(2032, 1, 1, 12))
+    expect(local.utc_offset).to eq(-21_600)
   end
 
   it 'normalizes zoned values to their UTC instants' do
@@ -64,11 +71,88 @@ RSpec.describe PaperTrailDiff::TimeRange do
       DateTime.new(2032, 1, 1, 6, 0, 0, '-06:00')..'2032-01-01T13:00:00.5Z'
     )
 
-    expect(range.begin_time).to eq(start_time)
+    expect(range.begin_time).to eq(start_time).and(be_an_instance_of(Time))
     expect(range.end_time).to eq(Time.utc(2032, 1, 1, 13, 0, 0.5r))
     expect([range.begin_time, range.end_time]).to all(be_frozen.and(be_utc))
-    expect(described_class.new(Date.new(2032, 1, 1)..Date.new(2032, 1, 2)).begin_time)
-      .to eq(Date.new(2032, 1, 1).to_time.getutc)
+  end
+
+  # Read in the server's own zone, the same window covered different hours
+  # on different servers.
+  describe 'dates and text' do
+    def in_zone(name, &)
+      Time.use_zone(name, &)
+    end
+
+    # Without Time.zone, in a host zone other than UTC, so that reading the
+    # host's zone is not mistaken for reading UTC on a UTC host, such as CI's.
+    def without_zone(&)
+      host = ENV.fetch('TZ', nil)
+      ENV['TZ'] = 'America/Chicago'
+      in_zone(nil, &)
+    ensure
+      ENV['TZ'] = host
+    end
+
+    def chicago(range)
+      in_zone('America/Chicago') { described_class.new(range) }
+    end
+
+    def day = Date.new(2032, 1, 1)
+
+    it 'reads a date as a whole day in Time.zone, through an inclusive end' do
+      july = Date.new(2032, 7, 4)
+      range = chicago(july..july)
+
+      expect([range.begin_time, range.end_time, range.exclude_end?])
+        .to eq([Time.utc(2032, 7, 4, 5), Time.utc(2032, 7, 5, 5), true])
+      expect([range.begin_time, range.end_time]).to all(be_an_instance_of(Time).and(be_utc))
+    end
+
+    it 'ends an exclusive date end at the start of that day' do
+      range = chicago(day...day.next_day)
+
+      expect([range.end_time, range.exclude_end?]).to eq([Time.utc(2032, 1, 2, 6), true])
+    end
+
+    it 'keeps an inclusive end that names its instant' do
+      range = described_class.new(Date.new(2032, 1, 1)..DateTime.new(2032, 1, 1, 12))
+
+      expect([range.end_time, range.exclude_end?]).to eq([Time.utc(2032, 1, 1, 12), false])
+    end
+
+    it 'reads a date in UTC without Time.zone' do
+      range = without_zone { described_class.new(day..day) }
+
+      expect([range.begin_time, range.end_time]).to eq([Time.utc(2032, 1, 1), Time.utc(2032, 1, 2)])
+    end
+
+    it 'reads text as a time in Time.zone, unless it names its offset' do
+      range = chicago('2032-01-01 06:00'..'2032-01-01T13:00:00Z')
+      expect(range.begin_time).to be_an_instance_of(Time).and(be_utc)
+
+      expect([range.begin_time, range.end_time])
+        .to eq([Time.utc(2032, 1, 1, 12), Time.utc(2032, 1, 1, 13)])
+    end
+
+    it 'reads text of any String class, such as html_safe text' do
+      start = '2032-01-01 06:00'.html_safe
+      range = without_zone { described_class.new(start..'2032-01-01 07:00') }
+
+      expect(range.begin_time).to eq(Time.utc(2032, 1, 1, 6))
+    end
+
+    it 'reads text in UTC without Time.zone' do
+      range = without_zone { described_class.new('2032-01-01 06:00'..'2032-01-01 07:00') }
+
+      expect(range.begin_time).to eq(Time.utc(2032, 1, 1, 6))
+    end
+
+    it 'includes a moment on the day a same-day date range names' do
+      range = chicago(day..day)
+
+      expect(range.include?(Time.utc(2032, 1, 2, 5, 59))).to be(true)
+      expect(range.include?(Time.utc(2032, 1, 2, 6))).to be(false)
+    end
   end
 
   describe 'version queries' do

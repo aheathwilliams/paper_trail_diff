@@ -22,13 +22,15 @@ module PaperTrailDiff
       @registry = ActivityEventRegistry.new
     end
 
+    # A tie between version tables, or between ids that do not count up,
+    # raises rather than building a timeline in an arbitrary order.
     #: () -> Array[ActivityEvent]
     def call
       @registry.add(@root_versions)
       collect_tree(@record.class, [@record.id], @tree, path: '', branch: nil) unless @tree.empty?
-      @registry.to_a.sort_by do |event|
-        Support.chronological_version_key(event.version)
-      end.freeze
+      events = @registry.to_a.sort_by { |event| Support.chronological_version_key(event.version) }
+      pair = Support.ambiguous_pair(events.map(&:version))
+      pair ? raise(AmbiguousVersionOrderError, Support.ambiguous_message(pair)) : events.freeze
     end
 
     private
@@ -92,7 +94,7 @@ module PaperTrailDiff
         # A through is always read with prepared history, which knows the
         # join row's state either side of each version.
         @registry.add(@prepared&.join_versions(group, reflection) || group.fetch(:versions),
-                      branch: branch)
+                      branch: branch, join: true)
         source = reflection.source_reflection
         children = edge_groups(group, source, branch)
         merge_groups!(result, children)
@@ -141,7 +143,7 @@ module PaperTrailDiff
         return identity_groups(rows, reflection)
       end
       transaction_ids = parent_versions.filter_map do |version|
-        version.transaction_id if version.respond_to?(:transaction_id)
+        VersionBoundary.transaction_id(version)
       end
       rows = parent_class.paper_trail.version_association_class.where(
         version_id: transaction_ids,

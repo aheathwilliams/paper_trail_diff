@@ -48,6 +48,62 @@ RSpec.describe 'bounded event reconstruction' do
     expect(query_count).to eq(one)
   end
 
+  def queries(comparisons)
+    count = 0
+    callback = ->(*args) { count += 1 unless %w[SCHEMA TRANSACTION].include?(args.last[:name]) }
+    ActiveSupport::Notifications.subscribed(callback, 'sql.active_record') do
+      PaperTrailDiff.compare_many(comparisons, associations: [:profile])
+    end
+    count
+  end
+
+  # Active Record adds `limit(1)` to every has_one's association scope; only a
+  # declared limit or offset needs loading per record.
+  it 'loads a plain has_one of every current record together' do
+    articles = []
+    counts = [1, 4].map do |added|
+      added.times do
+        article = TrackedArticle.create!(title: 'Profiled')
+        TrackedProfile.create!(article: article, bio: 'bio')
+        articles << article
+      end
+      comparisons = articles.map { |article| { from: article.versions.first, to: article } }
+      queries(comparisons)
+    end
+
+    expect(counts.last).to eq(counts.first)
+  ensure
+    TrackedProfile.delete_all
+  end
+
+  # Through activity after a root's last version reads the root's current
+  # row, which the batch has already loaded.
+  it "reads each root's current row once in a report with through activity" do
+    counts = [1, 4].map do |added|
+      added.times do
+        article = seed
+        TrackedAuthorship.create!(article: article, author: TrackedAuthor.create!(name: 'A'),
+                                  role: 'writer')
+      end
+      report_queries(%i[contributors])
+    end
+
+    expect(counts.last).to eq(counts.first)
+  ensure
+    TrackedAuthorship.delete_all
+    TrackedAuthor.delete_all
+  end
+
+  def report_queries(associations)
+    count = 0
+    callback = ->(*args) { count += 1 unless %w[SCHEMA TRANSACTION].include?(args.last[:name]) }
+    ActiveSupport::Notifications.subscribed(callback, 'sql.active_record') do
+      PaperTrailDiff.report(TrackedArticle, since: Time.now.utc - 3600, limit: 10,
+                                            associations: associations)
+    end
+    count
+  end
+
   it 'uses handled absence without asking a version for a successor or live row' do
     version = instance_double(PaperTrail::Version, event: 'update')
     resolver = PaperTrailDiff::ActivityEventRecordResolver.new(

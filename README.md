@@ -196,8 +196,11 @@ Three selection rules matter:
   `associations: [:comments]`, editing only a comment selects its article, and
   the article's report shows the edit.
 - A relation such as `Article.where(status: "open")` checks today's values.
-  It cannot establish whether deleted articles matched that condition. Deleted
-  records are therefore listed separately.
+  Deleted records have none, so they are listed separately. With
+  `include_deleted: true`, the gem tests each against the relation as it was
+  when destroyed and keeps only those that match, so a report on one account's
+  records holds only that account's deletions. That needs plain conditions on
+  the model's own columns; a join or SQL text raises `ConfigurationError`.
 - `limit: 100` is a safety ceiling, not pagination. Selecting too many records
   raises `BatchLimitExceededError`. With `include_deleted: true`, both existing
   and deleted records count toward it. Use a narrower relation or time window,
@@ -286,14 +289,26 @@ Scopes and default scopes made of plain conditions, such as
 `-> { where(archived: false) }`, are batched too, and so is a `limit` or
 `offset` ordered by integer, boolean, date, or datetime columns down to the
 primary key, such as `-> { order(:position, :id).limit(3) }`, on a direct
-association or a `has_many :through`. Some associations still need per-record
-queries, such as a `limit` ordered by a string or scopes that take
-the owner.
-Batch methods reject those by default with `UnsupportedBatchPathError`. The
-error names the association. Remove it from `associations:`, or pass
-`allow_expensive: true` if you accept that cost.
+association or a `has_many :through`. History cannot read a few scopes, such
+as a `limit` ordered by a string, a scope that takes the owner, or SQL text.
+PT-AT reads those instead, one record at a time and only approximately, so
+every method raises `UnsupportedAssociationError` naming the association.
+Remove it from `associations:`, or pass `allow_approximate: true` to accept
+PT-AT's answer and its cost. See
+[costly associations](docs/reference.md#costly-associations).
 Callbacks and callable historical filters can also issue queries. See the
 [performance guide](docs/performance.md) for measured behavior and limitations.
+
+On a large version table, add these indexes, or every `since:` or `within:`
+report reads all of the model's versions. See
+[database indexes](docs/architecture.md#database-indexes) for why.
+
+```ruby
+add_index :versions, %i[item_type item_id created_at id],
+          name: "index_versions_on_item_and_timeline"
+add_index :versions, %i[item_type created_at item_id],
+          name: "index_versions_on_type_and_time"
+```
 
 - `updated_at` is ignored. Passing `ignore:` replaces the default list.
 - Records passed as current state must be saved and have no unsaved changes.

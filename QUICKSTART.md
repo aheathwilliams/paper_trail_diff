@@ -37,6 +37,19 @@ table. `--with-changes` adds `object_changes`, which PaperTrail uses for
 for each event. This gem can also compare the full earlier records saved in
 PaperTrail's `object` column.
 
+PaperTrail stores earlier records as YAML, and Rails reads back only the YAML
+classes you allow. Without this, reading the first version raises
+`Psych::DisallowedClass`. Add PaperTrail's list to `config/application.rb`,
+inside `class Application`:
+
+<!-- executable:quickstart-config -->
+```ruby
+config.active_record.yaml_column_permitted_classes = [
+  ActiveRecord::Type::Time::Value, ActiveSupport::TimeWithZone, ActiveSupport::TimeZone,
+  BigDecimal, Date, Symbol, Time
+]
+```
+
 ## 2. Version a model
 
 Create an article model and tell PaperTrail to track its changes:
@@ -233,10 +246,11 @@ The same `within:` option works on `activity_timeline`, `analyze`,
 | Recent activity through now, for the records a relation selects | `report(scope, since:, limit:)` |
 
 Use the batch methods for many records so they can share database queries.
-Some scoped associations and `has_many :through` histories still need queries
-for each record. Batch calls reject those with `UnsupportedBatchPathError`.
-The error names the association. `allow_expensive: true` permits that extra work;
-see the [performance guide](docs/performance.md) before using it in a large report.
+A few scoped associations, such as one whose scope is SQL text, can be read
+only with PT-AT, approximately and one record at a time. Every method rejects
+them with `UnsupportedAssociationError`, naming the association; passing
+`allow_approximate: true` accepts both costs. See
+[costly associations](docs/reference.md#costly-associations).
 
 When associations are included, `timeline` compares their values at the article's
 versions. `activity_timeline` also reports the comments' own version events, even
@@ -388,6 +402,9 @@ window to select that article.
   comments does not automatically include every association on each comment.
 - Historical output cannot contain data that PaperTrail or PT-AT did not record
   or can no longer reconstruct.
+- A report with `since:` or `within:` gets slow as the version table grows
+  unless you add the
+  [two version indexes](docs/architecture.md#database-indexes).
 
 For association support, performance, error handling, ignore rules, and all
 available result methods, see the

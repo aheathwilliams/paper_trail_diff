@@ -24,8 +24,10 @@ module PaperTrailDiff
       @state_loader = PreparedVersionStateLoader.new
     end
 
-    #: (Array[String]) -> Array[String]
-    def call(candidates)
+    # More matches than the limit raise, unless the caller does not count
+    # them: candidates it only lists, such as deleted roots.
+    #: (Array[String], ?counted: bool) -> Array[String]
+    def call(candidates, counted: true)
       matched = [] #: Array[String]
       candidates.each_slice(CANDIDATE_BATCH) do |slice|
         versions = candidate_versions(slice)
@@ -34,7 +36,7 @@ module PaperTrailDiff
           next unless held?(versions.fetch(id, []), closing[id])
 
           matched << id
-          reject_root_limit! if matched.length > @limit
+          reject_root_limit! if counted && matched.length > @limit
         end
       end
       matched
@@ -64,7 +66,17 @@ module PaperTrailDiff
               "unknown historical attributes: #{unknown.join(', ')}"
       end
 
-      Support.immutable_copy(attributes)
+      attributes.to_h { |name, value| [name, cast(name, value)] }
+    end
+
+    # Expected and recorded values compare as the attribute casts them, as
+    # `where` reads its values: an enum's symbol names its stored value, and a
+    # `json` or `jsonb` version column, which PaperTrail does not cast, holds
+    # dates and times as strings. Casting also copies a mutable value, so the
+    # filter keeps its own.
+    #: (String, untyped) -> untyped
+    def cast(name, value)
+      @model.type_for_attribute(name).cast(value)
     end
 
     #: (untyped) -> Integer
@@ -76,8 +88,7 @@ module PaperTrailDiff
 
     #: (Array[String]) -> Hash[String, Array[untyped]]
     def candidate_versions(ids)
-      relation = @model.paper_trail.version_class.where(item_type: @model.base_class.name,
-                                                        item_id: ids)
+      relation = VersionQuery.for_items(@model, ids)
       range = @time_range
       relation = range.scope(relation) if range
       # One past the remaining budget is enough to know it was exceeded.
@@ -107,9 +118,7 @@ module PaperTrailDiff
       range = @time_range
       return {} unless range
 
-      relation = @model.paper_trail.version_class.where(item_type: @model.base_class.name,
-                                                        item_id: ids)
-      trailing = range.first_trailing_versions(relation)
+      trailing = range.first_trailing_versions(VersionQuery.for_items(@model, ids))
       account_versions!(trailing.length)
       trailing
     end
@@ -162,7 +171,7 @@ module PaperTrailDiff
                 "historical_filter: #{name} was not recorded in version #{version.id}"
         end
 
-        state.attributes.fetch(name) == expected
+        cast(name, state.attributes.fetch(name)) == expected
       end
     end
 

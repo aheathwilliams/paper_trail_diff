@@ -71,6 +71,12 @@ module PaperTrailDiff
     # : (Array[AssociationActivitySelection::source]) -> Array[AssociationActivitySelection::Query]?
     def subqueries: (Array[AssociationActivitySelection::source]) -> Array[AssociationActivitySelection::Query]?
 
+    # Which candidates still have a row is asked without the relation's
+    # conditions, so that "filtered out" and "no longer exists" stay
+    # separable. A filter then reads the history of the relation's records
+    # only, whose order and page choose among those that match, and of the
+    # deleted ones, which no relation can test. Those it lists, as without a
+    # filter, but does not count toward `limit:`.
     # : (Array[String]) -> Result
     def plucked_selection: (Array[String]) -> Result
 
@@ -113,10 +119,8 @@ module PaperTrailDiff
     # : () -> Array[String]
     def versioned_ids: () -> Array[String]
 
-    # Which of those candidates still have a row, asked without the relation's
-    # conditions so that "filtered out" and "no longer exists" stay separable.
-    # : (Array[String]) -> Array[String]
-    def live_ids: (Array[String]) -> Array[String]
+    # : (untyped, Array[String]) -> Array[String]
+    def ids_in: (untyped, Array[String]) -> Array[String]
 
     # Deduplicate records rather than adding SQL DISTINCT: an otherwise valid
     # relation may order by joined columns or select a PostgreSQL json column.

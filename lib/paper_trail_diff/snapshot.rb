@@ -102,7 +102,7 @@ module PaperTrailDiff
       end
 
       @kind = kind
-      @records = records.frozen? ? records : records.dup.freeze
+      @records = ordered(records)
       @identity_index_cache = identity_index_cache || IdentityIndexCache.new
       @transition = transition
       @serial = SERIALS.next_serial
@@ -122,6 +122,21 @@ module PaperTrailDiff
         identity_index_cache: cache,
         transition: transition
       )
+    end
+
+    # Collections are documented in record type, then ID, order wherever they
+    # were read from. Most arrive sorted, so they are checked before sorting.
+    #: (Array[RecordSnapshot]) -> Array[RecordSnapshot]
+    def ordered(records)
+      keys = records.map { |record| Support.sortable_identity(record.type, record.id) }
+      return records.sort_by.with_index { |_, index| keys.fetch(index) }.freeze unless sorted?(keys)
+
+      records.frozen? ? records : records.dup.freeze
+    end
+
+    #: (Array[Array[untyped]]) -> bool
+    def sorted?(keys)
+      keys.each_cons(2).all? { |left, right| (left <=> right).to_i <= 0 }
     end
 
     #: (AssociationSnapshot) -> CollectionTransition?

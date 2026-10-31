@@ -91,6 +91,12 @@ RSpec.describe PaperTrailDiff::CollectionComparator do
       expect(diff.added).to be_empty
     end
 
+    it 'reports a swapped record as removed and added, not as changed' do
+      diff = compare(association(record(1), record(2)), association(record(1), record(3)))
+
+      expect([ids(diff.removed), ids(diff.added), diff.changed]).to eq([[2], [3], []])
+    end
+
     it 'matches reordered records by identity, not position' do
       diff = compare(association(record(1, 'one'), record(2, 'two')),
                      association(record(2, 'two'), record(1, 'one')))

@@ -168,6 +168,22 @@ RSpec.describe PaperTrailDiff::ScopeRanking do
       .to eq([2, 1, 3])
   end
 
+  # Rails' default for an application: every datetime is time-zone aware.
+  it 'ranks a time-zone-aware time by the instant it stores' do
+    aware = Class.new(ScopeRankingItem) { self.time_zone_aware_attributes = true }
+    stub_const('ScopeRankingAware', aware)
+    expect(aware.type_for_attribute('seen_at').class.name).to end_with('TimeZoneConverter')
+    ranking = Time.use_zone('America/Chicago') do
+      described_class.build(aware.order(seen_at: :desc, id: :asc).limit(9), reflection(nil), aware)
+    end
+    rows = [row(id: 1, seen_at: Time.utc(2026, 1, 1, 12)),
+            row(id: 2, seen_at: Time.utc(2026, 1, 1, 13)),
+            row(id: 3, seen_at: Time.utc(2025, 12, 31, 12))]
+
+    expect(ranking.call(rows).map { |ranked_row| ranked_row.attributes.fetch('id') })
+      .to eq([2, 1, 3])
+  end
+
   it 'reads only an adapter whose NULL placement it knows' do
     with_adapter('oracle') do
       expect(build(-> { order(:level, :id).limit(1) })).to be_nil

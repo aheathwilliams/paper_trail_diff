@@ -111,7 +111,8 @@ module PaperTrailDiff
     #: (untyped, Array[untyped], untyped, String) -> untyped
     def historical_child_relation(owner_class, owner_ids, reflection, foreign_key)
       version_class = owner_class.paper_trail.version_class
-      owner_class.paper_trail.version_association_class.joins(:version).where(
+      associations = owner_class.paper_trail.version_association_class
+      VersionTable.joined(associations, version_class).where(
         foreign_key_name: foreign_key,
         foreign_key_id: owner_ids,
         foreign_type: parent_types(owner_class)

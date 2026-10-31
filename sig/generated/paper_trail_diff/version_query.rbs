@@ -9,13 +9,29 @@ module PaperTrailDiff
     # : (untyped) -> untyped
     def self?.chronological: (untyped) -> untyped
 
+    # Every version of a model's items. They are read from the version class
+    # rather than through the model's versions association, whose scope may
+    # leave some out: a history replayed without them credits their changes to
+    # the next version kept.
+    # : (untyped) -> untyped
+    def self?.for_model: (untyped) -> untyped
+
+    # The versions of the given items, read the same way.
+    # : (untyped, untyped) -> untyped
+    def self?.for_items: (untyped, untyped) -> untyped
+
     # Keeps each item's earliest version among those the block also accepts:
     # no other version of the same item that the block accepts is earlier. A
     # correlated NOT EXISTS stays portable where window functions are not.
     # : (untyped) ?{ (untyped) -> untyped } -> untyped
     def self?.no_earlier_version: (untyped) ?{ (untyped) -> untyped } -> untyped
 
-    # : (untyped, untyped) ?{ (untyped) -> untyped } -> untyped
-    def self?.earlier_version: (untyped, untyped) ?{ (untyped) -> untyped } -> untyped
+    # The same for either side of an instant: each item's earliest version
+    # when the versions lie after it, and its latest when they lie before.
+    # : (untyped, later: bool) ?{ (untyped) -> untyped } -> untyped
+    def self?.no_nearer_version: (untyped, later: bool) ?{ (untyped) -> untyped } -> untyped
+
+    # : (untyped, untyped, later: bool) ?{ (untyped) -> untyped } -> untyped
+    def self?.nearer_version: (untyped, untyped, later: bool) ?{ (untyped) -> untyped } -> untyped
   end
 end

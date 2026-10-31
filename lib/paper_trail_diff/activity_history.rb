@@ -30,24 +30,26 @@ module PaperTrailDiff
 
   # Builds activity steps while retaining root snapshots for combined analysis.
   class ActivityHistoryBuilder
-    #: (Array[untyped], Array[ActivityEvent], untyped, ?current: untyped, ?include_step: untyped, ?snapshots: bool, ?recorded: IgnorePolicy?) -> void
+    # `closing` is the snapshot after the last event when the range closes on
+    # the current record. Any other range ends at a root event, or at events
+    # after a window whose steps are not reported, so nothing reads it.
+    #: (Array[untyped], Array[ActivityEvent], untyped, view: ActivityView, ?current: untyped, ?include_step: untyped, ?closing: RecordSnapshot?) -> void
     def initialize( # rubocop:disable Metrics/ParameterLists
-      root_versions, events, snapshotter, current: nil, include_step: nil, snapshots: false,
-      recorded: nil
+      root_versions, events, snapshotter, view:, current: nil, include_step: nil, closing: nil
     )
       @root_versions = root_versions
       @events = events
       @snapshotter = snapshotter
+      @view = view
       @current = current
       @include_step = include_step
-      @snapshots = snapshots
-      @recorded = recorded
+      @closing = closing
     end
 
     #: () -> ActivityHistory
     def call
       reset
-      sequence.each { |event, snapshot| consume(event, snapshot) }
+      filter.call(sequence) { |event, snapshot, kept| consume(event, snapshot, kept) }
       ActivityHistory.new(
         steps: @steps,
         root_snapshots: @root_snapshots,
@@ -65,8 +67,8 @@ module PaperTrailDiff
     # @rbs @snapshotter: untyped
     # @rbs @current: untyped
     # @rbs @include_step: untyped
-    # @rbs @snapshots: bool
-    # @rbs @recorded: IgnorePolicy?
+    # @rbs @view: ActivityView
+    # @rbs @closing: RecordSnapshot?
     # @rbs @steps: Array[ActivityStep]
     # @rbs @root_snapshots: Hash[Array[untyped], RecordSnapshot?]
     # @rbs @first_snapshot: RecordSnapshot?
@@ -74,6 +76,7 @@ module PaperTrailDiff
     # @rbs @selected_last_snapshot: RecordSnapshot?
     # @rbs @previous_boundary: ActivityBoundary?
     # @rbs @previous_event: ActivityEvent?
+    # @rbs @passed_reported: bool
 
     #: () -> void
     def reset
@@ -85,6 +88,12 @@ module PaperTrailDiff
       @selected_last_snapshot = nil
       @previous_boundary = nil
       @previous_event = nil
+      @passed_reported = false
+    end
+
+    #: () -> ActivityTreeFilter
+    def filter
+      ActivityTreeFilter.new(@events, reported: @include_step, closing: @closing)
     end
 
     #: () -> ActivitySnapshotSequence
@@ -97,17 +106,28 @@ module PaperTrailDiff
       )
     end
 
-    #: (ActivityEvent, RecordSnapshot?) -> void
-    def consume(event, snapshot)
+    # A left-out event bounds nothing. A reported step it would have opened
+    # still moves the reported range's end past it, to the next boundary.
+    #: (ActivityEvent, RecordSnapshot?, bool) -> void
+    def consume(event, snapshot, kept)
       capture_first(snapshot)
+      return pass(event) unless kept
+
       boundary = ActivityBoundary.from_version(
-        event.version, recorded: @recorded&.recorded_attributes(root: event.root?)
+        event.version, recorded: @view.recorded_attributes(root: event.root?)
       )
       @root_snapshots[version_key(event.version)] = snapshot if event.root?
       append_step(boundary, snapshot) if @previous_boundary
+      @selected_last_snapshot = snapshot if @passed_reported
+      @passed_reported = false
       @previous_boundary = boundary
       @previous_event = event
       @previous_snapshot = snapshot
+    end
+
+    #: (ActivityEvent) -> void
+    def pass(event)
+      @passed_reported = true if !@include_step || @include_step.call(event)
     end
 
     #: (RecordSnapshot?) -> void
@@ -127,7 +147,7 @@ module PaperTrailDiff
 
       @steps << ActivityStep.between(
         from_boundary: previous_boundary, to_boundary: boundary,
-        from_snapshot: @previous_snapshot, to_snapshot: snapshot, retain: @snapshots
+        from_snapshot: @previous_snapshot, to_snapshot: snapshot, retain: @view.retain?
       )
       @selected_last_snapshot = snapshot
     end

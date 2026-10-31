@@ -6,12 +6,10 @@ module PaperTrailDiff
   # the only place allowed to know about both PaperTrail and the pure engine.
   # Reconstruction logic lives in the collaborators it wires together.
   class PaperTrailAdapter
-    # The only thing a wall-clock window can close on besides a later version.
-    CLOSE_ON_CURRENT: ::Symbol
-
     # `recorded_changes:` reads what each activity boundary's version recorded.
-    # : (associations: Array[String | Symbol], ignore: ignore_option, ?reload_live_endpoints: bool, ?allow_expensive: bool, ?recorded_changes: bool) -> void
-    def initialize: (associations: Array[String | Symbol], ignore: ignore_option, ?reload_live_endpoints: bool, ?allow_expensive: bool, ?recorded_changes: bool) -> void
+    # `allow_approximate:` accepts association paths read with PT-AT.
+    # : (associations: association_option, ignore: ignore_option, ?reload_live_endpoints: bool, ?recorded_changes: bool, ?allow_approximate: bool) -> void
+    def initialize: (associations: association_option, ignore: ignore_option, ?reload_live_endpoints: bool, ?recorded_changes: bool, ?allow_approximate: bool) -> void
 
     # : (untyped, untyped) -> Diff
     def compare: (untyped, untyped) -> Diff
@@ -20,46 +18,48 @@ module PaperTrailDiff
     # : (Array[comparison_input]) -> comparison_results
     def compare_many: (Array[comparison_input]) -> comparison_results
 
-    # : (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped, ?close_on: Symbol?) -> Array[Step]
-    def timeline: (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped, ?close_on: Symbol?) -> Array[Step]
+    # : (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped) -> Array[Step]
+    def timeline: (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped) -> Array[Step]
 
-    # : (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?) -> Array[ActivityStep]
-    def activity_timeline: (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?) -> Array[ActivityStep]
+    # : (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?) -> Array[ActivityStep]
+    def activity_timeline: (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?) -> Array[ActivityStep]
 
-    # : (untyped, from: untyped, to: untyped, within: untyped, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?) -> Analysis
-    def analyze: (untyped, from: untyped, to: untyped, within: untyped, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?) -> Analysis
+    # : (untyped, from: untyped, to: untyped, within: untyped, ?activity: bool, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?) -> Analysis
+    def analyze: (untyped, from: untyped, to: untyped, within: untyped, ?activity: bool, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?) -> Analysis
 
     # Analyzes many roots over one shared range, preparing their history once.
-    # : (Array[untyped], within: untyped, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?) -> Hash[identity, Analysis]
-    def analyze_many: (Array[untyped], within: untyped, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?) -> Hash[identity, Analysis]
+    # : (Array[untyped], within: untyped, ?activity: bool, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?) -> Hash[identity, Analysis]
+    def analyze_many: (Array[untyped], within: untyped, ?activity: bool, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?) -> Hash[identity, Analysis]
 
     # Selects the roots from a relation before running the ordinary batch, so a
     # caller reporting on a population does not have to rediscover which of its
     # members changed. The roots the relation could not reach come back named
     # rather than dropped -- see `PaperTrailDiff.analyze_scope`.
-    # : (untyped, limit: Integer?, within: untyped, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?historical_filter: untyped, ?max_filter_versions: Integer, ?include_deleted: bool) -> ScopedAnalysis
-    def analyze_scope: (untyped, limit: Integer?, within: untyped, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?historical_filter: untyped, ?max_filter_versions: Integer, ?include_deleted: bool) -> ScopedAnalysis
+    # : (untyped, limit: Integer?, within: untyped, ?activity: bool, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?, ?historical_filter: untyped, ?max_filter_versions: Integer, ?include_deleted: bool) -> ScopedAnalysis
+    def analyze_scope: (untyped, limit: Integer?, within: untyped, ?activity: bool, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?, ?historical_filter: untyped, ?max_filter_versions: Integer, ?include_deleted: bool) -> ScopedAnalysis
 
     private
 
-    # : (Symbol?, bool, bool) -> void
-    def validate_activity_options!: (Symbol?, bool, bool) -> void
+    # : (bool, bool, Symbol?) -> ActivityView
+    def activity_view: (bool, bool, Symbol?) -> ActivityView
 
-    # Selecting by activity reads association history, so it must be available
-    # before the first selection query rather than once analysis starts.
-    # : (untyped, bool) -> void
-    def check_scope: (untyped, bool) -> void
+    # : (untyped) -> Hash[Symbol, untyped]
+    def model_payload: (untyped) -> Hash[Symbol, untyped]
+
+    # : (Array[untyped], within: untyped, activity: bool, version_scope: untyped, view: ActivityView) -> Hash[identity, Analysis]
+    def analyze_batch: (Array[untyped], within: untyped, activity: bool, version_scope: untyped, view: ActivityView) -> Hash[identity, Analysis]
+
+    # Analysis reads association history, so a request it would refuse is
+    # refused before the first selection query rather than once analysis starts.
+    # : (untyped) -> void
+    def check_scope: (untyped) -> void
 
     # : (Array[comparison_input], preparer: untyped) -> ComparisonBatch
     def comparison_batch: (Array[comparison_input], preparer: untyped) -> ComparisonBatch
 
+    # Refused before the current records load, rather than once analysis starts.
     # : (Array[untyped]) -> Hash[identity, untyped]
     def load_batch_endpoints: (Array[untyped]) -> Hash[identity, untyped]
-
-    # : (untyped, historical: bool) -> void
-    def prepare_batch_model: (untyped, historical: bool) -> void
-
-    @batch_safety: BatchSafety
 
     # : (untyped, Array[Array[String]], Hash[Symbol, untyped]) -> Hash[Array[String], Analysis?]
     def analyze_deleted: (untyped, Array[Array[String]], Hash[Symbol, untyped]) -> Hash[Array[String], Analysis?]
@@ -88,9 +88,6 @@ module PaperTrailDiff
 
     @traversal_preparer: TraversalPreparer
 
-    # : (untyped, from: untyped, to: untyped, within: untyped, version_scope: untyped, live_endpoint: untyped, ?snapshots: bool, ?group: Symbol?) -> Analysis
-    def analyze_activity: (untyped, from: untyped, to: untyped, within: untyped, version_scope: untyped, live_endpoint: untyped, ?snapshots: bool, ?group: Symbol?) -> Analysis
-
     # Association membership is resolved by timestamp, so endpoints sharing one
     # cannot be told apart and any association change between them is invisible.
     # The result may still be correct -- nothing associated may have changed --
@@ -99,40 +96,36 @@ module PaperTrailDiff
     # : (untyped, untyped) -> void
     def notify_ambiguous_association_boundary: (untyped, untyped) -> void
 
-    # A window with nothing recorded after its last change ends at the live
-    # record, which holds the state that change produced -- whether the window
-    # ended a moment ago or long before. `close_on: :current` asked for this
-    # before it was the default and is still accepted. It names what ends a
-    # wall-clock window, so it is meaningless for explicit endpoints.
-    # : (Symbol?, untyped) -> bool
-    def close_on_current?: (Symbol?, untyped) -> bool
-
     # With neither a window nor endpoints, a range is the record's whole
     # history through its current saved state; a missing endpoint takes that
     # side of the same default.
     # : (untyped, untyped, untyped, untyped) -> [untyped, untyped]
     def default_range: (untyped, untyped, untyped, untyped) -> [ untyped, untyped ]
 
+    # A window with nothing recorded after its last change ends at the live
+    # record, which holds the state that change produced -- whether the window
+    # ended a moment ago or long before. Explicit endpoints name their own end.
     # Only a saved row has current state to close on. A destroyed root's own
     # destroy version already terminates its history, and a reified or unsaved
     # instance stands for a state that is not in the table.
-    # : (untyped, Symbol?, untyped) -> untyped
-    def live_endpoint_for: (untyped, Symbol?, untyped) -> untyped
+    # : (untyped, untyped) -> untyped
+    def live_endpoint_for: (untyped, untyped) -> untyped
 
     # : () -> void
     def build_snapshotters: () -> void
 
-    # : (bool, within: untyped, snapshots: bool, group: Symbol?) -> BatchedRootAnalyzer
-    def batched_root_analyzer: (bool, within: untyped, snapshots: bool, group: Symbol?) -> BatchedRootAnalyzer
+    # : (bool, within: untyped, view: ActivityView) -> BatchedRootAnalyzer
+    def batched_root_analyzer: (bool, within: untyped, view: ActivityView) -> BatchedRootAnalyzer
 
     # : () -> HistoricalSnapshotStore
     def build_historical_store: () -> HistoricalSnapshotStore
 
-    # : () -> ActivitySnapshotProvider
-    def build_activity_snapshotter: () -> ActivitySnapshotProvider
+    # Refreshes one root's snapshots, reading with the history prepared for it.
+    # : (PreparedActivitySnapshots) -> BranchSnapshotRefresher
+    def branch_refresher: (PreparedActivitySnapshots) -> BranchSnapshotRefresher
 
-    # : (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped, ?live_endpoint: untyped, ?snapshots: bool, ?group: Symbol?) -> ActivityTimelineBuilder
-    def activity_builder: (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped, ?live_endpoint: untyped, ?snapshots: bool, ?group: Symbol?) -> ActivityTimelineBuilder
+    # : (untyped, from: untyped, to: untyped, within: untyped, version_scope: untyped, live_endpoint: untyped, view: ActivityView) -> ActivityTimelineBuilder
+    def activity_builder: (untyped, from: untyped, to: untyped, within: untyped, version_scope: untyped, live_endpoint: untyped, view: ActivityView) -> ActivityTimelineBuilder
 
     # : (untyped) -> RecordSnapshot?
     def snapshot_for_endpoint: (untyped) -> RecordSnapshot?
@@ -140,11 +133,8 @@ module PaperTrailDiff
     # : (untyped) -> RecordSnapshot?
     def historical_snapshot: (untyped) -> RecordSnapshot?
 
-    # : (untyped) -> RecordSnapshot?
-    def uncached_historical_snapshot: (untyped) -> RecordSnapshot?
-
-    # : (untyped, untyped) -> RecordSnapshot?
-    def snapshot_at: (untyped, untyped) -> RecordSnapshot?
+    # : (untyped, untyped, ?history: PreparedHistory?) -> RecordSnapshot?
+    def snapshot_at: (untyped, untyped, ?history: PreparedHistory?) -> RecordSnapshot?
 
     # : (untyped) -> RecordSnapshot
     def live_snapshot: (untyped) -> RecordSnapshot

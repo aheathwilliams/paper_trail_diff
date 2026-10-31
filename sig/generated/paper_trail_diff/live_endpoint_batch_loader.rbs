@@ -39,21 +39,6 @@ module PaperTrailDiff
     # : () -> untyped
     def active_record_preloader: () -> untyped
 
-    # The preloader applies a limit or offset to all owners' records at once,
-    # not to each owner's, so such an association is loaded per record. A
-    # has_one is no exception. Through a part with a limit, an offset or a
-    # has_one cut, the preloader keeps what the part alone would load, while
-    # the through's own query keeps the part's conditions only.
-    # : (untyped, untyped) -> bool
-    def batch_safe?: (untyped, untyped) -> bool
-
-    # : (untyped) -> bool
-    def cut_part?: (untyped) -> bool
-
-    # Every part a through passes, at any depth.
-    # : (untyped) -> Array[untyped]
-    def through_parts: (untyped) -> Array[untyped]
-
     # : (Array[untyped], untyped) -> Array[untyped]
     def load_individually: (Array[untyped], untyped) -> Array[untyped]
 

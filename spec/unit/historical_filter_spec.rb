@@ -6,6 +6,8 @@ RSpec.describe PaperTrailDiff::HistoricalFilter do
   before do
     FilterVersion.delete_all
     FilterArticle.unscoped.delete_all
+    FilterJsonVersion.delete_all
+    FilterEvent.delete_all
   end
 
   def filter(predicate, within: nil, limit: 10, max_versions: 100, model: FilterArticle)
@@ -136,6 +138,61 @@ RSpec.describe PaperTrailDiff::HistoricalFilter do
       expect(matches({ views: 3 }, [article], within: start..Time.now)).to eq([article.id.to_s])
     end
 
+    # As `where` reads them: an enum by the name it stores, given as a symbol.
+    it 'reads an enum value given as a symbol, in history and in the live row' do
+      event = FilterEvent.create!(status: :published)
+      start = Time.now
+      event.update!(status: :draft)
+      ids = [event.id.to_s]
+
+      expect(filter({ status: :published }, within: start..Time.now, model: FilterEvent).call(ids))
+        .to eq(ids)
+      expect(filter({ status: :draft }, model: FilterEvent).call(ids)).to eq(ids)
+    end
+
+    # A json or jsonb version column holds dates and times as strings, which
+    # PaperTrail does not cast back.
+    it 'casts recorded dates and times a json version column stores as strings' do
+      event = json_event
+      start = Time.now
+      event.update!(due_on: nil, starts_at: nil)
+      ids = [event.id.to_s]
+      window = start..Time.now
+      cast = ->(predicate) { filter(predicate, within: window, model: FilterJsonEvent).call(ids) }
+
+      expect(cast.call({ due_on: Date.new(2026, 1, 2) })).to eq(ids)
+      expect(cast.call({ starts_at: Time.utc(2026, 1, 2, 3) })).to eq(ids)
+      expect(cast.call({ due_on: Date.new(2026, 1, 3) })).to eq([])
+    end
+
+    # See spec/integration/json_history_spec.rb: some PaperTrail, Ruby, and
+    # adapter combinations cannot write JSON history at all.
+    def json_event
+      FilterJsonEvent.create!(due_on: Date.new(2026, 1, 2), starts_at: Time.utc(2026, 1, 2, 3))
+    rescue StandardError => e
+      skip "PaperTrail cannot record json history here: #{e.class}: #{e.message}"
+    end
+
+    # Some JSON and Active Support versions cannot encode a json column, as
+    # json_event above cannot.
+    def structured_event
+      FilterEvent.create!(details: { 'size' => 1 }, labels: ['a'])
+    rescue StandardError => e
+      skip "Active Record cannot write json columns here: #{e.class}: #{e.message}"
+    end
+
+    it 'keeps its own copy of a structured expected value' do
+      event = structured_event
+      details = { 'size' => 1 }
+      labels = ['a']
+      copied = [filter({ details: details }, model: FilterEvent),
+                filter({ labels: labels }, model: FilterEvent)]
+      details['size'] = 2
+      labels << 'b'
+
+      expect(copied.map { |each| each.call([event.id.to_s]) }).to eq([[event.id.to_s]] * 2)
+    end
+
     it 'keeps candidates in the order given, and looks past ones that do not match' do
       first, = history
       second, = history
@@ -256,6 +313,12 @@ RSpec.describe PaperTrailDiff::HistoricalFilter do
         'historical_filter: matched more than 1 roots; narrow the window ' \
         'or the filter, or raise limit: to the population you intend to analyze'
       )
+    end
+
+    it 'does not count matches the caller does not count' do
+      ids = Array.new(2) { history.first.id.to_s }
+
+      expect(filter({ title: 'Draft' }, limit: 1).call(ids, counted: false)).to eq(ids)
     end
 
     it 'stops at more versions than the budget, counting the version after the window' do

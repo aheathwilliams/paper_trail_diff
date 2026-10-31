@@ -43,10 +43,13 @@ matcher:
     - PaperTrailDiff::RootVersionPlan*
     - PaperTrailDiff::HistoricalFilter*
     - PaperTrailDiff::TimeRange*
+    - PaperTrailDiff::TransactionCut*
+    - PaperTrailDiff::VersionTable*
     - PaperTrailDiff::VersionRange*
     - PaperTrailDiff::TimeVersionRange*
     - PaperTrailDiff::BatchedRootVersions*
     - PaperTrailDiff::DeletedAnalysisBatch*
+    - PaperTrailDiff::DeletedRootFilter*
     - PaperTrailDiff::RecordedChanges*
     - PaperTrailDiff::ChangeRow*
     - PaperTrailDiff::AssociationActivitySelection*
@@ -56,11 +59,14 @@ matcher:
     - PaperTrailDiff::PreparedHistoryLoader*
     - PaperTrailDiff::PreparedEdgeLoader*
     - PaperTrailDiff::ActivityTimelineBuilder*
+    - PaperTrailDiff::ActivityTreeFilter*
     - PaperTrailDiff::ActivityTransactionGrouper*
-    - PaperTrailDiff::BatchSafety*
+    - PaperTrailDiff::ActivityView*
+    - PaperTrailDiff::ApproximatePaths*
     - PaperTrailDiff::ScopeCondition*
     - PaperTrailDiff::ScopeRanking*
     - PaperTrailDiff::AssociationTraversal*
+    - PaperTrailDiff::AssociationKey*
     - PaperTrailDiff::HabtmTransactionOwners*
     - PaperTrailDiff::ActivityRange*
     - PaperTrailDiff::VersionAssociationCandidateScope*

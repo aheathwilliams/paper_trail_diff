@@ -83,11 +83,11 @@ module PaperTrailDiff
 
     #: (untyped) -> untyped
     def historical_relation(version_class)
-      association_class.joins(:version)
-                       .where(foreign_key_name: @reflection.foreign_key)
-                       .where(version_class.table_name => {
-                                item_type: @owner_class.base_class.name, item_id: @owner_ids
-                              })
+      VersionTable.joined(association_class, version_class)
+                  .where(foreign_key_name: @reflection.foreign_key)
+                  .where(version_class.table_name => {
+                           item_type: @owner_class.base_class.name, item_id: @owner_ids
+                         })
     end
 
     #: (untyped, untyped) -> Array[Array[untyped]]

@@ -7,8 +7,8 @@ RSpec.describe PaperTrailDiff::DeletedAnalysisBatch do
   let(:analyzed) { [] }
   let(:prepared) { [] }
   let(:analyzer) do
-    lambda do |record, plan|
-      analyzed << [record, plan]
+    lambda do |record, plan, window|
+      analyzed << [record, plan, window]
       "analysis of #{record.id}"
     end
   end
@@ -68,6 +68,29 @@ RSpec.describe PaperTrailDiff::DeletedAnalysisBatch do
     expect(plan.versions).to eq([created, updated, destroyed])
   end
 
+  it 'passes each root the window it moved to the start of a transaction crossing its edge' do
+    article, _created, updated, = deleted
+    updated.update_columns(transaction_id: 7)
+    FilterVersion.insert({ item_type: 'FilterNote', item_id: 1, event: 'update',
+                           created_at: at(1.5), transaction_id: 7 })
+
+    analyze([key(article)], within: at(1.25)..at(3))
+
+    _record, plan, window = analyzed.sole
+    expect([window.begin_time, window.end_time]).to eq([at(1), at(3)])
+    expect(plan.versions.first).to eq(updated)
+  end
+
+  it 'passes an unmoved root the window as asked' do
+    article, = deleted
+    range = at(0.5)..at(3)
+
+    analyze([key(article)], within: range)
+
+    window = analyzed.sole.last
+    expect([window.begin_time, window.end_time]).to eq([at(0.5), at(3)])
+  end
+
   it 'reads only the deletions of the model asked for' do
     article, = deleted
     FilterVersion.where(item_id: article.id).update_all(item_type: 'FilterNote')
@@ -121,7 +144,7 @@ RSpec.describe PaperTrailDiff::DeletedAnalysisBatch do
 
     analyze([key(article)], within: at(2)..at(3), context: true)
 
-    plan = analyzed.sole.last
+    plan = analyzed.sole[1]
     expect(plan.reconstruction_versions).to eq([destroyed])
     expect(plan.mutation?(destroyed)).to be(false)
   end
@@ -144,7 +167,7 @@ RSpec.describe PaperTrailDiff::DeletedAnalysisBatch do
 
     analyze([key(article)], version_scope: ->(versions) { versions.where(id: updated.id) })
 
-    expect(analyzed.sole.last.mutations).to eq([updated])
+    expect(analyzed.sole[1].mutations).to eq([updated])
   end
 
   describe 'preparing history' do

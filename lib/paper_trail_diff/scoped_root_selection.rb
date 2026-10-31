@@ -106,14 +106,22 @@ module PaperTrailDiff
       matching if matching.length == related.length
     end
 
+    # Which candidates still have a row is asked without the relation's
+    # conditions, so that "filtered out" and "no longer exists" stay
+    # separable. A filter then reads the history of the relation's records
+    # only, whose order and page choose among those that match, and of the
+    # deleted ones, which no relation can test. Those it lists, as without a
+    # filter, but does not count toward `limit:`.
     #: (Array[String]) -> Result
     def plucked_selection(candidates)
-      candidates = @historical_filter.call(candidates) if @historical_filter
-      live = live_ids(candidates)
-      Result.new(
-        records: selected_records([live]),
-        unreachable: (candidates - live).sort.map { |id| identity(id) }.freeze
-      )
+      live = ids_in(base_class.unscoped, candidates)
+      missing = candidates - live
+      if (filter = @historical_filter)
+        live = filter.call(ids_in(@scope.except(:order, :limit, :offset), live).uniq)
+        missing = filter.call(missing, counted: false)
+      end
+      Result.new(records: selected_records([live]),
+                 unreachable: missing.sort.map { |id| identity(id) }.freeze)
     end
 
     # Comparing the two columns in SQL needs them to share a type: PostgreSQL
@@ -144,7 +152,7 @@ module PaperTrailDiff
 
     #: () -> untyped
     def window_versions
-      relation = version_class.where(item_type: item_type)
+      relation = VersionQuery.for_model(model)
       range = @time_range
       range ? range.scope(relation) : relation
     end
@@ -185,12 +193,10 @@ module PaperTrailDiff
       window_versions.distinct.pluck(:item_id).map(&:to_s)
     end
 
-    # Which of those candidates still have a row, asked without the relation's
-    # conditions so that "filtered out" and "no longer exists" stay separable.
-    #: (Array[String]) -> Array[String]
-    def live_ids(candidates)
+    #: (untyped, Array[String]) -> Array[String]
+    def ids_in(relation, candidates)
       candidates.each_slice(PAGE_SIZE).flat_map do |slice|
-        base_class.unscoped.where(primary_key => slice).pluck(primary_key).map(&:to_s)
+        relation.where(primary_key => slice).pluck(primary_key).map(&:to_s)
       end
     end
 

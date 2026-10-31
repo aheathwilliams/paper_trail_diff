@@ -6,10 +6,8 @@ module PaperTrailDiff
   class HistoricalAssociationReifier
     #: (untyped, ?habtm_version: untyped) -> void
     def initialize(version, habtm_version: version)
-      @transaction_id = version.transaction_id if version.respond_to?(:transaction_id)
-      if habtm_version.respond_to?(:transaction_id)
-        @habtm_transaction_id = habtm_version.transaction_id
-      end
+      @transaction_id = VersionBoundary.transaction_id(version)
+      @habtm_transaction_id = VersionBoundary.transaction_id(habtm_version)
       @version_at = version.created_at
       # Keyed on record identity rather than `object_id`, which Ruby may reuse
       # once an earlier record in the same pass has been collected.

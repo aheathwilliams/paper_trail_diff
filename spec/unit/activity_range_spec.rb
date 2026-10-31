@@ -14,6 +14,22 @@ RSpec.describe PaperTrailDiff::ActivityRange do
     end
   end
 
+  transactional_class = Struct.new(:id, :created_at, :transaction_id) do
+    def reify; end
+
+    def item_type
+      'Article'
+    end
+
+    def item_id
+      1
+    end
+  end
+
+  define_method(:in_transaction) do |id, at, transaction|
+    transactional_class.new(id, at, transaction)
+  end
+
   let(:noon) { Time.utc(2032, 1, 1, 12) }
 
   define_method(:version) { |id, at| version_class.new(id, at) }
@@ -64,6 +80,33 @@ RSpec.describe PaperTrailDiff::ActivityRange do
 
     expect(range(version(5, noon), noon + 60).scope(relation))
       .to eq(created_at: noon..(noon + 60))
+  end
+
+  # A range starting at a version starts before that version's transaction,
+  # where PT-AT reads associations. A child version saved earlier in it, as
+  # `touch: true` saves one, is inside the range.
+  it 'includes versions saved earlier in the transaction of a version start' do
+    window = range(in_transaction(5, noon, 40), noon + 60)
+    candidates = [in_transaction(3, noon - 1, 40), in_transaction(4, noon - 1, 39),
+                  in_transaction(1, noon - 1, nil)]
+
+    expect(candidates.map { |candidate| window.include?(candidate) }).to eq([true, false, false])
+    expect(range(noon, noon + 60).include?(candidates.first)).to be(false)
+    expect(range(in_transaction(5, noon, nil), noon + 60).include?(candidates.last)).to be(false)
+  end
+
+  it "also narrows a relation to the start's transaction" do
+    relation = Object.new
+    relation.define_singleton_method(:where) do |hash|
+      next hash if hash.key?(:transaction_id)
+
+      Object.new.tap do |narrowed|
+        narrowed.define_singleton_method(:or) { |other| [:or, hash, other] }
+      end
+    end
+
+    expect(range(in_transaction(5, noon, 40), noon + 60).scope(relation))
+      .to eq([:or, { created_at: noon..(noon + 60) }, { transaction_id: 40 }])
   end
 
   it 'ends at the current record only when its end is not a version' do

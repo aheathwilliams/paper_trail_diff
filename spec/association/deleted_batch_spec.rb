@@ -39,6 +39,27 @@ RSpec.describe 'batched deleted association history' do
     sql
   end
 
+  # A report on one account's articles must not return another account's
+  # deletions, contents included.
+  it 'keeps only the deleted roots the relation would have selected when they were destroyed' do
+    tenant_a, tenant_b = %w[A B].map { |name| TrackedAuthor.create!(name: name) }
+    kept = TrackedArticle.create!(title: 'Ours', author: tenant_a)
+    hidden = TrackedArticle.create!(title: 'Theirs', author: tenant_b)
+    [kept, hidden].each(&:destroy!)
+
+    result = PaperTrailDiff.report(TrackedArticle.where(author_id: tenant_a.id),
+                                   since: Time.now.utc - 3600, limit: 10, include_deleted: true)
+
+    expect(result.unreachable).to eq([['TrackedArticle', kept.id.to_s]])
+    expect(result.deleted.keys).to eq([['TrackedArticle', kept.id.to_s]])
+    expect do
+      PaperTrailDiff.report(TrackedArticle.where('author_id = ?', tenant_a.id),
+                            since: Time.now.utc - 3600, limit: 10, include_deleted: true)
+    end.to raise_error(PaperTrailDiff::ConfigurationError, /include_deleted: cannot test/)
+  ensure
+    TrackedAuthor.delete_all
+  end
+
   it 'matches single-root historical reconstruction without adding per-root queries' do
     articles = seed(1)
     one = queries { report }

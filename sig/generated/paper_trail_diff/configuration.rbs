@@ -5,17 +5,26 @@ module PaperTrailDiff
   class AssociationTree
     attr_reader children: Hash[String, AssociationTree]
 
+    # Takes what `includes` takes: a name, a dotted path, a hash of names to
+    # what to include below them, or an array of any of these.
     # : (untyped) -> AssociationTree
     def self.build: (untyped) -> AssociationTree
+
+    # : (untyped, String?) -> Array[String]
+    private def self.paths: (untyped, String?) -> Array[String]
+
+    # `{ comments: :replies }` names comments as well as their replies.
+    # : (untyped, untyped, String?) -> Array[String]
+    private def self.nested_paths: (untyped, untyped, String?) -> Array[String]
+
+    # : (String?, String | Symbol) -> String
+    private def self.joined: (String?, String | Symbol) -> String
 
     # : (Hash[String, untyped], String) -> void
     private def self.add_path: (Hash[String, untyped], String) -> void
 
     # : (Hash[String, untyped]) -> AssociationTree
     private def self.from_hash: (Hash[String, untyped]) -> AssociationTree
-
-    # : (untyped) -> bool
-    private def self.valid_values?: (untyped) -> bool
 
     # : (Hash[String, AssociationTree]) -> void
     def initialize: (Hash[String, AssociationTree]) -> void

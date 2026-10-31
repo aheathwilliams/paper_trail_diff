@@ -24,12 +24,14 @@ module PaperTrailDiff
     def call
       destroys = destroy_versions
       records = historical_roots(destroys)
-      selected = plans(records, destroys)
-      prepare(records, selected)
+      windows = TransactionCut.batch_windows(records, @time_range)
+      selected = plans(records, destroys, windows)
+      prepare(records, selected, windows)
       analyses = records.to_h do |record|
         key = Endpoint.identity(record)
         plan = selected.fetch(key)
-        [key, plan.empty? ? Analysis.empty : @analyzer.call(record, plan)]
+        window = windows.fetch(key, @time_range)
+        [key, plan.empty? ? Analysis.empty : @analyzer.call(record, plan, window)]
       end
       with_unavailable(analyses)
     end
@@ -51,20 +53,20 @@ module PaperTrailDiff
 
     # A root destroyed before the window had no state inside it to read, so
     # only the others take the version after the window as context.
-    #: (Array[untyped], Array[untyped]) -> Hash[Array[String], RootVersionPlan]
-    def plans(records, destroys)
+    #: (Array[untyped], Array[untyped], Hash[Array[String], TimeRange]) -> Hash[Array[String], RootVersionPlan]
+    def plans(records, destroys, windows)
       start = @time_range&.begin_time
       early = destroys.select { |version| start && version.created_at < start }
                       .map { |version| version.item_id.to_s }
       before, during = records.partition { |record| early.include?(record.id.to_s) }
-      plans_for(during, @context_required).merge(plans_for(before, false))
+      plans_for(during, @context_required, windows).merge(plans_for(before, false, windows))
     end
 
-    #: (Array[untyped], bool) -> Hash[Array[String], RootVersionPlan]
-    def plans_for(records, context_required)
+    #: (Array[untyped], bool, Hash[Array[String], TimeRange]) -> Hash[Array[String], RootVersionPlan]
+    def plans_for(records, context_required, windows)
       BatchedRootVersions.new(
         records, time_range: @time_range, version_scope: @version_scope,
-                 live_endpoints: nil, context_required: context_required
+                 live_endpoints: nil, context_required: context_required, windows: windows
       ).call
     end
 
@@ -84,28 +86,26 @@ module PaperTrailDiff
 
     #: () -> Array[untyped]
     def destroy_versions
-      destroys = @model.paper_trail.version_class.where(
-        item_type: @model.base_class.name, item_id: @identities.map(&:last), event: 'destroy'
-      )
+      destroys = VersionQuery.for_items(@model, @identities.map(&:last)).where(event: 'destroy')
       # Oldest first, so each item keeps its latest destroy.
       VersionQuery.chronological(destroys).index_by(&:item_id).values
     end
 
-    #: (Array[untyped]) -> Hash[Symbol, untyped]
-    def preparation_range(versions)
-      { start_at: @time_range&.begin_time,
+    #: (Array[untyped], Hash[Array[String], TimeRange]) -> Hash[Symbol, untyped]
+    def preparation_range(versions, windows)
+      { start_at: TransactionCut.earliest_start(@time_range, windows),
         end_at: [@time_range&.end_time, versions.map(&:created_at).max].compact.max }
     end
 
-    #: (Array[untyped], Hash[Array[String], RootVersionPlan]) -> void
-    def prepare(records, selected)
+    #: (Array[untyped], Hash[Array[String], RootVersionPlan], Hash[Array[String], TimeRange]) -> void
+    def prepare(records, selected, windows)
       records.group_by(&:class).each_value do |group|
         versions = group.flat_map do |record|
           selected.fetch(Endpoint.identity(record)).reconstruction_versions
         end
         next if versions.empty?
 
-        @history_preparer.call(group, versions, **preparation_range(versions))
+        @history_preparer.call(group, versions, **preparation_range(versions, windows))
       end
     end
   end

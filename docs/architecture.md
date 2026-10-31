@@ -66,7 +66,9 @@ PT-AT transaction are applied together.
 
 These association shapes cannot be read from the loaded history. The gem asks
 PT-AT to rebuild them at each point instead, which costs queries per record and
-resolves association membership by timestamp only:
+resolves association membership by timestamp only. PT-AT starts from the
+association's current members and swaps in their older versions, without
+checking a scope against them, so its membership is approximate:
 
 - associations with a scope the gem cannot read as plain conditions and an
   exact ranking, including owner-dependent scopes and a `limit` without a
@@ -75,8 +77,8 @@ resolves association membership by timestamp only:
 - targets that are not versioned;
 - composite foreign keys.
 
-Batch methods reject the scoped cases unless you pass
-`allow_expensive: true`; see [costly associations](reference.md#costly-associations).
+Every method that reads history rejects the scoped cases unless you pass
+`allow_approximate: true`; see [costly associations](reference.md#costly-associations).
 
 HABTM membership comes from the snapshots PT-AT records with each transaction,
 so it is only known at root versions saved in a transaction. Those snapshots
@@ -88,18 +90,32 @@ HABTM of the same name saved a version holds both records' members;
 
 ## Database indexes
 
-For large histories, add a composite index that matches how the gem reads
-versions:
+For large histories, add two indexes to each version table, one for each way
+the gem reads versions:
 
 ```ruby
 add_index :versions, %i[item_type item_id created_at id],
           name: "index_versions_on_item_and_timeline"
+add_index :versions, %i[item_type created_at item_id],
+          name: "index_versions_on_type_and_time"
 ```
 
-It helps most with repeated `within:` queries, which filter by `item_type`,
-`item_id`, and `created_at`, then order by time and ID. Keep PT-AT's own index
-on `version_associations` (`foreign_key_name`, `foreign_key_id`,
-`foreign_type`).
+The first serves reading one record's history: it filters by `item_type` and
+`item_id`, then by time, in time and ID order. It covers PaperTrail's own
+`(item_type, item_id)` index, which you can then drop.
+
+The second serves finding which records changed in a window, as `report`,
+`analyze_scope`, and the other batch methods do with `since:` or `within:`.
+They filter by `item_type` and `created_at` alone, which the first index cannot
+narrow, so without the second the database reads every version of the model.
+On PostgreSQL with 5 million article versions, a report on five articles
+changed in the last hour took about 230 ms without it and 2 ms with it.
+Ending the index with `item_id` lets the database answer from the index alone,
+and SQLite, which keeps no table statistics unless you run `ANALYZE`, picks it
+only then.
+
+Keep PT-AT's own index on `version_associations` (`foreign_key_name`,
+`foreign_key_id`, `foreign_type`).
 
 ## Remaining costs
 
@@ -109,3 +125,8 @@ on `version_associations` (`foreign_key_name`, `foreign_key_id`,
 - Repeated events in one very wide collection still copy that collection's
   list of records for each step. The comparison work stays small, but memory
   traffic grows with *events × collection size*.
+- With PT-AT installed, a `within:` or `since:` window looks up each root's
+  versions on either side of both edges, to move an edge that falls inside a
+  transaction (see [time windows](reference.md#time-windows)). These are
+  four indexed lookups per root, sent 200 roots per query, whatever the
+  length of the root's history: about 0.2 ms per root on SQLite.

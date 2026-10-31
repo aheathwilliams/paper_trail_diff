@@ -13,8 +13,9 @@ module PaperTrailDiff
     # : (untyped) -> bool
     def include?: (untyped) -> bool
 
-    # Narrows an Active Record version relation by timestamp. Exact tie-breaking
-    # remains in #include? so this works for integer, UUID, and custom version IDs.
+    # Narrows an Active Record version relation by timestamp, and to the
+    # start's transaction. Exact tie-breaking remains in #include? so this
+    # works for integer, UUID, and custom version IDs.
     # : (untyped) -> untyped
     def scope: (untyped) -> untyped
 
@@ -33,10 +34,16 @@ module PaperTrailDiff
 
     @end_key: Array[untyped]?
 
+    @opening_transaction: Array[untyped]?
+
     @start_key: Array[untyped]?
 
     @start_time: untyped
 
+    # A range starting at a version starts before that version's transaction,
+    # where PT-AT reads its associations. A version saved earlier in it, such
+    # as the child update behind a `touch: true` parent version, is a change
+    # inside the range.
     # : (untyped, Array[untyped]) -> bool
     def after_start?: (untyped, Array[untyped]) -> bool
 

@@ -25,11 +25,13 @@ RSpec.describe PaperTrailDiff::BatchedRootVersions do
     start_time + (minute * 60)
   end
 
-  def select(records, within: nil, version_scope: nil, live_endpoints: nil, context_required: false)
+  def select(records, within: nil, version_scope: nil, live_endpoints: nil, context_required: false, # rubocop:disable Metrics/ParameterLists
+             windows: {})
     described_class.new(
       records, time_range: within && PaperTrailDiff::TimeRange.new(within),
                version_scope: version_scope, live_endpoints: live_endpoints,
-               context_required: context_required
+               context_required: context_required,
+               windows: windows.transform_values { |range| PaperTrailDiff::TimeRange.new(range) }
     ).call
   end
 
@@ -84,6 +86,85 @@ RSpec.describe PaperTrailDiff::BatchedRootVersions do
     article, = history
 
     expect(select([article], within: at(5)..at(6)).fetch(key(article))).to be_empty
+  end
+
+  describe 'with windows moved to transaction edges' do
+    it "reads each moved root's versions from its own window" do
+      article, created, reviewed, = history
+      other, _other_created, other_reviewed, = history
+
+      plans = select([article, other], within: at(0.5)..at(1.5),
+                                       windows: { key(article) => at(0)...at(1) })
+
+      expect(plans.fetch(key(article)).mutations).to eq([created])
+      expect(plans.fetch(key(article)).context_version).to eq(reviewed)
+      expect(plans.fetch(key(other)).mutations).to eq([other_reviewed])
+    end
+
+    it 'closes a moved window on the version after the shared window when none is in it' do
+      article, created, reviewed, = history
+
+      plan = select([article], within: at(0.5)...at(1),
+                               windows: { key(article) => at(0)...at(0.75) })
+             .fetch(key(article))
+
+      expect(plan.mutations).to eq([created])
+      expect(plan.context_version).to eq(reviewed)
+    end
+
+    it 'reads from the earliest of several moved starts' do
+      article, created, = history
+      other, = history
+
+      plans = select([article, other], within: at(0.5)..at(0.75),
+                                       windows: { key(article) => at(0)..at(0.75),
+                                                  key(other) => at(0.25)..at(0.75) },
+                                       context_required: true)
+
+      expect(plans.fetch(key(article)).mutations).to eq([created])
+      expect(plans.fetch(key(other)).mutations).to eq([])
+    end
+
+    it 'closes on the nearest version past a moved end, not one before its moved start' do
+      article, = history(minutes: [0, 1.75, 2])
+      _, *later = FilterVersion.where(item_id: article.id).order(:created_at).to_a
+      other, = history(minutes: [5, 6, 7])
+
+      plans = select([article, other], within: at(0.5)..at(2.5), context_required: true,
+                                       windows: { key(article) => at(0.25)...at(1.5),
+                                                  key(other) => at(0)..at(2.5) })
+
+      expect(plans.fetch(key(article)).context_version).to eq(later.first)
+    end
+
+    it 'leaves a moved window with nothing in or after it empty' do
+      article, = history
+
+      plan = select([article], within: at(5)..at(6), windows: { key(article) => at(4)...at(5) })
+             .fetch(key(article))
+
+      expect(plan).to be_empty
+    end
+
+    it 'keeps an exclusive end when widening the read for a moved start' do
+      article, created, reviewed, published = history
+
+      plan = select([article], within: at(1)...at(2), windows: { key(article) => at(0)...at(2) })
+             .fetch(key(article))
+
+      expect(plan.mutations).to eq([created, reviewed])
+      expect(plan.context_version).to eq(published)
+    end
+
+    it 'keeps an inclusive end when widening the read for a moved start' do
+      article, created, reviewed, published = history
+
+      plan = select([article], within: at(0.5)..at(1), windows: { key(article) => at(0)..at(1) })
+             .fetch(key(article))
+
+      expect(plan.mutations).to eq([created, reviewed])
+      expect(plan.context_version).to eq(published)
+    end
   end
 
   describe 'with a version scope' do

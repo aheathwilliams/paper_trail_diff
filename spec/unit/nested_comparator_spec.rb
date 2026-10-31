@@ -175,10 +175,32 @@ RSpec.describe PaperTrailDiff::NestedComparator do
     expect(described_class.call('not json', { 'a' => 1 })).to eq({})
     expect(described_class.call('{oops', '{nope')).to eq({})
     expect(described_class.call(nil, { 'a' => 1 })).to eq({})
-    expect(described_class.call('[1,2]', '[1,3]')).to eq({})
     expect(described_class.call({ 'a' => 1 }, 'not json')).to eq({})
     expect(described_class.call({ 'a' => 1 }, 5)).to eq({})
     expect(described_class.call(nil, nil)).to be_frozen
+  end
+
+  # A json column can hold an array at the top, which has no key to name it.
+  it 'reports two top-level arrays as one membership change at the empty path' do
+    change = described_class.call('[1,2]', '[1,3]')
+
+    expect(change.keys).to eq([[]])
+    expect(change.fetch([]).to_h).to eq(from: [1, 2], to: [1, 3], added: [3], removed: [2],
+                                        reordered: false)
+    expect(described_class.call(%w[a], %w[a b]).fetch([]).added).to eq(['b'])
+    expect(described_class.call(%w[a b], '["a","b"]')).to eq({})
+    expect(described_class.call([1], [1.0])).to eq({})
+    expect(described_class.call(%w[a], %w[b])).to be_frozen
+    expect(change.keys.first).to be_frozen
+    list = Class.new(Array)
+    expect(described_class.call(list.new(%w[a]), list.new(%w[a b])).fetch([]).added).to eq(['b'])
+  end
+
+  it 'reports nothing for an array facing anything but an array' do
+    [['[1,2]', { 'a' => 1 }], [{ 'a' => 1 }, [1]], ['not json', [1]], [5, [1]], [[1], '5'],
+     [[1], nil]].each do |from_value, to_value|
+      expect(described_class.call(from_value, to_value)).to eq({})
+    end
   end
 
   it 'compares an array with a non-array as a whole value, not by membership' do

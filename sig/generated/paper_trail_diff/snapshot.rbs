@@ -70,6 +70,14 @@ module PaperTrailDiff
     # : (Array[RecordSnapshot], before: RecordSnapshot?, after: RecordSnapshot?, membership_preserved: bool) -> AssociationSnapshot
     def transition_to: (Array[RecordSnapshot], before: RecordSnapshot?, after: RecordSnapshot?, membership_preserved: bool) -> AssociationSnapshot
 
+    # Collections are documented in record type, then ID, order wherever they
+    # were read from. Most arrive sorted, so they are checked before sorting.
+    # : (Array[RecordSnapshot]) -> Array[RecordSnapshot]
+    def ordered: (Array[RecordSnapshot]) -> Array[RecordSnapshot]
+
+    # : (Array[Array[untyped]]) -> bool
+    def sorted?: (Array[Array[untyped]]) -> bool
+
     # : (AssociationSnapshot) -> CollectionTransition?
     def transition_from: (AssociationSnapshot) -> CollectionTransition?
 

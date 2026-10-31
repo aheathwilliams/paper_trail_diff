@@ -52,13 +52,17 @@ module PaperTrailDiff
     # Returns the changed paths, or an empty hash when the pair is not two
     # structures this can look inside. An empty result therefore means "nothing
     # to report at this depth", and the caller still has the whole-value change.
+    # Two arrays at the top are one membership change, at the empty path.
     #: () -> nested_changes
     def call
-      from_structure, to_structure = structures
+      from, to = structures
       changes = {} #: nested_changes
-      return changes.freeze unless from_structure && to_structure
-
-      walk(from_structure, to_structure, [], changes)
+      if from.is_a?(Hash) && to.is_a?(Hash)
+        walk(from, to, [], changes)
+      elsif from.is_a?(Array) && to.is_a?(Array)
+        whole = [] #: Array[String]
+        changes[whole.freeze] = change_for(from, to) if from != to
+      end
       changes.freeze
     end
 
@@ -67,26 +71,23 @@ module PaperTrailDiff
     # @rbs @from_value: untyped
     # @rbs @to_value: untyped
 
-    # Both sides have to be readable as a Hash for a nested answer to mean
-    # anything. A column that held text on one side and JSON on the other
-    # changed wholesale, and saying so is the accurate report.
-    #: () -> [Hash[untyped, untyped]?, Hash[untyped, untyped]?]
+    # Both sides have to be readable as the same kind of structure for a
+    # nested answer to mean anything. A column that held text on one side and
+    # JSON on the other changed wholesale, and saying so is the accurate report.
+    #: () -> [untyped, untyped]
     def structures
       [structure(@from_value), structure(@to_value)]
     end
 
-    #: (untyped) -> Hash[untyped, untyped]?
+    # A string is read as JSON; anything else, or JSON that is neither an
+    # object nor an array, is left for #call to decline.
+    #: (untyped) -> untyped
     def structure(value)
-      return value if value.is_a?(Hash)
-      return unless value.is_a?(String)
+      return value unless value.is_a?(String)
 
-      parsed = begin
-        JSON.parse(value)
-      rescue JSON::ParserError
-        nil
-      end
-      # JSON parses objects into plain Hashes, never a subclass.
-      parsed if parsed.instance_of?(Hash)
+      JSON.parse(value)
+    rescue JSON::ParserError
+      nil
     end
 
     #: (Hash[untyped, untyped], Hash[untyped, untyped], Array[String], nested_changes) -> void

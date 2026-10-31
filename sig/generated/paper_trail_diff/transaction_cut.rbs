@@ -1,0 +1,94 @@
+# Generated from lib/paper_trail_diff/transaction_cut.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Moves each edge of a wall-clock window that falls inside one of a root's
+  # transactions back to where that transaction began, so the transaction is
+  # wholly in the later window.
+  #
+  # PT-AT reads a root's associations at the start of the transaction of the
+  # root version it reifies. A window starting just after a child saved its
+  # part of such a transaction therefore starts from the state before that
+  # child's change, and one ending there ends at it too, so the change belonged
+  # to no window and surfaced at the next transaction, under its author.
+  #
+  # Only the root's own versions on either side of an edge are consulted:
+  # rows locked by an update keep two transactions of one root from
+  # interleaving, so a transaction holding a root version and crossing the edge
+  # holds the root's nearest version on one side of it. Each edge is moved from
+  # where it was asked for, never from where another edge moved, so adjacent
+  # windows move their shared edge alike.
+  module TransactionCut
+    # One edge of a window. A strict edge keeps versions recorded at its
+    # instant on the left, as an inclusive end does. A plain class rather than
+    # Data.define, which arrived in Ruby 3.2 while this gem supports 3.1.
+    class Edge
+      # : (Time, bool) -> void
+      def initialize: (Time, bool) -> void
+
+      # : (untyped) -> untyped
+      def left: (untyped) -> untyped
+
+      # : (untyped) -> untyped
+      def right: (untyped) -> untyped
+
+      # : (untyped, later: bool) -> untyped
+      def side: (untyped, later: bool) -> untyped
+
+      @strict: bool
+
+      @time: Time
+    end
+
+    # Roots per statement: two lookups each stays under SQLite's limit of 500
+    # terms in a compound SELECT.
+    SLICE: ::Integer
+
+    # The same as `windows` for a batch of roots, keyed by identity.
+    # : (Array[untyped], TimeRange?) -> Hash[Array[String], TimeRange]
+    def self.batch_windows: (Array[untyped], TimeRange?) -> Hash[Array[String], TimeRange]
+
+    # Where history for a batch must be read from: the earliest moved start.
+    # : (TimeRange?, Hash[Array[String], TimeRange]) -> Time?
+    def self.earliest_start: (TimeRange?, Hash[Array[String], TimeRange]) -> Time?
+
+    # The windows that move, keyed by root id. A root missing from the result
+    # keeps the window as asked.
+    # : (untyped, Array[untyped], TimeRange) -> Hash[String, TimeRange]
+    def self.windows: (untyped, Array[untyped], TimeRange) -> Hash[String, TimeRange]
+
+    # : (untyped) -> untyped
+    def self.transaction_versions: (untyped) -> untyped
+
+    # Each root's earliest start among its transactions that cross the edge.
+    # : (untyped, Array[untyped], Edge) -> Hash[String, Time]
+    def self.moved_edges: (untyped, Array[untyped], Edge) -> Hash[String, Time]
+
+    # The roots whose versions next to the edge each transaction holds.
+    # : (untyped, Array[untyped], Edge) -> Hash[untyped, Array[String]]
+    def self.nearest_roots: (untyped, Array[untyped], Edge) -> Hash[untyped, Array[String]]
+
+    # Each root's nearest versions on either side of an edge, as [id,
+    # transaction] pairs; versions tied at the nearest instant are all kept.
+    # One indexed lookup per root and side, where a single query over the
+    # roots would read every version before the edge. The lookups are written
+    # once with the root's id left open, as building a relation for each root
+    # costs more than the query. Rows read as SQL text come back as the adapter
+    # returns them, so the transaction is cast as the grouped query's keys are.
+    # : (untyped, Array[untyped], Edge) -> Array[[String, untyped]]
+    def self.nearest: (untyped, Array[untyped], Edge) -> Array[[ String, untyped ]]
+
+    # Both sides' lookups for a root whose id is each `?`.
+    # : (untyped, Edge) -> String
+    def self.nearest_lookups: (untyped, Edge) -> String
+
+    # : (untyped, Edge, bool) -> String
+    def self.nearest_lookup: (untyped, Edge, bool) -> String
+
+    # Where each transaction that has versions on both sides of the edge began.
+    # : (untyped, Array[untyped], Edge) -> Hash[untyped, Time]
+    def self.crossing_starts: (untyped, Array[untyped], Edge) -> Hash[untyped, Time]
+
+    # : (TimeRange, Time?, Time?) -> TimeRange
+    def self.moved: (TimeRange, Time?, Time?) -> TimeRange
+  end
+end

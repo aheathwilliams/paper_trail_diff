@@ -7,19 +7,26 @@ module PaperTrailDiff
 
     attr_reader branches: Array[String]?
 
-    # : (version: untyped, branches: Array[String]?) -> void
-    def initialize: (version: untyped, branches: Array[String]?) -> void
+    # : (version: untyped, branches: Array[String]?, ?join: bool) -> void
+    def initialize: (version: untyped, branches: Array[String]?, ?join: bool) -> void
 
     # : () -> bool
     def root?: () -> bool
+
+    # Whether the version is of a through's join row, which links the root to
+    # a target without being one.
+    # : () -> bool
+    def join?: () -> bool
+
+    @join: bool
   end
 
   # Accumulates each version once while retaining every selected root branch.
   class ActivityEventRegistry
     def initialize: () -> untyped
 
-    # : (Array[untyped], ?branch: String?) -> void
-    def add: (Array[untyped], ?branch: String?) -> void
+    # : (Array[untyped], ?branch: String?, ?join: bool) -> void
+    def add: (Array[untyped], ?branch: String?, ?join: bool) -> void
 
     # : () -> Array[ActivityEvent]
     def to_a: () -> Array[ActivityEvent]

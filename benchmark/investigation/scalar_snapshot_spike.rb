@@ -27,7 +27,7 @@ module ScalarSnapshotSpike
 
   private
 
-  def snapshot_from_version(version, context, tree:, normalizer:)
+  def snapshot_from_version(version, context, tree:, normalizer:, history:)
     return super unless ScalarSnapshotSpike.enabled && tree.empty?
 
     ScalarSnapshotSpike.snapshot(version, normalizer)

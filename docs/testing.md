@@ -8,7 +8,7 @@ mise exec -- bundle exec rake
 ```
 
 The default task runs the core specs without PT-AT loaded, the association specs
-in a separate process, RuboCop (with the rubocop-performance and rubocop-rspec
+and the [oracle checks](#oracle-checks) each in a separate process, RuboCop (with the rubocop-performance and rubocop-rspec
 plugins), generated-signature verification, and Steep.
 Ruby blocks in the README, quickstart, and API reference marked with
 `<!-- executable:... -->` run inside those specs, so documented examples stay
@@ -37,6 +37,49 @@ history, with integer and string `versions.item_id`, YAML and JSON history, and
 a `has_paper_trail skip:` column. When one fails, its seed reproduces it. Add a
 variant here when a bug turns out to depend on a schema or configuration.
 
+## Oracle checks
+
+The consistency checks compare gem methods with each other, so a bug they
+share passes. `spec/oracle` compares them with the truth instead:
+
+1. A seeded generator (`spec/support/oracle.rb`) makes random edits to an
+   article graph, one transaction each: root edits and checkpoints, comments
+   and replies created, edited, moved, and deleted, an author, a profile, and
+   authorships with their authors. Some transactions write several versions.
+2. After each transaction it records the live state, keyed by the versions
+   that transaction wrote, so every version names the state just before it.
+   The state comes from the gem's current-record path, which is plain Active
+   Record, and is checked against an independent read of each association.
+3. Every endpoint pair, every timeline step, every activity step (grouped and
+   not), and windows through `analyze`, `analyze_many`, and `analyze_scope`
+   are compared with the recorded states. Two windows that meet between
+   transactions, or inside one, must report each step once, as the window
+   spanning both does, through both `activity_timeline` and `analyze_many`.
+
+Two more generators cover other shapes. `scoped_membership_spec.rb` moves
+notes in and out of scoped associations (conditions, order, limit, and
+offset) and compares the members at every version with Active Record's own
+answer. `tree_history_spec.rb` edits a tree of one model, so a root can sit
+inside another root's tree, with children whose attributes are encrypted,
+serialized, enums stored as strings, custom types, decimals, and JSON. It reads
+the expected states with plain Active Record, not through the gem.
+
+```console
+mise exec -- bundle exec rake spec_oracle
+ORACLE_SEEDS=1..200 ORACLE_STEPS=40 mise exec -- bundle exec rake spec_oracle
+```
+
+The default seeds keep the run to a few seconds; `rake spec` includes it, so
+the database jobs run it too. Mutant does not, because it would slow every
+mutation. A failure prints its seed and the transactions it made. To fix one,
+reproduce it with that seed, reduce it to the few edits that matter, and add
+that as a named spec beside the code it covers, so the cause is readable
+without the generator.
+
+When a bug turns out to depend on a schema, configuration, or kind of edit,
+add it to the generator or as a new context, so the whole class of bug stays
+covered.
+
 ## Mutation testing
 
 [Mutant](https://github.com/mbj/mutant) changes the library one expression at
@@ -53,7 +96,8 @@ passes is behavior nothing checks. `mutant.yml` lists the classes it mutates:
 - what a version recorded: `RecordedChanges`;
 - how a step flattens into rows: `ChangeRow` and `ChangeRows`;
 - which records a scope or report selects: `ScopedRootSelection`,
-  `AssociationActivitySelection`, and `AssociationActivityEdge`;
+  `AssociationActivitySelection`, `AssociationActivityEdge`, and
+  `DeletedRootFilter`;
 - which children and targets a record had at each point:
   `PreparedHistoryLoader`, `PreparedEdgeLoader`,
   `ActivityTargetCandidateLoader`, and `PreparedActivityIndex`;
@@ -61,10 +105,11 @@ passes is behavior nothing checks. `mutant.yml` lists the classes it mutates:
   query reads: `ActivityRange` and `VersionAssociationCandidateScope`;
 - what activity a record shows: `ActivityTimelineBuilder` and
   `ActivityTransactionGrouper`;
-- which association paths a request accepts: `AssociationTraversal`;
+- which association paths a request accepts: `AssociationTraversal` and
+  `AssociationKey`;
 - whether a transaction's HABTM members are one record's:
   `HabtmTransactionOwners`;
-- which association paths a batch refuses: `BatchSafety`;
+- which association paths history cannot read exactly: `ApproximatePaths`;
 - which records an association scope admits, and how it ranks them:
   `ScopeCondition` and `ScopeRanking`.
 
@@ -80,7 +125,10 @@ description names the mutated class (`RSpec.describe PaperTrailDiff::Engine`),
 falling back to wider names such as `PaperTrailDiff` when none does. A spec
 named after a behavior, as most integration specs are, never runs. So each
 mutated class has a unit spec of its own that catches every mutation in it,
-and a class added to `mutant.yml` needs one too.
+and a class added to `mutant.yml` needs one too. A spec named after a
+behavior can still name the class it checks with metadata, as the activity
+window specs do: `RSpec.describe 'Activity over a window', mutant_expression:
+'PaperTrailDiff::ActivityTimelineBuilder'`.
 
 Mutant counts a mutation that runs past its time limit as caught, so
 `mutant.yml` sets the limit well above the time the whole suite takes. With
@@ -158,6 +206,11 @@ PaperTrail's default YAML serializer, the fixtures explicitly permit
 `Symbol` and `Time`. Applications using that serializer need the corresponding
 `ActiveRecord.yaml_column_permitted_classes` configuration. The gem does not
 change an application's YAML configuration.
+
+PT-AT compares version times through SQL text, which SQL Server's adapter
+writes as `datetime` values, up to 1/300 s off. So on SQL Server the
+association specs keep their versions 5 ms apart, or the specs that compare
+the gem with PT-AT would fail whenever versions were saved closer together.
 
 The CI service configuration is in `.github/workflows/ci.yml`. PostgreSQL and
 MySQL create the named database during container initialization. The SQL Server

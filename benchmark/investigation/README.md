@@ -1,7 +1,8 @@
 # Remaining N+1 and reconstruction costs
 
-This is the pre-fix investigation. See the [production follow-up](../../docs/performance.md#direct-reconstruction-follow-up-2026-09-07)
-for implemented changes, remaining exceptions and updated measurements.
+This is the pre-fix investigation. The [performance guide](../../docs/performance.md)
+describes current behavior and how to measure it, and the
+[changelog](../../CHANGELOG.md) records each change since.
 
 Investigated library revision `4cd54d641b71dc96181969217e0a206dd749a917` on
 2026-09-07 UTC. Several remaining costs are avoidable. The current gem does not
@@ -93,7 +94,7 @@ the first author's before that change. The same lookup also misses any child
 that later moved to another owner. `spec/association/through_membership_spec.rb`
 now writes out the expected membership for moves, deletions, transactions and
 unrecorded changes, and the prepared resolver reads these throughs; see
-[the performance guide](../../docs/performance.md#through-associations-2026-10-29).
+[0.14.0 in the changelog](../../CHANGELOG.md#0140---2026-10-29).
 
 ### Scope fallbacks are intentional but still costly
 

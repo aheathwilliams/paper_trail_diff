@@ -14,6 +14,8 @@ module PaperTrailDiff
     # ranking alone.
     RELATION_VALUES = %i[where order reordering limit offset readonly strict_loading
                          extending].freeze
+    # Relation parts that load or shape rows without choosing them.
+    LOADING_VALUES = %i[includes preload select distinct].freeze
     # Types whose stored values compare in Ruby as the database compares them,
     # named rather than referenced so that loading needs no Active Model.
     VALUE_TYPES = %w[ActiveModel::Type::Integer ActiveModel::Type::Boolean
@@ -59,6 +61,23 @@ module PaperTrailDiff
       clause = relation.where_clause - model_class.unscoped.where_clause
       predicate = Reader.new(model_class).call(clause.ast)
       new(model_class, predicate, (ranking(relation, reflection, model_class) if ranked))
+    rescue Unreadable
+      nil
+    end
+
+    # A relation's own where clause, default scope included, read as
+    # conditions on stored attributes; nil when it cannot be. Its order,
+    # limit, and offset choose a page of current rows rather than membership,
+    # and loading or selecting columns changes neither, so they are left out.
+    # A single-table subclass's type condition is left to the caller, as for
+    # an association.
+    #: (untyped, untyped) -> ScopeCondition?
+    def self.for_relation(relation, model_class)
+      extra = relation.values.except(*RELATION_VALUES, *LOADING_VALUES).values
+      return unless extra.all? { |value| value.respond_to?(:empty?) && value.empty? }
+
+      clause = relation.where_clause - model_class.unscoped.where_clause
+      new(model_class, Reader.new(model_class).call(clause.ast))
     rescue Unreadable
       nil
     end
@@ -132,9 +151,11 @@ module PaperTrailDiff
       freeze
     end
 
+    # SQL admits a row only when its condition is true, not when it is
+    # unknown.
     #: (Hash[String, untyped]) -> bool
     def matches?(attributes)
-      evaluate(@predicate, attributes)
+      evaluate(@predicate, attributes) == true
     end
 
     # The members among records that are each the owner's by key: those that
@@ -152,13 +173,15 @@ module PaperTrailDiff
       ranking ? ranking.call(records) : records
     end
 
-    # SQL compares NULL with nothing, so only an IS NULL test, an equality
-    # with nil, matches it.
+    # SQL's three values: a comparison with NULL is unknown (nil) rather than
+    # false, except an IS NULL or IS NOT NULL test, an equality with nil, which
+    # is always known. Unknown matters only under NOT, which leaves it
+    # unknown where false would become true.
     COMPARISONS = {
-      eq: ->(value, expected) { value == expected },
-      not_eq: ->(value, expected) { !value.nil? && value != expected },
-      in: ->(value, expected) { !value.nil? && expected.include?(value) },
-      not_in: ->(value, expected) { !value.nil? && !expected.include?(value) }
+      eq: ->(value, expected) { expected.nil? || !value.nil? ? value == expected : nil },
+      not_eq: ->(value, expected) { expected.nil? || !value.nil? ? value != expected : nil },
+      in: ->(value, expected) { expected.include?(value) unless value.nil? },
+      not_in: ->(value, expected) { !expected.include?(value) unless value.nil? }
     }.freeze
     private_constant :COMPARISONS
 
@@ -168,14 +191,37 @@ module PaperTrailDiff
     # @rbs @predicate: Array[untyped]
     # @rbs @ranking: ScopeRanking?
 
-    #: (Array[untyped], Hash[String, untyped]) -> bool
+    # true, false, or nil for unknown.
+    #: (Array[untyped], Hash[String, untyped]) -> bool?
     def evaluate(predicate, attributes)
       operator, first, second = predicate
       case operator
-      when :and then first.all? { |part| evaluate(part, attributes) }
-      when :or then first.any? { |part| evaluate(part, attributes) }
+      when :and then all(first.map { |part| evaluate(part, attributes) })
+      when :or then any(first.map { |part| evaluate(part, attributes) })
+      when :not then negate(evaluate(first, attributes))
       else COMPARISONS.fetch(operator).call(stored(first, attributes), second)
       end
+    end
+
+    # False if any part is, otherwise unknown if any part is.
+    #: (Array[bool?]) -> bool?
+    def all(values)
+      return false if values.include?(false)
+
+      true unless values.include?(nil)
+    end
+
+    # True if any part is, otherwise unknown if any part is.
+    #: (Array[bool?]) -> bool?
+    def any(values)
+      return true if values.include?(true)
+
+      false unless values.include?(nil)
+    end
+
+    #: (bool?) -> bool?
+    def negate(value)
+      !value unless value.nil?
     end
 
     # The form the database holds, as the scope's own values were cast.
@@ -224,6 +270,7 @@ module PaperTrailDiff
         when 'Arel::Nodes::And' then [:and, node.children.map { |child| call(child) }]
         when 'Arel::Nodes::Or' then [:or, either(node).map { |child| call(child) }]
         when 'Arel::Nodes::Grouping' then call(node.expr)
+        when 'Arel::Nodes::Not' then [:not, call(node.expr)]
         else comparison(node)
         end
       end
@@ -250,9 +297,11 @@ module PaperTrailDiff
         end
       end
 
+      # Whether a value is NULL compares alike on every type.
       #: (Symbol, untyped) -> Array[untyped]
       def binary(operator, node)
-        [operator, column(node.left), value(node.right)]
+        expected = value(node.right)
+        [operator, column(node.left, null_test: expected.nil?), expected]
       end
 
       #: (untyped) -> Array[untyped]
@@ -272,29 +321,35 @@ module PaperTrailDiff
       end
 
       # Ruby comparison stands in for SQL only on the record's own column of
-      # a type both compare alike.
-      #: (untyped) -> String
-      def column(attribute)
+      # a type both compare alike. Whether a value is NULL, any column's
+      # type compares alike.
+      #: (untyped, ?null_test: bool) -> String
+      def column(attribute, null_test: false)
         raise Unreadable unless ATTRIBUTE.eql?(attribute.class.name)
 
         table = attribute.relation
         raise Unreadable unless table.name == @model_class.table_name && table.table_alias.nil?
 
         name = attribute.name
-        raise Unreadable unless comparable?(name)
+        column = @model_class.columns_hash[name]
+        raise Unreadable unless column && (null_test || comparable?(name, column))
 
         name
       end
 
-      #: (String) -> bool
-      def comparable?(name)
-        column = @model_class.columns_hash[name]
+      #: (String, untyped) -> bool
+      def comparable?(name, column)
         kinds = value_type(@model_class.type_for_attribute(name)).class.ancestors.map(&:name)
-        return false unless column && VALUE_TYPES.intersect?(kinds)
-        return true unless kinds.include?(TEXT_TYPE)
+        return false unless VALUE_TYPES.intersect?(kinds)
 
+        !kinds.include?(TEXT_TYPE) || exact_text?(column)
+      end
+
+      # PostgreSQL's citext is text that compares without regard to case.
+      #: (untyped) -> bool
+      def exact_text?(column)
         EXACT_TEXT_ADAPTERS.include?(@model_class.connection_db_config.adapter) &&
-          column.collation.nil?
+          column.collation.nil? && !column.sql_type.casecmp?('citext')
       end
 
       # An enum compares the values it stores, which its subtype describes. A

@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative '../support/association_database'
+require_relative '../support/full_snapshotter'
 
 # Driven through the public entry points, which build one of these for every
 # version-bounded activity timeline and analysis.
@@ -46,6 +47,23 @@ RSpec.describe PaperTrailDiff::ActivityTimelineBuilder do
     comments.changed.map do |change|
       change.attributes.fetch('body').to_h
     end
+  end
+
+  # The current record shows what the last transaction left in the tree, so a
+  # comment it added is that transaction's activity, credited to its version.
+  it 'credits a comment added in the last transaction before the current record to it' do
+    article = TrackedArticle.create!(title: 'Article')
+    added = TrackedArticle.transaction do
+      article.update!(title: 'Renamed')
+      article.comments.create!(body: 'added')
+    end
+
+    steps = timeline(article.reload, from: article.versions.reorder(:created_at, :id).first,
+                                     to: article)
+    adding = steps.find { |step| step.diff.associations['comments']&.added&.any? }
+
+    expect([adding.source_boundary.item_type, adding.source_boundary.item_id])
+      .to eq(['TrackedComment', added.id])
   end
 
   # An article with one comment edited twice between two article versions.
@@ -172,9 +190,11 @@ RSpec.describe PaperTrailDiff::ActivityTimelineBuilder do
     it 'requires a root version to start from' do
       article = TrackedArticle.create!(title: 'Article')
 
-      expect { timeline(article, from: article, to: article) }
-        .to raise_error(PaperTrailDiff::InvalidTimelineRangeError,
-                        '`from` must be a root PaperTrail version')
+      [-> { timeline(article, from: article, to: article) },
+       -> { analysis(article, from: article, to: article) }].each do |call|
+        expect(&call).to raise_error(PaperTrailDiff::InvalidTimelineRangeError,
+                                     '`from` must be a root PaperTrail version')
+      end
     end
 
     it 'rejects an endpoint of another record' do
@@ -235,6 +255,18 @@ RSpec.describe PaperTrailDiff::ActivityTimelineBuilder do
       .to all(be_a(PaperTrailDiff::RecordSnapshot))
   end
 
+  it 'keeps snapshots only when asked on the step that closes on the live row' do
+    article, comment, from, = edited_history
+    comment.update!(body: 'live')
+
+    closing = timeline(article, from: from, to: article).last
+    kept = timeline(article, from: from, to: article, snapshots: true).last
+
+    expect(closing.to_boundary.kind).to eq(:current)
+    expect([closing.from_snapshot, closing.to_snapshot]).to eq([nil, nil])
+    expect([kept.from_snapshot, kept.to_snapshot]).to all(be_a(PaperTrailDiff::RecordSnapshot))
+  end
+
   it 'hands a window to the time-based builder' do
     article = TrackedArticle.create!(title: 'Article')
     comment = article.comments.create!(body: 'one')
@@ -260,7 +292,7 @@ RSpec.describe PaperTrailDiff::ActivityTimelineBuilder do
                                                         live_endpoint: live)
       tree = PaperTrailDiff::AssociationTree.build([:comments])
       described_class.new(record, range: range, tree: tree, snapshotter: snapshotter,
-                                  snapshots: false, group: nil)
+                                  view: PaperTrailDiff::ActivityView.new)
     end
 
     def collector_calls
@@ -275,7 +307,10 @@ RSpec.describe PaperTrailDiff::ActivityTimelineBuilder do
 
     it 'prepares history over the root versions and reads events from the first to the last' do
       article, _comment, from, to = edited_history
-      allow(provider).to receive(:prepare).and_call_original
+      prepared = []
+      allow(provider).to receive(:prepare).and_wrap_original do |original, *args, **options|
+        original.call(*args, **options).tap { |snapshots| prepared << snapshots }
+      end
       calls = collector_calls
 
       builder(article, from: from, to: to).build
@@ -287,7 +322,7 @@ RSpec.describe PaperTrailDiff::ActivityTimelineBuilder do
       expect(calls.map { |call| call.slice(:root_versions, :range_start, :range_end) })
         .to eq([{ root_versions: versions, range_start: from, range_end: to }] * 2)
       expect(calls.map { |call| call[:prepared] }).to all(be_a(PaperTrailDiff::PreparedActivityIndex))
-      expect(calls.last[:prepared]).to equal(provider.activity_index)
+      expect(calls.last[:prepared]).to equal(prepared.last.activity_index)
     end
 
     it 'prepares history up to the moment it captures the live row' do
@@ -307,10 +342,10 @@ RSpec.describe PaperTrailDiff::ActivityTimelineBuilder do
       expect(steps.last.from_boundary.version_id).to eq(to.id)
     end
 
-    it 'reads the same activity from a snapshotter that cannot prepare' do
+    it 'reads the same activity from a snapshotter that rebuilds every state' do
       article, comment, from, to = edited_history
       comment.update!(body: 'live')
-      plain = adapter.method(:snapshot_at)
+      plain = FullSnapshotter.new(adapter.method(:snapshot_at))
       calls = collector_calls
 
       expected = [builder(article, from: from, to: to).build,

@@ -1,0 +1,42 @@
+# Generated from lib/paper_trail_diff/activity_view.rb with RBS::Inline
+
+module PaperTrailDiff
+  # How a request presents its activity steps: whether they keep their
+  # snapshots, whether a transaction's steps merge into one, and which of
+  # their versions' recorded changes they carry. Built and checked once per
+  # request, and read the same way by both activity builders, or the same
+  # history would read differently depending on how it was asked for.
+  class ActivityView
+    # Options only an activity view uses are refused without one.
+    # : (activity: bool, snapshots: bool, group: Symbol?, recorded: IgnorePolicy?) -> ActivityView
+    def self.build: (activity: bool, snapshots: bool, group: Symbol?, recorded: IgnorePolicy?) -> ActivityView
+
+    # : (?snapshots: bool, ?group: Symbol?, ?recorded: IgnorePolicy?) -> void
+    def initialize: (?snapshots: bool, ?group: Symbol?, ?recorded: IgnorePolicy?) -> void
+
+    # Merging a group compares its outer states, so the snapshots must survive
+    # the build even when the caller did not ask to keep them.
+    # : () -> bool
+    def retain?: () -> bool
+
+    # The attributes a boundary's version recorded, when they were asked for.
+    # : (root: bool) -> Array[String]?
+    def recorded_attributes: (root: bool) -> Array[String]?
+
+    # Applied last, to finished steps, so grouping sees the same timeline the
+    # caller would otherwise have received.
+    # : (Array[ActivityStep]) -> Array[ActivityStep]
+    def present: (Array[ActivityStep]) -> Array[ActivityStep]
+
+    private
+
+    @group: Symbol?
+
+    @recorded: IgnorePolicy?
+
+    @snapshots: bool
+
+    # : () -> bool
+    def grouping?: () -> bool
+  end
+end

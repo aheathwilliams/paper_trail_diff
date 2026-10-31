@@ -44,6 +44,20 @@ module PaperTrailDiff
       end
     end
 
+    # Records sort by type first so that mixed id types stay comparable, then
+    # naturally within one type. Ordering by the printed form instead would put
+    # id 10 before id 2, which is deterministic but reads as unsorted wherever a
+    # result is rendered.
+    #: (untyped, untyped) -> Array[untyped]
+    def sortable_identity(type, id)
+      key = case id
+            when Numeric then [0, id]
+            when String, Symbol then [1, id.to_s]
+            else [2, id.inspect]
+            end
+      [type.to_s, key]
+    end
+
     #: (untyped) -> Array[untyped]
     def chronological_version_key(version)
       version_key(version.created_at, version.id)
@@ -70,10 +84,23 @@ module PaperTrailDiff
     #: (Array[untyped]) -> Array[untyped]?
     def ambiguous_pair(sorted)
       sorted.each_cons(2).find do |left, right|
-        left.created_at == right.created_at &&
-          !(sequential_id?(left.id) && sequential_id?(right.id))
+        left.created_at == right.created_at && !orderable_tie?(left, right)
       end
     end
+
+    # Ids order versions saved in one instant only when they count up in one
+    # table. Two version tables count separately, so ids there say nothing.
+    #: (untyped, untyped) -> bool
+    def orderable_tie?(left, right)
+      version_table(left) == version_table(right) &&
+        sequential_id?(left.id) && sequential_id?(right.id)
+    end
+
+    #: (untyped) -> untyped
+    def version_table(version)
+      version.class.respond_to?(:table_name) ? version.class.table_name : version.class.name
+    end
+    private_class_method :version_table
 
     # Versions sharing a timestamp, whether or not their ids order them. PT-AT
     # indexes association membership per version but resolves it by timestamp,

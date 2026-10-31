@@ -4,31 +4,26 @@
 # or TimeVersionRange, so those are doubles here and their own specs and the
 # integration specs cover what they select.
 RSpec.describe PaperTrailDiff::TimelineRange do
-  # A versioned record as far as Endpoint can tell: it names its versions
-  # association and answers the questions Endpoint.record? asks.
+  # A versioned record as far as Endpoint can tell: it answers the questions
+  # Endpoint.record? asks. `history_with` gives it versions.
   def self.record_class
     Class.new do
-      attr_reader :versions
-
-      def self.versions_association_name = :versions
       def self.base_class = self
-
-      def initialize(versions)
-        @versions = versions
-      end
 
       def persisted? = true
       def destroyed? = false
+      def id = 5
     end
   end
   let(:history) { instance_double(ActiveRecord::Relation) }
-  let(:record) { self.class.record_class.new(history) }
+  let(:record) { self.class.record_class.new }
   let(:plan) { PaperTrailDiff::RootVersionPlan.closing_on(Object.new) }
 
   def start_time = Time.utc(2032, 2, 1, 12)
   def window = start_time...(start_time + 3600)
 
   def history_with(*versions)
+    allow(PaperTrailDiff::Endpoint).to receive(:versions).with(record).and_return(history)
     allow(history).to receive(:reorder).with(created_at: :asc, id: :asc).and_return(versions)
   end
 
@@ -100,6 +95,51 @@ RSpec.describe PaperTrailDiff::TimelineRange do
   end
 
   describe 'a window' do
+    let(:moved) { PaperTrailDiff::TimeRange.new((start_time - 60)...(start_time + 3600)) }
+
+    # As Support.versioned? tells a model PaperTrail tracks.
+    let(:versioned_record) do
+      Class.new(self.class.record_class) { def self.paper_trail_options = {} }.new
+    end
+
+    def versioned(windows)
+      allow(PaperTrailDiff::TransactionCut).to receive(:windows).and_return(windows)
+    end
+
+    def versioned_range(within, **options)
+      described_class.new(versioned_record, from: nil, to: nil, within: within, **options)
+    end
+
+    it 'moves its edges to transaction edges for a versioned record' do
+      versioned('5' => moved)
+
+      expect(versioned_range(window).time_range).to equal(moved)
+      expect(PaperTrailDiff::TransactionCut).to have_received(:windows) do |model, records, asked|
+        expect([model, records, asked.begin_time, asked.end_time, asked.exclude_end?])
+          .to eq([versioned_record.class, [versioned_record], start_time, start_time + 3600, true])
+      end
+    end
+
+    it 'keeps the window when no transaction crosses an edge' do
+      versioned('6' => moved)
+
+      expect(versioned_range(window).time_range.begin_time).to eq(start_time)
+    end
+
+    it 'keeps a window a batch already moved' do
+      versioned('5' => PaperTrailDiff::TimeRange.new(window))
+
+      expect(versioned_range(moved, plan: plan).time_range).to equal(moved)
+      expect(PaperTrailDiff::TransactionCut).not_to have_received(:windows)
+    end
+
+    it 'does not look for transactions of an unversioned record' do
+      allow(PaperTrailDiff::TransactionCut).to receive(:windows)
+
+      expect(range(within: window).time_range.begin_time).to eq(start_time)
+      expect(PaperTrailDiff::TransactionCut).not_to have_received(:windows)
+    end
+
     it 'keeps versions created inside it' do
       inside = Struct.new(:created_at).new(start_time)
       outside = Struct.new(:created_at).new(start_time + 3600)

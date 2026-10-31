@@ -47,6 +47,29 @@ module PaperTrailDiff
       validate_record!(endpoint)
     end
 
+    # The record a method reads the history of: a record, saved or destroyed,
+    # of a model PaperTrail versions.
+    #: (untyped) -> void
+    def validate_root!(record)
+      unless record?(record)
+        raise InvalidEndpointError, "expected a record, got #{described(record)}"
+      end
+      return if Support.versioned?(record.class)
+
+      raise InvalidEndpointError,
+            "#{record.class.name} is not versioned, so it has no history: add has_paper_trail to it"
+    end
+
+    # A relation is named rather than inspected, which would load it.
+    #: (untyped) -> String
+    def described(value)
+      return 'nil' if value.nil?
+      return "the class #{value.name}" if value.is_a?(Module)
+
+      value.class.name.to_s
+    end
+    private_class_method :described
+
     #: (untyped) -> bool
     def version?(endpoint)
       endpoint.respond_to?(:reify) &&
@@ -82,11 +105,11 @@ module PaperTrailDiff
       raise InvalidEndpointError, "cannot resolve endpoint model: #{model_type}", cause: e
     end
 
-    # The record's own PaperTrail versions, under whatever name the model gave
-    # the association.
+    # Every PaperTrail version of the record, whatever scope its versions
+    # association has.
     #: (untyped) -> untyped
     def versions(record)
-      record.public_send(record.class.versions_association_name)
+      VersionQuery.for_items(record.class, record.id)
     rescue NoMethodError => e
       message = 'record does not expose a PaperTrail version history'
       raise InvalidTimelineRangeError, message, cause: e

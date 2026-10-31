@@ -5,7 +5,61 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+### Breaking changes
+
+- An association whose model keeps its versions, or its PT-AT version
+  associations, in different tables than its owner's raises
+  `UnsupportedAssociationError` in every method, and `association_paths`
+  leaves it out. History read through it was wrong: PT-AT records a child's
+  membership with the child's versions but reads it from the owner's tables,
+  so a child that moved to another owner was never reported as removed, and a
+  root with its own version table raised `ActiveRecord::StatementInvalid`.
+
+- An association keyed on a column other than a primary key
+  (`primary_key: :legacy_id`), or a `has_many :through` with such a part,
+  raises `UnsupportedAssociationError` up front in every method, and
+  `association_paths` leaves it out. PT-AT records which record a child
+  pointed at by that record's ID, and history matched children by ID, so an
+  article's history showed another article's comments, and a comment's past
+  article was the wrong one. Comparisons against the current record were
+  right, so the same range disagreed with itself.
+- An association path history cannot read, such as one with a scope written
+  as SQL text, a scope that takes the owner, or a condition on a string
+  column on MySQL or SQL Server, raises `UnsupportedAssociationError` in every
+  method that reads history, unless you pass the new `allow_approximate: true`.
+  The gem reads such a path with PT-AT, which rebuilds an association from its
+  current members and never checks the scope against them: a record that
+  entered the scope since was reported as a member it was not, so a comment
+  moved into `-> { where("position > 2") }` showed as changed rather than
+  added. Single-record methods did this without warning, and batch methods
+  described it only as costly.
+- `include_deleted: true` keeps only the deleted records that met the
+  relation's conditions when they were destroyed, in both `deleted` and
+  `unreachable`. It returned every deleted record of the model that changed in
+  the window, so a report on one account's articles included other accounts'
+  deleted articles with their contents. The relation's conditions must be
+  plain conditions on the model's own columns; a join or SQL text raises
+  `ConfigurationError`.
+
 ### Added
+
+- `diagnose` reports every reason `compare` would refuse the same request as
+  an error, with `compare`'s message, so `ok?` is false whenever `compare`
+  would refuse. It said `ok?` for a path `compare` reads only approximately,
+  such as a scope written as SQL text, raised on an unknown or unsupported
+  association instead of reporting it, and checked only the join model a
+  `has_many :through` goes through first, not every model it reads. It
+  takes `allow_approximate:`, and with `true` reports such a path as an
+  `:approximate_association` warning. The new error codes are
+  `:unknown_association`, `:unsupported_association`, and
+  `:approximate_association`; an unversioned target's message now matches
+  `compare`'s.
+
+- `diagnose` takes the current record as either endpoint, as `compare` does,
+  so `compare(version, record)` can be checked before it runs. Its version
+  checks then run from the version to the latest one. An endpoint that is
+  neither a version nor a saved record raises `InvalidEndpointError` naming
+  that, rather than `VersionMismatchError`.
 
 - Activity steps list the events whose changes they show as `step.sources`,
   oldest first. A step from `group: :transaction` lists every event in the
@@ -31,7 +85,138 @@ project follows [Semantic Versioning](https://semver.org/).
   for whole records, so a record added or removed with only blank fields left
   no trace.
 
+- `associations:` takes what `includes` takes: a single name
+  (`associations: :comments`) or hashes of names to what to include below them
+  (`associations: [:author, { comments: :replies }]`), as well as the arrays of
+  names and dotted paths it took before.
+
+- `nested_changes` compares two top-level arrays, as a `json` column can hold,
+  and reports one `ArrayChange` at the empty path, `[]`. It returned `{}`,
+  although arrays nested in an object were compared.
+
+### Changed
+
+- The performance guide describes current behavior instead of logging each
+  past change: what the batch methods cost, what still grows with a report,
+  the version indexes, what costs a query per record, historical filters,
+  large reports, and how to measure. Its measurements were taken again. The
+  earlier ones remain in `benchmark/results/` and in the changelog.
+
+- `historical_filter:` reads the history of the relation's records only, and
+  of deleted records, which a relation cannot test. It read every record of
+  the model that changed in the window, so a report on one account's articles
+  raised `BatchLimitExceededError` when another account had more matching
+  articles than `limit:`, and spent `max_filter_versions:` on their versions.
+  Matching deleted records no longer count toward `limit:` unless
+  `include_deleted: true` is given, as without a filter.
+
+- The reference says how a record created without a version, such as one
+  imported with `insert_all`, and history pruned with `has_paper_trail
+  limit:` read.
+
+- `IncompleteTimeRangeError` no longer advises the deprecated
+  `close_on: :current`. The quickstart and performance guide no longer say
+  that `has_many :through` or limited associations need the opt-ins, and the
+  reference says that `association_paths` lists paths that need
+  `allow_approximate: true`.
+
+- The quickstart sets PaperTrail's `yaml_column_permitted_classes`. In a new
+  Rails 8.1 app, versions hold timestamps as `ActiveSupport::TimeWithZone`,
+  and the quickstart's first `reify` raised `Psych::DisallowedClass` without
+  it. Its documentation spec now reads a version in that form.
+
+- The README and architecture guide recommend a second version index,
+  `(item_type, created_at, item_id)`. Batch methods with `since:` or
+  `within:` find changed records by type and time, which the one index they
+  recommended cannot narrow, so each report read every version of the model:
+  about 230 ms instead of 2 ms on PostgreSQL with 5 million versions.
+- The gemspec requires Active Record 7.1 to 8.1. CI tests 7.2 through 8.1,
+  and the suite passes on 7.1. It named only PaperTrail, so Bundler could
+  install the gem with Active Record 6.1 or 7.0, whose relations and Arel
+  nodes the gem reads differently.
+- `close_on:` is deprecated and warns through the new
+  `PaperTrailDiff.deprecator`. It has had no effect since a window began
+  closing on the current record by default; remove it. In a Rails app,
+  register the deprecator with
+  `Rails.application.deprecators[:paper_trail_diff] = PaperTrailDiff.deprecator`.
+- `allow_expensive:` is deprecated and has no effect. It refused exactly the
+  paths `allow_approximate:` refuses, so batch methods needed both or
+  neither; `allow_approximate: true` alone now accepts such a path in every
+  method, and `UnsupportedBatchPathError` is no longer raised. Batch methods
+  refuse such a path before their first query, as before, now with
+  `UnsupportedAssociationError`.
+- `reload_live_endpoints:` is deprecated and warns. It still works until it
+  is removed. Skipping the reload saves a query for the records and one per
+  association level in each call, 2 for 500 articles with their comments,
+  and reads values from objects that may be stale; it also needs every
+  requested association loaded, and reads limited ones again anyway. It was
+  on `compare`, `compare_many`, and `activity_timeline` only. Remove it.
+
 ### Fixed
+
+- `timeline`, `activity_timeline`, and `analyze` read every version of a
+  model whose versions association has a scope
+  (`has_paper_trail versions: { scope: }`), as the other methods already did.
+  They read only the versions the scope kept, so a change saved in a version
+  it left out was credited to the next one kept: with a bot's edits hidden,
+  an editor's step showed the bot's later edit too, and the same record and
+  window gave different steps in `analyze` and `analyze_many`. A version the
+  scope leaves out is also accepted as an endpoint. To report only some
+  changes, pass `version_scope:`.
+
+- Activity steps leave out the versions a record saved while it was outside
+  the root's tree. A comment edited on another article, then moved to this
+  one, brought that edit into the article's timeline as a step, and a
+  transaction group's `sources` listed it. Saved together with a comment added
+  to the article, the edit took the credit for the addition. The same went for
+  a comment edited after it moved away or left a scope, and for an author
+  renamed after the article changed authors. A version now counts when its
+  record is in the tree before or after its transaction. The versions of a
+  `has_many :through`'s join rows are all still kept.
+
+- `timeline`, `activity_timeline`, `analyze`, and `analyze_many` raise
+  `InvalidEndpointError` naming what they were given when it is not a record
+  of a versioned model, such as `nil`, a model class, a relation, or a
+  version. They raised a bare `NoMethodError`, or said to provide `from` and
+  `to`. `report` names `since` when it is `nil` or a range.
+
+- A scope ordered by a datetime, such as
+  `-> { order(created_at: :desc, id: :desc).limit(3) }`, is read from history
+  under Rails' default time-zone-aware attributes. Rails wraps those
+  attributes' types, which hid the datetime, so every method raised
+  `UnsupportedAssociationError` for the documented recipe.
+
+- A `Date` bound of `within:` or `since:` is a whole day in `Time.zone`, and
+  a string a time in `Time.zone`, or in UTC without one. They were read in
+  the server's own zone, so the same window covered different hours on
+  different servers, and a same-day `Date..Date` window covered one instant
+  and found nothing.
+
+- A `has_many :through` whose join model is not versioned raises
+  `UnversionedAssociationError` naming the join model when its history is
+  read, and `diagnose` reports it as an error, so `ok?` is false. A
+  comparison raised a bare `KeyError` while `diagnose` reported only a
+  warning.
+
+- `reload_live_endpoints: false` reads an association with a `limit` or
+  `offset`, directly or in a part it goes through, or a scope that takes the
+  owner, again for each record. Active Record's `preload` applies the limit across all the records
+  it loads, so with three articles preloaded, two kept one comment each and
+  the third none, and their unchanged comments were reported as removed.
+
+- A root and its associations that share one version table other than
+  PaperTrail's `versions` can be compared. Association lookups joined PT-AT's
+  version associations to the `versions` table whatever table the versions
+  were in, so every method raised `ActiveRecord::StatementInvalid`.
+
+- A `within:` or `since:` window whose edge falls inside a transaction that
+  saved a version of the root record reports the whole transaction in the
+  later window. A window starting between a comment edit and the `touch: true`
+  article version saved with it showed the edit at the article's next change,
+  credited to that change's author, and the window ending there left it out;
+  when the article saved first, its version was in one window and the comment
+  edit in the other. Each root's edges move back to the transaction's start,
+  read in a fixed number of queries per batch.
 
 - `activity_timeline`, and `analyze` with `activity: true`, no longer report a
   child version saved in the same transaction as the root version that ends
@@ -42,6 +227,85 @@ project follows [Semantic Versioning](https://semver.org/).
   `compare` and `timeline` already did. End at a later version or at the
   current record to include the change, with `group: :transaction` to credit it
   to the child's version.
+- A range that starts at a version now starts before that version's
+  transaction, as one that ends there already ended. A child version saved
+  earlier in the same transaction, such as the update behind a `touch: true`
+  parent version, was read after its change, so `compare`, `analyze`,
+  `timeline`, and `activity_timeline` from that version left the change out.
+  It was also missing from the range ending there, so a history split at that
+  version reported it nowhere. It is now inside the range that starts there.
+- A past `within:` window in `activity_timeline`, and in `analyze`,
+  `analyze_many`, `analyze_scope`, and `report` with `activity: true`, no
+  longer includes association changes made after it. When the root had no
+  version after the window, the window closed on current state, so a comment
+  edited in August appeared in a July window, in its last step, `to_snapshot`,
+  and `diff`; with a later root version the same window was right. It now
+  closes on current state only when nothing on a requested path was recorded
+  after it. The reasoning in 0.8.0, that nothing had been recorded since,
+  checked only the root's own versions. `timeline`, and `analyze` without
+  `activity:`, still run their last step to the root's next version or the
+  current record; the reference now says so.
+- Association scopes read from history now cover `IS NULL` and `IS NOT NULL`
+  on a column of any type, such as a soft-delete scope's
+  `where(deleted_at: nil)`, and `NOT` with SQL's rules for NULL, such as
+  `where.not(position: [1, nil])`. These were read with PT-AT before, so a
+  record restored from a soft delete showed as changed rather than added, and
+  batch methods refused them without `allow_expensive: true`. A condition on a
+  PostgreSQL `citext` column, which compares without regard to case, is no
+  longer read as exact text.
+- A `historical_filter:` hash casts its values, and the recorded ones, to each
+  attribute's type before comparing them, as `where` does. An enum given as a
+  symbol (`{ status: :published }`), and a date or time read from a `json` or
+  `jsonb` version column, which PaperTrail returns as a string, never matched,
+  so the report silently selected nothing.
+- Versions from two version tables saved in the same instant raise
+  `AmbiguousVersionOrderError`, as the reference promises, instead of being
+  ordered by their ids. Each table counts its ids separately, so their order
+  said nothing about which change came first, and an activity timeline built
+  from them could credit a change to the wrong step.
+- `compare_many`, `analyze_many`, `analyze_scope`, and `report` load a
+  `has_one` of every current record in one query again, as before 0.14.0.
+  0.14.0 meant to load only a `has_one` with a declared limit or offset per
+  record, but checked the association's scope, to which Active Record adds
+  `limit(1)` for every `has_one`, so every `has_one` cost one query per
+  record.
+- `report`, `analyze_scope`, and `analyze_many` with `activity: true` no
+  longer read a root's current row once more for activity through a
+  `has_many :through` after its last version. The batch has already loaded
+  it, so the query count no longer grows with the number of roots.
+- A snapshot's collections list their records by type, then ID, as the
+  reference says, wherever the snapshot was read from. Snapshots rebuilt from
+  history or carried through an activity timeline listed them in the order
+  they were found, and a ranked association in its query's order, so `to_h` of
+  the same state differed between methods. Diffs were already ordered.
+- With a `json` or `jsonb` `object` column, an activity step no longer
+  reports an unchanged timestamp as changed. PaperTrail returns such a
+  column's times as strings, and a step after a child's update carried them
+  into the snapshot as they were, so the next step that read the child again
+  reported `created_at` changing from a string to the same time. Activity now
+  casts them as it does every other recorded state. The specs had covered the
+  JSON serializer on a text column only, which PaperTrail casts.
+
+### Development
+
+- A new oracle suite, `rake spec_oracle`, checks rebuilt history against the
+  truth rather than against other gem methods. It makes seeded random edits to
+  an article graph one transaction at a time, records the live state after
+  each, and compares every endpoint, timeline step, activity step, window, and
+  batch result with those states. It also checks that two windows meeting
+  between transactions or inside one report each step once, scoped membership
+  against Active Record, and a tree of one model whose children have
+  encrypted, serialized, enum, custom-type, decimal, and JSON attributes.
+  `rake spec` runs it, so CI runs it on every database. `ORACLE_SEEDS` and
+  `ORACLE_STEPS` widen a run. See `docs/testing.md`.
+- `PTD_PROBE_ALLOW_APPROXIMATE=1` makes the reconstruction probe pass
+  `allow_approximate: true`, so its PT-AT-read scenario runs rather than
+  raising, and neither benchmark passes the deprecated `close_on:` any more.
+- On SQL Server the association specs keep their versions 5 ms apart. Specs
+  that compare the gem with PT-AT failed at random there: PT-AT compares
+  version times through SQL text, which the SQL Server adapter writes as
+  `datetime` values up to 1/300 s off, and after the host clock stepped back
+  the test clock packed versions microseconds apart until it caught up.
 
 ## [0.14.0] - 2026-10-29
 

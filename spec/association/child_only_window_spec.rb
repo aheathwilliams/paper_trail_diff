@@ -6,7 +6,8 @@ require_relative '../support/association_database'
 # it. The activity view must still report the comment, whether the window is
 # closed by a later article version or by current state, and the single-record
 # and batch forms must agree.
-RSpec.describe 'Activity windows where only descendants changed' do
+RSpec.describe 'Activity windows where only descendants changed',
+               mutant_expression: 'PaperTrailDiff::ActivityTimelineBuilder' do
   before do
     PaperTrail::VersionAssociation.delete_all
     PaperTrail::Version.delete_all
@@ -76,6 +77,31 @@ RSpec.describe 'Activity windows where only descendants changed' do
 
     expect(comment_summary(single.diff)).to eq(expected)
     expect(batch.diff.to_h).to eq(single.diff.to_h)
+  end
+
+  # The article has no version after the window, but a comment does. The
+  # window ends where it ends, so that later edit is in no step and not in the
+  # window's final state, whichever method reads it.
+  it 'ends a past window before an association change made after it' do
+    article, window_start = child_only_history
+    window = window_start..Time.now.utc
+    TrackedComment.find_by!(body: 'two').update!(body: 'after the window')
+    options = { within: window, associations: [:comments], activity: true }
+
+    single = PaperTrailDiff.analyze(article, snapshots: true, **options)
+    batch = batch_analysis(article, options)
+    scoped = PaperTrailDiff.analyze_scope(TrackedArticle.all, limit: 10, **options)
+                           .analyses.fetch(PaperTrailDiff::Endpoint.identity(article))
+    steps = PaperTrailDiff.activity_timeline(article, within: window, associations: [:comments])
+
+    expect(comment_summary(single.diff)).to eq(expected)
+    expect(single.to_snapshot.associations.fetch('comments').records.map do |record|
+      record.attributes.fetch('body')
+    end).to contain_exactly('two', 'added')
+    expect([batch.diff.to_h, scoped.diff.to_h]).to eq([single.diff.to_h] * 2)
+    expect(steps.map { |step| step.to_boundary.kind }).not_to include(:current)
+    expect(steps.flat_map { |step| comment_summary(step.diff)[:changed] })
+      .to eq([{ from: 'one', to: 'two' }])
   end
 
   it 'closes on current state by default, as close_on: :current asks' do

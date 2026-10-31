@@ -6,9 +6,13 @@ module PaperTrailDiff
   # queries. Only the range forms that mean the same thing for every root are
   # supported: a shared wall-clock window, or each root's own whole history.
   class BatchedRootVersions
-    #: (Array[untyped], time_range: TimeRange?, version_scope: untyped, live_endpoints: Hash[Array[String], untyped]?, context_required: bool) -> void
-    def initialize(records, time_range:, version_scope:, live_endpoints:, context_required:)
+    #: (Array[untyped], time_range: TimeRange?, version_scope: untyped, live_endpoints: Hash[Array[String], untyped]?, context_required: bool, windows: Hash[Array[String], TimeRange]) -> void
+    def initialize( # rubocop:disable Metrics/ParameterLists
+      records, time_range:, version_scope:, live_endpoints:, context_required:, windows:
+    )
       @records = records
+      # Roots whose window moved to a transaction's start, by identity.
+      @windows = windows
       # An activity view needs a root to reconstruct from even in a window with
       # no root version, exactly as a single-record activity timeline does.
       @context_required = context_required
@@ -34,32 +38,55 @@ module PaperTrailDiff
     # @rbs @version_scope: untyped
     # @rbs @live_endpoints: Hash[Array[String], untyped]?
     # @rbs @context_required: bool
+    # @rbs @windows: Hash[Array[String], TimeRange]
 
     #: (untyped, Array[untyped], Hash[Array[String], RootVersionPlan]) -> void
     def select_model(model_class, records, selected)
       in_range, chosen, trailing = model_versions(model_class, records)
       records.each do |record|
         key = Endpoint.identity(record)
-        selected[key] = versions_for(
-          in_range.fetch(record.id.to_s, []), chosen, trailing[record.id.to_s],
-          live_endpoint(key, record)
-        )
+        own = own_window(key, record.id.to_s, in_range, trailing)
+        selected[key] = versions_for(*own, chosen, live_endpoint(key, record))
       end
+    end
+
+    # Moved windows only start and end earlier, so the versions read for the
+    # widest of them hold each root's own, and the first left past a moved end.
+    #: (Array[String], String, Hash[String, Array[untyped]], Hash[String, untyped]) -> [Array[untyped], untyped]
+    def own_window(key, id, in_range, trailing)
+      loaded = in_range.fetch(id, [])
+      return [loaded, trailing[id]] if @windows.empty?
+
+      # A batch moves windows only when it has one, so this is never nil.
+      window = @windows.fetch(key) { @time_range } #: untyped
+      own, rest = loaded.partition { |version| window.include?(version.created_at) }
+      [own, rest.find { |version| version.created_at >= window.end_time } || trailing[id]]
     end
 
     #: (untyped, Array[untyped]) -> [Hash[String, Array[untyped]], Set[untyped]?, Hash[String, untyped]]
     def model_versions(model_class, records)
       range = @time_range
       empty = {} #: Hash[String, untyped]
+      widest = widest_range(records)
       [
-        grouped_versions(model_class, records, range),
-        chosen_version_ids(model_class, records, range),
+        grouped_versions(model_class, records, widest),
+        chosen_version_ids(model_class, records, widest),
         range ? trailing_versions(model_class, records, range) : empty
       ]
     end
 
-    #: (Array[untyped], Set[untyped]?, untyped, untyped) -> RootVersionPlan
-    def versions_for(in_range, chosen, after_range, live_endpoint)
+    #: (Array[untyped]) -> TimeRange?
+    def widest_range(records)
+      range = @time_range
+      return unless range
+
+      moved = records.filter_map { |record| @windows[Endpoint.identity(record)]&.begin_time }
+      start = [range.begin_time, *moved].min
+      TimeRange.new(range.exclude_end? ? (start...range.end_time) : (start..range.end_time))
+    end
+
+    #: (Array[untyped], untyped, Set[untyped]?, untyped) -> RootVersionPlan
+    def versions_for(in_range, after_range, chosen, live_endpoint)
       RootVersionSelection.new(
         in_range: in_range,
         selected: chosen ? in_range.select { |version| chosen.include?(version.id) } : in_range,
@@ -109,10 +136,7 @@ module PaperTrailDiff
     #: (untyped, Array[untyped]) -> untyped
     def base_scope(model_class, records)
       # Active Record reads each record's id.
-      model_class.paper_trail.version_class.where(
-        item_type: model_class.base_class.name,
-        item_id: records
-      )
+      VersionQuery.for_items(model_class, records)
     end
   end
 end

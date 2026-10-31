@@ -306,6 +306,74 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
                                     historical_filter: { 'title' => 'Old' }).records).to eq([])
     end
 
+    # A busy neighbour's matching records cost nothing and count for nothing.
+    it 'reads the history of the relation\'s records only' do
+      start = Time.now.utc
+      mine, other = %w[Mine Other].map { |name| TrackedAuthor.create!(name: name) }
+      kept = TrackedArticle.create!(title: 'Draft', author: mine)
+      3.times { TrackedArticle.create!(title: 'Draft', author: other) }
+
+      result = select(TrackedArticle.where(author_id: mine.id),
+                      time_range: since(start), limit: 1, max_filter_versions: 2,
+                      historical_filter: { 'title' => 'Draft' })
+
+      expect(result.records).to eq([kept])
+    end
+
+    # A join that repeats a record still selects it once.
+    it 'counts a record the relation repeats once' do
+      start = Time.now.utc
+      article = TrackedArticle.create!(title: 'Draft')
+      2.times { |index| article.comments.create!(body: "Comment #{index}") }
+
+      result = select(TrackedArticle.joins(:comments),
+                      time_range: since(start), limit: 1, historical_filter: { 'title' => 'Draft' })
+
+      expect(result.records).to eq([article])
+    end
+
+    # As without a filter, they are listed but do not count toward the limit.
+    it 'tests deleted records, which no relation can select' do
+      start = Time.now.utc
+      kept = TrackedArticle.create!(title: 'Draft')
+      gone = Array.new(2) { TrackedArticle.create!(title: 'Draft').tap(&:destroy!) }
+      TrackedArticle.create!(title: 'Other').destroy!
+
+      result = select(TrackedArticle.where(id: kept.id), time_range: since(start), limit: 1,
+                                                         historical_filter: { 'title' => 'Draft' })
+
+      expect(result.records).to eq([kept])
+      expect(result.unreachable)
+        .to match_array(gone.map { |article| ['TrackedArticle', article.id.to_s] })
+    end
+
+    # The relation's order and page choose among the records that match.
+    it 'pages the records that match, not the candidates' do
+      start = Time.now.utc
+      first, _other, second, _third = %w[Draft Other Draft Draft].map do |title|
+        TrackedArticle.create!(title: title)
+      end
+
+      result = select(TrackedArticle.order(:id).limit(1).offset(1),
+                      time_range: since(start), historical_filter: { 'title' => 'Draft' })
+
+      expect(result.records).to eq([second])
+      expect(first.id).to be < second.id
+    end
+
+    # Ordering by a name the select list gives needs that list.
+    it 'reads a relation ordered by a column it selects' do
+      start = Time.now.utc
+      article = TrackedArticle.create!(title: 'Draft')
+      relation = TrackedArticle.select('tracked_articles.*, title AS sort_title')
+                               .order('sort_title')
+
+      result = select(relation, time_range: since(start),
+                                historical_filter: { 'title' => 'Draft' })
+
+      expect(result.records).to eq([article])
+    end
+
     it 'passes its version budget on' do
       start = Time.now.utc
       article = TrackedArticle.create!(title: 'Draft')

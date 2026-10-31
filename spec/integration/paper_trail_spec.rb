@@ -325,7 +325,7 @@ RSpec.describe PaperTrailDiff do
         /not preloaded: comments/
       )
       expect do
-        described_class.compare_many([], reload_live_endpoints: nil)
+        described_class.compare_many([], reload_live_endpoints: 'yes')
       end.to raise_error(PaperTrailDiff::ConfigurationError, /must be true or false/)
     end
 
@@ -543,10 +543,12 @@ RSpec.describe PaperTrailDiff do
       versions = UuidVersion.where(item_id: article.id.to_s)
                             .to_a.sort_by { |version| [version.created_at, version.id] }
 
-      report = described_class.diagnose(versions.first, versions.last)
+      [versions.last, article].each do |to|
+        report = described_class.diagnose(versions.first, to)
 
-      expect(report).not_to be_ok
-      expect(report.errors.map(&:code)).to eq([:ambiguous_version_order])
+        expect(report).not_to be_ok
+        expect(report.errors.map(&:code)).to eq([:ambiguous_version_order])
+      end
     end
   end
 
@@ -639,6 +641,55 @@ RSpec.describe PaperTrailDiff do
       end
 
       expect(counts).to eq([1, 1])
+    end
+
+    it 'warns that close_on: is deprecated, once per call, in every method that takes it' do
+      articles, window = open_window_articles(1)
+      article = articles.fetch(0)
+      allow(described_class.deprecator).to receive(:warn)
+
+      described_class.timeline(article, within: window, close_on: :current)
+      described_class.activity_timeline(article, within: window, close_on: :current)
+      described_class.analyze(article, within: window, close_on: :current)
+      described_class.analyze_many([article], within: window, close_on: :current)
+      described_class.analyze_scope(CoreArticle, within: window, limit: 5, close_on: :current)
+      described_class.report(CoreArticle, since: window.begin, limit: 5)
+      described_class.timeline(article, within: window)
+
+      expect(described_class.deprecator).to have_received(:warn)
+        .with(/close_on: is deprecated and has no effect/).exactly(5).times
+    end
+
+    it 'warns that allow_expensive: is deprecated, once per call, in every method that takes it' do
+      articles, window = open_window_articles(1)
+      article = articles.fetch(0)
+      allow(described_class.deprecator).to receive(:warn)
+
+      described_class.compare_many([{ from: :first, to: article }], allow_expensive: true)
+      described_class.analyze_many([article], within: window, allow_expensive: false)
+      described_class.analyze_scope(CoreArticle, within: window, limit: 5, allow_expensive: true)
+      described_class.report(CoreArticle, since: window.begin, limit: 5, allow_expensive: true)
+      described_class.analyze_many([article], within: window)
+
+      expect(described_class.deprecator).to have_received(:warn)
+        .with(/allow_expensive: is deprecated and has no effect/).exactly(4).times
+    end
+
+    it 'warns that reload_live_endpoints: is deprecated, and still honors it' do
+      articles, = open_window_articles(1)
+      article = articles.fetch(0)
+      allow(described_class.deprecator).to receive(:warn)
+      allow(CoreArticle).to receive(:unscoped).and_call_original
+
+      described_class.compare(article.versions.first, article, reload_live_endpoints: false)
+      described_class.activity_timeline(article, reload_live_endpoints: false)
+      expect(CoreArticle).not_to have_received(:unscoped)
+      described_class.compare_many([{ from: :first, to: article }], reload_live_endpoints: true)
+      described_class.compare(article.versions.first, article)
+
+      expect(described_class.deprecator).to have_received(:warn)
+        .with(/reload_live_endpoints: is deprecated/).exactly(3).times
+      expect(CoreArticle).to have_received(:unscoped).twice
     end
 
     it 'rejects a closing endpoint the range cannot use' do
@@ -1035,10 +1086,9 @@ RSpec.describe PaperTrailDiff do
         expect(reified).to eq(12)
       end
 
-      # The early exit must refuse rather than stop scanning: breaking would end
-      # the pass while later candidates could still have been selected, handing
-      # back a quietly short report instead of an error.
-      it 'refuses rather than returning a short result when matches are destroyed' do
+      # Destroyed matches are listed, as without a filter, and count toward
+      # `limit:` only when they are analyzed too, so none is quietly left out.
+      it 'lists every destroyed match, and refuses too many only to analyze them' do
         start_at = Time.now.utc - 3600
         doomed = Array.new(6) do |index|
           article = CoreArticle.create!(title: "gone #{index}", internal_note: 'wanted')
@@ -1047,12 +1097,12 @@ RSpec.describe PaperTrailDiff do
         end
         doomed.each(&:destroy!)
         window = start_at..(Time.now.utc + 3600)
+        options = { within: window, limit: 2, historical_filter: was_review_or_wanted }
 
-        expect do
-          described_class.analyze_scope(CoreArticle, within: window, limit: 2,
-                                                     close_on: :current,
-                                                     historical_filter: was_review_or_wanted)
-        end.to raise_error(PaperTrailDiff::BatchLimitExceededError)
+        expect(described_class.analyze_scope(CoreArticle, **options).unreachable)
+          .to match_array(doomed.map { |article| ['CoreArticle', article.id.to_s] })
+        expect { described_class.analyze_scope(CoreArticle, include_deleted: true, **options) }
+          .to raise_error(PaperTrailDiff::BatchLimitExceededError, /include_deleted/)
       end
 
       it 'preserves activity options alongside the filter' do
@@ -1235,7 +1285,7 @@ RSpec.describe PaperTrailDiff do
       expect { described_class.timeline(article, from: published, to: create_version) }
         .to raise_error(PaperTrailDiff::InvalidTimelineRangeError, /must not follow/)
       expect { described_class.timeline(Object.new, from: draft, to: published) }
-        .to raise_error(PaperTrailDiff::InvalidTimelineRangeError, /version history/)
+        .to raise_error(PaperTrailDiff::InvalidEndpointError, 'expected a record, got Object')
     end
 
     it 'loads only the requested slice of a long root history' do
@@ -1620,13 +1670,15 @@ RSpec.describe PaperTrailDiff do
       expect(report.to_h).to eq(ok: true, issues: [])
     end
 
+    # CoreComment has no history either, which compare refuses next.
     it 'reports unavailable association tracking without raising' do
       _article, _create, draft, published, = create_history
 
       report = described_class.diagnose(draft, published, associations: [:comments])
 
       expect(report).not_to be_ok
-      expect(report.errors.map(&:code)).to eq([:association_tracking_unavailable])
+      expect(report.errors.map(&:code))
+        .to eq(%i[association_tracking_unavailable unversioned_association_target])
       expect(report.warnings).to be_empty
     end
 
@@ -1636,6 +1688,35 @@ RSpec.describe PaperTrailDiff do
 
       expect { described_class.diagnose(draft, other.versions.first) }
         .to raise_error(PaperTrailDiff::VersionMismatchError, /same PaperTrail item/)
+      expect { described_class.diagnose(draft, other) }
+        .to raise_error(PaperTrailDiff::VersionMismatchError, /same PaperTrail item/)
+    end
+
+    # As `compare(version, record)` takes them, in either order.
+    it 'checks a comparison with the current record' do
+      article, _create, draft, = create_history
+
+      [[draft, article], [article, draft]].each do |from, to|
+        report = described_class.diagnose(from, to)
+        expect(report.to_h).to eq(ok: true, issues: [])
+      end
+    end
+
+    it 'names an endpoint that is neither a version nor a record' do
+      _article, _create, draft, = create_history
+
+      [[draft, nil], [nil, draft], [draft, CoreArticle]].each do |from, to|
+        expect { described_class.diagnose(from, to) }
+          .to raise_error(PaperTrailDiff::InvalidEndpointError, /version or persisted record/)
+      end
+    end
+
+    # Two current records read no history, so there is nothing to check.
+    it 'passes two current records of one item' do
+      article, = create_history
+
+      expect(described_class.diagnose(article, CoreArticle.find(article.id)).to_h)
+        .to eq(ok: true, issues: [])
     end
   end
 end

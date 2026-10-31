@@ -16,8 +16,10 @@ module PaperTrailDiff
     # : (untyped, predicate: untyped, time_range: TimeRange?, limit: Integer, max_versions: Integer) -> void
     def initialize: (untyped, predicate: untyped, time_range: TimeRange?, limit: Integer, max_versions: Integer) -> void
 
-    # : (Array[String]) -> Array[String]
-    def call: (Array[String]) -> Array[String]
+    # More matches than the limit raise, unless the caller does not count
+    # them: candidates it only lists, such as deleted roots.
+    # : (Array[String], ?counted: bool) -> Array[String]
+    def call: (Array[String], ?counted: bool) -> Array[String]
 
     private
 
@@ -37,6 +39,14 @@ module PaperTrailDiff
 
     # : (untyped) -> untyped
     def validate_predicate: (untyped) -> untyped
+
+    # Expected and recorded values compare as the attribute casts them, as
+    # `where` reads its values: an enum's symbol names its stored value, and a
+    # `json` or `jsonb` version column, which PaperTrail does not cast, holds
+    # dates and times as strings. Casting also copies a mutable value, so the
+    # filter keeps its own.
+    # : (String, untyped) -> untyped
+    def cast: (String, untyped) -> untyped
 
     # : (untyped) -> Integer
     def validate_budget: (untyped) -> Integer

@@ -1,0 +1,35 @@
+# Generated from lib/paper_trail_diff/deprecation.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Warns about options that do nothing any more and will be removed. In a
+  # Rails app, register the deprecator to configure it with the app's own:
+  #
+  #   Rails.application.deprecators[:paper_trail_diff] = PaperTrailDiff.deprecator
+  module Deprecation
+    CLOSE_ON: ::String
+
+    ALLOW_EXPENSIVE: ::String
+
+    RELOAD_LIVE_ENDPOINTS: ::String
+
+    # Required when first used, as the library loads nothing it does not need.
+    # : () -> untyped
+    def self.deprecator: () -> untyped
+
+    # The one value close_on: took. It named what ends a wall-clock window,
+    # so it was meaningless without one, and until it is removed it is still
+    # checked as it was.
+    CLOSE_ON_CURRENT: ::Symbol
+
+    # : (Symbol?, untyped) -> void
+    def self.close_on!: (Symbol?, untyped) -> void
+
+    # : (untyped) -> void
+    def self.allow_expensive!: (untyped) -> void
+
+    # The value to use: the option still works until it is removed, and nil
+    # stands for its old default.
+    # : (untyped) -> untyped
+    def self.reload_live_endpoints!: (untyped) -> untyped
+  end
+end

@@ -9,14 +9,17 @@ require_relative 'paper_trail_diff/version_query'
 require_relative 'paper_trail_diff/stored_time_precision'
 require_relative 'paper_trail_diff/version_boundary'
 require_relative 'paper_trail_diff/instrumentation'
+require_relative 'paper_trail_diff/deprecation'
 require_relative 'paper_trail_diff/errors'
 require_relative 'paper_trail_diff/configuration'
 require_relative 'paper_trail_diff/endpoint'
 require_relative 'paper_trail_diff/recorded_class'
+require_relative 'paper_trail_diff/association_key'
+require_relative 'paper_trail_diff/version_table'
 require_relative 'paper_trail_diff/association_traversal'
 require_relative 'paper_trail_diff/scope_ranking'
 require_relative 'paper_trail_diff/scope_condition'
-require_relative 'paper_trail_diff/batch_safety'
+require_relative 'paper_trail_diff/approximate_paths'
 require_relative 'paper_trail_diff/traversal_preparer'
 require_relative 'paper_trail_diff/association_discovery'
 require_relative 'paper_trail_diff/diagnostics'
@@ -47,6 +50,7 @@ require_relative 'paper_trail_diff/prepared_edge_loader'
 require_relative 'paper_trail_diff/prepared_history_loader'
 require_relative 'paper_trail_diff/prepared_association_reifier'
 require_relative 'paper_trail_diff/live_association_reader'
+require_relative 'paper_trail_diff/batch_preload'
 require_relative 'paper_trail_diff/live_endpoint_batch_loader'
 require_relative 'paper_trail_diff/preloaded_endpoint_batch_loader'
 require_relative 'paper_trail_diff/live_endpoint_provider'
@@ -74,7 +78,7 @@ require_relative 'paper_trail_diff/activity_event_snapshot_refresher'
 require_relative 'paper_trail_diff/activity_root_snapshot_refresher'
 require_relative 'paper_trail_diff/branch_snapshot_refresher'
 require_relative 'paper_trail_diff/activity_boundary'
-require_relative 'paper_trail_diff/activity_grouping'
+require_relative 'paper_trail_diff/activity_view'
 require_relative 'paper_trail_diff/activity_transaction_grouper'
 require_relative 'paper_trail_diff/step'
 require_relative 'paper_trail_diff/analysis'
@@ -86,11 +90,13 @@ require_relative 'paper_trail_diff/historical_filter'
 require_relative 'paper_trail_diff/association_activity_edge'
 require_relative 'paper_trail_diff/association_activity_selection'
 require_relative 'paper_trail_diff/scoped_root_selection'
+require_relative 'paper_trail_diff/deleted_root_filter'
 require_relative 'paper_trail_diff/scoped_analysis_builder'
 require_relative 'paper_trail_diff/batched_root_analyzer'
 require_relative 'paper_trail_diff/version_range'
 require_relative 'paper_trail_diff/version_sequence_diagnostics'
 require_relative 'paper_trail_diff/time_range'
+require_relative 'paper_trail_diff/transaction_cut'
 require_relative 'paper_trail_diff/time_version_range'
 require_relative 'paper_trail_diff/timeline_range'
 require_relative 'paper_trail_diff/timeline_builder'
@@ -100,8 +106,8 @@ require_relative 'paper_trail_diff/activity_child_candidate_loader'
 require_relative 'paper_trail_diff/activity_target_candidate_loader'
 require_relative 'paper_trail_diff/activity_version_collector'
 require_relative 'paper_trail_diff/activity_snapshot_sequence'
+require_relative 'paper_trail_diff/activity_tree_filter'
 require_relative 'paper_trail_diff/activity_history'
-require_relative 'paper_trail_diff/time_activity_timeline_builder'
 require_relative 'paper_trail_diff/activity_timeline_builder'
 require_relative 'paper_trail_diff/paper_trail_adapter'
 
@@ -119,10 +125,10 @@ require_relative 'paper_trail_diff/paper_trail_adapter'
 #     type comparison_input = Hash[String | Symbol, untyped]
 #     type comparison_results = Hash[identity, Diff]
 #     type report_options = {
-#       within: untyped, activity: bool, version_scope: untyped,
-#       close_on: Symbol?, snapshots: bool, group: Symbol?
+#       within: untyped, activity: bool, version_scope: untyped, view: ActivityView
 #     }
 #     type ignore_option = Array[String | Symbol] | Hash[String | Symbol, untyped]
+#     type association_option = String | Symbol | Array[untyped] | Hash[untyped, untyped]
 #     type reference_key = :type | :id | "type" | "id"
 #     type traversal_context = :change | :included_state
 #     type traversal_state = :before | :after
@@ -143,43 +149,45 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
 
   class << self # rubocop:disable Metrics/ClassLength
     # Compares net state between explicit PaperTrail-version or current-record endpoints.
-    #: (untyped, untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?reload_live_endpoints: bool) -> Diff
-    def compare(
+    #: (untyped, untyped, ?associations: association_option, ?ignore: ignore_option, ?reload_live_endpoints: bool?, ?allow_approximate: bool) -> Diff
+    def compare( # rubocop:disable Metrics/ParameterLists
       from_version,
       to_version,
       associations: [],
       ignore: DEFAULT_IGNORED_ATTRIBUTES,
-      reload_live_endpoints: true
+      reload_live_endpoints: nil,
+      allow_approximate: false
     )
       PaperTrailAdapter.new(
         associations: associations,
         ignore: ignore,
-        reload_live_endpoints: reload_live_endpoints
-      ).compare(
-        from_version,
-        to_version
-      )
+        reload_live_endpoints: Deprecation.reload_live_endpoints!(reload_live_endpoints),
+        allow_approximate: allow_approximate
+      ).compare(from_version, to_version)
     end
 
     # Compares many independent endpoint pairs while batching current-record loading.
-    #: (Array[comparison_input], ?associations: Array[String | Symbol], ?ignore: ignore_option, ?reload_live_endpoints: bool, ?allow_expensive: bool) -> comparison_results
-    def compare_many(
+    #: (Array[comparison_input], ?associations: association_option, ?ignore: ignore_option, ?reload_live_endpoints: bool?, ?allow_expensive: bool?, ?allow_approximate: bool) -> comparison_results
+    def compare_many( # rubocop:disable Metrics/ParameterLists
       comparisons,
       associations: [],
       ignore: DEFAULT_IGNORED_ATTRIBUTES,
-      reload_live_endpoints: true,
-      allow_expensive: false
+      reload_live_endpoints: nil,
+      allow_expensive: nil,
+      allow_approximate: false
     )
+      Deprecation.allow_expensive!(allow_expensive)
       PaperTrailAdapter.new(
         associations: associations,
         ignore: ignore,
-        reload_live_endpoints: reload_live_endpoints, allow_expensive: allow_expensive
+        reload_live_endpoints: Deprecation.reload_live_endpoints!(reload_live_endpoints),
+        allow_approximate: allow_approximate
       ).compare_many(comparisons)
     end
 
     # Compares every adjacent reconstructed state in an inclusive version range,
     # by default the record's whole history through its current state.
-    #: (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?version_scope: untyped, ?close_on: Symbol?) -> Array[Step]
+    #: (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: association_option, ?ignore: ignore_option, ?version_scope: untyped, ?close_on: Symbol?, ?allow_approximate: bool) -> Array[Step]
     def timeline( # rubocop:disable Metrics/ParameterLists
       record,
       from: nil,
@@ -188,23 +196,23 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
       associations: [],
       ignore: DEFAULT_IGNORED_ATTRIBUTES,
       version_scope: nil,
-      close_on: nil
+      close_on: nil,
+      allow_approximate: false
     )
-      PaperTrailAdapter.new(associations: associations, ignore: ignore).timeline(
+      Deprecation.close_on!(close_on, within)
+      PaperTrailAdapter.new(
+        associations: associations, ignore: ignore, allow_approximate: allow_approximate
+      ).timeline(
         record,
         from: from,
         to: to,
         within: within,
-        version_scope: version_scope,
-        close_on: close_on
+        version_scope: version_scope
       )
     end
 
     # Compares adjacent root and selected-descendant activity boundaries.
-    # `reload_live_endpoints:` applies whenever the range ends at the current
-    # record: an explicit `to:` record, the default range, or a window with no
-    # later version.
-    #: (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?reload_live_endpoints: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?recorded_changes: bool) -> Array[ActivityStep]
+    #: (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: association_option, ?ignore: ignore_option, ?reload_live_endpoints: bool?, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?recorded_changes: bool, ?allow_approximate: bool) -> Array[ActivityStep]
     def activity_timeline( # rubocop:disable Metrics/ParameterLists
       record,
       from: nil,
@@ -212,32 +220,32 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
       within: nil,
       associations: [],
       ignore: DEFAULT_IGNORED_ATTRIBUTES,
-      reload_live_endpoints: true,
+      reload_live_endpoints: nil,
       version_scope: nil,
       close_on: nil,
       snapshots: false,
       group: nil,
-      recorded_changes: false
+      recorded_changes: false,
+      allow_approximate: false
     )
+      Deprecation.close_on!(close_on, within)
       PaperTrailAdapter.new(
-        associations: associations,
-        ignore: ignore,
-        reload_live_endpoints: reload_live_endpoints,
-        recorded_changes: recorded_changes
+        associations: associations, ignore: ignore,
+        reload_live_endpoints: Deprecation.reload_live_endpoints!(reload_live_endpoints),
+        recorded_changes: recorded_changes, allow_approximate: allow_approximate
       ).activity_timeline(
         record,
         from: from,
         to: to,
         within: within,
         version_scope: version_scope,
-        close_on: close_on,
         group: group,
         snapshots: snapshots
       )
     end
 
     # Builds an endpoint diff and root-checkpoint timeline while normalizing each version once.
-    #: (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?recorded_changes: bool) -> Analysis
+    #: (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: association_option, ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?recorded_changes: bool, ?allow_approximate: bool) -> Analysis
     def analyze( # rubocop:disable Metrics/ParameterLists
       record,
       from: nil,
@@ -250,10 +258,13 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
       close_on: nil,
       snapshots: false,
       group: nil,
-      recorded_changes: false
+      recorded_changes: false,
+      allow_approximate: false
     )
+      Deprecation.close_on!(close_on, within)
       PaperTrailAdapter.new(
-        associations: associations, ignore: ignore, recorded_changes: recorded_changes
+        associations: associations, ignore: ignore, recorded_changes: recorded_changes,
+        allow_approximate: allow_approximate
       ).analyze(
         record,
         from: from,
@@ -261,7 +272,6 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
         within: within,
         activity: activity,
         version_scope: version_scope,
-        close_on: close_on,
         snapshots: snapshots,
         group: group
       )
@@ -272,7 +282,7 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
     # returns a frozen Hash keyed by identity. Roots with nothing to report in
     # the window return an empty `Analysis`. To let a relation choose the
     # records, use `analyze_scope`.
-    #: (Array[untyped], ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?allow_expensive: bool, ?recorded_changes: bool) -> Hash[identity, Analysis]
+    #: (Array[untyped], ?within: untyped, ?associations: association_option, ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?allow_expensive: bool?, ?recorded_changes: bool, ?allow_approximate: bool) -> Hash[identity, Analysis]
     def analyze_many( # rubocop:disable Metrics/ParameterLists
       records,
       within: nil,
@@ -283,14 +293,17 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
       close_on: nil,
       snapshots: false,
       group: nil,
-      allow_expensive: false,
-      recorded_changes: false
+      allow_expensive: nil,
+      recorded_changes: false,
+      allow_approximate: false
     )
+      Deprecation.close_on!(close_on, within)
+      Deprecation.allow_expensive!(allow_expensive)
       PaperTrailAdapter.new(
-        associations: associations, ignore: ignore, allow_expensive: allow_expensive,
-        recorded_changes: recorded_changes
+        associations: associations, ignore: ignore,
+        recorded_changes: recorded_changes, allow_approximate: allow_approximate
       ).analyze_many(records, within: within, activity: activity, version_scope: version_scope,
-                              close_on: close_on, snapshots: snapshots, group: group)
+                              snapshots: snapshots, group: group)
     end
 
     # Analyzes every root the relation reaches whose history moved inside the
@@ -319,7 +332,7 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
     # Note also that a relation selects on current state, not on state during
     # the window: `where(status: 'published')` means published *now*, which is a
     # different set from what was published while the window was open.
-    #: (untyped, limit: Integer?, ?within: untyped, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?historical_filter: untyped, ?max_filter_versions: Integer, ?include_deleted: bool, ?allow_expensive: bool, ?recorded_changes: bool) -> ScopedAnalysis
+    #: (untyped, limit: Integer?, ?within: untyped, ?associations: association_option, ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?historical_filter: untyped, ?max_filter_versions: Integer, ?include_deleted: bool, ?allow_expensive: bool?, ?recorded_changes: bool, ?allow_approximate: bool) -> ScopedAnalysis
     def analyze_scope( # rubocop:disable Metrics/ParameterLists
       scope,
       limit:,
@@ -334,15 +347,18 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
       historical_filter: nil,
       max_filter_versions: HistoricalFilter::DEFAULT_VERSION_LIMIT,
       include_deleted: false,
-      allow_expensive: false,
-      recorded_changes: false
+      allow_expensive: nil,
+      recorded_changes: false,
+      allow_approximate: false
     )
+      Deprecation.close_on!(close_on, within)
+      Deprecation.allow_expensive!(allow_expensive)
       adapter = PaperTrailAdapter.new(associations: associations, ignore: ignore,
-                                      allow_expensive: allow_expensive,
-                                      recorded_changes: recorded_changes)
+                                      recorded_changes: recorded_changes,
+                                      allow_approximate: allow_approximate)
       adapter.analyze_scope(
         scope, limit: limit, within: within, activity: activity,
-               version_scope: version_scope, close_on: close_on, snapshots: snapshots, group: group,
+               version_scope: version_scope, snapshots: snapshots, group: group,
                historical_filter: historical_filter, max_filter_versions: max_filter_versions,
                include_deleted: include_deleted
       )
@@ -352,21 +368,33 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
     # for every root that changed or whose requested associations did.
     # Historical windows remain explicit on analyze_scope; this entry point is
     # deliberately named for a report through now rather than an as-of query.
-    #: (untyped, since: untyped, limit: Integer, ?associations: Array[String | Symbol], ?ignore: ignore_option, ?snapshots: bool, ?group: Symbol?, ?include_deleted: bool, ?historical_filter: untyped, ?max_filter_versions: Integer, ?allow_expensive: bool, ?recorded_changes: bool) -> ScopedAnalysis
+    #: (untyped, since: untyped, limit: Integer, ?associations: association_option, ?ignore: ignore_option, ?snapshots: bool, ?group: Symbol?, ?include_deleted: bool, ?historical_filter: untyped, ?max_filter_versions: Integer, ?allow_expensive: bool?, ?recorded_changes: bool, ?allow_approximate: bool) -> ScopedAnalysis
     def report( # rubocop:disable Metrics/ParameterLists
       scope, since:, limit:, associations: [], ignore: DEFAULT_IGNORED_ATTRIBUTES,
       snapshots: false, group: nil, include_deleted: false, historical_filter: nil,
-      max_filter_versions: HistoricalFilter::DEFAULT_VERSION_LIMIT, allow_expensive: false,
-      recorded_changes: false
+      max_filter_versions: HistoricalFilter::DEFAULT_VERSION_LIMIT, allow_expensive: nil,
+      recorded_changes: false, allow_approximate: false
     )
+      # A range here would become the start of another range.
+      if since.nil? || since.is_a?(Range)
+        raise InvalidTimeRangeError, '`since` must be a time, date, or string; for a range, ' \
+                                     'pass it as `within:` to analyze_scope'
+      end
+
       analyze_scope(
         scope,
         within: since..Time.now.utc, limit: limit, associations: associations,
-        ignore: ignore, activity: true, close_on: :current, snapshots: snapshots, group: group,
+        ignore: ignore, activity: true, snapshots: snapshots, group: group,
         include_deleted: include_deleted, historical_filter: historical_filter,
         max_filter_versions: max_filter_versions, allow_expensive: allow_expensive,
-        recorded_changes: recorded_changes
+        recorded_changes: recorded_changes, allow_approximate: allow_approximate
       )
+    end
+
+    # Warns about deprecated options; see Deprecation.
+    #: () -> untyped
+    def deprecator
+      Deprecation.deprecator
     end
 
     # Returns the association macros this release can normalize.
@@ -381,10 +409,13 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
       AssociationDiscovery.new(model_or_record, max_depth: max_depth).call
     end
 
-    # Reports known reconstruction hazards without mutating application state.
-    #: (untyped, untyped, ?associations: Array[String | Symbol]) -> DiagnosticReport
-    def diagnose(from_version, to_version, associations: [])
-      HistoryDiagnostics.new(from_version, to_version, associations: associations).call
+    # Reports known reconstruction hazards without mutating application state,
+    # for the endpoints `compare` takes: two versions, or a version and the
+    # current record. Every reason `compare` would refuse them is an error.
+    #: (untyped, untyped, ?associations: association_option, ?allow_approximate: bool) -> DiagnosticReport
+    def diagnose(from, to, associations: [], allow_approximate: false)
+      HistoryDiagnostics.new(from, to, associations: associations,
+                                       allow_approximate: allow_approximate).call
     end
 
     # Looks inside an attribute the database stores whole, such as a JSON or

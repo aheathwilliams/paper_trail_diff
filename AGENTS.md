@@ -54,6 +54,7 @@ Run Ruby and package commands through mise in non-interactive shells:
 mise exec -- bundle install
 mise exec -- bundle exec rake spec_core
 mise exec -- bundle exec rake spec_associations
+mise exec -- bundle exec rake spec_oracle
 mise exec -- bundle exec rake rubocop
 mise exec -- bundle exec rake typecheck
 mise exec -- bundle exec rake
