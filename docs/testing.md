@@ -125,7 +125,10 @@ description names the mutated class (`RSpec.describe PaperTrailDiff::Engine`),
 falling back to wider names such as `PaperTrailDiff` when none does. A spec
 named after a behavior, as most integration specs are, never runs. So each
 mutated class has a unit spec of its own that catches every mutation in it,
-and a class added to `mutant.yml` needs one too.
+and a class added to `mutant.yml` needs one too. A spec named after a
+behavior can still name the class it checks with metadata, as the activity
+window specs do: `RSpec.describe 'Activity over a window', mutant_expression:
+'PaperTrailDiff::ActivityTimelineBuilder'`.
 
 Mutant counts a mutation that runs past its time limit as caught, so
 `mutant.yml` sets the limit well above the time the whole suite takes. With

@@ -190,9 +190,11 @@ RSpec.describe PaperTrailDiff::ActivityTimelineBuilder do
     it 'requires a root version to start from' do
       article = TrackedArticle.create!(title: 'Article')
 
-      expect { timeline(article, from: article, to: article) }
-        .to raise_error(PaperTrailDiff::InvalidTimelineRangeError,
-                        '`from` must be a root PaperTrail version')
+      [-> { timeline(article, from: article, to: article) },
+       -> { analysis(article, from: article, to: article) }].each do |call|
+        expect(&call).to raise_error(PaperTrailDiff::InvalidTimelineRangeError,
+                                     '`from` must be a root PaperTrail version')
+      end
     end
 
     it 'rejects an endpoint of another record' do

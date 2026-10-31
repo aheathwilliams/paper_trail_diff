@@ -4,7 +4,8 @@ require_relative '../support/association_database'
 
 # The root has no version in the window, so the targets it points at come from
 # its state when the window opened rather than from changes of its own.
-RSpec.describe 'Activity windows where only a belongs_to target changed' do
+RSpec.describe 'Activity windows where only a belongs_to target changed',
+               mutant_expression: 'PaperTrailDiff::ActivityTimelineBuilder' do
   before do
     PaperTrail::VersionAssociation.delete_all
     PaperTrail::Version.delete_all

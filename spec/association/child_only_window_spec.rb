@@ -6,7 +6,8 @@ require_relative '../support/association_database'
 # it. The activity view must still report the comment, whether the window is
 # closed by a later article version or by current state, and the single-record
 # and batch forms must agree.
-RSpec.describe 'Activity windows where only descendants changed' do
+RSpec.describe 'Activity windows where only descendants changed',
+               mutant_expression: 'PaperTrailDiff::ActivityTimelineBuilder' do
   before do
     PaperTrail::VersionAssociation.delete_all
     PaperTrail::Version.delete_all

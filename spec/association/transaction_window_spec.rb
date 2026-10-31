@@ -28,7 +28,8 @@ end
 # PT-AT reads a root's associations at the start of the transaction of the
 # root version it reifies, so a window edge inside a transaction moves back to
 # where the transaction began: the whole transaction is in the later window.
-RSpec.describe 'Windows that meet inside a transaction' do
+RSpec.describe 'Windows that meet inside a transaction',
+               mutant_expression: 'PaperTrailDiff::ActivityTimelineBuilder' do
   before do
     PaperTrail::VersionAssociation.delete_all
     PaperTrail::Version.delete_all
