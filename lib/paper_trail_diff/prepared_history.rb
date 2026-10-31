@@ -146,6 +146,11 @@ module PaperTrailDiff
       owners ? owners.fetch(owner.id.to_s, empty) : group.fetch(:ids)
     end
 
+    # PT-AT records a checkpoint's membership as it is when the checkpoint is
+    # saved, so a tag attached earlier in the checkpoint's own transaction is a
+    # member there, unlike other associations, which a version reads as they
+    # were before its transaction. A member created in that transaction has no
+    # earlier state, so it is read as it was created.
     #: (untyped, untyped, untyped, untyped, bool) -> Array[untyped]?
     def habtm_records(record, reflection, boundary, habtm_boundary, ranked)
       transaction_id = transaction_id_for(habtm_boundary)
@@ -155,7 +160,10 @@ module PaperTrailDiff
       ids = @habtm.fetch(edge_key(record.class, reflection), empty)[transaction_id.to_s]
       return unless ids
 
-      members = ids.filter_map { |id| @records.record_before(reflection.klass, id, boundary) }
+      members = ids.filter_map do |id|
+        @records.record_before(reflection.klass, id, boundary) ||
+          @records.record_created_in(reflection.klass, id, habtm_boundary)
+      end
       @conditions.select(reflection, members, ranked: ranked)
     end
 

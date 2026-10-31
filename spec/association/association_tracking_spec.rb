@@ -561,6 +561,29 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     expect(step_tags.to_h).to eq(tags.to_h)
   end
 
+  # A checkpoint records membership as it is when saved, so a tag attached
+  # earlier in its own transaction is a member there. A tag created in that
+  # transaction used to be dropped, as it had no state before the transaction,
+  # so the checkpoint missed it and a comparison with now reported it added.
+  it "reads a tag attached in a checkpoint's own transaction as a member there" do
+    article = TrackedArticle.create!(title: 'T')
+    existing = TrackedTag.create!(name: 'Existing')
+    before = habtm_boundary_for(article)
+    TrackedArticle.transaction do
+      created = TrackedTag.create!(name: 'Created with the checkpoint')
+      TrackedArticle.find(article.id).tags << [existing, created]
+      habtm_boundary_for(article)
+    end
+    after = article.versions.reload.last
+
+    tags = PaperTrailDiff.compare(before, after, associations: [:tags]).associations.fetch('tags')
+    since = PaperTrailDiff.compare(after, article, associations: [:tags])
+
+    expect(tags.added.map { |tag| tag.attributes.fetch('name') })
+      .to eq(['Existing', 'Created with the checkpoint'])
+    expect(since.associations).not_to have_key('tags')
+  end
+
   # The root's checkpoints record the root's tags and nothing else, so the
   # tag's articles used to read as empty at both: `Other` joining the tag went
   # unreported, and against the current record both articles read as added.

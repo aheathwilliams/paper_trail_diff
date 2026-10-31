@@ -154,6 +154,12 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- A HABTM member created in the same transaction as the checkpoint that
+  records it is a member at that checkpoint, as a member attached there
+  already was. It was left out, because it had no state before the
+  transaction, so the checkpoint missed it and a comparison from the
+  checkpoint to now reported it added.
+
 - `association_paths` leaves out an association whose target, or a model its
   `has_many :through` goes through, has no `has_paper_trail`, such as the
   `file_attachment` and `file_blob` that `has_one_attached` defines. Every
