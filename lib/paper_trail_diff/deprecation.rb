@@ -24,9 +24,20 @@ module PaperTrailDiff
       end
     end
 
-    #: (Symbol?) -> void
-    def self.close_on!(close_on)
-      deprecator.warn(CLOSE_ON) unless close_on.nil?
+    # The one value close_on: took. It named what ends a wall-clock window,
+    # so it was meaningless without one, and until it is removed it is still
+    # checked as it was.
+    CLOSE_ON_CURRENT = :current
+
+    #: (Symbol?, untyped) -> void
+    def self.close_on!(close_on, within)
+      return if close_on.nil?
+      unless close_on == CLOSE_ON_CURRENT
+        raise ConfigurationError, "close_on: must be #{CLOSE_ON_CURRENT.inspect} or nil"
+      end
+      raise ConfigurationError, 'close_on: requires `within`' if within.nil?
+
+      deprecator.warn(CLOSE_ON)
     end
 
     #: (untyped) -> void

@@ -14,8 +14,13 @@ module PaperTrailDiff
     # : () -> untyped
     def self.deprecator: () -> untyped
 
-    # : (Symbol?) -> void
-    def self.close_on!: (Symbol?) -> void
+    # The one value close_on: took. It named what ends a wall-clock window,
+    # so it was meaningless without one, and until it is removed it is still
+    # checked as it was.
+    CLOSE_ON_CURRENT: ::Symbol
+
+    # : (Symbol?, untyped) -> void
+    def self.close_on!: (Symbol?, untyped) -> void
 
     # : (untyped) -> void
     def self.allow_expensive!: (untyped) -> void

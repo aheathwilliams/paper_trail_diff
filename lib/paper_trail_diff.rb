@@ -127,7 +127,7 @@ require_relative 'paper_trail_diff/paper_trail_adapter'
 #     type comparison_results = Hash[identity, Diff]
 #     type report_options = {
 #       within: untyped, activity: bool, version_scope: untyped,
-#       close_on: Symbol?, snapshots: bool, group: Symbol?
+#       snapshots: bool, group: Symbol?
 #     }
 #     type ignore_option = Array[String | Symbol] | Hash[String | Symbol, untyped]
 #     type association_option = String | Symbol | Array[untyped] | Hash[untyped, untyped]
@@ -201,7 +201,7 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
       close_on: nil,
       allow_approximate: false
     )
-      Deprecation.close_on!(close_on)
+      Deprecation.close_on!(close_on, within)
       PaperTrailAdapter.new(
         associations: associations, ignore: ignore, allow_approximate: allow_approximate
       ).timeline(
@@ -209,8 +209,7 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
         from: from,
         to: to,
         within: within,
-        version_scope: version_scope,
-        close_on: close_on
+        version_scope: version_scope
       )
     end
 
@@ -234,7 +233,7 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
       recorded_changes: false,
       allow_approximate: false
     )
-      Deprecation.close_on!(close_on)
+      Deprecation.close_on!(close_on, within)
       PaperTrailAdapter.new(
         associations: associations, ignore: ignore, reload_live_endpoints: reload_live_endpoints,
         recorded_changes: recorded_changes, allow_approximate: allow_approximate
@@ -244,7 +243,6 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
         to: to,
         within: within,
         version_scope: version_scope,
-        close_on: close_on,
         group: group,
         snapshots: snapshots
       )
@@ -267,7 +265,7 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
       recorded_changes: false,
       allow_approximate: false
     )
-      Deprecation.close_on!(close_on)
+      Deprecation.close_on!(close_on, within)
       PaperTrailAdapter.new(
         associations: associations, ignore: ignore, recorded_changes: recorded_changes,
         allow_approximate: allow_approximate
@@ -278,7 +276,6 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
         within: within,
         activity: activity,
         version_scope: version_scope,
-        close_on: close_on,
         snapshots: snapshots,
         group: group
       )
@@ -304,13 +301,13 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
       recorded_changes: false,
       allow_approximate: false
     )
-      Deprecation.close_on!(close_on)
+      Deprecation.close_on!(close_on, within)
       Deprecation.allow_expensive!(allow_expensive)
       PaperTrailAdapter.new(
         associations: associations, ignore: ignore,
         recorded_changes: recorded_changes, allow_approximate: allow_approximate
       ).analyze_many(records, within: within, activity: activity, version_scope: version_scope,
-                              close_on: close_on, snapshots: snapshots, group: group)
+                              snapshots: snapshots, group: group)
     end
 
     # Analyzes every root the relation reaches whose history moved inside the
@@ -358,14 +355,14 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
       recorded_changes: false,
       allow_approximate: false
     )
-      Deprecation.close_on!(close_on)
+      Deprecation.close_on!(close_on, within)
       Deprecation.allow_expensive!(allow_expensive)
       adapter = PaperTrailAdapter.new(associations: associations, ignore: ignore,
                                       recorded_changes: recorded_changes,
                                       allow_approximate: allow_approximate)
       adapter.analyze_scope(
         scope, limit: limit, within: within, activity: activity,
-               version_scope: version_scope, close_on: close_on, snapshots: snapshots, group: group,
+               version_scope: version_scope, snapshots: snapshots, group: group,
                historical_filter: historical_filter, max_filter_versions: max_filter_versions,
                include_deleted: include_deleted
       )

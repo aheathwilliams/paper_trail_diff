@@ -6,16 +6,15 @@ module PaperTrailDiff
   # versions and preparing their association history once for the whole batch
   # rather than once per root.
   class AnalysisBatch
-    #: (Array[untyped], time_range: TimeRange?, live_loader: untyped, history_preparer: untyped, analyzer: untyped, ?version_scope: untyped, ?close_on_current: bool, ?context_required: bool) -> void
+    #: (Array[untyped], time_range: TimeRange?, live_loader: untyped, history_preparer: untyped, analyzer: untyped, ?version_scope: untyped, ?context_required: bool) -> void
     def initialize( # rubocop:disable Metrics/ParameterLists
       records, time_range:, live_loader:, history_preparer:, analyzer:, version_scope: nil,
-      close_on_current: false, context_required: false
+      context_required: false
     )
       @records = records
       @context_required = context_required
       @time_range = time_range
       @version_scope = validated_scope(version_scope)
-      @close_on_current = close_on_current
       @live_loader = live_loader
       @history_preparer = history_preparer
       @analyzer = analyzer
@@ -28,7 +27,7 @@ module PaperTrailDiff
       windows = TransactionCut.batch_windows(records, @time_range)
       selected = BatchedRootVersions.new(
         records, time_range: @time_range, version_scope: @version_scope,
-                 live_endpoints: (loaded if @close_on_current),
+                 live_endpoints: loaded,
                  context_required: @context_required, windows: windows
       ).call
       prepare(records, selected, loaded, windows)
@@ -44,7 +43,6 @@ module PaperTrailDiff
     # @rbs @records: Array[untyped]
     # @rbs @time_range: TimeRange?
     # @rbs @version_scope: untyped
-    # @rbs @close_on_current: bool
     # @rbs @context_required: bool
     # @rbs @live_loader: untyped
     # @rbs @history_preparer: untyped
@@ -101,8 +99,8 @@ module PaperTrailDiff
 
     # A plan closing on the live record reads history up to now; the others
     # stop at the window, so a past window does not load everything since.
-    #: (Array[untyped], Hash[Array[String], TimeRange], ?live: bool) -> Hash[Symbol, untyped]
-    def preparation_range(versions, windows, live: @close_on_current)
+    #: (Array[untyped], Hash[Array[String], TimeRange], live: bool) -> Hash[Symbol, untyped]
+    def preparation_range(versions, windows, live:)
       times = versions.map(&:created_at)
       end_at = [times.max, @time_range&.end_time, (Time.now.utc if live)].compact.max
       { start_at: TransactionCut.earliest_start(@time_range, windows) || times.min, end_at: end_at }

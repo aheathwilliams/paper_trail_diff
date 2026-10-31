@@ -7,9 +7,6 @@ module PaperTrailDiff
   # the only place allowed to know about both PaperTrail and the pure engine.
   # Reconstruction logic lives in the collaborators it wires together.
   class PaperTrailAdapter # rubocop:disable Metrics/ClassLength
-    # The only thing a wall-clock window can close on besides a later version.
-    CLOSE_ON_CURRENT = :current
-
     # `recorded_changes:` reads what each activity boundary's version recorded.
     # `allow_approximate:` accepts association paths read with PT-AT.
     #: (associations: association_option, ignore: ignore_option, ?reload_live_endpoints: bool, ?recorded_changes: bool, ?allow_approximate: bool) -> void
@@ -60,8 +57,8 @@ module PaperTrailDiff
       end
     end
 
-    #: (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped, ?close_on: Symbol?) -> Array[Step]
-    def timeline(record, from:, to:, within:, version_scope: nil, close_on: nil) # rubocop:disable Metrics/ParameterLists
+    #: (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped) -> Array[Step]
+    def timeline(record, from:, to:, within:, version_scope: nil)
       Endpoint.validate_root!(record)
       @traversal_preparer.call(record.class, historical: true)
       from, to = default_range(record, from, to, within)
@@ -71,19 +68,19 @@ module PaperTrailDiff
         to: to,
         within: within,
         version_scope: version_scope,
-        live_endpoint: live_endpoint_for(record, close_on, within),
+        live_endpoint: live_endpoint_for(record, within),
         snapshotter: @timeline_snapshotter
       ).build
     end
 
-    #: (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?) -> Array[ActivityStep]
-    def activity_timeline(record, from:, to:, within:, version_scope: nil, close_on: nil, snapshots: false, group: nil) # rubocop:disable Metrics/ParameterLists, Layout/LineLength
+    #: (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?) -> Array[ActivityStep]
+    def activity_timeline(record, from:, to:, within:, version_scope: nil, snapshots: false, group: nil) # rubocop:disable Metrics/ParameterLists, Layout/LineLength
       Endpoint.validate_root!(record)
       payload = @instrumentation_payload.merge(model_type: record.class.base_class.name.to_s)
       Instrumentation.instrument('activity_timeline', payload) do
         @traversal_preparer.call(record.class, historical: true)
         from, to = default_range(record, from, to, within)
-        live = live_endpoint_for(record, close_on, within)
+        live = live_endpoint_for(record, within)
         steps = activity_builder(
           record, from: from, to: to, within: within, version_scope: version_scope,
                   live_endpoint: live, snapshots: snapshots, group: group
@@ -93,13 +90,13 @@ module PaperTrailDiff
       end
     end
 
-    #: (untyped, from: untyped, to: untyped, within: untyped, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?) -> Analysis
-    def analyze(record, from:, to:, within:, activity: false, version_scope: nil, close_on: nil, snapshots: false, group: nil) # rubocop:disable Metrics/ParameterLists, Layout/LineLength
+    #: (untyped, from: untyped, to: untyped, within: untyped, ?activity: bool, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?) -> Analysis
+    def analyze(record, from:, to:, within:, activity: false, version_scope: nil, snapshots: false, group: nil) # rubocop:disable Metrics/ParameterLists, Layout/LineLength
       validate_activity_options!(group, activity, snapshots)
       Endpoint.validate_root!(record)
       @traversal_preparer.call(record.class, historical: true)
       from, to = default_range(record, from, to, within)
-      live = live_endpoint_for(record, close_on, within)
+      live = live_endpoint_for(record, within)
       if activity
         return analyze_activity(
           record, from: from, to: to, within: within, version_scope: version_scope,
@@ -114,8 +111,8 @@ module PaperTrailDiff
     end
 
     # Analyzes many roots over one shared range, preparing their history once.
-    #: (Array[untyped], within: untyped, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?) -> Hash[identity, Analysis]
-    def analyze_many(records, within:, activity: false, version_scope: nil, close_on: nil, snapshots: false, group: nil) # rubocop:disable Metrics/ParameterLists, Layout/LineLength
+    #: (Array[untyped], within: untyped, ?activity: bool, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?) -> Hash[identity, Analysis]
+    def analyze_many(records, within:, activity: false, version_scope: nil, snapshots: false, group: nil) # rubocop:disable Metrics/ParameterLists, Layout/LineLength
       validate_activity_options!(group, activity, snapshots)
       count = records.is_a?(Array) ? records.length : 0
       payload = @instrumentation_payload.merge(comparison_count: count)
@@ -123,7 +120,6 @@ module PaperTrailDiff
         AnalysisBatch.new(
           records,
           time_range: within.nil? ? nil : TimeRange.new(within), version_scope: version_scope,
-          close_on_current: close_on_current?(close_on, within) || within.nil?,
           context_required: activity && !@association_tree.empty?,
           live_loader: method(:load_batch_endpoints),
           history_preparer: @historical_store.method(:prepare_batch),
@@ -137,13 +133,13 @@ module PaperTrailDiff
     # caller reporting on a population does not have to rediscover which of its
     # members changed. The roots the relation could not reach come back named
     # rather than dropped -- see `PaperTrailDiff.analyze_scope`.
-    #: (untyped, limit: Integer?, within: untyped, ?activity: bool, ?version_scope: untyped, ?close_on: Symbol?, ?snapshots: bool, ?group: Symbol?, ?historical_filter: untyped, ?max_filter_versions: Integer, ?include_deleted: bool) -> ScopedAnalysis
-    def analyze_scope(scope, limit:, within:, activity: false, version_scope: nil, close_on: nil, snapshots: false, group: nil, historical_filter: nil, max_filter_versions: HistoricalFilter::DEFAULT_VERSION_LIMIT, include_deleted: false) # rubocop:disable Metrics/ParameterLists, Layout/LineLength
+    #: (untyped, limit: Integer?, within: untyped, ?activity: bool, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?, ?historical_filter: untyped, ?max_filter_versions: Integer, ?include_deleted: bool) -> ScopedAnalysis
+    def analyze_scope(scope, limit:, within:, activity: false, version_scope: nil, snapshots: false, group: nil, historical_filter: nil, max_filter_versions: HistoricalFilter::DEFAULT_VERSION_LIMIT, include_deleted: false) # rubocop:disable Metrics/ParameterLists, Layout/LineLength
       validate_activity_options!(group, activity, snapshots)
       check_scope(scope)
       # @type var options: report_options
       options = { within: within, activity: activity, version_scope: version_scope,
-                  close_on: close_on, snapshots: snapshots, group: group }
+                  snapshots: snapshots, group: group }
       ScopedAnalysisBuilder.new(
         scope, limit: limit, within: within, historical_filter: historical_filter,
                max_filter_versions: max_filter_versions, include_deleted: include_deleted,
@@ -251,21 +247,6 @@ module PaperTrailDiff
       )
     end
 
-    # A window with nothing recorded after its last change ends at the live
-    # record, which holds the state that change produced -- whether the window
-    # ended a moment ago or long before. `close_on: :current` asked for this
-    # before it was the default and is still accepted. It names what ends a
-    # wall-clock window, so it is meaningless for explicit endpoints.
-    #: (Symbol?, untyped) -> bool
-    def close_on_current?(close_on, within)
-      unless close_on.nil? || close_on == CLOSE_ON_CURRENT
-        raise ConfigurationError, "close_on: must be #{CLOSE_ON_CURRENT.inspect} or nil"
-      end
-      raise ConfigurationError, 'close_on: requires `within`' if close_on && within.nil?
-
-      !within.nil?
-    end
-
     # With neither a window nor endpoints, a range is the record's whole
     # history through its current saved state; a missing endpoint takes that
     # side of the same default.
@@ -276,12 +257,15 @@ module PaperTrailDiff
       [from.nil? ? :first : from, to.nil? ? record : to]
     end
 
+    # A window with nothing recorded after its last change ends at the live
+    # record, which holds the state that change produced -- whether the window
+    # ended a moment ago or long before. Explicit endpoints name their own end.
     # Only a saved row has current state to close on. A destroyed root's own
     # destroy version already terminates its history, and a reified or unsaved
     # instance stands for a state that is not in the table.
-    #: (untyped, Symbol?, untyped) -> untyped
-    def live_endpoint_for(record, close_on, within)
-      return unless close_on_current?(close_on, within)
+    #: (untyped, untyped) -> untyped
+    def live_endpoint_for(record, within)
+      return if within.nil?
       return unless Endpoint.record?(record) && record.persisted?
 
       record
