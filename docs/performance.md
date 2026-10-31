@@ -114,9 +114,10 @@ comes from its scenarios. `PTD_PROBE_ALLOW_APPROXIMATE=1` passes
 `allow_approximate: true`.
 `reporting.rb` times `analyze_scope` over articles with no associations, each
 in a fresh process, and records memory; `--output` keeps the raw samples.
-Both use an in-memory SQLite database, never your application's. Compare
-counts as well as times, and run the correctness suites separately; no CI
-job checks timings.
+Both use an in-memory SQLite database, never your application's, and read
+time from the [test clock](testing.md#test-clock), so a host clock that steps
+backwards cannot reorder the versions they seed. Compare counts as well as
+times, and run the correctness suites separately; no CI job checks timings.
 
 The numbers here were measured on 2026-10-30 at revision `6c3d30b` with Ruby
 4.0.1, Active Record 8.1.3.1, PaperTrail 17.0.0, and SQLite 3.53.2, on WSL2

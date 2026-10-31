@@ -12,8 +12,10 @@ abort 'use baseline or direct' unless %w[baseline direct].include?(mode)
 workload = ReportingBenchmark::Workload.new('many_roots', size)
 workload.prepare
 # Keep current-boundary metadata identical for the parity check after timing.
+# Prepended, so it runs ahead of the workload's monotonic clock, which would
+# otherwise move each reading on by a microsecond.
 captured_at = Time.now
-Time.define_singleton_method(:now) { captured_at }
+Time.singleton_class.prepend(Module.new { define_method(:now) { captured_at } })
 PaperTrailDiff::HistoricalSnapshotStore.prepend(ScalarSnapshotSpike)
 ScalarSnapshotSpike.enabled = mode == 'direct'
 measurement = ReportingBenchmark::Measurement.new
