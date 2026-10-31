@@ -46,18 +46,29 @@ module PaperTrailDiff
   # current record, in either order. Two current records read no history, so
   # nothing is checked.
   class HistoryDiagnostics
-    # : (untyped, untyped, associations: association_option) -> void
-    def initialize: (untyped, untyped, associations: association_option) -> void
+    STOPPING_CODES: untyped
+
+    # : (untyped, untyped, associations: association_option, ?allow_approximate: bool) -> void
+    def initialize: (untyped, untyped, associations: association_option, ?allow_approximate: bool) -> void
 
     # : () -> DiagnosticReport
     def call: () -> DiagnosticReport
 
     private
 
+    # Each refusal a comparison would raise is an error, so `ok?` is false
+    # exactly when one would. The checks after them read reflections that must
+    # resolve and PT-AT records that must be there.
     # : (untyped) -> void
     def inspect_associations: (untyped) -> void
 
+    @allow_approximate: bool
+
     @issues: Array[DiagnosticIssue]
+
+    @preparer: TraversalPreparer
+
+    @traversal: AssociationTraversal
 
     @tree: AssociationTree
 
@@ -68,7 +79,11 @@ module PaperTrailDiff
     def validated_versions: (untyped, untyped) -> Array[untyped]
 
     # : (Array[Array[untyped]]) -> void
-    def inspect_targets: (Array[Array[untyped]]) -> void
+    def inspect_polymorphic_targets: (Array[Array[untyped]]) -> void
+
+    # Accepted, but read the way `allow_approximate:` describes.
+    # : (untyped) -> void
+    def inspect_approximate_paths: (untyped) -> void
 
     # : (untyped, Array[Array[untyped]]) -> void
     def inspect_habtm: (untyped, Array[Array[untyped]]) -> void
@@ -89,25 +104,8 @@ module PaperTrailDiff
     # : (Array[String]) -> void
     def inspect_transaction_metadata: (Array[String]) -> void
 
-    # : (untyped, String) -> void
-    def inspect_versioned_model: (untyped, String) -> void
-
-    # An error, as for a target: a through reads past membership from the
-    # versions of the model it goes through, so comparisons raise.
-    # : (untyped, String) -> void
-    def inspect_through_model: (untyped, String) -> void
-
-    # : (untyped) -> bool
-    def model_versioned?: (untyped) -> bool
-
     # : (untyped) -> bool
     def synchronized_timestamp_disabled?: (untyped) -> bool
-
-    # : () -> bool
-    def association_tracking_available?: () -> bool
-
-    # : () -> String
-    def tracking_unavailable_message: () -> String
 
     # : (Symbol, String, ?String?, ?untyped) -> void
     def add_error: (Symbol, String, ?String?, ?untyped) -> void

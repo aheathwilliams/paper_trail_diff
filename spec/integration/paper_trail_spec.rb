@@ -1638,13 +1638,15 @@ RSpec.describe PaperTrailDiff do
       expect(report.to_h).to eq(ok: true, issues: [])
     end
 
+    # CoreComment has no history either, which compare refuses next.
     it 'reports unavailable association tracking without raising' do
       _article, _create, draft, published, = create_history
 
       report = described_class.diagnose(draft, published, associations: [:comments])
 
       expect(report).not_to be_ok
-      expect(report.errors.map(&:code)).to eq([:association_tracking_unavailable])
+      expect(report.errors.map(&:code))
+        .to eq(%i[association_tracking_unavailable unversioned_association_target])
       expect(report.warnings).to be_empty
     end
 

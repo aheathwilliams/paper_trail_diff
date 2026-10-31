@@ -3,22 +3,50 @@
 module PaperTrailDiff
   # Checks that a model can be traversed before any reconstruction starts, and
   # that association tracking is actually available when history is involved.
+  # `diagnose` reports the same refusals instead of raising the first.
   class TraversalPreparer
+    # One reason to refuse a request: the error `call` raises, and the code
+    # and path `diagnose` reports.
+    class Refusal
+      attr_reader error: untyped
+
+      attr_reader code: Symbol
+
+      attr_reader message: String
+
+      attr_reader path: String?
+
+      # : (untyped, Symbol, String, ?String?) -> void
+      def initialize: (untyped, Symbol, String, ?String?) -> void
+    end
+
     # : (tree: AssociationTree, traversal: AssociationTraversal, ?allow_approximate: bool) -> void
     def initialize: (tree: AssociationTree, traversal: AssociationTraversal, ?allow_approximate: bool) -> void
 
     # : (untyped, historical: bool) -> void
     def call: (untyped, historical: bool) -> void
 
+    # Every reason to refuse a request over the model, in the order `call`
+    # raises them. Live-to-live comparison reads current state, so only the
+    # traversal itself is checked for it.
+    # : (untyped, historical: bool) -> Array[Refusal]
+    def refusals: (untyped, historical: bool) -> Array[Refusal]
+
     private
 
     @allow_approximate: bool
 
-    @exact: Hash[untyped, bool]
+    @refusals: Hash[Array[untyped], Array[Refusal]]
 
     @traversal: AssociationTraversal
 
     @tree: AssociationTree
+
+    # : (untyped, bool) -> Array[Refusal]
+    def collect: (untyped, bool) -> Array[Refusal]
+
+    # : (untyped) -> Refusal?
+    def traversal_refusal: (untyped) -> Refusal?
 
     # A path prepared history cannot read is read with PT-AT, which rebuilds
     # an association from its current members, swapping in older versions of
@@ -26,28 +54,28 @@ module PaperTrailDiff
     # into a scope or restored from a soft delete, then reads as a member it
     # was not, and one that left reads as missing. Only a caller who accepts
     # that may read such a path.
-    # : (untyped) -> void
-    def ensure_exact_membership!: (untyped) -> void
+    # : (untyped) -> Array[Refusal]
+    def approximate_refusals: (untyped) -> Array[Refusal]
 
     # A model PaperTrail never versioned has no history to reconstruct, so a
     # comparison over it can only ever answer "nothing changed" -- which is a
     # wrong answer rather than an empty one. Live-to-live comparison reads
     # current state and is unaffected, so this applies to historical work only.
-    # : (untyped) -> void
-    def ensure_versioned_targets!: (untyped) -> void
+    # : (untyped) -> Array[Refusal]
+    def unversioned_refusals: (untyped) -> Array[Refusal]
 
     # A has_many :through reads past membership from the versions of the
     # models it goes through, so each of them needs history too.
     # : (untyped) -> Array[untyped]
     def through_models: (untyped) -> Array[untyped]
 
-    # : (String, untyped, String) -> void
-    def ensure_versioned!: (String, untyped, String) -> void
+    # : (String, untyped, Symbol, String) -> Array[Refusal]
+    def unversioned: (String, untyped, Symbol, String) -> Array[Refusal]
 
-    # : (untyped) -> bool
-    def versioned?: (untyped) -> bool
+    # : () -> bool
+    def association_tracking?: () -> bool
 
-    # : () -> void
-    def ensure_association_tracking!: () -> void
+    # : () -> Refusal
+    def tracking_refusal: () -> Refusal
   end
 end

@@ -69,10 +69,18 @@ module PaperTrailDiff
   # current record, in either order. Two current records read no history, so
   # nothing is checked.
   class HistoryDiagnostics
-    #: (untyped, untyped, associations: association_option) -> void
-    def initialize(from, to, associations:)
+    STOPPING_CODES = %i[
+      unknown_association unsupported_association association_tracking_unavailable
+    ].freeze
+
+    #: (untyped, untyped, associations: association_option, ?allow_approximate: bool) -> void
+    def initialize(from, to, associations:, allow_approximate: false)
       @versions = validated_versions(from, to)
       @tree = AssociationTree.build(associations)
+      @traversal = AssociationTraversal.new(@tree)
+      @preparer = TraversalPreparer.new(tree: @tree, traversal: @traversal,
+                                        allow_approximate: allow_approximate)
+      @allow_approximate = allow_approximate
       @issues = [] #: Array[DiagnosticIssue]
     end
 
@@ -91,20 +99,27 @@ module PaperTrailDiff
 
     private
 
+    # Each refusal a comparison would raise is an error, so `ok?` is false
+    # exactly when one would. The checks after them read reflections that must
+    # resolve and PT-AT records that must be there.
     #: (untyped) -> void
     def inspect_associations(model_class)
-      unless association_tracking_available?
-        return add_error(:association_tracking_unavailable, tracking_unavailable_message)
-      end
+      refusals = @preparer.refusals(model_class, historical: true)
+      refusals.each { |refusal| add_error(refusal.code, refusal.message, refusal.path) }
+      return if refusals.any? { |refusal| STOPPING_CODES.include?(refusal.code) }
 
-      selected = AssociationTraversal.new(@tree).selected_reflections(model_class)
-      inspect_targets(selected)
+      selected = @traversal.selected_reflections(model_class)
+      inspect_polymorphic_targets(selected)
+      inspect_approximate_paths(model_class) if @allow_approximate
       inspect_checkpoint_timestamp(model_class)
       inspect_habtm(model_class, selected)
     end
 
     # @rbs @versions: Array[untyped]
     # @rbs @tree: AssociationTree
+    # @rbs @traversal: AssociationTraversal
+    # @rbs @preparer: TraversalPreparer
+    # @rbs @allow_approximate: bool
     # @rbs @issues: Array[DiagnosticIssue]
 
     # The endpoints that are versions, in the order given.
@@ -120,15 +135,21 @@ module PaperTrailDiff
     end
 
     #: (Array[Array[untyped]]) -> void
-    def inspect_targets(selected)
+    def inspect_polymorphic_targets(selected)
       selected.each do |path, reflection|
-        if reflection.polymorphic?
-          add_warning(:polymorphic_target_unverified, 'polymorphic target cannot be verified', path)
-          next
-        end
+        next unless reflection.polymorphic?
 
-        inspect_versioned_model(reflection.klass, path)
-        inspect_through_model(reflection, path) if reflection.options[:through]
+        add_warning(:polymorphic_target_unverified, 'polymorphic target cannot be verified', path)
+      end
+    end
+
+    # Accepted, but read the way `allow_approximate:` describes.
+    #: (untyped) -> void
+    def inspect_approximate_paths(model_class)
+      BatchSafety.fallback_paths(@traversal, model_class).each do |path, reason|
+        add_warning(:approximate_association,
+                    "association #{path} is read approximately with PT-AT (#{reason}): a " \
+                    'record that entered or left it since is reported wrongly', path)
       end
     end
 
@@ -196,57 +217,12 @@ module PaperTrailDiff
       end
     end
 
-    #: (untyped, String) -> void
-    def inspect_versioned_model(model_class, path)
-      return if model_versioned?(model_class)
-
-      # An error rather than a warning: `ok?` must not stay true for a
-      # comparison that cannot work, and this one raises at runtime.
-      add_error(
-        :unversioned_association_target,
-        "#{model_class.name} does not appear to have PaperTrail enabled",
-        path
-      )
-    end
-
-    # An error, as for a target: a through reads past membership from the
-    # versions of the model it goes through, so comparisons raise.
-    #: (untyped, String) -> void
-    def inspect_through_model(reflection, path)
-      model_class = reflection.through_reflection.klass
-      return if model_versioned?(model_class)
-
-      add_error(
-        :unversioned_through_model,
-        "#{model_class.name} does not appear to have PaperTrail enabled",
-        path
-      )
-    end
-
-    #: (untyped) -> bool
-    def model_versioned?(model_class)
-      Support.versioned?(model_class)
-    end
-
     #: (untyped) -> bool
     def synchronized_timestamp_disabled?(model_class)
       options = model_class.paper_trail_options
       options[:synchronize_version_creation_timestamp] == false
     rescue NoMethodError
       false
-    end
-
-    #: () -> bool
-    def association_tracking_available?
-      paper_trail = Object.const_get(:PaperTrail) #: untyped
-      config = paper_trail.config #: untyped
-      !!(defined?(::PaperTrailAssociationTracking) &&
-        config.respond_to?(:track_associations?) && config.track_associations?)
-    end
-
-    #: () -> String
-    def tracking_unavailable_message
-      'association tracking must be loaded and enabled to diagnose associations'
     end
 
     #: (Symbol, String, ?String?, ?untyped) -> void

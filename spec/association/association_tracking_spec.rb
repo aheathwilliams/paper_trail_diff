@@ -585,7 +585,8 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     end
     expect { PaperTrailDiff.activity_timeline(root, from: before, to: after, **options) }
       .to raise_error(*error)
-    expect { PaperTrailDiff.diagnose(before, after, **options) }.to raise_error(*error)
+    expect(PaperTrailDiff.diagnose(before, after, **options).errors.map { |e| [e.code, e.message] })
+      .to match([[:unsupported_association, error.last]])
 
     tags = PaperTrailDiff.compare(before, after, associations: [:tags]).associations.fetch('tags')
     expect(tags.changed.map { |change| change.attributes.fetch('name').to_h })
@@ -2038,9 +2039,9 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     expect(report).to be_ok
     expect(report.issues).to be_empty
     expect(PaperTrailDiff.diagnose(graph[:before], after)).to be_ok
-    expect do
-      PaperTrailDiff.diagnose(graph[:before], after, associations: [:missing])
-    end.to raise_error(PaperTrailDiff::UnknownAssociationError, /missing/)
+    missing = PaperTrailDiff.diagnose(graph[:before], after, associations: [:missing])
+    expect(missing.errors.map { |issue| [issue.code, issue.message] })
+      .to eq([[:unknown_association, 'unknown association: missing']])
   end
 
   describe 'an association whose target is not versioned' do

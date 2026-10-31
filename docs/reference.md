@@ -1268,7 +1268,12 @@ report.warnings.map(&:code)
 ```
 
 Association checks run only for requested associations. The version-order check
-always runs. `ok?` does not prove the history is complete.
+always runs. Every reason `compare` would refuse the same request is an error,
+with the message `compare` would raise, so `ok?` is false whenever `compare`
+would refuse: an unknown or unsupported association, missing association
+tracking, an unversioned target, or a path read only approximately. Pass
+`allow_approximate: true`, as you would to `compare`, and such a path is a
+warning instead. `ok?` does not prove the history is complete.
 
 ## Models, schemas, and edge cases
 

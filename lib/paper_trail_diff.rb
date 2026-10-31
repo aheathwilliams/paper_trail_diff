@@ -416,10 +416,11 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
 
     # Reports known reconstruction hazards without mutating application state,
     # for the endpoints `compare` takes: two versions, or a version and the
-    # current record.
-    #: (untyped, untyped, ?associations: association_option) -> DiagnosticReport
-    def diagnose(from, to, associations: [])
-      HistoryDiagnostics.new(from, to, associations: associations).call
+    # current record. Every reason `compare` would refuse them is an error.
+    #: (untyped, untyped, ?associations: association_option, ?allow_approximate: bool) -> DiagnosticReport
+    def diagnose(from, to, associations: [], allow_approximate: false)
+      HistoryDiagnostics.new(from, to, associations: associations,
+                                       allow_approximate: allow_approximate).call
     end
 
     # Looks inside an attribute the database stores whole, such as a JSON or

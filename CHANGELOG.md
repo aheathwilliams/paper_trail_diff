@@ -44,6 +44,18 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `diagnose` reports every reason `compare` would refuse the same request as
+  an error, with `compare`'s message, so `ok?` is false whenever `compare`
+  would refuse. It said `ok?` for a path `compare` reads only approximately,
+  such as a scope written as SQL text, raised on an unknown or unsupported
+  association instead of reporting it, and checked only the join model a
+  `has_many :through` goes through first, not every model it reads. It
+  takes `allow_approximate:`, and
+  with `true` reports such a path as an `:approximate_association` warning.
+  The new error codes are `:unknown_association`,
+  `:unsupported_association`, and `:approximate_association`; an unversioned
+  target's message now matches `compare`'s.
+
 - `diagnose` takes the current record as either endpoint, as `compare` does,
   so `compare(version, record)` can be checked before it runs. Its version
   checks then run from the version to the latest one. An endpoint that is
