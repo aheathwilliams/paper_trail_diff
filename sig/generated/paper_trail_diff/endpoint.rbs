@@ -42,8 +42,8 @@ module PaperTrailDiff
     # : (untyped) -> untyped
     def self?.model_class: (untyped) -> untyped
 
-    # The record's own PaperTrail versions, under whatever name the model gave
-    # the association.
+    # Every PaperTrail version of the record, whatever scope its versions
+    # association has.
     # : (untyped) -> untyped
     def self?.versions: (untyped) -> untyped
 

@@ -88,8 +88,7 @@ module PaperTrailDiff
 
     #: (Array[String]) -> Hash[String, Array[untyped]]
     def candidate_versions(ids)
-      relation = @model.paper_trail.version_class.where(item_type: @model.base_class.name,
-                                                        item_id: ids)
+      relation = VersionQuery.for_items(@model, ids)
       range = @time_range
       relation = range.scope(relation) if range
       # One past the remaining budget is enough to know it was exceeded.
@@ -119,9 +118,7 @@ module PaperTrailDiff
       range = @time_range
       return {} unless range
 
-      relation = @model.paper_trail.version_class.where(item_type: @model.base_class.name,
-                                                        item_id: ids)
-      trailing = range.first_trailing_versions(relation)
+      trailing = range.first_trailing_versions(VersionQuery.for_items(@model, ids))
       account_versions!(trailing.length)
       trailing
     end

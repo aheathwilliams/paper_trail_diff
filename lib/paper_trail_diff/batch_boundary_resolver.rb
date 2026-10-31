@@ -113,10 +113,9 @@ module PaperTrailDiff
     # a tie -- refusing one that ids cannot order.
     #: (untyped, Array[untyped]) -> Hash[String, untyped]
     def first_versions(model_class, ids)
-      version_class = model_class.paper_trail.version_class
-      table = version_class.arel_table
-      candidates = version_class.where(item_type: model_class.base_class.name.to_s, item_id: ids)
-                                .where(VersionQuery.no_earlier_version(table)).to_a
+      table = model_class.paper_trail.version_class.arel_table
+      candidates = VersionQuery.for_items(model_class, ids)
+                               .where(VersionQuery.no_earlier_version(table)).to_a
       candidates.group_by { |version| version.item_id.to_s }
                 .transform_values { |versions| Support.chronological_sort(versions).first }
     end

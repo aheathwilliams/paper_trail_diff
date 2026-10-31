@@ -58,9 +58,7 @@ module PaperTrailDiff
     # The state each root held before its latest destroy.
     #: (Array[String]) -> Hash[String, Hash[String, untyped]?]
     def destroyed_states(ids)
-      destroys = model.paper_trail.version_class.where(
-        item_type: model.base_class.name, item_id: ids, event: 'destroy'
-      )
+      destroys = VersionQuery.for_items(model, ids).where(event: 'destroy')
       VersionQuery.chronological(destroys).to_h do |version|
         [version.item_id.to_s, @loader.call(version)&.attributes || reified_attributes(version)]
       end

@@ -14,6 +14,16 @@ module PaperTrailDiff
       relation.reorder(created_at: :asc, id: :asc)
     end
 
+    # A model's versions, or those of the given items. They are read from the
+    # version class rather than through the model's versions association,
+    # whose scope may leave some out: a history replayed without them credits
+    # their changes to the next version kept.
+    #: (untyped, ?untyped) -> untyped
+    def for_items(model_class, ids = nil)
+      relation = model_class.paper_trail.version_class.where(item_type: model_class.base_class.name)
+      ids.nil? ? relation : relation.where(item_id: ids)
+    end
+
     # Keeps each item's earliest version among those the block also accepts:
     # no other version of the same item that the block accepts is earlier. A
     # correlated NOT EXISTS stays portable where window functions are not.

@@ -136,10 +136,7 @@ module PaperTrailDiff
     #: (untyped, Array[untyped]) -> untyped
     def base_scope(model_class, records)
       # Active Record reads each record's id.
-      model_class.paper_trail.version_class.where(
-        item_type: model_class.base_class.name,
-        item_id: records
-      )
+      VersionQuery.for_items(model_class, records)
     end
   end
 end

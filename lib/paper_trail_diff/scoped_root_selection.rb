@@ -152,7 +152,7 @@ module PaperTrailDiff
 
     #: () -> untyped
     def window_versions
-      relation = version_class.where(item_type: item_type)
+      relation = VersionQuery.for_items(model)
       range = @time_range
       range ? range.scope(relation) : relation
     end

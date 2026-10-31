@@ -1286,6 +1286,11 @@ always runs. `ok?` does not prove the history is complete.
   `UnsupportedAssociationError` naming both tables, and `association_paths`
   leaves it out. One custom table shared by the models works like
   PaperTrail's own.
+- **A scoped versions association** (`has_paper_trail versions: { scope: }`)
+  does not change what is read: every method reads all of a record's
+  versions, because a history replayed without some of them would credit
+  their changes to the next version kept. To report only some changes, pass
+  [`version_scope:`](#reporting-only-some-changes-version_scope).
 
 ### Version order
 

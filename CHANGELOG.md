@@ -133,6 +133,16 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- `timeline`, `activity_timeline`, and `analyze` read every version of a
+  model whose versions association has a scope
+  (`has_paper_trail versions: { scope: }`), as the other methods already did.
+  They read only the versions the scope kept, so a change saved in a version
+  it left out was credited to the next one kept: with a bot's edits hidden,
+  an editor's step showed the bot's later edit too, and the same record and
+  window gave different steps in `analyze` and `analyze_many`. A version the
+  scope leaves out is also accepted as an endpoint. To report only some
+  changes, pass `version_scope:`.
+
 - Activity steps leave out the versions a record saved while it was outside
   the root's tree. A comment edited on another article, then moved to this
   one, brought that edit into the article's timeline as a step, and a

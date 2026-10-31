@@ -4,18 +4,11 @@
 # or TimeVersionRange, so those are doubles here and their own specs and the
 # integration specs cover what they select.
 RSpec.describe PaperTrailDiff::TimelineRange do
-  # A versioned record as far as Endpoint can tell: it names its versions
-  # association and answers the questions Endpoint.record? asks.
+  # A versioned record as far as Endpoint can tell: it answers the questions
+  # Endpoint.record? asks. `history_with` gives it versions.
   def self.record_class
     Class.new do
-      attr_reader :versions
-
-      def self.versions_association_name = :versions
       def self.base_class = self
-
-      def initialize(versions)
-        @versions = versions
-      end
 
       def persisted? = true
       def destroyed? = false
@@ -23,13 +16,14 @@ RSpec.describe PaperTrailDiff::TimelineRange do
     end
   end
   let(:history) { instance_double(ActiveRecord::Relation) }
-  let(:record) { self.class.record_class.new(history) }
+  let(:record) { self.class.record_class.new }
   let(:plan) { PaperTrailDiff::RootVersionPlan.closing_on(Object.new) }
 
   def start_time = Time.utc(2032, 2, 1, 12)
   def window = start_time...(start_time + 3600)
 
   def history_with(*versions)
+    allow(PaperTrailDiff::Endpoint).to receive(:versions).with(record).and_return(history)
     allow(history).to receive(:reorder).with(created_at: :asc, id: :asc).and_return(versions)
   end
 
@@ -105,7 +99,7 @@ RSpec.describe PaperTrailDiff::TimelineRange do
 
     # As Support.versioned? tells a model PaperTrail tracks.
     let(:versioned_record) do
-      Class.new(self.class.record_class) { def self.paper_trail_options = {} }.new(history)
+      Class.new(self.class.record_class) { def self.paper_trail_options = {} }.new
     end
 
     def versioned(windows)

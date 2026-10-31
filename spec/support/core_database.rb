@@ -92,3 +92,16 @@ end
 class SkippingArticle < ActiveRecord::Base
   has_paper_trail skip: [:view_count]
 end
+
+# Its versions association leaves out the versions a bot wrote, as an app
+# might to keep them off its own history pages.
+ActiveRecord::Schema.define do
+  create_table :scoped_history_articles, force: true do |table|
+    table.string :title, null: false
+    table.timestamps null: false
+  end
+end
+
+class ScopedHistoryArticle < ActiveRecord::Base
+  has_paper_trail versions: { scope: -> { where(whodunnit: [nil, 'editor']) } }
+end

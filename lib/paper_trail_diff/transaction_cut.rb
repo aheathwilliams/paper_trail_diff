@@ -90,10 +90,9 @@ module PaperTrailDiff
 
     #: (untyped) -> untyped
     def self.transaction_versions(model_class)
-      version_class = model_class.paper_trail.version_class
-      return unless version_class.column_names.include?('transaction_id')
+      return unless model_class.paper_trail.version_class.column_names.include?('transaction_id')
 
-      version_class.where(item_type: model_class.polymorphic_name)
+      VersionQuery.for_items(model_class)
     end
     private_class_method :transaction_versions
 
