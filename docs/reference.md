@@ -543,6 +543,26 @@ and members were recorded there, reading the root's membership at that version
 raises `IncompleteAssociationHistoryError` instead of mixing both records'
 members. Save each HABTM owner's versions in a transaction of its own.
 
+PT-AT records membership only when the owner saves a version, so the gem knows
+it only at root versions. A change made between two root versions is reported
+in the first step after the earlier one, and credited to that step's source:
+usually the earlier root version, which someone else may have saved. A member
+created between them is reported in the step that starts with its creation
+instead. A change attached before a checkpoint is therefore credited to
+whoever saved the version before the checkpoint, not to the checkpoint's
+author. Credit HABTM changes with that in mind, or describe them by the versions
+around them.
+
+PT-AT works out the membership a version records from the instance that saves
+it: the instance's current members, with the changes that instance made undone,
+so that the version holds the membership from before its own event. It never
+forgets those changes, not even on `reload`. Only the first version an instance
+saves after changing a HABTM is right; each later save from it records the
+membership from before that change again. The gem then reports the change late,
+or reports a member that never left as removed and added again. Load the record
+again, with `find`, before saving it a second time, and save checkpoints from a
+freshly loaded record, as the [checkpoint recipe](#saving-a-checkpoint) does.
+
 ## analyze
 
 `analyze(record)` returns an `Analysis` with the net `diff` and the `timeline`
@@ -964,7 +984,11 @@ Without `synchronize_version_creation_timestamp: false`, the checkpoint takes th
 record's old `updated_at` as its time and lands in the past. Save one record per
 transaction: HABTM membership cannot be read from a transaction in which
 another record with the same HABTM also saved a version (see the
-[HABTM limitation](#habtm-limitation)).
+[HABTM limitation](#habtm-limitation)). A checkpoint records membership as it
+is when saved, including a member attached or created earlier in the same
+transaction. A change it captures is credited to the step before it, so its
+author is whoever saved the version before the checkpoint. Don't save the
+instance that made the HABTM change again; it records the old membership.
 
 ### Files from ActiveStorage
 

@@ -584,6 +584,47 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     expect(since.associations).not_to have_key('tags')
   end
 
+  # Documented in the reference's HABTM limitation, and pinned here so that a
+  # change in PT-AT, or in how the gem reads it, is noticed.
+  describe 'HABTM membership as PT-AT records it' do
+    it 'credits a change between root versions to the step after the earlier one' do
+      article = TrackedArticle.create!(title: 'T')
+      tag = TrackedTag.create!(name: 'Attached by the second author')
+      PaperTrail.request(whodunnit: 'first') { article.update!(title: 'By the first author') }
+      by_first = article.versions.reload.last
+      PaperTrail.request(whodunnit: 'second') do
+        TrackedArticle.find(article.id).tags << tag
+        habtm_boundary_for(article)
+      end
+      by_second = article.versions.reload.last
+
+      steps = PaperTrailDiff.activity_timeline(article, from: by_first, to: by_second,
+                                                        associations: [:tags])
+
+      credited = steps.reject(&:empty?).map do |step|
+        [step.source_boundary.whodunnit, step.diff.associations.keys]
+      end
+      expect(credited).to eq([['first', ['tags']]])
+    end
+
+    it "records the old membership again at an instance's later save" do
+      article = TrackedArticle.create!(title: 'T')
+      tag = TrackedTag.create!(name: 'Kept throughout')
+      article.tags << tag
+      habtm_boundary_for(article)
+      checkpoint = article.versions.reload.last
+      article.reload
+      article.update!(title: 'Saved again from the same instance')
+      stale = article.versions.reload.last
+
+      tags = PaperTrailDiff.compare(checkpoint, stale, associations: [:tags])
+                           .associations.fetch('tags')
+
+      # The tag never left: PT-AT undid the instance's earlier change again.
+      expect(tags.removed.map(&:id)).to eq([tag.id])
+    end
+  end
+
   # The root's checkpoints record the root's tags and nothing else, so the
   # tag's articles used to read as empty at both: `Other` joining the tag went
   # unreported, and against the current record both articles read as added.
