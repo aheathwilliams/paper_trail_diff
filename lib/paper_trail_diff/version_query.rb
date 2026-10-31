@@ -14,14 +14,19 @@ module PaperTrailDiff
       relation.reorder(created_at: :asc, id: :asc)
     end
 
-    # A model's versions, or those of the given items. They are read from the
-    # version class rather than through the model's versions association,
-    # whose scope may leave some out: a history replayed without them credits
-    # their changes to the next version kept.
-    #: (untyped, ?untyped) -> untyped
-    def for_items(model_class, ids = nil)
-      relation = model_class.paper_trail.version_class.where(item_type: model_class.base_class.name)
-      ids.nil? ? relation : relation.where(item_id: ids)
+    # Every version of a model's items. They are read from the version class
+    # rather than through the model's versions association, whose scope may
+    # leave some out: a history replayed without them credits their changes to
+    # the next version kept.
+    #: (untyped) -> untyped
+    def for_model(model_class)
+      model_class.paper_trail.version_class.where(item_type: model_class.base_class.name)
+    end
+
+    # The versions of the given items, read the same way.
+    #: (untyped, untyped) -> untyped
+    def for_items(model_class, ids)
+      for_model(model_class).where(item_id: ids)
     end
 
     # Keeps each item's earliest version among those the block also accepts:

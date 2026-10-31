@@ -92,7 +92,7 @@ module PaperTrailDiff
     def self.transaction_versions(model_class)
       return unless model_class.paper_trail.version_class.column_names.include?('transaction_id')
 
-      VersionQuery.for_items(model_class)
+      VersionQuery.for_model(model_class)
     end
     private_class_method :transaction_versions
 
