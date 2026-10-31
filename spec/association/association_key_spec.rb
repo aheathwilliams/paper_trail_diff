@@ -32,10 +32,12 @@ class KeyedSpecArticle < ActiveRecord::Base
   has_paper_trail
 end
 
-# Keyed on its name, so a key named `id` is not its primary key.
+# Keyed on its name, so a key named `id` is not its primary key. Versioned, so
+# the key rule alone decides whether discovery lists the paths that reach it.
 class KeyedSpecNamedAuthor < ActiveRecord::Base
   self.table_name = 'tracked_authors'
   self.primary_key = 'name'
+  has_paper_trail
 end
 
 class KeyedSpecArticle

@@ -59,6 +59,12 @@ RSpec.describe 'A has_many :through an unversioned join model' do
                       'mirror the fields you need onto a model that has it.')
   end
 
+  # Every request that reads history refuses both the through and the path to
+  # its join model, so neither is offered.
+  it 'is left out of association_paths, with the path to its join model' do
+    expect(PaperTrailDiff.association_paths(LooseRack).map(&:path)).to eq([])
+  end
+
   it 'is an error diagnose reports' do
     from, to = rack.versions.reorder(:created_at, :id).to_a
 
