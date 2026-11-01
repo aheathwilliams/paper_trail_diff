@@ -23,9 +23,7 @@ module PaperTrailDiff
       @traversal = traversal
       start_at = VersionBoundary.transaction_start(root_versions, start_at)
       @records = PreparedRecordIndex.new(start_at, end_at: end_at, live_records: live_records)
-      @activity = PreparedActivityIndex.new(
-        @records, root_versions, start_at: start_at, end_at: end_at || root_versions.last.created_at
-      )
+      @activity = PreparedActivityIndex.new(@records, root_versions, start_at: start_at)
       @history = PreparedHistory.new(@records, activity_index: @activity)
       @edges = PreparedEdgeLoader.new(@records, root_versions, start_at: start_at)
       @prepared = {} #: Hash[untyped, Array[String]]

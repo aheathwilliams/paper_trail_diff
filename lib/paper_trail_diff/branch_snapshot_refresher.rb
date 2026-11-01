@@ -35,7 +35,8 @@ module PaperTrailDiff
         tree: tree, traversal: traversal, normalizer: normalizer,
         record_after: @event_refresher.method(:record_after),
         changeset: @event_refresher.method(:deserialized_changeset),
-        partial_snapshotter: method(:partial_snapshot)
+        partial_snapshotter: method(:partial_snapshot),
+        record_transition: record_transition
       )
     end
 

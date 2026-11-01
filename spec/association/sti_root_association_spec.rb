@@ -25,6 +25,9 @@ class StiRootSharedFolder < StiRootFolder
   has_many :files, class_name: 'StiRootFile', foreign_key: :folder_id, inverse_of: :folder
 end
 
+# Shares the association, so a folder can become one and keep its files.
+class StiRootArchiveFolder < StiRootSharedFolder; end
+
 class StiRootFile < ActiveRecord::Base
   belongs_to :folder, class_name: 'StiRootSharedFolder', optional: true, inverse_of: :files
   has_paper_trail
@@ -115,6 +118,41 @@ RSpec.describe 'An association declared by an STI root subclass' do
     file_steps = activity.activity_timeline.select { |step| step.diff.associations.key?('files') }
     expect(file_steps.map { |step| [step.from_boundary.item_type, files(step.diff)] })
       .to eq([['StiRootFile', expected]])
+  end
+
+  # Activity carries a root's snapshot from one of its versions to the next.
+  it "carries a subclass root's snapshot forward, with the class it changes to" do
+    folder.files.create!(name: 'notes')
+    folder.update!(name: 'Docs 2')
+    StiRootFolder.find(folder.id).update!(type: 'StiRootArchiveFolder')
+    StiRootFolder.find(folder.id).update!(name: 'Docs 3')
+    handled = []
+    allow_any_instance_of(PaperTrailDiff::ActivityRootSnapshotRefresher)
+      .to receive(:call).and_wrap_original do |original, *arguments|
+        original.call(*arguments).tap { |result| handled << result.first }
+      end
+
+    current = StiRootFolder.find(folder.id)
+    steps = PaperTrailDiff.activity_timeline(current, snapshots: true, **paths)
+
+    expect(steps.map { |step| [step.to_snapshot.type, step.to_snapshot.attributes['name']] })
+      .to eq([%w[StiRootSharedFolder Docs], %w[StiRootSharedFolder Docs],
+              ['StiRootSharedFolder', 'Docs 2'], ['StiRootArchiveFolder', 'Docs 2'],
+              ['StiRootArchiveFolder', 'Docs 3']])
+    # The create has no snapshot before it, and the change of class is rebuilt
+    # in full. The rename between them is carried forward.
+    expect(handled).to eq([false, true, false])
+  end
+
+  it 'names the class a base-class root changes to in its next snapshot' do
+    plain = StiRootFolder.create!(name: 'Plain')
+    StiRootFolder.find(plain.id).update!(type: 'StiRootSharedFolder')
+    StiRootFolder.find(plain.id).update!(name: 'Shared')
+
+    steps = PaperTrailDiff.activity_timeline(StiRootFolder.find(plain.id), snapshots: true)
+
+    expect(steps.map { |step| step.to_snapshot.type })
+      .to eq(%w[StiRootFolder StiRootSharedFolder StiRootSharedFolder])
   end
 
   it 'reads the subclass from the change a create version recorded' do

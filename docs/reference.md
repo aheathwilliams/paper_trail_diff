@@ -76,7 +76,12 @@ Six things follow from this:
   changes the values the record's next version stores, or its current row. The
   gem reads the result of a change from there, so the write appears in the step
   for that record's previous recorded change and is attributed to its author.
-  Ending a range at a version leaves out only the writes after it.
+  Ending a range at a version leaves out only the writes after it. A column
+  that `has_paper_trail only:` or `ignore:` leaves out of `object_changes` is
+  read the same way, so a key saved with a version is that version's change.
+  Rails updates `counter_cache` columns like this, so a parent's count changes
+  in the step of the parent's previous change; pass the column in `ignore:` to
+  leave it out.
   [`recorded_changes`](#what-a-version-recorded) reads what a version itself
   recorded, and activity steps can [include it](#what-each-event-recorded-recorded_changes-true).
 - **A record created without a version looks as if it always existed.** A

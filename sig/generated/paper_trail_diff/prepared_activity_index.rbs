@@ -2,9 +2,16 @@
 
 module PaperTrailDiff
   # Shares association event discovery across every root in a prepared graph.
+  #
+  # The candidates are the records the prepared snapshots can hold: those
+  # recorded under an owner from the start onward, and those under it now. A
+  # key changed without a version is recorded only by the record's next
+  # version, or by the current row, either of which can come after the range,
+  # and the snapshots read it from there. ActivityTreeFilter leaves out the
+  # events of a candidate that was outside the tree throughout.
   class PreparedActivityIndex
-    # : (PreparedRecordIndex, Array[untyped], start_at: untyped, end_at: untyped) -> void
-    def initialize: (PreparedRecordIndex, Array[untyped], start_at: untyped, end_at: untyped) -> void
+    # : (PreparedRecordIndex, Array[untyped], start_at: untyped) -> void
+    def initialize: (PreparedRecordIndex, Array[untyped], start_at: untyped) -> void
 
     # : (untyped, Array[untyped]) -> void
     def register: (untyped, Array[untyped]) -> void
@@ -32,8 +39,8 @@ module PaperTrailDiff
     # : (untyped, Array[untyped], untyped, ActivityRange) -> Array[untyped]
     def child_ids: (untyped, Array[untyped], untyped, ActivityRange) -> Array[untyped]
 
-    # The `belongs_to` targets each owner pointed at in the range: at its start
-    # and after each change inside it, plus the live row at a current end.
+    # The `belongs_to` targets each owner pointed at from the range's start
+    # onward, plus the live row.
     # : (untyped, Array[untyped], untyped, ActivityRange) -> Array[ActivityTargetCandidateLoader::Row]
     def target_rows: (untyped, Array[untyped], untyped, ActivityRange) -> Array[ActivityTargetCandidateLoader::Row]
 

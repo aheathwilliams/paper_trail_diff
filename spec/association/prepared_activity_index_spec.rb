@@ -71,7 +71,7 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
   def index_for(origin, loads, root_versions: [])
     records = PaperTrailDiff::PreparedRecordIndex.new(origin)
     loads.each { |model, ids| records.load(model, ids) }
-    described_class.new(records, root_versions, start_at: origin, end_at: Time.now.utc)
+    described_class.new(records, root_versions, start_at: origin)
   end
 
   def sections
@@ -151,8 +151,11 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
 
   # PT-AT records a version's foreign keys after its change: the latest one
   # before the range names the children at its start. A section moved away
-  # before the index's own start, or saved after its end, is outside it.
-  it "reads a page's sections at the range start, inside it, and live at a current end" do
+  # before the index's own start is outside it. One saved after the range's
+  # end, even after the index was built, or only in the live row, is a
+  # candidate whatever the end: a key written without a version is recorded
+  # only after it.
+  it "reads a page's sections from the range start onward, and live ones" do
     page, other, bare = %w[Page Other Bare].map { |title| IndexSpecPage.create!(title: title) }
     early = IndexSpecSection.create!(title: 'early', page: page)
     early.update!(page: other)
@@ -173,16 +176,17 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
     ids = [early, kept, moved, gone, adopted, added, late].map(&:id)
     index = index_for(origin, { IndexSpecSection => ids })
     index.register(IndexSpecPage, [page.id, other.id, bare.id])
-    IndexSpecSection.create!(title: 'fleeting', page: page).destroy!
+    fleeting = IndexSpecSection.create!(title: 'fleeting', page: page).tap(&:destroy!)
 
     closed = index.child_ids(IndexSpecPage, [page.id], sections, range(start, finish))
     current = index.child_ids(IndexSpecPage, [page.id, bare.id], sections,
                               range(start, Time.now.utc))
     both = index.child_ids(IndexSpecPage, [page.id, other.id], sections, range(start, finish))
 
-    expect(closed).to contain_exactly(kept.id, added.id)
-    expect(current).to contain_exactly(kept.id, added.id, late.id, adopted.id)
-    expect(both).to contain_exactly(kept.id, added.id, moved.id, early.id)
+    later = [late.id, adopted.id, fleeting.id]
+    expect(closed).to contain_exactly(kept.id, added.id, *later)
+    expect(current).to contain_exactly(kept.id, added.id, *later)
+    expect(both).to contain_exactly(kept.id, added.id, moved.id, early.id, *later)
   end
 
   it 'reads the rows of each association once for every page' do
@@ -212,8 +216,10 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
   end
 
   # The version a range ends at names the author after it, which the range
-  # never reached.
-  it 'reads the authors a page pointed at in the range, and its live one at a current end' do
+  # never reached, but a key written without a version is recorded only after
+  # it too, so every author from the start onward is a candidate, and the live
+  # one.
+  it 'reads the authors a page pointed at from the range start onward, and its live one' do
     origin = Time.now.utc
     first, second, third = %w[Ann Bea Cy].map { |name| TrackedAuthor.create!(name: name) }
     page, other, gone = %w[Page Other Gone].map do |title|
@@ -239,15 +245,18 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
     current = index.target_rows(IndexSpecPage, [page.id, unversioned.id], author,
                                 range(start, Time.now.utc))
 
-    expect(fields.call(closed))
-      .to contain_exactly([page.id, first.id, 'create'], [page.id, second.id, 'update'])
+    expect(fields.call(closed)).to contain_exactly(
+      [page.id, first.id, 'create'], [page.id, second.id, 'update'],
+      [page.id, third.id, 'update'], [page.id, third.id, nil]
+    )
     expect(fields.call(current)).to contain_exactly(
       [page.id, first.id, 'create'], [page.id, second.id, 'update'],
       [page.id, third.id, 'update'], [page.id, third.id, nil], [unversioned.id, first.id, nil]
     )
     queries = statements do
       found = index.target_rows(IndexSpecPage, [other.id], author, range(start, closing))
-      expect(fields.call(found)).to eq([[other.id, second.id, 'update']])
+      expect(fields.call(found))
+        .to eq([[other.id, second.id, 'update'], [other.id, second.id, nil]])
     end
     expect(queries).to eq(0)
   end
@@ -316,7 +325,7 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
 
   it 'explains missing graph registration instead of leaking a hash lookup error' do
     records = PaperTrailDiff::PreparedRecordIndex.new(Time.now.utc - 60)
-    index = described_class.new(records, [], start_at: Time.now.utc - 60, end_at: Time.now.utc)
+    index = described_class.new(records, [], start_at: Time.now.utc - 60)
 
     expect do
       index.child_ids(TrackedArticle, [1], TrackedArticle.reflect_on_association(:comments),
@@ -344,13 +353,13 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
     end
     records = PaperTrailDiff::PreparedRecordIndex.new(origin)
     records.load(TrackedComment, (1..8).to_a)
-    index = described_class.new(records, [], start_at: origin, end_at: origin + 30)
+    index = described_class.new(records, [], start_at: origin)
     relation = PaperTrail::Version.where(id: candidates.map(&:id))
 
     [10, 15].each do |start|
       range = PaperTrailDiff::ActivityRange.new(origin + start, origin + 20)
       expected = PaperTrailDiff::VersionAssociationCandidateScope.new(
-        PaperTrail::Version, range.start_time, end_at: range.end_time
+        PaperTrail::Version, range.start_time
       ).call(relation).pluck(:id)
       actual = candidates.select do |version|
         index.send(:eligible_version?, TrackedComment, version.item_id, version.created_at,

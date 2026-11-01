@@ -7,6 +7,27 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Activity reports a change to a root's `belongs_to` key in the step of the
+  root version that made it, also when `object_changes` leaves the key out:
+  under `has_paper_trail only:` or `ignore:` that do not list it, or when
+  `update_columns`, `update_all`, or a save with versioning off wrote it. The
+  root kept its old target until a later event read the branch again, so the
+  change was credited to whoever saved that, two windows that met between
+  the two reported it in neither, and `analyze(activity: true).timeline`
+  differed from `timeline`.
+
+- Activity reads a child or a `belongs_to` target whose key changed without a
+  version, such as a comment moved by `update_columns`, or by any save under
+  `has_paper_trail only:` or `ignore:` that leave the key out. In a past
+  window or a range that ends at a version, the record had no events: it
+  joined at an arbitrary later step, or was left out of the window's diff,
+  and a reviewer set this way kept its later renames out of activity.
+
+- An STI root that changes class names its new class in the activity
+  snapshots after the change, not its old one, and a subclass root's
+  snapshot is carried from one of its versions to the next instead of being
+  rebuilt at each one.
+
 - Activity reports a change to a key that a child's own `belongs_to`
   follows, such as a comment's `reviewer_id` under `comments.reviewer`, in
   the step of the child's update. The child kept its old target until its
@@ -27,6 +48,12 @@ project follows [Semantic Versioning](https://semver.org/).
   range that ends at the checkpoint still ends with it, as `compare` does.
 
 ### Development
+
+- `spec/oracle/replay_differential_spec.rb` replays generated histories
+  with activity's incremental snapshots and with a full snapshot at every
+  event, under `has_paper_trail only:` and `ignore:` and with keys written
+  without a version, and fails on any difference. It found the first two
+  bugs above.
 
 - Two oracle generators compare rebuilt history with plain Active Record:
   `spec/oracle/through_history_spec.rb` for every kind of `has_many :through`,
