@@ -6,12 +6,14 @@ module PaperTrailDiff
   # and missed by another: an activity read then found a comment whose versions
   # it had not read yet, and raised `KeyError`.
   #
-  # PostgreSQL and MySQL (through mysql2 or trilogy) run the read at REPEATABLE
-  # READ, which gives every statement of the transaction the same view. Other
-  # adapters get no snapshot; docs/reference.md lists them under limitations.
+  # PostgreSQL and MySQL (through mysql2 or trilogy), and adapters built on
+  # them such as PostGIS, run the read at REPEATABLE READ, which gives every
+  # statement of the transaction the same view. Other adapters get no snapshot;
+  # docs/reference.md lists them under limitations.
   module ReadSnapshot
-    # Keyed by the adapter name that `connection_db_config` reports.
-    SNAPSHOT_ISOLATION: untyped
+    # The adapters whose subclasses take a snapshot, by name, since an
+    # application loads only the adapters it uses.
+    SNAPSHOT_ADAPTERS: untyped
 
     # Yields once. Each connection the values read through gets a snapshot
     # transaction first, unless that connection already has a transaction open:
@@ -21,8 +23,12 @@ module PaperTrailDiff
     # : (Array[untyped]) { () -> untyped } -> untyped
     def self?.call: (Array[untyped]) { () -> untyped } -> untyped
 
+    # : (untyped) -> bool
+    def self?.snapshot?: (untyped) -> bool
+
     # One class per connection: each read model and its version class, with the
-    # repeats through a shared connection dropped.
+    # repeats through a shared connection dropped. An associated model on
+    # another database is not among them, so it is read outside the snapshot.
     # : (Array[untyped]) -> Array[untyped]
     def self?.connection_classes: (Array[untyped]) -> Array[untyped]
 

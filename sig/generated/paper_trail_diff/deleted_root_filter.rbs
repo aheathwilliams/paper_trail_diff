@@ -6,6 +6,8 @@ module PaperTrailDiff
   # table, where a destroyed root has no row, so without this a report on one
   # account's records would include every account's deletions.
   class DeletedRootFilter
+    SLICE: ::Integer
+
     # : (untyped) -> void
     def initialize: (untyped) -> void
 
@@ -36,7 +38,9 @@ module PaperTrailDiff
     # : (Hash[String, untyped]?) -> bool
     def selected?: (Hash[String, untyped]?) -> bool
 
-    # The state each root held before its latest destroy.
+    # The state each root held before its latest destroy, read in slices: a
+    # report lists every deleted root it reached, and SQL Server cannot plan an
+    # IN list of thousands.
     # : (Array[String]) -> Hash[String, Hash[String, untyped]?]
     def destroyed_states: (Array[String]) -> Hash[String, Hash[String, untyped]?]
 

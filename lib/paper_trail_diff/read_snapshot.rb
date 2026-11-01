@@ -7,16 +7,17 @@ module PaperTrailDiff
   # and missed by another: an activity read then found a comment whose versions
   # it had not read yet, and raised `KeyError`.
   #
-  # PostgreSQL and MySQL (through mysql2 or trilogy) run the read at REPEATABLE
-  # READ, which gives every statement of the transaction the same view. Other
-  # adapters get no snapshot; docs/reference.md lists them under limitations.
+  # PostgreSQL and MySQL (through mysql2 or trilogy), and adapters built on
+  # them such as PostGIS, run the read at REPEATABLE READ, which gives every
+  # statement of the transaction the same view. Other adapters get no snapshot;
+  # docs/reference.md lists them under limitations.
   module ReadSnapshot
-    # Keyed by the adapter name that `connection_db_config` reports.
-    SNAPSHOT_ISOLATION = {
-      'postgresql' => :repeatable_read,
-      'mysql2' => :repeatable_read,
-      'trilogy' => :repeatable_read
-    }.freeze
+    # The adapters whose subclasses take a snapshot, by name, since an
+    # application loads only the adapters it uses.
+    SNAPSHOT_ADAPTERS = %w[
+      ActiveRecord::ConnectionAdapters::PostgreSQLAdapter
+      ActiveRecord::ConnectionAdapters::AbstractMysqlAdapter
+    ].freeze
 
     module_function
 
@@ -29,15 +30,21 @@ module PaperTrailDiff
     def call(values, &block)
       classes = connection_classes(values)
       classes.reverse_each.reduce(block) do |inner, klass|
-        isolation = SNAPSHOT_ISOLATION[klass.connection_db_config.adapter]
-        next inner if isolation.nil? || klass.connection.transaction_open?
+        connection = klass.connection
+        next inner if !snapshot?(connection) || connection.transaction_open?
 
-        -> { klass.transaction(isolation: isolation) { inner.call } }
+        -> { klass.transaction(isolation: :repeatable_read) { inner.call } }
       end.call
     end
 
+    #: (untyped) -> bool
+    def snapshot?(connection)
+      connection.class.ancestors.any? { |ancestor| SNAPSHOT_ADAPTERS.include?(ancestor.name) }
+    end
+
     # One class per connection: each read model and its version class, with the
-    # repeats through a shared connection dropped.
+    # repeats through a shared connection dropped. An associated model on
+    # another database is not among them, so it is read outside the snapshot.
     #: (Array[untyped]) -> Array[untyped]
     def connection_classes(values)
       values.filter_map { |value| model_for(value) }
@@ -65,6 +72,6 @@ module PaperTrailDiff
       value.class if Endpoint.record?(value)
     end
 
-    private_class_method :model_for, :endpoint_model
+    private_class_method :snapshot?, :model_for, :endpoint_model
   end
 end

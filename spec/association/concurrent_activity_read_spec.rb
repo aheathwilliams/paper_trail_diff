@@ -67,4 +67,25 @@ RSpec.describe 'activity reads under a concurrent commit' do
                                                       group: :transaction, snapshots: true)
     expect(comment_bodies(later.last.to_snapshot)).to eq(%w[before late])
   end
+
+  # PostgreSQL refuses every statement of a transaction after one fails, so a
+  # check that recovers from a failed query must not fail inside the snapshot.
+  # A HABTM path is checked with a query, after the order check.
+  it 'diagnoses the associations after a version-order check whose query failed' do
+    article = TrackedArticle.create!(title: 'Article')
+    article.update!(title: 'Renamed')
+    first = article.versions.order(:id).first
+    expected = PaperTrailDiff.diagnose(first, article, associations: [:tags]).issues.map(&:code)
+    checks = PaperTrailDiff::VersionSequenceDiagnostics
+    allow(checks).to receive(:new).and_wrap_original do |original, *args, **options|
+      original.call(*args, **options).tap do |check|
+        allow(check).to receive(:ordered_range_versions) do
+          TrackedArticle.connection.select_value('SELECT missing_column FROM versions')
+        end
+      end
+    end
+
+    expect(PaperTrailDiff.diagnose(first, article, associations: [:tags]).issues.map(&:code))
+      .to eq(expected)
+  end
 end

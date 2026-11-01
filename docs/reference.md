@@ -1446,8 +1446,11 @@ Results can only be as complete as the history PaperTrail and PT-AT recorded.
 - Deleted versions, schema changes, and serializer changes can affect how old
   versions read.
 - Each call reads its history and live rows in one snapshot on PostgreSQL and
-  MySQL (through mysql2 or trilogy), so a commit that lands during the call is
-  seen by none of its statements. A call made inside a transaction of your own
+  MySQL (through mysql2 or trilogy), and on adapters built on them such as
+  PostGIS, so a commit that lands during the call is seen by none of its
+  statements. The snapshot covers the database of the record's model and its
+  versions; an associated model on another database is read outside it. A
+  call made inside a transaction of your own
   keeps that transaction's isolation level. To make the whole call see one
   snapshot, start that transaction at `REPEATABLE READ` or stricter. SQLite and
   SQL Server take no snapshot, so a commit during a call can appear in some of

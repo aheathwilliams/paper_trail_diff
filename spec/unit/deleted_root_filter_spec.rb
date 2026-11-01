@@ -77,6 +77,21 @@ RSpec.describe PaperTrailDiff::DeletedRootFilter do
     expect(loaded).to eq([1])
   end
 
+  it 'reads the destroys in slices, keeping each root by its latest destroy' do
+    one = destroyed(views: 1)
+    two = destroyed(views: 2)
+    record_destroy('FilterArticle', one.id, { 'id' => one.id, 'views' => 2 })
+    stub_const('PaperTrailDiff::DeletedRootFilter::SLICE', 1)
+    queries = 0
+    count = ->(*, payload) { queries += 1 unless payload[:name] == 'SCHEMA' }
+
+    ActiveSupport::Notifications.subscribed(count, 'sql.active_record') do
+      expect(kept(FilterArticle.where(views: 2), [one, two])).to eq([identity(one), identity(two)])
+    end
+
+    expect(queries).to eq(2)
+  end
+
   # A report checks its ceiling after filtering, and before reifying anything.
   it 'reads each destroyed state of a plain model without reifying it' do
     events = %i[published draft].map { |status| FilterEvent.create!(status: status) }

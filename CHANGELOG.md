@@ -7,6 +7,10 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- `include_deleted:` reads the deleted records' `destroy` versions 500
+  records per query, as `unreachable`'s test below does, instead of in one
+  query for all of them.
+
 - `report` and `analyze_scope` list in `unreachable` only the deleted records
   whose state when destroyed meets the relation's conditions, also without
   `include_deleted:`, whenever those conditions can be read. A report on
@@ -30,8 +34,10 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
-- On PostgreSQL and MySQL (through mysql2 or trilogy), each call reads its
-  history and live rows in one REPEATABLE READ transaction. A comment that
+- On PostgreSQL and MySQL (through mysql2 or trilogy), and adapters built on
+  them such as PostGIS, each call reads its history and live rows in one
+  REPEATABLE READ transaction on the database of the model and its versions.
+  A comment that
   committed between two statements of an activity read could make it raise an
   internal `KeyError`, and one statement could see a row that another did not.
   A call now reflects the database as of its first statement, so a commit
