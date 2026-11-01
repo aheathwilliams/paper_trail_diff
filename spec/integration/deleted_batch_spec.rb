@@ -35,6 +35,14 @@ RSpec.describe 'deleted root reporting' do
     sql
   end
 
+  # Whether the adapter compares text as Ruby does, which is what lets the gem
+  # test a text comparison against a deleted record. It mirrors ScopeCondition.
+  def text_comparisons_readable?
+    PaperTrailDiff::ScopeCondition::EXACT_TEXT_ADAPTERS.include?(
+      ActiveRecord::Base.connection_db_config.adapter
+    )
+  end
+
   # A report on one selection must not list another's deleted records.
   # One whose destroy was not recorded has no state to test, so it stays.
   it 'lists only the deleted records the relation selects, even without include_deleted' do
@@ -49,7 +57,11 @@ RSpec.describe 'deleted root reporting' do
 
     expect(unreachable.call(CoreArticle.where(title: "Final #{stable.title[-1]}")))
       .to eq([stable.id.to_s, other.id.to_s])
-    expect(unreachable.call(CoreArticle.where(title: 'Elsewhere'))).to eq([other.id.to_s])
+    # Only PostgreSQL and SQLite compare text as Ruby does, so elsewhere the
+    # relation cannot be tested, and, as reference.md documents, every deleted
+    # record of the model is listed.
+    listed = text_comparisons_readable? ? [other.id.to_s] : [stable.id.to_s, other.id.to_s]
+    expect(unreachable.call(CoreArticle.where(title: 'Elsewhere'))).to eq(listed)
     expect(unreachable.call(CoreArticle.none)).to eq([])
     expect(unreachable.call(unreadable)).to eq([stable.id.to_s, other.id.to_s])
   end
