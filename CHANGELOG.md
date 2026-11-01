@@ -26,6 +26,13 @@ project follows [Semantic Versioning](https://semver.org/).
   root version, before it existed and before members attached earlier. A
   range that ends at the checkpoint still ends with it, as `compare` does.
 
+### Development
+
+- Two oracle generators compare rebuilt history with plain Active Record:
+  `spec/oracle/through_history_spec.rb` for every kind of `has_many :through`,
+  and `spec/oracle/habtm_history_spec.rb` for HABTM membership between
+  checkpoints. They found the three activity bugs above.
+
 ## [0.15.0] - 2026-10-31
 
 ### Breaking changes

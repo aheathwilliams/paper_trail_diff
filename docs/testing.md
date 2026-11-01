@@ -56,13 +56,22 @@ share passes. `spec/oracle` compares them with the truth instead:
    transactions, or inside one, must report each step once, as the window
    spanning both does, through both `activity_timeline` and `analyze_many`.
 
-Two more generators cover other shapes. `scoped_membership_spec.rb` moves
+Four more generators cover other shapes. `scoped_membership_spec.rb` moves
 notes in and out of scoped associations (conditions, order, limit, and
 offset) and compares the members at every version with Active Record's own
 answer. `tree_history_spec.rb` edits a tree of one model, so a root can sit
 inside another root's tree, with children whose attributes are encrypted,
-serialized, enums stored as strings, custom types, decimals, and JSON. It reads
-the expected states with plain Active Record, not through the gem.
+serialized, enums stored as strings, custom types, decimals, and JSON.
+`through_history_spec.rb` edits two teams' join records and the records they
+reach, through every kind of `has_many :through`: to a `belongs_to`, through a
+scoped part, ranked with a limit, to a `has_many`, through another through, a
+`has_one` through, and with `source_type:`. `habtm_history_spec.rb` attaches,
+detaches, creates, renames, and destroys tags between checkpoints. HABTM
+membership is known only at root versions, so it expects what the
+[reference](reference.md#habtm-limitation) describes: at each point, the
+members the next root version recorded, as each was then, and only once it
+exists. These three read the expected states with plain Active Record, not
+through the gem.
 
 ```console
 mise exec -- bundle exec rake spec_oracle
