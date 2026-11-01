@@ -117,6 +117,41 @@ RSpec.describe 'Windows that meet inside a transaction',
     end
   end
 
+  describe 'the window an analysis covers' do
+    it 'starts where the transaction that crossed its start began' do
+      article, child, root = comment_then_article
+      within = root.created_at..Time.now.utc
+
+      many = PaperTrailDiff.analyze_many([article], within: within, activity: true,
+                                                    associations: paths).values.first
+      one = PaperTrailDiff.analyze(article, within: within, activity: true, associations: paths)
+
+      expect([many.window, one.window]).to all(eq(child.created_at..within.end))
+    end
+
+    it 'holds every step, and is the window asked for when no transaction crosses it' do
+      article, = comment_then_article
+      within = window(article)
+
+      analyses = [
+        PaperTrailDiff.analyze(article, within: within),
+        PaperTrailDiff.analyze_many([article], within: within, activity: true,
+                                               associations: paths).values.first
+      ]
+
+      expect(analyses.map(&:window)).to all(eq(within))
+      expect(analyses.last.activity_timeline.map { |step| step.source_boundary.recorded_at })
+        .to all(satisfy { |time| within.cover?(time) })
+    end
+
+    it 'is nothing without a window' do
+      article, = comment_then_article
+
+      expect(PaperTrailDiff.analyze(article).window).to be_nil
+      expect(PaperTrailDiff.analyze_many([article], within: nil).values.first.window).to be_nil
+    end
+  end
+
   it 'ends a window at an inclusive end inside a transaction before the transaction' do
     article, child, root = comment_then_article
     whole = window(article)

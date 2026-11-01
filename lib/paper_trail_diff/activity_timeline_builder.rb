@@ -30,6 +30,12 @@ module PaperTrailDiff
       build_between_versions
     end
 
+    # The window the range covers once its edges have moved to transactions.
+    #: () -> TimeRange?
+    def window
+      @range.time_range
+    end
+
     # Builds the endpoint diff, the root timeline, and the activity from one
     # activity snapshot pass.
     #: () -> Analysis

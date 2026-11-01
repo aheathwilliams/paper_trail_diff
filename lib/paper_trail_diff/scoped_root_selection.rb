@@ -45,13 +45,16 @@ module PaperTrailDiff
 
     # `activity_tree` names the association paths whose changes also select a
     # root, as an activity analysis reports them. Without one, only a root's
-    # own versions select it.
-    #: (untyped, time_range: TimeRange?, limit: Integer, ?historical_filter: untyped, ?max_filter_versions: Integer, ?activity_tree: AssociationTree?) -> void
+    # own versions select it. `version_scope` narrows which of those count,
+    # as it narrows which are reported.
+    #: (untyped, time_range: TimeRange?, limit: Integer, ?historical_filter: untyped, ?max_filter_versions: Integer, ?activity_tree: AssociationTree?, ?version_scope: untyped) -> void
     def initialize(scope, time_range:, limit:, historical_filter: nil, # rubocop:disable Metrics/ParameterLists
-                   max_filter_versions: HistoricalFilter::DEFAULT_VERSION_LIMIT, activity_tree: nil)
+                   max_filter_versions: HistoricalFilter::DEFAULT_VERSION_LIMIT, activity_tree: nil,
+                   version_scope: nil)
       @scope = normalize_scope(scope)
       reject_unversioned!
       @time_range = time_range
+      @version_scope = VersionScopeFilter.validated(version_scope)
       @limit = validate_limit(limit)
       @related = if activity_tree
                    AssociationActivitySelection.new(model, tree: activity_tree,
@@ -80,6 +83,7 @@ module PaperTrailDiff
     # @rbs @limit: Integer
     # @rbs @historical_filter: untyped
     # @rbs @related: AssociationActivitySelection?
+    # @rbs @version_scope: untyped
 
     # Leaves the candidate set in the database. Plucking every root changed in
     # the window would cost memory and a statement proportional to all activity
@@ -150,11 +154,14 @@ module PaperTrailDiff
       window_versions.where.not(item_id: base_class.unscoped).distinct.pluck(:item_id).map(&:to_s)
     end
 
+    # Only the versions `version_scope` keeps select a root: one whose versions
+    # in the window it drops would have nothing to report.
     #: () -> untyped
     def window_versions
       relation = VersionQuery.for_model(model)
       range = @time_range
-      range ? range.scope(relation) : relation
+      relation = range.scope(relation) if range
+      @version_scope ? @version_scope.call(relation) : relation
     end
 
     # Accepts a model class as readily as a relation: `Article` and

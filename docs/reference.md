@@ -181,6 +181,25 @@ or a `report` with `since:` after an earlier report, show each change exactly
 once, credited to the transaction that made it. Each root moves its own edges,
 so in a batch two roots can start a few moments apart.
 
+`analysis.window` is the window an `Analysis` covers after any such move, as a
+Ruby range. It is `nil` when `within:` or `since:` was not given. Every step of
+the analysis is inside it, so to check a step against the window, use
+`analysis.window` rather than the range you passed: a step at the start of a
+moved window begins before the time you asked for.
+
+```ruby
+analysis = PaperTrailDiff.analyze_many(articles, within: window, activity: true).values.first
+analysis.window # => window, or one that starts earlier
+```
+
+Each move emits a `moved_window.paper_trail_diff` notification whose payload
+has `item_type`, `item_id`, the `requested` range, and the moved `window`. In
+history saved by your application, an edge moves back by the time one
+transaction took, usually well under a second. A move of minutes or days
+means a transaction ran that long, or that the versions' times were changed
+after they were saved, as a test might do; see
+[writing history in tests](#writing-history-in-tests).
+
 A closed window can still change. PaperTrail stamps a version's `created_at`
 when it builds the version, inside its transaction, and the transaction commits
 later. A transaction that stamped a change inside the window and committed
@@ -233,7 +252,7 @@ PaperTrailDiff.timeline(article, within: window, version_scope: user_edits)
 ```
 
 It is accepted by `timeline`, `activity_timeline`, `analyze`, `analyze_many`,
-and `analyze_scope`.
+`analyze_scope`, and `report`.
 
 - Each reported change is compared with the version right after it, even if
   that version is filtered out. So each step shows exactly what that one change
@@ -247,6 +266,11 @@ and `analyze_scope`.
 - It looks at the root record's versions only. Someone who only edited comments
   has no root versions to select. To find one person's changes, including to
   associations, see [one person's changes](#one-persons-changes).
+- In `analyze_scope` and `report`, it also chooses which records are selected:
+  a record's own versions select it only when the filter keeps one of them in
+  the window. A record whose versions there it all drops would have nothing to
+  report, so it is left out. A change on a requested association still selects
+  a record, whoever made it.
 - `activity_timeline` uses the filter to decide where the range starts and
   ends, but still lists every step inside it. Dropping one would move its
   change into a neighboring step and credit the wrong person.
@@ -596,10 +620,22 @@ analysis.timeline          # the same steps timeline returns
 analysis.activity_timeline # nil unless activity: true
 analysis.from_snapshot     # the full state at the start (nil before creation)
 analysis.to_snapshot       # the full state at the end
+analysis.window            # the time window it covers, or nil without within:
 analysis.to_h(snapshots: true, metadata: true)
 ```
 
 - It accepts the same ranges as `timeline`.
+- `from_snapshot` is the record as it was when the range began: before the
+  first change in a window, or before the change of the version you passed as
+  `from:`. With `version_scope:`, a window begins at the first change the
+  filter keeps. It is `nil` when the record was created inside the range; the
+  state right after it was created is then the first activity step's
+  `to_snapshot`, which `snapshots: true` keeps.
+- To read the record at one version, with its values typed and its
+  associations, take `from_snapshot` from a range that starts there:
+  `PaperTrailDiff.analyze(article, from: version, to: article).from_snapshot`.
+  Don't decode `version.object` yourself; the gem casts what PaperTrail
+  stores, which a `json` column or an enum leaves in another form.
 - When nothing in the range is reported, the analysis is empty: an empty
   `diff` and timelines, and `nil` for `from_snapshot` and `to_snapshot`. Here
   `nil` means no state was read, not that the record did not exist; reading
@@ -676,7 +712,7 @@ recently":
 report = PaperTrailDiff.report(Article.all, since: 1.day.ago, limit: 100)
 ```
 
-It accepts `associations:`, `ignore:`, `snapshots:`, `group:`,
+It accepts `associations:`, `ignore:`, `version_scope:`, `snapshots:`, `group:`,
 `recorded_changes:`, `include_deleted:`, `historical_filter:`, `max_filter_versions:`,
 and `allow_approximate:`.
 
@@ -689,7 +725,9 @@ and `allow_approximate:`.
   both. Nested paths count at every level, and a `has_many :through` counts its
   join rows too. Without `activity: true`, an analysis compares a record's own
   versions and cannot show a change to its associations alone, so only a
-  record's own version selects it.
+  record's own version selects it. With
+  [`version_scope:`](#reporting-only-some-changes-version_scope), only the
+  record's own versions that the filter keeps select it.
 - **An analysis can still be empty.** A record is selected by any version on its
   paths, but its analysis compares only the state you requested. A join row
   whose role changed, or a version that touched only ignored columns, selects a
@@ -1386,6 +1424,32 @@ precision was never recorded and cannot be reported. A `json` or `jsonb`
 column also returns times and dates as strings, which PaperTrail leaves as
 they are; the gem casts them back to the attribute's type.
 
+### Writing history in tests
+
+To give versions fixed times in a test, save them at those times with
+`travel_to`:
+
+```ruby
+travel_to(Time.zone.local(2026, 8, 15, 9, 1)) do
+  PaperTrail.request(whodunnit: "alice") { article.update!(title: "Published") }
+end
+```
+
+If you change `created_at` after saving instead, change every version saved
+in the same transaction, not only the ones you check. PT-AT gives all of
+them the same `transaction_id`, including versions of other models saved by
+callbacks. A version left at the time the test ran makes that transaction
+seem to last from your chosen time until today. A window edge in between
+then moves back to the transaction's start (see [Time windows](#time-windows)),
+and the window can lose the changes the test expects.
+
+```ruby
+def set_version_time(version, time)
+  same = version.transaction_id && { transaction_id: version.transaction_id }
+  PaperTrail::Version.where(same || { id: version.id }).update_all(created_at: time)
+end
+```
+
 ## Instrumentation
 
 The gem never logs. It emits `ActiveSupport::Notifications` events you can
@@ -1398,6 +1462,7 @@ subscribe to:
 - `load_live_endpoints.paper_trail_diff`
 - `prepare_history.paper_trail_diff`
 - `ambiguous_association_boundary.paper_trail_diff`
+- `moved_window.paper_trail_diff`, when a [window edge moves](#time-windows)
 
 ```ruby
 ActiveSupport::Notifications.subscribe(/\.paper_trail_diff\z/) do |name, start, finish, _id, payload|
@@ -1405,8 +1470,8 @@ ActiveSupport::Notifications.subscribe(/\.paper_trail_diff\z/) do |name, start, 
 end
 ```
 
-Payloads contain counts, model names, association paths, and options, never
-record data. To see the SQL for one call, subscribe to `sql.active_record`
+Payloads contain counts, model names, ids, times, association paths, and
+options, never record data. To see the SQL for one call, subscribe to `sql.active_record`
 around it with `ActiveSupport::Notifications.subscribed`.
 
 ## Errors

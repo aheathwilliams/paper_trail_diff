@@ -9,6 +9,10 @@ module PaperTrailDiff
     attr_reader :activity_timeline #: Array[ActivityStep]?
     attr_reader :from_snapshot #: RecordSnapshot?
     attr_reader :to_snapshot #: RecordSnapshot?
+    # The time window the analysis covers, or nil without one. It is the
+    # window asked for unless a transaction crossed an edge, which moves the
+    # edge back to where that transaction began.
+    attr_reader :window #: Range[Time]?
 
     # The result for a record whose requested history contains no versions,
     # which is an empty history rather than a failed request. Its snapshots
@@ -25,14 +29,27 @@ module PaperTrailDiff
 
     # The reconstructed states the diff was taken between. A report that has to
     # render unchanged columns needs the whole final state, not only what moved.
-    #: (diff: Diff, timeline: Array[Step], ?activity_timeline: Array[ActivityStep]?, ?from_snapshot: RecordSnapshot?, ?to_snapshot: RecordSnapshot?) -> void
-    def initialize(diff:, timeline:, activity_timeline: nil, from_snapshot: nil, to_snapshot: nil)
+    #: (diff: Diff, timeline: Array[Step], ?activity_timeline: Array[ActivityStep]?, ?from_snapshot: RecordSnapshot?, ?to_snapshot: RecordSnapshot?, ?window: Range[Time]?) -> void
+    def initialize( # rubocop:disable Metrics/ParameterLists
+      diff:, timeline:, activity_timeline: nil, from_snapshot: nil, to_snapshot: nil, window: nil
+    )
       @diff = diff
       @timeline = timeline.dup.freeze
       @activity_timeline = activity_timeline&.dup&.freeze
       @from_snapshot = from_snapshot
       @to_snapshot = to_snapshot
+      @window = window
       freeze
+    end
+
+    # The same result for the window it was read in, which the caller knows
+    # once it has moved the window's edges to transactions.
+    #: (TimeRange?) -> Analysis
+    def with_window(range)
+      self.class.new(
+        diff: diff, timeline: timeline, activity_timeline: activity_timeline,
+        from_snapshot: from_snapshot, to_snapshot: to_snapshot, window: range&.to_range
+      )
     end
 
     # Every activity step's rows, in time order. Only the activity timeline says

@@ -188,14 +188,12 @@ RSpec.describe PaperTrailDiff::TransactionCut do
         sql.first
       end
 
-      it 'reads one version on each side of an edge' do
+      it 'reads one instant on each side of an edge' do
         article, = history
-        ordered = FilterVersion.order(:created_at)
-        one = ordered.limit(1).to_sql.delete_prefix(ordered.to_sql)
 
-        limits = lookups(FilterArticle, [article]).scan(/#{Regexp.escape(one)}(?!\d)/)
+        sql = lookups(FilterArticle, [article])
 
-        expect(limits.length).to eq(2)
+        expect([sql.scan('MAX(').length, sql.scan('MIN(').length]).to eq([1, 1])
       end
     end
 
@@ -208,13 +206,13 @@ RSpec.describe PaperTrailDiff::TransactionCut do
       expect(windows([article], at(1.25)..at(3))).to eq({})
     end
 
-    it 'reads no transactions when no root version near an edge has one' do
-      article, = history
+    it 'reads the roots together, and no transactions when no root version near an edge has one' do
+      roots = Array.new(2) { history.first }
       queries = []
       counter = ->(*, payload) { queries << payload[:sql] unless payload[:name] == 'SCHEMA' }
 
       ActiveSupport::Notifications.subscribed(counter, 'sql.active_record') do
-        windows([article], at(0.5)..at(1.5))
+        windows(roots, at(0.5)..at(1.5))
       end
 
       expect(queries.length).to eq(2)
@@ -243,6 +241,49 @@ RSpec.describe PaperTrailDiff::TransactionCut do
       other(1.5, 7)
 
       expect(windows([article, unmoved], at(1.25)..at(3)).keys).to eq([article.id.to_s])
+    end
+
+    it "reads each root's own nearest versions in one batch" do
+      article, = history(transactions: { 1 => 7 })
+      later, _, review = history(transactions: { 1 => 8 })
+      review.update_columns(created_at: at(1.1))
+      other(1.5, 7)
+      other(1.6, 8)
+
+      expect(windows([article, later], at(1.25)..at(3)))
+        .to eq(article.id.to_s => [at(1), at(3), false], later.id.to_s => [at(1.1), at(3), false])
+    end
+
+    it "does not read a root's older version at another root's nearest instant" do
+      article, = history(transactions: { 0 => 7 })
+      neighbour, _, review = history
+      review.update_columns(created_at: at(0))
+      other(1.75, 7)
+
+      expect(windows([article, neighbour], at(1.5)..at(3))).to eq({})
+    end
+
+    it 'leaves a start where a transaction ended before it while another runs past it' do
+      article, = history(transactions: { 1 => 7 })
+      other(0.5, 7)
+      other(1.5, 9)
+
+      expect(windows([article], at(1.25)..at(2))).to eq({})
+    end
+
+    it 'reports each moved window, and only those, under the stored type' do
+      feature, = history(FilterFeature, transactions: { 1 => 7 })
+      unmoved, = history(FilterFeature)
+      other(1.5, 7)
+      events = []
+      subscriber = ->(*, payload) { events << payload }
+
+      ActiveSupport::Notifications.subscribed(subscriber, 'moved_window.paper_trail_diff') do
+        windows([feature, unmoved], at(1.25)..at(3))
+      end
+
+      expect(events).to eq([{ item_type: 'FilterArticle', item_id: feature.id.to_s,
+                              requested: at(1.25)..at(3), window: at(1)..at(3) }])
     end
 
     it "does not move a root for another root's transaction" do

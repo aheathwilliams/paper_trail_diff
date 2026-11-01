@@ -15,6 +15,10 @@ module PaperTrailDiff
     # : () -> Array[ActivityStep]
     def build: () -> Array[ActivityStep]
 
+    # The window the range covers once its edges have moved to transactions.
+    # : () -> TimeRange?
+    def window: () -> TimeRange?
+
     # Builds the endpoint diff, the root timeline, and the activity from one
     # activity snapshot pass.
     # : () -> Analysis

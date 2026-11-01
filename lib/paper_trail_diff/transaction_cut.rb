@@ -18,7 +18,7 @@ module PaperTrailDiff
   # holds the root's nearest version on one side of it. Each edge is moved from
   # where it was asked for, never from where another edge moved, so adjacent
   # windows move their shared edge alike.
-  module TransactionCut
+  module TransactionCut # rubocop:disable Metrics/ModuleLength
     # One edge of a window. A strict edge keeps versions recorded at its
     # instant on the left, as an inclusive end does. A plain class rather than
     # Data.define, which arrived in Ruby 3.2 while this gem supports 3.1.
@@ -40,18 +40,14 @@ module PaperTrailDiff
         @strict ? column.gt(@time) : column.gteq(@time)
       end
 
-      #: (untyped, later: bool) -> untyped
-      def side(column, later:)
-        later ? right(column) : left(column)
-      end
-
       # @rbs @time: Time
       # @rbs @strict: bool
     end
 
-    # Roots per statement: two lookups each stays under SQLite's limit of 500
-    # terms in a compound SELECT.
-    SLICE = 200
+    # Roots, or transactions, per statement. SQL Server compiles every
+    # statement afresh, since its ids are written into it, in time that grows
+    # with their number; fewer statements than this cost more than they save.
+    SLICE = 500
     private_constant :SLICE
 
     # The same as `windows` for a batch of roots, keyed by identity.
@@ -85,8 +81,26 @@ module PaperTrailDiff
 
       starts = moved_edges(versions, records, Edge.new(range.begin_time, false))
       ends = moved_edges(versions, records, Edge.new(range.end_time, !range.exclude_end?))
-      (starts.keys | ends.keys).to_h { |id| [id, moved(range, starts[id], ends[id])] }
+      (starts.keys | ends.keys).to_h do |id|
+        [id, moved_window(model_class, id, range, starts[id], ends[id])]
+      end
     end
+
+    # A transaction holds its rows only while it runs, so in history as an
+    # application saves it an edge moves by moments. A longer move means a
+    # long transaction or rewritten times, which only the application can
+    # judge, so each move is reported rather than logged or refused.
+    #: (untyped, String, TimeRange, Time?, Time?) -> TimeRange
+    def self.moved_window(model_class, id, range, start, finish)
+      window = moved(range, start, finish)
+      Instrumentation.notify(
+        'moved_window',
+        item_type: model_class.base_class.name, item_id: id,
+        requested: range.to_range, window: window.to_range
+      )
+      window
+    end
+    private_class_method :moved_window
 
     #: (untyped) -> untyped
     def self.transaction_versions(model_class)
@@ -118,55 +132,100 @@ module PaperTrailDiff
 
     # Each root's nearest versions on either side of an edge, as [id,
     # transaction] pairs; versions tied at the nearest instant are all kept.
-    # One indexed lookup per root and side, where a single query over the
-    # roots would read every version before the edge. The lookups are written
-    # once with the root's id left open, as building a relation for each root
-    # costs more than the query. Rows read as SQL text come back as the adapter
+    # One statement per slice: a grouped pass over the roots' versions finds
+    # both instants, and a join reads the versions saved at either. A lookup
+    # per root, joined by UNION ALL, took SQL Server about a second per 200
+    # roots to compile. Rows read without a model come back as the adapter
     # returns them, so the transaction is cast as the grouped query's keys are.
     #: (untyped, Array[untyped], Edge) -> Array[[String, untyped]]
     def self.nearest(versions, records, edge)
-      lookup = nearest_lookups(versions, edge)
-      item_id = versions.type_for_attribute('item_id')
-      lookups = records.map do |record|
-        versions.sanitize_sql_array([lookup, *Array.new(4, item_id.serialize(record.id))])
-      end
       transaction = versions.type_for_attribute('transaction_id')
-      versions.connection.select_rows(lookups.join(' UNION ALL ')).map do |id, value|
+      versions.connection.select_rows(nearest_sql(versions, records, edge)).map do |id, value|
         [id.to_s, transaction.cast(value)]
       end
     end
     private_class_method :nearest
 
-    # Both sides' lookups for a root whose id is each `?`.
-    #: (untyped, Edge) -> String
-    def self.nearest_lookups(versions, edge)
-      own = versions.where("#{versions.quoted_table_name}.item_id = ?")
-      "#{nearest_lookup(own, edge, false)} UNION ALL #{nearest_lookup(own, edge, true)}"
+    # The roots' versions saved in a transaction at either nearest instant.
+    #: (untyped, Array[untyped], Edge) -> String
+    def self.nearest_sql(versions, records, edge)
+      own = versions.where(item_id: records)
+      instants = nearest_instants(own, edge)
+      own.joins(arel::Nodes::InnerJoin.new(instants, at_either(own.arel_table, instants)))
+         .where.not(transaction_id: nil).select(:item_id, :transaction_id).to_sql
     end
-    private_class_method :nearest_lookups
+    private_class_method :nearest_sql
 
-    #: (untyped, Edge, bool) -> String
-    def self.nearest_lookup(own, edge, later)
-      column = own.arel_table[:created_at]
-      instant = own.where(edge.side(column, later: later))
-                   .reorder(created_at: later ? :asc : :desc).limit(1).select(:created_at)
-      own.where(column.eq(instant.arel)).where.not(transaction_id: nil)
-         .select(:item_id, :transaction_id).to_sql
+    # Each root's latest instant before the edge and earliest after it, from
+    # every version, saved in a transaction or not.
+    #: (untyped, Edge) -> untyped
+    def self.nearest_instants(own, edge)
+      table = own.arel_table
+      column = table[:created_at]
+      before = side_instant(arel::Nodes::Max, edge.left(column), column).as('before_at')
+      after = side_instant(arel::Nodes::Min, edge.right(column), column).as('after_at')
+      own.group(:item_id).select(table[:item_id], before, after).arel.as('paper_trail_diff_nearest')
     end
-    private_class_method :nearest_lookup
+    private_class_method :nearest_instants
+
+    # The latest or earliest of the times on one side of the edge.
+    #: (untyped, untyped, untyped) -> untyped
+    def self.side_instant(aggregate, side, column)
+      aggregate.new([arel::Nodes::Case.new.when(side).then(column)])
+    end
+    private_class_method :side_instant
+
+    # The same root's versions saved at either of its instants.
+    #: (untyped, untyped) -> untyped
+    def self.at_either(table, instants)
+      column = table[:created_at]
+      at_either = column.eq(instants[:before_at]).or(column.eq(instants[:after_at]))
+      arel::Nodes::On.new(table[:item_id].eq(instants[:item_id]).and(at_either))
+    end
+    private_class_method :at_either
 
     # Where each transaction that has versions on both sides of the edge began.
     #: (untyped, Array[untyped], Edge) -> Hash[untyped, Time]
     def self.crossing_starts(version_class, transactions, edge)
-      return {} if transactions.empty?
-
-      column = version_class.arel_table[:created_at]
-      scope = version_class.where(transaction_id: transactions)
-      scope.where(edge.left(column))
-           .where(transaction_id: scope.where(edge.right(column)).select(:transaction_id))
-           .group(:transaction_id).minimum(:created_at)
+      earlier = edge.left(version_class.arel_table[:created_at])
+      later = later_version(version_class.arel_table, edge)
+      starts = {} #: Hash[untyped, Time]
+      transactions.each_slice(SLICE).with_object(starts) do |slice, found|
+        crossing = version_class.where(transaction_id: slice).where(earlier).where(later)
+        found.merge!(crossing.group(:transaction_id).minimum(:created_at))
+      end
     end
     private_class_method :crossing_starts
+
+    # Another version of the same transaction on the edge's later side.
+    #: (untyped, Edge) -> untyped
+    def self.later_version(table, edge)
+      other = other_versions(table)
+      arel::SelectManager.new.from(other).project('1')
+                         .where(other[:transaction_id].eq(table[:transaction_id])
+                                  .and(edge.right(other[:created_at])))
+                         .exists
+    end
+    private_class_method :later_version
+
+    # The version table under a second name, for a subquery over it. Any name
+    # serves, and SQLite even accepts an empty one other databases refuse, so
+    # no spec can tell the mutations apart.
+    # mutant:disable
+    #: (untyped) -> untyped
+    def self.other_versions(table)
+      table.alias('paper_trail_diff_crossing_versions')
+    end
+    private_class_method :other_versions
+
+    # Arel ships no signatures; see VersionQuery. Any spelling of the constant
+    # finds the same module.
+    # mutant:disable
+    #: () -> untyped
+    def self.arel
+      Object.const_get(:Arel)
+    end
+    private_class_method :arel
 
     #: (TimeRange, Time?, Time?) -> TimeRange
     def self.moved(range, start, finish)

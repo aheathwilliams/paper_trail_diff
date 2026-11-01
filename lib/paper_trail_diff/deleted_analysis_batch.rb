@@ -29,14 +29,18 @@ module PaperTrailDiff
       prepare(records, selected, windows)
       analyses = records.to_h do |record|
         key = Endpoint.identity(record)
-        plan = selected.fetch(key)
-        window = windows.fetch(key, @time_range)
-        [key, plan.empty? ? @analyzer.empty : @analyzer.call(record, plan, window)]
+        [key, analysis_for(record, selected.fetch(key), windows.fetch(key, @time_range))]
       end
       with_unavailable(analyses)
     end
 
     private
+
+    #: (untyped, RootVersionPlan, TimeRange?) -> Analysis
+    def analysis_for(record, plan, window)
+      analysis = plan.empty? ? @analyzer.empty : @analyzer.call(record, plan, window)
+      analysis.with_window(window)
+    end
 
     #: (Hash[Array[String], Analysis]) -> Hash[Array[String], Analysis?]
     def with_unavailable(analyses)

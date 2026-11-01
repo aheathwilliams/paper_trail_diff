@@ -3,8 +3,8 @@
 module PaperTrailDiff
   # Selects both populations and checks their shared ceiling before analysis.
   class ScopedAnalysisBuilder
-    # : (untyped, limit: Integer?, within: untyped, historical_filter: untyped, max_filter_versions: Integer, include_deleted: bool, analyzer: untyped, deleted_analyzer: untyped, ?activity_tree: AssociationTree?) -> void
-    def initialize: (untyped, limit: Integer?, within: untyped, historical_filter: untyped, max_filter_versions: Integer, include_deleted: bool, analyzer: untyped, deleted_analyzer: untyped, ?activity_tree: AssociationTree?) -> void
+    # : (untyped, limit: Integer?, within: untyped, historical_filter: untyped, max_filter_versions: Integer, include_deleted: bool, analyzer: untyped, deleted_analyzer: untyped, ?activity_tree: AssociationTree?, ?version_scope: untyped) -> void
+    def initialize: (untyped, limit: Integer?, within: untyped, historical_filter: untyped, max_filter_versions: Integer, include_deleted: bool, analyzer: untyped, deleted_analyzer: untyped, ?activity_tree: AssociationTree?, ?version_scope: untyped) -> void
 
     # : () -> ScopedAnalysis
     def call: () -> ScopedAnalysis

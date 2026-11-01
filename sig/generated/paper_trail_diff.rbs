@@ -70,8 +70,8 @@ module PaperTrailDiff
   # for every root that changed or whose requested associations did.
   # Historical windows remain explicit on analyze_scope; this entry point is
   # deliberately named for a report through now rather than an as-of query.
-  # : (untyped, since: untyped, limit: Integer, ?associations: association_option, ?ignore: ignore_option, ?snapshots: bool, ?group: Symbol?, ?include_deleted: bool, ?historical_filter: untyped, ?max_filter_versions: Integer, ?allow_expensive: bool?, ?recorded_changes: bool, ?allow_approximate: bool) -> ScopedAnalysis
-  def self.report: (untyped, since: untyped, limit: Integer, ?associations: association_option, ?ignore: ignore_option, ?snapshots: bool, ?group: Symbol?, ?include_deleted: bool, ?historical_filter: untyped, ?max_filter_versions: Integer, ?allow_expensive: bool?, ?recorded_changes: bool, ?allow_approximate: bool) -> ScopedAnalysis
+  # : (untyped, since: untyped, limit: Integer, ?associations: association_option, ?ignore: ignore_option, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?, ?include_deleted: bool, ?historical_filter: untyped, ?max_filter_versions: Integer, ?allow_expensive: bool?, ?recorded_changes: bool, ?allow_approximate: bool) -> ScopedAnalysis
+  def self.report: (untyped, since: untyped, limit: Integer, ?associations: association_option, ?ignore: ignore_option, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?, ?include_deleted: bool, ?historical_filter: untyped, ?max_filter_versions: Integer, ?allow_expensive: bool?, ?recorded_changes: bool, ?allow_approximate: bool) -> ScopedAnalysis
 
   # Warns about deprecated options; see Deprecation.
   # : () -> untyped

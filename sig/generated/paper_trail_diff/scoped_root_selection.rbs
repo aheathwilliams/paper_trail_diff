@@ -40,9 +40,10 @@ module PaperTrailDiff
 
     # `activity_tree` names the association paths whose changes also select a
     # root, as an activity analysis reports them. Without one, only a root's
-    # own versions select it.
-    # : (untyped, time_range: TimeRange?, limit: Integer, ?historical_filter: untyped, ?max_filter_versions: Integer, ?activity_tree: AssociationTree?) -> void
-    def initialize: (untyped, time_range: TimeRange?, limit: Integer, ?historical_filter: untyped, ?max_filter_versions: Integer, ?activity_tree: AssociationTree?) -> void
+    # own versions select it. `version_scope` narrows which of those count,
+    # as it narrows which are reported.
+    # : (untyped, time_range: TimeRange?, limit: Integer, ?historical_filter: untyped, ?max_filter_versions: Integer, ?activity_tree: AssociationTree?, ?version_scope: untyped) -> void
+    def initialize: (untyped, time_range: TimeRange?, limit: Integer, ?historical_filter: untyped, ?max_filter_versions: Integer, ?activity_tree: AssociationTree?, ?version_scope: untyped) -> void
 
     # : () -> Result
     def call: () -> Result
@@ -58,6 +59,8 @@ module PaperTrailDiff
     @scope: untyped
 
     @time_range: TimeRange?
+
+    @version_scope: untyped
 
     # Leaves the candidate set in the database. Plucking every root changed in
     # the window would cost memory and a statement proportional to all activity
@@ -97,6 +100,8 @@ module PaperTrailDiff
     # : () -> Array[String]
     def missing_ids: () -> Array[String]
 
+    # Only the versions `version_scope` keeps select a root: one whose versions
+    # in the window it drops would have nothing to report.
     # : () -> untyped
     def window_versions: () -> untyped
 

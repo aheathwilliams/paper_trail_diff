@@ -13,6 +13,9 @@ module PaperTrailDiff
 
     private
 
+    # : (untyped, RootVersionPlan, TimeRange?) -> Analysis
+    def analysis_for: (untyped, RootVersionPlan, TimeRange?) -> Analysis
+
     # : (Hash[Array[String], Analysis]) -> Hash[Array[String], Analysis?]
     def with_unavailable: (Hash[Array[String], Analysis]) -> Hash[Array[String], Analysis?]
 
