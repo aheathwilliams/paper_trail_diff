@@ -3,6 +3,17 @@
 All notable changes to this project will be documented in this file. The
 project follows [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Fixed
+
+- Activity reports a change to a key that a child's own `belongs_to`
+  follows, such as a comment's `reviewer_id` under `comments.reviewer`, in
+  the step of the child's update. The child kept its old target until its
+  next edit, or a root version, read the branch again, so the change showed
+  up in a later step, credited to whoever saved that, and a window that
+  held only the change reported nothing.
+
 ## [0.15.0] - 2026-10-31
 
 ### Breaking changes

@@ -16,7 +16,8 @@ module PaperTrailDiff
     def safe?(routes, version, delta)
       !scoped_route?(routes) &&
         !unsafe_through_membership_event?(routes, version) &&
-        !unsafe_nested_membership_delta?(routes, delta)
+        !unsafe_nested_membership_delta?(routes, delta) &&
+        !unsafe_owned_relationship_delta?(routes, delta)
     end
 
     #: (untyped, untyped, RecordSnapshot, SnapshotNormalizer, Array[Array[untyped]], untyped, ActivitySnapshotDelta?) -> [bool, RecordSnapshot]
@@ -90,6 +91,37 @@ module PaperTrailDiff
       routes.any? do |route|
         route.length > 1 && delta.relationship_changed?(route.last.fetch(1))
       end
+    end
+
+    # A delta replaces a record's attributes and keeps its associations, so an
+    # edit to a key one of them follows, such as a comment's `reviewer_id`
+    # under `comments.reviewer`, would leave the old target in place. The
+    # branch is read again instead.
+    #: (Array[Array[untyped]], ActivitySnapshotDelta?) -> bool
+    def unsafe_owned_relationship_delta?(routes, delta)
+      return false unless delta
+
+      routes.any? do |route|
+        _name, reflection, subtree, = route.last
+        subtree.children.each_key.any? do |name|
+          owned_keys(reflection.klass.reflect_on_association(name)).any? do |key|
+            delta.before_value(key).to_s != delta.after_value(key).to_s
+          end
+        end
+      end
+    end
+
+    # The record's own columns that decide what an association of it holds: a
+    # belongs_to's key and type, or those of the belongs_to a through starts
+    # from. A has_one or has_many follows the record's primary key.
+    #: (untyped) -> Array[untyped]
+    def owned_keys(reflection)
+      return [] unless reflection
+      return owned_keys(reflection.through_reflection) if reflection.through_reflection?
+      return [] unless reflection.belongs_to?
+
+      keys = Array(reflection.foreign_key)
+      reflection.polymorphic? ? [*keys, reflection.foreign_type] : keys
     end
 
     #: (RecordSnapshot, Array[untyped], untyped, ActivitySnapshotDelta?, Array[untyped], SnapshotNormalizer, Array[untyped], ?direct: bool) -> [untyped, RecordSnapshot?]
