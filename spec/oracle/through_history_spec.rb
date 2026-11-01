@@ -17,7 +17,7 @@ ActiveRecord::Schema.define do
   create_table :oracle_memberships, force: true do |table|
     table.integer :team_id
     table.integer :person_id
-    table.string :role
+    table.boolean :lead, null: false, default: false
     table.timestamps
   end
 
@@ -62,9 +62,9 @@ class OracleTeam < ActiveRecord::Base
   has_many :memberships, class_name: 'OracleMembership', foreign_key: :team_id,
                          inverse_of: :team
   has_many :people, through: :memberships
-  has_many :lead_memberships, -> { where(role: 'lead') }, class_name: 'OracleMembership',
-                                                          foreign_key: :team_id,
-                                                          inverse_of: :team
+  has_many :lead_memberships, -> { where(lead: true) }, class_name: 'OracleMembership',
+                                                        foreign_key: :team_id,
+                                                        inverse_of: :team
   has_many :leads, through: :lead_memberships, source: :person
   has_many :top_people, -> { order(:rank, :id).limit(2) }, through: :memberships,
                                                            source: :person
@@ -176,7 +176,7 @@ end
 class OracleThroughHistory
   OPERATIONS = %i[
     edit_team add_person edit_person edit_person destroy_person
-    join join leave change_role move_membership swap_person
+    join join leave change_lead move_membership swap_person
     add_project move_project destroy_project
     add_task add_task move_task edit_task destroy_task
     add_note move_note edit_note destroy_note
@@ -209,7 +209,7 @@ class OracleThroughHistory
     people = Array.new(3) { |index| OraclePerson.create!(name: "person #{index}", rank: index) }
     teams = Array.new(2) do |index|
       team = OracleTeam.create!(name: "team #{index}")
-      OracleMembership.create!(team: team, person: people[index], role: 'lead')
+      OracleMembership.create!(team: team, person: people[index], lead: true)
       project = OracleProject.create!(team: team, title: "project #{index}")
       task = OracleTask.create!(project: project, title: "task #{index}")
       OracleTaskNote.create!(task: task, body: "note #{index}")
@@ -228,7 +228,7 @@ class OracleThroughHistory
   def notes = OracleTaskNote.order(:id).to_a
   def charters = OracleCharter.order(:id).to_a
   def assignments = OracleAssignment.order(:id).to_a
-  def role = any(%w[lead member])
+  def lead = any([true, false])
   def rank = @random.rand(4)
 
   def edit_team = any(teams).update!(name: "team #{next_number}")
@@ -247,14 +247,14 @@ class OracleThroughHistory
 
   def join
     person = any(people)
-    person && OracleMembership.create!(team: any(teams), person: person, role: role)
+    person && OracleMembership.create!(team: any(teams), person: person, lead: lead)
   end
 
   def leave = any(memberships)&.destroy!
 
-  def change_role
+  def change_lead
     membership = any(memberships)
-    membership&.update!(role: membership.role == 'lead' ? 'member' : 'lead')
+    membership&.update!(lead: !membership.lead)
   end
 
   def move_membership
@@ -321,7 +321,7 @@ class OracleThroughHistory
 
   # Several versions in one transaction, some of them undoing each other.
   def combo
-    3.times { send(any(%i[join leave change_role move_task edit_person swap_person edit_team])) }
+    3.times { send(any(%i[join leave change_lead move_task edit_person swap_person edit_team])) }
   end
 end
 
