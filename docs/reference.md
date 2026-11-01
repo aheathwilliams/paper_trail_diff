@@ -625,6 +625,17 @@ analysis.to_h(snapshots: true, metadata: true)
 ```
 
 - It accepts the same ranges as `timeline`.
+- `from_snapshot` is the record as it was when the range began: before the
+  first change in a window, or before the change of the version you passed as
+  `from:`. With `version_scope:`, a window begins at the first change the
+  filter keeps. It is `nil` when the record was created inside the range; the
+  state right after it was created is then the first activity step's
+  `to_snapshot`, which `snapshots: true` keeps.
+- To read the record at one version, with its values typed and its
+  associations, take `from_snapshot` from a range that starts there:
+  `PaperTrailDiff.analyze(article, from: version, to: article).from_snapshot`.
+  Don't decode `version.object` yourself; the gem casts what PaperTrail
+  stores, which a `json` column or an enum leaves in another form.
 - When nothing in the range is reported, the analysis is empty: an empty
   `diff` and timelines, and `nil` for `from_snapshot` and `to_snapshot`. Here
   `nil` means no state was read, not that the record did not exist; reading

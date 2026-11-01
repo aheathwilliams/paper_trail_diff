@@ -11,6 +11,11 @@ project follows [Semantic Versioning](https://semver.org/).
   records per query, as `unreachable`'s test below does, instead of in one
   query for all of them.
 
+- The reference says what `from_snapshot` holds at the start of a window,
+  under `version_scope:`, and for a record created inside the range, and how
+  to read a record at one version from an analysis rather than by decoding
+  `version.object`, which skips the casting the gem applies.
+
 - `analyze_scope` and `report` with `version_scope:` select a record by its
   own versions only when the filter keeps one of them in the window. A record
   whose versions there it all dropped was selected anyway, with an empty
