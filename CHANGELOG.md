@@ -84,6 +84,11 @@ project follows [Semantic Versioning](https://semver.org/).
   without a version, and fails on any difference. It found the first two
   bugs above.
 
+- The through oracle renames a team at most once per transaction. A second
+  rename made it expect a version to read the state before its transaction,
+  which made `ORACLE_SEEDS=40..49` fail on seed 45 without a bug. The scoped
+  membership oracle covers range scopes.
+
 - Two oracle generators compare rebuilt history with plain Active Record:
   `spec/oracle/through_history_spec.rb` for every kind of `has_many :through`,
   and `spec/oracle/habtm_history_spec.rb` for HABTM membership between

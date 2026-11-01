@@ -320,8 +320,18 @@ class OracleThroughHistory
   def unassign = any(assignments)&.destroy!
 
   # Several versions in one transaction, some of them undoing each other.
+  # A team renamed twice in one transaction has two versions there, and each
+  # reads its own attributes, not the state before the transaction this
+  # oracle records, so a team is renamed at most once.
   def combo
-    3.times { send(any(%i[join leave change_lead move_task edit_person swap_person edit_team])) }
+    renamed = false
+    3.times do
+      operation = any(%i[join leave change_lead move_task edit_person swap_person edit_team])
+      next if operation == :edit_team && renamed
+
+      renamed ||= operation == :edit_team
+      send(operation)
+    end
   end
 end
 
