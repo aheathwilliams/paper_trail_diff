@@ -20,6 +20,12 @@ project follows [Semantic Versioning](https://semver.org/).
   The update changed only the copy under that path, so the through kept the
   member until another event read the branch again.
 
+- A HABTM member created in a checkpoint's transaction appears in activity
+  from its creation on, as in 0.14.0. Since 0.15.0, which counts such a
+  member at the checkpoint, it appeared in every step back to the previous
+  root version, before it existed and before members attached earlier. A
+  range that ends at the checkpoint still ends with it, as `compare` does.
+
 ## [0.15.0] - 2026-10-31
 
 ### Breaking changes

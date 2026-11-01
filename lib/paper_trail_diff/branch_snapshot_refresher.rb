@@ -53,7 +53,7 @@ module PaperTrailDiff
     end
 
     #: (untyped, untyped, RecordSnapshot?, Array[String], ?event: ActivityEvent?, ?isolated: bool) -> RecordSnapshot?
-    def call( # rubocop:disable Metrics/MethodLength, Metrics/ParameterLists
+    def call( # rubocop:disable Metrics/ParameterLists
       root_endpoint,
       context_endpoint,
       previous_snapshot,
@@ -62,24 +62,16 @@ module PaperTrailDiff
       isolated: false
     )
       return full_snapshot(root_endpoint, context_endpoint) unless previous_snapshot
+
+      branches = with_habtm(root_endpoint, context_endpoint, branches)
       if isolated && event && branches.length > 1
-        return refresh_independent_branches(
-          root_endpoint,
-          context_endpoint,
-          previous_snapshot,
-          branches,
-          event
-        )
+        return refresh_independent_branches(root_endpoint, context_endpoint, previous_snapshot,
+                                            branches, event)
       end
 
       endpoints = [root_endpoint, context_endpoint]
-      handled, incremental = incremental_event(
-        endpoints,
-        previous_snapshot,
-        branches,
-        event,
-        isolated
-      )
+      handled, incremental = incremental_event(endpoints, previous_snapshot, branches, event,
+                                               isolated)
       return incremental if handled
 
       partial = partial_snapshot(root_endpoint, context_endpoint, branches)
@@ -99,6 +91,16 @@ module PaperTrailDiff
     # @rbs @components: Hash[Array[String], [AssociationTree, SnapshotNormalizer]]
     # @rbs @event_refresher: ActivityEventSnapshotRefresher
     # @rbs @root_refresher: ActivityRootSnapshotRefresher
+
+    # A root version's HABTM members include any created earlier in its
+    # transaction. A range ending at that version leaves those creations out
+    # as events, so the branch is read again there, whatever event led to it.
+    #: (untyped, untyped, Array[String]) -> Array[String]
+    def with_habtm(root_endpoint, context_endpoint, branches)
+      root = Endpoint.version?(root_endpoint) &&
+             VersionBoundary.same_version?(root_endpoint, context_endpoint)
+      root ? branches | @traversal.habtm_paths(RecordedClass.for(root_endpoint)) : branches
+    end
 
     #: (Array[untyped], RecordSnapshot, Array[String], ActivityEvent?, bool) -> [bool, RecordSnapshot?]
     def incremental_event(endpoints, previous, branches, event, isolated)
