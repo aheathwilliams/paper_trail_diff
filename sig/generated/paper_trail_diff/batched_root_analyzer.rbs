@@ -11,6 +11,10 @@ module PaperTrailDiff
     # : (untyped, RootVersionPlan, ?TimeRange?) -> Analysis
     def call: (untyped, RootVersionPlan, ?TimeRange?) -> Analysis
 
+    # The result for a root with nothing to read.
+    # : () -> Analysis
+    def empty: () -> Analysis
+
     private
 
     @activity: bool

@@ -103,7 +103,7 @@ module PaperTrailDiff
     # on current state, where its descendants may still have moved.
     #: (untyped, RootVersionPlan, TimeRange?) -> Analysis
     def analysis_for(record, plan, window)
-      return Analysis.empty if plan.empty? && !plan.closing_record
+      return @analyzer.empty if plan.empty? && !plan.closing_record
 
       @analyzer.call(record, plan, window)
     end

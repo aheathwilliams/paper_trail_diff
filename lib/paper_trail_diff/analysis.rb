@@ -13,12 +13,14 @@ module PaperTrailDiff
     # The result for a record whose requested history contains no versions,
     # which is an empty history rather than a failed request. Its snapshots
     # are nil because no state was read, not because the record was absent:
-    # reading one would rebuild the whole graph, per record in a batch.
-    #: () -> Analysis
-    def self.empty
+    # reading one would rebuild the whole graph, per record in a batch. Its
+    # activity timeline is empty when activity was asked for and nil when not,
+    # as a record with versions would have.
+    #: (?activity: bool) -> Analysis
+    def self.empty(activity: true)
       timeline = [] #: Array[Step]
       activity_timeline = [] #: Array[ActivityStep]
-      new(diff: Diff.new, timeline: timeline, activity_timeline: activity_timeline)
+      new(diff: Diff.new, timeline: timeline, activity_timeline: (activity_timeline if activity))
     end
 
     # The reconstructed states the diff was taken between. A report that has to

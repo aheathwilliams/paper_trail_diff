@@ -23,6 +23,12 @@ project follows [Semantic Versioning](https://semver.org/).
   joined at an arbitrary later step, or was left out of the window's diff,
   and a reviewer set this way kept its later renames out of activity.
 
+- `analyze_many`, and the `deleted` analyses of `analyze_scope`, give a record
+  with nothing in the window an `activity_timeline` of `nil` unless
+  `activity: true` was passed, as `analyze` does, so its `change_rows` raises
+  `ConfigurationError` as for any other record. It was `[]`, so code that read
+  `change_rows` without asking for activity passed while nothing changed.
+
 - An STI root that changes class names its new class in the activity
   snapshots after the change, not its old one, and a subclass root's
   snapshot is carried from one of its versions to the next instead of being
