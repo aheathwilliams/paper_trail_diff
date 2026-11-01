@@ -78,9 +78,14 @@ module PaperTrailDiff
     # saved, so a tag attached earlier in the checkpoint's own transaction is a
     # member there, unlike other associations, which a version reads as they
     # were before its transaction. A member created in that transaction has no
-    # earlier state, so it is read as it was created.
+    # earlier state, so it is read as it was created, from its creation on.
+    # The checkpoint's membership also stands for earlier points, since the
+    # previous root version; the member did not exist at those yet.
     # : (untyped, untyped, untyped, untyped, bool) -> Array[untyped]?
     def habtm_records: (untyped, untyped, untyped, untyped, bool) -> Array[untyped]?
+
+    # : (untyped, untyped, untyped, bool) -> untyped
+    def habtm_member: (untyped, untyped, untyped, bool) -> untyped
 
     # A has_many through reads its parts unranked, as its query does. Its own
     # scope applies to each row, and a ranked read then keeps a record reached

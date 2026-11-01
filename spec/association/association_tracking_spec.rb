@@ -628,6 +628,44 @@ RSpec.describe 'PaperTrailDiff association tracking' do
       expect(credited).to eq([['first', []], ['second', ['tags']]])
     end
 
+    # The checkpoint's membership stands for every point since the previous
+    # root version, but a member created in its transaction did not exist at
+    # the earlier ones. It used to appear there, before a member attached
+    # earlier.
+    it "shows a member created in a checkpoint's transaction from its creation on" do
+      article = TrackedArticle.create!(title: 'T')
+      first = article.versions.last
+      TrackedArticle.transaction do
+        TrackedArticle.find(article.id).tags << TrackedTag.create!(name: 'early')
+      end
+      article.comments.create!(body: 'between')
+      PaperTrail.request(whodunnit: 'checkpointer') do
+        TrackedArticle.transaction do
+          TrackedArticle.find(article.id).tags << TrackedTag.create!(name: 'late')
+          TrackedArticle.find(article.id).paper_trail.save_with_version
+        end
+      end
+      checkpoint = article.versions.reload.last
+
+      { [:tags] => [[], %w[early late]],
+        %i[tags comments] => [[], %w[early], %w[early late]] }.each do |paths, expected|
+        steps = PaperTrailDiff.activity_timeline(article, from: first, to: checkpoint,
+                                                          associations: paths, snapshots: true)
+        names = steps.map do |step|
+          step.to_snapshot.associations.fetch('tags').records.map do |tag|
+            tag.attributes.fetch('name')
+          end
+        end
+        expect(names).to eq(expected)
+      end
+      at_checkpoint = PaperTrailDiff.analyze(article, from: first, to: checkpoint,
+                                                      associations: [:tags])
+                                    .to_snapshot.associations.fetch('tags').records
+      expect(at_checkpoint.map do |tag|
+        tag.attributes.fetch('name')
+      end).to contain_exactly('early', 'late')
+    end
+
     it "records the old membership again at an instance's later save" do
       article = TrackedArticle.create!(title: 'T')
       tag = TrackedTag.create!(name: 'Kept throughout')

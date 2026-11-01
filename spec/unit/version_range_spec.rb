@@ -22,6 +22,18 @@ RSpec.describe PaperTrailDiff::VersionRange do
     [article, *versions]
   end
 
+  # Four versions whose ids run against time, as a clock step or an import
+  # leaves them: the version saved first has the latest time, so neither the
+  # table's own order nor the ids give the order of time. Returned oldest
+  # first.
+  def backwards_history
+    article, *versions = history
+    versions.reverse.each_with_index do |version, index|
+      version.update_columns(created_at: start_time + (index * 60))
+    end
+    [article, *versions.reverse]
+  end
+
   def range(article, from, to, version_scope: nil)
     described_class.new(article, from: from, to: to, version_scope: version_scope)
   end
@@ -32,13 +44,12 @@ RSpec.describe PaperTrailDiff::VersionRange do
 
   describe '#select_plan_for_range' do
     it 'selects the versions from one boundary through the other, oldest first' do
-      article, _created, reviewed, edited, published = history
-      allow(article).to receive(:versions).and_return(article.versions.reorder(id: :desc))
+      article, _first, second, third, last = backwards_history
 
-      plan = range(article, reviewed, published).select_plan_for_range
+      plan = range(article, second, last).select_plan_for_range
 
-      expect(plan.versions).to eq([reviewed, edited, published])
-      expect(plan.steps).to eq([[reviewed, edited], [edited, published]])
+      expect(plan.versions).to eq([second, third, last])
+      expect(plan.steps).to eq([[second, third], [third, last]])
     end
 
     it 'orders versions sharing a boundary timestamp by id' do
@@ -132,6 +143,14 @@ RSpec.describe PaperTrailDiff::VersionRange do
 
       expect(plan.versions).to eq([reviewed, edited, published])
       expect(plan.closing_record).to equal(article)
+    end
+
+    it 'orders by time when the ids run the other way' do
+      article, _first, second, third, last = backwards_history
+
+      plan = range(article, second, second).select_plan_through_current(article)
+
+      expect(plan.versions).to eq([second, third, last])
     end
 
     it 'applies the version scope from the boundary on' do

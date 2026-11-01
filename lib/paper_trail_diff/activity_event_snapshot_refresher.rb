@@ -65,7 +65,7 @@ module PaperTrailDiff
       )
       unless routes.empty?
         delta = @record_resolver.snapshot_delta(event.version)
-        return [false, nil] unless @collection_applier.safe?(routes, event.version, delta)
+        return [false, nil] unless collection_safe?(root_endpoint, tree, routes, event, delta)
 
         return @collection_applier.call(
           root_endpoint,
@@ -98,6 +98,17 @@ module PaperTrailDiff
     # @rbs @belongs_to_applier: ActivityBelongsToEventApplier
 
     private :belongs_to_applier, :collection_applier, :collection_updater, :configure_appliers
+
+    # A through's membership follows the keys of the records it joins through
+    # or reaches, which a route to such a record elsewhere in the tree leaves
+    # alone, so the branch is read again instead.
+    #: (untyped, AssociationTree, Array[Array[untyped]], ActivityEvent, ActivitySnapshotDelta?) -> bool
+    def collection_safe?(root_endpoint, tree, routes, event, delta)
+      version = event.version
+      !@route_finder.through_part?(endpoint_model_class(root_endpoint), tree,
+                                   version.item_type.to_s) &&
+        @collection_applier.safe?(routes, version, delta)
+    end
 
     #: (untyped) -> untyped
     def record_after(version)

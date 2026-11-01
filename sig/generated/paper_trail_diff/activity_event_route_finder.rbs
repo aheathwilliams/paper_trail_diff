@@ -12,13 +12,27 @@ module PaperTrailDiff
     # : (untyped, AssociationTree, String, ?path: String) -> Array[Array[untyped]]
     def belongs_to_routes: (untyped, AssociationTree, String, ?path: String) -> Array[Array[untyped]]
 
+    # Whether a has_many through in the tree joins through, or reaches,
+    # records of the type. Its membership follows their keys, which a route
+    # to the record elsewhere in the tree does not update.
+    # : (untyped, AssociationTree, String) -> bool
+    def through_part?: (untyped, AssociationTree, String) -> bool
+
     private
 
     @belongs_to_routes: Hash[Array[untyped], Array[Array[untyped]]]
 
     @collection_routes: Hash[Array[untyped], Array[Array[untyped]]]
 
+    @through_parts: Hash[Array[untyped], bool]
+
     @traversal: AssociationTraversal
+
+    # : (untyped, AssociationTree, String, String) -> bool
+    def through_part_below?: (untyped, AssociationTree, String, String) -> bool
+
+    # : (untyped, String) -> bool
+    def through_reaches?: (untyped, String) -> bool
 
     # Timelines interleave event types, so every requested combination is
     # retained. Model, tree, and path are fixed per adapter, leaving one entry

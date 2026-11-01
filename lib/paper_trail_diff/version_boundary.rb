@@ -68,10 +68,12 @@ module PaperTrailDiff
     end
     private_class_method :version_record?
 
+    # The same row of the same version table. A record or instant is never a
+    # version.
     #: (untyped, untyped) -> bool
     def same_version?(left, right)
-      left.class.table_name == right.class.table_name && left.id.to_s == right.id.to_s
+      version_record?(left) && version_record?(right) &&
+        left.class.table_name == right.class.table_name && left.id.to_s == right.id.to_s
     end
-    private_class_method :same_version?
   end
 end

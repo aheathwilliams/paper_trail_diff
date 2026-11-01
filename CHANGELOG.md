@@ -3,6 +3,42 @@
 All notable changes to this project will be documented in this file. The
 project follows [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Fixed
+
+- Activity reports a change to a key that a child's own `belongs_to`
+  follows, such as a comment's `reviewer_id` under `comments.reviewer`, in
+  the step of the child's update. The child kept its old target until its
+  next edit, or a root version, read the branch again, so the change showed
+  up in a later step, credited to whoever saved that, and a window that
+  held only the change reported nothing.
+
+- Activity removes a `has_many :through` member when its join record moves
+  to another owner or points at another record, also when a path below the
+  through reads that join model again, as `contributors.authorships` does.
+  The update changed only the copy under that path, so the through kept the
+  member until another event read the branch again.
+
+- A HABTM member created in a checkpoint's transaction appears in activity
+  from its creation on, as in 0.14.0. Since 0.15.0, which counts such a
+  member at the checkpoint, it appeared in every step back to the previous
+  root version, before it existed and before members attached earlier. A
+  range that ends at the checkpoint still ends with it, as `compare` does.
+
+### Development
+
+- Two oracle generators compare rebuilt history with plain Active Record:
+  `spec/oracle/through_history_spec.rb` for every kind of `has_many :through`,
+  and `spec/oracle/habtm_history_spec.rb` for HABTM membership between
+  checkpoints. They found the three activity bugs above.
+
+- Specs check that a range orders versions by time when their ids run the
+  other way, and that an STI subclass's selection names only its own
+  destroyed rows. A stub of the versions association these specs relied on
+  stopped reaching the gem when it began reading versions from the version
+  class, which left six mutations alive in a full mutation run.
+
 ## [0.15.0] - 2026-10-31
 
 ### Breaking changes

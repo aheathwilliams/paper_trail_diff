@@ -32,6 +32,12 @@ module PaperTrailDiff
 
     @tree: AssociationTree
 
+    # A root version's HABTM members include any created earlier in its
+    # transaction. A range ending at that version leaves those creations out
+    # as events, so the branch is read again there, whatever event led to it.
+    # : (untyped, untyped, Array[String]) -> Array[String]
+    def with_habtm: (untyped, untyped, Array[String]) -> Array[String]
+
     # : (Array[untyped], RecordSnapshot, Array[String], ActivityEvent?, bool) -> [bool, RecordSnapshot?]
     def incremental_event: (Array[untyped], RecordSnapshot, Array[String], ActivityEvent?, bool) -> [ bool, RecordSnapshot? ]
 

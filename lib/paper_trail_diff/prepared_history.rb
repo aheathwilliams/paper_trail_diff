@@ -150,7 +150,9 @@ module PaperTrailDiff
     # saved, so a tag attached earlier in the checkpoint's own transaction is a
     # member there, unlike other associations, which a version reads as they
     # were before its transaction. A member created in that transaction has no
-    # earlier state, so it is read as it was created.
+    # earlier state, so it is read as it was created, from its creation on.
+    # The checkpoint's membership also stands for earlier points, since the
+    # previous root version; the member did not exist at those yet.
     #: (untyped, untyped, untyped, untyped, bool) -> Array[untyped]?
     def habtm_records(record, reflection, boundary, habtm_boundary, ranked)
       transaction_id = transaction_id_for(habtm_boundary)
@@ -160,11 +162,15 @@ module PaperTrailDiff
       ids = @habtm.fetch(edge_key(record.class, reflection), empty)[transaction_id.to_s]
       return unless ids
 
-      members = ids.filter_map do |id|
-        @records.record_before(reflection.klass, id, boundary) ||
-          @records.record_created_in(reflection.klass, id, habtm_boundary)
-      end
+      created = VersionBoundary.transaction_id(boundary).to_s == transaction_id.to_s
+      members = ids.filter_map { |id| habtm_member(reflection.klass, id, boundary, created) }
       @conditions.select(reflection, members, ranked: ranked)
+    end
+
+    #: (untyped, untyped, untyped, bool) -> untyped
+    def habtm_member(model_class, id, boundary, created)
+      @records.record_before(model_class, id, boundary) ||
+        (@records.record_created_in(model_class, id, boundary) if created)
     end
 
     # A has_many through reads its parts unranked, as its query does. Its own

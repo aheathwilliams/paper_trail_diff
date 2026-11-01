@@ -135,11 +135,15 @@ module PaperTrailDiff
 
     # A record created in the boundary's own transaction has no state before
     # it, yet a HABTM checkpoint saved later in that transaction records it as
-    # a member. Such a member is read as it was created.
+    # a member. Such a member is read as it was created, at a boundary after
+    # its creation; before it, the record did not exist yet.
     #: (untyped) -> untyped
     def record_created_in(boundary)
       index = transaction_index(boundary)
-      return unless index && versions.fetch(index).event == 'create'
+      return unless index
+
+      version = versions.fetch(index)
+      return unless version.event == 'create' && !VersionBoundary.at_or_after?(version, boundary)
 
       state_after(index)&.instantiate
     end

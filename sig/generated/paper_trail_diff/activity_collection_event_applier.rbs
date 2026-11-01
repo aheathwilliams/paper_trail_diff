@@ -36,6 +36,19 @@ module PaperTrailDiff
     # : (Array[Array[untyped]], ActivitySnapshotDelta?) -> bool
     def unsafe_nested_membership_delta?: (Array[Array[untyped]], ActivitySnapshotDelta?) -> bool
 
+    # A delta replaces a record's attributes and keeps its associations, so an
+    # edit to a key one of them follows, such as a comment's `reviewer_id`
+    # under `comments.reviewer`, would leave the old target in place. The
+    # branch is read again instead.
+    # : (Array[Array[untyped]], ActivitySnapshotDelta?) -> bool
+    def unsafe_owned_relationship_delta?: (Array[Array[untyped]], ActivitySnapshotDelta?) -> bool
+
+    # The record's own columns that decide what an association of it holds: a
+    # belongs_to's key and type, or those of the belongs_to a through starts
+    # from. A has_one or has_many follows the record's primary key.
+    # : (untyped) -> Array[untyped]
+    def owned_keys: (untyped) -> Array[untyped]
+
     # : (RecordSnapshot, Array[untyped], untyped, ActivitySnapshotDelta?, Array[untyped], SnapshotNormalizer, Array[untyped], ?direct: bool) -> [untyped, RecordSnapshot?]
     def route_event_state: (RecordSnapshot, Array[untyped], untyped, ActivitySnapshotDelta?, Array[untyped], SnapshotNormalizer, Array[untyped], ?direct: bool) -> [ untyped, RecordSnapshot? ]
 
