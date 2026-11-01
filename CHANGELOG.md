@@ -30,6 +30,16 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- On PostgreSQL and MySQL (through mysql2 or trilogy), each call reads its
+  history and live rows in one REPEATABLE READ transaction. A comment that
+  committed between two statements of an activity read could make it raise an
+  internal `KeyError`, and one statement could see a row that another did not.
+  A call now reflects the database as of its first statement, so a commit
+  during the call appears in the next call. Each call adds two or three
+  transaction statements on those databases. A call made inside a transaction
+  of your own keeps that transaction's isolation level. SQLite and SQL Server
+  are unchanged.
+
 - Activity reports a change to a root's `belongs_to` key in the step of the
   root version that made it, also when `object_changes` leaves the key out:
   under `has_paper_trail only:` or `ignore:` that do not list it, or when

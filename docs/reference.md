@@ -1424,8 +1424,15 @@ Results can only be as complete as the history PaperTrail and PT-AT recorded.
   [how PaperTrail stores history](#how-papertrail-stores-history).
 - Deleted versions, schema changes, and serializer changes can affect how old
   versions read.
-- Several queries against the current record are not one database snapshot.
-  Use a transaction with a suitable isolation level if that matters.
+- Each call reads its history and live rows in one snapshot on PostgreSQL and
+  MySQL (through mysql2 or trilogy), so a commit that lands during the call is
+  seen by none of its statements. A call made inside a transaction of your own
+  keeps that transaction's isolation level. To make the whole call see one
+  snapshot, start that transaction at `REPEATABLE READ` or stricter. SQLite and
+  SQL Server take no snapshot, so a commit during a call can appear in some of
+  its statements and not others. A long call holds its snapshot until it ends:
+  on PostgreSQL that can keep VACUUM from reclaiming old row versions, and on
+  MySQL it keeps undo history.
 - HABTM membership history exists only where PT-AT recorded it in a
   transaction, and only for the root record without a scope: a scoped HABTM,
   or one below the root, raises `UnsupportedAssociationError`, and a transaction that another record with

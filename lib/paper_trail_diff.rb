@@ -110,6 +110,7 @@ require_relative 'paper_trail_diff/activity_snapshot_sequence'
 require_relative 'paper_trail_diff/activity_tree_filter'
 require_relative 'paper_trail_diff/activity_history'
 require_relative 'paper_trail_diff/activity_timeline_builder'
+require_relative 'paper_trail_diff/read_snapshot'
 require_relative 'paper_trail_diff/paper_trail_adapter'
 
 # @rbs!
