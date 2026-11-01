@@ -247,7 +247,7 @@ module PaperTrailDiff
                },
                # Checkpoints compare a root's own versions, so only activity can
                # report a window in which just its associations changed.
-               activity_tree: (@association_tree if activity)
+               activity_tree: (@association_tree if activity), version_scope: version_scope
       )
     end
 

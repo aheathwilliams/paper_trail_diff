@@ -252,7 +252,7 @@ PaperTrailDiff.timeline(article, within: window, version_scope: user_edits)
 ```
 
 It is accepted by `timeline`, `activity_timeline`, `analyze`, `analyze_many`,
-and `analyze_scope`.
+`analyze_scope`, and `report`.
 
 - Each reported change is compared with the version right after it, even if
   that version is filtered out. So each step shows exactly what that one change
@@ -266,6 +266,11 @@ and `analyze_scope`.
 - It looks at the root record's versions only. Someone who only edited comments
   has no root versions to select. To find one person's changes, including to
   associations, see [one person's changes](#one-persons-changes).
+- In `analyze_scope` and `report`, it also chooses which records are selected:
+  a record's own versions select it only when the filter keeps one of them in
+  the window. A record whose versions there it all drops would have nothing to
+  report, so it is left out. A change on a requested association still selects
+  a record, whoever made it.
 - `activity_timeline` uses the filter to decide where the range starts and
   ends, but still lists every step inside it. Dropping one would move its
   change into a neighboring step and credit the wrong person.
@@ -696,7 +701,7 @@ recently":
 report = PaperTrailDiff.report(Article.all, since: 1.day.ago, limit: 100)
 ```
 
-It accepts `associations:`, `ignore:`, `snapshots:`, `group:`,
+It accepts `associations:`, `ignore:`, `version_scope:`, `snapshots:`, `group:`,
 `recorded_changes:`, `include_deleted:`, `historical_filter:`, `max_filter_versions:`,
 and `allow_approximate:`.
 
@@ -709,7 +714,9 @@ and `allow_approximate:`.
   both. Nested paths count at every level, and a `has_many :through` counts its
   join rows too. Without `activity: true`, an analysis compares a record's own
   versions and cannot show a change to its associations alone, so only a
-  record's own version selects it.
+  record's own version selects it. With
+  [`version_scope:`](#reporting-only-some-changes-version_scope), only the
+  record's own versions that the filter keeps select it.
 - **An analysis can still be empty.** A record is selected by any version on its
   paths, but its analysis compares only the state you requested. A join row
   whose role changed, or a version that touched only ignored columns, selects a

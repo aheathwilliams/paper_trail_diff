@@ -370,12 +370,12 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
     # for every root that changed or whose requested associations did.
     # Historical windows remain explicit on analyze_scope; this entry point is
     # deliberately named for a report through now rather than an as-of query.
-    #: (untyped, since: untyped, limit: Integer, ?associations: association_option, ?ignore: ignore_option, ?snapshots: bool, ?group: Symbol?, ?include_deleted: bool, ?historical_filter: untyped, ?max_filter_versions: Integer, ?allow_expensive: bool?, ?recorded_changes: bool, ?allow_approximate: bool) -> ScopedAnalysis
+    #: (untyped, since: untyped, limit: Integer, ?associations: association_option, ?ignore: ignore_option, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?, ?include_deleted: bool, ?historical_filter: untyped, ?max_filter_versions: Integer, ?allow_expensive: bool?, ?recorded_changes: bool, ?allow_approximate: bool) -> ScopedAnalysis
     def report( # rubocop:disable Metrics/ParameterLists
       scope, since:, limit:, associations: [], ignore: DEFAULT_IGNORED_ATTRIBUTES,
-      snapshots: false, group: nil, include_deleted: false, historical_filter: nil,
-      max_filter_versions: HistoricalFilter::DEFAULT_VERSION_LIMIT, allow_expensive: nil,
-      recorded_changes: false, allow_approximate: false
+      version_scope: nil, snapshots: false, group: nil, include_deleted: false,
+      historical_filter: nil, max_filter_versions: HistoricalFilter::DEFAULT_VERSION_LIMIT,
+      allow_expensive: nil, recorded_changes: false, allow_approximate: false
     )
       # A range here would become the start of another range.
       if since.nil? || since.is_a?(Range)
@@ -386,7 +386,8 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
       analyze_scope(
         scope,
         within: since..Time.now.utc, limit: limit, associations: associations,
-        ignore: ignore, activity: true, snapshots: snapshots, group: group,
+        ignore: ignore, activity: true, version_scope: version_scope, snapshots: snapshots,
+        group: group,
         include_deleted: include_deleted, historical_filter: historical_filter,
         max_filter_versions: max_filter_versions, allow_expensive: allow_expensive,
         recorded_changes: recorded_changes, allow_approximate: allow_approximate

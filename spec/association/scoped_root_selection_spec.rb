@@ -392,6 +392,50 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
     end
   end
 
+  describe 'version_scope:' do
+    def by_people = ->(versions) { versions.where.not(whodunnit: nil) }
+
+    it 'selects a root by its own versions only when the scope keeps one' do
+      start = Time.now.utc
+      by_system = TrackedArticle.create!(title: 'System')
+      by_alice = PaperTrail.request(whodunnit: 'alice') { TrackedArticle.create!(title: 'Alice') }
+
+      expect(select(TrackedArticle, time_range: since(start), version_scope: by_people).records)
+        .to eq([by_alice])
+      expect(select(TrackedArticle, time_range: since(start)).records).to eq([by_system, by_alice])
+    end
+
+    it 'names only the destroyed roots whose versions the scope keeps' do
+      start = Time.now.utc
+      by_system = TrackedArticle.create!(title: 'System')
+      by_alice = PaperTrail.request(whodunnit: 'alice') do
+        TrackedArticle.create!(title: 'Alice').tap(&:destroy!)
+      end
+      by_system.destroy!
+
+      result = select(TrackedArticle, time_range: since(start), version_scope: by_people)
+
+      expect(result.unreachable).to eq([['TrackedArticle', by_alice.id.to_s]])
+    end
+
+    it 'keeps selecting a root whose requested associations changed' do
+      article = TrackedArticle.create!(title: 'Quiet')
+      comment = article.comments.create!(body: 'one')
+      start = Time.now.utc
+      comment.update!(body: 'two')
+
+      result = select(TrackedArticle, time_range: since(start), activity_tree: tree(:comments),
+                                      version_scope: :none.to_proc)
+
+      expect(result.records).to eq([article])
+    end
+
+    it 'rejects a scope that cannot be called' do
+      expect { select(TrackedArticle, version_scope: :people) }
+        .to raise_error(PaperTrailDiff::ConfigurationError, 'version_scope: must respond to call')
+    end
+  end
+
   describe 'activity_tree:' do
     it 'adds roots whose requested associations changed, and names those destroyed' do
       quiet = TrackedArticle.create!(title: 'Quiet')

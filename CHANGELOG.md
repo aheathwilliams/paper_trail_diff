@@ -11,6 +11,12 @@ project follows [Semantic Versioning](https://semver.org/).
   records per query, as `unreachable`'s test below does, instead of in one
   query for all of them.
 
+- `analyze_scope` and `report` with `version_scope:` select a record by its
+  own versions only when the filter keeps one of them in the window. A record
+  whose versions there it all dropped was selected anyway, with an empty
+  analysis, and counted toward `limit:`. A change on a requested association
+  still selects a record, as before.
+
 - `report` and `analyze_scope` list in `unreachable` only the deleted records
   whose state when destroyed meets the relation's conditions, also without
   `include_deleted:`, whenever those conditions can be read. A report on
@@ -20,6 +26,9 @@ project follows [Semantic Versioning](https://semver.org/).
   record of the model as before.
 
 ### Added
+
+- `report` accepts `version_scope:`, as `analyze_scope` does, to report only
+  some changes, such as those made by people rather than by background jobs.
 
 - `Analysis#window` is the time window an analysis covers: the `within:` or
   `since:` range, or that range with an edge moved back to where a crossing

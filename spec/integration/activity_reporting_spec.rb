@@ -98,6 +98,23 @@ RSpec.describe 'activity reporting at current state' do
     expect(analysis.activity_timeline.last.to_boundary).to be_version
   end
 
+  it 'selects only records whose versions in the window version_scope keeps' do
+    start = Time.now.utc
+    CoreArticle.create!(title: 'System', internal_note: 'stable')
+    edited = PaperTrail.request(whodunnit: 'alice') do
+      CoreArticle.create!(title: 'Alice', internal_note: 'stable')
+    end
+    people = ->(versions) { versions.where.not(whodunnit: nil) }
+
+    scoped = PaperTrailDiff.analyze_scope(CoreArticle, within: start..Time.now.utc, limit: 5,
+                                                       version_scope: people)
+    report = PaperTrailDiff.report(CoreArticle, since: start, limit: 5, version_scope: people)
+    steps = report.analyses.values.sole.activity_timeline
+
+    expect([scoped.roots, report.roots]).to all(eq([edited]))
+    expect(steps.map { |step| step.source_boundary.whodunnit }).to eq(['alice'])
+  end
+
   it 'rejects unsupported grouping and grouping without activity even for empty batches' do
     expect { PaperTrailDiff.analyze_many([], activity: true, group: :typo) }
       .to raise_error(PaperTrailDiff::ConfigurationError, /group:/)
