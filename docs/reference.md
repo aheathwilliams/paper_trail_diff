@@ -989,8 +989,10 @@ another record with the same HABTM also saved a version (see the
 is when saved, including a member attached or created earlier in the same
 transaction. A change it captures is credited to the step before it, so its
 author is whoever saved the version before the checkpoint, unless that is a
-checkpoint the same person saved just before the change. Don't save the
-instance that made the HABTM change again; it records the old membership.
+checkpoint the same person saved just before the change. A member created in
+the checkpoint's transaction is reported in the step of its creation instead,
+or, when the range ends at the checkpoint, in the step before it. Don't save
+the instance that made the HABTM change again; it records the old membership.
 
 ### Files from ActiveStorage
 
