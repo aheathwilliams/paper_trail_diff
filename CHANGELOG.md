@@ -14,6 +14,12 @@ project follows [Semantic Versioning](https://semver.org/).
   up in a later step, credited to whoever saved that, and a window that
   held only the change reported nothing.
 
+- Activity removes a `has_many :through` member when its join record moves
+  to another owner or points at another record, also when a path below the
+  through reads that join model again, as `contributors.authorships` does.
+  The update changed only the copy under that path, so the through kept the
+  member until another event read the branch again.
+
 ## [0.15.0] - 2026-10-31
 
 ### Breaking changes

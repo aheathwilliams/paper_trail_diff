@@ -35,6 +35,12 @@ module PaperTrailDiff
 
     @route_finder: ActivityEventRouteFinder
 
+    # A through's membership follows the keys of the records it joins through
+    # or reaches, which a route to such a record elsewhere in the tree leaves
+    # alone, so the branch is read again instead.
+    # : (untyped, AssociationTree, Array[Array[untyped]], ActivityEvent, ActivitySnapshotDelta?) -> bool
+    def collection_safe?: (untyped, AssociationTree, Array[Array[untyped]], ActivityEvent, ActivitySnapshotDelta?) -> bool
+
     # : (untyped) -> untyped
     def record_after: (untyped) -> untyped
 

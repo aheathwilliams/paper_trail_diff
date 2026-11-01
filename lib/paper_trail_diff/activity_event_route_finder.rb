@@ -9,6 +9,7 @@ module PaperTrailDiff
       @traversal = traversal
       @collection_routes = {} #: Hash[Array[untyped], Array[Array[untyped]]]
       @belongs_to_routes = {} #: Hash[Array[untyped], Array[Array[untyped]]]
+      @through_parts = {} #: Hash[Array[untyped], bool]
     end
 
     #: (untyped, AssociationTree, String, ?path: String) -> Array[Array[untyped]]
@@ -21,11 +22,41 @@ module PaperTrailDiff
       cached(@belongs_to_routes, model_class, tree, target_type, path, :belongs_to)
     end
 
+    # Whether a has_many through in the tree joins through, or reaches,
+    # records of the type. Its membership follows their keys, which a route
+    # to the record elsewhere in the tree does not update.
+    #: (untyped, AssociationTree, String) -> bool
+    def through_part?(model_class, tree, target_type)
+      key = [model_class, tree, target_type]
+      return @through_parts[key] if @through_parts.key?(key)
+
+      @through_parts[key] = through_part_below?(model_class, tree, target_type, '')
+    end
+
     private
 
     # @rbs @traversal: AssociationTraversal
     # @rbs @collection_routes: Hash[Array[untyped], Array[Array[untyped]]]
     # @rbs @belongs_to_routes: Hash[Array[untyped], Array[Array[untyped]]]
+    # @rbs @through_parts: Hash[Array[untyped], bool]
+
+    #: (untyped, AssociationTree, String, String) -> bool
+    def through_part_below?(model_class, tree, target_type, path)
+      @traversal.reflections_for(model_class, tree, path: path).any? do |reflection|
+        next true if through_reaches?(reflection, target_type)
+
+        subtree = tree.child(reflection.name.to_s) #: AssociationTree
+        child_path = Support.association_path(path, reflection.name)
+        !reflection.polymorphic? && !subtree.empty? &&
+          through_part_below?(reflection.klass, subtree, target_type, child_path)
+      end
+    end
+
+    #: (untyped, String) -> bool
+    def through_reaches?(reflection, target_type)
+      reflection.through_reflection? &&
+        reflection.chain.any? { |part| part.klass.base_class.name.to_s == target_type }
+    end
 
     # Timelines interleave event types, so every requested combination is
     # retained. Model, tree, and path are fixed per adapter, leaving one entry
