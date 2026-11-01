@@ -452,6 +452,10 @@ PaperTrailDiff.activity_timeline(article, associations: [:comments], group: :tra
   lists every event in the transaction, each with its own author, except
   those of records that were outside the tree before and after it.
 - Versions without a `transaction_id` are never grouped.
+- A savepoint that rolls back can split one transaction into more than one
+  group. PT-AT clears the transaction id when the savepoint rolls back, so the
+  versions the transaction saves afterwards form a separate group. Releasing
+  the savepoint keeps one group.
 - Also accepted by `analyze`, `analyze_many`, and `analyze_scope` with
   `activity: true`, and by `report`.
 
@@ -1449,6 +1453,9 @@ Results can only be as complete as the history PaperTrail and PT-AT recorded.
   its statements and not others. A long call holds its snapshot until it ends:
   on PostgreSQL that can keep VACUUM from reclaiming old row versions, and on
   MySQL it keeps undo history.
+- A savepoint that rolls back can split one transaction into several
+  transaction groups; see
+  [one step per transaction group](#one-step-per-transaction-group-transaction).
 - HABTM membership history exists only where PT-AT recorded it in a
   transaction, and only for the root record without a scope: a scoped HABTM,
   or one below the root, raises `UnsupportedAssociationError`, and a transaction that another record with
