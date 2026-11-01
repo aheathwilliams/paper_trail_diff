@@ -151,17 +151,18 @@ module PaperTrailDiff
       @traversal_preparer.call(record.class, historical: true)
       from, to = default_range(record, from, to, within)
       live = live_endpoint_for(record, within)
-      if activity
-        return activity_builder(
-          record, from: from, to: to, within: within, version_scope: version_scope,
-                  live_endpoint: live, view: view
-        ).analyze
-      end
-
-      TimelineBuilder.new(
-        record, from: from, to: to, within: within, version_scope: version_scope,
-                live_endpoint: live, snapshotter: @timeline_snapshotter
-      ).analyze
+      builder = if activity
+                  activity_builder(
+                    record, from: from, to: to, within: within, version_scope: version_scope,
+                            live_endpoint: live, view: view
+                  )
+                else
+                  TimelineBuilder.new(
+                    record, from: from, to: to, within: within, version_scope: version_scope,
+                            live_endpoint: live, snapshotter: @timeline_snapshotter
+                  )
+                end
+      builder.analyze.with_window(builder.window)
     end
 
     #: (Array[untyped], within: untyped, activity: bool, version_scope: untyped, view: ActivityView) -> Hash[identity, Analysis]

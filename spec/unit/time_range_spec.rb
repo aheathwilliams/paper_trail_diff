@@ -24,6 +24,11 @@ RSpec.describe PaperTrailDiff::TimeRange do
     expect(inclusive).to be_frozen
   end
 
+  it 'reads back as a Ruby range with the same end' do
+    expect(described_class.new(start_time..end_time).to_range).to eq(start_time..end_time)
+    expect(described_class.new(start_time...end_time).to_range).to eq(start_time...end_time)
+  end
+
   it 'rejects open, non-time, and reversed ranges' do
     expect { described_class.new(Range.new(nil, end_time)) }
       .to invalid('`within` must be a finite Range')

@@ -271,6 +271,21 @@ RSpec.describe PaperTrailDiff::TransactionCut do
       expect(windows([article], at(1.25)..at(2))).to eq({})
     end
 
+    it 'reports each moved window, and only those, under the stored type' do
+      feature, = history(FilterFeature, transactions: { 1 => 7 })
+      unmoved, = history(FilterFeature)
+      other(1.5, 7)
+      events = []
+      subscriber = ->(*, payload) { events << payload }
+
+      ActiveSupport::Notifications.subscribed(subscriber, 'moved_window.paper_trail_diff') do
+        windows([feature, unmoved], at(1.25)..at(3))
+      end
+
+      expect(events).to eq([{ item_type: 'FilterArticle', item_id: feature.id.to_s,
+                              requested: at(1.25)..at(3), window: at(1)..at(3) }])
+    end
+
     it "does not move a root for another root's transaction" do
       article, = history
       FilterVersion.insert({ item_type: 'FilterArticle', item_id: article.id + 1, event: 'update',

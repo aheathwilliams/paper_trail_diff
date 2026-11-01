@@ -9,7 +9,7 @@ RSpec.describe PaperTrailDiff::DeletedAnalysisBatch do
   let(:analyzer) do
     analyze = lambda do |record, plan, window|
       analyzed << [record, plan, window]
-      "analysis of #{record.id}"
+      AnalysisStandIn.new(record.id)
     end
     analyze.tap { |call| call.define_singleton_method(:empty) { PaperTrailDiff::Analysis.empty } }
   end
@@ -20,6 +20,12 @@ RSpec.describe PaperTrailDiff::DeletedAnalysisBatch do
   before do
     FilterVersion.delete_all
     FilterArticle.unscoped.delete_all
+    # Stands in for an Analysis, naming its root and the window it was given.
+    stub_const('AnalysisStandIn', Struct.new(:root_id, :window) do
+      def with_window(range)
+        self.class.new(root_id, range&.to_range)
+      end
+    end)
   end
 
   def at(minute)
@@ -60,7 +66,7 @@ RSpec.describe PaperTrailDiff::DeletedAnalysisBatch do
 
     result = analyze([key(article), key(never_deleted), %w[FilterArticle 0]])
 
-    expect(result).to eq(key(article) => "analysis of #{article.id}",
+    expect(result).to eq(key(article) => AnalysisStandIn.new(article.id),
                          key(never_deleted) => nil, %w[FilterArticle 0] => nil)
     expect(result).to be_frozen
     expect(result.keys).to all(be_frozen.and(all(be_frozen)))
@@ -75,21 +81,30 @@ RSpec.describe PaperTrailDiff::DeletedAnalysisBatch do
     FilterVersion.insert({ item_type: 'FilterNote', item_id: 1, event: 'update',
                            created_at: at(1.5), transaction_id: 7 })
 
-    analyze([key(article)], within: at(1.25)..at(3))
+    result = analyze([key(article)], within: at(1.25)..at(3))
 
     _record, plan, window = analyzed.sole
     expect([window.begin_time, window.end_time]).to eq([at(1), at(3)])
     expect(plan.versions.first).to eq(updated)
+    expect(result.fetch(key(article)).window).to eq(at(1)..at(3))
   end
 
   it 'passes an unmoved root the window as asked' do
     article, = deleted
     range = at(0.5)..at(3)
 
-    analyze([key(article)], within: range)
+    result = analyze([key(article)], within: range)
 
     window = analyzed.sole.last
     expect([window.begin_time, window.end_time]).to eq([at(0.5), at(3)])
+    expect(result.fetch(key(article)).window).to eq(range)
+  end
+
+  it 'gives a root with nothing in the window the window as asked' do
+    article, = deleted
+    range = at(5)..at(6)
+
+    expect(analyze([key(article)], within: range).fetch(key(article)).window).to eq(range)
   end
 
   it 'reads only the deletions of the model asked for' do

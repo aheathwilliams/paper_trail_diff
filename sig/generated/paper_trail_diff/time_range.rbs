@@ -23,6 +23,10 @@ module PaperTrailDiff
     # : (untyped) -> untyped
     def scope: (untyped) -> untyped
 
+    # The window as a Ruby range, its end included or left out as given.
+    # : () -> Range[Time]
+    def to_range: () -> Range[Time]
+
     # : (untyped) -> untyped
     def trailing_scope: (untyped) -> untyped
 
@@ -38,9 +42,6 @@ module PaperTrailDiff
 
     # : (untyped) -> untyped
     def after_end: (untyped) -> untyped
-
-    # : () -> Range[Time]
-    def query_range: () -> Range[Time]
 
     # : (untyped, boundary: Symbol) -> Time
     def coerce_time: (untyped, boundary: Symbol) -> Time

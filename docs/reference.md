@@ -181,6 +181,25 @@ or a `report` with `since:` after an earlier report, show each change exactly
 once, credited to the transaction that made it. Each root moves its own edges,
 so in a batch two roots can start a few moments apart.
 
+`analysis.window` is the window an `Analysis` covers after any such move, as a
+Ruby range. It is `nil` when `within:` or `since:` was not given. Every step of
+the analysis is inside it, so to check a step against the window, use
+`analysis.window` rather than the range you passed: a step at the start of a
+moved window begins before the time you asked for.
+
+```ruby
+analysis = PaperTrailDiff.analyze_many(articles, within: window, activity: true).values.first
+analysis.window # => window, or one that starts earlier
+```
+
+Each move emits a `moved_window.paper_trail_diff` notification whose payload
+has `item_type`, `item_id`, the `requested` range, and the moved `window`. In
+history saved by your application, an edge moves back by the time one
+transaction took, usually well under a second. A move of minutes or days
+means a transaction ran that long, or that the versions' times were changed
+after they were saved, as a test might do; see
+[writing history in tests](#writing-history-in-tests).
+
 A closed window can still change. PaperTrail stamps a version's `created_at`
 when it builds the version, inside its transaction, and the transaction commits
 later. A transaction that stamped a change inside the window and committed
@@ -596,6 +615,7 @@ analysis.timeline          # the same steps timeline returns
 analysis.activity_timeline # nil unless activity: true
 analysis.from_snapshot     # the full state at the start (nil before creation)
 analysis.to_snapshot       # the full state at the end
+analysis.window            # the time window it covers, or nil without within:
 analysis.to_h(snapshots: true, metadata: true)
 ```
 
@@ -1386,6 +1406,32 @@ precision was never recorded and cannot be reported. A `json` or `jsonb`
 column also returns times and dates as strings, which PaperTrail leaves as
 they are; the gem casts them back to the attribute's type.
 
+### Writing history in tests
+
+To give versions fixed times in a test, save them at those times with
+`travel_to`:
+
+```ruby
+travel_to(Time.zone.local(2026, 8, 15, 9, 1)) do
+  PaperTrail.request(whodunnit: "alice") { article.update!(title: "Published") }
+end
+```
+
+If you change `created_at` after saving instead, change every version saved
+in the same transaction, not only the ones you check. PT-AT gives all of
+them the same `transaction_id`, including versions of other models saved by
+callbacks. A version left at the time the test ran makes that transaction
+seem to last from your chosen time until today. A window edge in between
+then moves back to the transaction's start (see [Time windows](#time-windows)),
+and the window can lose the changes the test expects.
+
+```ruby
+def set_version_time(version, time)
+  same = version.transaction_id && { transaction_id: version.transaction_id }
+  PaperTrail::Version.where(same || { id: version.id }).update_all(created_at: time)
+end
+```
+
 ## Instrumentation
 
 The gem never logs. It emits `ActiveSupport::Notifications` events you can
@@ -1398,6 +1444,7 @@ subscribe to:
 - `load_live_endpoints.paper_trail_diff`
 - `prepare_history.paper_trail_diff`
 - `ambiguous_association_boundary.paper_trail_diff`
+- `moved_window.paper_trail_diff`, when a [window edge moves](#time-windows)
 
 ```ruby
 ActiveSupport::Notifications.subscribe(/\.paper_trail_diff\z/) do |name, start, finish, _id, payload|
@@ -1405,8 +1452,8 @@ ActiveSupport::Notifications.subscribe(/\.paper_trail_diff\z/) do |name, start, 
 end
 ```
 
-Payloads contain counts, model names, association paths, and options, never
-record data. To see the SQL for one call, subscribe to `sql.active_record`
+Payloads contain counts, model names, ids, times, association paths, and
+options, never record data. To see the SQL for one call, subscribe to `sql.active_record`
 around it with `ActiveSupport::Notifications.subscribed`.
 
 ## Errors

@@ -81,8 +81,26 @@ module PaperTrailDiff
 
       starts = moved_edges(versions, records, Edge.new(range.begin_time, false))
       ends = moved_edges(versions, records, Edge.new(range.end_time, !range.exclude_end?))
-      (starts.keys | ends.keys).to_h { |id| [id, moved(range, starts[id], ends[id])] }
+      (starts.keys | ends.keys).to_h do |id|
+        [id, moved_window(model_class, id, range, starts[id], ends[id])]
+      end
     end
+
+    # A transaction holds its rows only while it runs, so in history as an
+    # application saves it an edge moves by moments. A longer move means a
+    # long transaction or rewritten times, which only the application can
+    # judge, so each move is reported rather than logged or refused.
+    #: (untyped, String, TimeRange, Time?, Time?) -> TimeRange
+    def self.moved_window(model_class, id, range, start, finish)
+      window = moved(range, start, finish)
+      Instrumentation.notify(
+        'moved_window',
+        item_type: model_class.base_class.name, item_id: id,
+        requested: range.to_range, window: window.to_range
+      )
+      window
+    end
+    private_class_method :moved_window
 
     #: (untyped) -> untyped
     def self.transaction_versions(model_class)

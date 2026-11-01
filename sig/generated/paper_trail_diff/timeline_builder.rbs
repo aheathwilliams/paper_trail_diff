@@ -9,6 +9,10 @@ module PaperTrailDiff
     # : () -> Array[Step]
     def build: () -> Array[Step]
 
+    # The window the range covers once its edges have moved to transactions.
+    # : () -> TimeRange?
+    def window: () -> TimeRange?
+
     # : () -> Analysis
     def analyze: () -> Analysis
 

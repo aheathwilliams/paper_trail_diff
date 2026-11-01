@@ -21,6 +21,19 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `Analysis#window` is the time window an analysis covers: the `within:` or
+  `since:` range, or that range with an edge moved back to where a crossing
+  transaction began. Check steps against it rather than against the range you
+  passed, which the first step of a moved window starts before. It is `nil`
+  without a window.
+
+- A `moved_window.paper_trail_diff` notification reports each window edge that
+  moved, with the requested and the moved window. A move far longer than a
+  transaction takes means the versions' times were changed after saving, as in
+  a test that rewrote some versions' `created_at` and not the others saved in
+  the same transaction. The reference shows how to give versions fixed times
+  in tests.
+
 - Association scopes and `include_deleted:` relations read ranges, such as
   `where(position: 2..)` or `where(created_at: 1.day.ago..)`, and Arel's `gt`,
   `gteq`, `lt`, and `lteq`, on integer, integer enum, date, and datetime
@@ -127,6 +140,14 @@ project follows [Semantic Versioning](https://semver.org/).
 ## [0.15.0] - 2026-10-31
 
 ### Breaking changes
+
+- A `within:` or `since:` window, and a range that starts at a version, can
+  begin earlier than asked: an edge inside a transaction moves back to where
+  the transaction began, as the two entries under Fixed describe. The first
+  step of such a range has a `from_boundary` before the time or version you
+  passed, so code that drops steps outside the range it asked for loses that
+  step. (This entry was added after release; 0.15.0 listed the change only
+  under Fixed.)
 
 - An association whose model keeps its versions, or its PT-AT version
   associations, in different tables than its owner's raises
@@ -367,7 +388,7 @@ project follows [Semantic Versioning](https://semver.org/).
   credited to that change's author, and the window ending there left it out;
   when the article saved first, its version was in one window and the comment
   edit in the other. Each root's edges move back to the transaction's start,
-  read in a fixed number of queries per batch.
+  read in a fixed number of queries per 200 records.
 
 - `activity_timeline`, and `analyze` with `activity: true`, no longer report a
   child version saved in the same transaction as the root version that ends

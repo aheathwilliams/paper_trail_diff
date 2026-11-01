@@ -39,7 +39,13 @@ module PaperTrailDiff
 
     #: (untyped) -> untyped
     def scope(relation)
-      relation.where(created_at: query_range)
+      relation.where(created_at: to_range)
+    end
+
+    # The window as a Ruby range, its end included or left out as given.
+    #: () -> Range[Time]
+    def to_range
+      exclude_end? ? (begin_time...end_time) : (begin_time..end_time)
     end
 
     #: (untyped) -> untyped
@@ -69,11 +75,6 @@ module PaperTrailDiff
     #: (untyped) -> untyped
     def after_end(column)
       exclude_end? ? column.gteq(end_time) : column.gt(end_time)
-    end
-
-    #: () -> Range[Time]
-    def query_range
-      exclude_end? ? (begin_time...end_time) : (begin_time..end_time)
     end
 
     #: (untyped, boundary: Symbol) -> Time

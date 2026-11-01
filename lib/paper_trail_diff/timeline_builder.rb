@@ -24,6 +24,12 @@ module PaperTrailDiff
       steps
     end
 
+    # The window the range covers once its edges have moved to transactions.
+    #: () -> TimeRange?
+    def window
+      @range.time_range
+    end
+
     #: () -> Analysis
     def analyze
       steps, first_snapshot, last_snapshot = compare_history(selected_versions)
