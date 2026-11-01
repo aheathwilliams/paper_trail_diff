@@ -120,6 +120,9 @@ module PaperTrailDiff
     # unknown where false would become true.
     COMPARISONS: untyped
 
+    # Comparisons that order values, which read them as ScopeRanking sorts.
+    ORDERED: untyped
+
     private
 
     @model_class: untyped
@@ -143,9 +146,11 @@ module PaperTrailDiff
     # : (bool?) -> bool?
     def negate: (bool?) -> bool?
 
-    # The form the database holds, as the scope's own values were cast.
-    # : (String, Hash[String, untyped]) -> untyped
-    def stored: (String, Hash[String, untyped]) -> untyped
+    # The form the database holds, as the scope's own values were cast. An
+    # order reads the value the database sorts by instead: SQL Server holds a
+    # time or date in a wrapper that only compares for equality.
+    # : (Symbol, String, Hash[String, untyped]) -> untyped
+    def stored: (Symbol, String, Hash[String, untyped]) -> untyped
 
     # Builds each reflection's condition once per target class.
     class Cache
@@ -195,6 +200,11 @@ module PaperTrailDiff
 
       # : (Symbol, untyped, untyped) -> Array[untyped]
       def bound: (Symbol, untyped, untyped) -> Array[untyped]
+
+      # A bound in the form the database holds, read back as the value the
+      # database sorts by. Reading it back unwraps what an adapter wraps.
+      # : (String, untyped) -> untyped
+      def sort_value: (String, untyped) -> untyped
 
       # Whether a value is NULL compares alike on every type.
       # : (Symbol, untyped) -> Array[untyped]

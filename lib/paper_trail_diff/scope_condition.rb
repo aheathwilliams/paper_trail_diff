@@ -205,6 +205,10 @@ module PaperTrailDiff
     }.freeze
     private_constant :COMPARISONS
 
+    # Comparisons that order values, which read them as ScopeRanking sorts.
+    ORDERED = %i[gt gteq lt lteq].freeze
+    private_constant :ORDERED
+
     private
 
     # @rbs @model_class: untyped
@@ -219,7 +223,7 @@ module PaperTrailDiff
       when :and then all(first.map { |part| evaluate(part, attributes) })
       when :or then any(first.map { |part| evaluate(part, attributes) })
       when :not then negate(evaluate(first, attributes))
-      else COMPARISONS.fetch(operator).call(stored(first, attributes), second)
+      else COMPARISONS.fetch(operator).call(stored(operator, first, attributes), second)
       end
     end
 
@@ -244,10 +248,15 @@ module PaperTrailDiff
       !value unless value.nil?
     end
 
-    # The form the database holds, as the scope's own values were cast.
-    #: (String, Hash[String, untyped]) -> untyped
-    def stored(name, attributes)
-      @model_class.type_for_attribute(name).serialize(attributes[name])
+    # The form the database holds, as the scope's own values were cast. An
+    # order reads the value the database sorts by instead: SQL Server holds a
+    # time or date in a wrapper that only compares for equality.
+    #: (Symbol, String, Hash[String, untyped]) -> untyped
+    def stored(operator, name, attributes)
+      value = attributes[name]
+      return ScopeRanking.sort_value(@model_class, name, value) if ORDERED.include?(operator)
+
+      @model_class.type_for_attribute(name).serialize(value)
     end
 
     # Builds each reflection's condition once per target class.
@@ -347,7 +356,15 @@ module PaperTrailDiff
         expected = value(node)
         raise Unreadable if expected.nil?
 
-        [operator, name, expected]
+        [operator, name, sort_value(name, expected)]
+      end
+
+      # A bound in the form the database holds, read back as the value the
+      # database sorts by. Reading it back unwraps what an adapter wraps.
+      #: (String, untyped) -> untyped
+      def sort_value(name, stored)
+        read = @model_class.type_for_attribute(name).deserialize(stored)
+        ScopeRanking.sort_value(@model_class, name, read)
       end
 
       # Whether a value is NULL compares alike on every type.

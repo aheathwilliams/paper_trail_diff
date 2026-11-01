@@ -259,9 +259,37 @@ RSpec.describe PaperTrailDiff::ScopeCondition do
                      { seen_at: cutoff - 1 }, { seen_at: nil })).to eq([true, false, false])
     end
 
+    # SQL Server stores a time or a date in a wrapper that compares only for
+    # equality, which reading the value back unwraps.
+    def wrapping(base, **options)
+      wrapper = Struct.new(:value)
+      Class.new(base) do
+        define_method(:serialize) { |value| super(value)&.then { |stored| wrapper.new(stored) } }
+        define_method(:deserialize) { |value| super(value.is_a?(wrapper) ? value.value : value) }
+      end.new(**options)
+    end
+
+    it 'compares equality in the stored form and an order by the value it sorts by' do
+      stub_const('ScopeConditionWrapped', Class.new(ScopeConditionItem))
+      ScopeConditionWrapped.attribute :seen_at, wrapping(ActiveRecord::Type::DateTime, precision: 6)
+      ScopeConditionWrapped.attribute :rank, wrapping(ActiveRecord::Type::Integer)
+      wrapped = ->(scope) { build(scope, target: 'ScopeConditionWrapped') }
+      cutoff = Time.utc(2026)
+
+      expect(matches(wrapped.call(-> { where(seen_at: cutoff..) }), { seen_at: cutoff },
+                     { seen_at: cutoff - 1 }, { seen_at: nil })).to eq([true, false, false])
+      expect(matches(wrapped.call(-> { where(rank: 2..3) }), { rank: 3 }, { rank: 4 }))
+        .to eq([true, false])
+      expect(matches(wrapped.call(-> { where(rank: 3) }), { rank: 3 }, { rank: 4 }))
+        .to eq([true, false])
+      expect(matches(wrapped.call(-> { where(rank: [3, 5]) }), { rank: 5 }, { rank: 4 }))
+        .to eq([true, false])
+    end
+
     it 'declines ranges on columns that do not sort in Ruby as in SQL' do
       [-> { where(label: 'a'..'b') }, -> { where(table[:flag].gt(false)) },
-       -> { where(amount: 1..) }, -> { where(table[:rank].gt(nil)) }].each do |scope|
+       -> { where(amount: 1..) }, -> { where(table[:rank].gt(nil)) },
+       -> { where(table[:rank].gt(table[:owner_id])) }].each do |scope|
         expect(build(scope)).to be_nil
       end
     end
