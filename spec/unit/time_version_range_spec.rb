@@ -21,14 +21,16 @@ RSpec.describe PaperTrailDiff::TimeVersionRange do
     [article, *versions]
   end
 
-  # The same history with ids running backwards, as a clock step or an
-  # import leaves them: the newest version has the lowest id, so neither the
-  # table's own order nor the ids give the order of time.
+  # Four versions whose ids run against time, as a clock step or an import
+  # leaves them: the version saved first has the latest time, so neither the
+  # table's own order nor the ids give the order of time. Returned oldest
+  # first.
   def backwards_history
     article, *versions = history
-    top = versions.map(&:id).max + versions.length
-    versions.each_with_index { |version, index| version.update_columns(id: top - index) }
-    [article, *versions]
+    versions.reverse.each_with_index do |version, index|
+      version.update_columns(created_at: start_time + (index * 60))
+    end
+    [article, *versions.reverse]
   end
 
   def plan(article, within, version_scope: nil, live_endpoint: nil, context_required: false)
@@ -50,14 +52,14 @@ RSpec.describe PaperTrailDiff::TimeVersionRange do
   end
 
   it 'orders by time when the ids run the other way' do
-    article, _created, reviewed, edited, published = backwards_history
+    article, _first, second, third, last = backwards_history
 
-    selected = plan(article, reviewed.created_at..edited.created_at)
-    single = plan(article, reviewed.created_at..reviewed.created_at)
+    selected = plan(article, second.created_at..third.created_at)
+    single = plan(article, second.created_at..second.created_at)
 
-    expect(selected.versions).to eq([reviewed, edited, published])
-    expect(single.versions).to eq([reviewed, edited])
-    expect(single.context_version).to eq(edited)
+    expect(selected.versions).to eq([second, third, last])
+    expect(single.versions).to eq([second, third])
+    expect(single.context_version).to eq(third)
   end
 
   it 'applies the version scope to the window alone' do
