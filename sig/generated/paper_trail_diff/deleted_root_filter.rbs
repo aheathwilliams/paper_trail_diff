@@ -9,9 +9,13 @@ module PaperTrailDiff
     # : (untyped) -> void
     def initialize: (untyped) -> void
 
+    # nil when the relation's conditions cannot be read.
+    # : (untyped) -> DeletedRootFilter?
+    def self.readable: (untyped) -> DeletedRootFilter?
+
     # A root whose destroy PaperTrail did not record has no state to test
-    # and stays, as it has no state to report either. One whose destroy
-    # recorded no state is left out.
+    # and stays, as it has no state to report either, unless the relation
+    # selects nothing. One whose destroy recorded no state is left out.
     # : (Array[Array[String]]) -> Array[Array[String]]
     def call: (Array[Array[String]]) -> Array[Array[String]]
 

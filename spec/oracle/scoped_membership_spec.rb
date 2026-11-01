@@ -51,6 +51,10 @@ class OraclePost < ActiveRecord::Base
   has_many :status_ranked_notes, -> { order(status: :desc, id: :asc).limit(2) }, **notes
   has_many :last_page_notes, -> { order(position: :desc, id: :desc).offset(1).limit(2) }, **notes
   has_many :not_live_and_hidden_notes, -> { where.not(status: :live, hidden: true) }, **notes
+  has_many :high_notes, -> { where(position: 3..) }, **notes
+  has_many :middle_notes, -> { where(position: 2...4) }, **notes
+  has_many :not_low_notes, -> { where.not(position: ..1) }, **notes
+  has_many :trashed_since_notes, -> { where(deleted_at: Time.utc(2000)..) }, **notes
   has_one :latest_note, -> { order(id: :desc) }, **notes
   has_one :lowest_kept_note, -> { where(deleted_at: nil).order(:position, :id) }, **notes
   has_paper_trail synchronize_version_creation_timestamp: false

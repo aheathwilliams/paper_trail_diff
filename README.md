@@ -160,7 +160,7 @@ rows = report.analyses.map do |identity, analysis|
   }
 end
 
-report.unreachable # Model names and IDs for records no longer in the database
+report.unreachable # Model names and IDs of selected records no longer in the database
 report.deleted     # Reports for those records, or nil when destroy history is missing
 ```
 

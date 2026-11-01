@@ -11,6 +11,11 @@ module PaperTrailDiff
 
     private
 
+    # Without the option, the deleted roots are still tested when the
+    # relation can be read, so that another selection's are not listed.
+    # : (untyped, bool) -> DeletedRootFilter?
+    def deleted_filter: (untyped, bool) -> DeletedRootFilter?
+
     # : (ScopedRootSelection::Result, Array[Array[String]], Hash[Array[String], Analysis?]) -> ScopedAnalysis
     def analysis: (ScopedRootSelection::Result, Array[Array[String]], Hash[Array[String], Analysis?]) -> ScopedAnalysis
 
@@ -19,6 +24,8 @@ module PaperTrailDiff
     @deleted_analyzer: untyped
 
     @deleted_filter: DeletedRootFilter?
+
+    @include_deleted: bool
 
     @limit: Integer
 

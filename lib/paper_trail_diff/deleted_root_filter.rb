@@ -14,19 +14,31 @@ module PaperTrailDiff
       unless condition
         raise ConfigurationError,
               'include_deleted: cannot test deleted records against this relation: its ' \
-              "conditions must be plain conditions on #{model.name}'s own columns, as an " \
-              "association scope's must; select deleted records some other way"
+              "conditions must be equality, IN, NULL, or range tests on #{model.name}'s " \
+              'own columns, and a range or a text comparison must be on a column whose ' \
+              'values compare in Ruby as the database compares them, as for an ' \
+              'association scope; select deleted records some other way'
       end
 
       @condition = condition
       @loader = DirectRecordStateLoader.new
     end
 
+    # nil when the relation's conditions cannot be read.
+    #: (untyped) -> DeletedRootFilter?
+    def self.readable(relation)
+      new(relation)
+    rescue ConfigurationError
+      nil
+    end
+
     # A root whose destroy PaperTrail did not record has no state to test
-    # and stays, as it has no state to report either. One whose destroy
-    # recorded no state is left out.
+    # and stays, as it has no state to report either, unless the relation
+    # selects nothing. One whose destroy recorded no state is left out.
     #: (Array[Array[String]]) -> Array[Array[String]]
     def call(identities)
+      return [] if @condition.none?
+
       states = destroyed_states(identities.map(&:last))
       identities.select do |identity|
         id = identity.last

@@ -35,6 +35,25 @@ RSpec.describe 'deleted root reporting' do
     sql
   end
 
+  # A report on one selection must not list another's deleted records.
+  # One whose destroy was not recorded has no state to test, so it stays.
+  it 'lists only the deleted records the relation selects, even without include_deleted' do
+    since = Time.now.utc - 60
+    stable, other = seed_deleted(2)
+    CoreArticle.where(id: other.id).delete_all
+    PaperTrail::Version.where(item_id: other.id, event: 'destroy').delete_all
+    unreadable = CoreArticle.where('internal_note IS NOT NULL')
+    unreachable = lambda do |relation|
+      PaperTrailDiff.report(relation, since: since, limit: 5).unreachable.map(&:last)
+    end
+
+    expect(unreachable.call(CoreArticle.where(title: "Final #{stable.title[-1]}")))
+      .to eq([stable.id.to_s, other.id.to_s])
+    expect(unreachable.call(CoreArticle.where(title: 'Elsewhere'))).to eq([other.id.to_s])
+    expect(unreachable.call(CoreArticle.none)).to eq([])
+    expect(unreachable.call(unreadable)).to eq([stable.id.to_s, other.id.to_s])
+  end
+
   it 'returns complete deleted activity and unavailable identities without live-row lookup' do
     deleted = seed_deleted(2)
     missing = CoreArticle.create!(title: 'No destroy', internal_note: 'stable')

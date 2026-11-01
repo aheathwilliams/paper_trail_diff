@@ -115,7 +115,6 @@ module PaperTrailDiff
       ORDER_TYPES.intersect?(kinds) ||
         (kinds.include?(DATETIME_TYPE) && exact_time?(model_class, type))
     end
-    private_class_method :orderable?
 
     # The type of the value a column stores, under an enum or time zone wrapper.
     #: (untyped) -> untyped

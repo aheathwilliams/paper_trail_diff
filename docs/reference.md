@@ -700,19 +700,22 @@ and `allow_approximate:`.
 
 A relation's conditions read the table, and a deleted record has no row.
 Records that changed in the window but no longer exist are listed in
-`unreachable`, including those selected by a change to their associations. It
-is not paginated and, without `include_deleted:`, does not mean those records
-matched the relation.
+`unreachable`, including those selected by a change to their associations,
+when the state each held when it was destroyed meets the relation's
+conditions. That test needs conditions it can read, as `include_deleted:`
+below does; for any other relation, such as one with SQL text or a join,
+`unreachable` lists every such record of the model, whatever the relation. It
+is not paginated.
 
 `include_deleted: true` tests each of them against the relation's conditions,
-as it stood when it was destroyed, and keeps only those that match. So a
-report on `Article.where(account_id: account.id)` returns that account's
-deletions, not every account's. The relation's conditions must be plain
-conditions on the model's own columns, as a [readable association
-scope's](#costly-associations) must; anything else, such as a join or SQL
-text, raises `ConfigurationError`. Its order, limit, and offset are ignored
-here, since they choose a page of existing rows. A record whose destroy
-PaperTrail did not record has no state to test and stays listed.
+as it stood when it was destroyed, and keeps only those that match. So a report
+on `Article.where(account_id: account.id)` returns that account's deletions,
+not every account's. The relation's conditions must be plain conditions on the
+model's own columns, as a [readable association scope's](#costly-associations)
+must, ranges included; anything else, such as a join or SQL text, raises
+`ConfigurationError`. `Article.none` keeps none. Its order, limit, and offset
+are ignored here, since they choose a page of existing rows. A record whose
+destroy PaperTrail did not record has no state to test and stays listed.
 
 It then analyzes the kept records from their `destroy` versions and returns the
 results in `deleted`, keyed the same way. A value is `nil` when no `destroy`
@@ -796,6 +799,11 @@ MySQL and SQL Server compare strings without regard to case or trailing spaces
 by default, which the gem cannot repeat, and neither is PostgreSQL's
 `citext`.
 
+Ranges, such as `where(position: 2..)` or `where(created_at: 1.day.ago...)`,
+and Arel's `gt`, `gteq`, `lt`, and `lteq`, are read on the columns an order
+can sort by, below: integer, integer enum, date, and datetime columns, with
+the same conditions on a datetime's precision.
+
 A `limit` or `offset`, and the order of a `has_one`, are read the same way
 when the order is total and the gem can repeat it:
 
@@ -832,12 +840,12 @@ join records fills two places, as in the query. A `has_one :through` whose
 own scope or whose parts have a limit, an offset, or a `has_one` order is not
 read.
 
-The gem cannot read the rest: a `limit` or `offset` whose order is not total
-or sorts by another column type (strings follow a collation) or by a datetime
+The gem cannot read the rest: a `limit` or `offset` whose order is not total or
+sorts by another column type (strings follow a collation) or by a datetime
 history cannot rank exactly, scopes that take the owner
-(`->(article) { ... }`), scopes written as SQL strings or ranges, scopes that
-join or select, and conditions on other column types or other tables, such as
-a string column on MySQL. For these it asks PT-AT, which costs queries per
+(`->(article) { ... }`), scopes written as SQL strings, ranges on other column
+types, scopes that join or select, and conditions on other column types or
+other tables, such as a string column on MySQL. For these it asks PT-AT, which costs queries per
 record and is approximate: PT-AT rebuilds an association from its current
 members, swapping in their older versions, and never checks the scope against
 them. A record that entered the scope since is reported as a member it was

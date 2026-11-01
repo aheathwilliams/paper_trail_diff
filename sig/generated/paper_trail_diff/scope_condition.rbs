@@ -55,9 +55,14 @@ module PaperTrailDiff
     # limit, and offset choose a page of current rows rather than membership,
     # and loading or selecting columns changes neither, so they are left out.
     # A single-table subclass's type condition is left to the caller, as for
-    # an association.
+    # an association. `none` selects nothing, whatever it is chained to.
     # : (untyped, untyped) -> ScopeCondition?
     def self.for_relation: (untyped, untyped) -> ScopeCondition?
+
+    # A relation `none` built, whose where clause is SQL text. A condition
+    # that matches nothing reads no attribute, so it names no model.
+    # : () -> ScopeCondition
+    def self.nothing: () -> ScopeCondition
 
     # nil when the relation picks its members by conditions alone.
     # : (untyped, untyped, untyped) -> ScopeRanking?
@@ -83,9 +88,9 @@ module PaperTrailDiff
     def self.scoped_relation: (untyped, untyped) -> untyped
 
     # Some parts, such as the having clause `or` sets, may be present but
-    # empty.
-    # : (untyped) -> bool
-    def self.plain_relation?: (untyped) -> bool
+    # empty. `allowed` names the parts that may hold values.
+    # : (untyped, Array[Symbol]) -> bool
+    def self.plain_relation?: (untyped, Array[Symbol]) -> bool
 
     # : (untyped, Array[untyped], ?ScopeRanking?) -> void
     def initialize: (untyped, Array[untyped], ?ScopeRanking?) -> void
@@ -94,6 +99,10 @@ module PaperTrailDiff
     # unknown.
     # : (Hash[String, untyped]) -> bool
     def matches?: (Hash[String, untyped]) -> bool
+
+    # Whether no record can match, as for a relation `none` built.
+    # : () -> bool
+    def none?: () -> bool
 
     # The members among records that are each the owner's by key: those that
     # meet the conditions, then ranked.
@@ -173,6 +182,19 @@ module PaperTrailDiff
 
       # : (untyped) -> Array[untyped]
       def comparison: (untyped) -> Array[untyped]
+
+      RANGES: untyped
+
+      # A range, as `where(created_at: 1.day.ago..)` writes it, on a column
+      # whose values sort in Ruby as the database sorts them.
+      # : (untyped) -> Array[untyped]
+      def range: (untyped) -> Array[untyped]
+
+      # : (untyped) -> Array[untyped]
+      def between: (untyped) -> Array[untyped]
+
+      # : (Symbol, untyped, untyped) -> Array[untyped]
+      def bound: (Symbol, untyped, untyped) -> Array[untyped]
 
       # Whether a value is NULL compares alike on every type.
       # : (Symbol, untyped) -> Array[untyped]

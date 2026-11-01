@@ -109,6 +109,38 @@ RSpec.describe PaperTrailDiff::DeletedRootFilter do
     expect(kept(relation, [article])).to eq([identity(article)])
   end
 
+  it 'reads ranges, and keeps nothing for a relation that selects nothing' do
+    one = destroyed(views: 1)
+    two = destroyed(views: 2)
+
+    expect(kept(FilterArticle.where(views: 2..), [one, two])).to eq([identity(two)])
+    expect(kept(FilterArticle.where(views: ...2), [one, two])).to eq([identity(one)])
+    expect(kept(FilterArticle.none, [one, two])).to eq([])
+    unrecorded = FilterArticle.create!(title: 'Unrecorded', views: 3)
+    FilterArticle.where(id: unrecorded.id).delete_all
+    expect(kept(FilterArticle.none, [unrecorded])).to eq([])
+  end
+
+  it 'reads no history for no deleted roots' do
+    queries = 0
+    count = ->(*) { queries += 1 }
+    ActiveSupport::Notifications.subscribed(count, 'sql.active_record') do
+      expect(kept(FilterArticle.where(views: 1), [])).to eq([])
+    end
+
+    expect(queries).to eq(0)
+  end
+
+  it 'builds a filter only for a relation it can read, when asked to try' do
+    article = destroyed(views: 1)
+
+    expect(described_class.readable(FilterArticle.where(views: 1)).call([identity(article)]))
+      .to eq([identity(article)])
+    expect(described_class.readable(FilterArticle.where(views: 2)).call([identity(article)]))
+      .to eq([])
+    expect(described_class.readable(FilterArticle.where('views > 1'))).to be_nil
+  end
+
   it 'refuses a relation whose conditions it cannot read' do
     [FilterArticle.where('views > 1'), FilterArticle.joins('JOIN filter_versions ON 1 = 1'),
      FilterArticle.group(:views)].each do |relation|

@@ -5,6 +5,29 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+### Changed
+
+- `report` and `analyze_scope` list in `unreachable` only the deleted records
+  whose state when destroyed meets the relation's conditions, also without
+  `include_deleted:`, whenever those conditions can be read. A report on
+  `Article.where(account_id: account.id)` listed every account's deleted
+  articles there, and one on `Article.none` listed some too. A relation whose
+  conditions cannot be read, such as one with SQL text, lists every deleted
+  record of the model as before.
+
+### Added
+
+- Association scopes and `include_deleted:` relations read ranges, such as
+  `where(position: 2..)` or `where(created_at: 1.day.ago..)`, and Arel's `gt`,
+  `gteq`, `lt`, and `lteq`, on integer, integer enum, date, and datetime
+  columns. Such a scope was read through PT-AT, which needs
+  `allow_approximate: true`, and such a relation raised `ConfigurationError`
+  under `include_deleted: true`.
+
+- `include_deleted: true` accepts `Article.none`, which keeps no deleted
+  record, instead of raising `ConfigurationError`. Authorization scopes often
+  return `none`.
+
 ### Fixed
 
 - Activity reports a change to a root's `belongs_to` key in the step of the

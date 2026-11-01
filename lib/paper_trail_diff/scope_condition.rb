@@ -56,7 +56,7 @@ module PaperTrailDiff
       return if ranked && ranked_through?(reflection)
 
       relation = scoped_relation(reflection, model_class)
-      return unless relation && plain_relation?(relation)
+      return unless relation && plain_relation?(relation, RELATION_VALUES)
 
       clause = relation.where_clause - model_class.unscoped.where_clause
       predicate = Reader.new(model_class).call(clause.ast)
@@ -70,17 +70,26 @@ module PaperTrailDiff
     # limit, and offset choose a page of current rows rather than membership,
     # and loading or selecting columns changes neither, so they are left out.
     # A single-table subclass's type condition is left to the caller, as for
-    # an association.
+    # an association. `none` selects nothing, whatever it is chained to.
     #: (untyped, untyped) -> ScopeCondition?
     def self.for_relation(relation, model_class)
-      extra = relation.values.except(*RELATION_VALUES, *LOADING_VALUES).values
-      return unless extra.all? { |value| value.respond_to?(:empty?) && value.empty? }
+      return nothing if relation.null_relation?
+
+      return unless plain_relation?(relation, [*RELATION_VALUES, *LOADING_VALUES])
 
       clause = relation.where_clause - model_class.unscoped.where_clause
       new(model_class, Reader.new(model_class).call(clause.ast))
     rescue Unreadable
       nil
     end
+
+    # A relation `none` built, whose where clause is SQL text. A condition
+    # that matches nothing reads no attribute, so it names no model.
+    #: () -> ScopeCondition
+    def self.nothing
+      new(nil, [:or, []])
+    end
+    private_class_method :nothing
 
     # nil when the relation picks its members by conditions alone.
     #: (untyped, untyped, untyped) -> ScopeRanking?
@@ -135,10 +144,10 @@ module PaperTrailDiff
     private_class_method :scoped_relation
 
     # Some parts, such as the having clause `or` sets, may be present but
-    # empty.
-    #: (untyped) -> bool
-    def self.plain_relation?(relation)
-      extra = relation.values.except(*RELATION_VALUES).values
+    # empty. `allowed` names the parts that may hold values.
+    #: (untyped, Array[Symbol]) -> bool
+    def self.plain_relation?(relation, allowed)
+      extra = relation.values.except(*allowed).values
       extra.all? { |value| value.respond_to?(:empty?) && value.empty? }
     end
     private_class_method :plain_relation?
@@ -156,6 +165,13 @@ module PaperTrailDiff
     #: (Hash[String, untyped]) -> bool
     def matches?(attributes)
       evaluate(@predicate, attributes) == true
+    end
+
+    # Whether no record can match, as for a relation `none` built.
+    #: () -> bool
+    def none?
+      operator, parts = @predicate
+      operator == :or && parts.empty?
     end
 
     # The members among records that are each the owner's by key: those that
@@ -181,7 +197,11 @@ module PaperTrailDiff
       eq: ->(value, expected) { expected.nil? || !value.nil? ? value == expected : nil },
       not_eq: ->(value, expected) { expected.nil? || !value.nil? ? value != expected : nil },
       in: ->(value, expected) { expected.include?(value) unless value.nil? },
-      not_in: ->(value, expected) { !expected.include?(value) unless value.nil? }
+      not_in: ->(value, expected) { !expected.include?(value) unless value.nil? },
+      gt: ->(value, expected) { value > expected unless value.nil? },
+      gteq: ->(value, expected) { value >= expected unless value.nil? },
+      lt: ->(value, expected) { value < expected unless value.nil? },
+      lteq: ->(value, expected) { value <= expected unless value.nil? }
     }.freeze
     private_constant :COMPARISONS
 
@@ -293,8 +313,41 @@ module PaperTrailDiff
         when 'Arel::Nodes::HomogeneousIn' then homogeneous_in(node)
         when 'Arel::Nodes::In' then list(:in, node.left, values(node.right))
         when 'Arel::Nodes::NotIn' then list(:not_in, node.left, values(node.right))
-        else raise Unreadable
+        else range(node)
         end
+      end
+
+      RANGES = { 'Arel::Nodes::GreaterThan' => :gt, 'Arel::Nodes::GreaterThanOrEqual' => :gteq,
+                 'Arel::Nodes::LessThan' => :lt, 'Arel::Nodes::LessThanOrEqual' => :lteq }.freeze
+      private_constant :RANGES
+
+      # A range, as `where(created_at: 1.day.ago..)` writes it, on a column
+      # whose values sort in Ruby as the database sorts them.
+      #: (untyped) -> Array[untyped]
+      def range(node)
+        name = node.class.name
+        return between(node) if name == 'Arel::Nodes::Between'
+
+        operator = RANGES[name] or raise Unreadable
+        bound(operator, node.left, node.right)
+      end
+
+      #: (untyped) -> Array[untyped]
+      def between(node)
+        low, high = node.right.children
+        [:and, [bound(:gteq, node.left, low), bound(:lteq, node.left, high)]]
+      end
+
+      #: (Symbol, untyped, untyped) -> Array[untyped]
+      def bound(operator, attribute, node)
+        name = column(attribute, null_test: true)
+        boolean = :boolean.equal?(@model_class.type_for_attribute(name).type)
+        raise Unreadable unless ScopeRanking.orderable?(@model_class, name) && !boolean
+
+        expected = value(node)
+        raise Unreadable if expected.nil?
+
+        [operator, name, expected]
       end
 
       # Whether a value is NULL compares alike on every type.
