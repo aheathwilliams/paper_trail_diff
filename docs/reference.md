@@ -141,8 +141,9 @@ PaperTrailDiff.timeline(article, within: 1.week.ago..Time.current)
 
 - `from:` defaults to `:first`, the record's earliest version.
 - `to:` defaults to the record itself, meaning its current state. Pass a
-  version instead for a result that never changes when the record is edited
-  again.
+  version instead to anchor the result there. It does not change when the
+  record is edited again, unless a transaction that stamped changes before that
+  version commits after it; see [version order](#version-order).
 - A version stands for the state before its transaction, since PT-AT rebuilds
   associations as they were before it. Child changes saved in the same
   transaction, such as the update behind a `touch: true` parent version, fall
@@ -179,6 +180,14 @@ and the `touch: true` article version saved with it. So back-to-back windows,
 or a `report` with `since:` after an earlier report, show each change exactly
 once, credited to the transaction that made it. Each root moves its own edges,
 so in a batch two roots can start a few moments apart.
+
+A closed window can still change. PaperTrail stamps a version's `created_at`
+when it builds the version, inside its transaction. A transaction that was
+still open when the window was read can therefore add changes to the window
+when it commits. A report over a past window is final once every transaction
+that could have written in it has committed. A settling delay longer than your
+longest transaction is the practical safeguard. The gem cannot see open
+transactions.
 
 To show what the window's last change produced, the gem reads the state just
 before the next change after the window:
@@ -1339,6 +1348,13 @@ common. `diagnose` reports this as an error.
 `created_at` comes from your application server's clock. A clock that jumps
 backwards, or servers whose clocks disagree, can record a later change with an
 earlier time. Keep server clocks synchronized.
+
+Versions are ordered by when they were stamped, not by when their transactions
+committed. A transaction stamps its versions while it is open, so one that
+commits last can still sort first. The gem cannot see commit order. A report
+can therefore show a state the database never held, and a result for an earlier
+version or a closed window can change once that transaction commits.
+[Time windows](#time-windows) explains how to settle a report.
 
 Association changes between versions with the same timestamp are placed using
 the same order. A few association shapes fall back to PT-AT's own reifier, which
