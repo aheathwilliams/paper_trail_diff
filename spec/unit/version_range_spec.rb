@@ -22,6 +22,16 @@ RSpec.describe PaperTrailDiff::VersionRange do
     [article, *versions]
   end
 
+  # The same history with ids running backwards, as a clock step or an
+  # import leaves them: the newest version has the lowest id, so neither the
+  # table's own order nor the ids give the order of time.
+  def backwards_history
+    article, *versions = history
+    top = versions.map(&:id).max + versions.length
+    versions.each_with_index { |version, index| version.update_columns(id: top - index) }
+    [article, *versions]
+  end
+
   def range(article, from, to, version_scope: nil)
     described_class.new(article, from: from, to: to, version_scope: version_scope)
   end
@@ -32,8 +42,7 @@ RSpec.describe PaperTrailDiff::VersionRange do
 
   describe '#select_plan_for_range' do
     it 'selects the versions from one boundary through the other, oldest first' do
-      article, _created, reviewed, edited, published = history
-      allow(article).to receive(:versions).and_return(article.versions.reorder(id: :desc))
+      article, _created, reviewed, edited, published = backwards_history
 
       plan = range(article, reviewed, published).select_plan_for_range
 
@@ -132,6 +141,14 @@ RSpec.describe PaperTrailDiff::VersionRange do
 
       expect(plan.versions).to eq([reviewed, edited, published])
       expect(plan.closing_record).to equal(article)
+    end
+
+    it 'orders by time when the ids run the other way' do
+      article, _created, reviewed, edited, published = backwards_history
+
+      plan = range(article, reviewed, reviewed).select_plan_through_current(article)
+
+      expect(plan.versions).to eq([reviewed, edited, published])
     end
 
     it 'applies the version scope from the boundary on' do

@@ -214,12 +214,18 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
     end
   end
 
+  # A plain document's versions share the base class's item_type, and its
+  # row still exists, so it is neither selected nor named destroyed.
   it 'selects an STI subclass by the versions of its base class' do
     start = Time.now.utc
     special = PreparedSpecialDocument.create!(name: 'Special')
     PreparedDocument.create!(name: 'Plain')
+    gone = PreparedSpecialDocument.create!(name: 'Gone').tap(&:destroy!)
 
-    expect(select(PreparedSpecialDocument, time_range: since(start)).records).to eq([special])
+    result = select(PreparedSpecialDocument, time_range: since(start))
+
+    expect(result.records).to eq([special])
+    expect(result.unreachable).to eq([['PreparedDocument', gone.id.to_s]])
   end
 
   describe 'ordering' do

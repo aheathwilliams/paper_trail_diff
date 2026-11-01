@@ -33,6 +33,12 @@ project follows [Semantic Versioning](https://semver.org/).
   and `spec/oracle/habtm_history_spec.rb` for HABTM membership between
   checkpoints. They found the three activity bugs above.
 
+- Specs check that a range orders versions by time when their ids run the
+  other way, and that an STI subclass's selection names only its own
+  destroyed rows. A stub of the versions association these specs relied on
+  stopped reaching the gem when it began reading versions from the version
+  class, which left six mutations alive in a full mutation run.
+
 ## [0.15.0] - 2026-10-31
 
 ### Breaking changes

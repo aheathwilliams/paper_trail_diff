@@ -10,7 +10,7 @@ RSpec.describe PaperTrailDiff::TimeVersionRange do
     FilterArticle.unscoped.delete_all
   end
 
-  # A create and three updates, a minute apart, read back newest first.
+  # A create and three updates, a minute apart.
   def history
     article = FilterArticle.create!(title: 'Draft')
     %w[Review Edited Published].each { |title| article.update!(title: title) }
@@ -18,7 +18,16 @@ RSpec.describe PaperTrailDiff::TimeVersionRange do
     versions.each_with_index do |version, index|
       version.update_columns(created_at: start_time + (index * 60))
     end
-    allow(article).to receive(:versions).and_return(article.versions.reorder(id: :desc))
+    [article, *versions]
+  end
+
+  # The same history with ids running backwards, as a clock step or an
+  # import leaves them: the newest version has the lowest id, so neither the
+  # table's own order nor the ids give the order of time.
+  def backwards_history
+    article, *versions = history
+    top = versions.map(&:id).max + versions.length
+    versions.each_with_index { |version, index| version.update_columns(id: top - index) }
     [article, *versions]
   end
 
@@ -38,6 +47,17 @@ RSpec.describe PaperTrailDiff::TimeVersionRange do
     expect(selected.mutations).to eq([reviewed, edited])
     expect(selected.context_version).to eq(published)
     expect(selected.reconstruction_versions).to eq([reviewed, edited, published])
+  end
+
+  it 'orders by time when the ids run the other way' do
+    article, _created, reviewed, edited, published = backwards_history
+
+    selected = plan(article, reviewed.created_at..edited.created_at)
+    single = plan(article, reviewed.created_at..reviewed.created_at)
+
+    expect(selected.versions).to eq([reviewed, edited, published])
+    expect(single.versions).to eq([reviewed, edited])
+    expect(single.context_version).to eq(edited)
   end
 
   it 'applies the version scope to the window alone' do
