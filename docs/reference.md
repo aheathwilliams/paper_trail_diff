@@ -182,12 +182,13 @@ once, credited to the transaction that made it. Each root moves its own edges,
 so in a batch two roots can start a few moments apart.
 
 A closed window can still change. PaperTrail stamps a version's `created_at`
-when it builds the version, inside its transaction. A transaction that was
-still open when the window was read can therefore add changes to the window
-when it commits. A report over a past window is final once every transaction
-that could have written in it has committed. A settling delay longer than your
-longest transaction is the practical safeguard. The gem cannot see open
-transactions.
+when it builds the version, inside its transaction, and the transaction commits
+later. A transaction that stamped a change inside the window and committed
+after the window was read adds that change to it. Wait longer than your longest
+transaction after the window ends before you rely on it, so that every
+transaction that could have written in the window has committed. A report
+through now is final only for changes older than that delay. The gem cannot see
+open transactions, so it cannot tell when a window has settled.
 
 To show what the window's last change produced, the gem reads the state just
 before the next change after the window:
