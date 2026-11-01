@@ -34,6 +34,14 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Batch methods with `within:` or `since:` look for transactions that cross
+  the window's edges in one statement per 500 records. 0.15.0 wrote a
+  separate lookup for each record into the statement, which SQL Server took
+  about a second to compile per 200 records, so a report on 10,800 records
+  spent nearly two minutes there. With 1.4 million versions, those 10,800
+  records' edges now take about 6 seconds on SQL Server, and about 1.5 on
+  PostgreSQL and MySQL, down from 13.6 and 10.2.
+
 - On PostgreSQL and MySQL (through mysql2 or trilogy), and adapters built on
   them such as PostGIS, each call reads its history and live rows in one
   REPEATABLE READ transaction on the database of the model and its versions.

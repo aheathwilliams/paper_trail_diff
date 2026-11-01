@@ -31,16 +31,14 @@ module PaperTrailDiff
       # : (untyped) -> untyped
       def right: (untyped) -> untyped
 
-      # : (untyped, later: bool) -> untyped
-      def side: (untyped, later: bool) -> untyped
-
       @strict: bool
 
       @time: Time
     end
 
-    # Roots per statement: two lookups each stays under SQLite's limit of 500
-    # terms in a compound SELECT.
+    # Roots, or transactions, per statement. SQL Server compiles every
+    # statement afresh, since its ids are written into it, in time that grows
+    # with their number; fewer statements than this cost more than they save.
     SLICE: ::Integer
 
     # The same as `windows` for a batch of roots, keyed by identity.
@@ -69,24 +67,51 @@ module PaperTrailDiff
 
     # Each root's nearest versions on either side of an edge, as [id,
     # transaction] pairs; versions tied at the nearest instant are all kept.
-    # One indexed lookup per root and side, where a single query over the
-    # roots would read every version before the edge. The lookups are written
-    # once with the root's id left open, as building a relation for each root
-    # costs more than the query. Rows read as SQL text come back as the adapter
+    # One statement per slice: a grouped pass over the roots' versions finds
+    # both instants, and a join reads the versions saved at either. A lookup
+    # per root, joined by UNION ALL, took SQL Server about a second per 200
+    # roots to compile. Rows read without a model come back as the adapter
     # returns them, so the transaction is cast as the grouped query's keys are.
     # : (untyped, Array[untyped], Edge) -> Array[[String, untyped]]
     def self.nearest: (untyped, Array[untyped], Edge) -> Array[[ String, untyped ]]
 
-    # Both sides' lookups for a root whose id is each `?`.
-    # : (untyped, Edge) -> String
-    def self.nearest_lookups: (untyped, Edge) -> String
+    # The roots' versions saved in a transaction at either nearest instant.
+    # : (untyped, Array[untyped], Edge) -> String
+    def self.nearest_sql: (untyped, Array[untyped], Edge) -> String
 
-    # : (untyped, Edge, bool) -> String
-    def self.nearest_lookup: (untyped, Edge, bool) -> String
+    # Each root's latest instant before the edge and earliest after it, from
+    # every version, saved in a transaction or not.
+    # : (untyped, Edge) -> untyped
+    def self.nearest_instants: (untyped, Edge) -> untyped
+
+    # The latest or earliest of the times on one side of the edge.
+    # : (untyped, untyped, untyped) -> untyped
+    def self.side_instant: (untyped, untyped, untyped) -> untyped
+
+    # The same root's versions saved at either of its instants.
+    # : (untyped, untyped) -> untyped
+    def self.at_either: (untyped, untyped) -> untyped
 
     # Where each transaction that has versions on both sides of the edge began.
     # : (untyped, Array[untyped], Edge) -> Hash[untyped, Time]
     def self.crossing_starts: (untyped, Array[untyped], Edge) -> Hash[untyped, Time]
+
+    # Another version of the same transaction on the edge's later side.
+    # : (untyped, Edge) -> untyped
+    def self.later_version: (untyped, Edge) -> untyped
+
+    # The version table under a second name, for a subquery over it. Any name
+    # serves, and SQLite even accepts an empty one other databases refuse, so
+    # no spec can tell the mutations apart.
+    # mutant:disable
+    # : (untyped) -> untyped
+    def self.other_versions: (untyped) -> untyped
+
+    # Arel ships no signatures; see VersionQuery. Any spelling of the constant
+    # finds the same module.
+    # mutant:disable
+    # : () -> untyped
+    def self.arel: () -> untyped
 
     # : (TimeRange, Time?, Time?) -> TimeRange
     def self.moved: (TimeRange, Time?, Time?) -> TimeRange

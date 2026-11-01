@@ -57,6 +57,11 @@ Flat query counts do not make a report's cost flat:
   version of the root rather than per change, does less.
 - **`snapshots: true` and `recorded_changes: true` cost memory and time.** Ask
   for them only when you use them.
+- **Each edge of a window takes one or two statements per 500 records.** A
+  report with `within:` or `since:` looks for transactions that cross either
+  edge.
+  On 1.4 million versions, 10,800 records took about 6 s on SQL Server and
+  1.5 s on PostgreSQL and MySQL.
 
 ## Database indexes
 
