@@ -3,6 +3,14 @@
 require_relative '../support/association_database'
 require_relative '../support/documentation_examples'
 
+# A version of this article records only its title, so `object_changes` leaves
+# out a new author saved with it.
+class TitleOnlyArticle < ActiveRecord::Base
+  self.table_name = 'tracked_articles'
+  belongs_to :author, class_name: 'TrackedAuthor', optional: true
+  has_paper_trail only: [:title], synchronize_version_creation_timestamp: false
+end
+
 # PaperTrail stores a record's values before each change, so the result of a
 # change is read from the record's next version, or from the current row when
 # there is none. A write saved without a version in between is therefore part of
@@ -138,5 +146,75 @@ RSpec.describe 'Changes saved without a version' do
     expect(erin.map { |row| row.fetch(:changes).transform_values(&:to_h) })
       .to eq([{ 'title' => { from: 'Unrecorded title', to: 'Final' } },
               { 'body' => { from: 'Edited', to: 'Final' } }])
+  end
+
+  describe 'a key changed without appearing in object_changes' do
+    before { TrackedAuthor.delete_all }
+
+    let!(:ann) { TrackedAuthor.create!(name: 'Ann') }
+    let!(:bea) { TrackedAuthor.create!(name: 'Bea') }
+
+    def authors(steps)
+      steps.map do |step|
+        relationship = step.diff.associations['author']&.relationship
+        names = relationship && [relationship.from, relationship.to].map do |record|
+          record&.attributes&.fetch('name')
+        end
+        [step.source_boundary.whodunnit, names]
+      end
+    end
+
+    it 'credits an author saved with an `only:` version to that version' do
+      start = Time.now.utc
+      article = actor('alice') { TitleOnlyArticle.create!(title: 'Draft', author: ann) }
+      actor('carol') { article.update!(title: 'Published', author: bea) }
+      split = Time.now.utc
+      actor('dave') { article.update!(title: 'Final') }
+      finish = Time.now.utc
+      paths = { associations: [:author] }
+
+      activity = PaperTrailDiff.activity_timeline(article, **paths)
+      expect(authors(activity)).to eq([['alice', nil], ['carol', %w[Ann Bea]], ['dave', nil]])
+      expect(PaperTrailDiff.analyze(article, from: :first, to: article, activity: true, **paths)
+                           .timeline.map { |step| step.diff.to_h })
+        .to eq(PaperTrailDiff.timeline(article, **paths).map { |step| step.diff.to_h })
+      expect(authors(PaperTrailDiff.analyze(article, within: start...split, activity: true, **paths)
+                                   .activity_timeline))
+        .to eq([['alice', nil], ['carol', %w[Ann Bea]]])
+      expect(authors(PaperTrailDiff.analyze(article, within: split..finish, activity: true, **paths)
+                                   .activity_timeline))
+        .to eq([['dave', nil]])
+    end
+
+    it "credits an author written by update_columns to the article's previous change" do
+      article = actor('alice') { TrackedArticle.create!(title: 'Draft', author: ann) }
+      actor('carol') { article.update!(title: 'Published') }
+      article.update_columns(author_id: bea.id)
+      actor('dave') { article.update!(title: 'Final') }
+
+      expect(authors(PaperTrailDiff.activity_timeline(article, associations: [:author])))
+        .to eq([['alice', nil], ['carol', %w[Ann Bea]], ['dave', nil]])
+    end
+
+    # The comment's next version, which records its move, is after the range.
+    it 'reads a comment moved by update_columns in a range that ends before its next version' do
+      article, other = actor('alice') do
+        %w[Article Other].map { |title| TrackedArticle.create!(title: title) }
+      end
+      comment = actor('bob') { other.comments.create!(body: 'First') }
+      comment.update_columns(article_id: article.id)
+      actor('carol') { article.update!(title: 'Published') }
+      dave = actor('dave') { article.update!(title: 'Final') } && article.versions.last
+      actor('erin') { comment.update!(body: 'Edited') }
+
+      steps = PaperTrailDiff.activity_timeline(article, from: :first, to: dave,
+                                                        associations: [:comments])
+      added = steps.flat_map do |step|
+        step.diff.associations.fetch('comments', nil)&.added.to_a.map do |record|
+          [step.source_boundary.whodunnit, record.attributes.fetch('body')]
+        end
+      end
+      expect(added).to eq([%w[bob First]])
+    end
   end
 end

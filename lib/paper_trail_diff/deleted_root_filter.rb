@@ -7,6 +7,9 @@ module PaperTrailDiff
   # table, where a destroyed root has no row, so without this a report on one
   # account's records would include every account's deletions.
   class DeletedRootFilter
+    SLICE = 500
+    private_constant :SLICE
+
     #: (untyped) -> void
     def initialize(relation)
       @relation = relation
@@ -14,19 +17,31 @@ module PaperTrailDiff
       unless condition
         raise ConfigurationError,
               'include_deleted: cannot test deleted records against this relation: its ' \
-              "conditions must be plain conditions on #{model.name}'s own columns, as an " \
-              "association scope's must; select deleted records some other way"
+              "conditions must be equality, IN, NULL, or range tests on #{model.name}'s " \
+              'own columns, and a range or a text comparison must be on a column whose ' \
+              'values compare in Ruby as the database compares them, as for an ' \
+              'association scope; select deleted records some other way'
       end
 
       @condition = condition
       @loader = DirectRecordStateLoader.new
     end
 
+    # nil when the relation's conditions cannot be read.
+    #: (untyped) -> DeletedRootFilter?
+    def self.readable(relation)
+      new(relation)
+    rescue ConfigurationError
+      nil
+    end
+
     # A root whose destroy PaperTrail did not record has no state to test
-    # and stays, as it has no state to report either. One whose destroy
-    # recorded no state is left out.
+    # and stays, as it has no state to report either, unless the relation
+    # selects nothing. One whose destroy recorded no state is left out.
     #: (Array[Array[String]]) -> Array[Array[String]]
     def call(identities)
+      return [] if @condition.none?
+
       states = destroyed_states(identities.map(&:last))
       identities.select do |identity|
         id = identity.last
@@ -55,13 +70,20 @@ module PaperTrailDiff
       AssociationTraversal.sti_member?(model, attributes) && @condition.matches?(attributes)
     end
 
-    # The state each root held before its latest destroy.
+    # The state each root held before its latest destroy, read in slices: a
+    # report lists every deleted root it reached, and SQL Server cannot plan an
+    # IN list of thousands.
     #: (Array[String]) -> Hash[String, Hash[String, untyped]?]
     def destroyed_states(ids)
-      destroys = VersionQuery.for_items(model, ids).where(event: 'destroy')
-      VersionQuery.chronological(destroys).to_h do |version|
-        [version.item_id.to_s, @loader.call(version)&.attributes || reified_attributes(version)]
+      states = {} #: Hash[String, Hash[String, untyped]?]
+      ids.each_slice(SLICE) do |slice|
+        destroys = VersionQuery.for_items(model, slice).where(event: 'destroy')
+        VersionQuery.chronological(destroys).each do |version|
+          states[version.item_id.to_s] =
+            @loader.call(version)&.attributes || reified_attributes(version)
+        end
       end
+      states
     end
 
     # Read directly, with a column `skip:` left out of history as its default,

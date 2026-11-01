@@ -13,9 +13,12 @@ module PaperTrailDiff
       @fallback_selected = fallback_selected
     end
 
+    # The read runs in a savepoint, so that a query that fails here leaves a
+    # snapshot transaction around it usable: PostgreSQL refuses every later
+    # statement of a transaction once one has failed.
     #: () -> Array[DiagnosticIssue]
     def call
-      versions = ordered_range_versions
+      versions = @from_version.class.transaction(requires_new: true) { ordered_range_versions }
       issues = [] #: Array[DiagnosticIssue?]
       issues << unorderable(versions)
       issues << tied_timestamps(versions) if @fallback_selected

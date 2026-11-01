@@ -31,7 +31,7 @@ module PaperTrailDiff
         key = Endpoint.identity(record)
         plan = selected.fetch(key)
         window = windows.fetch(key, @time_range)
-        [key, plan.empty? ? Analysis.empty : @analyzer.call(record, plan, window)]
+        [key, plan.empty? ? @analyzer.empty : @analyzer.call(record, plan, window)]
       end
       with_unavailable(analyses)
     end

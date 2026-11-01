@@ -5,7 +5,73 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+### Changed
+
+- `include_deleted:` reads the deleted records' `destroy` versions 500
+  records per query, as `unreachable`'s test below does, instead of in one
+  query for all of them.
+
+- `report` and `analyze_scope` list in `unreachable` only the deleted records
+  whose state when destroyed meets the relation's conditions, also without
+  `include_deleted:`, whenever those conditions can be read. A report on
+  `Article.where(account_id: account.id)` listed every account's deleted
+  articles there, and one on `Article.none` listed some too. A relation whose
+  conditions cannot be read, such as one with SQL text, lists every deleted
+  record of the model as before.
+
+### Added
+
+- Association scopes and `include_deleted:` relations read ranges, such as
+  `where(position: 2..)` or `where(created_at: 1.day.ago..)`, and Arel's `gt`,
+  `gteq`, `lt`, and `lteq`, on integer, integer enum, date, and datetime
+  columns. Such a scope was read through PT-AT, which needs
+  `allow_approximate: true`, and such a relation raised `ConfigurationError`
+  under `include_deleted: true`.
+
+- `include_deleted: true` accepts `Article.none`, which keeps no deleted
+  record, instead of raising `ConfigurationError`. Authorization scopes often
+  return `none`.
+
 ### Fixed
+
+- On PostgreSQL and MySQL (through mysql2 or trilogy), and adapters built on
+  them such as PostGIS, each call reads its history and live rows in one
+  REPEATABLE READ transaction on the database of the model and its versions.
+  A comment that
+  committed between two statements of an activity read could make it raise an
+  internal `KeyError`, and one statement could see a row that another did not.
+  A call now reflects the database as of its first statement, so a commit
+  during the call appears in the next call. Each call adds two or three
+  transaction statements on those databases. A call made inside a transaction
+  of your own keeps that transaction's isolation level. SQLite and SQL Server
+  are unchanged.
+
+- Activity reports a change to a root's `belongs_to` key in the step of the
+  root version that made it, also when `object_changes` leaves the key out:
+  under `has_paper_trail only:` or `ignore:` that do not list it, or when
+  `update_columns`, `update_all`, or a save with versioning off wrote it. The
+  root kept its old target until a later event read the branch again, so the
+  change was credited to whoever saved that, two windows that met between
+  the two reported it in neither, and `analyze(activity: true).timeline`
+  differed from `timeline`.
+
+- Activity reads a child or a `belongs_to` target whose key changed without a
+  version, such as a comment moved by `update_columns`, or by any save under
+  `has_paper_trail only:` or `ignore:` that leave the key out. In a past
+  window or a range that ends at a version, the record had no events: it
+  joined at an arbitrary later step, or was left out of the window's diff,
+  and a reviewer set this way kept its later renames out of activity.
+
+- `analyze_many`, and the `deleted` analyses of `analyze_scope`, give a record
+  with nothing in the window an `activity_timeline` of `nil` unless
+  `activity: true` was passed, as `analyze` does, so its `change_rows` raises
+  `ConfigurationError` as for any other record. It was `[]`, so code that read
+  `change_rows` without asking for activity passed while nothing changed.
+
+- An STI root that changes class names its new class in the activity
+  snapshots after the change, not its old one, and a subclass root's
+  snapshot is carried from one of its versions to the next instead of being
+  rebuilt at each one.
 
 - Activity reports a change to a key that a child's own `belongs_to`
   follows, such as a comment's `reviewer_id` under `comments.reviewer`, in
@@ -27,6 +93,17 @@ project follows [Semantic Versioning](https://semver.org/).
   range that ends at the checkpoint still ends with it, as `compare` does.
 
 ### Development
+
+- `spec/oracle/replay_differential_spec.rb` replays generated histories
+  with activity's incremental snapshots and with a full snapshot at every
+  event, under `has_paper_trail only:` and `ignore:` and with keys written
+  without a version, and fails on any difference. It found the first two
+  bugs above.
+
+- The through oracle renames a team at most once per transaction. A second
+  rename made it expect a version to read the state before its transaction,
+  which made `ORACLE_SEEDS=40..49` fail on seed 45 without a bug. The scoped
+  membership oracle covers range scopes.
 
 - Two oracle generators compare rebuilt history with plain Active Record:
   `spec/oracle/through_history_spec.rb` for every kind of `has_many :through`,

@@ -10,7 +10,7 @@ Gem::Specification.new do |spec|
 
   spec.summary = 'Structured endpoint and activity diffs for PaperTrail'
   spec.description = <<~DESCRIPTION
-    paper_trail_diff compares reified PaperTrail histories and returns structured
+    paper_trail_diff compares records across their PaperTrail history and returns structured
     attribute and explicitly selected association changes.
   DESCRIPTION
   spec.license = 'MIT'

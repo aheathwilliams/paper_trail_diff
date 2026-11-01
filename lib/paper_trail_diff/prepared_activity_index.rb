@@ -3,11 +3,18 @@
 
 module PaperTrailDiff
   # Shares association event discovery across every root in a prepared graph.
+  #
+  # The candidates are the records the prepared snapshots can hold: those
+  # recorded under an owner from the start onward, and those under it now. A
+  # key changed without a version is recorded only by the record's next
+  # version, or by the current row, either of which can come after the range,
+  # and the snapshots read it from there. ActivityTreeFilter leaves out the
+  # events of a candidate that was outside the tree throughout.
   class PreparedActivityIndex
-    #: (PreparedRecordIndex, Array[untyped], start_at: untyped, end_at: untyped) -> void
-    def initialize(records, root_versions, start_at:, end_at:)
+    #: (PreparedRecordIndex, Array[untyped], start_at: untyped) -> void
+    def initialize(records, root_versions, start_at:)
       @records = records
-      @range = ActivityRange.new(start_at, end_at)
+      @range = ActivityRange.new(start_at, nil)
       @roots = root_versions.group_by { |version| [version.item_type, version.item_id.to_s] }
       @nodes = {} #: Hash[String, Array[untyped]]
       # Rows are cached by reflection, which a subclass shares with its base.
@@ -73,17 +80,15 @@ module PaperTrailDiff
       historical, live = @children[reflection] ||= child_rows(model, reflection)
       empty = [] #: Array[untyped]
       selected = historical_ids(reflection.klass, ids, historical, range)
-      selected |= ids.flat_map { |id| live.fetch(id.to_s, empty) } if range.current_end?
-      selected.uniq
+      selected | ids.flat_map { |id| live.fetch(id.to_s, empty) }
     end
 
-    # The `belongs_to` targets each owner pointed at in the range: at its start
-    # and after each change inside it, plus the live row at a current end.
+    # The `belongs_to` targets each owner pointed at from the range's start
+    # onward, plus the live row.
     #: (untyped, Array[untyped], untyped, ActivityRange) -> Array[ActivityTargetCandidateLoader::Row]
     def target_rows(model, ids, reflection, range)
       historical, live = @targets[reflection] ||= target_candidates(model, reflection)
-      rows = eligible_rows(model, rows_for(historical, ids), range)
-      range.current_end? ? rows + rows_for(live, ids) : rows
+      eligible_rows(model, rows_for(historical, ids), range) + rows_for(live, ids)
     end
 
     #: (untyped, untyped) -> bool
@@ -153,8 +158,7 @@ module PaperTrailDiff
     #: (untyped, Array[ActivityTargetCandidateLoader::Row], ActivityRange) -> Array[ActivityTargetCandidateLoader::Row]
     def eligible_rows(model, rows, range)
       rows.select do |row|
-        eligible_version?(model, row.owner_id, row.created_at, row.event, range) &&
-          range.recorded_before_end?(row.created_at, row.version_id)
+        eligible_version?(model, row.owner_id, row.created_at, row.event, range)
       end
     end
 
@@ -170,7 +174,7 @@ module PaperTrailDiff
     # survive a later pre-window reassignment just because that owner is absent.
     #: (untyped, untyped, untyped, String?, ActivityRange) -> bool
     def eligible_version?(model, id, timestamp, event, range)
-      return timestamp <= range.end_time if timestamp >= range.start_time
+      return true if timestamp >= range.start_time
       return false if event == 'destroy'
 
       later = @records.versions_for_id(model, id)

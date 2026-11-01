@@ -6,12 +6,18 @@ module PaperTrailDiff
   # table, where a destroyed root has no row, so without this a report on one
   # account's records would include every account's deletions.
   class DeletedRootFilter
+    SLICE: ::Integer
+
     # : (untyped) -> void
     def initialize: (untyped) -> void
 
+    # nil when the relation's conditions cannot be read.
+    # : (untyped) -> DeletedRootFilter?
+    def self.readable: (untyped) -> DeletedRootFilter?
+
     # A root whose destroy PaperTrail did not record has no state to test
-    # and stays, as it has no state to report either. One whose destroy
-    # recorded no state is left out.
+    # and stays, as it has no state to report either, unless the relation
+    # selects nothing. One whose destroy recorded no state is left out.
     # : (Array[Array[String]]) -> Array[Array[String]]
     def call: (Array[Array[String]]) -> Array[Array[String]]
 
@@ -32,7 +38,9 @@ module PaperTrailDiff
     # : (Hash[String, untyped]?) -> bool
     def selected?: (Hash[String, untyped]?) -> bool
 
-    # The state each root held before its latest destroy.
+    # The state each root held before its latest destroy, read in slices: a
+    # report lists every deleted root it reached, and SQL Server cannot plan an
+    # IN list of thousands.
     # : (Array[String]) -> Hash[String, Hash[String, untyped]?]
     def destroyed_states: (Array[String]) -> Hash[String, Hash[String, untyped]?]
 

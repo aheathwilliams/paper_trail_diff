@@ -33,6 +33,10 @@ for one association, at 1, 5, and 20 records:
 The last four rows grow with the number of records, for the reasons in
 [what costs a query per record](#what-costs-a-query-per-record).
 
+The counts leave out transaction statements. On PostgreSQL and MySQL each call
+also runs in one snapshot transaction, which adds two or three statements per
+call whatever its size. See [limitations](reference.md#limitations).
+
 ## What still grows
 
 Flat query counts do not make a report's cost flat:

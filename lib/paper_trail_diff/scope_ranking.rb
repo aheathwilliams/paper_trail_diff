@@ -115,7 +115,16 @@ module PaperTrailDiff
       ORDER_TYPES.intersect?(kinds) ||
         (kinds.include?(DATETIME_TYPE) && exact_time?(model_class, type))
     end
-    private_class_method :orderable?
+
+    # The value the database sorts by, as the column's type casts it. An enum
+    # sorts by the integer it stores; other types are compared cast, since an
+    # adapter may serialize a time or date as a wrapper, as SQL Server does.
+    #: (untyped, String, untyped) -> untyped
+    def self.sort_value(model_class, name, value)
+      type = model_class.type_for_attribute(name)
+      cast = type.cast(value)
+      ENUM_TYPE.eql?(type.class.name) ? type.serialize(cast) : cast
+    end
 
     # The type of the value a column stores, under an enum or time zone wrapper.
     #: (untyped) -> untyped
@@ -171,7 +180,7 @@ module PaperTrailDiff
     #: (Hash[String, untyped]) -> Array[Array[Numeric]]
     def sort_key(attributes)
       @keys.map do |name, descending|
-        place = place(stored(name, attributes))
+        place = place(ScopeRanking.sort_value(@model_class, name, attributes[name]))
         descending ? place.map(&:-@) : place
       end
     end
@@ -191,16 +200,6 @@ module PaperTrailDiff
       value = BOOLEAN_VALUE.fetch(value, value)
       value = value.jd if value.respond_to?(:jd)
       value.to_r
-    end
-
-    # The value the database sorts by, as the key's type casts it. An enum
-    # sorts by the integer it stores; other types are compared cast, since an
-    # adapter may serialize a time or date as a wrapper, as SQL Server does.
-    #: (String, Hash[String, untyped]) -> untyped
-    def stored(name, attributes)
-      type = @model_class.type_for_attribute(name)
-      value = type.cast(attributes[name])
-      ENUM_TYPE.eql?(type.class.name) ? type.serialize(value) : value
     end
   end
 end

@@ -56,7 +56,7 @@ module PaperTrailDiff
       return if ranked && ranked_through?(reflection)
 
       relation = scoped_relation(reflection, model_class)
-      return unless relation && plain_relation?(relation)
+      return unless relation && plain_relation?(relation, RELATION_VALUES)
 
       clause = relation.where_clause - model_class.unscoped.where_clause
       predicate = Reader.new(model_class).call(clause.ast)
@@ -70,17 +70,26 @@ module PaperTrailDiff
     # limit, and offset choose a page of current rows rather than membership,
     # and loading or selecting columns changes neither, so they are left out.
     # A single-table subclass's type condition is left to the caller, as for
-    # an association.
+    # an association. `none` selects nothing, whatever it is chained to.
     #: (untyped, untyped) -> ScopeCondition?
     def self.for_relation(relation, model_class)
-      extra = relation.values.except(*RELATION_VALUES, *LOADING_VALUES).values
-      return unless extra.all? { |value| value.respond_to?(:empty?) && value.empty? }
+      return nothing if relation.null_relation?
+
+      return unless plain_relation?(relation, [*RELATION_VALUES, *LOADING_VALUES])
 
       clause = relation.where_clause - model_class.unscoped.where_clause
       new(model_class, Reader.new(model_class).call(clause.ast))
     rescue Unreadable
       nil
     end
+
+    # A relation `none` built, whose where clause is SQL text. A condition
+    # that matches nothing reads no attribute, so it names no model.
+    #: () -> ScopeCondition
+    def self.nothing
+      new(nil, [:or, []])
+    end
+    private_class_method :nothing
 
     # nil when the relation picks its members by conditions alone.
     #: (untyped, untyped, untyped) -> ScopeRanking?
@@ -135,10 +144,10 @@ module PaperTrailDiff
     private_class_method :scoped_relation
 
     # Some parts, such as the having clause `or` sets, may be present but
-    # empty.
-    #: (untyped) -> bool
-    def self.plain_relation?(relation)
-      extra = relation.values.except(*RELATION_VALUES).values
+    # empty. `allowed` names the parts that may hold values.
+    #: (untyped, Array[Symbol]) -> bool
+    def self.plain_relation?(relation, allowed)
+      extra = relation.values.except(*allowed).values
       extra.all? { |value| value.respond_to?(:empty?) && value.empty? }
     end
     private_class_method :plain_relation?
@@ -156,6 +165,13 @@ module PaperTrailDiff
     #: (Hash[String, untyped]) -> bool
     def matches?(attributes)
       evaluate(@predicate, attributes) == true
+    end
+
+    # Whether no record can match, as for a relation `none` built.
+    #: () -> bool
+    def none?
+      operator, parts = @predicate
+      operator == :or && parts.empty?
     end
 
     # The members among records that are each the owner's by key: those that
@@ -181,9 +197,17 @@ module PaperTrailDiff
       eq: ->(value, expected) { expected.nil? || !value.nil? ? value == expected : nil },
       not_eq: ->(value, expected) { expected.nil? || !value.nil? ? value != expected : nil },
       in: ->(value, expected) { expected.include?(value) unless value.nil? },
-      not_in: ->(value, expected) { !expected.include?(value) unless value.nil? }
+      not_in: ->(value, expected) { !expected.include?(value) unless value.nil? },
+      gt: ->(value, expected) { value > expected unless value.nil? },
+      gteq: ->(value, expected) { value >= expected unless value.nil? },
+      lt: ->(value, expected) { value < expected unless value.nil? },
+      lteq: ->(value, expected) { value <= expected unless value.nil? }
     }.freeze
     private_constant :COMPARISONS
+
+    # Comparisons that order values, which read them as ScopeRanking sorts.
+    ORDERED = %i[gt gteq lt lteq].freeze
+    private_constant :ORDERED
 
     private
 
@@ -199,7 +223,7 @@ module PaperTrailDiff
       when :and then all(first.map { |part| evaluate(part, attributes) })
       when :or then any(first.map { |part| evaluate(part, attributes) })
       when :not then negate(evaluate(first, attributes))
-      else COMPARISONS.fetch(operator).call(stored(first, attributes), second)
+      else COMPARISONS.fetch(operator).call(stored(operator, first, attributes), second)
       end
     end
 
@@ -224,10 +248,15 @@ module PaperTrailDiff
       !value unless value.nil?
     end
 
-    # The form the database holds, as the scope's own values were cast.
-    #: (String, Hash[String, untyped]) -> untyped
-    def stored(name, attributes)
-      @model_class.type_for_attribute(name).serialize(attributes[name])
+    # The form the database holds, as the scope's own values were cast. An
+    # order reads the value the database sorts by instead: SQL Server holds a
+    # time or date in a wrapper that only compares for equality.
+    #: (Symbol, String, Hash[String, untyped]) -> untyped
+    def stored(operator, name, attributes)
+      value = attributes[name]
+      return ScopeRanking.sort_value(@model_class, name, value) if ORDERED.include?(operator)
+
+      @model_class.type_for_attribute(name).serialize(value)
     end
 
     # Builds each reflection's condition once per target class.
@@ -293,8 +322,49 @@ module PaperTrailDiff
         when 'Arel::Nodes::HomogeneousIn' then homogeneous_in(node)
         when 'Arel::Nodes::In' then list(:in, node.left, values(node.right))
         when 'Arel::Nodes::NotIn' then list(:not_in, node.left, values(node.right))
-        else raise Unreadable
+        else range(node)
         end
+      end
+
+      RANGES = { 'Arel::Nodes::GreaterThan' => :gt, 'Arel::Nodes::GreaterThanOrEqual' => :gteq,
+                 'Arel::Nodes::LessThan' => :lt, 'Arel::Nodes::LessThanOrEqual' => :lteq }.freeze
+      private_constant :RANGES
+
+      # A range, as `where(created_at: 1.day.ago..)` writes it, on a column
+      # whose values sort in Ruby as the database sorts them.
+      #: (untyped) -> Array[untyped]
+      def range(node)
+        name = node.class.name
+        return between(node) if name == 'Arel::Nodes::Between'
+
+        operator = RANGES[name] or raise Unreadable
+        bound(operator, node.left, node.right)
+      end
+
+      #: (untyped) -> Array[untyped]
+      def between(node)
+        low, high = node.right.children
+        [:and, [bound(:gteq, node.left, low), bound(:lteq, node.left, high)]]
+      end
+
+      #: (Symbol, untyped, untyped) -> Array[untyped]
+      def bound(operator, attribute, node)
+        name = column(attribute, null_test: true)
+        boolean = :boolean.equal?(@model_class.type_for_attribute(name).type)
+        raise Unreadable unless ScopeRanking.orderable?(@model_class, name) && !boolean
+
+        expected = value(node)
+        raise Unreadable if expected.nil?
+
+        [operator, name, sort_value(name, expected)]
+      end
+
+      # A bound in the form the database holds, read back as the value the
+      # database sorts by. Reading it back unwraps what an adapter wraps.
+      #: (String, untyped) -> untyped
+      def sort_value(name, stored)
+        read = @model_class.type_for_attribute(name).deserialize(stored)
+        ScopeRanking.sort_value(@model_class, name, read)
       end
 
       # Whether a value is NULL compares alike on every type.

@@ -32,6 +32,12 @@ module PaperTrailDiff
       ).analyze
     end
 
+    # The result for a root with nothing to read.
+    #: () -> Analysis
+    def empty
+      Analysis.empty(activity: @activity)
+    end
+
     private
 
     # @rbs @tree: AssociationTree

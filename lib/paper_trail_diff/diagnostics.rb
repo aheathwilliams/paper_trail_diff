@@ -88,11 +88,13 @@ module PaperTrailDiff
     def call
       unless @versions.empty?
         model_class = Endpoint.model_class(@versions.fetch(0))
-        # Runs whether or not associations are selected: unorderable versions
-        # corrupt a scalar timeline just as surely, and a report that inspected
-        # nothing has no business answering `ok?`.
-        inspect_version_sequence(model_class)
-        inspect_associations(model_class) unless @tree.empty?
+        ReadSnapshot.call([model_class]) do
+          # Runs whether or not associations are selected: unorderable versions
+          # corrupt a scalar timeline just as surely, and a report that inspected
+          # nothing has no business answering `ok?`.
+          inspect_version_sequence(model_class)
+          inspect_associations(model_class) unless @tree.empty?
+        end
       end
       DiagnosticReport.new(issues: @issues)
     end

@@ -324,11 +324,7 @@ RSpec.describe PaperTrailDiff::PreparedHistoryLoader do
     expect(PaperTrailDiff::PreparedRecordIndex).to have_received(:new)
       .with(start_at, end_at: end_at, live_records: live)
     expect(PaperTrailDiff::PreparedActivityIndex).to have_received(:new)
-      .with(instance_of(PaperTrailDiff::PreparedRecordIndex), versions,
-            start_at: start_at, end_at: end_at)
-    expect(PaperTrailDiff::PreparedActivityIndex).to have_received(:new)
-      .with(instance_of(PaperTrailDiff::PreparedRecordIndex), versions,
-            start_at: start_at, end_at: versions.last.created_at)
+      .with(instance_of(PaperTrailDiff::PreparedRecordIndex), versions, start_at: start_at).twice
     expect(PaperTrailDiff::PreparedEdgeLoader).to have_received(:new)
       .with(instance_of(PaperTrailDiff::PreparedRecordIndex), versions, start_at: start_at).twice
   end

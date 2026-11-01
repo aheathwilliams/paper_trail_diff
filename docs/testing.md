@@ -73,6 +73,17 @@ members the next root version recorded, as each was then, and only once it
 exists. These three read the expected states with plain Active Record, not
 through the gem.
 
+`replay_differential_spec.rb` checks activity against the gem's own full
+snapshots instead. Activity carries each snapshot forward from the previous
+event, reading again only what the event changed; this replays generated
+histories that way and with a full snapshot at every event, and fails on any
+difference. Needing no expected states, it covers what the others avoid:
+`has_paper_trail only:` and `ignore:` that leave keys out of `object_changes`,
+and keys written by `update_columns` or with versioning off.
+Mutant cannot check that carrying forward: a mutation that turns it off
+falls back to a full snapshot, which gives the same answers, more slowly. This
+check is what catches one that gives a different answer.
+
 ```console
 mise exec -- bundle exec rake spec_oracle
 ORACLE_SEEDS=1..200 ORACLE_STEPS=40 mise exec -- bundle exec rake spec_oracle

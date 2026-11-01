@@ -1402,6 +1402,22 @@ RSpec.describe PaperTrailDiff do
       expect(analysis.diff).to be_empty
     end
 
+    # A record with nothing in the window must not look as if activity had been
+    # asked for, or code that reads change_rows passes until a record changes.
+    it 'gives a batch record with nothing in the window the activity it asked for' do
+      article, = create_history
+      window = (Time.now.utc + 60)..(Time.now.utc + 120)
+
+      plain = described_class.analyze_many([article], within: window).values.sole
+      active = described_class.analyze_many([article], within: window, activity: true).values.sole
+
+      expect(plain.activity_timeline).to be_nil
+      expect { plain.change_rows }.to raise_error(PaperTrailDiff::ConfigurationError)
+      expect(active.activity_timeline).to eq([])
+      expect(active.change_rows).to eq([])
+      expect(described_class.analyze(article, within: window).activity_timeline).to be_nil
+    end
+
     it 'rejects an unknown boundary symbol and a reversed symbolic range' do
       article, = create_history
 

@@ -19,7 +19,8 @@ module PaperTrailDiff
                historical_filter: historical_filter, max_filter_versions: max_filter_versions,
                activity_tree: activity_tree
       )
-      @deleted_filter = DeletedRootFilter.new(scope.all) if include_deleted
+      @deleted_filter = deleted_filter(scope, include_deleted)
+      @include_deleted = include_deleted
       @limit = limit
       @analyzer = analyzer
       @deleted_analyzer = deleted_analyzer
@@ -28,10 +29,9 @@ module PaperTrailDiff
     #: () -> ScopedAnalysis
     def call
       selection = @selection.call
-      deleted_filter = @deleted_filter
-      return analysis(selection, selection.unreachable, {}) unless deleted_filter
+      unreachable = @deleted_filter&.call(selection.unreachable) || selection.unreachable
+      return analysis(selection, unreachable, {}) unless @include_deleted
 
-      unreachable = deleted_filter.call(selection.unreachable)
       if selection.records.length + unreachable.length > @limit
         raise BatchLimitExceededError, 'include_deleted: live and missing roots exceed limit:'
       end
@@ -41,6 +41,15 @@ module PaperTrailDiff
 
     private
 
+    # Without the option, the deleted roots are still tested when the
+    # relation can be read, so that another selection's are not listed.
+    #: (untyped, bool) -> DeletedRootFilter?
+    def deleted_filter(scope, include_deleted)
+      return DeletedRootFilter.new(scope.all) if include_deleted
+
+      DeletedRootFilter.readable(scope.all)
+    end
+
     #: (ScopedRootSelection::Result, Array[Array[String]], Hash[Array[String], Analysis?]) -> ScopedAnalysis
     def analysis(selection, unreachable, deleted)
       ScopedAnalysis.new(analyses: @analyzer.call(selection.records), roots: selection.records,
@@ -49,6 +58,7 @@ module PaperTrailDiff
 
     # @rbs @selection: ScopedRootSelection
     # @rbs @deleted_filter: DeletedRootFilter?
+    # @rbs @include_deleted: bool
     # @rbs @limit: Integer
     # @rbs @analyzer: untyped
     # @rbs @deleted_analyzer: untyped

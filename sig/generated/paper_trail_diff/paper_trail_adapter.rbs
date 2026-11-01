@@ -46,6 +46,9 @@ module PaperTrailDiff
     # : (untyped) -> Hash[Symbol, untyped]
     def model_payload: (untyped) -> Hash[Symbol, untyped]
 
+    # : (untyped, from: untyped, to: untyped, within: untyped, activity: bool, version_scope: untyped, view: ActivityView) -> Analysis
+    def analyze_record: (untyped, from: untyped, to: untyped, within: untyped, activity: bool, version_scope: untyped, view: ActivityView) -> Analysis
+
     # : (Array[untyped], within: untyped, activity: bool, version_scope: untyped, view: ActivityView) -> Hash[identity, Analysis]
     def analyze_batch: (Array[untyped], within: untyped, activity: bool, version_scope: untyped, view: ActivityView) -> Hash[identity, Analysis]
 
@@ -53,6 +56,10 @@ module PaperTrailDiff
     # refused before the first selection query rather than once analysis starts.
     # : (untyped) -> void
     def check_scope: (untyped) -> void
+
+    # The endpoints of the hash comparisons. Anything else is left for the batch to refuse.
+    # : (untyped) -> Array[untyped]
+    def comparison_endpoints: (untyped) -> Array[untyped]
 
     # : (Array[comparison_input], preparer: untyped) -> ComparisonBatch
     def comparison_batch: (Array[comparison_input], preparer: untyped) -> ComparisonBatch
@@ -63,6 +70,9 @@ module PaperTrailDiff
 
     # : (untyped, Array[Array[String]], Hash[Symbol, untyped]) -> Hash[Array[String], Analysis?]
     def analyze_deleted: (untyped, Array[Array[String]], Hash[Symbol, untyped]) -> Hash[Array[String], Analysis?]
+
+    # : (untyped, limit: Integer?, within: untyped, activity: bool, version_scope: untyped, historical_filter: untyped, max_filter_versions: Integer, include_deleted: bool, view: ActivityView) -> ScopedAnalysisBuilder
+    def scoped_builder: (untyped, limit: Integer?, within: untyped, activity: bool, version_scope: untyped, historical_filter: untyped, max_filter_versions: Integer, include_deleted: bool, view: ActivityView) -> ScopedAnalysisBuilder
 
     @activity_snapshotter: ActivitySnapshotProvider
 

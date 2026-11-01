@@ -237,8 +237,65 @@ RSpec.describe PaperTrailDiff::ScopeCondition do
       expect(build(-> { where(virtual_rank: nil) }, target: 'ScopeConditionVirtual')).to be_nil
     end
 
-    it 'declines SQL strings, ranges, subqueries and other tables or columns' do
-      [-> { where('rank = 1') }, -> { where(rank: 1..3) },
+    # Ranges read only columns that sort in Ruby as in SQL, as an order does.
+    it 'reads ranges and their bounds on sortable columns, which never match NULL' do
+      expect(matches(build(-> { where(rank: 2..3) }), { rank: 1 }, { rank: 2 }, { rank: 3 },
+                     { rank: 4 }, { rank: nil })).to eq([false, true, true, false, false])
+      expect(matches(build(-> { where(rank: 2...3) }), { rank: 2 }, { rank: 3 }))
+        .to eq([true, false])
+      expect(matches(build(-> { where(rank: 2..) }), { rank: 2 }, { rank: 1 }, { rank: nil }))
+        .to eq([true, false, false])
+      expect(matches(build(-> { where(rank: ..2) }), { rank: 2 }, { rank: 3 })).to eq([true, false])
+      expect(matches(build(-> { where.not(rank: 2..) }), { rank: 1 }, { rank: 2 }, { rank: nil }))
+        .to eq([true, false, false])
+      expect(matches(build(-> { where(table[:rank].gt(2)) }), { rank: 2 }, { rank: 3 }))
+        .to eq([false, true])
+      expect(matches(build(-> { where(table[:rank].lt(2)) }), { rank: 1 }, { rank: 2 }))
+        .to eq([true, false])
+      expect(matches(build(-> { where(status: :live..) }), { status: 'live' }, { status: 'draft' }))
+        .to eq([true, false])
+      cutoff = Time.utc(2026)
+      expect(matches(build(-> { where(seen_at: cutoff..) }), { seen_at: cutoff },
+                     { seen_at: cutoff - 1 }, { seen_at: nil })).to eq([true, false, false])
+    end
+
+    # SQL Server stores a time or a date in a wrapper that compares only for
+    # equality, which reading the value back unwraps.
+    def wrapping(base, **options)
+      wrapper = Struct.new(:value)
+      Class.new(base) do
+        define_method(:serialize) { |value| super(value)&.then { |stored| wrapper.new(stored) } }
+        define_method(:deserialize) { |value| super(value.is_a?(wrapper) ? value.value : value) }
+      end.new(**options)
+    end
+
+    it 'compares equality in the stored form and an order by the value it sorts by' do
+      stub_const('ScopeConditionWrapped', Class.new(ScopeConditionItem))
+      ScopeConditionWrapped.attribute :seen_at, wrapping(ActiveRecord::Type::DateTime, precision: 6)
+      ScopeConditionWrapped.attribute :rank, wrapping(ActiveRecord::Type::Integer)
+      wrapped = ->(scope) { build(scope, target: 'ScopeConditionWrapped') }
+      cutoff = Time.utc(2026)
+
+      expect(matches(wrapped.call(-> { where(seen_at: cutoff..) }), { seen_at: cutoff },
+                     { seen_at: cutoff - 1 }, { seen_at: nil })).to eq([true, false, false])
+      expect(matches(wrapped.call(-> { where(rank: 2..3) }), { rank: 3 }, { rank: 4 }))
+        .to eq([true, false])
+      expect(matches(wrapped.call(-> { where(rank: 3) }), { rank: 3 }, { rank: 4 }))
+        .to eq([true, false])
+      expect(matches(wrapped.call(-> { where(rank: [3, 5]) }), { rank: 5 }, { rank: 4 }))
+        .to eq([true, false])
+    end
+
+    it 'declines ranges on columns that do not sort in Ruby as in SQL' do
+      [-> { where(label: 'a'..'b') }, -> { where(table[:flag].gt(false)) },
+       -> { where(amount: 1..) }, -> { where(table[:rank].gt(nil)) },
+       -> { where(table[:rank].gt(table[:owner_id])) }].each do |scope|
+        expect(build(scope)).to be_nil
+      end
+    end
+
+    it 'declines SQL strings, subqueries and other tables or columns' do
+      [-> { where('rank = 1') },
        -> { where(rank: ScopeConditionItem.select(:rank)) },
        -> { where(owner_id: ScopeConditionOwner.where(rank: 1).select(:id).arel) },
        -> { where(table[:rank].eq(table[:owner_id])) },
@@ -479,6 +536,19 @@ RSpec.describe PaperTrailDiff::ScopeCondition do
       allow(ScopeConditionKind).to receive(:finder_needs_type_condition?).and_return(true)
 
       expect(relation_matches(ScopeConditionKind.where(rank: 1), { rank: 1 })).to eq([true])
+    end
+
+    it 'reads a relation that selects nothing as matching nothing' do
+      none = ->(relation) { described_class.for_relation(relation, relation.model).none? }
+      expect(none.call(ScopeConditionItem.none)).to be(true)
+      expect(none.call(ScopeConditionItem.where(table[:rank].not_in([1, nil])))).to be(true)
+      expect([ScopeConditionItem.where(rank: 1), ScopeConditionItem.where.not(rank: []),
+              ScopeConditionItem.where(rank: 1).or(ScopeConditionItem.where(rank: 2))]
+               .map { |relation| none.call(relation) }).to eq([false, false, false])
+      expect(relation_matches(ScopeConditionItem.none, { rank: 1 })).to eq([false])
+      expect(relation_matches(ScopeConditionItem.where('rank = 1').none, { rank: 1 }))
+        .to eq([false])
+      expect(relation_matches(ScopeConditionItem.where(id: []), { id: 1 })).to eq([false])
     end
 
     it 'declines a relation that joins, groups, or that it cannot read' do

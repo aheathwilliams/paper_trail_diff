@@ -76,7 +76,12 @@ Six things follow from this:
   changes the values the record's next version stores, or its current row. The
   gem reads the result of a change from there, so the write appears in the step
   for that record's previous recorded change and is attributed to its author.
-  Ending a range at a version leaves out only the writes after it.
+  Ending a range at a version leaves out only the writes after it. A column
+  that `has_paper_trail only:` or `ignore:` leaves out of `object_changes` is
+  read the same way, so a key saved with a version is that version's change.
+  Rails updates `counter_cache` columns like this, so a parent's count changes
+  in the step of the parent's previous change; pass the column in `ignore:` to
+  leave it out.
   [`recorded_changes`](#what-a-version-recorded) reads what a version itself
   recorded, and activity steps can [include it](#what-each-event-recorded-recorded_changes-true).
 - **A record created without a version looks as if it always existed.** A
@@ -136,8 +141,9 @@ PaperTrailDiff.timeline(article, within: 1.week.ago..Time.current)
 
 - `from:` defaults to `:first`, the record's earliest version.
 - `to:` defaults to the record itself, meaning its current state. Pass a
-  version instead for a result that never changes when the record is edited
-  again.
+  version instead to anchor the result there. It does not change when the
+  record is edited again, unless a transaction that stamped changes before that
+  version commits after it; see [version order](#version-order).
 - A version stands for the state before its transaction, since PT-AT rebuilds
   associations as they were before it. Child changes saved in the same
   transaction, such as the update behind a `touch: true` parent version, fall
@@ -174,6 +180,15 @@ and the `touch: true` article version saved with it. So back-to-back windows,
 or a `report` with `since:` after an earlier report, show each change exactly
 once, credited to the transaction that made it. Each root moves its own edges,
 so in a batch two roots can start a few moments apart.
+
+A closed window can still change. PaperTrail stamps a version's `created_at`
+when it builds the version, inside its transaction, and the transaction commits
+later. A transaction that stamped a change inside the window and committed
+after the window was read adds that change to it. Wait longer than your longest
+transaction after the window ends before you rely on it, so that every
+transaction that could have written in the window has committed. A report
+through now is final only for changes older than that delay. The gem cannot see
+open transactions, so it cannot tell when a window has settled.
 
 To show what the window's last change produced, the gem reads the state just
 before the next change after the window:
@@ -438,6 +453,10 @@ PaperTrailDiff.activity_timeline(article, associations: [:comments], group: :tra
   lists every event in the transaction, each with its own author, except
   those of records that were outside the tree before and after it.
 - Versions without a `transaction_id` are never grouped.
+- A savepoint that rolls back can split one transaction into more than one
+  group. PT-AT clears the transaction id when the savepoint rolls back, so the
+  versions the transaction saves afterwards form a separate group. Releasing
+  the savepoint keeps one group.
 - Also accepted by `analyze`, `analyze_many`, and `analyze_scope` with
   `activity: true`, and by `report`.
 
@@ -695,19 +714,22 @@ and `allow_approximate:`.
 
 A relation's conditions read the table, and a deleted record has no row.
 Records that changed in the window but no longer exist are listed in
-`unreachable`, including those selected by a change to their associations. It
-is not paginated and, without `include_deleted:`, does not mean those records
-matched the relation.
+`unreachable`, including those selected by a change to their associations,
+when the state each held when it was destroyed meets the relation's
+conditions. That test needs conditions it can read, as `include_deleted:`
+below does; for any other relation, such as one with SQL text or a join,
+`unreachable` lists every such record of the model, whatever the relation. It
+is not paginated.
 
 `include_deleted: true` tests each of them against the relation's conditions,
-as it stood when it was destroyed, and keeps only those that match. So a
-report on `Article.where(account_id: account.id)` returns that account's
-deletions, not every account's. The relation's conditions must be plain
-conditions on the model's own columns, as a [readable association
-scope's](#costly-associations) must; anything else, such as a join or SQL
-text, raises `ConfigurationError`. Its order, limit, and offset are ignored
-here, since they choose a page of existing rows. A record whose destroy
-PaperTrail did not record has no state to test and stays listed.
+as it stood when it was destroyed, and keeps only those that match. So a report
+on `Article.where(account_id: account.id)` returns that account's deletions,
+not every account's. The relation's conditions must be plain conditions on the
+model's own columns, as a [readable association scope's](#costly-associations)
+must, ranges included; anything else, such as a join or SQL text, raises
+`ConfigurationError`. `Article.none` keeps none. Its order, limit, and offset
+are ignored here, since they choose a page of existing rows. A record whose
+destroy PaperTrail did not record has no state to test and stays listed.
 
 It then analyzes the kept records from their `destroy` versions and returns the
 results in `deleted`, keyed the same way. A value is `nil` when no `destroy`
@@ -791,6 +813,11 @@ MySQL and SQL Server compare strings without regard to case or trailing spaces
 by default, which the gem cannot repeat, and neither is PostgreSQL's
 `citext`.
 
+Ranges, such as `where(position: 2..)` or `where(created_at: 1.day.ago...)`,
+and Arel's `gt`, `gteq`, `lt`, and `lteq`, are read on the columns an order
+can sort by, below: integer, integer enum, date, and datetime columns, with
+the same conditions on a datetime's precision.
+
 A `limit` or `offset`, and the order of a `has_one`, are read the same way
 when the order is total and the gem can repeat it:
 
@@ -827,12 +854,12 @@ join records fills two places, as in the query. A `has_one :through` whose
 own scope or whose parts have a limit, an offset, or a `has_one` order is not
 read.
 
-The gem cannot read the rest: a `limit` or `offset` whose order is not total
-or sorts by another column type (strings follow a collation) or by a datetime
+The gem cannot read the rest: a `limit` or `offset` whose order is not total or
+sorts by another column type (strings follow a collation) or by a datetime
 history cannot rank exactly, scopes that take the owner
-(`->(article) { ... }`), scopes written as SQL strings or ranges, scopes that
-join or select, and conditions on other column types or other tables, such as
-a string column on MySQL. For these it asks PT-AT, which costs queries per
+(`->(article) { ... }`), scopes written as SQL strings, ranges on other column
+types, scopes that join or select, and conditions on other column types or
+other tables, such as a string column on MySQL. For these it asks PT-AT, which costs queries per
 record and is approximate: PT-AT rebuilds an association from its current
 members, swapping in their older versions, and never checks the scope against
 them. A record that entered the scope since is reported as a member it was
@@ -1327,6 +1354,13 @@ common. `diagnose` reports this as an error.
 backwards, or servers whose clocks disagree, can record a later change with an
 earlier time. Keep server clocks synchronized.
 
+Versions are ordered by when they were stamped, not by when their transactions
+committed. A transaction stamps its versions while it is open, so one that
+commits last can still sort first. The gem cannot see commit order. A report
+can therefore show a state the database never held, and a result for an earlier
+version or a closed window can change once that transaction commits.
+[Time windows](#time-windows) explains how to settle a report.
+
 Association changes between versions with the same timestamp are placed using
 the same order. A few association shapes fall back to PT-AT's own reifier, which
 uses timestamps only: a path history reads only approximately, which takes
@@ -1411,8 +1445,21 @@ Results can only be as complete as the history PaperTrail and PT-AT recorded.
   [how PaperTrail stores history](#how-papertrail-stores-history).
 - Deleted versions, schema changes, and serializer changes can affect how old
   versions read.
-- Several queries against the current record are not one database snapshot.
-  Use a transaction with a suitable isolation level if that matters.
+- Each call reads its history and live rows in one snapshot on PostgreSQL and
+  MySQL (through mysql2 or trilogy), and on adapters built on them such as
+  PostGIS, so a commit that lands during the call is seen by none of its
+  statements. The snapshot covers the database of the record's model and its
+  versions; an associated model on another database is read outside it. A
+  call made inside a transaction of your own
+  keeps that transaction's isolation level. To make the whole call see one
+  snapshot, start that transaction at `REPEATABLE READ` or stricter. SQLite and
+  SQL Server take no snapshot, so a commit during a call can appear in some of
+  its statements and not others. A long call holds its snapshot until it ends:
+  on PostgreSQL that can keep VACUUM from reclaiming old row versions, and on
+  MySQL it keeps undo history.
+- A savepoint that rolls back can split one transaction into several
+  transaction groups; see
+  [one step per transaction group](#one-step-per-transaction-group-transaction).
 - HABTM membership history exists only where PT-AT recorded it in a
   transaction, and only for the root record without a scope: a scoped HABTM,
   or one below the root, raises `UnsupportedAssociationError`, and a transaction that another record with

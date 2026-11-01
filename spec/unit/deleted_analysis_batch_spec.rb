@@ -7,10 +7,11 @@ RSpec.describe PaperTrailDiff::DeletedAnalysisBatch do
   let(:analyzed) { [] }
   let(:prepared) { [] }
   let(:analyzer) do
-    lambda do |record, plan, window|
+    analyze = lambda do |record, plan, window|
       analyzed << [record, plan, window]
       "analysis of #{record.id}"
     end
+    analyze.tap { |call| call.define_singleton_method(:empty) { PaperTrailDiff::Analysis.empty } }
   end
   let(:history_preparer) do
     ->(records, versions, **range) { prepared << [records, versions, range] }

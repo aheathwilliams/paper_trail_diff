@@ -8,6 +8,9 @@ module PaperTrailDiff
     # : (untyped, untyped, ?fallback_selected: bool) -> void
     def initialize: (untyped, untyped, ?fallback_selected: bool) -> void
 
+    # The read runs in a savepoint, so that a query that fails here leaves a
+    # snapshot transaction around it usable: PostgreSQL refuses every later
+    # statement of a transaction once one has failed.
     # : () -> Array[DiagnosticIssue]
     def call: () -> Array[DiagnosticIssue]
 
