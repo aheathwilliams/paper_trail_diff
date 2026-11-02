@@ -5,6 +5,7 @@ module PaperTrailDiff
   # Places one version relative to another on the recorded timeline.
   module VersionBoundary
     @transactional = {} #: Hash[untyped, bool]
+    @version_records = {} #: Hash[untyped, bool]
 
     module_function
 
@@ -71,10 +72,14 @@ module PaperTrailDiff
     end
     private_class_method :transactional?
 
+    # Answered once for each Active Record class, as `transactional?` is.
     #: (untyped) -> bool
     def version_record?(value)
-      value.respond_to?(:id) && value.respond_to?(:item_type) &&
-        value.class.respond_to?(:table_name)
+      known = @version_records #: Hash[untyped, bool]
+      Support.per_model(known, value) do |candidate|
+        candidate.respond_to?(:id) && candidate.respond_to?(:item_type) &&
+          candidate.class.respond_to?(:table_name)
+      end
     end
     private_class_method :version_record?
 

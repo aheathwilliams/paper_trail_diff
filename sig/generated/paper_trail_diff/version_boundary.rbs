@@ -35,6 +35,7 @@ module PaperTrailDiff
     # : (untyped) -> bool
     def self?.transactional?: (untyped) -> bool
 
+    # Answered once for each Active Record class, as `transactional?` is.
     # : (untyped) -> bool
     def self?.version_record?: (untyped) -> bool
 

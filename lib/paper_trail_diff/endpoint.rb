@@ -4,6 +4,8 @@
 module PaperTrailDiff
   # Validates and describes explicit PaperTrail-version and live-record endpoints.
   module Endpoint
+    @subtyped = {} #: Hash[untyped, bool]
+
     module_function
 
     #: (untyped, untyped) -> void
@@ -93,12 +95,21 @@ module PaperTrailDiff
 
     #: (untyped) -> untyped
     def model_class(version)
-      subtype = version.item_subtype if version.respond_to?(:item_subtype)
+      subtype = version.item_subtype if subtyped?(version)
       model_type = subtype.to_s.empty? ? version.item_type.to_s : subtype.to_s
       Object.const_get(model_type)
     rescue NameError => e
       raise InvalidEndpointError, "cannot resolve endpoint model: #{model_type}", cause: e
     end
+
+    # Whether versions of this class have an `item_subtype` column, answered
+    # once for each Active Record class (see Support.per_model).
+    #: (untyped) -> bool
+    def subtyped?(version)
+      known = @subtyped #: Hash[untyped, bool]
+      Support.per_model(known, version) { |value| value.respond_to?(:item_subtype) }
+    end
+    private_class_method :subtyped?
 
     # Every PaperTrail version of the record, whatever scope its versions
     # association has.
