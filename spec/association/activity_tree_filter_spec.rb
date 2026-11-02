@@ -37,8 +37,9 @@ RSpec.describe PaperTrailDiff::ActivityTreeFilter do
   before do
     PaperTrail::VersionAssociation.delete_all
     PaperTrail::Version.delete_all
-    [TrackedAuthorship, TrackedComment, TrackedArticle, TrackedAuthor, TreeCard, TreeBoard]
-      .each(&:delete_all)
+    ActiveRecord::Base.connection.execute('DELETE FROM tracked_articles_tags')
+    [TrackedAuthorship, TrackedComment, TrackedArticle, TrackedAuthor, TrackedTag, TreeCard,
+     TreeBoard].each(&:delete_all)
   end
 
   # Each step as its sources and what it changed, with records read by name.
@@ -149,6 +150,61 @@ RSpec.describe PaperTrailDiff::ActivityTreeFilter do
         sources = every_source(comment_steps(article, within: within, group: group))
         expect(sources).not_to include(['TrackedComment', stray.id])
       end
+    end
+  end
+
+  # A tag created and attached in the transaction that saves the article, and
+  # detached before the next save, is in the tree only at that save: the
+  # version records it, and the next one does not.
+  context 'with a tag detached before the next version' do
+    def tag_history
+      article = TrackedArticle.create!(title: 'Root')
+      start = Time.now.utc
+      fleeting = TrackedArticle.transaction do
+        attach(article, 'Fleeting').tap { checkpoint(article) }
+      end
+      TrackedArticle.find(article.id).tags.delete(fleeting)
+      kept = TrackedArticle.transaction { attach(article, 'Kept') }
+      finish = Time.now.utc
+      TrackedArticle.transaction { checkpoint(article) }
+      [article.reload, start..finish,
+       named('article' => article, 'fleeting' => fleeting, 'kept' => kept)]
+    end
+
+    # A new tag, attached through a fresh copy of the article.
+    def attach(article, name)
+      TrackedTag.create!(name: name).tap { |tag| TrackedArticle.find(article.id).tags << tag }
+    end
+
+    def checkpoint(article) = TrackedArticle.find(article.id).paper_trail.save_with_version
+
+    let(:history) { tag_history }
+    let(:article) { history.first }
+    let(:names) { history.last }
+    let(:fleeting) { names.key('fleeting').last }
+    let(:kept) { names.key('kept').last }
+
+    it 'credits the tag to its own creation' do
+      steps = PaperTrailDiff.activity_timeline(article, from: first_version(article),
+                                                        to: article.versions.last,
+                                                        associations: [:tags])
+
+      expect(summary(steps, names)).to eq(
+        [[['article create'], ['presence']],
+         [['fleeting create'], ["tags +#{fleeting}"]],
+         [['article update'], ["tags -#{fleeting}"]],
+         [['kept create'], ["tags +#{kept}"]]]
+      )
+    end
+
+    it 'starts a window that the tag\'s creation opens before the tag' do
+      analysis = PaperTrailDiff.analyze(article, within: history.fetch(1), associations: [:tags],
+                                                 activity: true, snapshots: true)
+
+      expect(analysis.from_snapshot.associations.fetch('tags').records).to be_empty
+      expect(changes(analysis.diff)).to eq(["tags +#{kept}"])
+      expect(summary(analysis.activity_timeline, names).first)
+        .to eq([['fleeting create'], ["tags +#{fleeting}"]])
     end
   end
 
@@ -289,6 +345,23 @@ RSpec.describe PaperTrailDiff::ActivityTreeFilter do
 
       expect(kept(started)).to eq([1, 3, 4])
       expect(kept(ended)).to eq([1, 3, 4])
+    end
+
+    # Version 3 is the root's, saved in the transaction that saved record 6
+    # with version 2, and reads the members that transaction gave it.
+    # Version 4's transaction has no root event, and the root event that holds
+    # its record, version 1, is another transaction's. Any other event reads
+    # the state before its transaction, as the first one does, so only the
+    # first one's snapshot is read: in `others`, version 2's holds record 6.
+    it 'reads the snapshots at the root events of the event\'s own transaction' do
+      pairs = [[root_event(1, 30), holding(7)], [event(2, 6, 10), holding],
+               [root_event(3, 10), holding(6)], [event(4, 7, 20), holding],
+               [root_event(5, 40), holding]]
+      others = [[event(1, 6, 10), holding], [event(2, 7, 10), holding(6)],
+                [root_event(3, 20), holding]]
+
+      expect(kept(pairs)).to eq([1, 2, 3, 5])
+      expect(kept(others)).to eq([3])
     end
 
     it 'reads a version saved outside a transaction before and after itself' do

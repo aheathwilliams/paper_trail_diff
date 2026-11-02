@@ -14,7 +14,12 @@ module PaperTrailDiff
   # PT-AT reads associations as they were before a transaction, so a record
   # is judged by two snapshots: the one at its transaction's first event, and
   # the one after its last, which is the next event's or what the range
-  # closes on. A record in neither was outside the tree throughout.
+  # closes on. A root version inside the transaction is the exception: it
+  # reads the has_and_belongs_to_many members it records, including a record
+  # the transaction created before it, so the snapshots at the transaction's
+  # root events are read too. A tag created, attached and detached again
+  # before the next root version is in the tree only there. A record in none
+  # of these was outside the tree throughout.
   #
   # The root's own events are always kept, and so is an event whose step is
   # not reported, which only bounds one that is, unless its transaction has an
@@ -50,12 +55,19 @@ module PaperTrailDiff
 
     @reported: untyped
 
+    @roots: Hash[Array[untyped] | Integer, Array[Integer]]
+
     @starts: Array[Integer]
 
     @types: Hash[String, Array[String?]]
 
     # : (ActivityEvent, Integer, Array[[ActivityEvent, RecordSnapshot?]]) -> bool
     def keep?: (ActivityEvent, Integer, Array[[ ActivityEvent, RecordSnapshot? ]]) -> bool
+
+    # The snapshots at the first event and the root events of the event's
+    # transaction, and the one after its last event.
+    # : (Integer, Array[untyped] | Integer, Array[[ActivityEvent, RecordSnapshot?]]) -> Array[RecordSnapshot?]
+    def judged_by: (Integer, Array[untyped] | Integer, Array[[ ActivityEvent, RecordSnapshot? ]]) -> Array[RecordSnapshot?]
 
     # : (ActivityEvent) -> bool
     def reported?: (ActivityEvent) -> bool
@@ -65,6 +77,10 @@ module PaperTrailDiff
     # need not be adjacent.
     # : (Array[Array[untyped] | Integer]) -> [Array[Integer], Array[Integer]]
     def spans: (Array[Array[untyped] | Integer]) -> [ Array[Integer], Array[Integer] ]
+
+    # Where each transaction's root events are.
+    # : (Array[ActivityEvent]) -> Hash[Array[untyped] | Integer, Array[Integer]]
+    def root_positions: (Array[ActivityEvent]) -> Hash[Array[untyped] | Integer, Array[Integer]]
 
     # The transactions that have an event whose step is reported.
     # : (Array[ActivityEvent]) -> Set[Array[untyped] | Integer]

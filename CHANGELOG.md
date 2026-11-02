@@ -125,6 +125,14 @@ project follows [Semantic Versioning](https://semver.org/).
   step by step, while the same history read in full showed it in an
   unrelated step.
 
+- Activity on a `has_and_belongs_to_many` reports the addition of a record
+  that the transaction saving the root created and attached, when the record
+  was detached again before the root's next version. Only that transaction's
+  root version records the record as a member. Its creation was judged by the
+  states before and after the transaction, and the record was a member in
+  neither, so the creation was left out: activity reported the record's
+  removal but never its addition.
+
 ### Development
 
 - `spec/oracle/shapes_history_spec.rb` compares rebuilt history with plain

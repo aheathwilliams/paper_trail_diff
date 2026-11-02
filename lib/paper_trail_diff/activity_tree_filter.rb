@@ -15,7 +15,12 @@ module PaperTrailDiff
   # PT-AT reads associations as they were before a transaction, so a record
   # is judged by two snapshots: the one at its transaction's first event, and
   # the one after its last, which is the next event's or what the range
-  # closes on. A record in neither was outside the tree throughout.
+  # closes on. A root version inside the transaction is the exception: it
+  # reads the has_and_belongs_to_many members it records, including a record
+  # the transaction created before it, so the snapshots at the transaction's
+  # root events are read too. A tag created, attached and detached again
+  # before the next root version is in the tree only there. A record in none
+  # of these was outside the tree throughout.
   #
   # The root's own events are always kept, and so is an event whose step is
   # not reported, which only bounds one that is, unless its transaction has an
@@ -37,6 +42,7 @@ module PaperTrailDiff
       @closing = closing
       @keys = transaction_keys(events)
       @starts, @ends = spans(@keys)
+      @roots = root_positions(events)
       @judged = reported_transactions(events)
       @types = {} #: Hash[String, Array[String?]]
     end
@@ -58,16 +64,25 @@ module PaperTrailDiff
     # @rbs @keys: Array[Array[untyped] | Integer]
     # @rbs @starts: Array[Integer]
     # @rbs @ends: Array[Integer]
+    # @rbs @roots: Hash[Array[untyped] | Integer, Array[Integer]]
     # @rbs @judged: Set[Array[untyped] | Integer]
     # @rbs @types: Hash[String, Array[String?]]
 
     #: (ActivityEvent, Integer, Array[[ActivityEvent, RecordSnapshot?]]) -> bool
     def keep?(event, index, pairs)
-      return true if event.root? || event.join? || !@judged.include?(@keys.fetch(index))
+      key = @keys.fetch(index)
+      return true if event.root? || event.join? || !@judged.include?(key)
 
+      judged_by(index, key, pairs).any? { |snapshot| holds?(snapshot, event) }
+    end
+
+    # The snapshots at the first event and the root events of the event's
+    # transaction, and the one after its last event.
+    #: (Integer, Array[untyped] | Integer, Array[[ActivityEvent, RecordSnapshot?]]) -> Array[RecordSnapshot?]
+    def judged_by(index, key, pairs)
       position = @ends.fetch(index)
       after = position < pairs.length ? pairs.fetch(position).last : @closing
-      holds?(pairs.fetch(@starts.fetch(index)).last, event) || holds?(after, event)
+      ([@starts.fetch(index)] + @roots.fetch(key, [])).map { |at| pairs.fetch(at).last } << after
     end
 
     #: (ActivityEvent) -> bool
@@ -87,6 +102,13 @@ module PaperTrailDiff
         last[key] = index
       end
       [keys.map { |key| first.fetch(key) }, keys.map { |key| last.fetch(key) + 1 }]
+    end
+
+    # Where each transaction's root events are.
+    #: (Array[ActivityEvent]) -> Hash[Array[untyped] | Integer, Array[Integer]]
+    def root_positions(events)
+      events.each_index.select { |index| events.fetch(index).root? }
+            .group_by { |index| @keys.fetch(index) }
     end
 
     # The transactions that have an event whose step is reported.

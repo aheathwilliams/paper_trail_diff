@@ -481,10 +481,11 @@ PaperTrailDiff.activity_timeline(article, associations: [:comments], group: :tra
   it. A field set and then restored inside the transaction is not reported.
 - Its `source_boundary` is the first event in the transaction. That event's
   author is not necessarily the author of every grouped change. `step.sources`
-  lists every event in the transaction, each with its own author, except
-  those of records that were outside the tree before and after it, and those
-  saved before a window that starts inside a transaction of associated
-  records only (see [time windows](#time-windows)).
+  lists every event in the transaction, each with its own author, except two
+  kinds: those of records outside the tree before the transaction, after it,
+  and at every version of the root it saved; and those saved before a window
+  that starts inside a transaction of associated records only (see
+  [time windows](#time-windows)).
 - Versions without a `transaction_id` are never grouped.
 - A savepoint that rolls back can split one transaction into more than one
   group. PT-AT clears the transaction id when the savepoint rolls back, so the
