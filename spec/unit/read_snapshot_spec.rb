@@ -72,9 +72,10 @@ RSpec.describe PaperTrailDiff::ReadSnapshot do
   end
 
   # Run by the SQL Server CI jobs, one of which allows snapshot isolation.
-  # Changing the setting here would wait for every open transaction.
-  sql_server = ActiveRecord::Base.connection.adapter_name == 'SQLServer'
-  context 'with a SQL Server database', if: sql_server do
+  # Changing the setting here would wait for every open transaction. It skips
+  # itself on other databases rather than being left out with `if:`, because
+  # mutant runs an example it picks whatever its `if:` says.
+  context 'with a SQL Server database' do
     # 5 is SNAPSHOT, 2 READ COMMITTED.
     def session_level
       FilterArticle.connection.select_value(
@@ -83,6 +84,8 @@ RSpec.describe PaperTrailDiff::ReadSnapshot do
     end
 
     it 'reads at SNAPSHOT when the database allows it, and leaves the session as it was' do
+      skip 'needs SQL Server' unless FilterArticle.connection.adapter_name == 'SQLServer'
+
       state = FilterArticle.connection.select_value(described_class::SQL_SERVER_SNAPSHOT_STATE)
 
       inside = described_class.call([FilterArticle]) { session_level }
