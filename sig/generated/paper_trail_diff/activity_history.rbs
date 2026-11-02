@@ -15,8 +15,11 @@ module PaperTrailDiff
 
     attr_reader last_event_snapshot: RecordSnapshot?
 
-    # : (steps: Array[ActivityStep], root_snapshots: Hash[Array[untyped], RecordSnapshot?], first_snapshot: RecordSnapshot?, last_snapshot: RecordSnapshot?, ?last_boundary: ActivityBoundary?, ?last_event_snapshot: RecordSnapshot?) -> void
-    def initialize: (steps: Array[ActivityStep], root_snapshots: Hash[Array[untyped], RecordSnapshot?], first_snapshot: RecordSnapshot?, last_snapshot: RecordSnapshot?, ?last_boundary: ActivityBoundary?, ?last_event_snapshot: RecordSnapshot?) -> void
+    # The event of `last_boundary`.
+    attr_reader last_event: ActivityEvent?
+
+    # : (steps: Array[ActivityStep], root_snapshots: Hash[Array[untyped], RecordSnapshot?], first_snapshot: RecordSnapshot?, last_snapshot: RecordSnapshot?, ?last_boundary: ActivityBoundary?, ?last_event_snapshot: RecordSnapshot?, ?last_event: ActivityEvent?) -> void
+    def initialize: (steps: Array[ActivityStep], root_snapshots: Hash[Array[untyped], RecordSnapshot?], first_snapshot: RecordSnapshot?, last_snapshot: RecordSnapshot?, ?last_boundary: ActivityBoundary?, ?last_event_snapshot: RecordSnapshot?, ?last_event: ActivityEvent?) -> void
 
     # : () -> ActivityHistory
     def self.empty: () -> ActivityHistory
@@ -40,6 +43,8 @@ module PaperTrailDiff
     @current: untyped
 
     @events: Array[ActivityEvent]
+
+    @first_pending: bool
 
     @first_snapshot: RecordSnapshot?
 
@@ -77,16 +82,23 @@ module PaperTrailDiff
     # A left-out event bounds nothing. A reported step it would have opened
     # still moves the reported range's end past it, to the next boundary.
     #
-    # The history starts at its first kept event. The events left out before
-    # it change nothing the root shows, unless they are of a transaction that
-    # crossed the window's start and has no event kept here: the snapshot at
-    # them is the state before that transaction, whose changes the window
-    # before this one reports (see ActivityTreeFilter).
+    # The history starts at the first kept event whose step is reported. The
+    # events left out before it change nothing the root shows, unless they are
+    # of a transaction that crossed the window's start and has no event kept
+    # here: the snapshot at them is the state before that transaction, whose
+    # changes the window before this one reports (see ActivityTreeFilter). And
+    # a version filter starts it at the first change it keeps.
     # : (ActivityEvent, RecordSnapshot?, bool) -> void
     def consume: (ActivityEvent, RecordSnapshot?, bool) -> void
 
     # : (ActivityEvent) -> void
     def pass: (ActivityEvent) -> void
+
+    # : (ActivityEvent, RecordSnapshot?) -> void
+    def capture_first: (ActivityEvent, RecordSnapshot?) -> void
+
+    # : (ActivityEvent) -> bool
+    def reported?: (ActivityEvent) -> bool
 
     # : (ActivityBoundary, RecordSnapshot?) -> void
     def append_step: (ActivityBoundary, RecordSnapshot?) -> void

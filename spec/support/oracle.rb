@@ -65,10 +65,34 @@ module Oracle
     ActiveRecord::Base.connection.execute('DELETE FROM tracked_articles_tags')
   end
 
+  ALICE = ->(versions) { versions.where(whodunnit: 'alice') }
+
+  # Two windows that meet at `pivot` read each step once, as the window
+  # spanning both does, with a version filter and without. The filter reports
+  # the steps of each transaction it keeps a version of, of any record, as the
+  # unfiltered timeline shows them. The block reads a window's steps.
+  def self.check_split(failures, label, whole, pivot)
+    every, kept = [{}, { version_scope: ALICE }].map do |scope|
+      read = ->(within) { yield(within, scope) }
+      all = read.call(whole)
+      left = pivot > whole.begin ? read.call(whole.begin...pivot) : []
+      failures.check("#{label} #{scope.keys.inspect}", all, left + read.call(pivot..whole.end))
+      all
+    end
+    transactions = PaperTrail::Version.where(whodunnit: 'alice').distinct.pluck(:transaction_id)
+    failures.check("#{label} with version_scope:",
+                   every.select { |ids, _diff| ids.intersect?(transactions) }, kept)
+  end
+
   # The live state after each transaction, by the versions it wrote.
   class Recorder
     Entry = Struct.new(:name, :version_ids, :state, :membership, :snapshot, :after,
                        keyword_init: true)
+
+    # Each transaction's author, in turn, so that a version filter has some
+    # transactions to keep and some to leave out. Taken in turn rather than at
+    # random, a seed builds the same history as before they were added.
+    AUTHORS = [nil, 'alice', 'bob'].freeze
 
     attr_reader :entries
 
@@ -81,7 +105,8 @@ module Oracle
 
     def run(name, &block)
       before = PaperTrail::Version.maximum(:id) || 0
-      ActiveRecord::Base.transaction(&block)
+      author = AUTHORS.fetch(@entries.length % AUTHORS.length)
+      PaperTrail.request(whodunnit: author) { ActiveRecord::Base.transaction(&block) }
       ids = PaperTrail::Version.where('id > ?', before).order(:id).pluck(:id)
       state, membership, snapshot = @observe.call
       @entries << Entry.new(name: name, version_ids: ids, state: state, membership: membership,
@@ -473,10 +498,10 @@ module Oracle
       whole = PaperTrail::Version.minimum(:created_at)..@recorder.final.after
       SPLIT_READERS.each do |method, reader|
         options = { associations: @paths, group: group }
-        steps = ->(within) { split_steps(reader.call(@root, within: within, **options)) }
-        left = pivot > whole.begin ? steps.call(whole.begin...pivot) : []
         label = "#{method} windows split at #{pivot.utc.iso8601(6)} (group: #{group.inspect})"
-        @failures.check(label, steps.call(whole), left + steps.call(pivot..whole.end))
+        Oracle.check_split(@failures, label, whole, pivot) do |within, scope|
+          split_steps(reader.call(@root, within: within, **options, **scope))
+        end
       end
     end
 

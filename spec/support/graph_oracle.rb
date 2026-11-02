@@ -363,11 +363,11 @@ module Oracle
       whole = PaperTrail::Version.minimum(:created_at)..@recorder.final.after
       SPLIT_READERS.each do |method, reader|
         options = { associations: paths, group: group }
-        steps = ->(within) { split_steps(reader.call(root, within: within, **options)) }
-        left = pivot > whole.begin ? steps.call(whole.begin...pivot) : []
         label = "#{method} #{[root.id, paths].inspect} windows split at " \
                 "#{pivot.utc.iso8601(6)} (group: #{group.inspect})"
-        @failures.check(label, steps.call(whole), left + steps.call(pivot..whole.end))
+        Oracle.check_split(@failures, label, whole, pivot) do |within, scope|
+          split_steps(reader.call(root, within: within, **options, **scope))
+        end
       end
     end
 

@@ -8,10 +8,12 @@ module PaperTrailDiff
     module_function
 
     # A window closing on current state ends at the live record, which no
-    # version-keyed snapshot can supply, so that endpoint is passed in.
+    # version-keyed snapshot can supply, so that endpoint is passed in. A plan
+    # that replays versions a filter left out reports the steps of the ones it
+    # kept, as `timeline` does.
     #: (RootVersionPlan, Hash[Array[untyped], RecordSnapshot?], ?closing_snapshot: RecordSnapshot?, ?captured_at: untyped) -> Array[Step]
     def call(plan, root_snapshots, closing_snapshot: nil, captured_at: nil)
-      plan.steps.map do |from_endpoint, to_endpoint|
+      plan.steps.select { |from, _to| plan.mutation?(from) }.map do |from_endpoint, to_endpoint|
         Step.new(
           from_version: from_endpoint,
           to_version: to_endpoint,

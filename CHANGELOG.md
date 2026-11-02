@@ -24,6 +24,28 @@ project follows [Semantic Versioning](https://semver.org/).
 - The `compare.paper_trail_diff`, `compare_many.paper_trail_diff`, and
   `load_live_endpoints.paper_trail_diff` payloads no longer have a
   `reload_live_endpoints` key.
+- `version_scope:` applies to the versions of the requested associations as
+  it does to the root's own:
+  - In `analyze_scope` and `report`, a change on a requested association
+    selects a record only when the filter keeps its version. A record that
+    only versions the filter leaves out changed is no longer selected, and no
+    longer counts toward `limit:`.
+  - In activity (`activity_timeline`, `activity: true`, and `report`), the
+    filter decides which steps are reported: every step of a transaction in
+    which it keeps a version, of any record, and each version saved outside a
+    transaction that it keeps. Activity listed every step between the first
+    and the last root version the filter kept, whoever made it, and every
+    change on an association. Every version is still replayed, so each step
+    shows what its own change did. An analysis starts at the first change the
+    filter keeps, on the record or its associations, and ends after the last.
+  - Without associations, activity reports the root's versions the filter
+    keeps, as `timeline` does.
+
+  The record and its associations keep their versions in one table, which
+  the filter reads for all of them, so a condition on `item_type` or
+  `item_id` now leaves out the associations' changes. A filter that keeps
+  every version now reads as no filter: a range of one version, which no
+  later version reveals, has that version's state rather than none.
 
 ### Added
 
@@ -91,6 +113,10 @@ project follows [Semantic Versioning](https://semver.org/).
   version from history that ended with the window: a comment edited again
   after it showed its latest body instead of the one it had then.
 
+- `analyze_many` with `activity: true`, associations, and a `version_scope:`
+  that keeps none of a record's versions reports nothing for that record over
+  its whole history, as `analyze` does. It raised `IncompleteTimeRangeError`.
+
 - Activity reports a change to a `belongs_to` target that the root took
   without a version, such as an author set while `has_paper_trail only:`
   left `author_id` out, when the root's next version moved to another target.
@@ -114,6 +140,11 @@ project follows [Semantic Versioning](https://semver.org/).
 
 - The SQL Server 2022 CI job's database allows snapshot isolation and the
   2019 job's does not, so both ways of reading a call run on CI.
+
+- The oracles' transactions take turns between authors, and every window
+  split is also read with a `version_scope:` that keeps one author's versions.
+  It must report exactly the unfiltered steps of the transactions that author
+  saved a version in.
 
 ## [0.16.0] - 2026-11-01
 

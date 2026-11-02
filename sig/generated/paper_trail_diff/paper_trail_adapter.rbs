@@ -40,8 +40,8 @@ module PaperTrailDiff
 
     private
 
-    # : (bool, bool, Symbol?) -> ActivityView
-    def activity_view: (bool, bool, Symbol?) -> ActivityView
+    # : (bool, bool, Symbol?, untyped) -> ActivityView
+    def activity_view: (bool, bool, Symbol?, untyped) -> ActivityView
 
     # : (untyped) -> Hash[Symbol, untyped]
     def model_payload: (untyped) -> Hash[Symbol, untyped]

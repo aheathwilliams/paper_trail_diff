@@ -12,8 +12,8 @@ module PaperTrailDiff
       @live_endpoint = live_endpoint
     end
 
-    #: (context_required: bool) -> RootVersionPlan
-    def select_plan(context_required:)
+    #: (context_required: bool, whole: bool) -> RootVersionPlan
+    def select_plan(context_required:, whole:)
       relation = Endpoint.versions(@record)
       in_range = ordered(@time_range.scope(relation))
       RootVersionSelection.new(
@@ -23,8 +23,8 @@ module PaperTrailDiff
         after_range: trailing_version(relation),
         windowed: true,
         context_required: context_required,
-        filtered: !@version_scope.nil?,
-        live_endpoint: @live_endpoint
+        live_endpoint: @live_endpoint,
+        whole: whole
       ).call
     end
 

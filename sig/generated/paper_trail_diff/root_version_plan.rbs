@@ -58,6 +58,11 @@ module PaperTrailDiff
     # : () -> RootVersionPlan
     def closing_on_destroy: () -> RootVersionPlan
 
+    # The same plan reporting only `selected` as mutations, of the versions it
+    # holds.
+    # : (Array[untyped]) -> RootVersionPlan
+    def reporting: (Array[untyped]) -> RootVersionPlan
+
     # What the range's final state is read from, which is the live record when
     # the window closes on current state and the last version otherwise.
     # : () -> untyped

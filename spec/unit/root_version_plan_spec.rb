@@ -82,6 +82,26 @@ RSpec.describe PaperTrailDiff::RootVersionPlan do
     expect(plan.mutation?(third)).to be(false)
   end
 
+  it 'reports only the mutations it is given, keeping everything else it holds' do
+    record = Object.new
+    held = described_class.new(
+      versions: [first, third], steps: [[first, third], [third, record]],
+      reconstruction_versions: [first, second, third], context_version: third,
+      closing_record: record, closes_on_destroy: true
+    )
+
+    plan = held.reporting([first])
+    none = held.reporting([])
+
+    expect([plan.mutations, none.mutations]).to eq([[first], []])
+    expect([plan.mutation?(first), plan.mutation?(third), none.mutation?(first)])
+      .to eq([true, false, false])
+    expect([plan.versions, plan.steps, plan.reconstruction_versions])
+      .to eq([[first, third], [[first, third], [third, record]], [first, second, third]])
+    expect([plan.context_version, plan.closing_record, plan.closes_on_destroy])
+      .to eq([third, record, true])
+  end
+
   it 'recognizes a mutation by version class and id, not by object' do
     plan = described_class.contiguous([first])
 

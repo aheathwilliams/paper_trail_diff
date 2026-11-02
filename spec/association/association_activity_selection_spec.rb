@@ -366,10 +366,10 @@ RSpec.describe PaperTrailDiff::AssociationActivitySelection do
   end
 
   describe 'its sources' do
-    def sources(model, paths, window: nil)
+    def sources(model, paths, window: nil, version_scope: nil)
       range = PaperTrailDiff::TimeRange.new(window) if window
       described_class.new(model, tree: PaperTrailDiff::AssociationTree.build(paths),
-                                 time_range: range).call
+                                 time_range: range, version_scope: version_scope).call
     end
 
     def selected(found)
@@ -378,6 +378,25 @@ RSpec.describe PaperTrailDiff::AssociationActivitySelection do
 
     def since(start)
       start..Time.now.utc
+    end
+
+    it 'counts only the versions a version scope keeps, at every depth' do
+      article = TrackedArticle.create!(title: 'Quiet')
+      other = TrackedArticle.create!(title: 'Also quiet')
+      comment = other.comments.create!(body: 'by the system')
+      start = Time.now.utc
+      PaperTrail.request(whodunnit: 'alice') do
+        article.comments.create!(body: 'by alice').replies.create!(body: 'and her reply')
+      end
+      comment.replies.create!(body: 'by the system')
+      alice = ->(versions) { versions.where(whodunnit: 'alice') }
+      found = lambda do |paths, **options|
+        selected(sources(TrackedArticle, paths, window: since(start), **options))
+      end
+
+      expect(found.call([:comments], version_scope: alice)).to eq([article.id])
+      expect(found.call(['comments.replies'], version_scope: alice)).to eq([article.id])
+      expect(found.call(['comments.replies'])).to eq([article.id, other.id].sort)
     end
 
     it 'keeps a subquery typed like the owner column where the columns compared match' do

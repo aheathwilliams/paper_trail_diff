@@ -26,6 +26,8 @@ module PaperTrailDiff
 
     private
 
+    @filter: ActivityScopeFilter?
+
     @range: TimelineRange
 
     @record: untyped
@@ -41,39 +43,54 @@ module PaperTrailDiff
     # : () -> Array[ActivityStep]
     def no_steps: () -> Array[ActivityStep]
 
-    # Every boundary in the span, filtered out or not. A filter narrows where the
-    # span starts and ends, but the sequence inside it stays complete: dropping
-    # boundaries would fold the changes they carried into a neighbouring step and
-    # credit them to whoever made that one. A filter that keeps no version
-    # leaves no span, as it does for a checkpoint timeline.
+    # Every boundary between the endpoints, filtered out or not: dropping one
+    # would fold the change it carried into a neighbouring step and credit it
+    # to whoever made that one. A version filter decides only which of the
+    # steps are reported (see #reported?).
     # : () -> Array[ActivityStep]
     def build_between_versions: () -> Array[ActivityStep]
 
     # Activity from the first to the last of the root versions.
-    # : (Array[untyped]) -> ActivityHistory
-    def version_history: (Array[untyped]) -> ActivityHistory
+    # : (RootVersionPlan) -> ActivityHistory
+    def version_history: (RootVersionPlan) -> ActivityHistory
+
+    # Activity replays every root version in the range, even those a version
+    # filter leaves out, so that each change it keeps is read as the whole
+    # history shows it. Only a window reads a context: an explicit range
+    # always holds a version.
+    # : () -> RootVersionPlan
+    def select_plan: () -> RootVersionPlan
+
+    # Whether the event's step is reported: it is inside the range, and a
+    # version filter keeps it. With associations the filter keeps whole
+    # transactions (see ActivityScopeFilter). On the root alone it keeps the
+    # root's versions, as `timeline` does, and so does a plan without one, but
+    # for the version it holds only to reveal the last change in it.
+    # : (ActivityEvent, RootVersionPlan) -> bool
+    def reported?: (ActivityEvent, RootVersionPlan) -> bool
+
+    # A closing step is the last event's, so it is reported as that event's
+    # step would be.
+    # : (ActivityHistory, RootVersionPlan) -> bool
+    def closes?: (ActivityHistory, RootVersionPlan) -> bool
 
     # : () -> Array[ActivityStep]
     def build_to_current: () -> Array[ActivityStep]
 
+    # The range ends at the current record when its last event's step is
+    # reported, and at that step's end otherwise.
     # : () -> Analysis
     def analyze_current: () -> Analysis
 
     # The explicit live endpoint and a batch's live closing endpoint use the
-    # same selected plan. A version filter can close earlier, on its successor.
-    # : () -> [RootVersionPlan, ActivityHistory, RecordSnapshot?, ActivityBoundary?]
-    def current_history: () -> [ RootVersionPlan, ActivityHistory, RecordSnapshot?, ActivityBoundary? ]
+    # same selected plan, which replays every version through to the current
+    # record, a version filter or not.
+    # : () -> [RootVersionPlan, ActivityHistory, RecordSnapshot?, ActivityBoundary]
+    def current_history: () -> [ RootVersionPlan, ActivityHistory, RecordSnapshot?, ActivityBoundary ]
 
-    # Events up to the instant the current record was read. A range that a
-    # version filter closes earlier ends at that version, with no snapshot.
+    # Events up to the instant the current record was read.
     # : (RootVersionPlan, RecordSnapshot?, untyped) -> ActivityHistory
     def history_until: (RootVersionPlan, RecordSnapshot?, untyped) -> ActivityHistory
-
-    # Without a closing boundary nothing reads the closing pair, so its
-    # mutations cannot change an answer.
-    # mutant:disable
-    # : (RootVersionPlan) -> [RootVersionPlan, ActivityHistory, RecordSnapshot?, ActivityBoundary?]
-    def empty_history: (RootVersionPlan) -> [ RootVersionPlan, ActivityHistory, RecordSnapshot?, ActivityBoundary? ]
 
     # : (untyped) -> ActivityBoundary
     def current_boundary: (untyped) -> ActivityBoundary
@@ -88,8 +105,8 @@ module PaperTrailDiff
     # a requested current record or the absence a final root destroy leaves.
     # Either follows the root versions, which are themselves events, so the
     # last boundary the history kept opens it.
-    # : (ActivityHistory, ActivityBoundary?, RecordSnapshot?) -> Array[ActivityStep]
-    def activity_steps: (ActivityHistory, ActivityBoundary?, RecordSnapshot?) -> Array[ActivityStep]
+    # : (ActivityHistory, RootVersionPlan, ActivityBoundary?, RecordSnapshot?) -> Array[ActivityStep]
+    def activity_steps: (ActivityHistory, RootVersionPlan, ActivityBoundary?, RecordSnapshot?) -> Array[ActivityStep]
 
     # A destroyed root has no later version, but its own event states that
     # nothing follows it, so the removal can still close the timeline.
@@ -140,24 +157,26 @@ module PaperTrailDiff
     # : (RootVersionPlan) -> RecordSnapshot?
     def window_live_snapshot: (RootVersionPlan) -> RecordSnapshot?
 
-    # Root versions inside the window that the plan does not report are context
-    # rather than mutations: the version appended to reveal the last selected
-    # change, and anything a filter excluded but the replay still walks. Neither
-    # may be counted as a selected mutation. Descendant events are not filtered,
-    # so window membership is the whole test for them.
+    # The events whose steps are reported: not the version appended to reveal
+    # the last selected change, nor anything a filter leaves out that the
+    # replay still walks (see #reported?).
     # : (Array[ActivityEvent], RootVersionPlan) -> Array[ActivityEvent]
     def selected_events: (Array[ActivityEvent], RootVersionPlan) -> Array[ActivityEvent]
 
     # A window either closes on the absence its final destruction leaves, or on
     # current state when it reaches past everything recorded. Both are boundaries
-    # no version can supply. One whose replay kept no event has nothing to close.
+    # no version can supply. One whose replay kept no event, or whose last kept
+    # event's step it does not report, has nothing to close.
     #
     # Everything recorded means on every requested path, not only the root's
     # own versions. When an association changed after the window, its last
-    # step already ends at that change, at the state the window left; closing
-    # on current state would add the later change to a window it was not in.
-    # : (ActivityHistory, ActivityEvent, RootVersionPlan, untyped, RecordSnapshot?, Array[ActivityEvent]) -> ActivityStep?
-    def window_closing: (ActivityHistory, ActivityEvent, RootVersionPlan, untyped, RecordSnapshot?, Array[ActivityEvent]) -> ActivityStep?
+    # step already ends at that change, at the state the window left, and that
+    # change is the last kept event, outside the window; closing on current
+    # state would add it to a window it was not in. A plan that does not close
+    # on the current record holds a version after the window, which is such a
+    # change, or ends at a destruction.
+    # : (ActivityHistory, ActivityEvent, RootVersionPlan, untyped, RecordSnapshot?) -> ActivityStep?
+    def window_closing: (ActivityHistory, ActivityEvent, RootVersionPlan, untyped, RecordSnapshot?) -> ActivityStep?
 
     # : (ActivityHistory, ActivityEvent) -> ActivityStep
     def window_destroyed_step: (ActivityHistory, ActivityEvent) -> ActivityStep
@@ -189,11 +208,16 @@ module PaperTrailDiff
     # : (Array[untyped], untyped, range_end: untyped) -> Array[ActivityEvent]
     def collect_events: (Array[untyped], untyped, range_end: untyped) -> Array[ActivityEvent]
 
+    # A version filter reads its answers for a batch's history once, for the
+    # first root that history serves.
+    # : (untyped, Array[ActivityEvent]) -> void
+    def prepare_filter: (untyped, Array[ActivityEvent]) -> void
+
     # Events after the last root version read the root from the live record
-    # when the range closes on it. Explicit endpoints report every step, as
-    # their range includes every version.
-    # : (Array[untyped], Array[ActivityEvent], untyped, ?current: untyped, ?closing: RecordSnapshot?) -> ActivityHistory
-    def replay: (Array[untyped], Array[ActivityEvent], untyped, ?current: untyped, ?closing: RecordSnapshot?) -> ActivityHistory
+    # when the range closes on it. Explicit endpoints report every step their
+    # plan does, as their range includes every version.
+    # : (RootVersionPlan, Array[ActivityEvent], untyped, ?current: untyped, ?closing: RecordSnapshot?) -> ActivityHistory
+    def replay: (RootVersionPlan, Array[ActivityEvent], untyped, ?current: untyped, ?closing: RecordSnapshot?) -> ActivityHistory
 
     # The step from the last boundary the history reached to one that closes
     # the range.

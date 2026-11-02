@@ -40,6 +40,8 @@ module PaperTrailDiff
     # : (Array[untyped]) -> TimeRange?
     def widest_range: (Array[untyped]) -> TimeRange?
 
+    # Activity on associations, which is what needs a context, also replays
+    # every version a filter leaves out (see RootVersionSelection).
     # : (Array[untyped], untyped, Set[untyped]?, untyped) -> RootVersionPlan
     def versions_for: (Array[untyped], untyped, Set[untyped]?, untyped) -> RootVersionPlan
 

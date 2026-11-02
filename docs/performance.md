@@ -67,6 +67,10 @@ Flat query counts do not make a report's cost flat:
   history again from where that transaction began.
   On 1.4 million versions, 10,800 records took about 6 s on SQL Server and
   1.5 s on PostgreSQL and MySQL.
+- **`version_scope:` on activity reads every version in the range**, as
+  activity without one does. With associations, it takes one more statement
+  per 500 of the transactions its history reads, to find those the filter
+  keeps a version of.
 
 ## Database indexes
 

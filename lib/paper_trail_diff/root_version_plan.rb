@@ -90,6 +90,17 @@ module PaperTrailDiff
       )
     end
 
+    # The same plan reporting only `selected` as mutations, of the versions it
+    # holds.
+    #: (Array[untyped]) -> RootVersionPlan
+    def reporting(selected)
+      self.class.new(
+        versions: versions, steps: steps, context_version: context_version,
+        reconstruction_versions: reconstruction_versions, mutations: selected,
+        closing_record: closing_record, closes_on_destroy: closes_on_destroy
+      )
+    end
+
     # What the range's final state is read from, which is the live record when
     # the window closes on current state and the last version otherwise.
     #: () -> untyped

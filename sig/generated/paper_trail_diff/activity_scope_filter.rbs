@@ -1,0 +1,52 @@
+# Generated from lib/paper_trail_diff/activity_scope_filter.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Which events a `version_scope:` reports in activity on associations.
+  #
+  # PT-AT reads a transaction's records as they stood before it began, so the
+  # changes a transaction saved surface together in its last step rather than
+  # each in the step of its own version (see ActivityTransactionGrouper). No
+  # step inside a transaction can be credited to one version of it, and
+  # leaving one out would lose the changes it carried. A transaction is
+  # therefore reported whole when the filter keeps any version saved in it, of
+  # whichever record, and a version saved outside a transaction when the
+  # filter keeps that version. Both are answered from the version tables, so
+  # every window and every way of asking reads the same transaction alike.
+  #
+  # One filter serves a request. It reads the answers for each history once,
+  # in one statement per version table and 500 transactions or versions, and
+  # the roots a batch prepared together share them.
+  class ActivityScopeFilter
+    SLICE: ::Integer
+
+    # : (untyped) -> void
+    def initialize: (untyped) -> void
+
+    # Reads the answers for every version `history` holds, once for each
+    # history, and for those of `versions` it does not hold.
+    # : (PreparedHistory?, Array[untyped]) -> void
+    def prepare: (PreparedHistory?, Array[untyped]) -> void
+
+    # Whether the filter keeps a version of `version`'s transaction, or
+    # `version` itself when it was saved outside one. `prepare` reads it first.
+    # : (untyped) -> bool
+    def kept?: (untyped) -> bool
+
+    private
+
+    @histories: Set[PreparedHistory]
+
+    @scope: untyped
+
+    @transactions: Hash[Array[untyped], bool]
+
+    @versions: Hash[Array[untyped], bool]
+
+    # : (Array[untyped]) -> void
+    def read: (Array[untyped]) -> void
+
+    # Records which of `values` of `column` the filter keeps versions with.
+    # : (untyped, Hash[Array[untyped], bool], String, Array[untyped], Symbol) -> void
+    def read_kept: (untyped, Hash[Array[untyped], bool], String, Array[untyped], Symbol) -> void
+  end
+end

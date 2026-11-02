@@ -45,7 +45,7 @@ module PaperTrailDiff
 
     # `activity_tree` names the association paths whose changes also select a
     # root, as an activity analysis reports them. Without one, only a root's
-    # own versions select it. `version_scope` narrows which of those count,
+    # own versions select it. `version_scope` narrows which of either count,
     # as it narrows which are reported.
     #: (untyped, time_range: TimeRange?, limit: Integer, ?historical_filter: untyped, ?max_filter_versions: Integer, ?activity_tree: AssociationTree?, ?version_scope: untyped) -> void
     def initialize(scope, time_range:, limit:, historical_filter: nil, # rubocop:disable Metrics/ParameterLists
@@ -56,10 +56,9 @@ module PaperTrailDiff
       @time_range = time_range
       @version_scope = VersionScopeFilter.validated(version_scope)
       @limit = validate_limit(limit)
-      @related = if activity_tree
-                   AssociationActivitySelection.new(model, tree: activity_tree,
-                                                           time_range: time_range)
-                 end
+      @related = activity_tree && AssociationActivitySelection.new(
+        model, tree: activity_tree, time_range: time_range, version_scope: @version_scope
+      )
       @historical_filter = unless historical_filter.nil?
                              HistoricalFilter.new(base_class, predicate: historical_filter,
                                                               time_range: time_range, limit: @limit,

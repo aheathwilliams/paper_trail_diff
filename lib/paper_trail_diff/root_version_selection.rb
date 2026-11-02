@@ -20,22 +20,28 @@ module PaperTrailDiff
                  'final change, and there is no current record to end at: narrow ' \
                  'the window to end before the last recorded version'
 
-    #: (in_range: Array[untyped], selected: Array[untyped], after_range: untyped, windowed: bool, ?context_required: bool, ?filtered: bool, ?live_endpoint: untyped) -> void
+    # `selected` is what a filter keeps of `in_range`; one that keeps every
+    # version is no filter. A `whole` plan replays every version in the range,
+    # as one without a filter does, and the filter names only which of them
+    # are mutations.
+    #: (in_range: Array[untyped], selected: Array[untyped], after_range: untyped, windowed: bool, ?context_required: bool, ?live_endpoint: untyped, ?whole: bool) -> void
     def initialize( # rubocop:disable Metrics/ParameterLists
-      in_range:, selected:, after_range:, windowed:, context_required: false, filtered: false,
-      live_endpoint: nil
+      in_range:, selected:, after_range:, windowed:, context_required: false, live_endpoint: nil,
+      whole: false
     )
       @in_range = in_range
       @selected = selected
       @after_range = after_range
       @windowed = windowed
       @context_required = context_required
-      @filtered = filtered
+      @filtered = selected.length < in_range.length
       @live_endpoint = live_endpoint
+      @whole = whole
     end
 
     #: () -> RootVersionPlan
     def call
+      return whole_plan if @whole && @filtered
       return without_selection if @selected.empty?
 
       closing = revealing_version || @live_endpoint
@@ -52,6 +58,18 @@ module PaperTrailDiff
     # @rbs @context_required: bool
     # @rbs @filtered: bool
     # @rbs @live_endpoint: untyped
+    # @rbs @whole: bool
+
+    # Activity on associations reports the changes a filter keeps on them
+    # wherever they fall in the range, so it replays every root version
+    # there; the filter still names the root's own mutations.
+    #: () -> RootVersionPlan
+    def whole_plan
+      RootVersionSelection.new(
+        in_range: @in_range, selected: @in_range, after_range: @after_range,
+        windowed: @windowed, context_required: @context_required, live_endpoint: @live_endpoint
+      ).call.reporting(@selected)
+    end
 
     # A window reaching past the last recorded version has only the live record
     # left to show what its final mutation produced. That record is a closing

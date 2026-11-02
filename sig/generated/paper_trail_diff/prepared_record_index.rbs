@@ -189,6 +189,9 @@ module PaperTrailDiff
     # : (untyped, untyped) -> Array[untyped]
     def versions_for_id: (untyped, untyped) -> Array[untyped]
 
+    # : () -> Array[untyped]
+    def versions: () -> Array[untyped]
+
     # : (untyped, untyped, ?untyped) -> Array[untyped]
     def model_classes: (untyped, untyped, ?untyped) -> Array[untyped]
 

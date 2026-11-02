@@ -10,15 +10,18 @@ module PaperTrailDiff
     attr_reader :last_snapshot #: RecordSnapshot?
     attr_reader :last_boundary #: ActivityBoundary?
     attr_reader :last_event_snapshot #: RecordSnapshot?
+    # The event of `last_boundary`.
+    attr_reader :last_event #: ActivityEvent?
 
-    #: (steps: Array[ActivityStep], root_snapshots: Hash[Array[untyped], RecordSnapshot?], first_snapshot: RecordSnapshot?, last_snapshot: RecordSnapshot?, ?last_boundary: ActivityBoundary?, ?last_event_snapshot: RecordSnapshot?) -> void
-    def initialize(steps:, root_snapshots:, first_snapshot:, last_snapshot:, last_boundary: nil, last_event_snapshot: nil) # rubocop:disable Metrics/ParameterLists, Layout/LineLength
+    #: (steps: Array[ActivityStep], root_snapshots: Hash[Array[untyped], RecordSnapshot?], first_snapshot: RecordSnapshot?, last_snapshot: RecordSnapshot?, ?last_boundary: ActivityBoundary?, ?last_event_snapshot: RecordSnapshot?, ?last_event: ActivityEvent?) -> void
+    def initialize(steps:, root_snapshots:, first_snapshot:, last_snapshot:, last_boundary: nil, last_event_snapshot: nil, last_event: nil) # rubocop:disable Metrics/ParameterLists, Layout/LineLength
       @steps = steps.freeze
       @root_snapshots = root_snapshots.freeze
       @first_snapshot = first_snapshot
       @last_snapshot = last_snapshot
       @last_boundary = last_boundary
       @last_event_snapshot = last_event_snapshot
+      @last_event = last_event
       freeze
     end
 
@@ -56,7 +59,8 @@ module PaperTrailDiff
         first_snapshot: @first_snapshot,
         last_snapshot: final_snapshot,
         last_boundary: @previous_boundary,
-        last_event_snapshot: @previous_snapshot
+        last_event_snapshot: @previous_snapshot,
+        last_event: @previous_event
       )
     end
 
@@ -72,6 +76,7 @@ module PaperTrailDiff
     # @rbs @steps: Array[ActivityStep]
     # @rbs @root_snapshots: Hash[Array[untyped], RecordSnapshot?]
     # @rbs @first_snapshot: RecordSnapshot?
+    # @rbs @first_pending: bool
     # @rbs @previous_snapshot: RecordSnapshot?
     # @rbs @selected_last_snapshot: RecordSnapshot?
     # @rbs @previous_boundary: ActivityBoundary?
@@ -83,6 +88,7 @@ module PaperTrailDiff
       @steps = []
       @root_snapshots = {}
       @first_snapshot = nil
+      @first_pending = true
       @previous_snapshot = nil
       @selected_last_snapshot = nil
       @previous_boundary = nil
@@ -108,16 +114,17 @@ module PaperTrailDiff
     # A left-out event bounds nothing. A reported step it would have opened
     # still moves the reported range's end past it, to the next boundary.
     #
-    # The history starts at its first kept event. The events left out before
-    # it change nothing the root shows, unless they are of a transaction that
-    # crossed the window's start and has no event kept here: the snapshot at
-    # them is the state before that transaction, whose changes the window
-    # before this one reports (see ActivityTreeFilter).
+    # The history starts at the first kept event whose step is reported. The
+    # events left out before it change nothing the root shows, unless they are
+    # of a transaction that crossed the window's start and has no event kept
+    # here: the snapshot at them is the state before that transaction, whose
+    # changes the window before this one reports (see ActivityTreeFilter). And
+    # a version filter starts it at the first change it keeps.
     #: (ActivityEvent, RecordSnapshot?, bool) -> void
     def consume(event, snapshot, kept)
       return pass(event) unless kept
 
-      @first_snapshot = snapshot unless @previous_boundary
+      capture_first(event, snapshot)
       boundary = ActivityBoundary.from_version(
         event.version, recorded: @view.recorded_reader(root: event.root?)
       )
@@ -132,7 +139,20 @@ module PaperTrailDiff
 
     #: (ActivityEvent) -> void
     def pass(event)
-      @passed_reported = true if !@include_step || @include_step.call(event)
+      @passed_reported = true if reported?(event)
+    end
+
+    #: (ActivityEvent, RecordSnapshot?) -> void
+    def capture_first(event, snapshot)
+      return unless @first_pending && reported?(event)
+
+      @first_snapshot = snapshot
+      @first_pending = false
+    end
+
+    #: (ActivityEvent) -> bool
+    def reported?(event)
+      !@include_step || @include_step.call(event)
     end
 
     #: (ActivityBoundary, RecordSnapshot?) -> void

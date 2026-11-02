@@ -85,10 +85,10 @@ module PaperTrailDiff
         steps = ReadSnapshot.call([record]) do
           @traversal_preparer.call(record.class, historical: true)
           from, to = default_range(record, from, to, within)
-          live = live_endpoint_for(record, within)
+          view = activity_view(true, snapshots, group, version_scope)
           activity_builder(
             record, from: from, to: to, within: within, version_scope: version_scope,
-                    live_endpoint: live, view: activity_view(true, snapshots, group)
+                    live_endpoint: live_endpoint_for(record, within), view: view
           ).build
         end
         payload[:step_count] = steps.length
@@ -98,7 +98,7 @@ module PaperTrailDiff
 
     #: (untyped, from: untyped, to: untyped, within: untyped, ?activity: bool, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?) -> Analysis
     def analyze(record, from:, to:, within:, activity: false, version_scope: nil, snapshots: false, group: nil) # rubocop:disable Metrics/ParameterLists, Layout/LineLength
-      view = activity_view(activity, snapshots, group)
+      view = activity_view(activity, snapshots, group, version_scope)
       Endpoint.validate_root!(record)
       ReadSnapshot.call([record]) do
         analyze_record(record, from: from, to: to, within: within, activity: activity,
@@ -111,7 +111,7 @@ module PaperTrailDiff
     def analyze_many(records, within:, activity: false, version_scope: nil, snapshots: false, group: nil) # rubocop:disable Metrics/ParameterLists, Layout/LineLength
       ReadSnapshot.call(records.is_a?(Array) ? records : []) do
         analyze_batch(records, within: within, activity: activity, version_scope: version_scope,
-                               view: activity_view(activity, snapshots, group))
+                               view: activity_view(activity, snapshots, group, version_scope))
       end
     end
 
@@ -121,7 +121,7 @@ module PaperTrailDiff
     # rather than dropped -- see `PaperTrailDiff.analyze_scope`.
     #: (untyped, limit: Integer?, within: untyped, ?activity: bool, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?, ?historical_filter: untyped, ?max_filter_versions: Integer, ?include_deleted: bool) -> ScopedAnalysis
     def analyze_scope(scope, limit:, within:, activity: false, version_scope: nil, snapshots: false, group: nil, historical_filter: nil, max_filter_versions: HistoricalFilter::DEFAULT_VERSION_LIMIT, include_deleted: false) # rubocop:disable Metrics/ParameterLists, Layout/LineLength
-      view = activity_view(activity, snapshots, group)
+      view = activity_view(activity, snapshots, group, version_scope)
       ReadSnapshot.call([scope]) do
         check_scope(scope)
         scoped_builder(scope, limit: limit, within: within, activity: activity,
@@ -133,10 +133,10 @@ module PaperTrailDiff
 
     private
 
-    #: (bool, bool, Symbol?) -> ActivityView
-    def activity_view(activity, snapshots, group)
+    #: (bool, bool, Symbol?, untyped) -> ActivityView
+    def activity_view(activity, snapshots, group, version_scope)
       ActivityView.build(activity: activity, snapshots: snapshots, group: group,
-                         recorded: @recorded)
+                         recorded: @recorded, version_scope: version_scope)
     end
 
     #: (untyped) -> Hash[Symbol, untyped]

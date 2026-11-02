@@ -56,6 +56,9 @@ share passes. `spec/oracle` compares them with the truth instead:
    are compared with the recorded states. Two windows that meet between
    transactions, or inside one, must report each step once, as the window
    spanning both does, through both `activity_timeline` and `analyze_many`.
+   The transactions take turns between no author, `alice`, and `bob`, and
+   the same windows filtered to alice's versions must report exactly the
+   unfiltered steps of the transactions she saved a version in.
 
 Five more generators cover other shapes. `scoped_membership_spec.rb` moves
 notes in and out of scoped associations (conditions, order, limit, and

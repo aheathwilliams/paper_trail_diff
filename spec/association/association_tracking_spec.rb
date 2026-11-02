@@ -2448,17 +2448,17 @@ RSpec.describe 'PaperTrailDiff association tracking' do
       expect(activity.to_snapshot.attributes.fetch('title')).to eq('By Bob')
     end
 
-    it 'keeps every boundary in the activity sequence the filter spans' do
+    it 'reports only the changes the filter keeps, each from the state before it' do
       article, users = filtered_gap_history
 
       steps = PaperTrailDiff.activity_timeline(article, version_scope: users,
                                                         associations: ['comments'])
 
-      # A filter narrows where the span starts and ends. Inside it the sequence
-      # stays complete, because dropping a boundary would fold the change it
-      # carried into a neighbouring step and credit it to whoever made that one.
-      expect(titles(steps)).to include(['System 1', 'System 2'], ['System 2', 'System 3'])
-      expect(titles(steps).last).to eq(['System 3', 'By Bob'])
+      # Every version is still replayed, so leaving out the system's steps
+      # moves none of their changes into the steps that remain.
+      expect(steps.map { |step| step.source_boundary.whodunnit }).to eq(%w[alice alice bob])
+      expect(titles(steps)).to eq([nil, ['Start', 'By Alice'], ['System 3', 'By Bob']])
+      expect(steps.map { |step| step.diff.associations['comments'] }).to all(be_nil)
     end
 
     it 'keeps a selected destruction, which no successor can ever reveal' do
@@ -2476,7 +2476,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
       # Nothing follows a destroy, so it pairs into no step and the rule that
       # drops unrevealed mutations would drop it. The absence it leaves is what
       # it produced, and the activity view can show that.
-      expect(steps.map { |step| step.to_boundary.kind }).to eq(%i[version version destroyed])
+      expect(steps.map { |step| step.to_boundary.kind }).to eq(%i[version destroyed])
       expect(steps.last.diff.record_presence_change.to).to be_nil
       expect(steps.last.diff.record_presence_change.from.attributes.fetch('title'))
         .to eq('By system')

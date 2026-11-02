@@ -243,8 +243,8 @@ window.
 
 ### Reporting only some changes: `version_scope:`
 
-`version_scope:` narrows which of the root record's versions are reported. It
-receives the version relation and returns a narrower one:
+`version_scope:` narrows which changes are reported. It receives the version
+relation and returns a narrower one:
 
 ```ruby
 user_edits = ->(scope) { scope.where.not(whodunnit: nil) }
@@ -264,17 +264,29 @@ It is accepted by `timeline`, `activity_timeline`, `analyze`, `analyze_many`,
   reported   alice: what alice changed    bob: what bob changed
   ```
 
-- It looks at the root record's versions only. Someone who only edited comments
-  has no root versions to select. To find one person's changes, including to
-  associations, see [one person's changes](#one-persons-changes).
+- `timeline` looks at the root record's versions only, so someone who only
+  edited comments has none for it to report. Activity reports their changes:
+  see [one person's changes](#one-persons-changes).
+- In activity (`activity_timeline`, `activity: true`, and `report`), it
+  chooses the changes on the requested associations as well. A transaction is
+  reported whole, every step of it, when the filter keeps any version saved
+  in it, of whichever record: PT-AT shows a transaction's changes together, at
+  its last step, so no step inside one belongs to a single version. A version
+  saved outside a transaction is reported when the filter keeps it. Every
+  version is still read, so each step shows what its own change did, and an
+  analysis starts at the first change the filter keeps and ends after the
+  last. Without associations, the steps are the root's versions the filter
+  keeps, as `timeline` reports them.
 - In `analyze_scope` and `report`, it also chooses which records are selected:
-  a record's own versions select it only when the filter keeps one of them in
-  the window. A record whose versions there it all drops would have nothing to
-  report, so it is left out. A change on a requested association still selects
-  a record, whoever made it.
-- `activity_timeline` uses the filter to decide where the range starts and
-  ends, but still lists every step inside it. Dropping one would move its
-  change into a neighboring step and credit the wrong person.
+  a record is selected only when the filter keeps one of its own versions in
+  the window, or a version of a record on a requested association. A record
+  changed only by versions it drops would have nothing to report, so it is
+  left out, and it does not count toward `limit:`.
+- The record and its requested associations keep their versions in one table
+  (see [custom version classes](#models-schemas-and-edge-cases)), and the
+  filter reads it for all of them. A condition on `item_type` or `item_id`
+  therefore leaves out the associations' changes; filter on the version's own
+  columns, such as `whodunnit` or `event`.
 
 ## compare
 
@@ -418,7 +430,22 @@ end
 
 ### One person's changes
 
-Filter the steps in Ruby by `source_boundary.whodunnit`:
+Pass a [`version_scope:`](#reporting-only-some-changes-version_scope) that
+keeps their versions. Activity then reports only the transactions they saved
+a version in, on the record or on its associations:
+
+<!-- executable:readme-person-scope -->
+```ruby
+priya = ->(versions) { versions.where(whodunnit: "Priya Shah") }
+steps = PaperTrailDiff.activity_timeline(
+  article, within: window, associations: %i[comments tags], version_scope: priya
+)
+
+steps.map { |step| step.source_boundary.whodunnit }.uniq  # ["Priya Shah"]
+```
+
+To count everyone's changes from one read, group the steps in Ruby by
+`source_boundary.whodunnit` instead:
 
 <!-- executable:readme-person-changes -->
 ```ruby
@@ -436,13 +463,9 @@ authors = attributed.group_by { |step| step.source_boundary.whodunnit }
                     .transform_values(&:length)
 ```
 
-This includes changes to associations, which `version_scope:` cannot see.
-Filter after the call rather than asking the gem for fewer versions: every step
-has to be rebuilt anyway for each one to be correct, so filtering earlier saves
-nothing.
-
 For many records, use `report` or `analyze_many(..., activity: true)` instead of
-calling `activity_timeline` in a loop, so the database work is shared.
+calling `activity_timeline` in a loop, so the database work is shared. With
+`version_scope:`, `report` selects only the records that person changed.
 
 ### One step per transaction: `group: :transaction`
 
@@ -615,9 +638,10 @@ analysis.to_h(snapshots: true, metadata: true)
 - `from_snapshot` is the record as it was when the range began: before the
   first change in a window, or before the change of the version you passed as
   `from:`. With `version_scope:`, a window begins at the first change the
-  filter keeps. It is `nil` when the record was created inside the range; the
-  state right after it was created is then the first activity step's
-  `to_snapshot`, which `snapshots: true` keeps.
+  filter keeps, on the record or, with `activity: true`, on its associations.
+  It is `nil` when the record was created inside the range; the state right
+  after it was created is then the first activity step's `to_snapshot`, which
+  `snapshots: true` keeps.
 - To read the record at one version, with its values typed and its
   associations, take `from_snapshot` from a range that starts there:
   `PaperTrailDiff.analyze(article, from: version, to: article).from_snapshot`.
@@ -714,7 +738,7 @@ and `allow_approximate:`.
   versions and cannot show a change to its associations alone, so only a
   record's own version selects it. With
   [`version_scope:`](#reporting-only-some-changes-version_scope), only the
-  record's own versions that the filter keeps select it.
+  versions the filter keeps select it, the record's own and its associations'.
 - **An analysis can still be empty.** A record is selected by any version on its
   paths, but its analysis compares only the state you requested. A join row
   whose role changed, or a version that touched only ignored columns, selects a

@@ -8,11 +8,15 @@ module PaperTrailDiff
   # history would read differently depending on how it was asked for.
   class ActivityView
     # Options only an activity view uses are refused without one.
-    # : (activity: bool, snapshots: bool, group: Symbol?, recorded: IgnorePolicy?) -> ActivityView
-    def self.build: (activity: bool, snapshots: bool, group: Symbol?, recorded: IgnorePolicy?) -> ActivityView
+    # : (activity: bool, snapshots: bool, group: Symbol?, recorded: IgnorePolicy?, ?version_scope: untyped) -> ActivityView
+    def self.build: (activity: bool, snapshots: bool, group: Symbol?, recorded: IgnorePolicy?, ?version_scope: untyped) -> ActivityView
 
-    # : (?snapshots: bool, ?group: Symbol?, ?recorded: IgnorePolicy?) -> void
-    def initialize: (?snapshots: bool, ?group: Symbol?, ?recorded: IgnorePolicy?) -> void
+    # : (?snapshots: bool, ?group: Symbol?, ?recorded: IgnorePolicy?, ?version_scope: untyped) -> void
+    def initialize: (?snapshots: bool, ?group: Symbol?, ?recorded: IgnorePolicy?, ?version_scope: untyped) -> void
+
+    # Which events of activity on associations a `version_scope:` reports,
+    # answered once for the whole request; nil without one.
+    attr_reader version_filter: ActivityScopeFilter?
 
     # Merging a group compares its outer states, so the snapshots must survive
     # the build even when the caller did not ask to keep them.
@@ -37,6 +41,8 @@ module PaperTrailDiff
     @readers: Hash[bool, RecordedChangesReader]?
 
     @snapshots: bool
+
+    @version_filter: ActivityScopeFilter?
 
     # : () -> bool
     def grouping?: () -> bool

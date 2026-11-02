@@ -40,9 +40,10 @@ module PaperTrailDiff
     # A batch may have selected these versions already, in which case reselecting
     # them per record would undo the batching.
     # The plan says which pairs of versions become steps, which a filter can
-    # make different from adjacent pairs of the selected versions.
-    #: (?context_required: bool) -> RootVersionPlan
-    def select_plan(context_required: false)
+    # make different from adjacent pairs of the selected versions. A `whole`
+    # plan replays every version in the range; see RootVersionSelection.
+    #: (?context_required: bool, ?whole: bool) -> RootVersionPlan
+    def select_plan(context_required: false, whole: false)
       preselected = @plan
       return preselected if preselected
 
@@ -51,9 +52,9 @@ module PaperTrailDiff
         return TimeVersionRange.new(
           @record, time_range: range, version_scope: @version_scope,
                    live_endpoint: @live_endpoint
-        ).select_plan(context_required: context_required)
+        ).select_plan(context_required: context_required, whole: whole)
       end
-      explicit_plan
+      explicit_plan(whole)
     end
 
     #: () -> bool
@@ -83,17 +84,17 @@ module PaperTrailDiff
     # @rbs @from: untyped
     # @rbs @to: untyped
 
-    #: () -> RootVersionPlan
-    def explicit_plan
+    #: (bool) -> RootVersionPlan
+    def explicit_plan(whole)
       return RootVersionPlan.empty if unresolved?
       if Endpoint.record?(@to)
         return VersionRange.new(@record, from: @from, to: @from, version_scope: @version_scope)
-                           .select_plan_through_current(@to)
+                           .select_plan_through_current(@to, whole: whole)
       end
 
       VersionRange.new(
         @record, from: @from, to: @to, version_scope: @version_scope
-      ).select_plan_for_range
+      ).select_plan_for_range(whole: whole)
     end
 
     #: (untyped) -> bool

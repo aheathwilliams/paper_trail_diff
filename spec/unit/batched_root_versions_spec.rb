@@ -62,6 +62,17 @@ RSpec.describe PaperTrailDiff::BatchedRootVersions do
     expect(select([article]).fetch(key(article)).versions).to eq(article_versions)
   end
 
+  # Nothing after the version reveals what it did, which a filter would
+  # need; without one, the version is still the record's history.
+  it "keeps a record's only version without a filter, though nothing follows it" do
+    article = FilterArticle.create!(title: 'Draft')
+    only = FilterVersion.find_by!(item_id: article.id)
+
+    plan = select([article]).fetch(key(article))
+
+    expect([plan.versions, plan.steps]).to eq([[only], []])
+  end
+
   it 'gives a record with no versions an empty plan' do
     article, = history
     FilterVersion.delete_all
@@ -190,6 +201,19 @@ RSpec.describe PaperTrailDiff::BatchedRootVersions do
 
       expect(plan.mutations).to eq([created, published])
       expect(plan.steps).to eq([[created, reviewed]])
+    end
+
+    # Activity on associations, which needs a context, reads every version.
+    it 'replays every version, reporting those it keeps, when context is required' do
+      article, created, reviewed, published = history
+      only_review = ->(versions) { versions.where(id: reviewed.id) }
+
+      plan = select([article], within: at(0)...at(2), version_scope: only_review,
+                               context_required: true).fetch(key(article))
+
+      expect(plan.reconstruction_versions).to eq([created, reviewed, published])
+      expect(plan.steps).to eq([[created, reviewed], [reviewed, published]])
+      expect(plan.mutations).to eq([reviewed])
     end
   end
 

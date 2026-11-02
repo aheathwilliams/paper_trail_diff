@@ -85,6 +85,8 @@ module PaperTrailDiff
       TimeRange.new(range.exclude_end? ? (start...range.end_time) : (start..range.end_time))
     end
 
+    # Activity on associations, which is what needs a context, also replays
+    # every version a filter leaves out (see RootVersionSelection).
     #: (Array[untyped], untyped, Set[untyped]?, untyped) -> RootVersionPlan
     def versions_for(in_range, after_range, chosen, live_endpoint)
       RootVersionSelection.new(
@@ -93,8 +95,8 @@ module PaperTrailDiff
         after_range: after_range,
         windowed: !@time_range.nil?,
         context_required: @context_required,
-        filtered: !@version_scope.nil?,
-        live_endpoint: live_endpoint
+        live_endpoint: live_endpoint,
+        whole: @context_required
       ).call
     end
 

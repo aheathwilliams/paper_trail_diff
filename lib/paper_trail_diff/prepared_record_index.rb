@@ -396,6 +396,11 @@ module PaperTrailDiff
       @series.fetch(identity(model_class, id)).versions
     end
 
+    #: () -> Array[untyped]
+    def versions
+      @series.each_value.flat_map(&:versions)
+    end
+
     #: (untyped, untyped, ?untyped) -> Array[untyped]
     def model_classes(model_class, id, version = nil)
       @series.fetch(identity(model_class, id)).model_classes(version)
