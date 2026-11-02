@@ -9,17 +9,15 @@ module PaperTrailDiff
   class PaperTrailAdapter # rubocop:disable Metrics/ClassLength
     # `recorded_changes:` reads what each activity boundary's version recorded.
     # `allow_approximate:` accepts association paths read with PT-AT.
-    #: (associations: association_option, ignore: ignore_option, ?reload_live_endpoints: bool, ?recorded_changes: bool, ?allow_approximate: bool) -> void
-    def initialize(associations:, ignore:, reload_live_endpoints: true, recorded_changes: false, allow_approximate: false) # rubocop:disable Metrics/MethodLength, Layout/LineLength
+    #: (associations: association_option, ignore: ignore_option, ?recorded_changes: bool, ?allow_approximate: bool) -> void
+    def initialize(associations:, ignore:, recorded_changes: false, allow_approximate: false)
       @association_tree = AssociationTree.build(associations)
       @ignore_policy = IgnorePolicy.build(ignore, association_paths: @association_tree.paths)
       @recorded = (@ignore_policy if recorded_changes)
       @traversal = AssociationTraversal.new(@association_tree)
       @traversal_preparer = TraversalPreparer.new(tree: @association_tree, traversal: @traversal,
                                                   allow_approximate: allow_approximate)
-      @live_endpoints = LiveEndpointProvider.new(
-        tree: @association_tree, traversal: @traversal, reload: reload_live_endpoints
-      )
+      @live_endpoints = LiveEndpointProvider.new(tree: @association_tree)
       @instrumentation_payload = @live_endpoints.comparison_payload
       @snapshot_pool = SnapshotPool.new
       @normalizer = SnapshotNormalizer.new(

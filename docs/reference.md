@@ -237,11 +237,6 @@ in the step for that record's last recorded change.
 If the window's last change destroyed the record, the window closes on that
 deletion instead. See [a destroyed record](#a-destroyed-record).
 
-`close_on: :current` is deprecated and has no effect; passing it warns through
-`PaperTrailDiff.deprecator`. Remove it. In a Rails app, register the deprecator
-with `Rails.application.deprecators[:paper_trail_diff] = PaperTrailDiff.deprecator`
-to handle its warnings as the app's own.
-
 `timeline` returns no steps for a window with no versions of the root record.
 `activity_timeline` still reports chosen associations that changed in such a
 window.
@@ -320,8 +315,7 @@ diff.to_h
 - A current record must be saved, not destroyed, and have no unsaved changes.
   The gem reloads it, so in-memory edits and cached associations are ignored.
 - Options: `associations:`, `ignore:`, and `allow_approximate:` (see
-  [costly associations](#costly-associations)). `reload_live_endpoints:` is
-  deprecated (see [reusing loaded records](#reusing-loaded-records)).
+  [costly associations](#costly-associations)).
 
 ## compare_many
 
@@ -350,21 +344,6 @@ diffs.fetch(["Order", orders.first.id.to_s]) # => PaperTrailDiff::Diff
 
 If you look up versions yourself, do it in bulk. Looking up one record at a
 time brings back the per-record queries this method avoids.
-
-### Reusing loaded records
-
-Every method reloads the current records it compares with, together with the
-requested associations, in a query for the records and one per association
-level. `reload_live_endpoints: false` on `compare`, `compare_many`, and
-`activity_timeline` skips that reload and reads your loaded objects instead.
-It is deprecated and will be removed: it saves those few queries per call (2
-for 500 articles with their comments), and the values then come from objects
-that may be stale. Until it is removed it still works,
-with a warning. A requested association that is not loaded raises
-`UnloadedAssociationError`, and one with a `limit` or `offset`, directly or in
-a part it goes through, or a scope that takes the owner, is read again for
-each record, because Active Record's `preload` applies a limit to all the
-records it loads together.
 
 ## timeline
 
@@ -435,8 +414,7 @@ end
   current record. You do not need to save the article after each comment change.
 - Options: `from:`, `to:`, `within:`, `associations:`, `ignore:`,
   `version_scope:`, `snapshots:`, `group:`, `recorded_changes:`,
-  `allow_approximate:`. `reload_live_endpoints:` is deprecated (see
-  [reusing loaded records](#reusing-loaded-records)).
+  `allow_approximate:`.
 
 ### One person's changes
 
@@ -917,7 +895,7 @@ such a path and names it. Remove it from `associations:`, rewrite its scope as
 plain conditions on the target's own columns, or pass `allow_approximate:
 true` to accept PT-AT's answer, which also accepts its cost of queries per
 record in batch methods. A comparison of two current records reads no history
-and needs no opt-in. `allow_expensive:` is deprecated and has no effect.
+and needs no opt-in.
 
 A polymorphic `belongs_to` is loaded together too, with one query per target
 class. Its classes are known only from the records, though, so batch methods
@@ -1482,6 +1460,11 @@ Payloads contain counts, model names, ids, times, association paths, and
 options, never record data. To see the SQL for one call, subscribe to `sql.active_record`
 around it with `ActiveSupport::Notifications.subscribed`.
 
+`PaperTrailDiff.deprecator` warns when an option is deprecated; none is now. In
+a Rails app, register it with
+`Rails.application.deprecators[:paper_trail_diff] = PaperTrailDiff.deprecator`
+to handle its warnings as the app's own.
+
 ## Errors
 
 All errors inherit from `PaperTrailDiff::Error`.
@@ -1489,9 +1472,7 @@ All errors inherit from `PaperTrailDiff::Error`.
 | Error | Raised when |
 | --- | --- |
 | `ConfigurationError` | An option is invalid |
-| `UnsupportedBatchPathError` | No longer raised; kept until `allow_expensive:` is removed |
 | `InvalidEndpointError` | A record is unsaved, destroyed, or has unsaved changes, or `recorded_changes` is given something other than a version |
-| `UnloadedAssociationError` | The deprecated `reload_live_endpoints: false`, and an association is not loaded |
 | `VersionMismatchError` | Two endpoints belong to different records |
 | `ReversedEndpointsError` | Two versions are given newest first |
 | `InvalidTimelineRangeError` | A range is invalid, for example `within:` with `from:`, or `:last` |

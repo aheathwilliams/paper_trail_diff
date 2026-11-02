@@ -335,34 +335,6 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     expect(result.values.first.attributes.fetch('title').to).to eq('Scalar batch after')
   end
 
-  it 'validates nested caller-preloaded endpoint graphs' do
-    graph = article_with_graph
-    graph[:reply].update!(body: 'Preloaded nested after')
-    current = TrackedArticle.preload(comments: :replies).find(graph[:article].id)
-
-    result = PaperTrailDiff.compare(
-      graph[:before],
-      current,
-      associations: ['comments.replies'],
-      reload_live_endpoints: false
-    )
-    comment = result.associations.fetch('comments').changed.find do |change|
-      change.record.id == graph[:kept_comment].id
-    end
-    expect(comment.associations.fetch('replies').changed.first.attributes.fetch('body').to)
-      .to eq('Preloaded nested after')
-
-    missing_nested = TrackedArticle.preload(:comments).find(graph[:article].id)
-    expect do
-      PaperTrailDiff.compare(
-        graph[:before],
-        missing_nested,
-        associations: ['comments.replies'],
-        reload_live_endpoints: false
-      )
-    end.to raise_error(PaperTrailDiff::UnloadedAssociationError, /comments.replies/)
-  end
-
   it 'compares a transaction-backed HABTM version with live membership' do
     graph = article_with_graph
     before = habtm_boundary_for(graph[:article])
@@ -979,7 +951,6 @@ RSpec.describe 'PaperTrailDiff association tracking' do
 
     expect(events).to contain_exactly(
       association_paths: ['comments', 'comments.replies'],
-      reload_live_endpoints: true,
       model_type: 'TrackedArticle',
       step_count: steps.length
     )
@@ -1844,34 +1815,6 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     expect(batched.transform_values(&:to_h)).to eq(separately.transform_values(&:to_h))
   end
 
-  it 'reuses an already-preloaded current boundary when asked not to reload' do
-    article = TrackedArticle.create!(title: 'Preloaded')
-    TrackedComment.create!(article: article, body: 'First')
-    start = boundary_for(article)
-    preloaded = TrackedArticle.where(id: article.id).preload(:comments).first
-
-    steps = PaperTrailDiff.activity_timeline(
-      preloaded, from: start, to: preloaded,
-                 associations: [:comments], reload_live_endpoints: false
-    )
-    reloaded = PaperTrailDiff.activity_timeline(
-      TrackedArticle.find(article.id), from: start, to: TrackedArticle.find(article.id),
-                                       associations: [:comments]
-    )
-
-    # Only the captured instant of the current boundary may differ between them.
-    expect(steps.map { |step| step.diff.to_h }).to eq(reloaded.map { |step| step.diff.to_h })
-    expect(steps.last.to_boundary.kind).to eq(:current)
-    # An unloaded association must still fail loudly rather than silently querying.
-    expect do
-      bare = TrackedArticle.find(article.id)
-      PaperTrailDiff.activity_timeline(
-        bare, from: start, to: bare,
-              associations: [:comments], reload_live_endpoints: false
-      )
-    end.to raise_error(PaperTrailDiff::UnloadedAssociationError)
-  end
-
   it 'reuses immutable activity routes for repeated event types' do
     tree = PaperTrailDiff::AssociationTree.build(['comments.replies'])
     finder = PaperTrailDiff::ActivityEventRouteFinder.new(
@@ -2357,7 +2300,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
       start_at = PaperTrail::Version.order(:id).first.created_at
 
       steps = PaperTrailDiff.activity_timeline(
-        article, within: start_at..(Time.now.utc + 86_400), close_on: :current,
+        article, within: start_at..(Time.now.utc + 86_400),
                  associations: ['comments'], snapshots: true
       )
 
@@ -2382,7 +2325,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     end
   end
 
-  describe 'close_on: :current over an open window' do
+  describe 'a window that reaches the current record' do
     def open_window_article
       article = TrackedArticle.create!(title: 'Start')
       start_at = PaperTrail::Version.order(:id).first.created_at
@@ -2390,15 +2333,10 @@ RSpec.describe 'PaperTrailDiff association tracking' do
       [article, start_at..(Time.now.utc + 86_400)]
     end
 
-    it 'closes an activity timeline on current state by default' do
+    it 'closes an activity timeline on current state' do
       article, window = open_window_article
 
       steps = PaperTrailDiff.activity_timeline(article, within: window, associations: ['comments'])
-      explicit = PaperTrailDiff.activity_timeline(
-        article, within: window, close_on: :current, associations: ['comments']
-      )
-
-      expect(steps.map { |step| step.diff.to_h }).to eq(explicit.map { |step| step.diff.to_h })
 
       expect(steps.last.to_boundary.kind).to eq(:current)
       expect(steps.last.diff.attributes.fetch('title').to_h).to eq(from: 'Start', to: 'Revised')
@@ -2411,7 +2349,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
       article.comments.create!(body: 'Added after the final root version')
 
       steps = PaperTrailDiff.activity_timeline(
-        article, within: window, close_on: :current, associations: ['comments']
+        article, within: window, associations: ['comments']
       )
 
       added = steps.flat_map { |step| step.diff.associations.fetch('comments', nil)&.added || [] }
@@ -2424,7 +2362,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
       article, window = open_window_article
 
       analysis = PaperTrailDiff.analyze(
-        article, within: window, close_on: :current, activity: true, associations: ['comments']
+        article, within: window, activity: true, associations: ['comments']
       )
 
       expect(analysis.activity_timeline.last.to_boundary.kind).to eq(:current)

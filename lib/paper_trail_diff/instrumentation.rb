@@ -27,12 +27,9 @@ module PaperTrailDiff
       nil
     end
 
-    #: (association_paths: Array[String], reload_live_endpoints: bool) -> Hash[Symbol, untyped]
-    def comparison_payload(association_paths:, reload_live_endpoints:)
-      {
-        association_paths: association_paths,
-        reload_live_endpoints: reload_live_endpoints
-      }
+    #: (association_paths: Array[String]) -> Hash[Symbol, untyped]
+    def comparison_payload(association_paths:)
+      { association_paths: association_paths }
     end
   end
 end

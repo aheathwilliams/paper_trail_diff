@@ -523,7 +523,7 @@ RSpec.describe PaperTrailDiff::ActivityTimelineBuilder do
       comment.update!(body: 'live')
 
       [timeline(article, from: from, to: article, recorded_changes: true),
-       timeline(article, within: (Time.now.utc - 60)..Time.now.utc, close_on: :current,
+       timeline(article, within: (Time.now.utc - 60)..Time.now.utc,
                          recorded_changes: true)].each do |steps|
         closing = steps.last
         expect(closing.to_boundary.kind).to eq(:current)
@@ -620,7 +620,7 @@ RSpec.describe PaperTrailDiff::ActivityTimelineBuilder do
         article.update!(title: 'Live', author_id: 2)
 
         [timeline(article, from: from, to: article, recorded_changes: true, ignore: ignore),
-         timeline(article, within: from.created_at..Time.now.utc, close_on: :current,
+         timeline(article, within: from.created_at..Time.now.utc,
                            recorded_changes: true, ignore: ignore)].each do |steps|
           expect(recorded(steps.last.from_boundary))
             .to eq('author_id' => { from: 1, to: 2 })
@@ -675,7 +675,7 @@ RSpec.describe PaperTrailDiff::ActivityTimelineBuilder do
       start = Time.now.utc
       article.update!(title: 'After')
       gone.destroy!
-      options = { within: start..(Time.now.utc + 60), close_on: :current, activity: true,
+      options = { within: start..(Time.now.utc + 60), activity: true,
                   recorded_changes: true }
       expected = [{ 'title' => { from: 'Before', to: 'After' } }]
       titles = lambda do |result|

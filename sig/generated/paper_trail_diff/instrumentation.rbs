@@ -11,7 +11,7 @@ module PaperTrailDiff
     # : (String | Symbol, Hash[Symbol, untyped]) -> void
     def self?.notify: (String | Symbol, Hash[Symbol, untyped]) -> void
 
-    # : (association_paths: Array[String], reload_live_endpoints: bool) -> Hash[Symbol, untyped]
-    def self?.comparison_payload: (association_paths: Array[String], reload_live_endpoints: bool) -> Hash[Symbol, untyped]
+    # : (association_paths: Array[String]) -> Hash[Symbol, untyped]
+    def self?.comparison_payload: (association_paths: Array[String]) -> Hash[Symbol, untyped]
   end
 end

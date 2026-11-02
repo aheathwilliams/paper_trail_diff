@@ -36,7 +36,7 @@ RSpec.describe 'net diffs for windows closing on a deletion' do
   def deleted_analyses(activity:)
     PaperTrailDiff.analyze_scope(
       CoreArticle, limit: 10, within: window_start..(Time.now.utc + 60), activity: activity,
-                   close_on: :current, include_deleted: true
+                   include_deleted: true
     ).deleted
   end
 

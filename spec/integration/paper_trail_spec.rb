@@ -275,58 +275,49 @@ RSpec.describe PaperTrailDiff do
       expect(sql.grep(/FROM #{Regexp.escape(CoreComment.quoted_table_name)}/).length).to eq(1)
     end
 
-    it 'reuses fully preloaded endpoints without live-record queries' do
-      articles = Array.new(3) do |index|
-        article = CoreArticle.create!(title: "Preloaded #{index}", internal_note: 'stable')
-        article.comments.create!(body: "Comment #{index}")
-        article
-      end
-      preloaded = CoreArticle.where(id: articles.map(&:id)).preload(:comments).to_a
-      comparisons = preloaded.map { |article| { from: article, to: article } }
-      sql = []
-      callback = proc do |_name, _start, _finish, _id, payload|
-        sql << payload[:sql] unless payload[:name] == 'SCHEMA' || payload[:cached]
-      end
+    # Removed in 0.17.0, after a release of deprecation warnings. The
+    # deprecator stays, so an app that registered it still boots.
+    it 'rejects the options it no longer takes' do
+      article = CoreArticle.create!(title: 'Removed options', internal_note: 'stable')
+      window = (Time.now.utc - 60)..Time.now.utc
+      first = { from: :first, to: article }
+      calls = {
+        close_on: [
+          -> { described_class.timeline(article, within: window, close_on: :current) },
+          -> { described_class.activity_timeline(article, within: window, close_on: :current) },
+          -> { described_class.analyze(article, within: window, close_on: :current) },
+          -> { described_class.analyze_many([article], within: window, close_on: :current) },
+          lambda do
+            described_class.analyze_scope(CoreArticle, within: window, limit: 5, close_on: :current)
+          end
+        ],
+        allow_expensive: [
+          -> { described_class.compare_many([first], allow_expensive: true) },
+          -> { described_class.analyze_many([article], within: window, allow_expensive: true) },
+          lambda do
+            described_class.analyze_scope(CoreArticle, within: window, limit: 5,
+                                                       allow_expensive: true)
+          end,
+          lambda do
+            described_class.report(CoreArticle, since: window.begin, limit: 5,
+                                                allow_expensive: true)
+          end
+        ],
+        reload_live_endpoints: [
+          -> { described_class.compare(article, article, reload_live_endpoints: true) },
+          -> { described_class.compare_many([first], reload_live_endpoints: true) },
+          -> { described_class.activity_timeline(article, reload_live_endpoints: true) }
+        ]
+      }
 
-      results = ActiveSupport::Notifications.subscribed(callback, 'sql.active_record') do
-        described_class.compare_many(
-          comparisons,
-          associations: [:comments],
-          reload_live_endpoints: false
-        )
+      calls.each do |option, list|
+        list.each do |call|
+          expect(&call).to raise_error(ArgumentError, /unknown keyword: :#{option}/)
+        end
       end
-      single = ActiveSupport::Notifications.subscribed(callback, 'sql.active_record') do
-        described_class.compare(
-          preloaded.first,
-          preloaded.first,
-          associations: [:comments],
-          reload_live_endpoints: false
-        )
-      end
-
-      expect(results.values).to all(be_empty)
-      expect(single).to be_empty
-      expect(sql).to be_empty
-    end
-
-    it 'rejects missing preloads and invalid reload options' do
-      article = CoreArticle.create!(title: 'Not preloaded', internal_note: 'stable')
-      current = CoreArticle.find(article.id)
-
-      expect do
-        described_class.compare(
-          current,
-          current,
-          associations: [:comments],
-          reload_live_endpoints: false
-        )
-      end.to raise_error(
-        PaperTrailDiff::UnloadedAssociationError,
-        /not preloaded: comments/
-      )
-      expect do
-        described_class.compare_many([], reload_live_endpoints: 'yes')
-      end.to raise_error(PaperTrailDiff::ConfigurationError, /must be true or false/)
+      expect(%i[UnloadedAssociationError UnsupportedBatchPathError]
+               .select { |name| described_class.const_defined?(name, false) }).to eq([])
+      expect(described_class.deprecator).to be_a(ActiveSupport::Deprecation)
     end
 
     it 'emits namespaced runtime notifications without endpoint objects' do
@@ -342,16 +333,8 @@ RSpec.describe PaperTrailDiff do
 
       comparison = events.find { |event| event.fetch(:name) == 'compare_many.paper_trail_diff' }
       loading = events.find { |event| event.fetch(:name) == 'load_live_endpoints.paper_trail_diff' }
-      expect(comparison.fetch(:payload)).to eq(
-        comparison_count: 1,
-        association_paths: [],
-        reload_live_endpoints: true
-      )
-      expect(loading.fetch(:payload)).to eq(
-        endpoint_count: 1,
-        model_types: ['CoreArticle'],
-        reload_live_endpoints: true
-      )
+      expect(comparison.fetch(:payload)).to eq(comparison_count: 1, association_paths: [])
+      expect(loading.fetch(:payload)).to eq(endpoint_count: 1, model_types: ['CoreArticle'])
       expect(events.map { |event| event.fetch(:duration) }).to all(be >= 0)
     end
 
@@ -552,7 +535,7 @@ RSpec.describe PaperTrailDiff do
     end
   end
 
-  describe 'close_on: :current' do
+  describe 'a window that reaches the current record' do
     def open_window_articles(count = 2)
       articles = Array.new(count) do |index|
         article = CoreArticle.create!(title: "Draft #{index}", internal_note: 'stable')
@@ -565,13 +548,9 @@ RSpec.describe PaperTrailDiff do
       [articles, start_at..(Time.now.utc + 86_400)]
     end
 
-    it 'closes a timeline on the live record by default, as close_on: :current asks' do
+    it 'closes a timeline on the live record' do
       articles, window = open_window_articles(1)
       article = articles.fetch(0)
-
-      summary = ->(steps) { steps.map { |step| [step.to_boundary.kind, step.diff.to_h] } }
-      expect(summary.call(described_class.timeline(article, within: window, close_on: :current)))
-        .to eq(summary.call(described_class.timeline(article, within: window)))
 
       steps = described_class.timeline(article, within: window)
 
@@ -589,7 +568,7 @@ RSpec.describe PaperTrailDiff do
       # "up to now" window says current state is the endpoint, drift included.
       CoreArticle.where(id: article.id).update_all(title: 'Edited behind PaperTrail')
 
-      analysis = described_class.analyze(article.reload, within: window, close_on: :current)
+      analysis = described_class.analyze(article.reload, within: window)
 
       expect(analysis.to_snapshot.attributes.fetch('title')).to eq('Edited behind PaperTrail')
       expect(analysis.timeline.last.diff.attributes.fetch('title').to)
@@ -611,10 +590,10 @@ RSpec.describe PaperTrailDiff do
     it 'agrees with analyzing each root separately' do
       articles, window = open_window_articles(2)
 
-      batched = described_class.analyze_many(articles, within: window, close_on: :current)
+      batched = described_class.analyze_many(articles, within: window)
       separately = articles.to_h do |article|
         [PaperTrailDiff::Endpoint.identity(article),
-         described_class.analyze(article, within: window, close_on: :current)]
+         described_class.analyze(article, within: window)]
       end
 
       expect(batched.transform_values { |a| a.timeline.map { |s| s.diff.to_h } })
@@ -635,71 +614,12 @@ RSpec.describe PaperTrailDiff do
         end
 
         ActiveSupport::Notifications.subscribed(callback, 'sql.active_record') do
-          described_class.analyze_many(articles, within: window, close_on: :current)
+          described_class.analyze_many(articles, within: window)
         end
         sql.grep(/FROM #{Regexp.escape(CoreArticle.quoted_table_name)}/).length
       end
 
       expect(counts).to eq([1, 1])
-    end
-
-    it 'warns that close_on: is deprecated, once per call, in every method that takes it' do
-      articles, window = open_window_articles(1)
-      article = articles.fetch(0)
-      allow(described_class.deprecator).to receive(:warn)
-
-      described_class.timeline(article, within: window, close_on: :current)
-      described_class.activity_timeline(article, within: window, close_on: :current)
-      described_class.analyze(article, within: window, close_on: :current)
-      described_class.analyze_many([article], within: window, close_on: :current)
-      described_class.analyze_scope(CoreArticle, within: window, limit: 5, close_on: :current)
-      described_class.report(CoreArticle, since: window.begin, limit: 5)
-      described_class.timeline(article, within: window)
-
-      expect(described_class.deprecator).to have_received(:warn)
-        .with(/close_on: is deprecated and has no effect/).exactly(5).times
-    end
-
-    it 'warns that allow_expensive: is deprecated, once per call, in every method that takes it' do
-      articles, window = open_window_articles(1)
-      article = articles.fetch(0)
-      allow(described_class.deprecator).to receive(:warn)
-
-      described_class.compare_many([{ from: :first, to: article }], allow_expensive: true)
-      described_class.analyze_many([article], within: window, allow_expensive: false)
-      described_class.analyze_scope(CoreArticle, within: window, limit: 5, allow_expensive: true)
-      described_class.report(CoreArticle, since: window.begin, limit: 5, allow_expensive: true)
-      described_class.analyze_many([article], within: window)
-
-      expect(described_class.deprecator).to have_received(:warn)
-        .with(/allow_expensive: is deprecated and has no effect/).exactly(4).times
-    end
-
-    it 'warns that reload_live_endpoints: is deprecated, and still honors it' do
-      articles, = open_window_articles(1)
-      article = articles.fetch(0)
-      allow(described_class.deprecator).to receive(:warn)
-      allow(CoreArticle).to receive(:unscoped).and_call_original
-
-      described_class.compare(article.versions.first, article, reload_live_endpoints: false)
-      described_class.activity_timeline(article, reload_live_endpoints: false)
-      expect(CoreArticle).not_to have_received(:unscoped)
-      described_class.compare_many([{ from: :first, to: article }], reload_live_endpoints: true)
-      described_class.compare(article.versions.first, article)
-
-      expect(described_class.deprecator).to have_received(:warn)
-        .with(/reload_live_endpoints: is deprecated/).exactly(3).times
-      expect(CoreArticle).to have_received(:unscoped).twice
-    end
-
-    it 'rejects a closing endpoint the range cannot use' do
-      articles, window = open_window_articles(1)
-      article = articles.fetch(0)
-
-      expect { described_class.timeline(article, from: :first, to: article, close_on: :current) }
-        .to raise_error(PaperTrailDiff::ConfigurationError, /requires `within`/)
-      expect { described_class.timeline(article, within: window, close_on: :nope) }
-        .to raise_error(PaperTrailDiff::ConfigurationError, /must be :current/)
     end
 
     it 'still closes a destroyed root on its own destruction' do
@@ -709,7 +629,7 @@ RSpec.describe PaperTrailDiff do
       article.destroy!
       window = start_at..(Time.now.utc + 86_400)
 
-      steps = described_class.timeline(article, within: window, close_on: :current)
+      steps = described_class.timeline(article, within: window)
 
       # A destroyed record has no current state to close on, and its destroy
       # version already terminates the history.
@@ -865,10 +785,8 @@ RSpec.describe PaperTrailDiff do
     it 'selects the same roots the caller would have assembled by hand' do
       kept, _skipped, _doomed, window = scoped_history
 
-      scoped = described_class.analyze_scope(kept_scope, within: window, limit: 100,
-                                                         close_on: :current)
-      by_hand = described_class.analyze_many(kept_scope.to_a, within: window,
-                                                              close_on: :current)
+      scoped = described_class.analyze_scope(kept_scope, within: window, limit: 100)
+      by_hand = described_class.analyze_many(kept_scope.to_a, within: window)
 
       expect(scoped.analyses.keys).to eq([PaperTrailDiff::Endpoint.identity(kept)])
       expect(reported_changes(scoped.analyses)).to eq(reported_changes(by_hand))
@@ -878,7 +796,7 @@ RSpec.describe PaperTrailDiff do
       _kept, _skipped, doomed, window = scoped_history
 
       analyses, unreachable = described_class.analyze_scope(
-        kept_scope, within: window, limit: 100, close_on: :current
+        kept_scope, within: window, limit: 100
       )
 
       expect(analyses).to be_a(Hash)
@@ -893,7 +811,7 @@ RSpec.describe PaperTrailDiff do
       _kept, skipped, doomed, window = scoped_history
 
       analyses, unreachable = described_class.analyze_scope(
-        kept_scope, within: window, limit: 100, close_on: :current
+        kept_scope, within: window, limit: 100
       )
       reached = analyses.keys + unreachable
 
@@ -905,7 +823,7 @@ RSpec.describe PaperTrailDiff do
       _kept, _skipped, doomed, window = scoped_history
 
       analyses, unreachable = described_class.analyze_scope(
-        CoreArticle, within: window, limit: 100, close_on: :current
+        CoreArticle, within: window, limit: 100
       )
 
       expect(analyses.length).to eq(2)
@@ -916,7 +834,7 @@ RSpec.describe PaperTrailDiff do
       *_roots, window = scoped_history
 
       expect do
-        described_class.analyze_scope(CoreArticle, within: window, limit: 1, close_on: :current)
+        described_class.analyze_scope(CoreArticle, within: window, limit: 1)
       end.to raise_error(PaperTrailDiff::BatchLimitExceededError, /more than 1/)
     end
 
@@ -931,7 +849,7 @@ RSpec.describe PaperTrailDiff do
         ids = kept_scope.limit(root_count).pluck(:id)
         query_count do
           described_class.analyze_scope(CoreArticle.where(id: ids), within: window,
-                                                                    limit: 100, close_on: :current)
+                                                                    limit: 100)
         end
       end
 
@@ -944,7 +862,7 @@ RSpec.describe PaperTrailDiff do
       PaperTrail.request(whodunnit: 'alice') { kept.update!(internal_note: 'by alice') }
       named = ->(versions) { versions.where.not(whodunnit: nil) }
 
-      options = { within: window, close_on: :current, version_scope: named }
+      options = { within: window, version_scope: named }
       scoped = described_class.analyze_scope(kept_scope, limit: 100, **options)
       by_hand = described_class.analyze_many(kept_scope.to_a, **options)
 
@@ -1011,10 +929,10 @@ RSpec.describe PaperTrailDiff do
 
         by_relation = described_class.analyze_scope(
           CoreArticle.where(internal_note: 'review'), within: window,
-                                                      limit: 100, close_on: :current
+                                                      limit: 100
         )
         historically = described_class.analyze_scope(
-          CoreArticle, within: window, limit: 100, close_on: :current,
+          CoreArticle, within: window, limit: 100,
                        historical_filter: was_review
         )
 
@@ -1032,7 +950,7 @@ RSpec.describe PaperTrailDiff do
         _left, _joined, doomed, window = moving_population
 
         result = described_class.analyze_scope(
-          CoreArticle, within: window, limit: 100, close_on: :current,
+          CoreArticle, within: window, limit: 100,
                        historical_filter: was_review
         )
 
@@ -1043,7 +961,7 @@ RSpec.describe PaperTrailDiff do
         *_roots, window = moving_population
 
         result = described_class.analyze_scope(
-          CoreArticle, within: window, limit: 100, close_on: :current,
+          CoreArticle, within: window, limit: 100,
                        historical_filter: ->(state) { state.internal_note == 'never used' }
         )
 
@@ -1077,7 +995,6 @@ RSpec.describe PaperTrailDiff do
 
         expect do
           described_class.analyze_scope(CoreArticle, within: window, limit: 5,
-                                                     close_on: :current,
                                                      historical_filter: counting)
         end.to raise_error(PaperTrailDiff::BatchLimitExceededError, /matched more than 5/)
         expect(reconstructed).to eq(6)
@@ -1132,7 +1049,7 @@ RSpec.describe PaperTrailDiff do
         root.update!(title: 'final')
         result = described_class.analyze_scope(
           CoreArticle, within: (Time.now.utc - 3600)..(Time.now.utc + 3600),
-                       limit: 100, close_on: :current, historical_filter: was_review
+                       limit: 100, historical_filter: was_review
         )
         expect(result.roots.map(&:id)).to eq([root.id])
       end
@@ -1151,8 +1068,7 @@ RSpec.describe PaperTrailDiff do
       it 'hands back the records it loaded, so a caller need not query them again' do
         kept, _skipped, _doomed, window = scoped_history
 
-        result = described_class.analyze_scope(kept_scope, within: window, limit: 100,
-                                                           close_on: :current)
+        result = described_class.analyze_scope(kept_scope, within: window, limit: 100)
 
         expect(result.roots.map(&:id)).to eq([kept.id])
         expect(result.roots).to all(be_a(CoreArticle))
@@ -1164,8 +1080,7 @@ RSpec.describe PaperTrailDiff do
       it 'stays complementary to unreachable' do
         _kept, _skipped, doomed, window = scoped_history
 
-        result = described_class.analyze_scope(CoreArticle, within: window, limit: 100,
-                                                            close_on: :current)
+        result = described_class.analyze_scope(CoreArticle, within: window, limit: 100)
 
         expect(result.roots.map { |root| PaperTrailDiff::Endpoint.identity(root) })
           .not_to include(['CoreArticle', doomed.id.to_s])
@@ -1177,8 +1092,7 @@ RSpec.describe PaperTrailDiff do
         *_roots, window = scoped_history
 
         analyses, unreachable = described_class.analyze_scope(CoreArticle, within: window,
-                                                                           limit: 100,
-                                                                           close_on: :current)
+                                                                           limit: 100)
 
         expect(analyses).to be_a(Hash)
         expect(unreachable).to be_a(Array)

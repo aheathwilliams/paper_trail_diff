@@ -20,7 +20,7 @@ RSpec.describe 'batched activity reporting' do
       end
     end
     options = {
-      within: (Time.now.utc - 3600)..(Time.now.utc + 60), close_on: :current,
+      within: (Time.now.utc - 3600)..(Time.now.utc + 60),
       associations: [:comments], activity: true, snapshots: true, group: :transaction
     }
     single = PaperTrailDiff.analyze(article, **options)

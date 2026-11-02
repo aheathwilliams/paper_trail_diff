@@ -1,14 +1,13 @@
 # Generated from lib/paper_trail_diff/live_endpoint_provider.rb with RBS::Inline
 
 module PaperTrailDiff
-  # Selects safe reload or validated caller-owned loading for current endpoints.
+  # Reloads the current records a call compares with, with their requested
+  # associations, once per call.
   class LiveEndpointProvider
-    attr_reader reload: bool
-
     attr_reader comparison_payload: Hash[Symbol, untyped]
 
-    # : (tree: AssociationTree, traversal: AssociationTraversal, reload: bool) -> void
-    def initialize: (tree: AssociationTree, traversal: AssociationTraversal, reload: bool) -> void
+    # : (tree: AssociationTree) -> void
+    def initialize: (tree: AssociationTree) -> void
 
     # Loads each endpoint at most once for the life of this provider, which is
     # one public call. A batch that resolves every root up front and then asks
@@ -21,7 +20,7 @@ module PaperTrailDiff
 
     @loaded: Hash[identity, untyped]
 
-    @loader: untyped
+    @loader: LiveEndpointBatchLoader
 
     # : (Array[untyped]) -> Hash[identity, untyped]
     def known: (Array[untyped]) -> Hash[identity, untyped]

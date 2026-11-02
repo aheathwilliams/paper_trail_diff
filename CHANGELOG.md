@@ -5,6 +5,26 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+### Breaking changes
+
+- The options deprecated in 0.15.0 are removed, and passing one raises
+  `ArgumentError` (unknown keyword):
+  - `close_on:` on `timeline`, `activity_timeline`, `analyze`, `analyze_many`,
+    and `analyze_scope`. It had no effect: a window already closes on the
+    current record when nothing on its requested paths was recorded after it.
+  - `allow_expensive:` on `compare_many`, `analyze_many`, `analyze_scope`, and
+    `report`. It had no effect: `allow_approximate: true` alone accepts a path
+    read with PT-AT.
+  - `reload_live_endpoints:` on `compare`, `compare_many`, and
+    `activity_timeline`. Every method now reloads the current records it
+    compares with, as it did by default.
+- `UnloadedAssociationError`, which only `reload_live_endpoints: false` raised,
+  and `UnsupportedBatchPathError`, which nothing raised since 0.15.0, are
+  removed. Code that rescues either must stop naming it.
+- The `compare.paper_trail_diff`, `compare_many.paper_trail_diff`, and
+  `load_live_endpoints.paper_trail_diff` payloads no longer have a
+  `reload_live_endpoints` key.
+
 ### Fixed
 
 - Activity on a `has_many :through` leaves out the versions a join record

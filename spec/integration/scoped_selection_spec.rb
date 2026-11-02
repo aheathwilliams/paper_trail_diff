@@ -12,7 +12,7 @@ RSpec.describe 'scoped root selection' do
   def analyze(scope, limit: 10)
     PaperTrailDiff.analyze_scope(
       scope, limit: limit,
-             within: (Time.now.utc - 3600)..(Time.now.utc + 60), close_on: :current
+             within: (Time.now.utc - 3600)..(Time.now.utc + 60)
     )
   end
 
