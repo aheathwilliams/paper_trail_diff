@@ -9,17 +9,18 @@ module PaperTrailDiff
     # : (tree: AssociationTree, traversal: AssociationTraversal, normalizer: SnapshotNormalizer, preparer: untyped) -> void
     def initialize: (tree: AssociationTree, traversal: AssociationTraversal, normalizer: SnapshotNormalizer, preparer: untyped) -> void
 
-    # A `window` is a time range; see PreparedHistoryLoader.
-    # : (untyped, Array[untyped], ?start_at: untyped, ?end_at: untyped, ?window: bool) -> PreparedHistory?
-    def prepare: (untyped, Array[untyped], ?start_at: untyped, ?end_at: untyped, ?window: bool) -> PreparedHistory?
+    # A `start_at` is a window's (see PreparedHistoryLoader); a range of
+    # versions starts at its first.
+    # : (untyped, Array[untyped], ?start_at: untyped, ?end_at: untyped) -> PreparedHistory?
+    def prepare: (untyped, Array[untyped], ?start_at: untyped, ?end_at: untyped) -> PreparedHistory?
 
-    # : (Array[untyped], Array[untyped], ?start_at: untyped, ?end_at: untyped, ?window: bool) -> void
-    def prepare_batch: (Array[untyped], Array[untyped], ?start_at: untyped, ?end_at: untyped, ?window: bool) -> void
+    # A `start_at` is a window's, as for `prepare`.
+    # : (Array[untyped], Array[untyped], ?start_at: untyped, ?end_at: untyped) -> void
+    def prepare_batch: (Array[untyped], Array[untyped], ?start_at: untyped, ?end_at: untyped) -> void
 
     # Missing roots, and roots compared only between versions, have no live
     # graph to collect. Reading their associations here would issue a query
     # per root and seed nonexistent rows as live state.
-    # Only a window gives deleted roots a start.
     # : (Array[untyped], Array[untyped], ?start_at: untyped, ?end_at: untyped) -> void
     def prepare_deleted_batch: (Array[untyped], Array[untyped], ?start_at: untyped, ?end_at: untyped) -> void
 
@@ -66,8 +67,8 @@ module PaperTrailDiff
     # : (Array[untyped], Array[untyped]) -> Hash[Symbol, untyped]
     def batch_payload: (Array[untyped], Array[untyped]) -> Hash[Symbol, untyped]
 
-    # : (Array[untyped], Array[untyped], ?live_records: Array[untyped], ?start_at: untyped, ?end_at: untyped, ?window: bool) -> void
-    def register_batch: (Array[untyped], Array[untyped], ?live_records: Array[untyped], ?start_at: untyped, ?end_at: untyped, ?window: bool) -> void
+    # : (Array[untyped], Array[untyped], ?live_records: Array[untyped], ?start_at: untyped, ?end_at: untyped) -> void
+    def register_batch: (Array[untyped], Array[untyped], ?live_records: Array[untyped], ?start_at: untyped, ?end_at: untyped) -> void
 
     # : (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer, history: PreparedHistory?) -> RecordSnapshot?
     def snapshot_from_version: (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer, history: PreparedHistory?) -> RecordSnapshot?

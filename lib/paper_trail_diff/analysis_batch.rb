@@ -96,8 +96,7 @@ module PaperTrailDiff
     def preparation_range(versions, windows, live:)
       times = versions.map(&:created_at)
       end_at = [times.max, @time_range&.end_time, (Time.now.utc if live)].compact.max
-      { start_at: TransactionCut.earliest_start(@time_range, windows) || times.min, end_at: end_at,
-        window: !@time_range.nil? }
+      { start_at: TransactionCut.earliest_start(@time_range, windows), end_at: end_at }
     end
 
     # A root with no versions in range has nothing to report, which is an empty
