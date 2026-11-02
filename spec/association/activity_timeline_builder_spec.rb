@@ -342,6 +342,26 @@ RSpec.describe PaperTrailDiff::ActivityTimelineBuilder do
       expect(steps.last.from_boundary.version_id).to eq(to.id)
     end
 
+    # Nothing in the window is reported, so nothing closes it on the live row,
+    # which is never read.
+    it 'reads no live row for a window that reports nothing' do
+      article, = edited_history
+      none = :none.to_proc
+      range = PaperTrailDiff::TimelineRange.new(
+        article, from: nil, to: nil, within: article.versions.minimum(:created_at)..Time.now.utc,
+                 version_scope: none, live_endpoint: article
+      )
+      tree = PaperTrailDiff::AssociationTree.build([:comments])
+      view = PaperTrailDiff::ActivityView.new(version_scope: none)
+      allow(provider).to receive(:call).and_call_original
+
+      built = described_class.new(article, range: range, tree: tree, snapshotter: provider,
+                                           view: view)
+
+      expect([built.build, built.analyze.activity_timeline]).to eq([[], []])
+      expect(provider).not_to have_received(:call)
+    end
+
     it 'reads the same activity from a snapshotter that rebuilds every state' do
       article, comment, from, to = edited_history
       comment.update!(body: 'live')
