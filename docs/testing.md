@@ -142,6 +142,7 @@ passes is behavior nothing checks. `mutant.yml` lists the classes it mutates:
   `ActivityView`;
 - what an update did to a record, and whether it moved the record to another
   owner: `ActivitySnapshotDelta`;
+- where in a carried snapshot an event's record sits: `ActivityEventRouteFinder`;
 - which association paths a request accepts: `AssociationTraversal`,
   `AssociationKey`, and `VersionTable`;
 - whether a transaction's HABTM members are one record's:

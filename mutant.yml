@@ -73,6 +73,7 @@ matcher:
     - PaperTrailDiff::ActivityTimelineBuilder*
     - PaperTrailDiff::ActivityVersionCollector*
     - PaperTrailDiff::ActivityRootSteps*
+    - PaperTrailDiff::ActivityEventRouteFinder*
     - PaperTrailDiff::ActivityTreeFilter*
     - PaperTrailDiff::ActivityTransactionGrouper*
     - PaperTrailDiff::ActivityTransactionGroups*

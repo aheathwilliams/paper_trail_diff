@@ -35,10 +35,9 @@ module PaperTrailDiff
     # to the record elsewhere in the tree does not update.
     #: (untyped, AssociationTree, String) -> bool
     def through_part?(model_class, tree, target_type)
-      key = [model_class, tree, target_type]
-      return @through_parts[key] if @through_parts.key?(key)
-
-      @through_parts[key] = through_part_below?(model_class, tree, target_type, '')
+      @through_parts.fetch([model_class, tree, target_type]) do |key|
+        @through_parts[key] = through_part_below?(model_class, tree, target_type, '')
+      end
     end
 
     private
@@ -48,40 +47,34 @@ module PaperTrailDiff
     # @rbs @belongs_to_routes: Hash[Array[untyped], Array[Array[untyped]]]
     # @rbs @through_parts: Hash[Array[untyped], bool]
 
+    # Validation rejects a path that continues past a polymorphic target, so
+    # only a target of one class has a subtree to search.
     #: (untyped, AssociationTree, String, String) -> bool
     def through_part_below?(model_class, tree, target_type, path)
       @traversal.reflections_for(model_class, tree, path: path).any? do |reflection|
-        next true if through_reaches?(reflection, target_type)
-
-        subtree = tree.child(reflection.name.to_s) #: AssociationTree
-        child_path = Support.association_path(path, reflection.name)
-        !reflection.polymorphic? && !subtree.empty? &&
-          through_part_below?(reflection.klass, subtree, target_type, child_path)
+        subtree = tree.child(reflection.name) #: AssociationTree
+        below = Support.association_path(path, reflection.name)
+        through_reaches?(reflection, target_type) ||
+          (!subtree.empty? && through_part_below?(reflection.klass, subtree, target_type, below))
       end
     end
 
     #: (untyped, String) -> bool
     def through_reaches?(reflection, target_type)
       reflection.through_reflection? &&
-        reflection.chain.any? { |part| part.klass.base_class.name.to_s == target_type }
+        reflection.chain.any? { |part| part.klass.base_class.name == target_type }
     end
 
     # Timelines interleave event types, so every requested combination is
     # retained. Model, tree, and path are fixed per adapter, leaving one entry
-    # per selected item type.
+    # per selected item type. The strings are kept as frozen copies, which a
+    # caller cannot change.
     #: (Hash[Array[untyped], Array[Array[untyped]]], untyped, AssociationTree, String, String, Symbol) -> Array[Array[untyped]]
     def cached(store, model_class, tree, target_type, path, macro) # rubocop:disable Metrics/ParameterLists
-      key = [model_class, tree, target_type, path]
-      existing = store[key]
-      return existing if existing
-
-      store[cache_key(key)] =
-        freeze_routes(routes(model_class, tree, target_type, macro, path: path))
-    end
-
-    #: (Array[untyped]) -> Array[untyped]
-    def cache_key(key)
-      key.map { |part| part.is_a?(String) ? -part : part }.freeze
+      store.fetch([model_class, tree, target_type, path]) do
+        store[[model_class, tree, -target_type, -path]] =
+          freeze_routes(routes(model_class, tree, target_type, macro, path: path))
+      end
     end
 
     #: (Array[Array[untyped]]) -> Array[Array[untyped]]
@@ -93,18 +86,17 @@ module PaperTrailDiff
     end
 
     #: (untyped, AssociationTree, String, Symbol, path: String) -> Array[Array[untyped]]
-    def routes(model_class, tree, target_type, macro, path: '')
+    def routes(model_class, tree, target_type, macro, path:)
       @traversal.reflections_for(model_class, tree, path: path).flat_map do |reflection|
         routes_for_reflection(reflection, tree, target_type, macro, path)
       end
     end
 
+    # Each reflection is of a child the tree names.
     #: (untyped, AssociationTree, String, Symbol, String) -> Array[Array[untyped]]
     def routes_for_reflection(reflection, tree, target_type, macro, path)
       name = reflection.name.to_s
-      subtree = tree.child(name)
-      return [] unless subtree
-
+      subtree = tree.child(name) #: AssociationTree
       child_path = Support.association_path(path, name)
       entry = [name, reflection, subtree, child_path]
       direct = [] #: Array[Array[untyped]]
@@ -119,12 +111,12 @@ module PaperTrailDiff
     #: (untyped, String, Symbol) -> bool
     def direct_route?(reflection, target_type, macro)
       reflection.macro == macro && supported_direct_reflection?(reflection, macro) &&
-        reflection.klass.base_class.name.to_s == target_type
+        reflection.klass.base_class.name == target_type
     end
 
     #: (untyped, Symbol) -> bool
     def supported_direct_reflection?(reflection, macro)
-      return !reflection.options[:through] if macro == :has_many
+      return !reflection.through_reflection? if macro == :has_many
 
       !reflection.polymorphic?
     end
