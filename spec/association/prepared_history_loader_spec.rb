@@ -89,6 +89,7 @@ RSpec.describe PaperTrailDiff::PreparedHistoryLoader do
     end
     edge = versions_of(added).first
     allow(PaperTrailDiff::PreparedRecordIndex).to receive(:new).and_call_original
+    allow(PaperTrailDiff::PreparedHistory).to receive(:new).and_call_original
     end_at = Time.now.utc + 60
     window = load_history(article, ['comments'], start_at: edge.created_at, end_at: end_at,
                                                  live_records: [article], window: true)
@@ -99,8 +100,10 @@ RSpec.describe PaperTrailDiff::PreparedHistoryLoader do
     expect(range.opening_transactions).to eq([])
     # Read again from where the transaction began, over the same range.
     expect(PaperTrailDiff::PreparedRecordIndex).to have_received(:new)
-      .with(versions_of(comment).last.created_at, end_at: end_at, live_records: [article],
-                                                  opening_transactions: crossing)
+      .with(versions_of(comment).last.created_at, end_at: end_at, live_records: [article])
+    expect(PaperTrailDiff::PreparedHistory).to have_received(:new)
+      .with(instance_of(PaperTrailDiff::PreparedRecordIndex),
+            activity_index: anything, opening_transactions: crossing)
   end
 
   it 'prepares every root it is given, as one batch' do
@@ -348,7 +351,7 @@ RSpec.describe PaperTrailDiff::PreparedHistoryLoader do
     load_history(article, [:comments], root_versions: versions, start_at: start_at)
 
     expect(PaperTrailDiff::PreparedRecordIndex).to have_received(:new)
-      .with(start_at, end_at: end_at, live_records: live, opening_transactions: [])
+      .with(start_at, end_at: end_at, live_records: live)
     expect(PaperTrailDiff::PreparedActivityIndex).to have_received(:new)
       .with(instance_of(PaperTrailDiff::PreparedRecordIndex), versions, start_at: start_at).twice
     expect(PaperTrailDiff::PreparedEdgeLoader).to have_received(:new)

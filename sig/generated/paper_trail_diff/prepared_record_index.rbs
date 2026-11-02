@@ -139,12 +139,8 @@ module PaperTrailDiff
 
   # Request-scoped scalar history loaded once per model identity.
   class PreparedRecordIndex
-    # The transactions that crossed a window's start, keyed as
-    # ActivityTransactionGroups keys a version's; see PreparedHistoryLoader.
-    attr_reader opening_transactions: Array[Array[untyped]]
-
-    # : (untyped, ?end_at: untyped, ?live_records: Array[untyped], ?opening_transactions: Array[Array[untyped]]) -> void
-    def initialize: (untyped, ?end_at: untyped, ?live_records: Array[untyped], ?opening_transactions: Array[Array[untyped]]) -> void
+    # : (untyped, ?end_at: untyped, ?live_records: Array[untyped]) -> void
+    def initialize: (untyped, ?end_at: untyped, ?live_records: Array[untyped]) -> void
 
     # : (untyped, Array[untyped]) -> void
     def load: (untyped, Array[untyped]) -> void
@@ -206,6 +202,11 @@ module PaperTrailDiff
     # : (PreparedRecordState) -> Hash[untyped, untyped]
     def typed_attributes: (PreparedRecordState) -> Hash[untyped, untyped]
 
+    # A state completed as a record of its class would hold it, or nil where
+    # only instantiating can tell; each state is completed once.
+    # : (PreparedRecordState) -> PreparedRecordState?
+    def direct_state: (PreparedRecordState) -> PreparedRecordState?
+
     # : (untyped, String) -> bool
     def generated_reader?: (untyped, String) -> bool
 
@@ -214,8 +215,6 @@ module PaperTrailDiff
     @direct_states: Hash[PreparedRecordState, PreparedRecordState?]
 
     @end_time: untyped
-
-    @opening_transactions: Array[Array[untyped]]
 
     @seeded_live_records: Hash[Array[String], untyped]
 

@@ -6,6 +6,11 @@ module PaperTrailDiff
   class PreparedHistory
     attr_reader :activity_index #: PreparedActivityIndex?
 
+    # The transactions that crossed the history's start, keyed as
+    # ActivityTransactionGroups keys a version's; see
+    # PreparedHistoryLoader#reload.
+    attr_reader :opening_transactions #: Array[Array[untyped]]
+
     DIRECT_RESOLVERS = {
       belongs_to: :resolve_belongs_to,
       has_one: :resolve_children,
@@ -14,9 +19,10 @@ module PaperTrailDiff
     }.freeze
     private_constant :DIRECT_RESOLVERS
 
-    #: (PreparedRecordIndex, ?activity_index: PreparedActivityIndex?) -> void
-    def initialize(records, activity_index: nil)
+    #: (PreparedRecordIndex, ?activity_index: PreparedActivityIndex?, ?opening_transactions: Array[Array[untyped]]) -> void
+    def initialize(records, activity_index: nil, opening_transactions: [])
       @records = records
+      @opening_transactions = opening_transactions
       @conditions = ScopeCondition::Cache.new
       @state_reader = PreparedStateAssociationReader.new(records, method(:edge), @conditions)
       @activity_index = activity_index
@@ -24,11 +30,6 @@ module PaperTrailDiff
       @unsupported = {} #: Hash[Array[String], bool]
       @habtm = {} #: Hash[Array[String], Hash[String, Array[untyped]]]
     end
-
-    # The transactions that crossed the history's start; see
-    # PreparedHistoryLoader#reload.
-    #: () -> Array[Array[untyped]]
-    def opening_transactions = @records.opening_transactions
 
     #: () -> Array[untyped]
     def versions = @records.versions

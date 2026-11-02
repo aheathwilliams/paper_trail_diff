@@ -5,15 +5,15 @@ module PaperTrailDiff
   class PreparedHistory
     attr_reader activity_index: PreparedActivityIndex?
 
+    # The transactions that crossed the history's start, keyed as
+    # ActivityTransactionGroups keys a version's; see
+    # PreparedHistoryLoader#reload.
+    attr_reader opening_transactions: Array[Array[untyped]]
+
     DIRECT_RESOLVERS: untyped
 
-    # : (PreparedRecordIndex, ?activity_index: PreparedActivityIndex?) -> void
-    def initialize: (PreparedRecordIndex, ?activity_index: PreparedActivityIndex?) -> void
-
-    # The transactions that crossed the history's start; see
-    # PreparedHistoryLoader#reload.
-    # : () -> Array[Array[untyped]]
-    def opening_transactions: () -> Array[Array[untyped]]
+    # : (PreparedRecordIndex, ?activity_index: PreparedActivityIndex?, ?opening_transactions: Array[Array[untyped]]) -> void
+    def initialize: (PreparedRecordIndex, ?activity_index: PreparedActivityIndex?, ?opening_transactions: Array[Array[untyped]]) -> void
 
     # : () -> Array[untyped]
     def versions: () -> Array[untyped]
