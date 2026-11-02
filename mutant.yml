@@ -52,6 +52,7 @@ matcher:
     - PaperTrailDiff::VersionQuery*
     - PaperTrailDiff::TimeVersionRange*
     - PaperTrailDiff::BatchedRootVersions*
+    - PaperTrailDiff::BatchBoundaryResolver*
     - PaperTrailDiff::BatchedRootAnalyses*
     - PaperTrailDiff::AnalysisBatch*
     - PaperTrailDiff::DeletedAnalysisBatch*

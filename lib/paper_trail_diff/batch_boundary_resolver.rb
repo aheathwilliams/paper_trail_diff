@@ -11,7 +11,7 @@ module PaperTrailDiff
     class << self
       #: (untyped) -> bool
       def symbolic?(endpoint)
-        endpoint.is_a?(Symbol)
+        endpoint.instance_of?(Symbol)
       end
     end
 
@@ -25,11 +25,11 @@ module PaperTrailDiff
     # decide what an absent history means rather than being handed nil.
     #: () -> Array[[untyped, untyped]]
     def call
-      return @pairs unless @pairs.flatten(1).any? { |endpoint| symbolic?(endpoint) }
+      return @pairs unless @pairs.flatten.any? { |endpoint| symbolic?(endpoint) }
 
-      index = boundary_index
+      firsts = first_versions
       @pairs.map do |from, to|
-        [resolve(from, to, index), resolve(to, from, index)]
+        [resolve(from, to, firsts), resolve(to, from, firsts)]
       end
     end
 
@@ -42,8 +42,8 @@ module PaperTrailDiff
       self.class.symbolic?(endpoint)
     end
 
-    #: (untyped, untyped, Hash[Array[String], Hash[Symbol, untyped]]) -> untyped
-    def resolve(endpoint, other, index)
+    #: (untyped, untyped, Hash[Array[String], untyped]) -> untyped
+    def resolve(endpoint, other, firsts)
       return endpoint unless symbolic?(endpoint)
       raise ConfigurationError, TimelineRange::LAST_REMOVED if endpoint == :last
 
@@ -58,65 +58,59 @@ module PaperTrailDiff
               'a :first endpoint needs the other endpoint to name a record'
       end
 
-      index.dig(identity, endpoint) || endpoint
+      firsts[identity] || endpoint
     end
 
     # A symbol carries no identity of its own, so the pair's other endpoint has
     # to say which record is meant.
     #: (untyped) -> Array[String]?
     def anchor_identity(endpoint)
-      return if endpoint.nil? || symbolic?(endpoint)
-
       Endpoint.identity(endpoint)
     rescue InvalidEndpointError
       nil
     end
 
-    #: () -> Hash[Array[String], Hash[Symbol, untyped]]
-    def boundary_index
-      index = {} #: Hash[Array[String], Hash[Symbol, untyped]]
-      anchors.group_by { |model_class, _id| model_class }.each do |model_class, entries|
-        add_model_boundaries(index, model_class, entries.map { |_klass, id| id }.uniq)
+    # Each named record's earliest version, by the record's identity, in one
+    # statement for each model class.
+    #: () -> Hash[Array[String], untyped]
+    def first_versions
+      firsts = {} #: Hash[Array[String], untyped]
+      anchors.group_by(&:first).each do |model_class, entries|
+        firsts.merge!(first_versions_of(model_class, entries.map(&:last)))
       end
-      index
+      firsts
     end
 
+    # The model of each endpoint that names a record, with the record or its
+    # versions' id: a query reads a record's own id, as BatchedRootVersions'
+    # does. A version of a model that no longer exists names none, so its pair
+    # keeps its symbol.
     #: () -> Array[[untyped, untyped]]
     def anchors
-      @pairs.flatten(1).filter_map { |endpoint| anchor(endpoint) }.uniq
+      @pairs.flatten.filter_map { |endpoint| anchor(endpoint) }
     end
 
     #: (untyped) -> [untyped, untyped]?
     def anchor(endpoint)
-      return if endpoint.nil? || symbolic?(endpoint)
-
       if Endpoint.version?(endpoint)
         [Endpoint.model_class(endpoint), endpoint.item_id]
       elsif Endpoint.record?(endpoint)
-        [endpoint.class, endpoint.id]
+        [endpoint.class, endpoint]
       end
     rescue InvalidEndpointError
       nil
-    end
-
-    #: (Hash[Array[String], Hash[Symbol, untyped]], untyped, Array[untyped]) -> void
-    def add_model_boundaries(index, model_class, ids)
-      firsts = first_versions(model_class, ids)
-      ids.each do |id|
-        index[Support.record_identity(model_class, id)] = { first: firsts[id.to_s] }
-      end
     end
 
     # Each root's earliest version by time, in one query whatever the size of
     # the batch. The lowest id is not the earliest version when ids are not
     # sequential, as with UUIDs, so time decides and the usual ordering breaks
     # a tie -- refusing one that ids cannot order.
-    #: (untyped, Array[untyped]) -> Hash[String, untyped]
-    def first_versions(model_class, ids)
+    #: (untyped, Array[untyped]) -> Hash[Array[String], untyped]
+    def first_versions_of(model_class, ids)
       table = model_class.paper_trail.version_class.arel_table
       candidates = VersionQuery.for_items(model_class, ids)
-                               .where(VersionQuery.no_earlier_version(table)).to_a
-      candidates.group_by { |version| version.item_id.to_s }
+                               .where(VersionQuery.no_earlier_version(table))
+      candidates.group_by { |version| Support.record_identity(model_class, version.item_id) }
                 .transform_values { |versions| Support.chronological_sort(versions).first }
     end
   end

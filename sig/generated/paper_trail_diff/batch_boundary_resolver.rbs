@@ -26,31 +26,34 @@ module PaperTrailDiff
     # : (untyped) -> bool
     def symbolic?: (untyped) -> bool
 
-    # : (untyped, untyped, Hash[Array[String], Hash[Symbol, untyped]]) -> untyped
-    def resolve: (untyped, untyped, Hash[Array[String], Hash[Symbol, untyped]]) -> untyped
+    # : (untyped, untyped, Hash[Array[String], untyped]) -> untyped
+    def resolve: (untyped, untyped, Hash[Array[String], untyped]) -> untyped
 
     # A symbol carries no identity of its own, so the pair's other endpoint has
     # to say which record is meant.
     # : (untyped) -> Array[String]?
     def anchor_identity: (untyped) -> Array[String]?
 
-    # : () -> Hash[Array[String], Hash[Symbol, untyped]]
-    def boundary_index: () -> Hash[Array[String], Hash[Symbol, untyped]]
+    # Each named record's earliest version, by the record's identity, in one
+    # statement for each model class.
+    # : () -> Hash[Array[String], untyped]
+    def first_versions: () -> Hash[Array[String], untyped]
 
+    # The model of each endpoint that names a record, with the record or its
+    # versions' id: a query reads a record's own id, as BatchedRootVersions'
+    # does. A version of a model that no longer exists names none, so its pair
+    # keeps its symbol.
     # : () -> Array[[untyped, untyped]]
     def anchors: () -> Array[[ untyped, untyped ]]
 
     # : (untyped) -> [untyped, untyped]?
     def anchor: (untyped) -> [ untyped, untyped ]?
 
-    # : (Hash[Array[String], Hash[Symbol, untyped]], untyped, Array[untyped]) -> void
-    def add_model_boundaries: (Hash[Array[String], Hash[Symbol, untyped]], untyped, Array[untyped]) -> void
-
     # Each root's earliest version by time, in one query whatever the size of
     # the batch. The lowest id is not the earliest version when ids are not
     # sequential, as with UUIDs, so time decides and the usual ordering breaks
     # a tie -- refusing one that ids cannot order.
-    # : (untyped, Array[untyped]) -> Hash[String, untyped]
-    def first_versions: (untyped, Array[untyped]) -> Hash[String, untyped]
+    # : (untyped, Array[untyped]) -> Hash[Array[String], untyped]
+    def first_versions_of: (untyped, Array[untyped]) -> Hash[Array[String], untyped]
   end
 end
