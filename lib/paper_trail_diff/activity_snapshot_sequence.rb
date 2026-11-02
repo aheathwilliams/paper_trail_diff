@@ -123,13 +123,6 @@ module PaperTrailDiff
       @root_endpoints = build_root_endpoints
     end
 
-    #: () -> Array[RecordSnapshot?]
-    def call
-      snapshots = [] #: Array[RecordSnapshot?]
-      each { |_event, snapshot| snapshots << snapshot }
-      snapshots
-    end
-
     #: () { (ActivityEvent, RecordSnapshot?) -> void } -> void
     def each
       first = @events.first

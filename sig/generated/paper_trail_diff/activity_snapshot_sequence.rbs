@@ -79,9 +79,6 @@ module PaperTrailDiff
     # : (Array[untyped], Array[ActivityEvent], untyped, ?current: untyped) -> void
     def initialize: (Array[untyped], Array[ActivityEvent], untyped, ?current: untyped) -> void
 
-    # : () -> Array[RecordSnapshot?]
-    def call: () -> Array[RecordSnapshot?]
-
     # : () { (ActivityEvent, RecordSnapshot?) -> void } -> void
     def each: () { (ActivityEvent, RecordSnapshot?) -> void } -> void
 
