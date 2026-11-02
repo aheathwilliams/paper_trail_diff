@@ -472,12 +472,8 @@ module PaperTrailDiff
     # recorded between the requested range and the present.
     #: (untyped, Array[untyped]) -> Array[untyped]
     def versions_for(model_class, ids)
-      version_class = model_class.paper_trail.version_class
-      scope = version_class.where(
-        item_type: model_class.base_class.name,
-        item_id: ids
-      ).where(created_at: @start_time..)
-      scope = scope.where(window_condition(version_class)) if @end_time
+      scope = VersionQuery.for_items(model_class, ids).where(created_at: @start_time..)
+      scope = scope.where(window_condition(model_class.paper_trail.version_class)) if @end_time
       scope.order(:id).to_a
     end
 

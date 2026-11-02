@@ -152,8 +152,7 @@ module PaperTrailDiff
       return [] unless Support.versioned?(model)
 
       versions = model.paper_trail.version_class
-      relation = versions.where(item_type: model.base_class.name)
-      relation = relation.where(item_id: item_ids) if item_ids
+      relation = item_ids ? VersionQuery.for_items(model, item_ids) : VersionQuery.for_model(model)
       range = @time_range
       relation = range.scope(relation) if range
       relation = @version_scope.call(relation) if @version_scope
