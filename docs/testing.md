@@ -173,6 +173,10 @@ behavior can still name the class it checks with metadata, as the activity
 window specs do: `RSpec.describe 'Activity over a window', mutant_expression:
 'PaperTrailDiff::ActivityTimelineBuilder'`.
 
+Mutant runs an example it picks whatever its `if:` or `unless:` metadata
+says. An example that needs one database calls `skip` on the others instead,
+as `spec/unit/read_snapshot_spec.rb` does for SQL Server.
+
 Mutant counts a mutation that runs past its time limit as caught, so
 `mutant.yml` sets the limit well above the time the whole suite takes. With
 mutant's 5-second default, mutations no spec caught were reported as caught.
