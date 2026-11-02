@@ -115,7 +115,7 @@ module PaperTrailDiff
     # side, so a field's value goes on the side that has it.
     #: (TraversalEntry, String?) -> ChangeRow
     def presence_row(entry, attribute)
-      value = attribute ? entry.value : nil
+      value = (entry.value if attribute)
       return row(entry, :added, attribute, nil, value) if entry.state == :after
 
       row(entry, :removed, attribute, value, nil)

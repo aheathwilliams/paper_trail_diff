@@ -53,6 +53,7 @@ matcher:
     - PaperTrailDiff::DeletedRootFilter*
     - PaperTrailDiff::RecordedChanges*
     - PaperTrailDiff::ChangeRow*
+    - PaperTrailDiff::ChangeRows*
     - PaperTrailDiff::AssociationActivitySelection*
     - PaperTrailDiff::AssociationActivityEdge*
     - PaperTrailDiff::ActivityTargetCandidateLoader*

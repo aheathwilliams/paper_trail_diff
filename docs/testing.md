@@ -120,7 +120,7 @@ passes is behavior nothing checks. `mutant.yml` lists the classes it mutates:
   `CollectionIdentityIndex`, and `NestedComparator`;
 - which columns are compared: `SnapshotNormalizer` and `SnapshotPool`;
 - which versions a range reads: `TimeRange`, `TimelineRange`, `VersionRange`,
-  `TimeVersionRange`, and `RootVersionPlan`;
+  `TimeVersionRange`, `RootVersionPlan`, and `TransactionCut`;
 - which versions a batch or filter reads: `BatchedRootVersions`,
   `BatchedRootAnalyses`, `DeletedAnalysisBatch`, and `HistoricalFilter`;
 - what a version recorded: `RecordedChanges`;
@@ -133,13 +133,15 @@ passes is behavior nothing checks. `mutant.yml` lists the classes it mutates:
   `ActivityTargetCandidateLoader`, and `PreparedActivityIndex`;
 - where an activity range starts and ends, and which association history its
   query reads: `ActivityRange` and `VersionAssociationCandidateScope`;
-- what activity a record shows: `ActivityTimelineBuilder` and
-  `ActivityTransactionGrouper`;
-- which association paths a request accepts: `AssociationTraversal` and
-  `AssociationKey`;
+- what activity a record shows: `ActivityTimelineBuilder`,
+  `ActivityTransactionGrouper`, `ActivityTreeFilter`, `ActivityScopeFilter`,
+  and `ActivityView`;
+- which association paths a request accepts: `AssociationTraversal`,
+  `AssociationKey`, and `VersionTable`;
 - whether a transaction's HABTM members are one record's:
   `HabtmTransactionOwners`;
-- which association paths history cannot read exactly: `ApproximatePaths`;
+- which association paths history cannot read exactly, and whether a request
+  reads one with PT-AT: `ApproximatePaths` and `FallbackPaths`;
 - which records an association scope admits, and how it ranks them:
   `ScopeCondition` and `ScopeRanking`.
 
