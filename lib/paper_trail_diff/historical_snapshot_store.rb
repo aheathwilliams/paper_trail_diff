@@ -27,8 +27,8 @@ module PaperTrailDiff
       return if @tree.empty?
 
       # A batched preparation already covers these roots.
-      batched = root_versions.find { |version| @prepared_histories.key?(context_key(version)) }
-      return @prepared_histories.fetch(context_key(batched)) if batched
+      batched = root_versions.find { |version| @prepared_histories.key?(Support.row_key(version)) }
+      return @prepared_histories.fetch(Support.row_key(batched)) if batched
 
       PreparedHistoryLoader.new(
         record, root_ids: [record.id], root_versions: root_versions,
@@ -120,12 +120,7 @@ module PaperTrailDiff
     # A batch's history for the version wins over the one a caller passes.
     #: (untyped, PreparedHistory?) -> PreparedHistory?
     def history_for(context_endpoint, history)
-      @prepared_histories[context_key(context_endpoint)] || history
-    end
-
-    #: (untyped) -> Array[untyped]
-    def context_key(endpoint)
-      [endpoint.class.name, endpoint.id]
+      @prepared_histories[Support.row_key(context_endpoint)] || history
     end
 
     #: (Array[untyped], Array[untyped]) -> Hash[Symbol, untyped]
@@ -148,7 +143,7 @@ module PaperTrailDiff
         live_records: live_records,
         window: !start_at.nil?
       ).call
-      root_versions.each { |version| @prepared_histories[context_key(version)] = history }
+      root_versions.each { |version| @prepared_histories[Support.row_key(version)] = history }
     end
 
     #: (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer, history: PreparedHistory?) -> RecordSnapshot?
@@ -196,7 +191,7 @@ module PaperTrailDiff
 
     #: (untyped, untyped) -> Array[untyped]
     def snapshot_key(root_endpoint, context_endpoint)
-      context_key(root_endpoint) + context_key(context_endpoint)
+      Support.row_key(root_endpoint) + Support.row_key(context_endpoint)
     end
   end
 end

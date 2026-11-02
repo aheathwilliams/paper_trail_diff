@@ -94,7 +94,7 @@ module PaperTrailDiff
 
     #: (untyped) -> bool
     def mutation?(version)
-      @mutation_keys.include?(key(version))
+      @mutation_keys.include?(Support.row_key(version))
     end
 
     private
@@ -114,8 +114,8 @@ module PaperTrailDiff
     def default_mutations
       return @versions unless @context_version
 
-      context = key(@context_version)
-      @versions.reject { |version| key(version) == context }
+      context = Support.row_key(@context_version)
+      @versions.reject { |version| Support.row_key(version) == context }
     end
 
     # A Set only makes the lookup in `mutation?` fast; an Array would answer the
@@ -123,13 +123,7 @@ module PaperTrailDiff
     # mutant:disable
     #: (Array[untyped]) -> Set[Array[untyped]]
     def key_set(versions)
-      Set.new(versions.map { |version| key(version) })
-    end
-
-    # By class name, so a version still matches after its class is reloaded.
-    #: (untyped) -> Array[untyped]
-    def key(version)
-      [version.class.name, version.id]
+      Set.new(versions.map { |version| Support.row_key(version) })
     end
   end
 end

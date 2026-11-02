@@ -17,7 +17,7 @@ module PaperTrailDiff
     # What `version` recorded, as PaperTrailDiff.recorded_changes returns it.
     #: (untyped) -> Hash[String, ValueChange]?
     def call(version)
-      key = [version.class.name, version.id]
+      key = Support.row_key(version)
       @lock.synchronize do
         @changes.fetch(key) { @changes[key] = RecordedChanges.call(version, ignore: @ignore) }
       end

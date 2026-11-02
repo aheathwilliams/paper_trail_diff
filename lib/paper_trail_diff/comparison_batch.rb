@@ -138,7 +138,7 @@ module PaperTrailDiff
     #: (Array[[untyped, untyped]]) -> Array[untyped]
     def historical_versions(pairs)
       selected = pairs.flatten.select { |endpoint| Endpoint.version?(endpoint) }
-      selected.uniq { |version| [version.class.name, version.id] }
+      selected.uniq { |version| Support.row_key(version) }
     end
 
     #: () -> Array[[untyped, untyped]]

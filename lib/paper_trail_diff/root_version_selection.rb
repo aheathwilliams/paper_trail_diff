@@ -147,7 +147,7 @@ module PaperTrailDiff
 
     #: (Array[untyped]) -> Array[untyped]
     def chronological(versions)
-      Support.chronological_sort(versions.uniq { |version| [version.class.name, version.id] })
+      Support.chronological_sort(versions.uniq { |version| Support.row_key(version) })
     end
 
     #: (untyped) -> untyped

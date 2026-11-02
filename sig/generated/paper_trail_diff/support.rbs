@@ -33,6 +33,12 @@ module PaperTrailDiff
     # : (untyped, untyped) -> Array[untyped]
     def self?.sortable_identity: (untyped, untyped) -> Array[untyped]
 
+    # Which loaded row a version or record is, across the lookups of a call:
+    # by its class's name rather than the class, so a row still matches after
+    # its class is reloaded.
+    # : (untyped) -> Array[untyped]
+    def self?.row_key: (untyped) -> Array[untyped]
+
     # : (untyped) -> Array[untyped]
     def self?.chronological_version_key: (untyped) -> Array[untyped]
 

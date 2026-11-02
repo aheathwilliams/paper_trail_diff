@@ -39,7 +39,7 @@ module PaperTrailDiff
     #: (Array[untyped], ?branch: String?, ?join: bool) -> void
     def add(versions, branch: nil, join: false)
       versions.each do |version|
-        key = [version.class.name, version.id]
+        key = Support.row_key(version)
         existing = @events[key]
         @events[key] = {
           version: version,

@@ -86,9 +86,5 @@ module PaperTrailDiff
     # mutant:disable
     # : (Array[untyped]) -> Set[Array[untyped]]
     def key_set: (Array[untyped]) -> Set[Array[untyped]]
-
-    # By class name, so a version still matches after its class is reloaded.
-    # : (untyped) -> Array[untyped]
-    def key: (untyped) -> Array[untyped]
   end
 end

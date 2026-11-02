@@ -77,6 +77,14 @@ module PaperTrailDiff
       [type.to_s, key]
     end
 
+    # Which loaded row a version or record is, across the lookups of a call:
+    # by its class's name rather than the class, so a row still matches after
+    # its class is reloaded.
+    #: (untyped) -> Array[untyped]
+    def row_key(row)
+      [row.class.name, row.id]
+    end
+
     #: (untyped) -> Array[untyped]
     def chronological_version_key(version)
       version_key(version.created_at, version.id)

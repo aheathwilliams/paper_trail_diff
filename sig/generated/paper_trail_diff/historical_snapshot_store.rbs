@@ -61,9 +61,6 @@ module PaperTrailDiff
     # : (untyped, PreparedHistory?) -> PreparedHistory?
     def history_for: (untyped, PreparedHistory?) -> PreparedHistory?
 
-    # : (untyped) -> Array[untyped]
-    def context_key: (untyped) -> Array[untyped]
-
     # : (Array[untyped], Array[untyped]) -> Hash[Symbol, untyped]
     def batch_payload: (Array[untyped], Array[untyped]) -> Hash[Symbol, untyped]
 

@@ -104,8 +104,5 @@ module PaperTrailDiff
     # The step from the previous boundary, which `consume` has, to this one.
     # : (ActivityBoundary, RecordSnapshot?) -> void
     def append_step: (ActivityBoundary, RecordSnapshot?) -> void
-
-    # : (untyped) -> Array[untyped]
-    def version_key: (untyped) -> Array[untyped]
   end
 end

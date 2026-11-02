@@ -19,7 +19,7 @@ module PaperTrailDiff
           to_version: to_endpoint,
           captured_at: captured_at,
           diff: Engine.compare(
-            root_snapshots[version_key(from_endpoint)],
+            root_snapshots[Support.row_key(from_endpoint)],
             snapshot_for(to_endpoint, root_snapshots, closing_snapshot)
           )
         )
@@ -30,12 +30,7 @@ module PaperTrailDiff
     def snapshot_for(endpoint, root_snapshots, closing_snapshot)
       return closing_snapshot if Endpoint.record?(endpoint)
 
-      root_snapshots[version_key(endpoint)]
-    end
-
-    #: (untyped) -> Array[untyped]
-    def version_key(version)
-      [version.class.name, version.id]
+      root_snapshots[Support.row_key(endpoint)]
     end
   end
 end

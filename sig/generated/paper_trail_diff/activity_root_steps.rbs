@@ -13,8 +13,5 @@ module PaperTrailDiff
 
     # : (untyped, Hash[Array[untyped], RecordSnapshot?], RecordSnapshot?) -> RecordSnapshot?
     def self?.snapshot_for: (untyped, Hash[Array[untyped], RecordSnapshot?], RecordSnapshot?) -> RecordSnapshot?
-
-    # : (untyped) -> Array[untyped]
-    def self?.version_key: (untyped) -> Array[untyped]
   end
 end

@@ -41,7 +41,7 @@ module PaperTrailDiff
       transaction = ActivityTransactionGroups.transaction_key(version)
       return @transactions.fetch(transaction) if transaction
 
-      @versions.fetch([version.class.name, version.id])
+      @versions.fetch(Support.row_key(version))
     end
 
     private
