@@ -137,9 +137,9 @@ passes is behavior nothing checks. `mutant.yml` lists the classes it mutates:
 - where an activity range starts and ends, and which association history its
   query reads: `ActivityRange` and `VersionAssociationCandidateScope`;
 - what activity a record shows: `ActivityTimelineBuilder`,
-  `ActivityVersionCollector`, `ActivityRootSteps`, `ActivityTransactionGrouper`,
-  `ActivityTransactionGroups`, `ActivityTreeFilter`, `ActivityScopeFilter`, and
-  `ActivityView`;
+  `ActivityVersionCollector`, `ActivityHistoryBuilder`, `ActivityRootSteps`,
+  `ActivityTransactionGrouper`, `ActivityTransactionGroups`,
+  `ActivityTreeFilter`, `ActivityScopeFilter`, and `ActivityView`;
 - what an update did to a record, and whether it moved the record to another
   owner: `ActivitySnapshotDelta`;
 - where in a carried snapshot an event's record sits: `ActivityEventRouteFinder`;

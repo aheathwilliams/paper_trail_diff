@@ -48,11 +48,14 @@ module PaperTrailDiff
       @current = current
       @include_step = include_step
       @closing = closing
+      # A builder makes one pass; the rest of its state starts out nil.
+      @steps = []
+      @root_snapshots = {}
+      @first_pending = true
     end
 
     #: () -> ActivityHistory
     def call
-      reset
       filter.call(sequence) { |event, snapshot, kept| consume(event, snapshot, kept) }
       ActivityHistory.new(
         steps: @steps,
@@ -82,20 +85,7 @@ module PaperTrailDiff
     # @rbs @selected_last_snapshot: RecordSnapshot?
     # @rbs @previous_boundary: ActivityBoundary?
     # @rbs @previous_event: ActivityEvent?
-    # @rbs @passed_reported: bool
-
-    #: () -> void
-    def reset
-      @steps = []
-      @root_snapshots = {}
-      @first_snapshot = nil
-      @first_pending = true
-      @previous_snapshot = nil
-      @selected_last_snapshot = nil
-      @previous_boundary = nil
-      @previous_event = nil
-      @passed_reported = false
-    end
+    # @rbs @passed_reported: bool?
 
     #: () -> ActivityTreeFilter
     def filter
