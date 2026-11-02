@@ -171,6 +171,29 @@ RSpec.describe 'A has_many :through whose source is a has_many' do
     expect(notes_change(single(bea, from, to))).to eq(empty.merge(added: ['note']))
   end
 
+  # A post saved under another author changes nothing this one shows. As a
+  # step of its own inside a transaction, where a change surfaces one event
+  # late, it would take the credit for the note created before it.
+  it 'credits no step to the versions a post saved before it joined the author' do
+    ada
+    other = MembershipAuthor.transaction do
+      MembershipPost.create!(title: 'A', author: ada).notes.create!(body: 'note')
+      MembershipPost.create!(title: 'B', author: bea)
+    end
+    other.update!(title: 'B edited')
+    other.update!(author: ada)
+    elsewhere = other.versions.reorder(:id).first(2).map(&:id)
+
+    steps = PaperTrailDiff.activity_timeline(ada, associations: [:notes])
+    added = steps.find { |step| notes_change(step.diff)[:added] == ['note'] }
+    grouped = PaperTrailDiff.activity_timeline(ada, associations: [:notes], group: :transaction)
+
+    expect(added.source_boundary.item_type).to eq('MembershipNote')
+    [steps, grouped].each do |timeline|
+      expect(timeline.flat_map(&:sources).map(&:version_id) & elsewhere).to be_empty
+    end
+  end
+
   it 'follows a through whose own through is a through' do
     post = MembershipPost.create!(title: 'A', author: ada)
     note = post.notes.create!(body: 'note', reviewer: bea)

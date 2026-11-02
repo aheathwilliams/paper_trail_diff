@@ -93,7 +93,7 @@ module PaperTrailDiff
       intermediate.each_value do |group|
         # A through is always read with prepared history, which knows the
         # join row's state either side of each version.
-        @registry.add(@prepared&.join_versions(group, reflection) || group.fetch(:versions),
+        @registry.add(@prepared&.join_versions(parent, group, reflection) || group.fetch(:versions),
                       branch: branch, join: true)
         source = reflection.source_reflection
         children = edge_groups(group, source, branch)

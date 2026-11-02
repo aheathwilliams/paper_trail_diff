@@ -3,6 +3,18 @@
 All notable changes to this project will be documented in this file. The
 project follows [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Fixed
+
+- Activity on a `has_many :through` leaves out the versions a join record
+  saved while it joined another record. A card created on one board and moved
+  to another later brought every version it saved on the first board into the
+  second board's activity: each was a step of its own, and a transaction
+  group listed it in `sources`. Inside a transaction, where a change surfaces
+  one event late, such a step also took the credit for the change made just
+  before it, under its own author.
+
 ## [0.16.0] - 2026-11-01
 
 ### Changed

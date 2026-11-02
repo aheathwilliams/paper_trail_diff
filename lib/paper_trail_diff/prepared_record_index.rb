@@ -387,6 +387,13 @@ module PaperTrailDiff
       @series.fetch(identity(model_class, id)).states_around(version)
     end
 
+    # The attributes either side of one version, typed as a reified record's
+    # are.
+    #: (untyped, untyped, untyped) -> Array[Hash[untyped, untyped]]
+    def typed_states_around(model_class, id, version)
+      states_around(model_class, id, version).map { |state| typed_attributes(state) }
+    end
+
     #: (untyped, untyped) -> bool
     def loaded?(model_class, id)
       @series.key?(identity(model_class, id))

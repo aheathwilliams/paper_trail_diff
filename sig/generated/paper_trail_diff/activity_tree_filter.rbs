@@ -16,9 +16,11 @@ module PaperTrailDiff
   # the one after its last, which is the next event's or what the range
   # closes on. A record in neither was outside the tree throughout.
   #
-  # The root's own events are always kept, and so are the versions of a
-  # through's join rows, which a snapshot does not hold, and an event whose
-  # step is not reported, which only bounds one that is.
+  # The root's own events are always kept, and so is an event whose step is
+  # not reported, which only bounds one that is. A snapshot does not hold a
+  # through's join rows, so their versions are judged when they are
+  # collected, by the row's own state (PreparedActivityIndex#join_versions),
+  # and kept here.
   class ActivityTreeFilter
     # `closing` is the snapshot after the last event: the current record's,
     # or nil when nothing follows, as after the root's destruction.

@@ -181,6 +181,11 @@ module PaperTrailDiff
     # : (untyped, untyped, untyped) -> Array[PreparedRecordState]
     def states_around: (untyped, untyped, untyped) -> Array[PreparedRecordState]
 
+    # The attributes either side of one version, typed as a reified record's
+    # are.
+    # : (untyped, untyped, untyped) -> Array[Hash[untyped, untyped]]
+    def typed_states_around: (untyped, untyped, untyped) -> Array[Hash[untyped, untyped]]
+
     # : (untyped, untyped) -> bool
     def loaded?: (untyped, untyped) -> bool
 
