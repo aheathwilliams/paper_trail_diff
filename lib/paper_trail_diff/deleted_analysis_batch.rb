@@ -25,22 +25,14 @@ module PaperTrailDiff
       destroys = destroy_versions
       records = historical_roots(destroys)
       windows = TransactionCut.batch_windows(records, @time_range)
-      selected = plans(records, destroys, windows)
-      prepare(records, selected, windows)
-      analyses = records.to_h do |record|
-        key = Endpoint.identity(record)
-        [key, analysis_for(record, selected.fetch(key), windows.fetch(key, @time_range))]
-      end
+      analyses = BatchedRootAnalyses.new(
+        time_range: @time_range, windows: windows, history_preparer: @history_preparer,
+        analyzer: @analyzer
+      ).call(records, plans(records, destroys, windows))
       with_unavailable(analyses)
     end
 
     private
-
-    #: (untyped, RootVersionPlan, TimeRange?) -> Analysis
-    def analysis_for(record, plan, window)
-      analysis = plan.empty? ? @analyzer.empty : @analyzer.call(record, plan, window)
-      analysis.with_window(window)
-    end
 
     #: (Hash[Array[String], Analysis]) -> Hash[Array[String], Analysis?]
     def with_unavailable(analyses)
@@ -97,24 +89,6 @@ module PaperTrailDiff
       destroys = VersionQuery.for_items(@model, @identities.map(&:last)).where(event: 'destroy')
       # Oldest first, so each item keeps its latest destroy.
       VersionQuery.chronological(destroys).index_by(&:item_id).values
-    end
-
-    #: (Array[untyped], Hash[Array[String], TimeRange]) -> Hash[Symbol, untyped]
-    def preparation_range(versions, windows)
-      { start_at: TransactionCut.earliest_start(@time_range, windows),
-        end_at: [@time_range&.end_time, versions.map(&:created_at).max].compact.max }
-    end
-
-    #: (Array[untyped], Hash[Array[String], RootVersionPlan], Hash[Array[String], TimeRange]) -> void
-    def prepare(records, selected, windows)
-      records.group_by(&:class).each_value do |group|
-        versions = group.flat_map do |record|
-          selected.fetch(Endpoint.identity(record)).reconstruction_versions
-        end
-        next if versions.empty?
-
-        @history_preparer.call(group, versions, **preparation_range(versions, windows))
-      end
     end
   end
 end

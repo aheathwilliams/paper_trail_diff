@@ -13,9 +13,6 @@ module PaperTrailDiff
 
     private
 
-    # : (untyped, RootVersionPlan, TimeRange?) -> Analysis
-    def analysis_for: (untyped, RootVersionPlan, TimeRange?) -> Analysis
-
     # : (Hash[Array[String], Analysis]) -> Hash[Array[String], Analysis?]
     def with_unavailable: (Hash[Array[String], Analysis]) -> Hash[Array[String], Analysis?]
 
@@ -52,11 +49,5 @@ module PaperTrailDiff
 
     # : () -> Array[untyped]
     def destroy_versions: () -> Array[untyped]
-
-    # : (Array[untyped], Hash[Array[String], TimeRange]) -> Hash[Symbol, untyped]
-    def preparation_range: (Array[untyped], Hash[Array[String], TimeRange]) -> Hash[Symbol, untyped]
-
-    # : (Array[untyped], Hash[Array[String], RootVersionPlan], Hash[Array[String], TimeRange]) -> void
-    def prepare: (Array[untyped], Hash[Array[String], RootVersionPlan], Hash[Array[String], TimeRange]) -> void
   end
 end

@@ -122,7 +122,7 @@ passes is behavior nothing checks. `mutant.yml` lists the classes it mutates:
 - which versions a range reads: `TimeRange`, `TimelineRange`, `VersionRange`,
   `TimeVersionRange`, and `RootVersionPlan`;
 - which versions a batch or filter reads: `BatchedRootVersions`,
-  `DeletedAnalysisBatch`, and `HistoricalFilter`;
+  `BatchedRootAnalyses`, `DeletedAnalysisBatch`, and `HistoricalFilter`;
 - what a version recorded: `RecordedChanges`;
 - how a step flattens into rows: `ChangeRow` and `ChangeRows`;
 - which records a scope or report selects: `ScopedRootSelection`,
