@@ -25,6 +25,15 @@ project follows [Semantic Versioning](https://semver.org/).
   `load_live_endpoints.paper_trail_diff` payloads no longer have a
   `reload_live_endpoints` key.
 
+### Added
+
+- On SQL Server, each call reads its history and live rows in one `SNAPSHOT`
+  transaction when the database allows snapshot isolation
+  (`ALTER DATABASE ... SET ALLOW_SNAPSHOT_ISOLATION ON`), as it does at
+  `REPEATABLE READ` on PostgreSQL and MySQL. A commit that lands during the
+  call is then seen by none of its statements. Each call checks the setting
+  first, in one statement; without it, nothing changes.
+
 ### Fixed
 
 - Activity on a `has_many :through` leaves out the versions a join record

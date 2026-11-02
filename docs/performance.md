@@ -35,7 +35,9 @@ The last four rows grow with the number of records, for the reasons in
 
 The counts leave out transaction statements. On PostgreSQL and MySQL each call
 also runs in one snapshot transaction, which adds two or three statements per
-call whatever its size. See [limitations](reference.md#limitations).
+call whatever its size. On SQL Server a call first checks whether the
+database allows snapshot isolation, in one statement, and when it does, runs
+in a snapshot transaction too. See [limitations](reference.md#limitations).
 
 ## What still grows
 

@@ -1502,15 +1502,19 @@ Results can only be as complete as the history PaperTrail and PT-AT recorded.
 - Each call reads its history and live rows in one snapshot on PostgreSQL and
   MySQL (through mysql2 or trilogy), and on adapters built on them such as
   PostGIS, so a commit that lands during the call is seen by none of its
-  statements. The snapshot covers the database of the record's model and its
-  versions; an associated model on another database is read outside it. A
-  call made inside a transaction of your own
-  keeps that transaction's isolation level. To make the whole call see one
-  snapshot, start that transaction at `REPEATABLE READ` or stricter. SQLite and
-  SQL Server take no snapshot, so a commit during a call can appear in some of
-  its statements and not others. A long call holds its snapshot until it ends:
-  on PostgreSQL that can keep VACUUM from reclaiming old row versions, and on
-  MySQL it keeps undo history.
+  statements. On SQL Server it does so only when the database allows snapshot
+  isolation, which you turn on with
+  `ALTER DATABASE your_database SET ALLOW_SNAPSHOT_ISOLATION ON`; each call
+  checks the setting first. The snapshot covers the database of the record's
+  model and its versions; an associated model on another database is read
+  outside it. A call made inside a transaction of your own keeps that
+  transaction's isolation level. To make the whole call see one snapshot,
+  start that transaction at `REPEATABLE READ` or stricter, or at `SNAPSHOT` on
+  SQL Server. SQLite, and SQL Server without snapshot isolation, take no
+  snapshot, so a commit during a call can appear in some of its statements
+  and not others. A long call holds its snapshot until it ends: on PostgreSQL
+  that can keep VACUUM from reclaiming old row versions, on MySQL it keeps
+  undo history, and on SQL Server it keeps row versions in `tempdb`.
 - A savepoint that rolls back can split one transaction into several
   transaction groups; see
   [one step per transaction group](#one-step-per-transaction-group-transaction).

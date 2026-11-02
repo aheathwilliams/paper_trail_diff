@@ -9,8 +9,11 @@ module PaperTrailDiff
   #
   # PostgreSQL and MySQL (through mysql2 or trilogy), and adapters built on
   # them such as PostGIS, run the read at REPEATABLE READ, which gives every
-  # statement of the transaction the same view. Other adapters get no snapshot;
-  # docs/reference.md lists them under limitations.
+  # statement of the transaction the same view. SQL Server runs it at SNAPSHOT
+  # when the database allows that isolation level, which it does only after
+  # `ALTER DATABASE ... SET ALLOW_SNAPSHOT_ISOLATION ON`; otherwise SNAPSHOT
+  # raises, so it takes none. Other adapters get no snapshot; docs/reference.md
+  # lists them under limitations.
   module ReadSnapshot
     # The adapters whose subclasses take a snapshot, by name, since an
     # application loads only the adapters it uses.
@@ -18,6 +21,12 @@ module PaperTrailDiff
       ActiveRecord::ConnectionAdapters::PostgreSQLAdapter
       ActiveRecord::ConnectionAdapters::AbstractMysqlAdapter
     ].freeze
+    SQL_SERVER_ADAPTER = 'ActiveRecord::ConnectionAdapters::SQLServerAdapter'
+
+    # 1 is ON. The setting can change while the application runs, so it is
+    # read for each call; the catalog answers at once.
+    SQL_SERVER_SNAPSHOT_STATE =
+      'SELECT snapshot_isolation_state FROM sys.databases WHERE database_id = DB_ID()'
 
     module_function
 
@@ -31,15 +40,31 @@ module PaperTrailDiff
       classes = connection_classes(values)
       classes.reverse_each.reduce(block) do |inner, klass|
         connection = klass.connection
-        next inner if !snapshot?(connection) || connection.transaction_open?
+        level = isolation(connection) unless connection.transaction_open?
+        next inner unless level
 
-        -> { klass.transaction(isolation: :repeatable_read) { inner.call } }
+        -> { klass.transaction(isolation: level) { inner.call } }
       end.call
     end
 
+    # The isolation level that gives this connection's statements one view, or
+    # nil when it has none.
+    #: (untyped) -> Symbol?
+    def isolation(connection)
+      return :repeatable_read if adapter?(connection, SNAPSHOT_ADAPTERS)
+
+      :snapshot if adapter?(connection, [SQL_SERVER_ADAPTER]) && sql_server_snapshot?(connection)
+    end
+
+    #: (untyped, Array[String]) -> bool
+    def adapter?(connection, names)
+      connection.class.ancestors.any? { |ancestor| names.include?(ancestor.name) }
+    end
+
+    # Named as a schema query, as Active Record names its own catalog reads.
     #: (untyped) -> bool
-    def snapshot?(connection)
-      connection.class.ancestors.any? { |ancestor| SNAPSHOT_ADAPTERS.include?(ancestor.name) }
+    def sql_server_snapshot?(connection)
+      connection.select_value(SQL_SERVER_SNAPSHOT_STATE, 'SCHEMA').to_i == 1
     end
 
     # One class per connection: each read model and its version class, with the
@@ -72,6 +97,7 @@ module PaperTrailDiff
       value.class if Endpoint.record?(value)
     end
 
-    private_class_method :snapshot?, :model_for, :endpoint_model
+    private_class_method :isolation, :adapter?, :sql_server_snapshot?, :model_for,
+                         :endpoint_model
   end
 end
