@@ -174,8 +174,8 @@ module PaperTrailDiff
     # : () -> void
     def reject_live_habtm!: () -> void
 
-    # : () -> Array[String]?
-    def root_recorded: () -> Array[String]?
+    # : () -> RecordedChangesReader?
+    def root_recorded: () -> RecordedChangesReader?
 
     # A window prepares from its start, explicit endpoints from their first
     # version.

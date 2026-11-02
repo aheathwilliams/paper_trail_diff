@@ -32,27 +32,28 @@ module PaperTrailDiff
 
     NOT_READ_MESSAGE: ::String
 
-    # `recorded:` names the attributes to leave out of the version's recorded
-    # changes, or is nil when they were not asked for. Reading them decodes
-    # `object_changes`, which a caller who does not want them should not pay.
-    # : (untyped, ?recorded: Array[String]?) -> ActivityBoundary
-    def self.from_version: (untyped, ?recorded: Array[String]?) -> ActivityBoundary
+    # `recorded:` reads the version's recorded changes, or is nil when they
+    # were not asked for. Reading them decodes `object_changes`, which waits
+    # until a caller reads them, and which one who never does should not pay.
+    # : (untyped, ?recorded: RecordedChangesReader?) -> ActivityBoundary
+    def self.from_version: (untyped, ?recorded: RecordedChangesReader?) -> ActivityBoundary
 
     # The current record has no version, so it recorded nothing.
-    # : (untyped, captured_at: untyped, ?recorded: Array[String]?) -> ActivityBoundary
-    def self.current: (untyped, captured_at: untyped, ?recorded: Array[String]?) -> ActivityBoundary
+    # : (untyped, captured_at: untyped, ?recorded: RecordedChangesReader?) -> ActivityBoundary
+    def self.current: (untyped, captured_at: untyped, ?recorded: RecordedChangesReader?) -> ActivityBoundary
 
     # The state a `destroy` version leaves behind. A version records the state
     # before its own event, so the boundary built from a destroy version still
     # holds the record; this one is the absence that follows it.
-    # : (untyped, ?recorded: Array[String]?) -> ActivityBoundary
-    def self.destroyed: (untyped, ?recorded: Array[String]?) -> ActivityBoundary
+    # : (untyped, ?recorded: RecordedChangesReader?) -> ActivityBoundary
+    def self.destroyed: (untyped, ?recorded: RecordedChangesReader?) -> ActivityBoundary
 
-    # : (untyped, Array[String]?) -> untyped
-    private def self.recorded_changes: (untyped, Array[String]?) -> untyped
+    # : (untyped, RecordedChangesReader?) -> untyped
+    private def self.recorded_changes: (untyped, RecordedChangesReader?) -> untyped
 
     # `recorded_changes:` takes what `PaperTrailDiff.recorded_changes` returns
-    # for the version; leave it out when they were not read.
+    # for the version, or a RecordedChangesReader::Pending that reads it when
+    # first asked; leave it out when they were not read.
     # : (kind: Symbol, version_id: untyped, item_type: untyped, item_id: untyped, recorded_at: untyped, ?event: untyped, ?whodunnit: untyped, ?transaction_id: untyped, ?recorded_changes: untyped) -> void
     def initialize: (kind: Symbol, version_id: untyped, item_type: untyped, item_id: untyped, recorded_at: untyped, ?event: untyped, ?whodunnit: untyped, ?transaction_id: untyped, ?recorded_changes: untyped) -> void
 

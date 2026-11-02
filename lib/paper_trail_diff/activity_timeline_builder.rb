@@ -325,9 +325,9 @@ module PaperTrailDiff
       AssociationTraversal.new(@tree).reject_live_habtm_activity!(@record.class)
     end
 
-    #: () -> Array[String]?
+    #: () -> RecordedChangesReader?
     def root_recorded
-      @view.recorded_attributes(root: true)
+      @view.recorded_reader(root: true)
     end
 
     # A window prepares from its start, explicit endpoints from their first

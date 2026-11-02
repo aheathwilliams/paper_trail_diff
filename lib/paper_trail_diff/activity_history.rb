@@ -114,7 +114,7 @@ module PaperTrailDiff
       return pass(event) unless kept
 
       boundary = ActivityBoundary.from_version(
-        event.version, recorded: @view.recorded_attributes(root: event.root?)
+        event.version, recorded: @view.recorded_reader(root: event.root?)
       )
       @root_snapshots[version_key(event.version)] = snapshot if event.root?
       append_step(boundary, snapshot) if @previous_boundary

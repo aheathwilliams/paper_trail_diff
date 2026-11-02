@@ -1,0 +1,42 @@
+# Generated from lib/paper_trail_diff/recorded_changes_reader.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Decodes what each version recorded at most once per request, and only when
+  # a boundary's changes are read. A version many roots share in a batch, such
+  # as an author's, is one decode however many steps name it, and a step the
+  # caller never reads costs none.
+  class RecordedChangesReader
+    # : (Array[String]) -> void
+    def initialize: (Array[String]) -> void
+
+    # What `version` recorded, as PaperTrailDiff.recorded_changes returns it.
+    # : (untyped) -> Hash[String, ValueChange]?
+    def call: (untyped) -> Hash[String, ValueChange]?
+
+    @changes: Hash[Array[untyped], Hash[String, ValueChange]?]
+
+    @ignore: Array[String]
+
+    @lock: Thread::Mutex
+
+    # One boundary's recorded changes, read when first asked for. It lets go of
+    # the version once read, so a result keeps only what was decoded.
+    class Pending
+      # : (RecordedChangesReader, untyped) -> void
+      def initialize: (RecordedChangesReader, untyped) -> void
+
+      # : () -> Hash[String, ValueChange]?
+      def value: () -> Hash[String, ValueChange]?
+
+      @lock: Thread::Mutex
+
+      @read: bool
+
+      @reader: RecordedChangesReader
+
+      @value: Hash[String, ValueChange]?
+
+      @version: untyped
+    end
+  end
+end

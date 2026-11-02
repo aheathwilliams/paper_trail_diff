@@ -26,10 +26,10 @@ module PaperTrailDiff
     private_constant :NOT_READ, :NOT_READ_MESSAGE
 
     class << self
-      # `recorded:` names the attributes to leave out of the version's recorded
-      # changes, or is nil when they were not asked for. Reading them decodes
-      # `object_changes`, which a caller who does not want them should not pay.
-      #: (untyped, ?recorded: Array[String]?) -> ActivityBoundary
+      # `recorded:` reads the version's recorded changes, or is nil when they
+      # were not asked for. Reading them decodes `object_changes`, which waits
+      # until a caller reads them, and which one who never does should not pay.
+      #: (untyped, ?recorded: RecordedChangesReader?) -> ActivityBoundary
       def from_version(version, recorded: nil)
         new(
           kind: :version,
@@ -45,7 +45,7 @@ module PaperTrailDiff
       end
 
       # The current record has no version, so it recorded nothing.
-      #: (untyped, captured_at: untyped, ?recorded: Array[String]?) -> ActivityBoundary
+      #: (untyped, captured_at: untyped, ?recorded: RecordedChangesReader?) -> ActivityBoundary
       def current(record, captured_at:, recorded: nil)
         new(
           kind: :current,
@@ -60,7 +60,7 @@ module PaperTrailDiff
       # The state a `destroy` version leaves behind. A version records the state
       # before its own event, so the boundary built from a destroy version still
       # holds the record; this one is the absence that follows it.
-      #: (untyped, ?recorded: Array[String]?) -> ActivityBoundary
+      #: (untyped, ?recorded: RecordedChangesReader?) -> ActivityBoundary
       def destroyed(version, recorded: nil)
         new(
           kind: :destroyed,
@@ -77,16 +77,17 @@ module PaperTrailDiff
 
       private
 
-      #: (untyped, Array[String]?) -> untyped
-      def recorded_changes(version, ignore)
-        return NOT_READ if ignore.nil?
+      #: (untyped, RecordedChangesReader?) -> untyped
+      def recorded_changes(version, reader)
+        return NOT_READ if reader.nil?
 
-        RecordedChanges.call(version, ignore: ignore)
+        RecordedChangesReader::Pending.new(reader, version)
       end
     end
 
     # `recorded_changes:` takes what `PaperTrailDiff.recorded_changes` returns
-    # for the version; leave it out when they were not read.
+    # for the version, or a RecordedChangesReader::Pending that reads it when
+    # first asked; leave it out when they were not read.
     #: (kind: Symbol, version_id: untyped, item_type: untyped, item_id: untyped, recorded_at: untyped, ?event: untyped, ?whodunnit: untyped, ?transaction_id: untyped, ?recorded_changes: untyped) -> void
     def initialize( # rubocop:disable Metrics/ParameterLists
       kind:,
@@ -121,7 +122,8 @@ module PaperTrailDiff
     def recorded_changes
       raise ConfigurationError, NOT_READ_MESSAGE unless recorded_changes?
 
-      @recorded_changes
+      changes = @recorded_changes
+      changes.is_a?(RecordedChangesReader::Pending) ? changes.value : changes
     end
 
     # Whether this boundary's recorded changes were read.
@@ -160,7 +162,7 @@ module PaperTrailDiff
                    record: record.to_h)
       return value unless recorded_changes?
 
-      value.merge(recorded_changes: @recorded_changes&.transform_values(&:to_h))
+      value.merge(recorded_changes: recorded_changes&.transform_values(&:to_h))
     end
   end
 

@@ -34,6 +34,15 @@ project follows [Semantic Versioning](https://semver.org/).
   call is then seen by none of its statements. Each call checks the setting
   first, in one statement; without it, nothing changes.
 
+### Changed
+
+- With `recorded_changes: true`, a boundary decodes its version's changes the
+  first time its `recorded_changes` is read, and each version is decoded once
+  for the whole call. Every boundary decoded its version when it was built,
+  so a version that many records share in a batch, such as an author's, was
+  decoded once for each of them, and a step nobody read cost as much as one
+  that was. A decoding error now raises when the changes are read.
+
 ### Fixed
 
 - Activity on a `has_many :through` leaves out the versions a join record
