@@ -121,8 +121,8 @@ passes is behavior nothing checks. `mutant.yml` lists the classes it mutates:
 - which columns are compared, and how precisely times are: `SnapshotNormalizer`,
   `SnapshotPool`, and `StoredTimePrecision`;
 - which versions a range reads: `TimeRange`, `TimelineRange`, `VersionRange`,
-  `TimeVersionRange`, `RootVersionSelection`, `RootVersionPlan`, and
-  `TransactionCut`;
+  `TimeVersionRange`, `RootVersionSelection`, `RootVersionPlan`,
+  `TransactionCut`, and `VersionQuery`;
 - which versions a batch or filter reads: `AnalysisBatch`,
   `BatchedRootVersions`, `BatchedRootAnalyses`, `DeletedAnalysisBatch`,
   `HistoricalFilter`, and `VersionScopeFilter`;

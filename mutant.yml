@@ -49,6 +49,7 @@ matcher:
     - PaperTrailDiff::TransactionCut*
     - PaperTrailDiff::VersionTable*
     - PaperTrailDiff::VersionRange*
+    - PaperTrailDiff::VersionQuery*
     - PaperTrailDiff::TimeVersionRange*
     - PaperTrailDiff::BatchedRootVersions*
     - PaperTrailDiff::BatchedRootAnalyses*
