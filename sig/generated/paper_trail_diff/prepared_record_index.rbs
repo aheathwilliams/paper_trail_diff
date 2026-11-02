@@ -261,9 +261,6 @@ module PaperTrailDiff
   # held from the start onward belong to that also saved versions before it,
   # of any record. One statement per 500 transactions.
   class OpeningTransactions
-    # Transactions per statement, as TransactionCut slices them.
-    SLICE: ::Integer
-
     # : (Hash[Array[String], PreparedRecordSeries], untyped) -> void
     def initialize: (Hash[Array[String], PreparedRecordSeries], untyped) -> void
 
@@ -274,8 +271,10 @@ module PaperTrailDiff
 
     private
 
-    # : (untyped, Array[untyped]) -> Array[untyped]
-    def earlier_versions: (untyped, Array[untyped]) -> Array[untyped]
+    # When each of these transactions saved its first version before the
+    # start, for those that saved one there.
+    # : (untyped, Array[untyped]) -> Array[[untyped, untyped]]
+    def earliest: (untyped, Array[untyped]) -> Array[[ untyped, untyped ]]
 
     @series: Hash[Array[String], PreparedRecordSeries]
 

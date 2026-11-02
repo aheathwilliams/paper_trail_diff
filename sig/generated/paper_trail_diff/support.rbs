@@ -3,6 +3,12 @@
 module PaperTrailDiff
   # Internal helpers for isolating and serializing values held by result objects.
   module Support
+    # Ids per statement, for the queries that list them in slices. SQL Server
+    # compiles every statement afresh, since its ids are written into it, in
+    # time that grows with their number; fewer statements than this cost more
+    # than they save.
+    IDS_PER_STATEMENT: ::Integer
+
     # Answers a question about `value` once for each Active Record class, in
     # `answers`: its respond_to? also looks through the instance's attributes,
     # which costs more than most of what reading a version does, and every

@@ -4,6 +4,12 @@
 module PaperTrailDiff
   # Internal helpers for isolating and serializing values held by result objects.
   module Support # rubocop:disable Metrics/ModuleLength
+    # Ids per statement, for the queries that list them in slices. SQL Server
+    # compiles every statement afresh, since its ids are written into it, in
+    # time that grows with their number; fewer statements than this cost more
+    # than they save.
+    IDS_PER_STATEMENT = 500
+
     module_function
 
     # Answers a question about `value` once for each Active Record class, in

@@ -515,10 +515,6 @@ module PaperTrailDiff
   # held from the start onward belong to that also saved versions before it,
   # of any record. One statement per 500 transactions.
   class OpeningTransactions
-    # Transactions per statement, as TransactionCut slices them.
-    SLICE = 500
-    private_constant :SLICE
-
     #: (Hash[Array[String], PreparedRecordSeries], untyped) -> void
     def initialize(series, start)
       @series = series
@@ -529,20 +525,24 @@ module PaperTrailDiff
     # earliest began; nil when none crossed the start.
     #: () -> [Array[Array[untyped]], untyped]?
     def call
-      earlier = transactions.flat_map { |version_class, ids| earlier_versions(version_class, ids) }
-      return if earlier.empty?
+      began = transactions.flat_map do |version_class, ids|
+        earliest(version_class, ids).map { |id, at| [[version_class.name, id], at] }
+      end
+      return if began.empty?
 
-      keys = earlier.filter_map { |version| ActivityTransactionGroups.transaction_key(version) }
-      [keys.uniq, earlier.map(&:created_at).min]
+      [began.map(&:first), began.map(&:last).min]
     end
 
     private
 
-    #: (untyped, Array[untyped]) -> Array[untyped]
-    def earlier_versions(version_class, transaction_ids)
+    # When each of these transactions saved its first version before the
+    # start, for those that saved one there.
+    #: (untyped, Array[untyped]) -> Array[[untyped, untyped]]
+    def earliest(version_class, transaction_ids)
       before = version_class.arel_table[:created_at].lt(@start)
-      transaction_ids.each_slice(SLICE).flat_map do |slice|
-        version_class.where(transaction_id: slice).where(before).to_a
+      transaction_ids.each_slice(Support::IDS_PER_STATEMENT).flat_map do |slice|
+        version_class.where(transaction_id: slice).where(before).group(:transaction_id)
+                     .minimum(:created_at).to_a
       end
     end
 

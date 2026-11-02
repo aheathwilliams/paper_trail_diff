@@ -18,9 +18,6 @@ module PaperTrailDiff
   # in one statement per version table and 500 transactions or versions, and
   # the roots a batch prepared together share them.
   class ActivityScopeFilter
-    SLICE = 500
-    private_constant :SLICE
-
     #: (untyped) -> void
     def initialize(scope)
       @scope = scope
@@ -58,17 +55,19 @@ module PaperTrailDiff
     def read(versions)
       versions.group_by(&:class).each do |version_class, group|
         name = version_class.name
-        saved, loose = group.partition { |version| VersionBoundary.transaction_id(version) }
-        read_kept(version_class, @transactions, name,
-                  saved.map { |version| VersionBoundary.transaction_id(version) }, :transaction_id)
+        saved = group.group_by { |version| VersionBoundary.transaction_id(version) }
+        loose = saved.delete(nil) || []
+        read_kept(version_class, @transactions, name, saved.keys, :transaction_id)
         read_kept(version_class, @versions, name, loose.map(&:id), :id)
       end
     end
 
-    # Records which of `values` of `column` the filter keeps versions with.
+    # Records which of the distinct `values` of `column` the filter keeps
+    # versions with.
     #: (untyped, Hash[Array[untyped], bool], String, Array[untyped], Symbol) -> void
     def read_kept(version_class, answers, name, values, column)
-      values.uniq.reject { |value| answers.key?([name, value]) }.each_slice(SLICE) do |slice|
+      values.reject { |value| answers.key?([name, value]) }
+            .each_slice(Support::IDS_PER_STATEMENT) do |slice|
         kept = @scope.call(version_class.where(column => slice)).pluck(column)
         slice.each { |value| answers[[name, value]] = false }
         kept.each { |value| answers[[name, value]] = true }

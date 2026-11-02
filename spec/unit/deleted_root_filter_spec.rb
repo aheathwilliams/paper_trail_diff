@@ -81,7 +81,7 @@ RSpec.describe PaperTrailDiff::DeletedRootFilter do
     one = destroyed(views: 1)
     two = destroyed(views: 2)
     record_destroy('FilterArticle', one.id, { 'id' => one.id, 'views' => 2 })
-    stub_const('PaperTrailDiff::DeletedRootFilter::SLICE', 1)
+    stub_const('PaperTrailDiff::Support::IDS_PER_STATEMENT', 1)
     queries = 0
     count = ->(*, payload) { queries += 1 unless payload[:name] == 'SCHEMA' }
 

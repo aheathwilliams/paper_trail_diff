@@ -17,8 +17,6 @@ module PaperTrailDiff
   # in one statement per version table and 500 transactions or versions, and
   # the roots a batch prepared together share them.
   class ActivityScopeFilter
-    SLICE: ::Integer
-
     # : (untyped) -> void
     def initialize: (untyped) -> void
 
@@ -45,7 +43,8 @@ module PaperTrailDiff
     # : (Array[untyped]) -> void
     def read: (Array[untyped]) -> void
 
-    # Records which of `values` of `column` the filter keeps versions with.
+    # Records which of the distinct `values` of `column` the filter keeps
+    # versions with.
     # : (untyped, Hash[Array[untyped], bool], String, Array[untyped], Symbol) -> void
     def read_kept: (untyped, Hash[Array[untyped], bool], String, Array[untyped], Symbol) -> void
   end

@@ -6,8 +6,6 @@ module PaperTrailDiff
   # table, where a destroyed root has no row, so without this a report on one
   # account's records would include every account's deletions.
   class DeletedRootFilter
-    SLICE: ::Integer
-
     # : (untyped) -> void
     def initialize: (untyped) -> void
 

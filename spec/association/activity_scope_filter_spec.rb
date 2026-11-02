@@ -70,7 +70,7 @@ RSpec.describe PaperTrailDiff::ActivityScopeFilter do
     versions = history
     prepared = instance_double(PaperTrailDiff::PreparedHistory, versions: versions)
     filter = described_class.new(alice)
-    stub_const('PaperTrailDiff::ActivityScopeFilter::SLICE', 1)
+    stub_const('PaperTrailDiff::Support::IDS_PER_STATEMENT', 1)
 
     first = statements { filter.prepare(prepared, []) }
     again = statements { filter.prepare(prepared, versions) }
@@ -101,7 +101,7 @@ RSpec.describe PaperTrailDiff::ActivityScopeFilter do
     prepared = instance_double(PaperTrailDiff::PreparedHistory, versions: versions.first(2))
     other = instance_double(PaperTrailDiff::PreparedHistory, versions: versions)
     filter = described_class.new(alice)
-    stub_const('PaperTrailDiff::ActivityScopeFilter::SLICE', 1)
+    stub_const('PaperTrailDiff::Support::IDS_PER_STATEMENT', 1)
 
     first = statements { filter.prepare(prepared, versions.last(2)) }
     held = statements { filter.prepare(other, versions) }

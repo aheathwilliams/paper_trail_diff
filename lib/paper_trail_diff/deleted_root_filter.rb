@@ -7,9 +7,6 @@ module PaperTrailDiff
   # table, where a destroyed root has no row, so without this a report on one
   # account's records would include every account's deletions.
   class DeletedRootFilter
-    SLICE = 500
-    private_constant :SLICE
-
     #: (untyped) -> void
     def initialize(relation)
       @relation = relation
@@ -76,7 +73,7 @@ module PaperTrailDiff
     #: (Array[String]) -> Hash[String, Hash[String, untyped]?]
     def destroyed_states(ids)
       states = {} #: Hash[String, Hash[String, untyped]?]
-      ids.each_slice(SLICE) do |slice|
+      ids.each_slice(Support::IDS_PER_STATEMENT) do |slice|
         destroys = VersionQuery.for_items(model, slice).where(event: 'destroy')
         VersionQuery.chronological(destroys).each do |version|
           states[version.item_id.to_s] =
