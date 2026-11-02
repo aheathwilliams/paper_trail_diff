@@ -20,17 +20,23 @@ module PaperTrailDiff
                  'final change, and there is no current record to end at: narrow ' \
                  'the window to end before the last recorded version'
 
-    #: (in_range: Array[untyped], selected: Array[untyped], after_range: untyped, windowed: bool, ?context_required: bool, ?filtered: bool, ?live_endpoint: untyped) -> void
+    # `selected` is what a filter keeps of `in_range`; one that keeps every
+    # version is no filter. Activity on associations reports the changes a
+    # filter keeps on them wherever they fall in the range, so a `whole` plan
+    # replays every root version there, as one without a filter does, and the
+    # filter names only which of them are the root's own mutations.
+    #: (in_range: Array[untyped], selected: Array[untyped], after_range: untyped, windowed: bool, ?context_required: bool, ?live_endpoint: untyped, ?whole: bool) -> void
     def initialize( # rubocop:disable Metrics/ParameterLists
-      in_range:, selected:, after_range:, windowed:, context_required: false, filtered: false,
-      live_endpoint: nil
+      in_range:, selected:, after_range:, windowed:, context_required: false, live_endpoint: nil,
+      whole: false
     )
       @in_range = in_range
-      @selected = selected
+      @reported = selected
+      @selected = whole ? in_range : selected
       @after_range = after_range
       @windowed = windowed
       @context_required = context_required
-      @filtered = filtered
+      @filtered = @selected.length < in_range.length
       @live_endpoint = live_endpoint
     end
 
@@ -40,12 +46,14 @@ module PaperTrailDiff
 
       closing = revealing_version || @live_endpoint
       plan = @filtered ? filtered_plan(closing) : contiguous_plan(closing)
-      closes_on_destroy?(closing) ? plan.closing_on_destroy : plan
+      plan = plan.closing_on_destroy if closes_on_destroy?(closing)
+      plan.reporting(@reported)
     end
 
     private
 
     # @rbs @in_range: Array[untyped]
+    # @rbs @reported: Array[untyped]
     # @rbs @selected: Array[untyped]
     # @rbs @after_range: untyped
     # @rbs @windowed: bool
@@ -105,8 +113,7 @@ module PaperTrailDiff
       RootVersionPlan.new(
         versions: versions, steps: steps,
         context_version: (revealing unless live),
-        reconstruction_versions: spanned(versions),
-        mutations: @selected, closing_record: live
+        reconstruction_versions: spanned(versions), closing_record: live
       )
     end
 
@@ -119,25 +126,28 @@ module PaperTrailDiff
       terminal_destroy? ? [@selected.last] : []
     end
 
-    # Everything the span passes through, filtered out or not. A replay that
-    # skipped the excluded versions would carry a stale state into the next
-    # reported step, so the two selected mutations either side of a gap would
-    # disagree about what the record looked like between them.
+    # Everything the span passes through, filtered out or not, through the
+    # version that reveals the last selected mutation, which can lie after the
+    # range. A replay that skipped the excluded versions would carry a stale
+    # state into the next reported step, so the two selected mutations either
+    # side of a gap would disagree about what the record looked like between
+    # them. One that stopped before the revealing version would read what the
+    # last one produced from history that ends before it.
     #: (Array[untyped]) -> Array[untyped]
     def spanned(versions)
       first = versions.first
       last = versions.last
       return versions unless first && last
 
-      @in_range.select do |candidate|
+      chronological(@in_range.select do |candidate|
         !Support.compare_versions(first, candidate).positive? &&
           !Support.compare_versions(candidate, last).positive?
-      end
+      end + versions)
     end
 
     #: (Array[untyped]) -> Array[untyped]
     def chronological(versions)
-      Support.chronological_sort(versions.uniq { |version| [version.class.name, version.id] })
+      Support.chronological_sort(versions.uniq { |version| Support.row_key(version) })
     end
 
     #: (untyped) -> untyped

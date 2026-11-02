@@ -5,7 +5,10 @@ module PaperTrailDiff
   # Expands the explicit association tree into a request-scoped PreparedHistory.
   class PreparedHistoryLoader
     # Without `end_at`, the activity range closes on the last root version.
-    #: (untyped, root_ids: Array[untyped], root_versions: Array[untyped], tree: AssociationTree, traversal: AssociationTraversal, start_at: untyped, end_at: untyped, live_records: Array[untyped]) -> void
+    # A `window` is a time range; a range of versions starts at the state its
+    # first version names. `opening` names the transactions that crossed the
+    # window's start when this history is read again from where they began.
+    #: (untyped, root_ids: Array[untyped], root_versions: Array[untyped], tree: AssociationTree, traversal: AssociationTraversal, start_at: untyped, end_at: untyped, live_records: Array[untyped], ?window: bool, ?opening: Array[Array[untyped]]) -> void
     def initialize( # rubocop:disable Metrics/ParameterLists
       record,
       root_ids:,
@@ -14,15 +17,21 @@ module PaperTrailDiff
       traversal:,
       start_at:,
       end_at:,
-      live_records:
+      live_records:,
+      window: false,
+      opening: []
     )
+      @window = window
       @record = record
       @root_ids = root_ids
       @root_versions = root_versions
       @tree = tree
       @traversal = traversal
+      @end_at = end_at
+      @live_records = live_records
       start_at = VersionBoundary.transaction_start(root_versions, start_at)
-      @records = PreparedRecordIndex.new(start_at, end_at: end_at, live_records: live_records)
+      @records = PreparedRecordIndex.new(start_at, end_at: end_at, live_records: live_records,
+                                                   opening_transactions: opening)
       @activity = PreparedActivityIndex.new(@records, root_versions, start_at: start_at)
       @history = PreparedHistory.new(@records, activity_index: @activity)
       @edges = PreparedEdgeLoader.new(@records, root_versions, start_at: start_at)
@@ -33,11 +42,17 @@ module PaperTrailDiff
     def call
       @records.seed(@record.class, @root_ids, @root_versions)
       load_node(@record.class, @root_ids, @tree, path: '')
-      @history
+      opening = @records.opening if @window
+      return @history unless opening
+
+      reload(*opening)
     end
 
     private
 
+    # @rbs @window: bool
+    # @rbs @end_at: untyped
+    # @rbs @live_records: Array[untyped]
     # @rbs @record: untyped
     # @rbs @root_ids: Array[untyped]
     # @rbs @root_versions: Array[untyped]
@@ -48,6 +63,28 @@ module PaperTrailDiff
     # @rbs @history: PreparedHistory
     # @rbs @edges: PreparedEdgeLoader
     # @rbs @prepared: Hash[untyped, Array[String]]
+
+    # A transaction that crosses a window's start and saved a version of the
+    # root moves the window's edge back to where it began (see
+    # TransactionCut); one that saved only associated records moves nothing.
+    # A boundary in such a transaction still reads each record as it stood
+    # before the transaction began (see PreparedRecordSeries#boundary_index),
+    # and a history read from the window's start holds neither the versions
+    # it saved before the start nor the records only those versions name, such
+    # as one it destroyed there. Without them the window would start after
+    # changes that the window before it left to this one, by ending its step
+    # at one of the transaction's events here (see ActivityTreeFilter), and
+    # neither would report them. So the history is read again from where the
+    # earliest such transaction began; the window's events still start at its
+    # start.
+    #: (Array[Array[untyped]], untyped) -> PreparedHistory
+    def reload(keys, earliest)
+      PreparedHistoryLoader.new(
+        @record, root_ids: @root_ids, root_versions: @root_versions, tree: @tree,
+                 traversal: @traversal, start_at: earliest, end_at: @end_at,
+                 live_records: @live_records, opening: keys
+      ).call
+    end
 
     #: (untyped, Array[untyped], AssociationTree, path: String) -> void
     def load_node(model_class, ids, tree, path:)

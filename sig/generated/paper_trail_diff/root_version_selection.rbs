@@ -17,8 +17,13 @@ module PaperTrailDiff
     # this is raised only when there is none to read.
     INCOMPLETE: ::String
 
-    # : (in_range: Array[untyped], selected: Array[untyped], after_range: untyped, windowed: bool, ?context_required: bool, ?filtered: bool, ?live_endpoint: untyped) -> void
-    def initialize: (in_range: Array[untyped], selected: Array[untyped], after_range: untyped, windowed: bool, ?context_required: bool, ?filtered: bool, ?live_endpoint: untyped) -> void
+    # `selected` is what a filter keeps of `in_range`; one that keeps every
+    # version is no filter. Activity on associations reports the changes a
+    # filter keeps on them wherever they fall in the range, so a `whole` plan
+    # replays every root version there, as one without a filter does, and the
+    # filter names only which of them are the root's own mutations.
+    # : (in_range: Array[untyped], selected: Array[untyped], after_range: untyped, windowed: bool, ?context_required: bool, ?live_endpoint: untyped, ?whole: bool) -> void
+    def initialize: (in_range: Array[untyped], selected: Array[untyped], after_range: untyped, windowed: bool, ?context_required: bool, ?live_endpoint: untyped, ?whole: bool) -> void
 
     # : () -> RootVersionPlan
     def call: () -> RootVersionPlan
@@ -34,6 +39,8 @@ module PaperTrailDiff
     @in_range: Array[untyped]
 
     @live_endpoint: untyped
+
+    @reported: Array[untyped]
 
     @selected: Array[untyped]
 
@@ -69,10 +76,13 @@ module PaperTrailDiff
     # : () -> Array[untyped]
     def closing_versions: () -> Array[untyped]
 
-    # Everything the span passes through, filtered out or not. A replay that
-    # skipped the excluded versions would carry a stale state into the next
-    # reported step, so the two selected mutations either side of a gap would
-    # disagree about what the record looked like between them.
+    # Everything the span passes through, filtered out or not, through the
+    # version that reveals the last selected mutation, which can lie after the
+    # range. A replay that skipped the excluded versions would carry a stale
+    # state into the next reported step, so the two selected mutations either
+    # side of a gap would disagree about what the record looked like between
+    # them. One that stopped before the revealing version would read what the
+    # last one produced from history that ends before it.
     # : (Array[untyped]) -> Array[untyped]
     def spanned: (Array[untyped]) -> Array[untyped]
 

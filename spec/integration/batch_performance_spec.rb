@@ -22,7 +22,7 @@ RSpec.describe 'batch reconstruction cost' do
       end
 
     report = PaperTrailDiff.analyze_many(
-      articles, within: (Time.now.utc - 3600)..(Time.now.utc + 60), close_on: :current
+      articles, within: (Time.now.utc - 3600)..(Time.now.utc + 60)
     )
 
     expect(calls).to be_empty
@@ -48,7 +48,7 @@ RSpec.describe 'batch reconstruction cost' do
       end
 
     analysis = PaperTrailDiff.analyze(
-      article, within: (Time.now.utc - 3600)..(Time.now.utc + 60), close_on: :current,
+      article, within: (Time.now.utc - 3600)..(Time.now.utc + 60),
                version_scope: ->(versions) { versions.where(id: chosen.map(&:id)) }
     )
 

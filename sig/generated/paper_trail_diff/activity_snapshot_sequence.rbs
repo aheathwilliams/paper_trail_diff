@@ -13,6 +13,8 @@ module PaperTrailDiff
     # share these snapshots too, and the caches their refresher builds. They
     # are the same for any root with that history, so reusing them depends on
     # nothing but the history.
+    #
+    # A `start_at` is a window's; a range of versions starts at its first.
     # : (untyped, Array[untyped], ?start_at: untyped, ?end_at: untyped) -> PreparedActivitySnapshots
     def prepare: (untyped, Array[untyped], ?start_at: untyped, ?end_at: untyped) -> PreparedActivitySnapshots
 
@@ -39,6 +41,9 @@ module PaperTrailDiff
 
     # : () -> PreparedActivityIndex?
     def activity_index: () -> PreparedActivityIndex?
+
+    # : () -> Array[Array[untyped]]
+    def opening_transactions: () -> Array[Array[untyped]]
 
     # : (untyped, untyped) -> RecordSnapshot?
     def call: (untyped, untyped) -> RecordSnapshot?

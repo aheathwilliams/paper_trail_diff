@@ -13,12 +13,12 @@ module PaperTrailDiff
     end
 
     # Keep both reconstruction boundaries and the step pairs a filter implies.
-    #: () -> RootVersionPlan
-    def select_plan_for_range
+    #: (?whole: bool) -> RootVersionPlan
+    def select_plan_for_range(whole: false)
       relation = validated_relation
       select_plan(
         relation.where(created_at: @from.created_at..@to.created_at),
-        through: @to
+        through: @to, whole: whole
       )
     end
 
@@ -34,12 +34,13 @@ module PaperTrailDiff
       relation
     end
 
-    #: (untyped) -> RootVersionPlan
-    def select_plan_through_current(current)
+    #: (untyped, ?whole: bool) -> RootVersionPlan
+    def select_plan_through_current(current, whole: false)
       Endpoint.validate_pair!(@record, current)
       relation = Endpoint.versions(@record)
       validate_boundary!(@from, relation, boundary: :from)
-      select_plan(relation.where(created_at: @from.created_at..), live_endpoint: current)
+      select_plan(relation.where(created_at: @from.created_at..), live_endpoint: current,
+                                                                  whole: whole)
     end
 
     private
@@ -49,8 +50,8 @@ module PaperTrailDiff
     # @rbs @to: untyped
     # @rbs @version_scope: untyped
 
-    #: (untyped, ?through: untyped, ?live_endpoint: untyped) -> RootVersionPlan
-    def select_plan(relation, through: nil, live_endpoint: nil)
+    #: (untyped, whole: bool, ?through: untyped, ?live_endpoint: untyped) -> RootVersionPlan
+    def select_plan(relation, whole:, through: nil, live_endpoint: nil)
       in_range = ordered(relation.select do |version|
         Support.compare_versions(@from, version) <= 0 &&
           (!through || Support.compare_versions(version, through) <= 0)
@@ -60,7 +61,7 @@ module PaperTrailDiff
         selected: VersionScopeFilter.new(@version_scope).call(relation, in_range),
         after_range: nil,
         windowed: false,
-        filtered: !@version_scope.nil?, live_endpoint: live_endpoint
+        live_endpoint: live_endpoint, whole: whole
       ).call
     end
 

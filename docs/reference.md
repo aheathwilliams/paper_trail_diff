@@ -176,10 +176,16 @@ A window edge that falls inside a transaction moves back to where that
 transaction began, so the whole transaction is in the later window, as it is
 when a range [starts or ends at a version](#choosing-a-range). This applies to
 transactions that saved a version of the root record, such as a comment edit
-and the `touch: true` article version saved with it. So back-to-back windows,
-or a `report` with `since:` after an earlier report, show each change exactly
-once, credited to the transaction that made it. Each root moves its own edges,
-so in a batch two roots can start a few moments apart.
+and the `touch: true` article version saved with it. A transaction that saved
+only associated records moves no edge. When it saved some of them before the
+edge and some after, its changes are still all in one window: in the later
+one when a version it saved after the edge is of a record on the requested
+paths before or after the transaction, and otherwise in the earlier one. A
+[transaction group](#one-step-per-transaction-group-transaction) lists in
+`sources` only the versions inside its window. So back-to-back windows, or a
+`report` with `since:` after an earlier report, show each change exactly
+once, credited to the transaction that made it. Each root moves its own
+edges, so in a batch two roots can start a few moments apart.
 
 `analysis.window` is the window an `Analysis` covers after any such move, as a
 Ruby range. It is `nil` when `within:` or `since:` was not given. Every step of
@@ -231,19 +237,14 @@ in the step for that record's last recorded change.
 If the window's last change destroyed the record, the window closes on that
 deletion instead. See [a destroyed record](#a-destroyed-record).
 
-`close_on: :current` is deprecated and has no effect; passing it warns through
-`PaperTrailDiff.deprecator`. Remove it. In a Rails app, register the deprecator
-with `Rails.application.deprecators[:paper_trail_diff] = PaperTrailDiff.deprecator`
-to handle its warnings as the app's own.
-
 `timeline` returns no steps for a window with no versions of the root record.
 `activity_timeline` still reports chosen associations that changed in such a
 window.
 
 ### Reporting only some changes: `version_scope:`
 
-`version_scope:` narrows which of the root record's versions are reported. It
-receives the version relation and returns a narrower one:
+`version_scope:` narrows which changes are reported. It receives the version
+relation and returns a narrower one:
 
 ```ruby
 user_edits = ->(scope) { scope.where.not(whodunnit: nil) }
@@ -263,17 +264,29 @@ It is accepted by `timeline`, `activity_timeline`, `analyze`, `analyze_many`,
   reported   alice: what alice changed    bob: what bob changed
   ```
 
-- It looks at the root record's versions only. Someone who only edited comments
-  has no root versions to select. To find one person's changes, including to
-  associations, see [one person's changes](#one-persons-changes).
+- `timeline` looks at the root record's versions only, so someone who only
+  edited comments has none for it to report. Activity reports their changes:
+  see [one person's changes](#one-persons-changes).
+- In activity (`activity_timeline`, `activity: true`, and `report`), it
+  chooses the changes on the requested associations as well. A transaction is
+  reported whole, every step of it, when the filter keeps any version saved
+  in it, of whichever record: PT-AT shows a transaction's changes together, at
+  its last step, so no step inside one belongs to a single version. A version
+  saved outside a transaction is reported when the filter keeps it. Every
+  version is still read, so each step shows what its own change did, and an
+  analysis starts at the first change the filter keeps and ends after the
+  last. Without associations, the steps are the root's versions the filter
+  keeps, as `timeline` reports them.
 - In `analyze_scope` and `report`, it also chooses which records are selected:
-  a record's own versions select it only when the filter keeps one of them in
-  the window. A record whose versions there it all drops would have nothing to
-  report, so it is left out. A change on a requested association still selects
-  a record, whoever made it.
-- `activity_timeline` uses the filter to decide where the range starts and
-  ends, but still lists every step inside it. Dropping one would move its
-  change into a neighboring step and credit the wrong person.
+  a record is selected only when the filter keeps one of its own versions in
+  the window, or a version of a record on a requested association. A record
+  changed only by versions it drops would have nothing to report, so it is
+  left out, and it does not count toward `limit:`.
+- The record and its requested associations keep their versions in one table
+  (see [custom version classes](#models-schemas-and-edge-cases)), and the
+  filter reads it for all of them. A condition on `item_type` or `item_id`
+  therefore leaves out the associations' changes; filter on the version's own
+  columns, such as `whodunnit` or `event`.
 
 ## compare
 
@@ -314,8 +327,7 @@ diff.to_h
 - A current record must be saved, not destroyed, and have no unsaved changes.
   The gem reloads it, so in-memory edits and cached associations are ignored.
 - Options: `associations:`, `ignore:`, and `allow_approximate:` (see
-  [costly associations](#costly-associations)). `reload_live_endpoints:` is
-  deprecated (see [reusing loaded records](#reusing-loaded-records)).
+  [costly associations](#costly-associations)).
 
 ## compare_many
 
@@ -344,21 +356,6 @@ diffs.fetch(["Order", orders.first.id.to_s]) # => PaperTrailDiff::Diff
 
 If you look up versions yourself, do it in bulk. Looking up one record at a
 time brings back the per-record queries this method avoids.
-
-### Reusing loaded records
-
-Every method reloads the current records it compares with, together with the
-requested associations, in a query for the records and one per association
-level. `reload_live_endpoints: false` on `compare`, `compare_many`, and
-`activity_timeline` skips that reload and reads your loaded objects instead.
-It is deprecated and will be removed: it saves those few queries per call (2
-for 500 articles with their comments), and the values then come from objects
-that may be stale. Until it is removed it still works,
-with a warning. A requested association that is not loaded raises
-`UnloadedAssociationError`, and one with a `limit` or `offset`, directly or in
-a part it goes through, or a scope that takes the owner, is read again for
-each record, because Active Record's `preload` applies a limit to all the
-records it loads together.
 
 ## timeline
 
@@ -429,12 +426,26 @@ end
   current record. You do not need to save the article after each comment change.
 - Options: `from:`, `to:`, `within:`, `associations:`, `ignore:`,
   `version_scope:`, `snapshots:`, `group:`, `recorded_changes:`,
-  `allow_approximate:`. `reload_live_endpoints:` is deprecated (see
-  [reusing loaded records](#reusing-loaded-records)).
+  `allow_approximate:`.
 
 ### One person's changes
 
-Filter the steps in Ruby by `source_boundary.whodunnit`:
+Pass a [`version_scope:`](#reporting-only-some-changes-version_scope) that
+keeps their versions. Activity then reports only the transactions they saved
+a version in, on the record or on its associations:
+
+<!-- executable:readme-person-scope -->
+```ruby
+priya = ->(versions) { versions.where(whodunnit: "Priya Shah") }
+steps = PaperTrailDiff.activity_timeline(
+  article, within: window, associations: %i[comments tags], version_scope: priya
+)
+
+steps.map { |step| step.source_boundary.whodunnit }.uniq  # ["Priya Shah"]
+```
+
+To count everyone's changes from one read, group the steps in Ruby by
+`source_boundary.whodunnit` instead:
 
 <!-- executable:readme-person-changes -->
 ```ruby
@@ -452,13 +463,9 @@ authors = attributed.group_by { |step| step.source_boundary.whodunnit }
                     .transform_values(&:length)
 ```
 
-This includes changes to associations, which `version_scope:` cannot see.
-Filter after the call rather than asking the gem for fewer versions: every step
-has to be rebuilt anyway for each one to be correct, so filtering earlier saves
-nothing.
-
 For many records, use `report` or `analyze_many(..., activity: true)` instead of
-calling `activity_timeline` in a loop, so the database work is shared.
+calling `activity_timeline` in a loop, so the database work is shared. With
+`version_scope:`, `report` selects only the records that person changed.
 
 ### One step per transaction: `group: :transaction`
 
@@ -474,8 +481,11 @@ PaperTrailDiff.activity_timeline(article, associations: [:comments], group: :tra
   it. A field set and then restored inside the transaction is not reported.
 - Its `source_boundary` is the first event in the transaction. That event's
   author is not necessarily the author of every grouped change. `step.sources`
-  lists every event in the transaction, each with its own author, except
-  those of records that were outside the tree before and after it.
+  lists every event in the transaction, each with its own author, except two
+  kinds: those of records outside the tree before the transaction, after it,
+  and at every version of the root it saved; and those saved before a window
+  that starts inside a transaction of associated records only (see
+  [time windows](#time-windows)).
 - Versions without a `transaction_id` are never grouped.
 - A savepoint that rolls back can split one transaction into more than one
   group. PT-AT clears the transaction id when the savepoint rolls back, so the
@@ -538,10 +548,11 @@ end
 - Each boundary's `recorded_changes` is what
   `PaperTrailDiff.recorded_changes(version)` returns for its version: `nil`
   when nothing was recorded, and always `nil` for the current record. The
-  versions are already loaded, so this adds no queries, but decoding each
-  version's changes takes time: about a third more for a `report` of 200
-  articles with comments, with history stored as YAML. Pass it only when you
-  use them.
+  versions are already loaded, so this adds no queries. A version's changes
+  are decoded the first time a boundary's `recorded_changes` is read, and once
+  for the whole call, however many steps or records share the version. Read
+  them from the boundary rather than calling `PaperTrailDiff.recorded_changes`
+  for its version, which decodes it again each time.
 - Without the option, `recorded_changes` raises `ConfigurationError` instead of
   returning `nil`, so a missing option cannot look like a version that recorded
   nothing.
@@ -628,9 +639,10 @@ analysis.to_h(snapshots: true, metadata: true)
 - `from_snapshot` is the record as it was when the range began: before the
   first change in a window, or before the change of the version you passed as
   `from:`. With `version_scope:`, a window begins at the first change the
-  filter keeps. It is `nil` when the record was created inside the range; the
-  state right after it was created is then the first activity step's
-  `to_snapshot`, which `snapshots: true` keeps.
+  filter keeps, on the record or, with `activity: true`, on its associations.
+  It is `nil` when the record was created inside the range; the state right
+  after it was created is then the first activity step's `to_snapshot`, which
+  `snapshots: true` keeps.
 - To read the record at one version, with its values typed and its
   associations, take `from_snapshot` from a range that starts there:
   `PaperTrailDiff.analyze(article, from: version, to: article).from_snapshot`.
@@ -727,7 +739,7 @@ and `allow_approximate:`.
   versions and cannot show a change to its associations alone, so only a
   record's own version selects it. With
   [`version_scope:`](#reporting-only-some-changes-version_scope), only the
-  record's own versions that the filter keeps select it.
+  versions the filter keeps select it, the record's own and its associations'.
 - **An analysis can still be empty.** A record is selected by any version on its
   paths, but its analysis compares only the state you requested. A join row
   whose role changed, or a version that touched only ignored columns, selects a
@@ -909,7 +921,7 @@ such a path and names it. Remove it from `associations:`, rewrite its scope as
 plain conditions on the target's own columns, or pass `allow_approximate:
 true` to accept PT-AT's answer, which also accepts its cost of queries per
 record in batch methods. A comparison of two current records reads no history
-and needs no opt-in. `allow_expensive:` is deprecated and has no effect.
+and needs no opt-in.
 
 A polymorphic `belongs_to` is loaded together too, with one query per target
 class. Its classes are known only from the records, though, so batch methods
@@ -1474,6 +1486,11 @@ Payloads contain counts, model names, ids, times, association paths, and
 options, never record data. To see the SQL for one call, subscribe to `sql.active_record`
 around it with `ActiveSupport::Notifications.subscribed`.
 
+`PaperTrailDiff.deprecator` warns when an option is deprecated; none is now. In
+a Rails app, register it with
+`Rails.application.deprecators[:paper_trail_diff] = PaperTrailDiff.deprecator`
+to handle its warnings as the app's own.
+
 ## Errors
 
 All errors inherit from `PaperTrailDiff::Error`.
@@ -1481,9 +1498,7 @@ All errors inherit from `PaperTrailDiff::Error`.
 | Error | Raised when |
 | --- | --- |
 | `ConfigurationError` | An option is invalid |
-| `UnsupportedBatchPathError` | No longer raised; kept until `allow_expensive:` is removed |
 | `InvalidEndpointError` | A record is unsaved, destroyed, or has unsaved changes, or `recorded_changes` is given something other than a version |
-| `UnloadedAssociationError` | The deprecated `reload_live_endpoints: false`, and an association is not loaded |
 | `VersionMismatchError` | Two endpoints belong to different records |
 | `ReversedEndpointsError` | Two versions are given newest first |
 | `InvalidTimelineRangeError` | A range is invalid, for example `within:` with `from:`, or `:last` |
@@ -1513,15 +1528,19 @@ Results can only be as complete as the history PaperTrail and PT-AT recorded.
 - Each call reads its history and live rows in one snapshot on PostgreSQL and
   MySQL (through mysql2 or trilogy), and on adapters built on them such as
   PostGIS, so a commit that lands during the call is seen by none of its
-  statements. The snapshot covers the database of the record's model and its
-  versions; an associated model on another database is read outside it. A
-  call made inside a transaction of your own
-  keeps that transaction's isolation level. To make the whole call see one
-  snapshot, start that transaction at `REPEATABLE READ` or stricter. SQLite and
-  SQL Server take no snapshot, so a commit during a call can appear in some of
-  its statements and not others. A long call holds its snapshot until it ends:
-  on PostgreSQL that can keep VACUUM from reclaiming old row versions, and on
-  MySQL it keeps undo history.
+  statements. On SQL Server it does so only when the database allows snapshot
+  isolation, which you turn on with
+  `ALTER DATABASE your_database SET ALLOW_SNAPSHOT_ISOLATION ON`; each call
+  checks the setting first. The snapshot covers the database of the record's
+  model and its versions; an associated model on another database is read
+  outside it. A call made inside a transaction of your own keeps that
+  transaction's isolation level. To make the whole call see one snapshot,
+  start that transaction at `REPEATABLE READ` or stricter, or at `SNAPSHOT` on
+  SQL Server. SQLite, and SQL Server without snapshot isolation, take no
+  snapshot, so a commit during a call can appear in some of its statements
+  and not others. A long call holds its snapshot until it ends: on PostgreSQL
+  that can keep VACUUM from reclaiming old row versions, on MySQL it keeps
+  undo history, and on SQL Server it keeps row versions in `tempdb`.
 - A savepoint that rolls back can split one transaction into several
   transaction groups; see
   [one step per transaction group](#one-step-per-transaction-group-transaction).

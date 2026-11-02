@@ -3,6 +3,20 @@
 module PaperTrailDiff
   # Internal helpers for isolating and serializing values held by result objects.
   module Support
+    # Ids per statement, for the queries that list them in slices. SQL Server
+    # compiles every statement afresh, since its ids are written into it, in
+    # time that grows with their number; fewer statements than this cost more
+    # than they save.
+    IDS_PER_STATEMENT: ::Integer
+
+    # Answers a question about `value` once for each Active Record class, in
+    # `answers`: its respond_to? also looks through the instance's attributes,
+    # which costs more than most of what reading a version does, and every
+    # instance of a model answers alike, since this gem reads versions with
+    # all their columns. Anything else is asked each time.
+    # : [T] (Hash[untyped, T], untyped) { (untyped) -> T } -> T
+    def self?.per_model: [T] (Hash[untyped, T], untyped) { (untyped) -> T } -> T
+
     # : (untyped) -> untyped
     def self?.immutable_copy: (untyped) -> untyped
 
@@ -18,6 +32,12 @@ module PaperTrailDiff
     # result is rendered.
     # : (untyped, untyped) -> Array[untyped]
     def self?.sortable_identity: (untyped, untyped) -> Array[untyped]
+
+    # Which loaded row a version or record is, across the lookups of a call:
+    # by its class's name rather than the class, so a row still matches after
+    # its class is reloaded.
+    # : (untyped) -> Array[untyped]
+    def self?.row_key: (untyped) -> Array[untyped]
 
     # : (untyped) -> Array[untyped]
     def self?.chronological_version_key: (untyped) -> Array[untyped]

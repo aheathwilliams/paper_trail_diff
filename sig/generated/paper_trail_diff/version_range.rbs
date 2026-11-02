@@ -7,14 +7,14 @@ module PaperTrailDiff
     def initialize: (untyped, from: untyped, to: untyped, version_scope: untyped) -> void
 
     # Keep both reconstruction boundaries and the step pairs a filter implies.
-    # : () -> RootVersionPlan
-    def select_plan_for_range: () -> RootVersionPlan
+    # : (?whole: bool) -> RootVersionPlan
+    def select_plan_for_range: (?whole: bool) -> RootVersionPlan
 
     # : () -> untyped
     def validated_relation: () -> untyped
 
-    # : (untyped) -> RootVersionPlan
-    def select_plan_through_current: (untyped) -> RootVersionPlan
+    # : (untyped, ?whole: bool) -> RootVersionPlan
+    def select_plan_through_current: (untyped, ?whole: bool) -> RootVersionPlan
 
     private
 
@@ -26,8 +26,8 @@ module PaperTrailDiff
 
     @version_scope: untyped
 
-    # : (untyped, ?through: untyped, ?live_endpoint: untyped) -> RootVersionPlan
-    def select_plan: (untyped, ?through: untyped, ?live_endpoint: untyped) -> RootVersionPlan
+    # : (untyped, whole: bool, ?through: untyped, ?live_endpoint: untyped) -> RootVersionPlan
+    def select_plan: (untyped, whole: bool, ?through: untyped, ?live_endpoint: untyped) -> RootVersionPlan
 
     # : (Array[untyped]) -> Array[untyped]
     def ordered: (Array[untyped]) -> Array[untyped]

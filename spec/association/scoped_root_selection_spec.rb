@@ -418,16 +418,16 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
       expect(result.unreachable).to eq([['TrackedArticle', by_alice.id.to_s]])
     end
 
-    it 'keeps selecting a root whose requested associations changed' do
+    it 'selects a root through its requested associations only by versions the scope keeps' do
       article = TrackedArticle.create!(title: 'Quiet')
-      comment = article.comments.create!(body: 'one')
+      other = TrackedArticle.create!(title: 'Also quiet')
       start = Time.now.utc
-      comment.update!(body: 'two')
+      PaperTrail.request(whodunnit: 'alice') { article.comments.create!(body: 'by alice') }
+      other.comments.create!(body: 'by the system')
+      options = { time_range: since(start), activity_tree: tree(:comments) }
 
-      result = select(TrackedArticle, time_range: since(start), activity_tree: tree(:comments),
-                                      version_scope: :none.to_proc)
-
-      expect(result.records).to eq([article])
+      expect(select(TrackedArticle, **options, version_scope: by_people).records).to eq([article])
+      expect(select(TrackedArticle, **options).records).to eq([article, other])
     end
 
     it 'rejects a scope that cannot be called' do

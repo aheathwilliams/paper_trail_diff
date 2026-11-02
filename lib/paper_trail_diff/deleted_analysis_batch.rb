@@ -56,7 +56,10 @@ module PaperTrailDiff
     # @rbs @version_scope: untyped
 
     # A root destroyed before the window had no state inside it to read, so
-    # only the others take the version after the window as context.
+    # only the others take the version after the window as context. Every
+    # root replays the whole of its window for activity on associations: one
+    # whose destroy saved in a transaction that crossed the window's start
+    # has the destroy inside its moved window.
     #: (Array[untyped], Array[untyped], Hash[Array[String], TimeRange]) -> Hash[Array[String], RootVersionPlan]
     def plans(records, destroys, windows)
       start = @time_range&.begin_time
@@ -70,7 +73,8 @@ module PaperTrailDiff
     def plans_for(records, context_required, windows)
       BatchedRootVersions.new(
         records, time_range: @time_range, version_scope: @version_scope,
-                 live_endpoints: nil, context_required: context_required, windows: windows
+                 live_endpoints: nil, context_required: context_required,
+                 whole: @context_required, windows: windows
       ).call
     end
 

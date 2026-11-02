@@ -48,8 +48,7 @@ RSpec.describe 'association documentation examples' do
     end
     start_at = PaperTrail::Version.order(:id).first.created_at
     PaperTrail.request(whodunnit: 'Maya Chen') { article.update!(title: 'Apollo Notes v2') }
-    # Priya only ever touches a descendant, which is exactly the case a root
-    # `version_scope:` cannot report.
+    # Priya only ever touches a descendant, which only activity can report.
     PaperTrail.request(whodunnit: 'Priya Shah') do
       article.comments.create!(body: 'Needs a source for the launch date.')
     end
@@ -61,6 +60,8 @@ RSpec.describe 'association documentation examples' do
     context = Object.new.instance_eval { binding }
     context.local_variable_set(:article, article)
     context.local_variable_set(:window, start_at..cutoff)
+    DocumentationExamples.evaluate(readme_path, session: 'readme-person-scope', context: context)
+    scoped = context.local_variable_get(:steps)
     DocumentationExamples.evaluate(
       readme_path, session: 'readme-person-changes', context: context
     )
@@ -70,8 +71,10 @@ RSpec.describe 'association documentation examples' do
     expect(by_priya.fetch(0).from_boundary.whodunnit).to eq('Priya Shah')
     expect(by_priya.fetch(0).diff.associations.fetch('comments').added.length).to eq(1)
     expect(context.local_variable_get(:authors).keys).to contain_exactly('Maya Chen', 'Priya Shah')
+    expect(scoped.map { |step| step.diff.to_h }).to eq(by_priya.map { |step| step.diff.to_h })
+    expect(scoped.map { |step| step.source_boundary.whodunnit }).to eq(['Priya Shah'])
 
-    # The claim the section rests on: a root-version filter sees none of it.
+    # The claim the section rests on: the root's own versions show none of it.
     root_steps = PaperTrailDiff.timeline(
       article,
       within: start_at..cutoff,

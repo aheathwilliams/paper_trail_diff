@@ -44,11 +44,7 @@ module PaperTrailDiff
       end
 
       #: () -> RootVersionPlan
-      def empty
-        versions = [] #: Array[untyped]
-        steps = [] #: Array[[untyped, untyped]]
-        new(versions: versions, steps: steps)
-      end
+      def empty = closing_on(nil)
 
       # No root version to report or replay: only descendants moved, and the
       # live record is the root's state throughout.
@@ -82,13 +78,12 @@ module PaperTrailDiff
     end
 
     #: () -> RootVersionPlan
-    def closing_on_destroy
-      self.class.new(
-        versions: versions, steps: steps, context_version: context_version,
-        reconstruction_versions: reconstruction_versions, mutations: mutations,
-        closing_record: closing_record, closes_on_destroy: true
-      )
-    end
+    def closing_on_destroy = copy(closes_on_destroy: true)
+
+    # The same plan reporting only `selected` as mutations, of the versions it
+    # holds.
+    #: (Array[untyped]) -> RootVersionPlan
+    def reporting(selected) = copy(mutations: selected)
 
     # What the range's final state is read from, which is the live record when
     # the window closes on current state and the last version otherwise.
@@ -99,19 +94,28 @@ module PaperTrailDiff
 
     #: (untyped) -> bool
     def mutation?(version)
-      @mutation_keys.include?(key(version))
+      @mutation_keys.include?(Support.row_key(version))
     end
 
     private
 
     # @rbs @mutation_keys: Set[Array[untyped]]
 
+    #: (**untyped) -> RootVersionPlan
+    def copy(**changes)
+      self.class.new(
+        versions: versions, steps: steps, context_version: context_version,
+        reconstruction_versions: reconstruction_versions, mutations: mutations,
+        closing_record: closing_record, closes_on_destroy: closes_on_destroy, **changes
+      )
+    end
+
     #: () -> Array[untyped]
     def default_mutations
       return @versions unless @context_version
 
-      context = key(@context_version)
-      @versions.reject { |version| key(version) == context }
+      context = Support.row_key(@context_version)
+      @versions.reject { |version| Support.row_key(version) == context }
     end
 
     # A Set only makes the lookup in `mutation?` fast; an Array would answer the
@@ -119,13 +123,7 @@ module PaperTrailDiff
     # mutant:disable
     #: (Array[untyped]) -> Set[Array[untyped]]
     def key_set(versions)
-      Set.new(versions.map { |version| key(version) })
-    end
-
-    # By class name, so a version still matches after its class is reloaded.
-    #: (untyped) -> Array[untyped]
-    def key(version)
-      [version.class.name, version.id]
+      Set.new(versions.map { |version| Support.row_key(version) })
     end
   end
 end

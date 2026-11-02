@@ -11,7 +11,7 @@ RSpec.describe 'deleted root reporting' do
   def analyze(**options)
     PaperTrailDiff.analyze_scope(
       CoreArticle, limit: 20, within: (Time.now.utc - 3600)..(Time.now.utc + 60),
-                   activity: true, snapshots: true, close_on: :current, include_deleted: true,
+                   activity: true, snapshots: true, include_deleted: true,
                    **options
     )
   end

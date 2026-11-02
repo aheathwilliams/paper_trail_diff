@@ -77,6 +77,32 @@ RSpec.describe PaperTrailDiff::PreparedHistoryLoader do
     expect([handled, after.body]).to eq([true, 'comment'])
   end
 
+  # A boundary in a transaction that crossed a window's start reads its
+  # records as they were before it began. A range of versions starts at its
+  # first version's state instead, so it looks for no such transaction.
+  it 'finds, for a window only, the transactions that crossed its start' do
+    article = TrackedArticle.create!(title: 'Root')
+    comment = article.comments.create!(body: 'before')
+    added = TrackedArticle.transaction do
+      comment.update!(body: 'after')
+      article.comments.create!(body: 'added')
+    end
+    edge = versions_of(added).first
+    allow(PaperTrailDiff::PreparedRecordIndex).to receive(:new).and_call_original
+    end_at = Time.now.utc + 60
+    window = load_history(article, ['comments'], start_at: edge.created_at, end_at: end_at,
+                                                 live_records: [article], window: true)
+    range = load_history(article, ['comments'], start_at: edge.created_at)
+    crossing = [[edge.class.name, edge.transaction_id]]
+
+    expect(window.opening_transactions).to eq(crossing)
+    expect(range.opening_transactions).to eq([])
+    # Read again from where the transaction began, over the same range.
+    expect(PaperTrailDiff::PreparedRecordIndex).to have_received(:new)
+      .with(versions_of(comment).last.created_at, end_at: end_at, live_records: [article],
+                                                  opening_transactions: crossing)
+  end
+
   it 'prepares every root it is given, as one batch' do
     articles = Array.new(2) { |index| TrackedArticle.create!(title: "Root #{index}") }
     comments = articles.map { |article| article.comments.create!(body: 'comment') }
@@ -322,7 +348,7 @@ RSpec.describe PaperTrailDiff::PreparedHistoryLoader do
     load_history(article, [:comments], root_versions: versions, start_at: start_at)
 
     expect(PaperTrailDiff::PreparedRecordIndex).to have_received(:new)
-      .with(start_at, end_at: end_at, live_records: live)
+      .with(start_at, end_at: end_at, live_records: live, opening_transactions: [])
     expect(PaperTrailDiff::PreparedActivityIndex).to have_received(:new)
       .with(instance_of(PaperTrailDiff::PreparedRecordIndex), versions, start_at: start_at).twice
     expect(PaperTrailDiff::PreparedEdgeLoader).to have_received(:new)

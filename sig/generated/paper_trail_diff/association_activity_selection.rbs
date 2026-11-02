@@ -44,8 +44,10 @@ module PaperTrailDiff
     # : (Array[source]) -> Array[untyped]
     def self.values: (Array[source]) -> Array[untyped]
 
-    # : (untyped, tree: AssociationTree, time_range: TimeRange?) -> void
-    def initialize: (untyped, tree: AssociationTree, time_range: TimeRange?) -> void
+    # Only the versions `version_scope` keeps select a root, on its
+    # associations as on its own versions.
+    # : (untyped, tree: AssociationTree, time_range: TimeRange?, ?version_scope: untyped) -> void
+    def initialize: (untyped, tree: AssociationTree, time_range: TimeRange?, ?version_scope: untyped) -> void
 
     # The roots' ids, each source a subquery or an array of values.
     # : () -> Array[source]
@@ -58,6 +60,8 @@ module PaperTrailDiff
     @time_range: TimeRange?
 
     @traversal: AssociationTraversal
+
+    @version_scope: untyped
 
     # Ids of `model` records with a change somewhere below them in `tree`: the
     # targets that changed, or that reach a change further down.

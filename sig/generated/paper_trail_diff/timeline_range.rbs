@@ -27,9 +27,10 @@ module PaperTrailDiff
     # A batch may have selected these versions already, in which case reselecting
     # them per record would undo the batching.
     # The plan says which pairs of versions become steps, which a filter can
-    # make different from adjacent pairs of the selected versions.
-    # : (?context_required: bool) -> RootVersionPlan
-    def select_plan: (?context_required: bool) -> RootVersionPlan
+    # make different from adjacent pairs of the selected versions. A `whole`
+    # plan replays every version in the range; see RootVersionSelection.
+    # : (?context_required: bool, ?whole: bool) -> RootVersionPlan
+    def select_plan: (?context_required: bool, ?whole: bool) -> RootVersionPlan
 
     # : () -> bool
     def time?: () -> bool
@@ -58,8 +59,8 @@ module PaperTrailDiff
 
     @version_scope: untyped
 
-    # : () -> RootVersionPlan
-    def explicit_plan: () -> RootVersionPlan
+    # : (bool) -> RootVersionPlan
+    def explicit_plan: (bool) -> RootVersionPlan
 
     # : (untyped) -> bool
     def symbolic?: (untyped) -> bool

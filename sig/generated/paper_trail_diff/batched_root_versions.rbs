@@ -5,8 +5,8 @@ module PaperTrailDiff
   # queries. Only the range forms that mean the same thing for every root are
   # supported: a shared wall-clock window, or each root's own whole history.
   class BatchedRootVersions
-    # : (Array[untyped], time_range: TimeRange?, version_scope: untyped, live_endpoints: Hash[Array[String], untyped]?, context_required: bool, windows: Hash[Array[String], TimeRange]) -> void
-    def initialize: (Array[untyped], time_range: TimeRange?, version_scope: untyped, live_endpoints: Hash[Array[String], untyped]?, context_required: bool, windows: Hash[Array[String], TimeRange]) -> void
+    # : (Array[untyped], time_range: TimeRange?, version_scope: untyped, live_endpoints: Hash[Array[String], untyped]?, context_required: bool, whole: bool, windows: Hash[Array[String], TimeRange]) -> void
+    def initialize: (Array[untyped], time_range: TimeRange?, version_scope: untyped, live_endpoints: Hash[Array[String], untyped]?, context_required: bool, whole: bool, windows: Hash[Array[String], TimeRange]) -> void
 
     # Returns a plan per record identity.
     # : () -> Hash[Array[String], RootVersionPlan]
@@ -23,6 +23,8 @@ module PaperTrailDiff
     @time_range: TimeRange?
 
     @version_scope: untyped
+
+    @whole: bool
 
     @windows: Hash[Array[String], TimeRange]
 

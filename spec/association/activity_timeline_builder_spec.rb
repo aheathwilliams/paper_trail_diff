@@ -342,6 +342,26 @@ RSpec.describe PaperTrailDiff::ActivityTimelineBuilder do
       expect(steps.last.from_boundary.version_id).to eq(to.id)
     end
 
+    # Nothing in the window is reported, so nothing closes it on the live row,
+    # which is never read.
+    it 'reads no live row for a window that reports nothing' do
+      article, = edited_history
+      none = :none.to_proc
+      range = PaperTrailDiff::TimelineRange.new(
+        article, from: nil, to: nil, within: article.versions.minimum(:created_at)..Time.now.utc,
+                 version_scope: none, live_endpoint: article
+      )
+      tree = PaperTrailDiff::AssociationTree.build([:comments])
+      view = PaperTrailDiff::ActivityView.new(version_scope: none)
+      allow(provider).to receive(:call).and_call_original
+
+      built = described_class.new(article, range: range, tree: tree, snapshotter: provider,
+                                           view: view)
+
+      expect([built.build, built.analyze.activity_timeline]).to eq([[], []])
+      expect(provider).not_to have_received(:call)
+    end
+
     it 'reads the same activity from a snapshotter that rebuilds every state' do
       article, comment, from, to = edited_history
       comment.update!(body: 'live')
@@ -523,7 +543,7 @@ RSpec.describe PaperTrailDiff::ActivityTimelineBuilder do
       comment.update!(body: 'live')
 
       [timeline(article, from: from, to: article, recorded_changes: true),
-       timeline(article, within: (Time.now.utc - 60)..Time.now.utc, close_on: :current,
+       timeline(article, within: (Time.now.utc - 60)..Time.now.utc,
                          recorded_changes: true)].each do |steps|
         closing = steps.last
         expect(closing.to_boundary.kind).to eq(:current)
@@ -620,7 +640,7 @@ RSpec.describe PaperTrailDiff::ActivityTimelineBuilder do
         article.update!(title: 'Live', author_id: 2)
 
         [timeline(article, from: from, to: article, recorded_changes: true, ignore: ignore),
-         timeline(article, within: from.created_at..Time.now.utc, close_on: :current,
+         timeline(article, within: from.created_at..Time.now.utc,
                            recorded_changes: true, ignore: ignore)].each do |steps|
           expect(recorded(steps.last.from_boundary))
             .to eq('author_id' => { from: 1, to: 2 })
@@ -675,7 +695,7 @@ RSpec.describe PaperTrailDiff::ActivityTimelineBuilder do
       start = Time.now.utc
       article.update!(title: 'After')
       gone.destroy!
-      options = { within: start..(Time.now.utc + 60), close_on: :current, activity: true,
+      options = { within: start..(Time.now.utc + 60), activity: true,
                   recorded_changes: true }
       expected = [{ 'title' => { from: 'Before', to: 'After' } }]
       titles = lambda do |result|

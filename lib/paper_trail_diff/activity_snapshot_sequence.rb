@@ -18,13 +18,10 @@ module PaperTrailDiff
     # share these snapshots too, and the caches their refresher builds. They
     # are the same for any root with that history, so reusing them depends on
     # nothing but the history.
+    #
+    # A `start_at` is a window's; a range of versions starts at its first.
     #: (untyped, Array[untyped], ?start_at: untyped, ?end_at: untyped) -> PreparedActivitySnapshots
-    def prepare(
-      record,
-      root_versions,
-      start_at: root_versions.first.created_at,
-      end_at: root_versions.last.created_at
-    )
+    def prepare(record, root_versions, start_at: nil, end_at: root_versions.last.created_at)
       history = @store.prepare(record, root_versions, start_at: start_at, end_at: end_at)
       last = @last
       return last if last && last.history.equal?(history)
@@ -61,6 +58,11 @@ module PaperTrailDiff
     #: () -> PreparedActivityIndex?
     def activity_index
       @history&.activity_index
+    end
+
+    #: () -> Array[Array[untyped]]
+    def opening_transactions
+      @history&.opening_transactions || []
     end
 
     #: (untyped, untyped) -> RecordSnapshot?
@@ -115,7 +117,9 @@ module PaperTrailDiff
       @events = events
       @snapshotter = snapshotter
       @current = current
-      @transaction_groups = ActivityTransactionGroups.new(events)
+      @transaction_groups = ActivityTransactionGroups.new(
+        events, opening: snapshotter.opening_transactions
+      )
       @root_endpoints = build_root_endpoints
     end
 

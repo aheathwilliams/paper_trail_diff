@@ -40,7 +40,7 @@ module PaperTrailDiff
 
     # `activity_tree` names the association paths whose changes also select a
     # root, as an activity analysis reports them. Without one, only a root's
-    # own versions select it. `version_scope` narrows which of those count,
+    # own versions select it. `version_scope` narrows which of either count,
     # as it narrows which are reported.
     # : (untyped, time_range: TimeRange?, limit: Integer, ?historical_filter: untyped, ?max_filter_versions: Integer, ?activity_tree: AssociationTree?, ?version_scope: untyped) -> void
     def initialize: (untyped, time_range: TimeRange?, limit: Integer, ?historical_filter: untyped, ?max_filter_versions: Integer, ?activity_tree: AssociationTree?, ?version_scope: untyped) -> void

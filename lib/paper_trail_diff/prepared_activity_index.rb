@@ -21,6 +21,7 @@ module PaperTrailDiff
       @children = {} #: Hash[untyped, untyped]
       @targets = {} #: Hash[untyped, untyped]
       @rows = {} #: Hash[untyped, Hash[String, Array[untyped]]]
+      @conditions = ScopeCondition::Cache.new
     end
 
     #: (untyped, Array[untyped]) -> void
@@ -57,22 +58,23 @@ module PaperTrailDiff
       end
     end
 
-    # The versions of a through's join rows that are on its path. Under
-    # `source_type:`, a row is on it only while its type column names that
-    # class, so only the versions it had that type before or after count. A
-    # version saved before the type column existed has no type to read.
-    #: (Hash[Symbol, untyped], untyped) -> Array[untyped]
-    def join_versions(group, reflection)
+    # The versions of a through's join rows that are on its path (see
+    # ThroughPath). A row's versions in one transaction are judged together, by
+    # its states before the transaction and after it, as ActivityTreeFilter
+    # judges a record; a version saved outside a transaction is judged alone.
+    # A row created under another owner and moved here later, one that left,
+    # or one created and destroyed inside one transaction, saved versions that
+    # change nothing these `owners` show. As events they would open steps of
+    # their own, and inside a transaction, where a change surfaces one event
+    # late, take the credit for another record's change.
+    #: (Hash[Symbol, untyped], Hash[Symbol, untyped], untyped) -> Array[untyped]
+    def join_versions(owners, group, reflection)
+      path = ThroughPath.new(owners, reflection, @conditions)
       versions = group.fetch(:versions)
-      source_type = reflection.options[:source_type]
-      return versions unless source_type
+      return versions if path.open?
 
-      column = reflection.foreign_type
-      versions.select do |version|
-        @records.states_around(group.fetch(:model), version.item_id, version).any? do |state|
-          state.attributes[column] == source_type.to_s
-        end
-      end
+      runs = versions.group_by { |version| join_run(version) }.values
+      runs.select { |run| on_path?(group.fetch(:model), run, path) }.flat_map(&:itself)
     end
 
     #: (untyped, Array[untyped], untyped, ActivityRange) -> Array[untyped]
@@ -84,11 +86,12 @@ module PaperTrailDiff
     end
 
     # The `belongs_to` targets each owner pointed at from the range's start
-    # onward, plus the live row.
+    # onward, plus the live row and those its recorded states name.
     #: (untyped, Array[untyped], untyped, ActivityRange) -> Array[ActivityTargetCandidateLoader::Row]
     def target_rows(model, ids, reflection, range)
       historical, live = @targets[reflection] ||= target_candidates(model, reflection)
-      eligible_rows(model, rows_for(historical, ids), range) + rows_for(live, ids)
+      eligible_rows(model, rows_for(historical, ids), range) + rows_for(live, ids) +
+        recorded_target_rows(model, ids, reflection)
     end
 
     #: (untyped, untyped) -> bool
@@ -113,6 +116,43 @@ module PaperTrailDiff
     # @rbs @children: Hash[untyped, untyped]
     # @rbs @targets: Hash[untyped, untyped]
     # @rbs @rows: Hash[untyped, Hash[String, Array[untyped]]]
+    # @rbs @conditions: ScopeCondition::Cache
+
+    # The versions one row saved in one transaction, or alone.
+    #: (untyped) -> Array[untyped]
+    def join_run(version)
+      [version.item_id, ActivityTransactionGroups.transaction_key(version) || version]
+    end
+
+    # A run's versions are in the order they were saved, as the row's series
+    # holds them.
+    #: (untyped, Array[untyped], ThroughPath) -> bool
+    def on_path?(model, run, path)
+      first = run.fetch(0)
+      @records.typed_states_across(model, first.item_id, first, run.fetch(-1))
+              .any? { |attributes| path.include?(attributes) }
+    end
+
+    # The targets the owners' recorded states point at. PT-AT names a target
+    # only in the rows its owner's versions wrote, so a key changed without a
+    # version, such as one `has_paper_trail only:` leaves out, names its target
+    # only in the state the owner's next version recorded. Prepared history
+    # reads that state, so its snapshots show the target, and the target's
+    # versions are events too. A key of two columns is read per record instead.
+    #: (untyped, Array[untyped], untyped) -> Array[ActivityTargetCandidateLoader::Row]
+    def recorded_target_rows(model, ids, reflection)
+      key = reflection.foreign_key
+      return [] if key.is_a?(Array)
+
+      ids.flat_map do |id|
+        targets = @records.attribute_values_for(model, [id], key)
+        types = (@records.attribute_values_for(model, [id], reflection.foreign_type) if
+                   reflection.polymorphic?) || []
+        targets.zip(types).filter_map do |target, type|
+          ActivityTargetCandidateLoader::Row.new(id, target, type) unless target.nil?
+        end
+      end
+    end
 
     #: (untyped, Array[untyped]) -> bool
     def member_class?(model, classes)
@@ -194,6 +234,86 @@ module PaperTrailDiff
     #: (Array[untyped]) -> Array[untyped]
     def transaction_ids(versions)
       versions.map { |version| VersionBoundary.transaction_id(version) }.uniq
+    end
+
+    # Whether one state of a through's join row puts it on the through's path.
+    # The row must join one of the owners as the join association reads it: by
+    # its key, by the owner's type under `as:`, by its class when the
+    # association is to a subclass, and by the association's scope when the
+    # gem can read it, unranked, as a through reads its parts. A through that
+    # goes through a belongs_to, or through another through, is joined by the
+    # owner's key or by rows further down, which a row's own state cannot
+    # show. Under `source_type:`, the row's type column must name that class;
+    # a version saved before the column existed has no type to read.
+    class ThroughPath
+      #: (Hash[Symbol, untyped], untyped, ScopeCondition::Cache) -> void
+      def initialize(owners, reflection, conditions)
+        @reflection = reflection
+        @through = reflection.through_reflection
+        @keyed = keyed?
+        @ids = owners.fetch(:ids).to_set(&:to_s)
+        @owner_types = owner_types(owners.fetch(:model))
+        @conditions = conditions
+      end
+
+      # Whether every state of a row is on the path, so that none need be read.
+      #: () -> bool
+      def open?
+        !@keyed && @reflection.options[:source_type].nil?
+      end
+
+      #: (Hash[untyped, untyped]) -> bool
+      def include?(attributes)
+        (!@keyed || joined?(attributes)) && typed?(attributes)
+      end
+
+      private
+
+      # @rbs @reflection: untyped
+      # @rbs @through: untyped
+      # @rbs @keyed: bool
+      # @rbs @ids: Set[String]
+      # @rbs @owner_types: Array[String]?
+      # @rbs @conditions: ScopeCondition::Cache
+
+      #: () -> bool
+      def keyed?
+        !@through.through_reflection? && !@through.belongs_to? &&
+          !@through.foreign_key.is_a?(Array)
+      end
+
+      #: (Hash[untyped, untyped]) -> bool
+      def joined?(attributes)
+        @ids.include?(attributes.fetch(@through.foreign_key).to_s) && owner_type?(attributes) &&
+          AssociationTraversal.sti_member?(@through.klass, attributes) && in_scope?(attributes)
+      end
+
+      # The names an `as:` row's type column may hold for an owner.
+      #: (untyped) -> Array[String]?
+      def owner_types(model)
+        return unless @through.type
+
+        [model.name, model.base_class.name, @through.active_record.name]
+      end
+
+      #: (Hash[untyped, untyped]) -> bool
+      def owner_type?(attributes)
+        types = @owner_types
+        !types || types.include?(attributes.fetch(@through.type))
+      end
+
+      #: (Hash[untyped, untyped]) -> bool
+      def in_scope?(attributes)
+        condition = @conditions.call(@through, ranked: false)
+        !condition || condition.matches?(attributes)
+      end
+
+      # As the through's snapshots read a join row (see
+      # PreparedStateAssociationReader#typed_join?).
+      #: (Hash[untyped, untyped]) -> bool
+      def typed?(attributes)
+        AssociationTraversal.source_type_member?(@reflection, attributes[@reflection.foreign_type])
+      end
     end
   end
 end

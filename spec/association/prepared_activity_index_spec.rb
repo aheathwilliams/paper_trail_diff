@@ -44,13 +44,100 @@ class IndexSpecSection < ActiveRecord::Base
   has_paper_trail
 end
 
+ActiveRecord::Schema.define do
+  create_table :index_spec_boards, force: true do |table|
+    table.string :type
+    table.string :code
+    table.integer :featured_link_id
+    table.timestamps null: false
+  end
+
+  create_table :index_spec_links, force: true do |table|
+    table.string :type
+    table.integer :board_id
+    table.string :board_type
+    table.string :board_code
+    table.integer :target_id
+    table.string :subject_type
+    table.integer :subject_id
+    table.boolean :active, null: false, default: true
+    table.timestamps null: false
+  end
+
+  create_table :index_spec_targets, force: true do |table|
+    table.string :name
+    table.timestamps null: false
+  end
+
+  create_table :index_spec_notes, force: true do |table|
+    table.integer :target_id
+    table.timestamps null: false
+  end
+end
+
+class IndexSpecTarget < ActiveRecord::Base
+  has_many :notes, class_name: 'IndexSpecNote', foreign_key: :target_id
+  has_paper_trail
+end
+
+class IndexSpecNote < ActiveRecord::Base
+  has_paper_trail
+end
+
+class IndexSpecLink < ActiveRecord::Base
+  belongs_to :board, class_name: 'IndexSpecBoard', optional: true
+  belongs_to :target, class_name: 'IndexSpecTarget', optional: true
+  belongs_to :subject, polymorphic: true, optional: true
+  has_many :sibling_links, through: :board, source: :links
+  has_paper_trail
+end
+
+class IndexSpecPinnedLink < IndexSpecLink
+end
+
+# A through over each kind of join association a join row's own state can
+# place under an owner, or cannot.
+class IndexSpecBoard < ActiveRecord::Base
+  links = { class_name: 'IndexSpecLink', foreign_key: :board_id }
+  has_many :links, **links
+  has_many :targets, through: :links
+  has_many :active_links, -> { where(active: true) }, **links
+  has_many :active_targets, through: :active_links, source: :target
+  # Ranked, its order is not total; a through reads its parts unranked.
+  has_many :first_active_links, -> { where(active: true).order(:active).limit(1) }, **links
+  has_many :first_active_targets, through: :first_active_links, source: :target
+  has_many :sql_links, -> { where('active = ?', true) }, **links
+  has_many :sql_targets, through: :sql_links, source: :target
+  has_many :pinned_links, class_name: 'IndexSpecPinnedLink', foreign_key: :board_id
+  has_many :pinned_targets, through: :pinned_links, source: :target
+  has_many :coded_links, class_name: 'IndexSpecLink', foreign_key: %i[board_id board_code],
+                         primary_key: %i[id code]
+  has_many :coded_targets, through: :coded_links, source: :target
+  has_many :target_notes, through: :targets, source: :notes
+  belongs_to :featured_link, class_name: 'IndexSpecLink', optional: true
+  has_one :featured_subject, through: :featured_link, source: :subject,
+                             source_type: 'IndexSpecTarget'
+  has_paper_trail
+end
+
+# Declares a polymorphic join association below the base class, so a row's
+# type may name the owner's class, its base class, or this one.
+class IndexSpecTeamBoard < IndexSpecBoard
+  has_many :held_links, class_name: 'IndexSpecLink', as: :board
+  has_many :held_targets, through: :held_links, source: :target
+end
+
+class IndexSpecSquadBoard < IndexSpecTeamBoard
+end
+
 RSpec.describe PaperTrailDiff::PreparedActivityIndex do
   before do
     PaperTrail::VersionAssociation.delete_all
     PaperTrail::Version.delete_all
     ActiveRecord::Base.connection.execute('DELETE FROM tracked_articles_tags')
     [IndexSpecSection, IndexSpecPage, TrackedComment, TrackedArticle, TrackedAuthor,
-     TrackedTag, SourceTypeLink, SourceTypeAuthor, SourceTypeTag].each(&:delete_all)
+     TrackedTag, SourceTypeLink, SourceTypeAuthor, SourceTypeTag, SourceTypeHolder,
+     IndexSpecBoard, IndexSpecLink, IndexSpecTarget, IndexSpecNote].each(&:delete_all)
   end
 
   def statements(&block)
@@ -218,7 +305,8 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
   # The version a range ends at names the author after it, which the range
   # never reached, but a key written without a version is recorded only after
   # it too, so every author from the start onward is a candidate, and the live
-  # one.
+  # one. So is every author a page's recorded states name, without an event,
+  # which a key PT-AT never saw reaches only that way.
   it 'reads the authors a page pointed at from the range start onward, and its live one' do
     origin = Time.now.utc
     first, second, third = %w[Ann Bea Cy].map { |name| TrackedAuthor.create!(name: name) }
@@ -245,20 +333,44 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
     current = index.target_rows(IndexSpecPage, [page.id, unversioned.id], author,
                                 range(start, Time.now.utc))
 
+    recorded = [[page.id, first.id, nil], [page.id, second.id, nil], [page.id, third.id, nil]]
     expect(fields.call(closed)).to contain_exactly(
       [page.id, first.id, 'create'], [page.id, second.id, 'update'],
-      [page.id, third.id, 'update'], [page.id, third.id, nil]
+      [page.id, third.id, 'update'], [page.id, third.id, nil], *recorded, [gone.id, first.id, nil]
     )
     expect(fields.call(current)).to contain_exactly(
       [page.id, first.id, 'create'], [page.id, second.id, 'update'],
-      [page.id, third.id, 'update'], [page.id, third.id, nil], [unversioned.id, first.id, nil]
+      [page.id, third.id, 'update'], [page.id, third.id, nil], [unversioned.id, first.id, nil],
+      *recorded, [unversioned.id, first.id, nil]
     )
     queries = statements do
       found = index.target_rows(IndexSpecPage, [other.id], author, range(start, closing))
       expect(fields.call(found))
-        .to eq([[other.id, second.id, 'update'], [other.id, second.id, nil]])
+        .to eq([[other.id, second.id, 'update'], [other.id, second.id, nil],
+                [other.id, first.id, nil], [other.id, second.id, nil]])
     end
     expect(queries).to eq(0)
+  end
+
+  # Each state a link recorded names its target by type and id; one with no
+  # target names none, and a key of two columns is left to the record path.
+  it "reads the targets an owner's recorded states name" do
+    author = SourceTypeAuthor.create!(name: 'Author')
+    tag = SourceTypeTag.create!(name: 'Tag')
+    link = SourceTypeLink.create!(target: author)
+    [{ target: tag }, { target: nil }].each { |change| link.update!(change) }
+    index = index_for(Time.now.utc - 60, { SourceTypeLink => [link.id] })
+    fields = lambda do |name|
+      index.send(:recorded_target_rows, SourceTypeLink, [link.id],
+                 SourceTypeLink.reflect_on_association(name))
+           .map { |row| [row.owner_id, row.foreign_type, row.foreign_key_id] }
+    end
+    composite = SourceTypeLink.reflect_on_association(:target).dup
+    allow(composite).to receive(:foreign_key).and_return(Class.new(Array).new(%w[target_id x]))
+
+    expect(fields.call(:target)).to eq([[link.id, 'SourceTypeAuthor', author.id],
+                                        [link.id, 'SourceTypeTag', tag.id]])
+    expect(index.send(:recorded_target_rows, SourceTypeLink, [link.id], composite)).to eq([])
   end
 
   def checkpoint(article)
@@ -298,13 +410,129 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
   end
 
   describe '#join_versions' do
+    let!(:origin) { Time.now.utc }
+    let(:board) { IndexSpecBoard.create! }
+    let(:owners) { { model: IndexSpecBoard, ids: [board.id] } }
+
+    # The join versions of `records` the named through keeps, and all of
+    # them, in order. Without `load`, the index holds no state to read.
+    def join_versions(owners, records, reflection, load: true)
+      records = Array(records)
+      model = records.first.class.base_class
+      versions = records.flat_map { |record| record.versions.reorder(:id).to_a }
+      index = index_for(origin, load ? { model => records.map(&:id) } : {})
+      [index.join_versions(owners, { model: model, versions: versions }, reflection), versions]
+    end
+
+    def through(name, model = IndexSpecBoard)
+      model.reflect_on_association(name)
+    end
+
+    # A version saved under another owner changes nothing this one shows.
+    it 'keeps the versions a join row saved while it joined one of the owners' do
+      other = IndexSpecBoard.create!
+      link = IndexSpecLink.create!(board_id: board.id)
+      [{ board_id: other.id }, { active: false }, { board_id: board.id }, { board_id: nil },
+       { active: true }].each { |change| link.update!(change) }
+
+      kept, versions = join_versions(owners, link, through(:targets))
+
+      expect(kept).to eq(versions.values_at(0, 1, 3, 4))
+    end
+
+    # By its states before and after the transaction, as a record in the
+    # tree is judged: one that existed only inside it joined nobody.
+    it 'judges the versions a row saved in one transaction together' do
+      other = IndexSpecBoard.create!
+      fleeting, returning = IndexSpecLink.transaction do
+        [IndexSpecLink.create!(board_id: board.id).tap(&:destroy!),
+         IndexSpecLink.create!(board_id: board.id)]
+      end
+      IndexSpecLink.transaction do
+        returning.update!(board_id: other.id)
+        returning.update!(board_id: board.id)
+      end
+
+      kept, versions = join_versions(owners, [fleeting, returning], through(:targets))
+
+      expect(versions.length).to eq(5)
+      expect(kept).to match_array(versions.last(3))
+    end
+
+    # PaperTrail leaves the transaction blank outside one.
+    it 'judges each version saved outside a transaction alone' do
+      link = IndexSpecLink.create!(board_id: board.id)
+      other = IndexSpecBoard.create!
+      [{ board_id: other.id }, { active: false }].each { |change| link.update!(change) }
+      link.versions.update_all(transaction_id: nil)
+
+      kept, versions = join_versions(owners, link, through(:targets))
+
+      expect(kept).to eq(versions.first(2))
+    end
+
+    it "reads an `as:` join row's type for each name an owner's rows may hold" do
+      squad = IndexSpecSquadBoard.create!
+      links = %w[IndexSpecSquadBoard IndexSpecBoard IndexSpecTeamBoard IndexSpecPage].map do |type|
+        IndexSpecLink.create!(board_id: squad.id, board_type: type)
+      end
+      owners = { model: IndexSpecSquadBoard, ids: [squad.id] }
+
+      kept, versions = join_versions(owners, links, through(:held_targets, IndexSpecTeamBoard))
+
+      expect(kept).to eq(versions.first(3))
+    end
+
+    it 'keeps a join row of an association to a subclass only while it was of that class' do
+      link = IndexSpecPinnedLink.create!(board_id: board.id)
+      link.update!(type: 'IndexSpecLink')
+      IndexSpecLink.find(link.id).update!(active: false)
+
+      kept, versions = join_versions(owners, link, through(:pinned_targets))
+
+      expect(kept).to eq(versions.first(2))
+    end
+
+    it "leaves out the versions a join row saved outside its association's scope" do
+      link = IndexSpecLink.create!(board_id: board.id)
+      [{ active: false }, { target_id: 1 }, { active: true }].each { |change| link.update!(change) }
+
+      %i[active_targets first_active_targets].each do |name|
+        kept, versions = join_versions(owners, link, through(name))
+        expect(kept).to eq(versions.values_at(0, 1, 3))
+      end
+      kept, versions = join_versions(owners, link, through(:sql_targets))
+      expect(kept).to eq(versions)
+    end
+
+    # The owner's key, rows further down, or a key of two columns joins them,
+    # so no state of the row is read.
+    it 'keeps every version of join rows a key on the row alone cannot place' do
+      target = IndexSpecTarget.create!
+      target.update!(name: 'renamed')
+      other = IndexSpecBoard.create!
+      link = IndexSpecLink.create!(board_id: other.id)
+      link.update!(active: false)
+      # An Array subclass, as a composite key may be, so only `is_a?` sees it.
+      composite = through(:coded_targets)
+      key = Class.new(Array).new(%w[board_id board_code])
+      allow(composite.through_reflection).to receive(:foreign_key).and_return(key)
+
+      [[owners, target, through(:target_notes)], [owners, link, composite],
+       [{ model: IndexSpecLink, ids: [link.id] }, board, through(:sibling_links, IndexSpecLink)]]
+        .each do |owners, record, reflection|
+          kept, versions = join_versions(owners, record, reflection, load: false)
+          expect(kept).to eq(versions)
+        end
+    end
+
     # Of a link's versions, only those it named an author before or after
     # are on a path that names its type.
     it 'keeps a version of a source_type join row only when the row had that type' do
-      origin = Time.now.utc
+      holder = SourceTypeHolder.create!(name: 'Holder')
       author = SourceTypeAuthor.create!(name: 'Author')
       tag = SourceTypeTag.create!(name: 'Tag')
-      link = SourceTypeLink.create!(target: tag, origin: author)
+      link = SourceTypeLink.create!(holder: holder, target: tag, origin: author)
       [author, author, tag, tag].each_with_index do |target, index|
         link.update!(target: target, origin_id: index)
       end
@@ -313,13 +541,23 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
       versions[1].update_columns(object: versions[1].object.sub(/^target_type:.*\n/, ''))
       index = index_for(origin, { SourceTypeLink => [link.id] })
       group = { model: SourceTypeLink, versions: versions }
+      owners = { model: SourceTypeHolder, ids: [holder.id] }
 
       %i[linked_authors symbol_authors].each do |name|
-        expect(index.join_versions(group, SourceTypeHolder.reflect_on_association(name)))
+        expect(index.join_versions(owners, group, SourceTypeHolder.reflect_on_association(name)))
           .to eq(versions[1..3])
       end
-      expect(index.join_versions(group, TrackedAuthor.reflect_on_association(:comments)))
-        .to eq(versions)
+    end
+
+    it 'reads the type of a join row an owner reaches through its own key' do
+      link = IndexSpecLink.create!(subject: IndexSpecTarget.create!)
+      link.update!(subject: IndexSpecNote.create!)
+      link.update!(active: false)
+
+      kept, versions = join_versions({ model: IndexSpecBoard, ids: [] }, link,
+                                     through(:featured_subject))
+
+      expect(kept).to eq(versions.first(2))
     end
   end
 

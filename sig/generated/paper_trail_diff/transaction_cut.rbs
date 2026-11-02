@@ -36,11 +36,6 @@ module PaperTrailDiff
       @time: Time
     end
 
-    # Roots, or transactions, per statement. SQL Server compiles every
-    # statement afresh, since its ids are written into it, in time that grows
-    # with their number; fewer statements than this cost more than they save.
-    SLICE: ::Integer
-
     # The same as `windows` for a batch of roots, keyed by identity.
     # : (Array[untyped], TimeRange?) -> Hash[Array[String], TimeRange]
     def self.batch_windows: (Array[untyped], TimeRange?) -> Hash[Array[String], TimeRange]

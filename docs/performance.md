@@ -19,14 +19,14 @@ for one association, at 1, 5, and 20 records:
 | Association | Queries | `reify` calls |
 | --- | --- | --- |
 | None | 9 / 9 / 9 | 0 |
-| `has_many` | 17 / 17 / 17 | 0 |
-| `belongs_to` | 15 / 15 / 15 | 0 |
-| A `has_many` scope of plain conditions, or a default scope | 17 / 17 / 17 | 0 |
-| `has_many :through` | 25 / 25 / 25 | 0 |
-| Polymorphic `belongs_to` | 19 / 19 / 19 | 0 |
-| `has_many :through` with `source_type:` | 25 / 25 / 25 | 0 |
-| A `has_many` with `order(:id).limit(1)` | 18 / 22 / 37 | 0 |
-| A scope that takes the owner, read with PT-AT | 29 / 77 / 257 | 9 / 45 / 180 |
+| `has_many` | 18 / 18 / 18 | 0 |
+| `belongs_to` | 16 / 16 / 16 | 0 |
+| A `has_many` scope of plain conditions, or a default scope | 18 / 18 / 18 | 0 |
+| `has_many :through` | 26 / 26 / 26 | 0 |
+| Polymorphic `belongs_to` | 20 / 20 / 20 | 0 |
+| `has_many :through` with `source_type:` | 26 / 26 / 26 | 0 |
+| A `has_many` with `order(:id).limit(1)` | 19 / 23 / 38 | 0 |
+| A scope that takes the owner, read with PT-AT | 30 / 78 / 258 | 9 / 45 / 180 |
 | None, with a querying `after_initialize` | 13 / 29 / 89 | 2 / 10 / 40 |
 | None, with a callable `historical_filter:` that queries | 15 / 19 / 34 | 2 / 10 / 40 |
 
@@ -35,7 +35,9 @@ The last four rows grow with the number of records, for the reasons in
 
 The counts leave out transaction statements. On PostgreSQL and MySQL each call
 also runs in one snapshot transaction, which adds two or three statements per
-call whatever its size. See [limitations](reference.md#limitations).
+call whatever its size. On SQL Server a call first checks whether the
+database allows snapshot isolation, in one statement, and when it does, runs
+in a snapshot transaction too. See [limitations](reference.md#limitations).
 
 ## What still grows
 
@@ -59,9 +61,16 @@ Flat query counts do not make a report's cost flat:
   for them only when you use them.
 - **Each edge of a window takes one or two statements per 500 records.** A
   report with `within:` or `since:` looks for transactions that cross either
-  edge.
+  edge. With associations, it also takes one statement per 500 of the
+  transactions its history reads, to find one that saved associated records
+  on both sides of its start; when it finds one, it reads the window's
+  history again from where that transaction began.
   On 1.4 million versions, 10,800 records took about 6 s on SQL Server and
   1.5 s on PostgreSQL and MySQL.
+- **`version_scope:` on activity reads every version in the range**, as
+  activity without one does. With associations, it takes one more statement
+  per 500 of the transactions its history reads, to find those the filter
+  keeps a version of.
 
 ## Database indexes
 
@@ -82,8 +91,6 @@ explains why.
 - **A limited association on the current record.** Active Record's `preload`
   applies a `limit` or `offset` across all the records it loads, so each
   record's limited association is loaded on its own: one query per record.
-  The deprecated `reload_live_endpoints: false` does the same for one you
-  preloaded.
 - **Your own code.** Model callbacks that query, such as an `after_initialize`,
   custom attribute types, and a callable `historical_filter:` run for each
   state they are given.
@@ -128,7 +135,9 @@ time from the [test clock](testing.md#test-clock), so a host clock that steps
 backwards cannot reorder the versions they seed. Compare counts as well as
 times, and run the correctness suites separately; no CI job checks timings.
 
-The numbers here were measured on 2026-10-30 at revision `6c3d30b` with Ruby
+The query counts in the first table were measured on 2026-11-01, after
+windows began looking for transactions that cross their start; the other
+numbers on 2026-10-30 at revision `6c3d30b`. Both used Ruby
 4.0.1, Active Record 8.1.3.1, PaperTrail 17.0.0, and SQLite 3.53.2, on WSL2
 on an AMD Ryzen 7 7800X3D. The memory, wide-collection, and index figures come
 from one-off scripts rather than these two. The benchmark's raw samples are in

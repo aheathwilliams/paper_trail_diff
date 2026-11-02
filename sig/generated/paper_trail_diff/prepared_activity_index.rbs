@@ -29,18 +29,23 @@ module PaperTrailDiff
     # : (untyped, Array[untyped], ActivityRange) -> Array[untyped]
     def member_versions: (untyped, Array[untyped], ActivityRange) -> Array[untyped]
 
-    # The versions of a through's join rows that are on its path. Under
-    # `source_type:`, a row is on it only while its type column names that
-    # class, so only the versions it had that type before or after count. A
-    # version saved before the type column existed has no type to read.
-    # : (Hash[Symbol, untyped], untyped) -> Array[untyped]
-    def join_versions: (Hash[Symbol, untyped], untyped) -> Array[untyped]
+    # The versions of a through's join rows that are on its path (see
+    # ThroughPath). A row's versions in one transaction are judged together, by
+    # its states before the transaction and after it, as ActivityTreeFilter
+    # judges a record; a version saved outside a transaction is judged alone.
+    # A row created under another owner and moved here later, one that left,
+    # or one created and destroyed inside one transaction, saved versions that
+    # change nothing these `owners` show. As events they would open steps of
+    # their own, and inside a transaction, where a change surfaces one event
+    # late, take the credit for another record's change.
+    # : (Hash[Symbol, untyped], Hash[Symbol, untyped], untyped) -> Array[untyped]
+    def join_versions: (Hash[Symbol, untyped], Hash[Symbol, untyped], untyped) -> Array[untyped]
 
     # : (untyped, Array[untyped], untyped, ActivityRange) -> Array[untyped]
     def child_ids: (untyped, Array[untyped], untyped, ActivityRange) -> Array[untyped]
 
     # The `belongs_to` targets each owner pointed at from the range's start
-    # onward, plus the live row.
+    # onward, plus the live row and those its recorded states name.
     # : (untyped, Array[untyped], untyped, ActivityRange) -> Array[ActivityTargetCandidateLoader::Row]
     def target_rows: (untyped, Array[untyped], untyped, ActivityRange) -> Array[ActivityTargetCandidateLoader::Row]
 
@@ -56,6 +61,8 @@ module PaperTrailDiff
 
     @children: Hash[untyped, untyped]
 
+    @conditions: ScopeCondition::Cache
+
     @nodes: Hash[String, Array[untyped]]
 
     @range: ActivityRange
@@ -67,6 +74,24 @@ module PaperTrailDiff
     @rows: Hash[untyped, Hash[String, Array[untyped]]]
 
     @targets: Hash[untyped, untyped]
+
+    # The versions one row saved in one transaction, or alone.
+    # : (untyped) -> Array[untyped]
+    def join_run: (untyped) -> Array[untyped]
+
+    # A run's versions are in the order they were saved, as the row's series
+    # holds them.
+    # : (untyped, Array[untyped], ThroughPath) -> bool
+    def on_path?: (untyped, Array[untyped], ThroughPath) -> bool
+
+    # The targets the owners' recorded states point at. PT-AT names a target
+    # only in the rows its owner's versions wrote, so a key changed without a
+    # version, such as one `has_paper_trail only:` leaves out, names its target
+    # only in the state the owner's next version recorded. Prepared history
+    # reads that state, so its snapshots show the target, and the target's
+    # versions are events too. A key of two columns is read per record instead.
+    # : (untyped, Array[untyped], untyped) -> Array[ActivityTargetCandidateLoader::Row]
+    def recorded_target_rows: (untyped, Array[untyped], untyped) -> Array[ActivityTargetCandidateLoader::Row]
 
     # : (untyped, Array[untyped]) -> bool
     def member_class?: (untyped, Array[untyped]) -> bool
@@ -101,5 +126,61 @@ module PaperTrailDiff
     # A version without a transaction id names no rows, so it can stay in.
     # : (Array[untyped]) -> Array[untyped]
     def transaction_ids: (Array[untyped]) -> Array[untyped]
+
+    # Whether one state of a through's join row puts it on the through's path.
+    # The row must join one of the owners as the join association reads it: by
+    # its key, by the owner's type under `as:`, by its class when the
+    # association is to a subclass, and by the association's scope when the
+    # gem can read it, unranked, as a through reads its parts. A through that
+    # goes through a belongs_to, or through another through, is joined by the
+    # owner's key or by rows further down, which a row's own state cannot
+    # show. Under `source_type:`, the row's type column must name that class;
+    # a version saved before the column existed has no type to read.
+    class ThroughPath
+      # : (Hash[Symbol, untyped], untyped, ScopeCondition::Cache) -> void
+      def initialize: (Hash[Symbol, untyped], untyped, ScopeCondition::Cache) -> void
+
+      # Whether every state of a row is on the path, so that none need be read.
+      # : () -> bool
+      def open?: () -> bool
+
+      # : (Hash[untyped, untyped]) -> bool
+      def include?: (Hash[untyped, untyped]) -> bool
+
+      private
+
+      @conditions: ScopeCondition::Cache
+
+      @ids: Set[String]
+
+      @keyed: bool
+
+      @owner_types: Array[String]?
+
+      @reflection: untyped
+
+      @through: untyped
+
+      # : () -> bool
+      def keyed?: () -> bool
+
+      # : (Hash[untyped, untyped]) -> bool
+      def joined?: (Hash[untyped, untyped]) -> bool
+
+      # The names an `as:` row's type column may hold for an owner.
+      # : (untyped) -> Array[String]?
+      def owner_types: (untyped) -> Array[String]?
+
+      # : (Hash[untyped, untyped]) -> bool
+      def owner_type?: (Hash[untyped, untyped]) -> bool
+
+      # : (Hash[untyped, untyped]) -> bool
+      def in_scope?: (Hash[untyped, untyped]) -> bool
+
+      # As the through's snapshots read a join row (see
+      # PreparedStateAssociationReader#typed_join?).
+      # : (Hash[untyped, untyped]) -> bool
+      def typed?: (Hash[untyped, untyped]) -> bool
+    end
   end
 end

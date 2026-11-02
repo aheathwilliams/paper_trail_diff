@@ -120,7 +120,7 @@ RSpec.describe 'bounded event reconstruction' do
 
     result = PaperTrailDiff.analyze_scope(
       TrackedArticle, within: (Time.now.utc - 3600)..Time.now.utc, limit: 10,
-                      close_on: :current, associations: [:comments]
+                      associations: [:comments]
     )
 
     expect(result.analyses.length).to eq(3)

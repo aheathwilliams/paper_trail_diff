@@ -39,12 +39,11 @@ RSpec.describe 'Activity windows where only descendants changed',
 
   let(:expected) { { added: ['added'], changed: [{ from: 'one', to: 'two' }] } }
 
-  it 'closes on current state when asked, attributing each comment event' do
+  it 'closes on current state, attributing each comment event' do
     article, window_start = child_only_history
 
     steps = PaperTrailDiff.activity_timeline(
-      article, within: window_start..Time.now.utc, associations: [:comments],
-               close_on: :current
+      article, within: window_start..Time.now.utc, associations: [:comments]
     ).reject(&:empty?)
 
     expect(steps.map { |step| step.source_boundary.item_type })
@@ -55,7 +54,7 @@ RSpec.describe 'Activity windows where only descendants changed',
   it 'reports the same analysis singly and in a batch when closing on current state' do
     article, window_start = child_only_history
     options = { within: window_start..Time.now.utc, associations: [:comments],
-                close_on: :current, activity: true }
+                activity: true }
 
     single = PaperTrailDiff.analyze(article, **options)
     batch = batch_analysis(article, options)
@@ -102,17 +101,5 @@ RSpec.describe 'Activity windows where only descendants changed',
     expect(steps.map { |step| step.to_boundary.kind }).not_to include(:current)
     expect(steps.flat_map { |step| comment_summary(step.diff)[:changed] })
       .to eq([{ from: 'one', to: 'two' }])
-  end
-
-  it 'closes on current state by default, as close_on: :current asks' do
-    article, window_start = child_only_history
-    window = window_start..Time.now.utc
-
-    defaulted = PaperTrailDiff.activity_timeline(article, within: window, associations: [:comments])
-    explicit = PaperTrailDiff.activity_timeline(
-      article, within: window, associations: [:comments], close_on: :current
-    )
-
-    expect(defaulted.map { |step| step.diff.to_h }).to eq(explicit.map { |step| step.diff.to_h })
   end
 end

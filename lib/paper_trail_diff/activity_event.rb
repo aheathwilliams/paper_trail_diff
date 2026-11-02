@@ -39,7 +39,7 @@ module PaperTrailDiff
     #: (Array[untyped], ?branch: String?, ?join: bool) -> void
     def add(versions, branch: nil, join: false)
       versions.each do |version|
-        key = [version.class.name, version.id]
+        key = Support.row_key(version)
         existing = @events[key]
         @events[key] = {
           version: version,
@@ -98,16 +98,22 @@ module PaperTrailDiff
       [version.class.name, transaction_id] if transaction_id
     end
 
-    #: (Array[ActivityEvent]) -> void
-    def initialize(events)
+    # An `opening` transaction began before the history's start, so its
+    # versions there are not events, yet the state after it has their changes
+    # (see PreparedHistoryLoader#reload). The snapshot after
+    # it is read whole rather than refreshed from its events alone.
+    #: (Array[ActivityEvent], ?opening: Array[Array[untyped]]) -> void
+    def initialize(events, opening: [])
       groups = grouped_events(events)
       @branches = build_groups(groups)
       @group_sizes = groups.transform_values(&:length)
+      @opening = opening.to_set
     end
 
     #: (ActivityEvent) -> Array[String]?
     def branches_for(event)
       key = transaction_key(event)
+      return if key && @opening.include?(key)
       return event.branches unless key && @branches.key?(key)
 
       @branches[key]
@@ -116,13 +122,14 @@ module PaperTrailDiff
     #: (ActivityEvent) -> bool
     def isolated?(event)
       key = transaction_key(event)
-      !key || @group_sizes.fetch(key, 0) == 1
+      !key || (@group_sizes.fetch(key, 0) == 1 && !@opening.include?(key))
     end
 
     private
 
     # @rbs @branches: Hash[Array[untyped], Array[String]?]
     # @rbs @group_sizes: Hash[Array[untyped], Integer]
+    # @rbs @opening: Set[Array[untyped]]
 
     #: (Hash[Array[untyped], Array[ActivityEvent]]) -> Hash[Array[untyped], Array[String]?]
     def build_groups(groups)

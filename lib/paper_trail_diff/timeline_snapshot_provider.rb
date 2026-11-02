@@ -37,7 +37,7 @@ module PaperTrailDiff
     # version, which is the one endpoint no version history can reconstruct.
     #: (untyped) -> RecordSnapshot?
     def call(endpoint)
-      key = [endpoint.class.name, endpoint.id]
+      key = Support.row_key(endpoint)
       return @snapshots[key] if @snapshots.key?(key)
 
       @snapshots[key] = if Endpoint.record?(endpoint)

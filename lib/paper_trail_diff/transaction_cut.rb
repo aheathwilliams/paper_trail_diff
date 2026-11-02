@@ -44,12 +44,6 @@ module PaperTrailDiff
       # @rbs @strict: bool
     end
 
-    # Roots, or transactions, per statement. SQL Server compiles every
-    # statement afresh, since its ids are written into it, in time that grows
-    # with their number; fewer statements than this cost more than they save.
-    SLICE = 500
-    private_constant :SLICE
-
     # The same as `windows` for a batch of roots, keyed by identity.
     #: (Array[untyped], TimeRange?) -> Hash[Array[String], TimeRange]
     def self.batch_windows(records, range)
@@ -125,7 +119,7 @@ module PaperTrailDiff
     # The roots whose versions next to the edge each transaction holds.
     #: (untyped, Array[untyped], Edge) -> Hash[untyped, Array[String]]
     def self.nearest_roots(versions, records, edge)
-      records.each_slice(SLICE).flat_map { |slice| nearest(versions, slice, edge) }
+      records.each_slice(Support::IDS_PER_STATEMENT).flat_map { |slice| nearest(versions, slice, edge) }
              .group_by(&:last).transform_values { |pairs| pairs.map(&:first) }
     end
     private_class_method :nearest_roots
@@ -190,7 +184,7 @@ module PaperTrailDiff
       earlier = edge.left(version_class.arel_table[:created_at])
       later = later_version(version_class.arel_table, edge)
       starts = {} #: Hash[untyped, Time]
-      transactions.each_slice(SLICE).with_object(starts) do |slice, found|
+      transactions.each_slice(Support::IDS_PER_STATEMENT).with_object(starts) do |slice, found|
         crossing = version_class.where(transaction_id: slice).where(earlier).where(later)
         found.merge!(crossing.group(:transaction_id).minimum(:created_at))
       end

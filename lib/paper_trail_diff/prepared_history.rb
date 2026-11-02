@@ -25,6 +25,14 @@ module PaperTrailDiff
       @habtm = {} #: Hash[Array[String], Hash[String, Array[untyped]]]
     end
 
+    # The transactions that crossed the history's start; see
+    # PreparedHistoryLoader#reload.
+    #: () -> Array[Array[untyped]]
+    def opening_transactions = @records.opening_transactions
+
+    #: () -> Array[untyped]
+    def versions = @records.versions
+
     # Returns every group the edge now holds.
     #: (untyped, untyped, Hash[String, Hash[Symbol, untyped]]) -> Hash[String, Hash[Symbol, untyped]]
     def merge_edge(owner_class, reflection, groups)

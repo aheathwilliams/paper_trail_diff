@@ -33,11 +33,12 @@ RSpec.describe PaperTrailDiff::TimeVersionRange do
     [article, *versions.reverse]
   end
 
-  def plan(article, within, version_scope: nil, live_endpoint: nil, context_required: false)
+  def plan(article, within, version_scope: nil, live_endpoint: nil, context_required: false, # rubocop:disable Metrics/ParameterLists
+           whole: false)
     described_class.new(
       article, time_range: PaperTrailDiff::TimeRange.new(within),
                version_scope: version_scope, live_endpoint: live_endpoint
-    ).select_plan(context_required: context_required)
+    ).select_plan(context_required: context_required, whole: whole)
   end
 
   it 'selects the versions in the window oldest first, then the next one to close on' do
@@ -79,6 +80,25 @@ RSpec.describe PaperTrailDiff::TimeVersionRange do
 
     expect(selected.mutations).to eq([created, edited])
     expect(selected.steps).to eq([[created, reviewed], [edited, published]])
+    expect(selected.reconstruction_versions).to eq([created, reviewed, edited, published])
+  end
+
+  # As activity on associations reads it: the changes a filter keeps there
+  # can fall anywhere in the window.
+  it 'replays every version in the window when whole, reporting those the scope keeps' do
+    article, created, reviewed, edited, published = history
+    skip_review = ->(versions) { versions.where.not(id: reviewed.id) }
+    window = created.created_at...published.created_at
+
+    whole = plan(article, window, version_scope: skip_review, whole: true)
+    none = plan(article, window, version_scope: :none.to_proc, whole: true)
+    unfiltered = plan(article, window)
+
+    expect([whole, none].map(&:reconstruction_versions))
+      .to all(eq([created, reviewed, edited, published]))
+    expect([whole.steps, whole.context_version]).to eq([unfiltered.steps, published])
+    expect([whole.mutations, none.mutations]).to eq([[created, edited], []])
+    expect(plan(article, window, whole: true).mutations).to eq(unfiltered.mutations)
   end
 
   it 'closes an empty window after the last version on the live record when context is required' do

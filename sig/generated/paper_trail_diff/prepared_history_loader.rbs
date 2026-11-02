@@ -4,8 +4,11 @@ module PaperTrailDiff
   # Expands the explicit association tree into a request-scoped PreparedHistory.
   class PreparedHistoryLoader
     # Without `end_at`, the activity range closes on the last root version.
-    # : (untyped, root_ids: Array[untyped], root_versions: Array[untyped], tree: AssociationTree, traversal: AssociationTraversal, start_at: untyped, end_at: untyped, live_records: Array[untyped]) -> void
-    def initialize: (untyped, root_ids: Array[untyped], root_versions: Array[untyped], tree: AssociationTree, traversal: AssociationTraversal, start_at: untyped, end_at: untyped, live_records: Array[untyped]) -> void
+    # A `window` is a time range; a range of versions starts at the state its
+    # first version names. `opening` names the transactions that crossed the
+    # window's start when this history is read again from where they began.
+    # : (untyped, root_ids: Array[untyped], root_versions: Array[untyped], tree: AssociationTree, traversal: AssociationTraversal, start_at: untyped, end_at: untyped, live_records: Array[untyped], ?window: bool, ?opening: Array[Array[untyped]]) -> void
+    def initialize: (untyped, root_ids: Array[untyped], root_versions: Array[untyped], tree: AssociationTree, traversal: AssociationTraversal, start_at: untyped, end_at: untyped, live_records: Array[untyped], ?window: bool, ?opening: Array[Array[untyped]]) -> void
 
     # : () -> PreparedHistory
     def call: () -> PreparedHistory
@@ -16,7 +19,11 @@ module PaperTrailDiff
 
     @edges: PreparedEdgeLoader
 
+    @end_at: untyped
+
     @history: PreparedHistory
+
+    @live_records: Array[untyped]
 
     @prepared: Hash[untyped, Array[String]]
 
@@ -31,6 +38,24 @@ module PaperTrailDiff
     @traversal: AssociationTraversal
 
     @tree: AssociationTree
+
+    @window: bool
+
+    # A transaction that crosses a window's start and saved a version of the
+    # root moves the window's edge back to where it began (see
+    # TransactionCut); one that saved only associated records moves nothing.
+    # A boundary in such a transaction still reads each record as it stood
+    # before the transaction began (see PreparedRecordSeries#boundary_index),
+    # and a history read from the window's start holds neither the versions
+    # it saved before the start nor the records only those versions name, such
+    # as one it destroyed there. Without them the window would start after
+    # changes that the window before it left to this one, by ending its step
+    # at one of the transaction's events here (see ActivityTreeFilter), and
+    # neither would report them. So the history is read again from where the
+    # earliest such transaction began; the window's events still start at its
+    # start.
+    # : (Array[Array[untyped]], untyped) -> PreparedHistory
+    def reload: (Array[Array[untyped]], untyped) -> PreparedHistory
 
     # : (untyped, Array[untyped], AssociationTree, path: String) -> void
     def load_node: (untyped, Array[untyped], AssociationTree, path: String) -> void

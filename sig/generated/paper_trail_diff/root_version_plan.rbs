@@ -58,6 +58,11 @@ module PaperTrailDiff
     # : () -> RootVersionPlan
     def closing_on_destroy: () -> RootVersionPlan
 
+    # The same plan reporting only `selected` as mutations, of the versions it
+    # holds.
+    # : (Array[untyped]) -> RootVersionPlan
+    def reporting: (Array[untyped]) -> RootVersionPlan
+
     # What the range's final state is read from, which is the live record when
     # the window closes on current state and the last version otherwise.
     # : () -> untyped
@@ -70,6 +75,9 @@ module PaperTrailDiff
 
     @mutation_keys: Set[Array[untyped]]
 
+    # : (**untyped) -> RootVersionPlan
+    def copy: (**untyped) -> RootVersionPlan
+
     # : () -> Array[untyped]
     def default_mutations: () -> Array[untyped]
 
@@ -78,9 +86,5 @@ module PaperTrailDiff
     # mutant:disable
     # : (Array[untyped]) -> Set[Array[untyped]]
     def key_set: (Array[untyped]) -> Set[Array[untyped]]
-
-    # By class name, so a version still matches after its class is reloaded.
-    # : (untyped) -> Array[untyped]
-    def key: (untyped) -> Array[untyped]
   end
 end

@@ -74,13 +74,28 @@ RSpec.describe PaperTrailDiff::VersionRange do
       expect(scoped.call(latest).mutations).to eq([edited])
     end
 
-    it 'keeps a single version as both boundaries' do
+    it 'keeps a single version as both boundaries, with a filter that keeps it or without' do
       article, _created, reviewed, = history
 
-      plan = range(article, reviewed, reviewed).select_plan_for_range
+      plans = [nil, :all.to_proc].map do |scope|
+        range(article, reviewed, reviewed, version_scope: scope).select_plan_for_range
+      end
 
-      expect(plan.versions).to eq([reviewed])
-      expect(plan.steps).to eq([])
+      expect(plans.map(&:versions)).to all(eq([reviewed]))
+      expect(plans.map(&:steps)).to all(eq([]))
+    end
+
+    # As activity reads it, with every version replayed.
+    it 'replays every version between the boundaries when whole, reporting those kept' do
+      article, created, reviewed, edited, published = history
+      skip_review = ->(versions) { versions.where.not(id: reviewed.id) }
+      scoped = range(article, created, published, version_scope: skip_review)
+
+      plan = scoped.select_plan_for_range(whole: true)
+
+      expect(plan.reconstruction_versions).to eq([created, reviewed, edited, published])
+      expect(plan.steps).to eq([[created, reviewed], [reviewed, edited], [edited, published]])
+      expect(plan.mutations).to eq([created, edited, published])
     end
 
     it 'bounds each selected version by the one after it, not by the next selected' do
@@ -154,13 +169,27 @@ RSpec.describe PaperTrailDiff::VersionRange do
     end
 
     it 'applies the version scope from the boundary on' do
-      article, _created, _reviewed, edited, = history
+      article, _created, _reviewed, edited, published = history
       earliest = ->(versions) { versions.reorder(:created_at).limit(1) }
 
       plan = range(article, edited, edited, version_scope: earliest)
              .select_plan_through_current(article)
 
       expect(plan.mutations).to eq([edited])
+      expect(plan.steps).to eq([[edited, published]])
+      expect(plan.closing_record).to be_nil
+    end
+
+    it 'replays every version through the current record when whole' do
+      article, created, reviewed, edited, published = history
+      only_review = ->(versions) { versions.where(id: reviewed.id) }
+
+      plan = range(article, created, created, version_scope: only_review)
+             .select_plan_through_current(article, whole: true)
+
+      expect(plan.reconstruction_versions).to eq([created, reviewed, edited, published])
+      expect(plan.closing_record).to equal(article)
+      expect(plan.mutations).to eq([reviewed])
     end
 
     it 'rejects a current record other than the one whose history it reads' do

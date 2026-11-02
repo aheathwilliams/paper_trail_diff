@@ -163,12 +163,17 @@ RSpec.describe PaperTrailDiff::TimelineRange do
       windowed = range(within: window, version_scope: scope, live_endpoint: live)
 
       expect(windowed.select_plan(context_required: true)).to equal(plan)
+      expect(windowed.select_plan(whole: true)).to equal(plan)
       expect(windowed.select_plan).to equal(plan)
       expect(PaperTrailDiff::TimeVersionRange).to have_received(:new).with(
         record, time_range: windowed.time_range, version_scope: scope, live_endpoint: live
-      ).twice
-      expect(selector).to have_received(:select_plan).with(context_required: true).once
-      expect(selector).to have_received(:select_plan).with(context_required: false).once
+      ).exactly(3).times
+      expect(selector).to have_received(:select_plan).with(context_required: true, whole: false)
+                                                     .once
+      expect(selector).to have_received(:select_plan).with(context_required: false, whole: true)
+                                                     .once
+      expect(selector).to have_received(:select_plan).with(context_required: false, whole: false)
+                                                     .once
     end
   end
 
@@ -187,9 +192,11 @@ RSpec.describe PaperTrailDiff::TimelineRange do
       selector = version_range(:select_plan_for_range)
 
       expect(range(from: 1, to: 2, version_scope: scope).select_plan).to equal(plan)
+      expect(range(from: 1, to: 2, version_scope: scope).select_plan(whole: true)).to equal(plan)
       expect(PaperTrailDiff::VersionRange).to have_received(:new)
-        .with(record, from: 1, to: 2, version_scope: scope)
-      expect(selector).to have_received(:select_plan_for_range)
+        .with(record, from: 1, to: 2, version_scope: scope).twice
+      expect(selector).to have_received(:select_plan_for_range).with(whole: false).once
+      expect(selector).to have_received(:select_plan_for_range).with(whole: true).once
     end
 
     it 'select through current state when the range ends at a record' do
@@ -197,9 +204,12 @@ RSpec.describe PaperTrailDiff::TimelineRange do
       selector = version_range(:select_plan_through_current)
 
       expect(range(from: 1, to: record, version_scope: scope).select_plan).to equal(plan)
+      expect(range(from: 1, to: record, version_scope: scope).select_plan(whole: true))
+        .to equal(plan)
       expect(PaperTrailDiff::VersionRange).to have_received(:new)
-        .with(record, from: 1, to: 1, version_scope: scope)
-      expect(selector).to have_received(:select_plan_through_current).with(record)
+        .with(record, from: 1, to: 1, version_scope: scope).twice
+      expect(selector).to have_received(:select_plan_through_current).with(record, whole: false)
+      expect(selector).to have_received(:select_plan_through_current).with(record, whole: true)
     end
 
     it 'select nothing when :first finds no versions' do

@@ -517,10 +517,17 @@ RSpec.describe PaperTrailDiff::AssociationTraversal do
   end
 
   describe 'public methods' do
+    # Queries, not session control: on SQL Server with snapshot isolation, a
+    # call's snapshot transaction puts the session's isolation level back when
+    # it rolls back, even before it ran anything.
     def statements(&block)
       sql = []
       callback = proc do |_name, _start, _finish, _id, payload|
-        sql << payload.fetch(:sql) unless payload[:name] == 'SCHEMA' || payload[:cached]
+        query = payload.fetch(:sql)
+        next if payload[:name] == 'SCHEMA' || payload[:cached]
+        next if query.start_with?('SET TRANSACTION ISOLATION LEVEL')
+
+        sql << query
       end
       ActiveSupport::Notifications.subscribed(callback, 'sql.active_record', &block)
       sql

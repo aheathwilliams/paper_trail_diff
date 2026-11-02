@@ -8,20 +8,26 @@ module PaperTrailDiff
   # history would read differently depending on how it was asked for.
   class ActivityView
     # Options only an activity view uses are refused without one.
-    # : (activity: bool, snapshots: bool, group: Symbol?, recorded: IgnorePolicy?) -> ActivityView
-    def self.build: (activity: bool, snapshots: bool, group: Symbol?, recorded: IgnorePolicy?) -> ActivityView
+    # : (activity: bool, snapshots: bool, group: Symbol?, recorded: IgnorePolicy?, ?version_scope: untyped) -> ActivityView
+    def self.build: (activity: bool, snapshots: bool, group: Symbol?, recorded: IgnorePolicy?, ?version_scope: untyped) -> ActivityView
 
-    # : (?snapshots: bool, ?group: Symbol?, ?recorded: IgnorePolicy?) -> void
-    def initialize: (?snapshots: bool, ?group: Symbol?, ?recorded: IgnorePolicy?) -> void
+    # : (?snapshots: bool, ?group: Symbol?, ?recorded: IgnorePolicy?, ?version_scope: untyped) -> void
+    def initialize: (?snapshots: bool, ?group: Symbol?, ?recorded: IgnorePolicy?, ?version_scope: untyped) -> void
+
+    # Which events of activity on associations a `version_scope:` reports,
+    # answered once for the whole request; nil without one.
+    attr_reader version_filter: ActivityScopeFilter?
 
     # Merging a group compares its outer states, so the snapshots must survive
     # the build even when the caller did not ask to keep them.
     # : () -> bool
     def retain?: () -> bool
 
-    # The attributes a boundary's version recorded, when they were asked for.
-    # : (root: bool) -> Array[String]?
-    def recorded_attributes: (root: bool) -> Array[String]?
+    # Reads what a boundary's version recorded, once per version for the whole
+    # request, when they were asked for. The root's own versions leave out the
+    # names ignored on its path as well.
+    # : (root: bool) -> RecordedChangesReader?
+    def recorded_reader: (root: bool) -> RecordedChangesReader?
 
     # Applied last, to finished steps, so grouping sees the same timeline the
     # caller would otherwise have received.
@@ -32,9 +38,11 @@ module PaperTrailDiff
 
     @group: Symbol?
 
-    @recorded: IgnorePolicy?
+    @readers: Hash[bool, RecordedChangesReader]?
 
     @snapshots: bool
+
+    @version_filter: ActivityScopeFilter?
 
     # : () -> bool
     def grouping?: () -> bool

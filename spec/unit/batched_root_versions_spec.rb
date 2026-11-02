@@ -26,11 +26,11 @@ RSpec.describe PaperTrailDiff::BatchedRootVersions do
   end
 
   def select(records, within: nil, version_scope: nil, live_endpoints: nil, context_required: false, # rubocop:disable Metrics/ParameterLists
-             windows: {})
+             whole: false, windows: {})
     described_class.new(
       records, time_range: within && PaperTrailDiff::TimeRange.new(within),
                version_scope: version_scope, live_endpoints: live_endpoints,
-               context_required: context_required,
+               context_required: context_required, whole: whole,
                windows: windows.transform_values { |range| PaperTrailDiff::TimeRange.new(range) }
     ).call
   end
@@ -60,6 +60,17 @@ RSpec.describe PaperTrailDiff::BatchedRootVersions do
                            created_at: at(1) })
 
     expect(select([article]).fetch(key(article)).versions).to eq(article_versions)
+  end
+
+  # Nothing after the version reveals what it did, which a filter would
+  # need; without one, the version is still the record's history.
+  it "keeps a record's only version without a filter, though nothing follows it" do
+    article = FilterArticle.create!(title: 'Draft')
+    only = FilterVersion.find_by!(item_id: article.id)
+
+    plan = select([article]).fetch(key(article))
+
+    expect([plan.versions, plan.steps]).to eq([[only], []])
   end
 
   it 'gives a record with no versions an empty plan' do
@@ -178,6 +189,7 @@ RSpec.describe PaperTrailDiff::BatchedRootVersions do
 
       expect(plans.fetch(key(article)).mutations).to eq([reviewed])
       expect(plans.fetch(key(article)).context_version).to eq(published)
+      expect(plans.fetch(key(article)).reconstruction_versions).to eq([reviewed, published])
       expect(plans.fetch(key(other))).to be_empty
     end
 
@@ -189,6 +201,20 @@ RSpec.describe PaperTrailDiff::BatchedRootVersions do
 
       expect(plan.mutations).to eq([created, published])
       expect(plan.steps).to eq([[created, reviewed]])
+    end
+
+    # As activity on associations reads it, whether or not the root takes a
+    # context.
+    it 'replays every version of a whole plan, reporting those it keeps' do
+      article, created, reviewed, published = history
+      only_review = ->(versions) { versions.where(id: reviewed.id) }
+
+      plan = select([article], within: at(0)...at(2), version_scope: only_review,
+                               whole: true).fetch(key(article))
+
+      expect(plan.reconstruction_versions).to eq([created, reviewed, published])
+      expect(plan.steps).to eq([[created, reviewed], [reviewed, published]])
+      expect(plan.mutations).to eq([reviewed])
     end
   end
 

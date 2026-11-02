@@ -11,7 +11,7 @@ RSpec.describe 'bounded historical filtering' do
   def report(filter, budget: 100)
     PaperTrailDiff.analyze_scope(
       CoreArticle, limit: 10, within: (Time.now.utc - 3600)..(Time.now.utc + 60),
-                   close_on: :current, historical_filter: filter, max_filter_versions: budget
+                   historical_filter: filter, max_filter_versions: budget
     )
   end
 

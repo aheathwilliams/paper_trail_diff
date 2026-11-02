@@ -9,7 +9,7 @@ RSpec.describe 'activity reporting at current state' do
   end
 
   def options
-    { within: (Time.now.utc - 3600)..(Time.now.utc + 60), close_on: :current }
+    { within: (Time.now.utc - 3600)..(Time.now.utc + 60) }
   end
 
   it 'reports a lone creation without requiring a preceding step' do

@@ -53,4 +53,14 @@ module PaperTrailDiff
     # : (untyped) -> void
     def self?.validate_record!: (untyped) -> void
   end
+
+  # Whether a value is a version, a record, or neither, answered once for
+  # each Active Record class (see Support.per_model).
+  module EndpointKind
+    # : (untyped) -> Symbol
+    def self?.call: (untyped) -> Symbol
+
+    # : (untyped) -> Symbol
+    def self?.classify: (untyped) -> Symbol
+  end
 end

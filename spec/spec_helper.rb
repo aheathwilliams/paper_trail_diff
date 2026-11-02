@@ -52,7 +52,3 @@ end
 
 require 'paper_trail_diff'
 require_relative 'support/paper_trail_transaction_reset'
-
-# Specs still pass deprecated options to check they keep working; the
-# deprecation spec checks the warning itself.
-PaperTrailDiff.deprecator.behavior = :silence

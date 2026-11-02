@@ -3,6 +3,162 @@
 All notable changes to this project will be documented in this file. The
 project follows [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Breaking changes
+
+- The options deprecated in 0.15.0 are removed, and passing one raises
+  `ArgumentError` (unknown keyword):
+  - `close_on:` on `timeline`, `activity_timeline`, `analyze`, `analyze_many`,
+    and `analyze_scope`. It had no effect: a window already closes on the
+    current record when nothing on its requested paths was recorded after it.
+  - `allow_expensive:` on `compare_many`, `analyze_many`, `analyze_scope`, and
+    `report`. It had no effect: `allow_approximate: true` alone accepts a path
+    read with PT-AT.
+  - `reload_live_endpoints:` on `compare`, `compare_many`, and
+    `activity_timeline`. Every method now reloads the current records it
+    compares with, as it did by default.
+- `UnloadedAssociationError`, which only `reload_live_endpoints: false` raised,
+  and `UnsupportedBatchPathError`, which nothing raised since 0.15.0, are
+  removed. Code that rescues either must stop naming it.
+- The `compare.paper_trail_diff`, `compare_many.paper_trail_diff`, and
+  `load_live_endpoints.paper_trail_diff` payloads no longer have a
+  `reload_live_endpoints` key.
+- `version_scope:` applies to the versions of the requested associations as
+  it does to the root's own:
+  - In `analyze_scope` and `report`, a change on a requested association
+    selects a record only when the filter keeps its version. A record that
+    only versions the filter leaves out changed is no longer selected, and no
+    longer counts toward `limit:`.
+  - In activity (`activity_timeline`, `activity: true`, and `report`), the
+    filter decides which steps are reported: every step of a transaction in
+    which it keeps a version, of any record, and each version saved outside a
+    transaction that it keeps. Activity listed every step between the first
+    and the last root version the filter kept, whoever made it, and every
+    change on an association. Every version is still replayed, so each step
+    shows what its own change did. An analysis starts at the first change the
+    filter keeps, on the record or its associations, and ends after the last.
+  - Without associations, activity reports the root's versions the filter
+    keeps, as `timeline` does.
+
+  The record and its associations keep their versions in one table, which
+  the filter reads for all of them, so a condition on `item_type` or
+  `item_id` now leaves out the associations' changes. A filter that keeps
+  every version now reads as no filter: a range of one version, which no
+  later version reveals, has that version's state rather than none.
+
+### Added
+
+- On SQL Server, each call reads its history and live rows in one `SNAPSHOT`
+  transaction when the database allows snapshot isolation
+  (`ALTER DATABASE ... SET ALLOW_SNAPSHOT_ISOLATION ON`), as it does at
+  `REPEATABLE READ` on PostgreSQL and MySQL. A commit that lands during the
+  call is then seen by none of its statements. Each call checks the setting
+  first, in one statement; without it, nothing changes.
+
+### Changed
+
+- With `recorded_changes: true`, a boundary decodes its version's changes the
+  first time its `recorded_changes` is read, and each version is decoded once
+  for the whole call. Every boundary decoded its version when it was built,
+  so a version that many records share in a batch, such as an author's, was
+  decoded once for each of them, and a step nobody read cost as much as one
+  that was. A decoding error now raises when the changes are read.
+
+- Activity asks Active Record whether a value is a version or a record once
+  for each model class, rather than on every read: Active Record answers
+  `respond_to?` by also looking through the record's attributes. An
+  `analyze_many` of 2,000 articles with their comments took about 9% less
+  time.
+
+### Fixed
+
+- Activity on a `has_many :through` leaves out the versions a join record
+  saved while it joined another record, judged by transaction as any record
+  is: by whether it joined the owner before the transaction or after it. A
+  card created on one board and moved to another later brought every version
+  it saved on the first board into the second board's activity, and so did a
+  card created and destroyed inside one transaction: each was a step of its
+  own, and a transaction group listed it in `sources`. Inside a transaction,
+  where a change surfaces one event late, such a step also took the credit
+  for the change made just before it, under its own author.
+
+- A window in which every event was of a record outside the requested
+  associations throughout, such as a comment past a scope's `limit` or one
+  its default scope leaves out, reports nothing. With nothing recorded after
+  it, such a window had a step whose `sources` held `nil` and that showed the
+  record as created. With something recorded after it, the analysis was empty
+  but still held both snapshots; both are `nil` now, as for any analysis that
+  reports nothing.
+
+- Back-to-back windows, or a `report` with `since:` after an earlier report,
+  that meet inside a transaction that saved associated records on both sides
+  of the edge, and no version of the root, report the changes it saved before
+  the edge. Neither window reported them: the earlier one ended at the state
+  before the transaction, as any window ending inside one does, and the later
+  one started after them, and did not know a record the transaction
+  destroyed before the edge. Now all of the transaction's changes are
+  reported once: in the later window, which starts from the state before the
+  transaction, when a version it saved after the edge is of a record on the
+  requested paths, and otherwise in the earlier window. A transaction group
+  lists in `sources` only the versions inside its window. Finding such
+  transactions takes one statement per 500 of the transactions a window's
+  history reads; when it finds one, the window's history is read again from
+  where that transaction began.
+
+- A window whose last change a `version_scope:` keeps is followed by the
+  version that shows what that change did, and that version now comes after
+  the window as well. Activity reported no step for the change, and
+  `analyze_many` with associations read the associations' state at that
+  version from history that ended with the window: a comment edited again
+  after it showed its latest body instead of the one it had then.
+
+- `analyze_many` with `activity: true`, associations, and a `version_scope:`
+  that keeps none of a record's versions reports nothing for that record over
+  its whole history, as `analyze` does. It raised `IncompleteTimeRangeError`.
+
+- Activity reports a change to a `belongs_to` target that the root took
+  without a version, such as an author set while `has_paper_trail only:`
+  left `author_id` out, when the root's next version moved to another target.
+  Only that version's stored state named the target, so the target's own
+  versions were not events: its rename went unreported by activity read
+  step by step, while the same history read in full showed it in an
+  unrelated step.
+
+- Activity on a `has_and_belongs_to_many` reports the addition of a record
+  that the transaction saving the root created and attached, when the record
+  was detached again before the root's next version. Only that transaction's
+  root version records the record as a member. Its creation was judged by the
+  states before and after the transaction, and the record was a member in
+  neither, so the creation was left out: activity reported the record's
+  removal but never its addition.
+
+- `analyze` with `activity: true` from a version to the same version is
+  empty, as is any analysis in which nothing is reported. It reported the
+  record as destroyed: its `diff` held a presence change to `nil`, and its
+  `to_snapshot` was `nil`.
+
+### Development
+
+- `spec/oracle/shapes_history_spec.rb` compares rebuilt history with plain
+  Active Record for shapes the other oracles leave out: polymorphic
+  `belongs_to`, `has_many` and `has_one` with `as:`, children that use
+  single-table inheritance and change type, an association to one subclass,
+  a child's own `belongs_to`, scoped and ranked `has_many` and `has_one`, and
+  a default scope. It checks every endpoint, timeline step, activity step,
+  window and window split, through `spec/support/graph_oracle.rb`, which
+  reads the expected states for any model. It found the first three bugs
+  above; a longer run of the replay differential found the fourth.
+  `ORACLE_SHOW` prints more than the first five mismatches.
+
+- The SQL Server 2022 CI job's database allows snapshot isolation and the
+  2019 job's does not, so both ways of reading a call run on CI.
+
+- The oracles' transactions take turns between authors, and every window
+  split is also read with a `version_scope:` that keeps one author's versions.
+  It must report exactly the unfiltered steps of the transactions that author
+  saved a version in.
+
 ## [0.16.0] - 2026-11-01
 
 ### Changed

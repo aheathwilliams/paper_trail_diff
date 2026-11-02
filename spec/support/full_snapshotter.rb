@@ -26,4 +26,7 @@ class FullSnapshotter
   end
 
   def activity_index; end
+
+  # Without prepared history, no transaction crosses its start.
+  def opening_transactions = []
 end

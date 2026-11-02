@@ -20,25 +20,24 @@ module PaperTrailDiff
       @live_roots = {} #: Hash[identity, untyped]
     end
 
+    # A `start_at` is a window's (see PreparedHistoryLoader); a range of
+    # versions starts at its first.
     #: (untyped, Array[untyped], ?start_at: untyped, ?end_at: untyped) -> PreparedHistory?
-    def prepare(
-      record,
-      root_versions,
-      start_at: root_versions.first.created_at,
-      end_at: root_versions.last.created_at
-    )
+    def prepare(record, root_versions, start_at: nil, end_at: root_versions.last.created_at)
       return if @tree.empty?
 
       # A batched preparation already covers these roots.
-      batched = root_versions.find { |version| @prepared_histories.key?(context_key(version)) }
-      return @prepared_histories.fetch(context_key(batched)) if batched
+      batched = root_versions.find { |version| @prepared_histories.key?(Support.row_key(version)) }
+      return @prepared_histories.fetch(Support.row_key(batched)) if batched
 
       PreparedHistoryLoader.new(
-        record, root_ids: [record.id], root_versions: root_versions, start_at: start_at,
-                end_at: end_at, tree: @tree, traversal: @traversal, live_records: []
+        record, root_ids: [record.id], root_versions: root_versions,
+                start_at: start_at || root_versions.first.created_at, end_at: end_at, tree: @tree,
+                traversal: @traversal, live_records: [], window: !start_at.nil?
       ).call
     end
 
+    # A `start_at` is a window's, as for `prepare`.
     #: (Array[untyped], Array[untyped], ?start_at: untyped, ?end_at: untyped) -> void
     def prepare_batch(records, root_versions, start_at: nil, end_at: nil)
       return if @tree.empty? || records.empty? || root_versions.empty?
@@ -121,12 +120,7 @@ module PaperTrailDiff
     # A batch's history for the version wins over the one a caller passes.
     #: (untyped, PreparedHistory?) -> PreparedHistory?
     def history_for(context_endpoint, history)
-      @prepared_histories[context_key(context_endpoint)] || history
-    end
-
-    #: (untyped) -> Array[untyped]
-    def context_key(endpoint)
-      [endpoint.class.name, endpoint.id]
+      @prepared_histories[Support.row_key(context_endpoint)] || history
     end
 
     #: (Array[untyped], Array[untyped]) -> Hash[Symbol, untyped]
@@ -146,9 +140,10 @@ module PaperTrailDiff
         end_at: end_at || root_versions.map(&:created_at).max,
         tree: @tree,
         traversal: @traversal,
-        live_records: live_records
+        live_records: live_records,
+        window: !start_at.nil?
       ).call
-      root_versions.each { |version| @prepared_histories[context_key(version)] = history }
+      root_versions.each { |version| @prepared_histories[Support.row_key(version)] = history }
     end
 
     #: (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer, history: PreparedHistory?) -> RecordSnapshot?
@@ -196,7 +191,7 @@ module PaperTrailDiff
 
     #: (untyped, untyped) -> Array[untyped]
     def snapshot_key(root_endpoint, context_endpoint)
-      context_key(root_endpoint) + context_key(context_endpoint)
+      Support.row_key(root_endpoint) + Support.row_key(context_endpoint)
     end
   end
 end

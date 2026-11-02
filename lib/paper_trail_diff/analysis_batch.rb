@@ -26,10 +26,11 @@ module PaperTrailDiff
       records = validated_records
       loaded = @live_loader.call(records)
       windows = TransactionCut.batch_windows(records, @time_range)
+      # Activity on associations both takes a context and replays whole plans.
       selected = BatchedRootVersions.new(
         records, time_range: @time_range, version_scope: @version_scope,
-                 live_endpoints: loaded,
-                 context_required: @context_required, windows: windows
+                 live_endpoints: loaded, context_required: @context_required,
+                 whole: @context_required, windows: windows
       ).call
       prepare(records, selected, loaded, windows)
       records.to_h do |record|
@@ -95,7 +96,7 @@ module PaperTrailDiff
     def preparation_range(versions, windows, live:)
       times = versions.map(&:created_at)
       end_at = [times.max, @time_range&.end_time, (Time.now.utc if live)].compact.max
-      { start_at: TransactionCut.earliest_start(@time_range, windows) || times.min, end_at: end_at }
+      { start_at: TransactionCut.earliest_start(@time_range, windows), end_at: end_at }
     end
 
     # A root with no versions in range has nothing to report, which is an empty

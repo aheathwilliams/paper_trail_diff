@@ -15,10 +15,9 @@ PaperTrailDiff.timeline(record, from: :first, to: record).each do |step|
 end
 PaperTrailDiff.analyze(record, from: :first, to: record, activity: true,
                                group: :transaction, snapshots: true).to_h(metadata: true)
-PaperTrailDiff.analyze_many([record], within: window, close_on: :current,
-                                      activity: true, group: :transaction, snapshots: true,
-                                      allow_approximate: false)
-PaperTrailDiff.analyze_scope(record, limit: 10, within: window, close_on: :current,
+PaperTrailDiff.analyze_many([record], within: window, activity: true, group: :transaction,
+                                      snapshots: true, allow_approximate: false)
+PaperTrailDiff.analyze_scope(record, limit: 10, within: window,
                                      activity: true, group: :transaction, snapshots: true,
                                      historical_filter: { status: 'published' },
                                      max_filter_versions: 500, include_deleted: true,

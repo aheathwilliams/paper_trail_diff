@@ -88,14 +88,14 @@ module PaperTrailDiff
     # : () -> Array[PreparedRecordState]
     def states: () -> Array[PreparedRecordState]
 
-    # The classes the record had at any point, or either side of one version.
+    # The classes the record had at any point, or either side of one version:
+    # a create has no state before it and a destroy none after.
     # : (?untyped) -> Array[untyped]
     def model_classes: (?untyped) -> Array[untyped]
 
-    # The states either side of one version; a create has none before it and a
-    # destroy none after.
-    # : (untyped) -> Array[PreparedRecordState]
-    def states_around: (untyped) -> Array[PreparedRecordState]
+    # The states before `first` and after `last`, where they exist.
+    # : (untyped, untyped) -> Array[PreparedRecordState]
+    def states_across: (untyped, untyped) -> Array[PreparedRecordState]
 
     # : (untyped) -> [PreparedRecordState, PreparedRecordState]?
     def transition: (untyped) -> [ PreparedRecordState, PreparedRecordState ]?
@@ -139,14 +139,24 @@ module PaperTrailDiff
 
   # Request-scoped scalar history loaded once per model identity.
   class PreparedRecordIndex
-    # : (untyped, ?end_at: untyped, ?live_records: Array[untyped]) -> void
-    def initialize: (untyped, ?end_at: untyped, ?live_records: Array[untyped]) -> void
+    # The transactions that crossed a window's start, keyed as
+    # ActivityTransactionGroups keys a version's; see PreparedHistoryLoader.
+    attr_reader opening_transactions: Array[Array[untyped]]
+
+    # : (untyped, ?end_at: untyped, ?live_records: Array[untyped], ?opening_transactions: Array[Array[untyped]]) -> void
+    def initialize: (untyped, ?end_at: untyped, ?live_records: Array[untyped], ?opening_transactions: Array[Array[untyped]]) -> void
 
     # : (untyped, Array[untyped]) -> void
     def load: (untyped, Array[untyped]) -> void
 
     # : (untyped, Array[untyped], Array[untyped]) -> void
     def seed: (untyped, Array[untyped], Array[untyped]) -> void
+
+    # The transactions the versions held from the start onward belong to that
+    # began before it, and where the earliest of them began; see
+    # PreparedHistoryLoader. Nothing when none did.
+    # : () -> [Array[Array[untyped]], untyped]?
+    def opening: () -> [ Array[Array[untyped]], untyped ]?
 
     # : (untyped, untyped, untyped) -> untyped
     def record_before: (untyped, untyped, untyped) -> untyped
@@ -175,11 +185,16 @@ module PaperTrailDiff
     # : (untyped, untyped) -> Array[untyped]
     def versions_for_id: (untyped, untyped) -> Array[untyped]
 
+    # : () -> Array[untyped]
+    def versions: () -> Array[untyped]
+
     # : (untyped, untyped, ?untyped) -> Array[untyped]
     def model_classes: (untyped, untyped, ?untyped) -> Array[untyped]
 
-    # : (untyped, untyped, untyped) -> Array[PreparedRecordState]
-    def states_around: (untyped, untyped, untyped) -> Array[PreparedRecordState]
+    # The attributes before `first` and after `last`, where they exist, typed
+    # as a reified record's are.
+    # : (untyped, untyped, untyped, untyped) -> Array[Hash[untyped, untyped]]
+    def typed_states_across: (untyped, untyped, untyped, untyped) -> Array[Hash[untyped, untyped]]
 
     # : (untyped, untyped) -> bool
     def loaded?: (untyped, untyped) -> bool
@@ -199,6 +214,8 @@ module PaperTrailDiff
     @direct_states: Hash[PreparedRecordState, PreparedRecordState?]
 
     @end_time: untyped
+
+    @opening_transactions: Array[Array[untyped]]
 
     @seeded_live_records: Hash[Array[String], untyped]
 
@@ -238,5 +255,34 @@ module PaperTrailDiff
 
     # : (untyped, Array[untyped]) -> Array[untyped]
     def live_records_for: (untyped, Array[untyped]) -> Array[untyped]
+  end
+
+  # Finds the transactions that crossed a history's start: those the versions
+  # held from the start onward belong to that also saved versions before it,
+  # of any record. One statement per 500 transactions.
+  class OpeningTransactions
+    # : (Hash[Array[String], PreparedRecordSeries], untyped) -> void
+    def initialize: (Hash[Array[String], PreparedRecordSeries], untyped) -> void
+
+    # Their keys, as ActivityTransactionGroups keys a version's, and when the
+    # earliest began; nil when none crossed the start.
+    # : () -> [Array[Array[untyped]], untyped]?
+    def call: () -> [ Array[Array[untyped]], untyped ]?
+
+    private
+
+    # When each of these transactions saved its first version before the
+    # start, for those that saved one there.
+    # : (untyped, Array[untyped]) -> Array[[untyped, untyped]]
+    def earliest: (untyped, Array[untyped]) -> Array[[ untyped, untyped ]]
+
+    @series: Hash[Array[String], PreparedRecordSeries]
+
+    @start: untyped
+
+    # The transactions of the versions held from the start onward, by version
+    # class, since each version table numbers its own.
+    # : () -> Hash[untyped, Array[untyped]]
+    def transactions: () -> Hash[untyped, Array[untyped]]
   end
 end

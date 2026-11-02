@@ -56,11 +56,14 @@ module PaperTrailDiff
       sources.flat_map { |ids| ids.is_a?(Query) ? ids.values : ids }.uniq
     end
 
-    #: (untyped, tree: AssociationTree, time_range: TimeRange?) -> void
-    def initialize(model, tree:, time_range:)
+    # Only the versions `version_scope` keeps select a root, on its
+    # associations as on its own versions.
+    #: (untyped, tree: AssociationTree, time_range: TimeRange?, ?version_scope: untyped) -> void
+    def initialize(model, tree:, time_range:, version_scope: nil)
       @model = model
       @traversal = AssociationTraversal.new(tree)
       @time_range = time_range
+      @version_scope = version_scope
     end
 
     # The roots' ids, each source a subquery or an array of values.
@@ -74,6 +77,7 @@ module PaperTrailDiff
     # @rbs @model: untyped
     # @rbs @traversal: AssociationTraversal
     # @rbs @time_range: TimeRange?
+    # @rbs @version_scope: untyped
 
     # Ids of `model` records with a change somewhere below them in `tree`: the
     # targets that changed, or that reach a change further down.
@@ -152,6 +156,7 @@ module PaperTrailDiff
       relation = relation.where(item_id: item_ids) if item_ids
       range = @time_range
       relation = range.scope(relation) if range
+      relation = @version_scope.call(relation) if @version_scope
       [Query.new(relation, versions.arel_table[:item_id],
                  versions.type_for_attribute('item_id').type)]
     end

@@ -8,6 +8,7 @@ RSpec.describe 'batched activity reporting' do
     PaperTrail::Version.delete_all
     TrackedComment.delete_all
     TrackedArticle.delete_all
+    TrackedAuthor.delete_all
   end
 
   it 'groups saves and retains snapshots consistently across single, batch, and scope calls' do
@@ -20,7 +21,7 @@ RSpec.describe 'batched activity reporting' do
       end
     end
     options = {
-      within: (Time.now.utc - 3600)..(Time.now.utc + 60), close_on: :current,
+      within: (Time.now.utc - 3600)..(Time.now.utc + 60),
       associations: [:comments], activity: true, snapshots: true, group: :transaction
     }
     single = PaperTrailDiff.analyze(article, **options)
@@ -36,6 +37,29 @@ RSpec.describe 'batched activity reporting' do
       expect(last.diff.associations.fetch('comments').changed.first.attributes.fetch('body').to_h)
         .to eq(from: 'Before', to: 'After')
     end
+  end
+
+  # An author renamed under two articles is one version, decoded once, and
+  # only when a step's changes are read.
+  it 'decodes the changes a version recorded once for the batch, when first read' do
+    author = TrackedAuthor.create!(name: 'Before')
+    articles = Array.new(2) do |index|
+      TrackedArticle.create!(title: "Article #{index}", author: author)
+    end
+    start = Time.now.utc
+    author.update!(name: 'After')
+    allow(PaperTrailDiff::RecordedChanges).to receive(:call).and_call_original
+
+    analyses = PaperTrailDiff.analyze_many(articles, within: start..Time.now.utc,
+                                                     associations: [:author], activity: true,
+                                                     recorded_changes: true)
+    expect(PaperTrailDiff::RecordedChanges).not_to have_received(:call)
+    changes = analyses.values.map do |analysis|
+      analysis.activity_timeline.flat_map(&:sources).map { |source| source.recorded_changes&.keys }
+    end
+
+    expect(changes).to eq([[%w[name]], [%w[name]]])
+    expect(PaperTrailDiff::RecordedChanges).to have_received(:call).once
   end
 
   it 'does not report descendant events outside a closed reporting window' do

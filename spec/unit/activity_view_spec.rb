@@ -24,11 +24,25 @@ RSpec.describe PaperTrailDiff::ActivityView do
   end
 
   it 'builds a view of the options it was given' do
-    view = described_class.build(activity: true, snapshots: true, group: nil, recorded: policy)
+    view = described_class.build(activity: true, snapshots: true, group: nil, recorded: policy,
+                                 version_scope: :all.to_proc)
 
     expect(view.retain?).to be(true)
-    expect(view.recorded_attributes(root: true)).to eq(policy.recorded_attributes(root: true))
-    expect(view.recorded_attributes(root: true)).to be_an(Array)
+    expect(view.recorded_reader(root: true)).to be_a(PaperTrailDiff::RecordedChangesReader)
+    expect(view.version_filter).to be_a(PaperTrailDiff::ActivityScopeFilter)
+  end
+
+  # One filter answers for the whole request, with the scope it was given.
+  it 'keeps one version filter for the request when given a scope, and none otherwise' do
+    scope = ->(versions) { versions }
+    allow(PaperTrailDiff::ActivityScopeFilter).to receive(:new).and_call_original
+
+    view = described_class.new(version_scope: scope)
+
+    expect(view.version_filter).to be_a(PaperTrailDiff::ActivityScopeFilter)
+    expect(view.version_filter).to equal(view.version_filter)
+    expect(PaperTrailDiff::ActivityScopeFilter).to have_received(:new).with(scope).once
+    expect(described_class.new.version_filter).to be_nil
   end
 
   it 'checks the group before what needs an activity view' do
@@ -42,15 +56,20 @@ RSpec.describe PaperTrailDiff::ActivityView do
     expect(described_class.new(group: :transaction).retain?).to be(true)
   end
 
-  it 'reads recorded attributes only when they were asked for' do
+  # Each reader decodes a version once for the whole request, leaving out the
+  # names ignored on its side.
+  it 'reads recorded changes only when they were asked for, once per version' do
     recorded = instance_double(PaperTrailDiff::IgnorePolicy)
     allow(recorded).to receive(:recorded_attributes) { |root:| root ? ['title'] : %w[title body] }
+    allow(PaperTrailDiff::RecordedChanges).to receive(:call) { |_version, ignore:| ignore }
+    version = Struct.new(:id).new(1)
 
     view = described_class.new(recorded: recorded)
 
-    expect(view.recorded_attributes(root: true)).to eq(['title'])
-    expect(view.recorded_attributes(root: false)).to eq(%w[title body])
-    expect(described_class.new.recorded_attributes(root: true)).to be_nil
+    expect(Array.new(2) { view.recorded_reader(root: true).call(version) }).to eq([['title']] * 2)
+    expect(view.recorded_reader(root: false).call(version)).to eq(%w[title body])
+    expect(PaperTrailDiff::RecordedChanges).to have_received(:call).twice
+    expect(described_class.new.recorded_reader(root: true)).to be_nil
   end
 
   it 'merges steps by transaction only when grouping, keeping snapshots only when asked' do

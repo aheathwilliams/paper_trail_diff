@@ -66,6 +66,18 @@ RSpec.describe 'Windows that meet inside a transaction',
     [article.reload, article.versions.where(event: 'update').first, comment.versions.last]
   end
 
+  # A transaction that saves no version of the root: the comment's update,
+  # then a new comment.
+  def comments_only
+    article, comment = article_with_comment
+    WindowArticle.transaction do
+      comment.update!(body: 'after')
+      article.comments.create!(body: 'new')
+    end
+    article.update!(title: 'Second')
+    [article.reload, comment.versions.last, WindowComment.find_by!(body: 'new').versions.first]
+  end
+
   def steps(article, within, method: :activity_timeline, group: nil)
     timeline(article, within, method, group).reject(&:empty?).map do |step|
       [step.sources.map(&:version_id), step.diff.attributes.keys, changed_keys(step)]
@@ -81,6 +93,16 @@ RSpec.describe 'Windows that meet inside a transaction',
 
   def changed_keys(step)
     step.diff.associations['comments']&.changed&.map { |change| change.attributes.keys }
+  end
+
+  # The bodies of the comments each step adds and removes.
+  def bodies(article, within, method, group)
+    timeline(article, within, method, group).reject(&:empty?).map do |step|
+      comments = step.diff.associations['comments']
+      comments && [comments.added, comments.removed].map do |records|
+        records.map { |record| record.attributes.fetch('body') }
+      end
+    end
   end
 
   def window(article)
@@ -101,6 +123,69 @@ RSpec.describe 'Windows that meet inside a transaction',
           expect(right.first).to include([['body']])
           expect(right.first.first).to include(root.id)
           expect(left.flatten).not_to include(child.id)
+        end
+
+        # It moves no edge, but each record in it still reads at its later
+        # versions as it was before it began, here and in a window ending
+        # inside it, so the part saved before the edge is in the later window.
+        # That window's group lists only the versions inside it.
+        it 'reports a transaction of children split by the edge in the later window' do
+          article, before_edge, at_edge = comments_only
+          whole = window(article)
+          by_transaction = lambda do |within|
+            steps(article, within, method: method, group: group).map do |sources, *diff|
+              [PaperTrail::Version.where(id: sources).distinct.pluck(:transaction_id), *diff]
+            end
+          end
+          left = by_transaction.call(whole.begin...at_edge.created_at)
+          right = by_transaction.call(at_edge.created_at..whole.end)
+
+          expect(left + right).to eq(by_transaction.call(whole))
+          expect(right.first).to eq([[at_edge.transaction_id], [], [['body']]])
+          expect(left.flatten).not_to include(before_edge.transaction_id)
+        end
+
+        # The comment it destroyed before the edge has no live row and no
+        # version after the edge, so only history read from where the
+        # transaction began holds it.
+        it 'reports a record such a transaction destroyed before the edge in the later window' do
+          article, comment = article_with_comment
+          added = WindowArticle.transaction do
+            comment.destroy!
+            article.comments.create!(body: 'new')
+          end
+          article.update!(title: 'Second')
+          whole = window(article)
+          edge = added.versions.first.created_at
+          read = ->(within) { bodies(article, within, method, group) }
+
+          expect(read.call(whole.begin...edge) + read.call(edge..whole.end)).to eq(read.call(whole))
+          expect(read.call(edge..whole.end).first).to eq([['new'], ['before']])
+        end
+
+        # The comment it edited after the edge was on another article then,
+        # and moves to this one later. The later window leaves that edit out,
+        # so the earlier one reports the transaction, and the later one
+        # starts after it.
+        it 'reports such a transaction in the earlier window when nothing it saved after ' \
+           'the edge is in the tree' do
+          article, comment = article_with_comment
+          elsewhere = WindowArticle.create!(title: 'Other').comments.create!(body: 'elsewhere')
+          WindowArticle.transaction do
+            comment.destroy!
+            elsewhere.update!(body: 'edited')
+          end
+          elsewhere.update!(article: article)
+          article.update!(title: 'Second')
+          whole = window(article)
+          edge = elsewhere.versions.where(event: 'update').first.created_at
+          read = ->(within) { bodies(article, within, method, group) }
+          later = PaperTrailDiff.analyze_many([article], within: edge..whole.end, activity: true,
+                                                         associations: paths, group: group)
+
+          expect(read.call(whole.begin...edge) + read.call(edge..whole.end)).to eq(read.call(whole))
+          expect(read.call(whole.begin...edge).last).to eq([[], ['before']])
+          expect(later.values.first.diff.associations.fetch('comments').removed).to eq([])
         end
 
         it 'does so when the root saved first' do

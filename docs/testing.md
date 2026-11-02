@@ -21,7 +21,8 @@ from the correctness suite and have no timing-based CI gate.
 CI keeps the Ruby 3.1–4.0 and PaperTrail 16/17 compatibility matrix on SQLite,
 including Windows runs. Separate Linux jobs run both core and association suites
 on PostgreSQL 17, MySQL 8.4, and SQL Server 2019 and 2022 with Ruby 4.0 and
-PaperTrail 17.
+PaperTrail 17. The SQL Server 2022 job's database allows snapshot isolation
+and the 2019 job's does not, so each call's `SNAPSHOT` read is run both ways.
 The SQL jobs exercise the same regressions, including joined-column ordering,
 duplicate roots, pagination, and historical association reconstruction.
 
@@ -55,8 +56,11 @@ share passes. `spec/oracle` compares them with the truth instead:
    are compared with the recorded states. Two windows that meet between
    transactions, or inside one, must report each step once, as the window
    spanning both does, through both `activity_timeline` and `analyze_many`.
+   The transactions take turns between no author, `alice`, and `bob`, and
+   the same windows filtered to alice's versions must report exactly the
+   unfiltered steps of the transactions she saved a version in.
 
-Four more generators cover other shapes. `scoped_membership_spec.rb` moves
+Five more generators cover other shapes. `scoped_membership_spec.rb` moves
 notes in and out of scoped associations (conditions, order, limit, and
 offset) and compares the members at every version with Active Record's own
 answer. `tree_history_spec.rb` edits a tree of one model, so a root can sit
@@ -70,8 +74,13 @@ detaches, creates, renames, and destroys tags between checkpoints. HABTM
 membership is known only at root versions, so it expects what the
 [reference](reference.md#habtm-limitation) describes: at each point, the
 members the next root version recorded, as each was then, and only once it
-exists. These three read the expected states with plain Active Record, not
-through the gem.
+exists. `shapes_history_spec.rb` edits two boards and the records around them:
+a polymorphic owner, cards that use single-table inheritance and change type,
+comments that move between boards and cards (`as:`), labels with a default
+scope, and scoped and ranked associations to the cards. Its checks, in
+`spec/support/graph_oracle.rb`, follow any model's associations, so a new
+shape needs only models and edits. These four read the expected states with
+plain Active Record, not through the gem.
 
 `replay_differential_spec.rb` checks activity against the gem's own full
 snapshots instead. Activity carries each snapshot forward from the previous
@@ -89,12 +98,13 @@ mise exec -- bundle exec rake spec_oracle
 ORACLE_SEEDS=1..200 ORACLE_STEPS=40 mise exec -- bundle exec rake spec_oracle
 ```
 
-The default seeds keep the run to a few seconds; `rake spec` includes it, so
+The default seeds keep the run short; `rake spec` includes it, so
 the database jobs run it too. Mutant does not, because it would slow every
-mutation. A failure prints its seed and the transactions it made. To fix one,
-reproduce it with that seed, reduce it to the few edits that matter, and add
-that as a named spec beside the code it covers, so the cause is readable
-without the generator.
+mutation. A failure prints its seed, the transactions it made, and its first
+five mismatches; `ORACLE_SHOW=50` prints more. To fix one, reproduce it with
+that seed, reduce it to the few edits that matter, and add that as a named
+spec beside the code it covers, so the cause is readable without the
+generator.
 
 When a bug turns out to depend on a schema, configuration, or kind of edit,
 add it to the generator or as a new context, so the whole class of bug stays

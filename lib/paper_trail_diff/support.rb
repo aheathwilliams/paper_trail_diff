@@ -4,7 +4,26 @@
 module PaperTrailDiff
   # Internal helpers for isolating and serializing values held by result objects.
   module Support # rubocop:disable Metrics/ModuleLength
+    # Ids per statement, for the queries that list them in slices. SQL Server
+    # compiles every statement afresh, since its ids are written into it, in
+    # time that grows with their number; fewer statements than this cost more
+    # than they save.
+    IDS_PER_STATEMENT = 500
+
     module_function
+
+    # Answers a question about `value` once for each Active Record class, in
+    # `answers`: its respond_to? also looks through the instance's attributes,
+    # which costs more than most of what reading a version does, and every
+    # instance of a model answers alike, since this gem reads versions with
+    # all their columns. Anything else is asked each time.
+    #: [T] (Hash[untyped, T], untyped) { (untyped) -> T } -> T
+    def per_model(answers, value)
+      model = value.class
+      return yield(value) unless model.respond_to?(:column_names)
+
+      answers.fetch(model) { answers[model] = yield(value) }
+    end
 
     #: (untyped) -> untyped
     def immutable_copy(value)
@@ -56,6 +75,14 @@ module PaperTrailDiff
             else [2, id.inspect]
             end
       [type.to_s, key]
+    end
+
+    # Which loaded row a version or record is, across the lookups of a call:
+    # by its class's name rather than the class, so a row still matches after
+    # its class is reloaded.
+    #: (untyped) -> Array[untyped]
+    def row_key(row)
+      [row.class.name, row.id]
     end
 
     #: (untyped) -> Array[untyped]
