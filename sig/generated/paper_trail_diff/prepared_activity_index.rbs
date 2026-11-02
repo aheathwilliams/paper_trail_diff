@@ -151,17 +151,15 @@ module PaperTrailDiff
 
       @conditions: ScopeCondition::Cache
 
-      @ids: Array[String]
+      @ids: Set[String]
 
       @keyed: bool
 
       @owner_types: Array[String]?
 
-      @source_type: String?
+      @reflection: untyped
 
       @through: untyped
-
-      @type_column: untyped
 
       # : () -> bool
       def keyed?: () -> bool
@@ -179,6 +177,8 @@ module PaperTrailDiff
       # : (Hash[untyped, untyped]) -> bool
       def in_scope?: (Hash[untyped, untyped]) -> bool
 
+      # As the through's snapshots read a join row (see
+      # PreparedStateAssociationReader#typed_join?).
       # : (Hash[untyped, untyped]) -> bool
       def typed?: (Hash[untyped, untyped]) -> bool
     end

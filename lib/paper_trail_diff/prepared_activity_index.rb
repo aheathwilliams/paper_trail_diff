@@ -248,11 +248,10 @@ module PaperTrailDiff
     class ThroughPath
       #: (Hash[Symbol, untyped], untyped, ScopeCondition::Cache) -> void
       def initialize(owners, reflection, conditions)
+        @reflection = reflection
         @through = reflection.through_reflection
         @keyed = keyed?
-        @source_type = reflection.options[:source_type]&.to_s
-        @type_column = reflection.foreign_type
-        @ids = owners.fetch(:ids).map(&:to_s)
+        @ids = owners.fetch(:ids).to_set(&:to_s)
         @owner_types = owner_types(owners.fetch(:model))
         @conditions = conditions
       end
@@ -260,7 +259,7 @@ module PaperTrailDiff
       # Whether every state of a row is on the path, so that none need be read.
       #: () -> bool
       def open?
-        !@keyed && @source_type.nil?
+        !@keyed && @reflection.options[:source_type].nil?
       end
 
       #: (Hash[untyped, untyped]) -> bool
@@ -270,11 +269,10 @@ module PaperTrailDiff
 
       private
 
+      # @rbs @reflection: untyped
       # @rbs @through: untyped
       # @rbs @keyed: bool
-      # @rbs @source_type: String?
-      # @rbs @type_column: untyped
-      # @rbs @ids: Array[String]
+      # @rbs @ids: Set[String]
       # @rbs @owner_types: Array[String]?
       # @rbs @conditions: ScopeCondition::Cache
 
@@ -310,9 +308,11 @@ module PaperTrailDiff
         !condition || condition.matches?(attributes)
       end
 
+      # As the through's snapshots read a join row (see
+      # PreparedStateAssociationReader#typed_join?).
       #: (Hash[untyped, untyped]) -> bool
       def typed?(attributes)
-        !@source_type || attributes.fetch(@type_column) == @source_type
+        AssociationTraversal.source_type_member?(@reflection, attributes[@reflection.foreign_type])
       end
     end
   end
