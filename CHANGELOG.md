@@ -133,6 +133,11 @@ project follows [Semantic Versioning](https://semver.org/).
   neither, so the creation was left out: activity reported the record's
   removal but never its addition.
 
+- `analyze` with `activity: true` from a version to the same version is
+  empty, as is any analysis in which nothing is reported. It reported the
+  record as destroyed: its `diff` held a presence change to `nil`, and its
+  `to_snapshot` was `nil`.
+
 ### Development
 
 - `spec/oracle/shapes_history_spec.rb` compares rebuilt history with plain

@@ -248,10 +248,10 @@ module PaperTrailDiff
 
     # A window with no selected event reports nothing, and so does one whose
     # replay left out every event it selected, each of a record outside the
-    # tree throughout, such as a comment created outside a scope: its
-    # analysis is empty. Any other has a boundary after its last event: the
-    # plan refuses a window that has no later version, ends on no destroy, and
-    # does not close on the live row.
+    # tree throughout, such as a comment created outside a scope (see
+    # #analysis). Any other has a boundary after its last event: the plan
+    # refuses a window that has no later version, ends on no destroy, and does
+    # not close on the live row.
     #: (RootVersionPlan, untyped) -> [ActivityHistory, RootVersionPlan, ActivityStep?, RecordSnapshot?, untyped]
     def window_replay(plan, captured_at)
       versions = plan.reconstruction_versions
@@ -262,15 +262,8 @@ module PaperTrailDiff
 
       snapshot = window_live_snapshot(plan)
       history = replay(plan, events, snapshots, current: plan.closing_record, closing: snapshot)
-      closing = window_closing(history, last, plan, captured_at, snapshot)
-      window_result(plan, history, closing, snapshot, captured_at)
-    end
-
-    #: (RootVersionPlan, ActivityHistory, ActivityStep?, RecordSnapshot?, untyped) -> [ActivityHistory, RootVersionPlan, ActivityStep?, RecordSnapshot?, untyped]
-    def window_result(plan, history, closing, snapshot, captured_at)
-      return empty_window(plan) if history.steps.empty? && !closing
-
-      [history, plan, closing, snapshot, captured_at]
+      [history, plan, window_closing(history, last, plan, captured_at, snapshot), snapshot,
+       captured_at]
     end
 
     # One live read serves both the closing activity step and the endpoint the
@@ -411,8 +404,13 @@ module PaperTrailDiff
       @view.present(steps).freeze
     end
 
+    # A range that reports no step is empty, whatever its replay read: a
+    # version filter may keep nothing in it, or only the version that ends it,
+    # which opens no step, and a range may run from a version to itself.
     #: (RootVersionPlan, ActivityHistory, final: RecordSnapshot?, steps: Array[ActivityStep], ?closing_snapshot: RecordSnapshot?, ?captured_at: untyped) -> Analysis
     def analysis(plan, history, final:, steps:, **closing)
+      return Analysis.empty if steps.empty?
+
       Analysis.new(
         diff: Engine.compare(history.first_snapshot, final),
         timeline: ActivityRootSteps.call(plan, history.root_snapshots, **closing),

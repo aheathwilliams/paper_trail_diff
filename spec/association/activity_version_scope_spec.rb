@@ -131,6 +131,27 @@ RSpec.describe 'version_scope: in activity on associations',
       .to eq([{ from: 'Draft', to: 'Titled' }])
   end
 
+  # A range's last version opens no step, so a filter that keeps only that
+  # version reports nothing, and neither does a range from a version to
+  # itself.
+  it 'reports an empty analysis when an explicit range reports no step' do
+    article = by('bob') { TrackedArticle.create!(title: 'Draft') }
+    by('bob') { article.update!(title: 'Titled') }
+    by('alice') { article.update!(title: 'Retitled') }
+    first, *, last = article.versions.reorder(:created_at, :id).to_a
+
+    analyses = [{ associations: paths }, {}].flat_map do |options|
+      [PaperTrailDiff.analyze(article, from: first, to: last, activity: true,
+                                       version_scope: alice, **options),
+       PaperTrailDiff.analyze(article, from: last, to: last, activity: true, **options)]
+    end
+
+    expect(analyses.map do |analysis|
+      [analysis.activity_timeline, analysis.timeline, analysis.diff.empty?,
+       analysis.from_snapshot, analysis.to_snapshot]
+    end).to all(eq([[], [], true, nil, nil]))
+  end
+
   it 'selects only the records the filter keeps a change of, which is all limit: counts' do
     start = Time.now.utc
     article = TrackedArticle.create!(title: 'Quiet')

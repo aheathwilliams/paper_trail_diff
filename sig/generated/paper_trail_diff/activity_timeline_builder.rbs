@@ -142,15 +142,12 @@ module PaperTrailDiff
 
     # A window with no selected event reports nothing, and so does one whose
     # replay left out every event it selected, each of a record outside the
-    # tree throughout, such as a comment created outside a scope: its
-    # analysis is empty. Any other has a boundary after its last event: the
-    # plan refuses a window that has no later version, ends on no destroy, and
-    # does not close on the live row.
+    # tree throughout, such as a comment created outside a scope (see
+    # #analysis). Any other has a boundary after its last event: the plan
+    # refuses a window that has no later version, ends on no destroy, and does
+    # not close on the live row.
     # : (RootVersionPlan, untyped) -> [ActivityHistory, RootVersionPlan, ActivityStep?, RecordSnapshot?, untyped]
     def window_replay: (RootVersionPlan, untyped) -> [ ActivityHistory, RootVersionPlan, ActivityStep?, RecordSnapshot?, untyped ]
-
-    # : (RootVersionPlan, ActivityHistory, ActivityStep?, RecordSnapshot?, untyped) -> [ActivityHistory, RootVersionPlan, ActivityStep?, RecordSnapshot?, untyped]
-    def window_result: (RootVersionPlan, ActivityHistory, ActivityStep?, RecordSnapshot?, untyped) -> [ ActivityHistory, RootVersionPlan, ActivityStep?, RecordSnapshot?, untyped ]
 
     # One live read serves both the closing activity step and the endpoint the
     # analysis reports, which would otherwise reconstruct the graph twice.
@@ -227,6 +224,9 @@ module PaperTrailDiff
     # : (Array[ActivityStep]) -> Array[ActivityStep]
     def present: (Array[ActivityStep]) -> Array[ActivityStep]
 
+    # A range that reports no step is empty, whatever its replay read: a
+    # version filter may keep nothing in it, or only the version that ends it,
+    # which opens no step, and a range may run from a version to itself.
     # : (RootVersionPlan, ActivityHistory, final: RecordSnapshot?, steps: Array[ActivityStep], ?closing_snapshot: RecordSnapshot?, ?captured_at: untyped) -> Analysis
     def analysis: (RootVersionPlan, ActivityHistory, final: RecordSnapshot?, steps: Array[ActivityStep], ?closing_snapshot: RecordSnapshot?, ?captured_at: untyped) -> Analysis
   end
