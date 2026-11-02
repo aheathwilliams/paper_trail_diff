@@ -145,6 +145,13 @@ project follows [Semantic Versioning](https://semver.org/).
   record as destroyed: its `diff` held a presence change to `nil`, and its
   `to_snapshot` was `nil`.
 
+- `analyze_many` and `analyze_scope` without associations raise
+  `AmbiguousVersionOrderError` for versions they cannot order, as `timeline`
+  and `analyze` already did: versions that share a timestamp and whose ids
+  do not count up, such as UUIDs. They read such versions in the order of
+  their ids, so a record's steps could follow a random sequence, including
+  a destroy and re-creation that never happened.
+
 ### Development
 
 - `spec/oracle/shapes_history_spec.rb` compares rebuilt history with plain

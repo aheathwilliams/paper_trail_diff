@@ -29,9 +29,6 @@ module PaperTrailDiff
     # : (untyped, whole: bool, ?through: untyped, ?live_endpoint: untyped) -> RootVersionPlan
     def select_plan: (untyped, whole: bool, ?through: untyped, ?live_endpoint: untyped) -> RootVersionPlan
 
-    # : (Array[untyped]) -> Array[untyped]
-    def ordered: (Array[untyped]) -> Array[untyped]
-
     # : (untyped, untyped, boundary: Symbol) -> void
     def validate_boundary!: (untyped, untyped, boundary: Symbol) -> void
 

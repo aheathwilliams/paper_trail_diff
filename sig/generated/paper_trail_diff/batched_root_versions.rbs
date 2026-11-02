@@ -55,6 +55,7 @@ module PaperTrailDiff
     # : (untyped, Array[untyped], TimeRange?) -> Set[untyped]?
     def chosen_version_ids: (untyped, Array[untyped], TimeRange?) -> Set[untyped]?
 
+    # RootVersionSelection puts each root's versions in order.
     # : (untyped, Array[untyped], TimeRange?) -> Hash[String, Array[untyped]]
     def grouped_versions: (untyped, Array[untyped], TimeRange?) -> Hash[String, Array[untyped]]
 

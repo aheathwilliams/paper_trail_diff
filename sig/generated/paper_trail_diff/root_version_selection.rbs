@@ -8,7 +8,9 @@ module PaperTrailDiff
   # a filter must never remove it.
   #
   # Both the single-record and the batched selectors resolve this here, because
-  # the rule is subtle enough that two copies of it would drift apart.
+  # the rule is subtle enough that two copies of it would drift apart. Their
+  # versions are put in order here too, which refuses a sequence that cannot
+  # be ordered (see Support.chronological_sort) whichever selector read it.
   class RootVersionSelection
     # An error is a specification, so it names the way out as well as the wall.
     # A window ending at the present can never gain a later version, which makes

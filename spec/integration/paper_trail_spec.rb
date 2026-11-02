@@ -499,6 +499,20 @@ RSpec.describe PaperTrailDiff do
         .to raise_error(PaperTrailDiff::AmbiguousVersionOrderError, /share the timestamp/)
     end
 
+    it 'refuses the sequence in a batch as it does for one record' do
+      article = unorderable_history
+      window = (Time.now.utc - 60)..(Time.now.utc + 60)
+
+      [
+        -> { described_class.analyze_many([article]) },
+        -> { described_class.analyze_many([article], within: window) },
+        -> { described_class.analyze_scope(UuidKeyedArticle.all, within: window, limit: 10) }
+      ].each do |call|
+        expect(&call)
+          .to raise_error(PaperTrailDiff::AmbiguousVersionOrderError, /share the timestamp/)
+      end
+    end
+
     it 'names the two versions and how to make them orderable' do
       article = unorderable_history
 

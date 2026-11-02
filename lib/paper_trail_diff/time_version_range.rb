@@ -15,7 +15,7 @@ module PaperTrailDiff
     #: (context_required: bool, whole: bool) -> RootVersionPlan
     def select_plan(context_required:, whole:)
       relation = Endpoint.versions(@record)
-      in_range = ordered(@time_range.scope(relation))
+      in_range = @time_range.scope(relation)
       RootVersionSelection.new(
         in_range: in_range,
         selected: VersionScopeFilter.new(@version_scope).call(@time_range.scope(relation),
@@ -38,11 +38,6 @@ module PaperTrailDiff
     #: (untyped) -> untyped
     def trailing_version(relation)
       VersionQuery.chronological(@time_range.trailing_scope(relation)).first
-    end
-
-    #: (Array[untyped]) -> Array[untyped]
-    def ordered(versions)
-      Support.chronological_sort(versions)
     end
   end
 end

@@ -120,10 +120,10 @@ module PaperTrailDiff
       VersionScopeFilter.new(@version_scope).chosen_ids(range_scope(model_class, records, range))
     end
 
+    # RootVersionSelection puts each root's versions in order.
     #: (untyped, Array[untyped], TimeRange?) -> Hash[String, Array[untyped]]
     def grouped_versions(model_class, records, range)
-      VersionQuery.chronological(range_scope(model_class, records, range))
-                  .group_by { |version| version.item_id.to_s }
+      range_scope(model_class, records, range).group_by { |version| version.item_id.to_s }
     end
 
     #: (untyped, Array[untyped], TimeRange?) -> untyped
