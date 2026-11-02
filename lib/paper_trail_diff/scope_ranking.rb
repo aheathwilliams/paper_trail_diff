@@ -95,18 +95,22 @@ module PaperTrailDiff
     def self.column(node, model_class)
       return unless DIRECTIONS.key?(node.class.name)
 
-      attribute = node.expr
-      return unless ATTRIBUTE.eql?(attribute.class.name)
-
-      table = attribute.relation
-      return unless table.name == model_class.table_name && table.table_alias.nil?
-
-      name = attribute.name
+      name = own_column(node.expr, model_class)
       name if orderable?(model_class, name)
     end
     private_class_method :column
 
-    #: (untyped, String) -> bool
+    # The name an Arel attribute gives a column of the model's own table, not
+    # of another table or an alias of its own; nil for anything else.
+    #: (untyped, untyped) -> String?
+    def self.own_column(attribute, model_class)
+      return unless ATTRIBUTE.eql?(attribute.class.name)
+
+      table = attribute.relation
+      attribute.name if table.name == model_class.table_name && table.table_alias.nil?
+    end
+
+    #: (untyped, String?) -> bool
     def self.orderable?(model_class, name)
       return false unless model_class.columns_hash.key?(name)
 
