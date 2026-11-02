@@ -65,8 +65,5 @@ module PaperTrailDiff
 
     # : (untyped, Array[untyped]) -> Array[untyped]
     def versions_for: (untyped, Array[untyped]) -> Array[untyped]
-
-    # : (untyped, untyped) -> untyped
-    def target_class: (untyped, untyped) -> untyped
   end
 end

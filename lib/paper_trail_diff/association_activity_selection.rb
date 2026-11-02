@@ -130,7 +130,7 @@ module PaperTrailDiff
       edge = AssociationActivityEdge::BelongsTo.new(reflection, @time_range)
       edge.target_types.flat_map do |name|
         typed = AssociationActivityEdge::BelongsTo.new(reflection, @time_range, foreign_type: name)
-        follow(typed, changed(target_class(name)))
+        follow(typed, changed(AssociationTraversal.named_class(name)))
       end
     end
 
@@ -188,15 +188,6 @@ module PaperTrailDiff
     #: (source, Symbol?) -> Query?
     def subquery(source, type)
       source if source.is_a?(Query) && source.type == type
-    end
-
-    # A type naming no class has no versions to read; `changed` skips one that
-    # names an unversioned class.
-    #: (String) -> untyped
-    def target_class(name)
-      Object.const_get(name)
-    rescue NameError
-      nil
     end
   end
 end

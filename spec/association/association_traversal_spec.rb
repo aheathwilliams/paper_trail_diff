@@ -158,6 +158,18 @@ RSpec.describe PaperTrailDiff::AssociationTraversal do
     end
   end
 
+  describe '.stored_target' do
+    it 'reads the declared class, or the class a polymorphic type names' do
+      reviewer = TraversalNote.reflect_on_association(:reviewer)
+      holder = TraversalNote.reflect_on_association(:holder)
+
+      expect(described_class.stored_target(reviewer, 'TrackedArticle')).to eq(TrackedAuthor)
+      expect(described_class.stored_target(holder, 'TrackedArticle')).to eq(TrackedArticle)
+      expect(described_class.stored_target(holder, nil)).to be_nil
+      expect(described_class.stored_target(holder, 'RenamedArticle')).to be_nil
+    end
+  end
+
   describe '.source_type_join?' do
     def join?(name, join)
       described_class.source_type_join?(SourceTypeHolder.reflect_on_association(name), join)

@@ -154,7 +154,9 @@ module PaperTrailDiff
 
     #: (Array[untyped], untyped) ?{ (untyped, untyped) -> bool } -> Hash[String, untyped]
     def identity_groups(rows, reflection)
-      identities = rows.group_by { |row| target_class(reflection, row) }
+      identities = rows.group_by do |row|
+        AssociationTraversal.stored_target(reflection, row.foreign_type)
+      end
       groups = {} #: Hash[String, untyped]
       identities.each do |model_class, class_rows|
         next unless model_class
@@ -201,15 +203,6 @@ module PaperTrailDiff
           item_id: ids
         )
       ).to_a.select { |version| @range.include?(version) }
-    end
-
-    #: (untyped, untyped) -> untyped
-    def target_class(reflection, row)
-      return reflection.klass unless reflection.polymorphic?
-
-      Object.const_get(row.foreign_type.to_s) unless row.foreign_type.to_s.empty?
-    rescue NameError
-      nil
     end
   end
 end

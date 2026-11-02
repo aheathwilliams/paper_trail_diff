@@ -52,19 +52,13 @@ module PaperTrailDiff
       id = owner.attributes[reflection.foreign_key.to_s]
       return [true, []] if id.nil?
 
-      model_class = target_class(owner, reflection)
+      type = owner.attributes[reflection.foreign_type]
+      model_class = AssociationTraversal.stored_target(reflection, type)
       return [false, []] unless model_class &&
                                 @conditions.call(reflection, model_class, ranked: ranked)
 
       handled, state = @records.snapshot_state_before(model_class, id, boundary)
       [handled, state && in_scope?(state, reflection, ranked, model_class) ? [state] : []]
-    end
-
-    #: (PreparedRecordState, untyped) -> untyped
-    def target_class(owner, reflection)
-      return reflection.klass unless reflection.polymorphic?
-
-      AssociationTraversal.named_class(owner.attributes[reflection.foreign_type].to_s)
     end
 
     # The members of each join record the owner had at the boundary, as

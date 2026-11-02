@@ -31,6 +31,11 @@ module PaperTrailDiff
     # : (String) -> untyped
     def self.named_class: (String) -> untyped
 
+    # The class a belongs_to's target is, given the type a polymorphic one
+    # stored: nil when that names no class.
+    # : (untyped, untyped) -> untyped
+    def self.stored_target: (untyped, untyped) -> untyped
+
     # A type left by a renamed or removed model names no class. Active Record
     # and PT-AT raise a bare NameError for it, which does not say where it is.
     # : (untyped, untyped, String) -> untyped
