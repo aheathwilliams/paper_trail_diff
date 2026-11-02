@@ -159,7 +159,7 @@ module Oracle
 
     def message
       lines = ["seed #{@seed}: #{@list.length} mismatches", "transactions: #{@recorder.describe}"]
-      @list.first(5).each do |label, expected, actual|
+      @list.first(Integer(ENV.fetch('ORACLE_SHOW', 5))).each do |label, expected, actual|
         lines << label
         lines << "  expected: #{expected.inspect[0, 1500]}"
         lines << "  actual:   #{actual.inspect[0, 1500]}"

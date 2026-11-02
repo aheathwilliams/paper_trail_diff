@@ -23,6 +23,18 @@ project follows [Semantic Versioning](https://semver.org/).
   but still held both snapshots; both are `nil` now, as for any analysis that
   reports nothing.
 
+### Development
+
+- `spec/oracle/shapes_history_spec.rb` compares rebuilt history with plain
+  Active Record for shapes the other oracles leave out: polymorphic
+  `belongs_to`, `has_many` and `has_one` with `as:`, children that use
+  single-table inheritance and change type, an association to one subclass,
+  a child's own `belongs_to`, scoped and ranked `has_many` and `has_one`, and
+  a default scope. It checks every endpoint, timeline step, activity step,
+  window and window split, through `spec/support/graph_oracle.rb`, which
+  reads the expected states for any model. It found both bugs above.
+  `ORACLE_SHOW` prints more than the first five mismatches.
+
 ## [0.16.0] - 2026-11-01
 
 ### Changed
