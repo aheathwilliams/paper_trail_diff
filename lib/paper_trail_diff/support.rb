@@ -85,6 +85,13 @@ module PaperTrailDiff
       [row.class.name, row.id]
     end
 
+    # Which record a model and id name, as Endpoint.identity reads a record:
+    # by its base class, so a subclass and its base name the same row.
+    #: (untyped, untyped) -> Array[String]
+    def record_identity(model_class, id)
+      [model_class.base_class.name.to_s, id.to_s]
+    end
+
     #: (untyped) -> Array[untyped]
     def chronological_version_key(version)
       version_key(version.created_at, version.id)

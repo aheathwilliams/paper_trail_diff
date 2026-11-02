@@ -448,7 +448,7 @@ module PaperTrailDiff
 
     #: (untyped, untyped) -> Array[String]
     def identity(model_class, id)
-      [model_class.base_class.name.to_s, id.to_s]
+      Support.record_identity(model_class, id)
     end
 
     #: (untyped, Array[untyped]) -> Array[untyped]

@@ -115,9 +115,7 @@ module PaperTrailDiff
 
     #: (Array[untyped]) -> Array[untyped]
     def unique_records(records)
-      records.compact.uniq do |record|
-        [record.class.base_class.name.to_s, record.id.to_s]
-      end
+      records.compact.uniq { |record| Support.record_identity(record.class, record.id) }
     end
 
     #: (Array[untyped], Hash[identity, untyped]) -> void

@@ -50,7 +50,7 @@ module PaperTrailDiff
 
       root_versions.reject { |version| version.created_at < start_at }
                    .sort_by { |version| Support.chronological_version_key(version) }
-                   .uniq { |version| [version.item_type.to_s, version.item_id.to_s] }
+                   .uniq { |version| Endpoint.identity(version) }
                    .filter_map { |version| transaction_id(version) }.uniq
     end
     private_class_method :opening_transactions

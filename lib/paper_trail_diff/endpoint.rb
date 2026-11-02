@@ -85,7 +85,7 @@ module PaperTrailDiff
       if version?(endpoint)
         [endpoint.item_type.to_s, endpoint.item_id.to_s]
       elsif record?(endpoint)
-        [endpoint.class.base_class.name.to_s, endpoint.id.to_s]
+        Support.record_identity(endpoint.class, endpoint.id)
       else
         raise InvalidEndpointError, 'expected a PaperTrail version or persisted record endpoint'
       end

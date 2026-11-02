@@ -225,7 +225,7 @@ module PaperTrailDiff
 
     #: (Array[untyped]) -> Array[untyped]
     def unique_records(records)
-      records.uniq { |record| [record.class.base_class.name, record.id.to_s] }
+      records.uniq { |record| Support.record_identity(record.class, record.id) }
     end
 
     #: (untyped, untyped) -> Array[String]

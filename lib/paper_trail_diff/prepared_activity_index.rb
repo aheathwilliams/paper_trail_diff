@@ -15,7 +15,7 @@ module PaperTrailDiff
     def initialize(records, root_versions, start_at:)
       @records = records
       @range = ActivityRange.new(start_at, nil)
-      @roots = root_versions.group_by { |version| [version.item_type, version.item_id.to_s] }
+      @roots = root_versions.group_by { |version| Endpoint.identity(version) }
       @nodes = {} #: Hash[String, Array[untyped]]
       # Rows are cached by reflection, which a subclass shares with its base.
       @children = {} #: Hash[untyped, untyped]
@@ -33,7 +33,7 @@ module PaperTrailDiff
     #: (untyped, Array[untyped]) -> Array[untyped]
     def versions(model, ids)
       ids.flat_map do |id|
-        @roots[[model.base_class.name, id.to_s]] || @records.versions_for_id(model, id)
+        @roots[Support.record_identity(model, id)] || @records.versions_for_id(model, id)
       end
     end
 

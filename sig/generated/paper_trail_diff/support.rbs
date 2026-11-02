@@ -39,6 +39,11 @@ module PaperTrailDiff
     # : (untyped) -> Array[untyped]
     def self?.row_key: (untyped) -> Array[untyped]
 
+    # Which record a model and id name, as Endpoint.identity reads a record:
+    # by its base class, so a subclass and its base name the same row.
+    # : (untyped, untyped) -> Array[String]
+    def self?.record_identity: (untyped, untyped) -> Array[String]
+
     # : (untyped) -> Array[untyped]
     def self?.chronological_version_key: (untyped) -> Array[untyped]
 

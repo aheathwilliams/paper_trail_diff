@@ -152,6 +152,7 @@ module PaperTrailDiff
     # : (Integer) -> void
     def reject_oversized!: (Integer) -> void
 
+    # Keyed as Endpoint.identity keys the record, which the analyses use.
     # : (String) -> Array[String]
     def identity: (String) -> Array[String]
 
