@@ -26,52 +26,51 @@ module PaperTrailDiff
     end
 
     #: (untyped, untyped, RecordSnapshot?, ActivityEvent) -> [bool, RecordSnapshot?]
-    def call( # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/MethodLength, Metrics/PerceivedComplexity
-      root_endpoint,
-      context_endpoint,
-      previous,
-      event
-    )
+    def call(root_endpoint, context_endpoint, previous, event)
       return [false, nil] unless previous && event.root?
 
-      version = event.version
-      model_class = RecordedClass.for(version)
-      return [false, nil] unless same_record?(previous, model_class, version)
+      record, branches = advance_target(previous, event.version)
+      return [false, nil] unless record && branches
 
-      changed = changed_columns(version, model_class)
-      return [false, nil] if changed.empty?
-
-      # A change of STI class can change the associations themselves.
-      record = @record_after.call(version)
-      return [false, nil] unless record && recorded_class(record) == model_class
-
-      branches = branches_to_refresh(model_class, changed)
       partial = nil #: RecordSnapshot?
       unless branches.empty?
         partial = @partial_snapshotter.call(root_endpoint, context_endpoint, branches)
+        return [false, nil] unless partial
       end
-      return [false, nil] if !branches.empty? && !partial
-
-      attributes = @normalizer.attributes_for(record, tree: @tree, path: '')
-
-      incoming_associations = {} #: snapshot_associations
-      incoming_associations = partial.associations if partial
-      associations = previous.associations.merge(incoming_associations)
-      return [true, previous] if attributes == previous.attributes &&
-                                 associations == previous.associations
-
-      [
-        true,
-        RecordSnapshot.new(
-          type: previous.type,
-          id: previous.id,
-          attributes: attributes,
-          associations: associations
-        )
-      ]
+      [true, advanced(previous, record, partial)]
     end
 
     private
+
+    # The record after a root version and the branches its change reaches, or
+    # nil when the version cannot be applied to the previous snapshot alone.
+    #: (RecordSnapshot, untyped) -> [untyped, Array[String]]?
+    def advance_target(previous, version)
+      model_class = RecordedClass.for(version)
+      return unless same_record?(previous, model_class, version)
+
+      changed = changed_columns(version, model_class)
+      return if changed.empty?
+
+      # A change of STI class can change the associations themselves.
+      record = @record_after.call(version)
+      return unless record && recorded_class(record) == model_class
+
+      [record, branches_to_refresh(model_class, changed)]
+    end
+
+    # The previous snapshot with the record's attributes and any branches read
+    # again, or the previous snapshot itself when nothing differs.
+    #: (RecordSnapshot, untyped, RecordSnapshot?) -> RecordSnapshot
+    def advanced(previous, record, partial)
+      attributes = @normalizer.attributes_for(record, tree: @tree, path: '')
+      associations = previous.associations
+      associations = associations.merge(partial.associations) if partial
+      return previous if attributes == previous.attributes && associations == previous.associations
+
+      RecordSnapshot.new(type: previous.type, id: previous.id, attributes: attributes,
+                         associations: associations)
+    end
 
     # @rbs @tree: AssociationTree
     # @rbs @traversal: AssociationTraversal
