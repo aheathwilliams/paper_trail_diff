@@ -117,7 +117,7 @@ a time and expects a spec to fail each time. A change that every spec still
 passes is behavior nothing checks. `mutant.yml` lists the classes it mutates:
 
 - what counts as a change: `Engine`, `CollectionComparator`,
-  `CollectionIdentityIndex`, and `NestedComparator`;
+  `CollectionIdentityIndex`, `NestedComparator`, and `CollectionTransition`;
 - which columns are compared, and how precisely times are: `SnapshotNormalizer`,
   `SnapshotPool`, and `StoredTimePrecision`;
 - which versions a range reads: `TimeRange`, `TimelineRange`, `VersionRange`,
@@ -137,7 +137,7 @@ passes is behavior nothing checks. `mutant.yml` lists the classes it mutates:
 - where an activity range starts and ends, and which association history its
   query reads: `ActivityRange` and `VersionAssociationCandidateScope`;
 - what activity a record shows: `ActivityTimelineBuilder`,
-  `ActivityVersionCollector`, `ActivityTransactionGrouper`,
+  `ActivityVersionCollector`, `ActivityRootSteps`, `ActivityTransactionGrouper`,
   `ActivityTransactionGroups`, `ActivityTreeFilter`, `ActivityScopeFilter`, and
   `ActivityView`;
 - what an update did to a record, and whether it moved the record to another

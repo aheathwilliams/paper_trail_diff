@@ -37,6 +37,7 @@ matcher:
     - PaperTrailDiff::CollectionComparator*
     - PaperTrailDiff::CollectionIdentityIndex*
     - PaperTrailDiff::NestedComparator*
+    - PaperTrailDiff::CollectionTransition*
     - PaperTrailDiff::SnapshotNormalizer*
     - PaperTrailDiff::SnapshotPool*
     - PaperTrailDiff::StoredTimePrecision*
@@ -71,6 +72,7 @@ matcher:
     - PaperTrailDiff::PreparedEdgeLoader*
     - PaperTrailDiff::ActivityTimelineBuilder*
     - PaperTrailDiff::ActivityVersionCollector*
+    - PaperTrailDiff::ActivityRootSteps*
     - PaperTrailDiff::ActivityTreeFilter*
     - PaperTrailDiff::ActivityTransactionGrouper*
     - PaperTrailDiff::ActivityTransactionGroups*
