@@ -71,6 +71,13 @@ project follows [Semantic Versioning](https://semver.org/).
   `analyze_many` of 2,000 articles with their comments took about 9% less
   time.
 
+- `analyze_many`, `analyze_scope`, and `report` with `activity: true` read
+  the association history of a record that has no version in the window,
+  but whose associated records changed there, together with the rest of the
+  batch. Such a record, as in a `report(since:)` of articles that only gained
+  comments, read its own history, at about nine statements each. A batch of
+  20 such articles took 188 statements and now takes 14, as many as one.
+
 ### Fixed
 
 - Activity on a `has_many :through` leaves out the versions a join record
