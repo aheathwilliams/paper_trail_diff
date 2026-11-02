@@ -5,28 +5,11 @@ module PaperTrailDiff
   class ActivityRange
     attr_reader start_time: untyped
 
-    attr_reader end_time: untyped
-
     # : (untyped, untyped) -> void
     def initialize: (untyped, untyped) -> void
 
     # : (untyped) -> bool
     def include?: (untyped) -> bool
-
-    # Narrows an Active Record version relation by timestamp, and to the
-    # start's transaction. Exact tie-breaking remains in #include? so this
-    # works for integer, UUID, and custom version IDs.
-    # : (untyped) -> untyped
-    def scope: (untyped) -> untyped
-
-    # : () -> bool
-    def current_end?: () -> bool
-
-    # Whether the state a version recorded after its change held inside the
-    # range. A range ending at a version ends at the state before it, so the
-    # change that version records is past the end, unlike #include?.
-    # : (untyped, untyped) -> bool
-    def recorded_before_end?: (untyped, untyped) -> bool
 
     private
 

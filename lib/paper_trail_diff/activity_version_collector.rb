@@ -3,6 +3,7 @@
 
 module PaperTrailDiff
   # Collects root and selected-descendant versions relevant to one root history range.
+  # Descendants are found in the root's prepared history.
   class ActivityVersionCollector
     #: (untyped, root_versions: Array[untyped], tree: AssociationTree, ?range_start: untyped, ?range_end: untyped, ?prepared: PreparedActivityIndex?) -> void
     def initialize( # rubocop:disable Metrics/ParameterLists
@@ -13,7 +14,9 @@ module PaperTrailDiff
       range_end: root_versions.last,
       prepared: nil
     )
-      @prepared = prepared
+      # Only a tree's descendants are read from it, and a tree is always read
+      # with prepared history (see HistoricalSnapshotStore#prepare).
+      @prepared = prepared #: PreparedActivityIndex
       @record = record
       @root_versions = root_versions
       @tree = tree
@@ -35,7 +38,7 @@ module PaperTrailDiff
 
     private
 
-    # @rbs @prepared: PreparedActivityIndex?
+    # @rbs @prepared: PreparedActivityIndex
     # @rbs @record: untyped
     # @rbs @root_versions: Array[untyped]
     # @rbs @tree: AssociationTree
@@ -91,10 +94,8 @@ module PaperTrailDiff
       intermediate = edge_groups(parent, through, branch)
       result = {} #: Hash[String, untyped]
       intermediate.each_value do |group|
-        # A through is always read with prepared history, which knows the
-        # join row's state either side of each version.
-        @registry.add(@prepared&.join_versions(parent, group, reflection) || group.fetch(:versions),
-                      branch: branch, join: true)
+        versions = @prepared.join_versions(parent, group, reflection)
+        @registry.add(versions, branch: branch, join: true)
         source = reflection.source_reflection
         children = edge_groups(group, source, branch)
         merge_groups!(result, children)
@@ -105,32 +106,18 @@ module PaperTrailDiff
 
     # Every target the owners pointed at in the range, not only those their own
     # changes there recorded: an author renamed under an article nobody edited
-    # is still that article's activity.
+    # is still that article's activity. Prepared history holds every target its
+    # snapshots can contain. One it did not load -- a key changed without a
+    # version -- has no state to compare.
     #: (untyped, Array[untyped], untyped) -> Hash[String, untyped]
     def belongs_to_groups(parent_class, parent_ids, reflection)
-      prepared = @prepared
-      return unprepared_belongs_to_groups(parent_class, parent_ids, reflection) unless prepared
-
-      # Prepared history holds every target its snapshots can contain. One it
-      # did not load -- a key changed without a version -- has no state to compare.
-      rows = prepared.target_rows(parent_class, parent_ids, reflection, @range)
-      identity_groups(rows, reflection) { |model_class, id| prepared.loaded?(model_class, id) }
-    end
-
-    #: (untyped, Array[untyped], untyped) -> Hash[String, untyped]
-    def unprepared_belongs_to_groups(parent_class, parent_ids, reflection)
-      rows = ActivityTargetCandidateLoader.new(parent_class, parent_ids, reflection, @range).call
-      identity_groups(rows, reflection)
+      rows = @prepared.target_rows(parent_class, parent_ids, reflection, @range)
+      identity_groups(rows, reflection) { |model_class, id| @prepared.loaded?(model_class, id) }
     end
 
     #: (untyped, Array[untyped], untyped) -> Hash[String, untyped]
     def direct_child_groups(parent_class, parent_ids, reflection)
-      item_ids = if (prepared = @prepared)
-                   prepared.child_ids(parent_class, parent_ids, reflection, @range)
-                 else
-                   ActivityChildCandidateLoader.new(parent_class, parent_ids, reflection,
-                                                    @range).call
-                 end
+      item_ids = @prepared.child_ids(parent_class, parent_ids, reflection, @range)
       return {} if item_ids.empty?
 
       { reflection.klass.name => group(reflection.klass, item_ids) }
@@ -138,18 +125,7 @@ module PaperTrailDiff
 
     #: (untyped, Array[untyped], untyped) -> Hash[String, untyped]
     def habtm_groups(parent_class, parent_versions, reflection)
-      if (prepared = @prepared)
-        rows = prepared.habtm_rows(parent_class, parent_versions, reflection)
-        return identity_groups(rows, reflection)
-      end
-      transaction_ids = parent_versions.filter_map do |version|
-        VersionBoundary.transaction_id(version)
-      end
-      rows = parent_class.paper_trail.version_association_class.where(
-        version_id: transaction_ids,
-        foreign_key_name: reflection.name.to_s
-      ).to_a
-      identity_groups(rows, reflection)
+      identity_groups(@prepared.habtm_rows(parent_class, parent_versions, reflection), reflection)
     end
 
     #: (Array[untyped], untyped) ?{ (untyped, untyped) -> bool } -> Hash[String, untyped]
@@ -170,8 +146,9 @@ module PaperTrailDiff
 
     #: (untyped, Array[untyped]) -> Hash[Symbol, untyped]
     def group(model_class, ids)
-      ids = @prepared&.member_ids(model_class, ids) || ids
-      { model: model_class, ids: ids, versions: versions_for(model_class, ids) }
+      ids = @prepared.member_ids(model_class, ids)
+      { model: model_class, ids: ids,
+        versions: @prepared.member_versions(model_class, ids, @range) }
     end
 
     #: (Hash[String, untyped], Hash[String, untyped]) -> void
@@ -186,23 +163,6 @@ module PaperTrailDiff
         ids = (existing.fetch(:ids) | incoming.fetch(:ids))
         destination[name] = group(existing.fetch(:model), ids)
       end
-    end
-
-    #: (untyped, Array[untyped]) -> Array[untyped]
-    def versions_for(model_class, ids)
-      return [] if ids.empty?
-
-      if (prepared = @prepared)
-        return prepared.member_versions(model_class, ids, @range)
-      end
-
-      version_class = model_class.paper_trail.version_class
-      @range.scope(
-        version_class.where(
-          item_type: model_class.base_class.name,
-          item_id: ids
-        )
-      ).to_a.select { |version| @range.include?(version) }
     end
   end
 end

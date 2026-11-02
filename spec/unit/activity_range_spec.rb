@@ -38,13 +38,9 @@ RSpec.describe PaperTrailDiff::ActivityRange do
     described_class.new(start_boundary, end_boundary)
   end
 
-  it 'reads its times from a version or a time at either end' do
-    first = version(1, noon)
-    last = version(2, noon + 60)
-
-    expect([range(first, last).start_time, range(first, last).end_time]).to eq([noon, noon + 60])
-    expect([range(noon, noon + 5).start_time, range(noon, noon + 5).end_time])
-      .to eq([noon, noon + 5])
+  it 'reads its start time from a version or a time' do
+    expect([range(version(1, noon), version(2, noon + 60)).start_time,
+            range(noon + 5, noon + 60).start_time]).to eq([noon, noon + 5])
   end
 
   it 'includes versions at a time boundary on either side' do
@@ -75,13 +71,6 @@ RSpec.describe PaperTrailDiff::ActivityRange do
              .map { |candidate| to_version.include?(candidate) }).to eq([false, true, false])
   end
 
-  it 'narrows a relation to the timestamps between its ends' do
-    relation = Object.new.tap { |where| where.define_singleton_method(:where) { |hash| hash } }
-
-    expect(range(version(5, noon), noon + 60).scope(relation))
-      .to eq(created_at: noon..(noon + 60))
-  end
-
   # A range starting at a version starts before that version's transaction,
   # where PT-AT reads associations. A child version saved earlier in it, as
   # `touch: true` saves one, is inside the range.
@@ -95,42 +84,6 @@ RSpec.describe PaperTrailDiff::ActivityRange do
     expect(range(in_transaction(5, noon, nil), noon + 60).include?(candidates.last)).to be(false)
   end
 
-  it "also narrows a relation to the start's transaction" do
-    relation = Object.new
-    relation.define_singleton_method(:where) do |hash|
-      next hash if hash.key?(:transaction_id)
-
-      Object.new.tap do |narrowed|
-        narrowed.define_singleton_method(:or) { |other| [:or, hash, other] }
-      end
-    end
-
-    expect(range(in_transaction(5, noon, 40), noon + 60).scope(relation))
-      .to eq([:or, { created_at: noon..(noon + 60) }, { transaction_id: 40 }])
-  end
-
-  it 'ends at the current record only when its end is not a version' do
-    expect(range(noon, noon + 60).current_end?).to be(true)
-    expect(range(noon, version(8, noon + 60)).current_end?).to be(false)
-  end
-
-  # A version records the state after its change, and a range that ends at a
-  # version ends just before that change.
-  it 'places the state a version recorded strictly before a version end' do
-    window = range(noon, version(8, noon + 60))
-
-    expect([[noon + 59, 99], [noon + 60, 7], [noon + 60, 8], [noon + 60, 9], [noon + 61, 1]]
-             .map { |at, id| window.recorded_before_end?(at, id) })
-      .to eq([true, true, false, false, false])
-  end
-
-  it 'places the state recorded at a time end inside the range' do
-    window = range(noon, noon + 60)
-
-    expect([noon + 59, noon + 60, noon + 61].map { |at| window.recorded_before_end?(at, 1) })
-      .to eq([true, true, false])
-  end
-
   it 'raises rather than order versions without comparable timestamps' do
     window = range(version(5, noon), version(8, noon + 60))
     message = 'versions have incomparable timestamps'
@@ -138,8 +91,6 @@ RSpec.describe PaperTrailDiff::ActivityRange do
     expect { window.include?(version(6, nil)) }
       .to raise_error(PaperTrailDiff::ConfigurationError, message)
     expect { range(version(5, nil), version(8, noon + 60)).include?(version(6, noon)) }
-      .to raise_error(PaperTrailDiff::ConfigurationError, message)
-    expect { window.recorded_before_end?(nil, 6) }
       .to raise_error(PaperTrailDiff::ConfigurationError, message)
   end
 end

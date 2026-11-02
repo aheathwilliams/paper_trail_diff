@@ -14,7 +14,7 @@ module PaperTrailDiff
     #: (PreparedRecordIndex, Array[untyped], start_at: untyped) -> void
     def initialize(records, root_versions, start_at:)
       @records = records
-      @range = ActivityRange.new(start_at, nil)
+      @start_at = start_at
       @roots = root_versions.group_by { |version| Endpoint.identity(version) }
       @nodes = {} #: Hash[String, Array[untyped]]
       # Rows are cached by reflection, which a subclass shares with its base.
@@ -110,7 +110,7 @@ module PaperTrailDiff
     private
 
     # @rbs @records: PreparedRecordIndex
-    # @rbs @range: ActivityRange
+    # @rbs @start_at: untyped
     # @rbs @roots: Hash[Array[String], Array[untyped]]
     # @rbs @nodes: Hash[String, Array[untyped]]
     # @rbs @children: Hash[untyped, untyped]
@@ -182,9 +182,7 @@ module PaperTrailDiff
 
     #: (untyped, untyped) -> untyped
     def child_rows(model, reflection)
-      loader = ActivityChildCandidateLoader.new(
-        model, node_ids(model), reflection, @range
-      )
+      loader = ActivityChildCandidateLoader.new(model, node_ids(model), reflection, @start_at)
       [loader.historical_rows.group_by { |row| row.first.to_s },
        loader.current_pairs.group_by { |row| row.first.to_s }
              .transform_values { |rows| rows.map(&:last) }]
@@ -204,7 +202,7 @@ module PaperTrailDiff
 
     #: (untyped, untyped) -> untyped
     def target_candidates(model, reflection)
-      loader = ActivityTargetCandidateLoader.new(model, node_ids(model), reflection, @range)
+      loader = ActivityTargetCandidateLoader.new(model, node_ids(model), reflection, @start_at)
       [loader.historical_rows.group_by { |row| row.owner_id.to_s },
        loader.current_rows.group_by { |row| row.owner_id.to_s }]
     end

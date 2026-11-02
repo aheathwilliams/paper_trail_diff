@@ -365,8 +365,7 @@ RSpec.describe PaperTrailDiff::ActivityTimelineBuilder do
     it 'reads the same activity from a snapshotter that rebuilds every state' do
       article, comment, from, to = edited_history
       comment.update!(body: 'live')
-      plain = FullSnapshotter.new(adapter.method(:snapshot_at))
-      calls = collector_calls
+      plain = FullSnapshotter.new(adapter.method(:snapshot_at), provider)
 
       expected = [builder(article, from: from, to: to).build,
                   builder(article, from: from, to: article, live: article).build]
@@ -379,7 +378,6 @@ RSpec.describe PaperTrailDiff::ActivityTimelineBuilder do
         end
       }
       expect(found.map(&strip)).to eq(expected.map(&strip))
-      expect(calls.last(2).map { |call| call[:prepared] }).to eq([nil, nil])
     end
 
     it 'returns nothing for a record with no versions' do

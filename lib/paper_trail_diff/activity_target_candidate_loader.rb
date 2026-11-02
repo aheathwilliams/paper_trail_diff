@@ -2,14 +2,13 @@
 # rbs_inline: enabled
 
 module PaperTrailDiff
-  # Loads the `belongs_to` targets owners pointed at during one activity range:
-  # at its start and after each change inside it.
+  # Loads the `belongs_to` targets owners pointed at from a start onward: at
+  # the start, after each change since, and in the live row.
   #
   # PT-AT records a version's foreign keys as they stood after its change, so
-  # the target at the start comes from the latest version before it, and the
-  # version a range ends at names a target only after the range. Reading only
-  # the owners' versions inside the range misses a target whose owner did not
-  # change there -- an author renamed under an article nobody edited.
+  # the target at the start comes from the latest version before it. Reading
+  # only the owners' versions after the start misses a target whose owner did
+  # not change there -- an author renamed under an article nobody edited.
   class ActivityTargetCandidateLoader
     # A plain class rather than Data.define, which arrived in Ruby 3.2 while this
     # gem supports 3.1.
@@ -19,35 +18,24 @@ module PaperTrailDiff
       attr_reader :foreign_type #: String?
       attr_reader :created_at #: untyped
       attr_reader :event #: String?
-      attr_reader :version_id #: untyped
 
-      #: (untyped, untyped, String?, ?untyped, ?String?, ?untyped) -> void
-      def initialize(owner_id, foreign_key_id, foreign_type, created_at = nil, event = nil, # rubocop:disable Metrics/ParameterLists
-                     version_id = nil)
+      #: (untyped, untyped, String?, ?untyped, ?String?) -> void
+      def initialize(owner_id, foreign_key_id, foreign_type, created_at = nil, event = nil)
         @owner_id = owner_id
         @foreign_key_id = foreign_key_id
         @foreign_type = foreign_type
         @created_at = created_at
         @event = event
-        @version_id = version_id
         freeze
       end
     end
 
-    #: (untyped, Array[untyped], untyped, ActivityRange) -> void
-    def initialize(owner_class, owner_ids, reflection, range)
+    #: (untyped, Array[untyped], untyped, untyped) -> void
+    def initialize(owner_class, owner_ids, reflection, start_at)
       @owner_class = owner_class
       @owner_ids = owner_ids
       @reflection = reflection
-      @range = range
-    end
-
-    #: () -> Array[Row]
-    def call
-      rows = historical_rows.select do |row|
-        @range.recorded_before_end?(row.created_at, row.version_id)
-      end
-      @range.current_end? ? rows + current_rows : rows
+      @start_at = start_at
     end
 
     # One shared query keeps the owner and timestamp needed to partition a
@@ -57,10 +45,11 @@ module PaperTrailDiff
       return [] if composite_foreign_key?
 
       version_class = @owner_class.paper_trail.version_class
-      relation = candidate_scope(version_class).call(historical_relation(version_class))
+      relation = VersionAssociationCandidateScope.new(version_class, @start_at)
+                                                 .call(historical_relation(version_class))
       historical_columns(relation, version_class).map do |row|
-        owner_id, id, type, created_at, event, version_id = row
-        Row.new(Support.record_id(@owner_class, owner_id), id, type, created_at, event, version_id)
+        owner_id, id, type, created_at, event = row
+        Row.new(Support.record_id(@owner_class, owner_id), id, type, created_at, event)
       end
     end
 
@@ -79,7 +68,7 @@ module PaperTrailDiff
     # @rbs @owner_class: untyped
     # @rbs @owner_ids: Array[untyped]
     # @rbs @reflection: untyped
-    # @rbs @range: ActivityRange
+    # @rbs @start_at: untyped
 
     #: (untyped) -> untyped
     def historical_relation(version_class)
@@ -95,8 +84,7 @@ module PaperTrailDiff
       versions = version_class.arel_table
       associations = association_class.arel_table
       relation.pluck(versions[:item_id], associations[:foreign_key_id],
-                     associations[:foreign_type], versions[:created_at], versions[:event],
-                     versions[:id])
+                     associations[:foreign_type], versions[:created_at], versions[:event])
     end
 
     # A polymorphic key names its target in a type column; any other names it
@@ -110,12 +98,6 @@ module PaperTrailDiff
       return relation.pluck(@owner_class.primary_key, key) unless @reflection.polymorphic?
 
       relation.pluck(@owner_class.primary_key, key, @reflection.foreign_type)
-    end
-
-    #: (untyped) -> VersionAssociationCandidateScope
-    def candidate_scope(version_class)
-      VersionAssociationCandidateScope.new(version_class, @range.start_time,
-                                           end_at: @range.end_time)
     end
 
     #: () -> untyped

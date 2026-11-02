@@ -3,11 +3,8 @@
 module PaperTrailDiff
   # Loads direct-child identities active at or after one activity boundary.
   class ActivityChildCandidateLoader
-    # : (untyped, Array[untyped], untyped, ActivityRange) -> void
-    def initialize: (untyped, Array[untyped], untyped, ActivityRange) -> void
-
-    # : () -> Array[untyped]
-    def call: () -> Array[untyped]
+    # : (untyped, Array[untyped], untyped, untyped) -> void
+    def initialize: (untyped, Array[untyped], untyped, untyped) -> void
 
     # One shared query retains the owner and timestamp needed to partition a
     # batch's candidates back into each root's exact activity range.
@@ -23,24 +20,15 @@ module PaperTrailDiff
 
     @parent_ids: Array[untyped]
 
-    @range: ActivityRange
-
     @reflection: untyped
+
+    @start_at: untyped
 
     # : (Array[Array[untyped]]) -> Array[Array[untyped]]
     def typed_rows: (Array[Array[untyped]]) -> Array[Array[untyped]]
 
-    # : () -> Array[untyped]
-    def historical_ids: () -> Array[untyped]
-
     # : (untyped) -> untyped
     def historical_relation: (untyped) -> untyped
-
-    # : (untyped) -> VersionAssociationCandidateScope
-    def candidate_scope: (untyped) -> VersionAssociationCandidateScope
-
-    # : () -> Array[untyped]
-    def current_ids: () -> Array[untyped]
 
     # : () -> String
     def child_item_type: () -> String
