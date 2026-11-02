@@ -178,6 +178,7 @@ RSpec.describe PaperTrailDiff::BatchedRootVersions do
 
       expect(plans.fetch(key(article)).mutations).to eq([reviewed])
       expect(plans.fetch(key(article)).context_version).to eq(published)
+      expect(plans.fetch(key(article)).reconstruction_versions).to eq([reviewed, published])
       expect(plans.fetch(key(other))).to be_empty
     end
 

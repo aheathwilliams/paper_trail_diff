@@ -119,20 +119,23 @@ module PaperTrailDiff
       terminal_destroy? ? [@selected.last] : []
     end
 
-    # Everything the span passes through, filtered out or not. A replay that
-    # skipped the excluded versions would carry a stale state into the next
-    # reported step, so the two selected mutations either side of a gap would
-    # disagree about what the record looked like between them.
+    # Everything the span passes through, filtered out or not, through the
+    # version that reveals the last selected mutation, which can lie after the
+    # range. A replay that skipped the excluded versions would carry a stale
+    # state into the next reported step, so the two selected mutations either
+    # side of a gap would disagree about what the record looked like between
+    # them. One that stopped before the revealing version would read what the
+    # last one produced from history that ends before it.
     #: (Array[untyped]) -> Array[untyped]
     def spanned(versions)
       first = versions.first
       last = versions.last
       return versions unless first && last
 
-      @in_range.select do |candidate|
+      chronological(@in_range.select do |candidate|
         !Support.compare_versions(first, candidate).positive? &&
           !Support.compare_versions(candidate, last).positive?
-      end
+      end + versions)
     end
 
     #: (Array[untyped]) -> Array[untyped]

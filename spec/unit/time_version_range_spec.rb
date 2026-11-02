@@ -79,6 +79,7 @@ RSpec.describe PaperTrailDiff::TimeVersionRange do
 
     expect(selected.mutations).to eq([created, edited])
     expect(selected.steps).to eq([[created, reviewed], [edited, published]])
+    expect(selected.reconstruction_versions).to eq([created, reviewed, edited, published])
   end
 
   it 'closes an empty window after the last version on the live record when context is required' do

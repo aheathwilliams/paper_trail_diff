@@ -84,6 +84,13 @@ project follows [Semantic Versioning](https://semver.org/).
   history reads; when it finds one, the window's history is read again from
   where that transaction began.
 
+- A window whose last change a `version_scope:` keeps is followed by the
+  version that shows what that change did, and that version now comes after
+  the window as well. Activity reported no step for the change, and
+  `analyze_many` with associations read the associations' state at that
+  version from history that ended with the window: a comment edited again
+  after it showed its latest body instead of the one it had then.
+
 - Activity reports a change to a `belongs_to` target that the root took
   without a version, such as an author set while `has_paper_trail only:`
   left `author_id` out, when the root's next version moved to another target.

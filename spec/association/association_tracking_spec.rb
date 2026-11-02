@@ -2403,6 +2403,29 @@ RSpec.describe 'PaperTrailDiff association tracking' do
       end
     end
 
+    # The comment changes again after the version that reveals the last kept
+    # change, so a batch reading history that ends with the window takes its
+    # live state for the state at that version.
+    it 'reads the change a batch keeps last through the version after the window' do
+      article = TrackedArticle.create!(title: 'Draft')
+      comment = article.comments.create!(body: 'one')
+      start = Time.now.utc
+      PaperTrail.request(whodunnit: 'alice') { article.update!(title: 'Titled') }
+      finish = Time.now.utc
+      comment.update!(body: 'two')
+      article.update!(title: 'Retitled')
+      comment.update!(body: 'three')
+      options = { within: start..finish, associations: ['comments'],
+                  version_scope: ->(scope) { scope.where(whodunnit: 'alice') } }
+
+      single = PaperTrailDiff.analyze(article, **options).timeline
+      batch = PaperTrailDiff.analyze_many([article], **options).values.sole.timeline
+
+      expect(batch.map { |step| step.diff.to_h }).to eq(single.map { |step| step.diff.to_h })
+      expect(batch.sole.diff.associations.fetch('comments').changed.sole.attributes
+                  .fetch('body').to_h).to eq(from: 'one', to: 'two')
+    end
+
     it 'reads the state each selected mutation started from, not the one before the run' do
       article, users = filtered_gap_history
 

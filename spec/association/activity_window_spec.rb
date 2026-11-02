@@ -217,6 +217,27 @@ RSpec.describe 'Activity over a window',
     expect(steps.last.to_boundary.kind).to eq(:current)
   end
 
+  # The version that reveals what the last kept change did follows the
+  # window, so a replay of the window's versions alone has no boundary after it.
+  it 'reports the last change its filter keeps when the version revealing it follows the window' do
+    article = TrackedArticle.create!(title: 'one')
+    start = now
+    PaperTrail.request(whodunnit: 'editor') { article.update!(title: 'kept') }
+    finish = now
+    article.update!(title: 'after the window')
+    editors = ->(versions) { versions.where(whodunnit: 'editor') }
+    window = start..finish
+
+    readings = [
+      timeline(article, within: window, version_scope: editors),
+      PaperTrailDiff.activity_timeline(article, within: window, version_scope: editors),
+      PaperTrailDiff.analyze_many([article], within: window, activity: true,
+                                             version_scope: editors).values.sole.activity_timeline
+    ]
+
+    expect(readings.map { |steps| titles(steps) }).to all(eq([{ from: 'one', to: 'kept' }]))
+  end
+
   it 'closes on the version its filter left out after the last kept one, not the live row' do
     article = TrackedArticle.create!(title: 'one')
     start = now
