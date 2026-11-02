@@ -52,11 +52,12 @@ module PaperTrailDiff
     # : [T] (untyped) { (untyped) -> T } -> T
     def self?.with_connection: [T] (untyped) { (untyped) -> T } -> T
 
-    # One of Active Record's classes, untyped: Active Record ships no
-    # signatures. Any spelling of the constant finds the same class.
+    # A constant by its full name, such as a model's or one of Active
+    # Record's, untyped: Active Record and the models ship no signatures. Any
+    # spelling of the lookup finds the same constant.
     # mutant:disable
-    # : (Symbol) -> untyped
-    def self?.active_record: (Symbol) -> untyped
+    # : (String) -> untyped
+    def self?.constant: (String) -> untyped
 
     # : (untyped) -> Array[untyped]
     def self?.chronological_version_key: (untyped) -> Array[untyped]

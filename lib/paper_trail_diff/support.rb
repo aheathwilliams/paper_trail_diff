@@ -104,12 +104,13 @@ module PaperTrailDiff
       yield(model.connection)
     end
 
-    # One of Active Record's classes, untyped: Active Record ships no
-    # signatures. Any spelling of the constant finds the same class.
+    # A constant by its full name, such as a model's or one of Active
+    # Record's, untyped: Active Record and the models ship no signatures. Any
+    # spelling of the lookup finds the same constant.
     # mutant:disable
-    #: (Symbol) -> untyped
-    def active_record(name)
-      Object.const_get(:ActiveRecord).const_get(name)
+    #: (String) -> untyped
+    def constant(name)
+      Object.const_get(name)
     end
 
     #: (untyped) -> Array[untyped]

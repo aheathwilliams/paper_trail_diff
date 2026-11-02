@@ -15,7 +15,7 @@ module PaperTrailDiff
 
       type = stored_type(version, model).to_s
       type.empty? ? model : model.sti_class_for(type)
-    rescue Support.active_record(:SubclassNotFound)
+    rescue Support.constant('ActiveRecord::SubclassNotFound')
       raise InvalidEndpointError, "cannot resolve endpoint model: #{type}"
     end
 

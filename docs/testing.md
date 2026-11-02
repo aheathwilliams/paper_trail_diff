@@ -120,6 +120,8 @@ passes is behavior nothing checks. `mutant.yml` lists the classes it mutates:
   `CollectionIdentityIndex`, `NestedComparator`, and `CollectionTransition`;
 - which columns are compared, and how precisely times are: `SnapshotNormalizer`,
   `SnapshotPool`, and `StoredTimePrecision`;
+- which endpoints a call accepts, and which item and model each names:
+  `Endpoint` and `EndpointKind`;
 - which versions a range reads: `TimeRange`, `TimelineRange`, `VersionRange`,
   `TimeVersionRange`, `RootVersionSelection`, `RootVersionPlan`,
   `TransactionCut`, `OpeningTransactions`, `VersionBoundary`, and
