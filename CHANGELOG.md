@@ -15,6 +15,14 @@ project follows [Semantic Versioning](https://semver.org/).
   one event late, such a step also took the credit for the change made just
   before it, under its own author.
 
+- A window in which every event was of a record outside the requested
+  associations throughout, such as a comment past a scope's `limit` or one
+  its default scope leaves out, reports nothing. With nothing recorded after
+  it, such a window had a step whose `sources` held `nil` and that showed the
+  record as created. With something recorded after it, the analysis was empty
+  but still held both snapshots; both are `nil` now, as for any analysis that
+  reports nothing.
+
 ## [0.16.0] - 2026-11-01
 
 ### Changed

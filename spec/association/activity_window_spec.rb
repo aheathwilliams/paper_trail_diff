@@ -71,6 +71,26 @@ RSpec.describe 'Activity over a window',
     expect([result.from_snapshot, result.to_snapshot]).to eq([nil, nil])
   end
 
+  # A comment past the limit is never in the tree, so its version bounds
+  # nothing, and with nothing else in the window there is no step to close.
+  it 'reports and analyzes nothing when every event in it was outside the tree' do
+    article = TrackedArticle.create!(title: 'one')
+    article.comments.create!(body: 'first')
+    start = now
+    article.comments.create!(body: 'second')
+    options = { associations: [:limited_comments], within: start..now }
+
+    expect(PaperTrailDiff.activity_timeline(article, **options)).to eq([])
+    closed = PaperTrailDiff.analyze(article, activity: true, **options)
+    article.update!(title: 'two')
+    followed = PaperTrailDiff.analyze(article, activity: true, **options)
+    [closed, followed].each do |result|
+      expect([result.activity_timeline, result.from_snapshot, result.to_snapshot])
+        .to eq([[], nil, nil])
+      expect(result.diff).to be_empty
+    end
+  end
+
   it 'reports and analyzes nothing without associations when the root did not change' do
     article = TrackedArticle.create!(title: 'one')
     start = now

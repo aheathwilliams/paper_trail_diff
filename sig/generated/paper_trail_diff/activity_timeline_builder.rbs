@@ -123,11 +123,17 @@ module PaperTrailDiff
     # : (RootVersionPlan) -> [ActivityHistory, RootVersionPlan, ActivityStep?, RecordSnapshot?, untyped]
     def empty_window: (RootVersionPlan) -> [ ActivityHistory, RootVersionPlan, ActivityStep?, RecordSnapshot?, untyped ]
 
-    # A window with no selected event reports nothing. Any other has a
-    # boundary after its last one: the plan refuses a window that has no later
-    # version, ends on no destroy, and does not close on the live row.
+    # A window with no selected event reports nothing, and so does one whose
+    # replay left out every event it selected, each of a record outside the
+    # tree throughout, such as a comment created outside a scope: its
+    # analysis is empty. Any other has a boundary after its last event: the
+    # plan refuses a window that has no later version, ends on no destroy, and
+    # does not close on the live row.
     # : (RootVersionPlan, untyped) -> [ActivityHistory, RootVersionPlan, ActivityStep?, RecordSnapshot?, untyped]
     def window_replay: (RootVersionPlan, untyped) -> [ ActivityHistory, RootVersionPlan, ActivityStep?, RecordSnapshot?, untyped ]
+
+    # : (RootVersionPlan, ActivityHistory, ActivityStep?, RecordSnapshot?, untyped) -> [ActivityHistory, RootVersionPlan, ActivityStep?, RecordSnapshot?, untyped]
+    def window_result: (RootVersionPlan, ActivityHistory, ActivityStep?, RecordSnapshot?, untyped) -> [ ActivityHistory, RootVersionPlan, ActivityStep?, RecordSnapshot?, untyped ]
 
     # One live read serves both the closing activity step and the endpoint the
     # analysis reports, which would otherwise reconstruct the graph twice.
@@ -144,7 +150,7 @@ module PaperTrailDiff
 
     # A window either closes on the absence its final destruction leaves, or on
     # current state when it reaches past everything recorded. Both are boundaries
-    # no version can supply.
+    # no version can supply. One whose replay kept no event has nothing to close.
     #
     # Everything recorded means on every requested path, not only the root's
     # own versions. When an association changed after the window, its last

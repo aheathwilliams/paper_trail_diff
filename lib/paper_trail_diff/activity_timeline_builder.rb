@@ -228,21 +228,30 @@ module PaperTrailDiff
       [ActivityHistory.empty, plan, nil, nil, nil]
     end
 
-    # A window with no selected event reports nothing. Any other has a
-    # boundary after its last one: the plan refuses a window that has no later
-    # version, ends on no destroy, and does not close on the live row.
+    # A window with no selected event reports nothing, and so does one whose
+    # replay left out every event it selected, each of a record outside the
+    # tree throughout, such as a comment created outside a scope: its
+    # analysis is empty. Any other has a boundary after its last event: the
+    # plan refuses a window that has no later version, ends on no destroy, and
+    # does not close on the live row.
     #: (RootVersionPlan, untyped) -> [ActivityHistory, RootVersionPlan, ActivityStep?, RecordSnapshot?, untyped]
     def window_replay(plan, captured_at)
       versions = plan.reconstruction_versions
       snapshots = prepare_history(versions, end_at: captured_at)
       events = collect_events(versions, snapshots, range_end: captured_at || versions.last)
-      selected = selected_events(events, plan)
-      last = selected.last
+      last = selected_events(events, plan).last
       return empty_window(plan) unless last
 
       snapshot = window_live_snapshot(plan)
       history = replay(versions, events, snapshots, current: plan.closing_record, closing: snapshot)
       closing = window_closing(history, last, plan, captured_at, snapshot, events)
+      window_result(plan, history, closing, snapshot, captured_at)
+    end
+
+    #: (RootVersionPlan, ActivityHistory, ActivityStep?, RecordSnapshot?, untyped) -> [ActivityHistory, RootVersionPlan, ActivityStep?, RecordSnapshot?, untyped]
+    def window_result(plan, history, closing, snapshot, captured_at)
+      return empty_window(plan) if history.steps.empty? && !closing
+
       [history, plan, closing, snapshot, captured_at]
     end
 
@@ -270,7 +279,7 @@ module PaperTrailDiff
 
     # A window either closes on the absence its final destruction leaves, or on
     # current state when it reaches past everything recorded. Both are boundaries
-    # no version can supply.
+    # no version can supply. One whose replay kept no event has nothing to close.
     #
     # Everything recorded means on every requested path, not only the root's
     # own versions. When an association changed after the window, its last
@@ -279,7 +288,7 @@ module PaperTrailDiff
     #: (ActivityHistory, ActivityEvent, RootVersionPlan, untyped, RecordSnapshot?, Array[ActivityEvent]) -> ActivityStep?
     def window_closing(history, event, plan, captured_at, snapshot, events) # rubocop:disable Metrics/ParameterLists
       return window_destroyed_step(history, event) if terminal_destroy?(event)
-      return unless plan.closing_record
+      return unless plan.closing_record && history.last_boundary
       return if events.any? { |later| !@range.include?(later.version) }
 
       window_current_step(history, plan.closing_record, captured_at, snapshot)
