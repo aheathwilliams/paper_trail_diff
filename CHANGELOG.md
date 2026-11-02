@@ -78,6 +78,12 @@ project follows [Semantic Versioning](https://semver.org/).
   comments, read its own history, at about nine statements each. A batch of
   20 such articles took 188 statements and now takes 14, as many as one.
 
+- `analyze` and `activity_timeline` with activity on associations read the
+  current record's row once for the snapshots that start from it, as
+  `analyze_many` already did. Each such snapshot read the row again: after
+  four transactions that changed two comments each, an article's activity
+  read its row ten times rather than four.
+
 ### Fixed
 
 - Activity on a `has_many :through` leaves out the versions a join record

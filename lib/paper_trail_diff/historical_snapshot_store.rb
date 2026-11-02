@@ -181,13 +181,12 @@ module PaperTrailDiff
     end
 
     # Rebuilding a version's associations writes them onto the record, so each
-    # snapshot gets its own copy of a batch's loaded row, built from the row's
-    # stored values without a query.
+    # snapshot gets its own copy of the root's row, built from the row's stored
+    # values without a query. A batch loaded the row already; otherwise it is
+    # read once, so every snapshot of the call starts from the same row.
     #: (untyped) -> untyped
     def live_root(root_record)
-      loaded = @live_roots[Endpoint.identity(root_record)]
-      return Endpoint.reload_record(root_record) unless loaded
-
+      loaded = @live_roots[Endpoint.identity(root_record)] ||= Endpoint.reload_record(root_record)
       loaded.class.instantiate(loaded.attributes_before_type_cast)
     end
 

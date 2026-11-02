@@ -156,4 +156,32 @@ RSpec.describe 'bounded event reconstruction' do
                                                    limit: 10, associations: [:author])
     expect(result.analyses.length).to eq(3)
   end
+
+  # A root whose window holds `count` transactions, each changing two comments.
+  def grouped_history(count)
+    article = TrackedArticle.create!(title: 'Root')
+    comments = Array.new(2) { |index| article.comments.create!(body: "comment #{index}") }
+    start = Time.now.utc
+    count.times do |index|
+      TrackedArticle.transaction { comments.each { |comment| comment.update!(body: index.to_s) } }
+    end
+    [TrackedArticle.find(article.id), start..Time.now.utc]
+  end
+
+  # Statements that read the root's table while that root's activity is read.
+  def root_reads(count)
+    root, window = grouped_history(count)
+    reads = 0
+    callback = ->(*args) { reads += 1 if args.last[:sql].include?('tracked_articles') }
+    ActiveSupport::Notifications.subscribed(callback, 'sql.active_record') do
+      PaperTrailDiff.analyze(root, within: window, associations: [:comments], activity: true)
+    end
+    reads
+  end
+
+  # A transaction's changes are read again as a branch of the snapshot that
+  # starts from the current record; each such snapshot copies one read of it.
+  it 'reads the current root once however many snapshots start from it' do
+    expect(root_reads(4)).to eq(root_reads(1))
+  end
 end
