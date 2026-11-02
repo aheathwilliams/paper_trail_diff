@@ -68,6 +68,7 @@ module PaperTrailDiff
     # : (untyped) -> RootVersionPlan
     def filtered_plan: (untyped) -> RootVersionPlan
 
+    # The steps run in order, and so do the versions they pass.
     # : (Array[[untyped, untyped]], untyped) -> RootVersionPlan
     def filtered_plan_for: (Array[[ untyped, untyped ]], untyped) -> RootVersionPlan
 
@@ -84,12 +85,11 @@ module PaperTrailDiff
     # state into the next reported step, so the two selected mutations either
     # side of a gap would disagree about what the record looked like between
     # them. One that stopped before the revealing version would read what the
-    # last one produced from history that ends before it.
-    # : (Array[untyped]) -> Array[untyped]
-    def spanned: (Array[untyped]) -> Array[untyped]
-
-    # : (Array[untyped]) -> Array[untyped]
-    def chronological: (Array[untyped]) -> Array[untyped]
+    # last one produced from history that ends before it. Only the version
+    # that reveals the last can lie outside the range, and it comes after it.
+    # With no versions there is no span, and a plan replays its versions.
+    # : (Array[untyped]) -> Array[untyped]?
+    def spanned: (Array[untyped]) -> Array[untyped]?
 
     # : (untyped) -> untyped
     def immediate_successor: (untyped) -> untyped

@@ -42,6 +42,7 @@ matcher:
     - PaperTrailDiff::StoredTimePrecision*
     - PaperTrailDiff::TimelineRange*
     - PaperTrailDiff::RootVersionPlan*
+    - PaperTrailDiff::RootVersionSelection*
     - PaperTrailDiff::HistoricalFilter*
     - PaperTrailDiff::VersionScopeFilter*
     - PaperTrailDiff::TimeRange*
