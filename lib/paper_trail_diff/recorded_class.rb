@@ -23,6 +23,12 @@ module PaperTrailDiff
       raise InvalidEndpointError, "cannot resolve endpoint model: #{type}", cause: e
     end
 
+    # The class a version recorded, or a live record's own class.
+    #: (untyped) -> untyped
+    def of_endpoint(endpoint)
+      Endpoint.version?(endpoint) ? RecordedClass.for(endpoint) : endpoint.class
+    end
+
     #: (untyped) -> bool
     def sti_base?(model)
       model.base_class == model && model.columns_hash.key?(model.inheritance_column.to_s)

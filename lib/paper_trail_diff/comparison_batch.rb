@@ -193,9 +193,8 @@ module PaperTrailDiff
     def endpoint_requirements(pairs)
       requirements = {} #: Hash[untyped, bool]
       pairs.flatten.each_with_object(requirements) do |endpoint, collected|
-        historical = Endpoint.version?(endpoint)
-        model_class = historical ? RecordedClass.for(endpoint) : endpoint.class
-        collected[model_class] = collected.fetch(model_class, false) || historical
+        model_class = RecordedClass.of_endpoint(endpoint)
+        collected[model_class] = collected.fetch(model_class, false) || Endpoint.version?(endpoint)
       end
     end
   end

@@ -46,8 +46,5 @@ module PaperTrailDiff
 
     # : (untyped, untyped) -> untyped
     def deserialized_changeset: (untyped, untyped) -> untyped
-
-    # : (untyped) -> untyped
-    def endpoint_model_class: (untyped) -> untyped
   end
 end
