@@ -78,11 +78,11 @@ project follows [Semantic Versioning](https://semver.org/).
   destroyed before the edge. The later window now starts from the state
   before the transaction, so all of its changes are reported there, once,
   unless none of the versions it saved after the edge is on a requested path
-  (see the reference's limitations). A
-  transaction group in that window lists in `sources` only the versions
-  inside it. Finding such transactions takes one statement per 500 of the
-  transactions a window's history reads; when it finds one, the window's
-  history is read again from where that transaction began.
+  (see the reference's limitations). A transaction group in that window lists
+  in `sources` only the versions inside it. Finding such transactions takes
+  one statement per 500 of the transactions a window's history reads; when it
+  finds one, the window's history is read again from where that transaction
+  began.
 
 - Activity reports a change to a `belongs_to` target that the root took
   without a version, such as an author set while `has_paper_trail only:`
@@ -101,8 +101,12 @@ project follows [Semantic Versioning](https://semver.org/).
   a child's own `belongs_to`, scoped and ranked `has_many` and `has_one`, and
   a default scope. It checks every endpoint, timeline step, activity step,
   window and window split, through `spec/support/graph_oracle.rb`, which
-  reads the expected states for any model. It found the three bugs above.
+  reads the expected states for any model. It found the first three bugs
+  above; a longer run of the replay differential found the fourth.
   `ORACLE_SHOW` prints more than the first five mismatches.
+
+- The SQL Server 2022 CI job's database allows snapshot isolation and the
+  2019 job's does not, so both ways of reading a call run on CI.
 
 ## [0.16.0] - 2026-11-01
 
