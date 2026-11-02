@@ -285,7 +285,7 @@ RSpec.describe PaperTrailDiff::ActivityTreeFilter do
       record('TrackedArticle', 1, comments: collection(*comments))
     end
 
-    def decisions(pairs, reported: nil, closing: nil)
+    def decisions(pairs, reported: ->(_event) { true }, closing: nil)
       filter = described_class.new(pairs.map(&:first), reported: reported, closing: closing)
       kept = []
       filter.call(pairs) { |event, snapshot, keep| kept << [event.version.id, snapshot, keep] }

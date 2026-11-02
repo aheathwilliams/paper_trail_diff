@@ -30,8 +30,9 @@ module PaperTrailDiff
     # `closing` is the snapshot after the last event when the range closes on
     # the current record. Any other range ends at a root event, or at events
     # after a window whose steps are not reported, so nothing reads it.
-    # : (Array[untyped], Array[ActivityEvent], untyped, view: ActivityView, ?current: untyped, ?include_step: untyped, ?closing: RecordSnapshot?) -> void
-    def initialize: (Array[untyped], Array[ActivityEvent], untyped, view: ActivityView, ?current: untyped, ?include_step: untyped, ?closing: RecordSnapshot?) -> void
+    # `include_step` says whether an event's step is reported.
+    # : (Array[untyped], Array[ActivityEvent], untyped, view: ActivityView, include_step: untyped, ?current: untyped, ?closing: RecordSnapshot?) -> void
+    def initialize: (Array[untyped], Array[ActivityEvent], untyped, view: ActivityView, include_step: untyped, ?current: untyped, ?closing: RecordSnapshot?) -> void
 
     # : () -> ActivityHistory
     def call: () -> ActivityHistory
@@ -100,14 +101,9 @@ module PaperTrailDiff
     # : (ActivityEvent) -> bool
     def reported?: (ActivityEvent) -> bool
 
+    # The step from the previous boundary, which `consume` has, to this one.
     # : (ActivityBoundary, RecordSnapshot?) -> void
     def append_step: (ActivityBoundary, RecordSnapshot?) -> void
-
-    # : () -> bool
-    def include_previous_step?: () -> bool
-
-    # : () -> RecordSnapshot?
-    def final_snapshot: () -> RecordSnapshot?
 
     # : (untyped) -> Array[untyped]
     def version_key: (untyped) -> Array[untyped]

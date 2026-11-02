@@ -34,8 +34,9 @@ module PaperTrailDiff
   # rows, so their versions are judged when they are collected, by the row's
   # own state (PreparedActivityIndex#join_versions), and kept here.
   class ActivityTreeFilter
-    # `closing` is the snapshot after the last event: the current record's,
-    # or nil when nothing follows, as after the root's destruction.
+    # `reported` says whether an event's step is reported. `closing` is the
+    # snapshot after the last event: the current record's, or nil when
+    # nothing follows, as after the root's destruction.
     #: (Array[ActivityEvent], reported: untyped, closing: RecordSnapshot?) -> void
     def initialize(events, reported:, closing:)
       @reported = reported
@@ -87,7 +88,7 @@ module PaperTrailDiff
 
     #: (ActivityEvent) -> bool
     def reported?(event)
-      !@reported || @reported.call(event)
+      @reported.call(event)
     end
 
     # Where each event's transaction starts, and the position just past its
