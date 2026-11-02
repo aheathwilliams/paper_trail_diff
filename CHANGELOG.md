@@ -76,7 +76,9 @@ project follows [Semantic Versioning](https://semver.org/).
   before the transaction, as any window ending inside one does, and the later
   one started after them, and did not know a record the transaction
   destroyed before the edge. The later window now starts from the state
-  before the transaction, so all of its changes are reported there, once. A
+  before the transaction, so all of its changes are reported there, once,
+  unless none of the versions it saved after the edge is on a requested path
+  (see the reference's limitations). A
   transaction group in that window lists in `sources` only the versions
   inside it. Finding such transactions takes one statement per 500 of the
   transactions a window's history reads; when it finds one, the window's
