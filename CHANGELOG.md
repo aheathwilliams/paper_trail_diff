@@ -46,12 +46,14 @@ project follows [Semantic Versioning](https://semver.org/).
 ### Fixed
 
 - Activity on a `has_many :through` leaves out the versions a join record
-  saved while it joined another record. A card created on one board and moved
-  to another later brought every version it saved on the first board into the
-  second board's activity: each was a step of its own, and a transaction
-  group listed it in `sources`. Inside a transaction, where a change surfaces
-  one event late, such a step also took the credit for the change made just
-  before it, under its own author.
+  saved while it joined another record, judged by transaction as any record
+  is: by whether it joined the owner before the transaction or after it. A
+  card created on one board and moved to another later brought every version
+  it saved on the first board into the second board's activity, and so did a
+  card created and destroyed inside one transaction: each was a step of its
+  own, and a transaction group listed it in `sources`. Inside a transaction,
+  where a change surfaces one event late, such a step also took the credit
+  for the change made just before it, under its own author.
 
 - A window in which every event was of a record outside the requested
   associations throughout, such as a comment past a scope's `limit` or one
@@ -66,11 +68,13 @@ project follows [Semantic Versioning](https://semver.org/).
   of the edge, and no version of the root, report the changes it saved before
   the edge. Neither window reported them: the earlier one ends at the state
   before the transaction, as any window ending inside one does, and the later
-  one started after them. The later window now starts from the state before
-  the transaction, so all of its changes are reported there, once. A
+  one started after them, and did not know a record the transaction
+  destroyed before the edge. The later window now starts from the state
+  before the transaction, so all of its changes are reported there, once. A
   transaction group in that window lists in `sources` only the versions
   inside it. Finding such transactions takes one statement per 500 of the
-  transactions a window's history reads.
+  transactions a window's history reads; when it finds one, the window's
+  history is read again from where that transaction began.
 
 ### Development
 

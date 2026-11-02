@@ -58,23 +58,24 @@ module PaperTrailDiff
       end
     end
 
-    # The versions of a through's join rows that are on its path: those a row
-    # saved while it was on the path before or after the version (see
-    # ThroughPath). A row created under another owner and moved here later,
-    # or one that left, saved versions there that change nothing these
-    # `owners` show. As events they would open steps of their own, and inside
-    # a transaction, where a change surfaces one event late, take the credit
-    # for another record's change.
+    # The versions of a through's join rows that are on its path (see
+    # ThroughPath). A row's versions in one transaction are judged together, by
+    # its states before the transaction and after it, as ActivityTreeFilter
+    # judges a record; a version saved outside a transaction is judged alone.
+    # A row created under another owner and moved here later, one that left,
+    # or one created and destroyed inside one transaction, saved versions that
+    # change nothing these `owners` show. As events they would open steps of
+    # their own, and inside a transaction, where a change surfaces one event
+    # late, take the credit for another record's change.
     #: (Hash[Symbol, untyped], Hash[Symbol, untyped], untyped) -> Array[untyped]
     def join_versions(owners, group, reflection)
       path = ThroughPath.new(owners, reflection, @conditions)
       versions = group.fetch(:versions)
       return versions if path.open?
 
-      versions.select do |version|
-        @records.typed_states_around(group.fetch(:model), version.item_id, version)
-                .any? { |attributes| path.include?(attributes) }
-      end
+      runs = versions.group_by { |version| join_run(version) }.values
+      off_path = [] #: Array[untyped]
+      runs.flat_map { |run| on_path?(group.fetch(:model), run, path) ? run : off_path }
     end
 
     #: (untyped, Array[untyped], untyped, ActivityRange) -> Array[untyped]
@@ -116,6 +117,21 @@ module PaperTrailDiff
     # @rbs @targets: Hash[untyped, untyped]
     # @rbs @rows: Hash[untyped, Hash[String, Array[untyped]]]
     # @rbs @conditions: ScopeCondition::Cache
+
+    # The versions one row saved in one transaction, or alone.
+    #: (untyped) -> Array[untyped]
+    def join_run(version)
+      [version.item_id, ActivityTransactionGroups.transaction_key(version) || version]
+    end
+
+    # A run's versions are in the order they were saved, as the row's series
+    # holds them.
+    #: (untyped, Array[untyped], ThroughPath) -> bool
+    def on_path?(model, run, path)
+      first = run.fetch(0)
+      @records.typed_states_across(model, first.item_id, first, run.fetch(-1))
+              .any? { |attributes| path.include?(attributes) }
+    end
 
     #: (untyped, Array[untyped]) -> bool
     def member_class?(model, classes)

@@ -11,7 +11,7 @@ module PaperTrailDiff
     def initialize: (PreparedRecordIndex, ?activity_index: PreparedActivityIndex?) -> void
 
     # The transactions that crossed the history's start; see
-    # PreparedRecordIndex#load_opening_transactions.
+    # PreparedHistoryLoader#reload.
     # : () -> Array[Array[untyped]]
     def opening_transactions: () -> Array[Array[untyped]]
 

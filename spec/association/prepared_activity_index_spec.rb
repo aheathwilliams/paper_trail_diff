@@ -415,6 +415,37 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
       expect(kept).to eq(versions.values_at(0, 1, 3, 4))
     end
 
+    # By its states before and after the transaction, as a record in the
+    # tree is judged: one that existed only inside it joined nobody.
+    it 'judges the versions a row saved in one transaction together' do
+      other = IndexSpecBoard.create!
+      fleeting, returning = IndexSpecLink.transaction do
+        [IndexSpecLink.create!(board_id: board.id).tap(&:destroy!),
+         IndexSpecLink.create!(board_id: board.id)]
+      end
+      IndexSpecLink.transaction do
+        returning.update!(board_id: other.id)
+        returning.update!(board_id: board.id)
+      end
+
+      kept, versions = join_versions(owners, [fleeting, returning], through(:targets))
+
+      expect(versions.length).to eq(5)
+      expect(kept).to match_array(versions.last(3))
+    end
+
+    # PaperTrail leaves the transaction blank outside one.
+    it 'judges each version saved outside a transaction alone' do
+      link = IndexSpecLink.create!(board_id: board.id)
+      other = IndexSpecBoard.create!
+      [{ board_id: other.id }, { active: false }].each { |change| link.update!(change) }
+      link.versions.update_all(transaction_id: nil)
+
+      kept, versions = join_versions(owners, link, through(:targets))
+
+      expect(kept).to eq(versions.first(2))
+    end
+
     it "reads an `as:` join row's type for each name an owner's rows may hold" do
       squad = IndexSpecSquadBoard.create!
       links = %w[IndexSpecSquadBoard IndexSpecBoard IndexSpecTeamBoard IndexSpecPage].map do |type|

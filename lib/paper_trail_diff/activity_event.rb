@@ -100,7 +100,7 @@ module PaperTrailDiff
 
     # An `opening` transaction began before the history's start, so its
     # versions there are not events, yet the state after it has their changes
-    # (see PreparedRecordIndex#load_opening_transactions). The snapshot after
+    # (see PreparedHistoryLoader#reload). The snapshot after
     # it is read whole rather than refreshed from its events alone.
     #: (Array[ActivityEvent], ?opening: Array[Array[untyped]]) -> void
     def initialize(events, opening: [])

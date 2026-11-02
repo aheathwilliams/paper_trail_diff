@@ -135,6 +135,32 @@ RSpec.describe 'Windows that meet inside a transaction',
           expect(left.flatten).not_to include(before_edge.transaction_id)
         end
 
+        # The comment it destroyed before the edge has no live row and no
+        # version after the edge, so only history read from where the
+        # transaction began holds it.
+        it 'reports a record such a transaction destroyed before the edge in the later window' do
+          article, comment = article_with_comment
+          added = WindowArticle.transaction do
+            comment.destroy!
+            article.comments.create!(body: 'new')
+          end
+          article.update!(title: 'Second')
+          whole = window(article)
+          edge = added.versions.first.created_at
+          bodies = lambda do |within|
+            timeline(article, within, method, group).reject(&:empty?).map do |step|
+              comments = step.diff.associations['comments']
+              comments && [comments.added, comments.removed].map do |records|
+                records.map { |record| record.attributes.fetch('body') }
+              end
+            end
+          end
+
+          expect(bodies.call(whole.begin...edge) + bodies.call(edge..whole.end))
+            .to eq(bodies.call(whole))
+          expect(bodies.call(edge..whole.end).first).to eq([['new'], ['before']])
+        end
+
         it 'does so when the root saved first' do
           article, root, child = article_then_comment
           whole = window(article)

@@ -126,17 +126,6 @@ module PaperTrailDiff
       @live = live
       @state_loader = state_loader
       @states = {} #: Hash[untyped, PreparedRecordState?]
-      @opening = {} #: Hash[untyped, untyped]
-    end
-
-    # Versions the record saved before the history's start in transactions
-    # that saved more from the start onward. The series does not hold them,
-    # but the state before such a transaction lies in its first one here.
-    #: (Array[untyped]) -> void
-    def add_opening(versions)
-      Support.chronological_sort(versions).each do |version|
-        @opening[VersionBoundary.transaction_id(version)] ||= version
-      end
     end
 
     #: (untyped) -> untyped
@@ -161,9 +150,6 @@ module PaperTrailDiff
 
     #: (untyped) -> PreparedRecordState?
     def state_before(boundary)
-      opening = @opening[VersionBoundary.transaction_id(boundary)]
-      return state_for(opening) if opening
-
       index = boundary_index(boundary)
       return state_for(versions.fetch(index)) if index
 
@@ -204,8 +190,13 @@ module PaperTrailDiff
     # destroy none after.
     #: (untyped) -> Array[PreparedRecordState]
     def states_around(version)
-      index = @version_positions.fetch(version.id.to_s)
-      [state_for(version), state_after(index)].compact
+      states_across(version, version)
+    end
+
+    # The states before `first` and after `last`, where they exist.
+    #: (untyped, untyped) -> Array[PreparedRecordState]
+    def states_across(first, last)
+      [state_for(first), state_after(@version_positions.fetch(last.id.to_s))].compact
     end
 
     #: (untyped) -> [PreparedRecordState, PreparedRecordState]?
@@ -225,7 +216,6 @@ module PaperTrailDiff
     # @rbs @live: PreparedRecordState?
     # @rbs @state_loader: PreparedVersionStateLoader
     # @rbs @states: Hash[untyped, PreparedRecordState?]
-    # @rbs @opening: Hash[untyped, untyped]
     # @rbs @version_positions: Hash[String, Integer]
     # @rbs @transaction_positions: Hash[untyped, Integer]
 
@@ -295,13 +285,13 @@ module PaperTrailDiff
 
   # Request-scoped scalar history loaded once per model identity.
   class PreparedRecordIndex
-    # The transactions load_opening_transactions found crossing the start, keyed
-    # as ActivityTransactionGroups keys a version's.
+    # The transactions that crossed a window's start, keyed as
+    # ActivityTransactionGroups keys a version's; see PreparedHistoryLoader.
     attr_reader :opening_transactions #: Array[Array[untyped]]
 
-    #: (untyped, ?end_at: untyped, ?live_records: Array[untyped]) -> void
-    def initialize(start_at, end_at: nil, live_records: [])
-      @opening_transactions = []
+    #: (untyped, ?end_at: untyped, ?live_records: Array[untyped], ?opening_transactions: Array[Array[untyped]]) -> void
+    def initialize(start_at, end_at: nil, live_records: [], opening_transactions: [])
+      @opening_transactions = opening_transactions
       @start_time = boundary_time(start_at)
       @end_time = boundary_time(end_at)
       @seeded_live_records = live_records.to_h do |record|
@@ -332,12 +322,13 @@ module PaperTrailDiff
       ids.each { |id| add_series(model_class, id, grouped, live) }
     end
 
-    # A window's history starts at the window, which can fall inside a
-    # transaction; see PreparedOpeningLoader.
-    #: () -> void
-    def load_opening_transactions
+    # The transactions the versions held from the start onward belong to that
+    # began before it, and where the earliest of them began; see
+    # PreparedHistoryLoader. Nothing when none did.
+    #: () -> [Array[Array[untyped]], untyped]?
+    def opening
       start = @start_time
-      @opening_transactions = PreparedOpeningLoader.new(@series, start).call if start
+      start && OpeningTransactions.new(@series, start).call
     end
 
     #: (untyped, untyped, untyped) -> untyped
@@ -415,11 +406,12 @@ module PaperTrailDiff
       @series.fetch(identity(model_class, id)).states_around(version)
     end
 
-    # The attributes either side of one version, typed as a reified record's
-    # are.
-    #: (untyped, untyped, untyped) -> Array[Hash[untyped, untyped]]
-    def typed_states_around(model_class, id, version)
-      states_around(model_class, id, version).map { |state| typed_attributes(state) }
+    # The attributes before `first` and after `last`, where they exist, typed
+    # as a reified record's are.
+    #: (untyped, untyped, untyped, untyped) -> Array[Hash[untyped, untyped]]
+    def typed_states_across(model_class, id, first, last)
+      @series.fetch(identity(model_class, id)).states_across(first, last)
+             .map { |state| typed_attributes(state) }
     end
 
     #: (untyped, untyped) -> bool
@@ -525,18 +517,10 @@ module PaperTrailDiff
     end
   end
 
-  # A transaction that crosses a window's start and saved a version of the
-  # root moves the window's edge back to where it began (see TransactionCut);
-  # one that saved only associated records moves nothing. A boundary in such a
-  # transaction still reads each record as it stood before the transaction
-  # began (see PreparedRecordSeries#boundary_index), so a record that saved its
-  # part before the start needs those versions too. Without them the window
-  # would start after a change that the window before it, whose last boundary
-  # is in the same transaction, left to this one, and neither would report
-  # it. This gives each record held its versions from before the start in the
-  # transactions its index's versions from the start onward belong to, in one
-  # statement per 500 transactions.
-  class PreparedOpeningLoader
+  # Finds the transactions that crossed a history's start: those the versions
+  # held from the start onward belong to that also saved versions before it,
+  # of any record. One statement per 500 transactions.
+  class OpeningTransactions
     # Transactions per statement, as TransactionCut slices them.
     SLICE = 500
     private_constant :SLICE
@@ -547,37 +531,29 @@ module PaperTrailDiff
       @start = start
     end
 
-    # The transactions that crossed the start, keyed as ActivityTransactionGroups
-    # keys a version's.
-    #: () -> Array[Array[untyped]]
+    # Their keys, as ActivityTransactionGroups keys a version's, and when the
+    # earliest began; nil when none crossed the start.
+    #: () -> [Array[Array[untyped]], untyped]?
     def call
-      opening = [] #: Array[Array[untyped]]
-      transactions.each do |version_class, transaction_ids|
-        transaction_ids.each_slice(SLICE) do |slice|
-          earlier = version_class.arel_table[:created_at].lt(@start)
-          opening |= add(version_class.where(transaction_id: slice).where(earlier).to_a)
-        end
-      end
-      opening
+      earlier = transactions.flat_map { |version_class, ids| earlier_versions(version_class, ids) }
+      return if earlier.empty?
+
+      keys = earlier.filter_map { |version| ActivityTransactionGroups.transaction_key(version) }
+      [keys.uniq, earlier.map(&:created_at).min]
     end
 
     private
 
+    #: (untyped, Array[untyped]) -> Array[untyped]
+    def earlier_versions(version_class, transaction_ids)
+      before = version_class.arel_table[:created_at].lt(@start)
+      transaction_ids.each_slice(SLICE).flat_map do |slice|
+        version_class.where(transaction_id: slice).where(before).to_a
+      end
+    end
+
     # @rbs @series: Hash[Array[String], PreparedRecordSeries]
     # @rbs @start: untyped
-
-    # Of the versions saved before the start, those of records held.
-    #: (Array[untyped]) -> Array[Array[untyped]]
-    def add(versions)
-      versions.group_by { |version| [version.item_type.to_s, version.item_id.to_s] }
-              .flat_map do |key, held|
-                series = @series[key]
-                next [] unless series
-
-                series.add_opening(held)
-                held.filter_map { |version| ActivityTransactionGroups.transaction_key(version) }
-              end
-    end
 
     # The transactions of the versions held from the start onward, by version
     # class, since each version table numbers its own.

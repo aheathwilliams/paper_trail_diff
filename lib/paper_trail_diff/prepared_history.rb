@@ -26,7 +26,7 @@ module PaperTrailDiff
     end
 
     # The transactions that crossed the history's start; see
-    # PreparedRecordIndex#load_opening_transactions.
+    # PreparedHistoryLoader#reload.
     #: () -> Array[Array[untyped]]
     def opening_transactions
       @records.opening_transactions
