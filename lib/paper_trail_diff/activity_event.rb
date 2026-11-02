@@ -107,55 +107,52 @@ module PaperTrailDiff
       groups = grouped_events(events)
       @branches = build_groups(groups)
       @group_sizes = groups.transform_values(&:length)
-      @opening = opening.to_set
+      @opening = opening
     end
 
+    # An event outside a transaction, or in one it was not given, keeps its
+    # own.
     #: (ActivityEvent) -> Array[String]?
     def branches_for(event)
       key = transaction_key(event)
-      return if key && @opening.include?(key)
-      return event.branches unless key && @branches.key?(key)
+      return if @opening.include?(key)
 
-      @branches[key]
+      @branches.fetch(key) { event.branches }
     end
 
     #: (ActivityEvent) -> bool
     def isolated?(event)
       key = transaction_key(event)
-      !key || (@group_sizes.fetch(key, 0) == 1 && !@opening.include?(key))
+      !key || (@group_sizes[key] == 1 && !@opening.include?(key))
     end
 
     private
 
-    # @rbs @branches: Hash[Array[untyped], Array[String]?]
-    # @rbs @group_sizes: Hash[Array[untyped], Integer]
-    # @rbs @opening: Set[Array[untyped]]
+    # @rbs @branches: Hash[Array[untyped]?, Array[String]?]
+    # @rbs @group_sizes: Hash[Array[untyped]?, Integer]
+    # @rbs @opening: Array[untyped]
 
-    #: (Hash[Array[untyped], Array[ActivityEvent]]) -> Hash[Array[untyped], Array[String]?]
+    #: (Hash[Array[untyped]?, Array[ActivityEvent]]) -> Hash[Array[untyped]?, Array[String]?]
     def build_groups(groups)
       groups.to_h do |key, selected_events|
         [key, group_branches(selected_events)]
       end
     end
 
-    #: (Array[ActivityEvent]) -> Hash[Array[untyped], Array[ActivityEvent]]
+    # The events of each transaction; one outside a transaction is in none.
+    #: (Array[ActivityEvent]) -> Hash[Array[untyped]?, Array[ActivityEvent]]
     def grouped_events(events)
-      groups = {} #: Hash[Array[untyped], Array[ActivityEvent]]
-      events.each do |event|
-        key = transaction_key(event)
-        next unless key
-
-        groups[key] ||= [] #: Array[ActivityEvent]
-        groups[key] << event
-      end
-      groups
+      events.group_by { |event| transaction_key(event) }.except(nil)
     end
 
+    # A transaction with a root event is read as the root's; every other
+    # event has branches.
     #: (Array[ActivityEvent]) -> Array[String]?
     def group_branches(events)
       return if events.any?(&:root?)
 
-      events.flat_map { |event| event.branches || [] }.uniq.sort.freeze
+      branches = events.flat_map(&:branches) #: Array[String]
+      branches.uniq.sort.freeze
     end
 
     #: (ActivityEvent) -> Array[untyped]?

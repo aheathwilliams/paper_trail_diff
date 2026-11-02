@@ -72,6 +72,7 @@ matcher:
     - PaperTrailDiff::ActivityVersionCollector*
     - PaperTrailDiff::ActivityTreeFilter*
     - PaperTrailDiff::ActivityTransactionGrouper*
+    - PaperTrailDiff::ActivityTransactionGroups*
     - PaperTrailDiff::ActivityView*
     - PaperTrailDiff::ActivityScopeFilter*
     - PaperTrailDiff::ActivitySnapshotDelta*
