@@ -63,7 +63,8 @@ Flat query counts do not make a report's cost flat:
   report with `within:` or `since:` looks for transactions that cross either
   edge. With associations, it also takes one statement per 500 of the
   transactions its history reads, to find one that saved associated records
-  on both sides of its start.
+  on both sides of its start; when it finds one, it reads the window's
+  history again from where that transaction began.
   On 1.4 million versions, 10,800 records took about 6 s on SQL Server and
   1.5 s on PostgreSQL and MySQL.
 
