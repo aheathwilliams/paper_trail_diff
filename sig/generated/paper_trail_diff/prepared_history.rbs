@@ -10,8 +10,6 @@ module PaperTrailDiff
     # PreparedHistoryLoader#reload.
     attr_reader opening_transactions: Array[Array[untyped]]
 
-    DIRECT_RESOLVERS: untyped
-
     # : (PreparedRecordIndex, ?activity_index: PreparedActivityIndex?, ?opening_transactions: Array[Array[untyped]]) -> void
     def initialize: (PreparedRecordIndex, ?activity_index: PreparedActivityIndex?, ?opening_transactions: Array[Array[untyped]]) -> void
 
@@ -66,12 +64,6 @@ module PaperTrailDiff
 
     # : (untyped, untyped, untyped, untyped, bool) -> Array[untyped]?
     def direct_records: (untyped, untyped, untyped, untyped, bool) -> Array[untyped]?
-
-    # : (untyped, untyped, untyped, untyped, bool) -> Array[untyped]?
-    def resolve_belongs_to: (untyped, untyped, untyped, untyped, bool) -> Array[untyped]?
-
-    # : (untyped, untyped, untyped, untyped, bool) -> Array[untyped]
-    def resolve_children: (untyped, untyped, untyped, untyped, bool) -> Array[untyped]
 
     # : (untyped, untyped, untyped, bool) -> Array[untyped]?
     def belongs_to_records: (untyped, untyped, untyped, bool) -> Array[untyped]?

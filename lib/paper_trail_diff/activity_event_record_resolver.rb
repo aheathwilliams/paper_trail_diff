@@ -4,12 +4,6 @@
 module PaperTrailDiff
   # Reconstructs an event's post-change record or immutable scalar delta.
   class ActivityEventRecordResolver
-    RECORD_AFTER_HANDLERS = {
-      'create' => :created_record_after,
-      'update' => :updated_record_after
-    }.freeze
-    private_constant :RECORD_AFTER_HANDLERS
-
     #: (?record_transition: untyped, ?prepared_record_after: untyped) -> void
     def initialize(record_transition: nil, prepared_record_after: nil)
       @record_transition = record_transition
@@ -70,8 +64,10 @@ module PaperTrailDiff
 
     #: (untyped) -> untyped
     def changed_record_after(version)
-      handler = RECORD_AFTER_HANDLERS[version.event.to_s]
-      send(handler, version) if handler
+      case version.event.to_s
+      when 'create' then created_record_after(version)
+      when 'update' then updated_record_after(version)
+      end
     end
 
     #: (untyped) -> untyped

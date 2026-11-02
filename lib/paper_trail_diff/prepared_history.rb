@@ -11,14 +11,6 @@ module PaperTrailDiff
     # PreparedHistoryLoader#reload.
     attr_reader :opening_transactions #: Array[Array[untyped]]
 
-    DIRECT_RESOLVERS = {
-      belongs_to: :resolve_belongs_to,
-      has_one: :resolve_children,
-      has_many: :resolve_children,
-      has_and_belongs_to_many: :habtm_records
-    }.freeze
-    private_constant :DIRECT_RESOLVERS
-
     #: (PreparedRecordIndex, ?activity_index: PreparedActivityIndex?, ?opening_transactions: Array[Array[untyped]]) -> void
     def initialize(records, activity_index: nil, opening_transactions: [])
       @records = records
@@ -106,18 +98,12 @@ module PaperTrailDiff
 
     #: (untyped, untyped, untyped, untyped, bool) -> Array[untyped]?
     def direct_records(record, reflection, boundary, habtm_boundary, ranked)
-      resolver = DIRECT_RESOLVERS.fetch(reflection.macro)
-      send(resolver, record, reflection, boundary, habtm_boundary, ranked)
-    end
-
-    #: (untyped, untyped, untyped, untyped, bool) -> Array[untyped]?
-    def resolve_belongs_to(record, reflection, boundary, _habtm_boundary, ranked)
-      belongs_to_records(record, reflection, boundary, ranked)
-    end
-
-    #: (untyped, untyped, untyped, untyped, bool) -> Array[untyped]
-    def resolve_children(record, reflection, boundary, _habtm_boundary, ranked)
-      child_records(record, reflection, boundary, ranked)
+      case reflection.macro
+      when :belongs_to then belongs_to_records(record, reflection, boundary, ranked)
+      when :has_one, :has_many then child_records(record, reflection, boundary, ranked)
+      when :has_and_belongs_to_many
+        habtm_records(record, reflection, boundary, habtm_boundary, ranked)
+      end
     end
 
     #: (untyped, untyped, untyped, bool) -> Array[untyped]?

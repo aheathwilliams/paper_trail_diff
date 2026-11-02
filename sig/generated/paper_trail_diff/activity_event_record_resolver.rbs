@@ -3,8 +3,6 @@
 module PaperTrailDiff
   # Reconstructs an event's post-change record or immutable scalar delta.
   class ActivityEventRecordResolver
-    RECORD_AFTER_HANDLERS: untyped
-
     # : (?record_transition: untyped, ?prepared_record_after: untyped) -> void
     def initialize: (?record_transition: untyped, ?prepared_record_after: untyped) -> void
 
