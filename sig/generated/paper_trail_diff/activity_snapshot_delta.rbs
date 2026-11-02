@@ -15,6 +15,11 @@ module PaperTrailDiff
     # : (untyped) -> untyped
     def after_value: (untyped) -> untyped
 
+    # Compared as text, so an id read as a string matches one read as an
+    # integer.
+    # : (untyped) -> bool
+    def changed?: (untyped) -> bool
+
     # : (untyped) -> bool
     def relationship_changed?: (untyped) -> bool
 
@@ -23,9 +28,6 @@ module PaperTrailDiff
     @after_attributes: Hash[String, untyped]
 
     @before_attributes: Hash[String, untyped]
-
-    # : (Hash[untyped, untyped]) -> Hash[String, untyped]
-    def normalize_hash: (Hash[untyped, untyped]) -> Hash[String, untyped]
 
     # : (untyped) -> Array[untyped]
     def relationship_keys: (untyped) -> Array[untyped]

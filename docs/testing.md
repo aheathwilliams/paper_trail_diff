@@ -118,12 +118,13 @@ passes is behavior nothing checks. `mutant.yml` lists the classes it mutates:
 
 - what counts as a change: `Engine`, `CollectionComparator`,
   `CollectionIdentityIndex`, and `NestedComparator`;
-- which columns are compared: `SnapshotNormalizer` and `SnapshotPool`;
+- which columns are compared, and how precisely times are: `SnapshotNormalizer`,
+  `SnapshotPool`, and `StoredTimePrecision`;
 - which versions a range reads: `TimeRange`, `TimelineRange`, `VersionRange`,
   `TimeVersionRange`, `RootVersionPlan`, and `TransactionCut`;
 - which versions a batch or filter reads: `BatchedRootVersions`,
   `BatchedRootAnalyses`, `DeletedAnalysisBatch`, and `HistoricalFilter`;
-- what a version recorded: `RecordedChanges`;
+- what a version recorded: `RecordedChanges` and `RecordedChangesReader`;
 - how a step flattens into rows: `ChangeRow` and `ChangeRows`;
 - which records a scope or report selects: `ScopedRootSelection`,
   `AssociationActivitySelection`, `AssociationActivityEdge`, and
@@ -136,6 +137,8 @@ passes is behavior nothing checks. `mutant.yml` lists the classes it mutates:
 - what activity a record shows: `ActivityTimelineBuilder`,
   `ActivityTransactionGrouper`, `ActivityTreeFilter`, `ActivityScopeFilter`,
   and `ActivityView`;
+- what an update did to a record, and whether it moved the record to another
+  owner: `ActivitySnapshotDelta`;
 - which association paths a request accepts: `AssociationTraversal`,
   `AssociationKey`, and `VersionTable`;
 - whether a transaction's HABTM members are one record's:

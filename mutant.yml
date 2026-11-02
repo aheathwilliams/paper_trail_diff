@@ -39,6 +39,7 @@ matcher:
     - PaperTrailDiff::NestedComparator*
     - PaperTrailDiff::SnapshotNormalizer*
     - PaperTrailDiff::SnapshotPool*
+    - PaperTrailDiff::StoredTimePrecision*
     - PaperTrailDiff::TimelineRange*
     - PaperTrailDiff::RootVersionPlan*
     - PaperTrailDiff::HistoricalFilter*
@@ -52,6 +53,7 @@ matcher:
     - PaperTrailDiff::DeletedAnalysisBatch*
     - PaperTrailDiff::DeletedRootFilter*
     - PaperTrailDiff::RecordedChanges*
+    - PaperTrailDiff::RecordedChangesReader*
     - PaperTrailDiff::ChangeRow*
     - PaperTrailDiff::ChangeRows*
     - PaperTrailDiff::AssociationActivitySelection*
@@ -65,6 +67,7 @@ matcher:
     - PaperTrailDiff::ActivityTransactionGrouper*
     - PaperTrailDiff::ActivityView*
     - PaperTrailDiff::ActivityScopeFilter*
+    - PaperTrailDiff::ActivitySnapshotDelta*
     - PaperTrailDiff::ApproximatePaths*
     - PaperTrailDiff::FallbackPaths*
     - PaperTrailDiff::ScopeCondition*

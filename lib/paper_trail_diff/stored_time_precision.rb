@@ -17,39 +17,37 @@ module PaperTrailDiff
     JSON_COLUMN_TYPES = %i[json jsonb].freeze
     private_constant :NANOSECOND_DIGITS, :JSON_COLUMN_TYPES
 
-    module_function
-
     # Fractional digits a model's history keeps for times, or nil when the
     # history is stored losslessly.
     #: (untyped) -> Integer?
-    def digits(model_class)
+    def self.digits(model_class)
       return unless Support.versioned?(model_class)
       return unless json_history?(model_class.paper_trail.version_class)
 
-      active_support = Object.const_get(:ActiveSupport) #: untyped
-      active_support.const_get(:JSON).const_get(:Encoding).time_precision
+      json_time_precision
     end
 
     #: (Hash[untyped, untyped], Integer?) -> Hash[untyped, untyped]
-    def apply(attributes, digits)
+    def self.apply(attributes, digits)
       return attributes unless digits
 
       attributes.transform_values { |value| truncate(value, digits) }
     end
 
+    # From nine digits on, the step is one nanosecond or a fraction of one, so
+    # nothing is cut.
     #: (untyped, Integer) -> untyped
-    def truncate(value, digits)
-      return value unless value.is_a?(Time) && digits < NANOSECOND_DIGITS
+    def self.truncate(value, digits)
+      return value unless value.is_a?(Time)
 
       # ActiveSupport's Time#change, which also serves TimeWithZone.
       time = value #: untyped
-      step = 10**(NANOSECOND_DIGITS - [digits, 0].max) #: Integer
-      remainder = time.nsec % step
+      remainder = time.nsec % (10**(NANOSECOND_DIGITS - digits))
       remainder.zero? ? time : time.change(nsec: time.nsec - remainder)
     end
 
     #: (untyped) -> bool
-    def json_history?(version_class)
+    def self.json_history?(version_class)
       columns = version_class.columns_hash
       json_column = %w[object object_changes].any? do |name|
         JSON_COLUMN_TYPES.include?(columns[name]&.type)
@@ -58,8 +56,18 @@ module PaperTrailDiff
     end
     private_class_method :json_history?
 
+    # mutant:disable - Every mutation that survives here reads the same
+    # constant another way: from this module rather than Object, or with `::`.
+    #: () -> Integer
+    def self.json_time_precision
+      active_support = Object.const_get(:ActiveSupport) #: untyped
+      active_support.const_get(:JSON).const_get(:Encoding).time_precision
+    end
+    private_class_method :json_time_precision
+
+    # mutant:disable - As for json_time_precision.
     #: () -> bool
-    def json_serializer?
+    def self.json_serializer?
       paper_trail = Object.const_get(:PaperTrail) #: untyped
       paper_trail.serializer.equal?(paper_trail.const_get(:Serializers).const_get(:JSON))
     end

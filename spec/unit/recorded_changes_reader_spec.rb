@@ -16,6 +16,32 @@ RSpec.describe PaperTrailDiff::RecordedChangesReader do
     expect(PaperTrailDiff::RecordedChanges).to have_received(:call).exactly(3).times
   end
 
+  # Support.row_key: a row still matches after its class is reloaded.
+  it 'knows a version again after its class is reloaded' do
+    reader = described_class.new([])
+    version = version_class.new(1)
+    reloaded = stub_const('ReaderSpecVersion', Struct.new(:id))
+
+    expect([reader.call(version), reader.call(reloaded.new(1))]).to eq([[1, []], [1, []]])
+    expect(PaperTrailDiff::RecordedChanges).to have_received(:call).once
+  end
+
+  # The steps of one result can be read from several threads.
+  it 'decodes a version once when two threads ask for it at once' do
+    release = Queue.new
+    allow(PaperTrailDiff::RecordedChanges).to receive(:call) { release.pop }
+    reader = described_class.new([])
+    version = version_class.new(1)
+
+    threads = Array.new(2) do
+      Thread.new { reader.call(version) }.tap { |thread| Thread.pass until thread.stop? }
+    end
+    2.times { release << :decoded }
+
+    expect(threads.map(&:value)).to eq(%i[decoded decoded])
+    expect(PaperTrailDiff::RecordedChanges).to have_received(:call).once
+  end
+
   it 'keeps a version that recorded nothing, rather than reading it again' do
     allow(PaperTrailDiff::RecordedChanges).to receive(:call).and_return(nil)
     reader = described_class.new([])
@@ -35,6 +61,21 @@ RSpec.describe PaperTrailDiff::RecordedChangesReader do
       expect([pending.value, pending.value]).to eq([[7, []], [7, []]])
       expect(reader).to have_received(:call).once
       expect(pending.instance_variable_get(:@version)).to be_nil
+    end
+
+    it 'reads once when two threads ask at once' do
+      release = Queue.new
+      reader = instance_double(PaperTrailDiff::RecordedChangesReader)
+      allow(reader).to receive(:call) { release.pop }
+      pending = described_class.new(reader, version_class.new(7))
+
+      threads = Array.new(2) do
+        Thread.new { pending.value }.tap { |thread| Thread.pass until thread.stop? }
+      end
+      2.times { release << :decoded }
+
+      expect(threads.map(&:value)).to eq(%i[decoded decoded])
+      expect(reader).to have_received(:call).once
     end
   end
 end
