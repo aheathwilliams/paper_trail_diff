@@ -87,11 +87,12 @@ module PaperTrailDiff
     end
 
     # The `belongs_to` targets each owner pointed at from the range's start
-    # onward, plus the live row.
+    # onward, plus the live row and those its recorded states name.
     #: (untyped, Array[untyped], untyped, ActivityRange) -> Array[ActivityTargetCandidateLoader::Row]
     def target_rows(model, ids, reflection, range)
       historical, live = @targets[reflection] ||= target_candidates(model, reflection)
-      eligible_rows(model, rows_for(historical, ids), range) + rows_for(live, ids)
+      eligible_rows(model, rows_for(historical, ids), range) + rows_for(live, ids) +
+        recorded_target_rows(model, ids, reflection)
     end
 
     #: (untyped, untyped) -> bool
@@ -131,6 +132,27 @@ module PaperTrailDiff
       first = run.fetch(0)
       @records.typed_states_across(model, first.item_id, first, run.fetch(-1))
               .any? { |attributes| path.include?(attributes) }
+    end
+
+    # The targets the owners' recorded states point at. PT-AT names a target
+    # only in the rows its owner's versions wrote, so a key changed without a
+    # version, such as one `has_paper_trail only:` leaves out, names its target
+    # only in the state the owner's next version recorded. Prepared history
+    # reads that state, so its snapshots show the target, and the target's
+    # versions are events too. A key of two columns is read per record instead.
+    #: (untyped, Array[untyped], untyped) -> Array[ActivityTargetCandidateLoader::Row]
+    def recorded_target_rows(model, ids, reflection)
+      key = reflection.foreign_key
+      return [] if key.is_a?(Array)
+
+      ids.flat_map do |id|
+        targets = @records.attribute_values_for(model, [id], key)
+        types = (@records.attribute_values_for(model, [id], reflection.foreign_type) if
+                   reflection.polymorphic?) || []
+        targets.zip(types).filter_map do |target, type|
+          ActivityTargetCandidateLoader::Row.new(id, target, type) unless target.nil?
+        end
+      end
     end
 
     #: (untyped, Array[untyped]) -> bool

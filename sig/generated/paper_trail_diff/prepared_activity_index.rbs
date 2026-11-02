@@ -45,7 +45,7 @@ module PaperTrailDiff
     def child_ids: (untyped, Array[untyped], untyped, ActivityRange) -> Array[untyped]
 
     # The `belongs_to` targets each owner pointed at from the range's start
-    # onward, plus the live row.
+    # onward, plus the live row and those its recorded states name.
     # : (untyped, Array[untyped], untyped, ActivityRange) -> Array[ActivityTargetCandidateLoader::Row]
     def target_rows: (untyped, Array[untyped], untyped, ActivityRange) -> Array[ActivityTargetCandidateLoader::Row]
 
@@ -83,6 +83,15 @@ module PaperTrailDiff
     # holds them.
     # : (untyped, Array[untyped], ThroughPath) -> bool
     def on_path?: (untyped, Array[untyped], ThroughPath) -> bool
+
+    # The targets the owners' recorded states point at. PT-AT names a target
+    # only in the rows its owner's versions wrote, so a key changed without a
+    # version, such as one `has_paper_trail only:` leaves out, names its target
+    # only in the state the owner's next version recorded. Prepared history
+    # reads that state, so its snapshots show the target, and the target's
+    # versions are events too. A key of two columns is read per record instead.
+    # : (untyped, Array[untyped], untyped) -> Array[ActivityTargetCandidateLoader::Row]
+    def recorded_target_rows: (untyped, Array[untyped], untyped) -> Array[ActivityTargetCandidateLoader::Row]
 
     # : (untyped, Array[untyped]) -> bool
     def member_class?: (untyped, Array[untyped]) -> bool

@@ -305,7 +305,8 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
   # The version a range ends at names the author after it, which the range
   # never reached, but a key written without a version is recorded only after
   # it too, so every author from the start onward is a candidate, and the live
-  # one.
+  # one. So is every author a page's recorded states name, without an event,
+  # which a key PT-AT never saw reaches only that way.
   it 'reads the authors a page pointed at from the range start onward, and its live one' do
     origin = Time.now.utc
     first, second, third = %w[Ann Bea Cy].map { |name| TrackedAuthor.create!(name: name) }
@@ -332,20 +333,44 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
     current = index.target_rows(IndexSpecPage, [page.id, unversioned.id], author,
                                 range(start, Time.now.utc))
 
+    recorded = [[page.id, first.id, nil], [page.id, second.id, nil], [page.id, third.id, nil]]
     expect(fields.call(closed)).to contain_exactly(
       [page.id, first.id, 'create'], [page.id, second.id, 'update'],
-      [page.id, third.id, 'update'], [page.id, third.id, nil]
+      [page.id, third.id, 'update'], [page.id, third.id, nil], *recorded, [gone.id, first.id, nil]
     )
     expect(fields.call(current)).to contain_exactly(
       [page.id, first.id, 'create'], [page.id, second.id, 'update'],
-      [page.id, third.id, 'update'], [page.id, third.id, nil], [unversioned.id, first.id, nil]
+      [page.id, third.id, 'update'], [page.id, third.id, nil], [unversioned.id, first.id, nil],
+      *recorded, [unversioned.id, first.id, nil]
     )
     queries = statements do
       found = index.target_rows(IndexSpecPage, [other.id], author, range(start, closing))
       expect(fields.call(found))
-        .to eq([[other.id, second.id, 'update'], [other.id, second.id, nil]])
+        .to eq([[other.id, second.id, 'update'], [other.id, second.id, nil],
+                [other.id, first.id, nil], [other.id, second.id, nil]])
     end
     expect(queries).to eq(0)
+  end
+
+  # Each state a link recorded names its target by type and id; one with no
+  # target names none, and a key of two columns is left to the record path.
+  it "reads the targets an owner's recorded states name" do
+    author = SourceTypeAuthor.create!(name: 'Author')
+    tag = SourceTypeTag.create!(name: 'Tag')
+    link = SourceTypeLink.create!(target: author)
+    [{ target: tag }, { target: nil }].each { |change| link.update!(change) }
+    index = index_for(Time.now.utc - 60, { SourceTypeLink => [link.id] })
+    fields = lambda do |name|
+      index.send(:recorded_target_rows, SourceTypeLink, [link.id],
+                 SourceTypeLink.reflect_on_association(name))
+           .map { |row| [row.owner_id, row.foreign_type, row.foreign_key_id] }
+    end
+    composite = SourceTypeLink.reflect_on_association(:target).dup
+    allow(composite).to receive(:foreign_key).and_return(Class.new(Array).new(%w[target_id x]))
+
+    expect(fields.call(:target)).to eq([[link.id, 'SourceTypeAuthor', author.id],
+                                        [link.id, 'SourceTypeTag', tag.id]])
+    expect(index.send(:recorded_target_rows, SourceTypeLink, [link.id], composite)).to eq([])
   end
 
   def checkpoint(article)

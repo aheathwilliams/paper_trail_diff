@@ -84,6 +84,14 @@ project follows [Semantic Versioning](https://semver.org/).
   transactions a window's history reads; when it finds one, the window's
   history is read again from where that transaction began.
 
+- Activity reports a change to a `belongs_to` target that the root took
+  without a version, such as an author set while `has_paper_trail only:`
+  left `author_id` out, when the root's next version moved to another target.
+  Only that version's stored state named the target, so the target's own
+  versions were not events: its rename went unreported by activity read
+  step by step, while the same history read in full showed it in an
+  unrelated step.
+
 ### Development
 
 - `spec/oracle/shapes_history_spec.rb` compares rebuilt history with plain

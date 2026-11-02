@@ -186,6 +186,24 @@ RSpec.describe 'Changes saved without a version' do
         .to eq([['dave', nil]])
     end
 
+    # The article names Bea only in the state its next version recorded: PT-AT
+    # wrote no row for a key `only:` left out, and the row it wrote with that
+    # next version names the author after it. Her rename is still an event.
+    it 'reports a rename of an author the article took without a version, as its own step' do
+      article = actor('alice') { TitleOnlyArticle.create!(title: 'Draft', author: ann) }
+      article.update!(author: bea)
+      actor('erin') { bea.update!(name: 'Bea Renamed') }
+      actor('carol') { article.update!(title: 'Published', author: ann) }
+
+      steps = PaperTrailDiff.activity_timeline(article, associations: [:author]).reject(&:empty?)
+      renames = steps.filter_map do |step|
+        changed = step.diff.associations['author']&.changed
+        changed && [step.source_boundary.whodunnit, changed.attributes.fetch('name').to_h]
+      end
+
+      expect(renames).to eq([['erin', { from: 'Bea', to: 'Bea Renamed' }]])
+    end
+
     it "credits an author written by update_columns to the article's previous change" do
       article = actor('alice') { TrackedArticle.create!(title: 'Draft', author: ann) }
       actor('carol') { article.update!(title: 'Published') }
