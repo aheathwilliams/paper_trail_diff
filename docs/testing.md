@@ -21,7 +21,8 @@ from the correctness suite and have no timing-based CI gate.
 CI keeps the Ruby 3.1–4.0 and PaperTrail 16/17 compatibility matrix on SQLite,
 including Windows runs. Separate Linux jobs run both core and association suites
 on PostgreSQL 17, MySQL 8.4, and SQL Server 2019 and 2022 with Ruby 4.0 and
-PaperTrail 17.
+PaperTrail 17. The SQL Server 2022 job's database allows snapshot isolation
+and the 2019 job's does not, so each call's `SNAPSHOT` read is run both ways.
 The SQL jobs exercise the same regressions, including joined-column ordering,
 duplicate roots, pagination, and historical association reconstruction.
 

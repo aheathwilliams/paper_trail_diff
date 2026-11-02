@@ -71,42 +71,23 @@ RSpec.describe PaperTrailDiff::ReadSnapshot do
     expect(FilterArticle).not_to have_received(:transaction)
   end
 
-  # Run by the SQL Server CI jobs. The database setting outlives the example,
-  # so it is put back.
+  # Run by the SQL Server CI jobs, one of which allows snapshot isolation.
+  # Changing the setting here would wait for every open transaction.
   sql_server = ActiveRecord::Base.connection.adapter_name == 'SQLServer'
   context 'with a SQL Server database', if: sql_server do
-    def allow_snapshot(state)
-      FilterArticle.connection.execute(
-        "ALTER DATABASE CURRENT SET ALLOW_SNAPSHOT_ISOLATION #{state ? 'ON' : 'OFF'}"
+    # 5 is SNAPSHOT, 2 READ COMMITTED.
+    def session_level
+      FilterArticle.connection.select_value(
+        'SELECT transaction_isolation_level FROM sys.dm_exec_sessions WHERE session_id = @@SPID'
       )
     end
 
-    # 5 is SNAPSHOT, 2 READ COMMITTED.
-    def level_inside_read
-      described_class.call([FilterArticle]) do
-        FilterArticle.connection.select_value(
-          'SELECT transaction_isolation_level FROM sys.dm_exec_sessions WHERE session_id = @@SPID'
-        )
-      end
-    end
-
-    around do |example|
+    it 'reads at SNAPSHOT when the database allows it, and leaves the session as it was' do
       state = FilterArticle.connection.select_value(described_class::SQL_SERVER_SNAPSHOT_STATE)
-      example.run
-    ensure
-      allow_snapshot(state.to_i == 1)
-    end
 
-    it 'reads at SNAPSHOT once the database allows it, and leaves the session as it was' do
-      allow_snapshot(true)
-      inside = level_inside_read
-      allow_snapshot(false)
+      inside = described_class.call([FilterArticle]) { session_level }
 
-      expect([inside, level_inside_read]).to eq([5, 2])
-      expect(FilterArticle.connection.select_value(
-               'SELECT transaction_isolation_level FROM sys.dm_exec_sessions ' \
-               'WHERE session_id = @@SPID'
-             )).to eq(2)
+      expect([inside, session_level]).to eq([state.to_i == 1 ? 5 : 2, 2])
     end
   end
 end
