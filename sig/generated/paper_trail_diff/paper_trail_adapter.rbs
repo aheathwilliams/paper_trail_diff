@@ -130,8 +130,8 @@ module PaperTrailDiff
     # : () -> void
     def build_snapshotters: () -> void
 
-    # : (bool, within: untyped, view: ActivityView) -> BatchedRootAnalyzer
-    def batched_root_analyzer: (bool, within: untyped, view: ActivityView) -> BatchedRootAnalyzer
+    # : (bool, view: ActivityView) -> BatchedRootAnalyzer
+    def batched_root_analyzer: (bool, view: ActivityView) -> BatchedRootAnalyzer
 
     # : () -> HistoricalSnapshotStore
     def build_historical_store: () -> HistoricalSnapshotStore
