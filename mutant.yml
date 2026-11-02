@@ -49,6 +49,7 @@ matcher:
     - PaperTrailDiff::TimeRange*
     - PaperTrailDiff::TransactionCut*
     - PaperTrailDiff::OpeningTransactions*
+    - PaperTrailDiff::VersionBoundary*
     - PaperTrailDiff::VersionTable*
     - PaperTrailDiff::VersionRange*
     - PaperTrailDiff::VersionQuery*

@@ -9,7 +9,7 @@ module PaperTrailDiff
     # guessing would place a change on an arbitrary side of the boundary. A
     # bare instant has no position among same-time versions, so it keeps them.
     # : (untyped, untyped) -> bool
-    def self?.at_or_after?: (untyped, untyped) -> bool
+    def self.at_or_after?: (untyped, untyped) -> bool
 
     # A range starting at a version starts before that version's transaction,
     # as PT-AT reads associations there. A version saved earlier in the same
@@ -19,29 +19,29 @@ module PaperTrailDiff
     # History loaded from the start alone would read that child after its
     # change.
     # : (Array[untyped], untyped) -> untyped
-    def self?.transaction_start: (Array[untyped], untyped) -> untyped
+    def self.transaction_start: (Array[untyped], untyped) -> untyped
 
     # The transaction of each root's first version at or after the start.
     # : (Array[untyped], untyped) -> Array[untyped]
-    def self?.opening_transactions: (Array[untyped], untyped) -> Array[untyped]
+    def self.opening_transactions: (Array[untyped], untyped) -> Array[untyped]
 
     # A custom version class need not carry the column, and PaperTrail leaves
     # it nil outside a transaction. Both read as "no transaction here", which
     # groups with nothing.
     # : (untyped) -> untyped
-    def self?.transaction_id: (untyped) -> untyped
+    def self.transaction_id: (untyped) -> untyped
 
     # Answered once for each Active Record class (see Support.per_model).
     # : (untyped) -> bool
-    def self?.transactional?: (untyped) -> bool
+    def self.transactional?: (untyped) -> bool
 
     # Answered once for each Active Record class, as `transactional?` is.
     # : (untyped) -> bool
-    def self?.version_record?: (untyped) -> bool
+    def self.version_record?: (untyped) -> bool
 
     # The same row of the same version table. A record or instant is never a
     # version.
     # : (untyped, untyped) -> bool
-    def self?.same_version?: (untyped, untyped) -> bool
+    def self.same_version?: (untyped, untyped) -> bool
   end
 end
