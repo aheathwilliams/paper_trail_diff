@@ -130,7 +130,7 @@ passes is behavior nothing checks. `mutant.yml` lists the classes it mutates:
   `AssociationActivitySelection`, `AssociationActivityEdge`, and
   `DeletedRootFilter`;
 - which children and targets a record had at each point:
-  `PreparedHistoryLoader`, `PreparedEdgeLoader`,
+  `PreparedHistoryLoader`, `PreparedEdgeLoader`, `ActivityChildCandidateLoader`,
   `ActivityTargetCandidateLoader`, and `PreparedActivityIndex`;
 - where an activity range starts and ends, and which association history its
   query reads: `ActivityRange` and `VersionAssociationCandidateScope`;

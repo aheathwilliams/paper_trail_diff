@@ -58,6 +58,7 @@ matcher:
     - PaperTrailDiff::ChangeRows*
     - PaperTrailDiff::AssociationActivitySelection*
     - PaperTrailDiff::AssociationActivityEdge*
+    - PaperTrailDiff::ActivityChildCandidateLoader*
     - PaperTrailDiff::ActivityTargetCandidateLoader*
     - PaperTrailDiff::ScopedRootSelection*
     - PaperTrailDiff::PreparedHistoryLoader*

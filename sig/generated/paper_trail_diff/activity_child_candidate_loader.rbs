@@ -1,7 +1,8 @@
 # Generated from lib/paper_trail_diff/activity_child_candidate_loader.rb with RBS::Inline
 
 module PaperTrailDiff
-  # Loads direct-child identities active at or after one activity boundary.
+  # Loads direct-child identities active at or after one activity boundary. A
+  # composite foreign key reads none, as loaded history cannot index it.
   class ActivityChildCandidateLoader
     # : (untyped, Array[untyped], untyped, untyped) -> void
     def initialize: (untyped, Array[untyped], untyped, untyped) -> void
@@ -16,6 +17,8 @@ module PaperTrailDiff
 
     private
 
+    @foreign_key: String?
+
     @parent_class: untyped
 
     @parent_ids: Array[untyped]
@@ -27,11 +30,11 @@ module PaperTrailDiff
     # : (Array[Array[untyped]]) -> Array[Array[untyped]]
     def typed_rows: (Array[Array[untyped]]) -> Array[Array[untyped]]
 
-    # : (untyped) -> untyped
-    def historical_relation: (untyped) -> untyped
+    # : (untyped, String) -> untyped
+    def historical_relation: (untyped, String) -> untyped
 
-    # : () -> String
-    def child_item_type: () -> String
+    # : (untyped, untyped) -> Array[Array[untyped]]
+    def pluck_rows: (untyped, untyped) -> Array[Array[untyped]]
 
     # : () -> Array[String?]
     def parent_types: () -> Array[String?]
