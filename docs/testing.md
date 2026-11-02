@@ -167,7 +167,14 @@ mutant's 5-second default, mutations no spec caught were reported as caught.
 In CI, a pull request mutates only the methods it changes. The full set runs
 nightly in `.github/workflows/mutation.yml`, and only when `main` has a commit
 that has not passed yet. Start it by hand from the Actions tab with "Run
-workflow".
+workflow". Both split the methods across four jobs with
+`script/mutant_shard.rb`, which takes every fourth method in mutant's listing,
+so that a class holding most of a run's methods is split as well. To run one
+shard locally, as the pull request job does:
+
+```console
+BUNDLE_GEMFILE=gemfiles/mutant.gemfile mise exec -- ruby script/mutant_shard.rb 0 4 origin/main
+```
 
 Mutant needs Ruby 3.3 or newer, so it has its own bundle:
 

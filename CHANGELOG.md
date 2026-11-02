@@ -159,6 +159,11 @@ project follows [Semantic Versioning](https://semver.org/).
   It must report exactly the unfiltered steps of the transactions that author
   saved a version in.
 
+- Mutation testing in CI runs in four parallel jobs, each mutating every
+  fourth method in scope (`script/mutant_shard.rb`). A pull request that
+  changed 84 methods took 33 minutes on one runner, close to the job's
+  45-minute limit.
+
 ## [0.16.0] - 2026-11-01
 
 ### Changed
