@@ -48,11 +48,8 @@ module PaperTrailDiff
     # models it goes through, so each of them needs history too.
     #: (untyped) -> Array[untyped]
     def self.through_models(reflection)
-      return [] unless reflection.through_reflection?
-
-      [reflection.through_reflection, reflection.source_reflection].flat_map do |part|
-        part.polymorphic? ? through_models(part) : [part.klass, *through_models(part)]
-      end.uniq - [reflection.klass]
+      parts = AssociationTraversal.through_parts(reflection).reject(&:polymorphic?)
+      parts.map(&:klass).uniq - [reflection.klass]
     end
     private_class_method :through_models
 

@@ -19,14 +19,10 @@ module PaperTrailDiff
     # are checked for conditions alone.
     #: (untyped, ranked: bool) -> String?
     def self.fallback_reason(reflection, ranked:)
-      reason = reason_for(reflection, ranked)
-      return reason if reason || !reflection.through_reflection?
-
-      [reflection.through_reflection, reflection.source_reflection].each do |part|
-        part_reason = fallback_reason(part, ranked: false)
-        return part_reason if part_reason
-      end
-      nil
+      reason_for(reflection, ranked) ||
+        AssociationTraversal.through_parts(reflection).filter_map do |part|
+          reason_for(part, false)
+        end.first
     end
     private_class_method :fallback_reason
 

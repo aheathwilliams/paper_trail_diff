@@ -31,6 +31,17 @@ module PaperTrailDiff
       source_type.nil? || type == source_type.to_s
     end
 
+    # Every part a through passes, at any depth: its through part and that
+    # part's own parts, then its source part and that part's own parts.
+    #: (untyped) -> Array[untyped]
+    def self.through_parts(reflection)
+      return [] unless reflection.through_reflection?
+
+      [reflection.through_reflection, reflection.source_reflection].flat_map do |part|
+        [part, *through_parts(part)]
+      end
+    end
+
     # The class a stored type names, or nil when it names none.
     # This class defines no constants of its own, so the one mutation left,
     # `const_get` on it rather than on Object, finds the same class.

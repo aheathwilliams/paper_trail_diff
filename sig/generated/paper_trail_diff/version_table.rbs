@@ -18,6 +18,9 @@ module PaperTrailDiff
     # : (untyped) -> untyped
     def self.separate_part: (untyped) -> untyped
 
+    # : (untyped) -> bool
+    def self.separate?: (untyped) -> bool
+
     # PT-AT's version association rows joined to the versions they were saved
     # with. Its `belongs_to :version` names PaperTrail's default class whatever
     # table a model's versions are in, so the join names the table instead.

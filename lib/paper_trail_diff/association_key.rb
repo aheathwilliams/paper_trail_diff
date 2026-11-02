@@ -22,12 +22,7 @@ module PaperTrailDiff
     # than its owner's or target's primary key.
     #: (untyped) -> untyped
     def self.keyed_part(reflection)
-      return reflection if other_key?(reflection)
-      return unless reflection.through_reflection?
-
-      [reflection.through_reflection, reflection.source_reflection].filter_map do |part|
-        keyed_part(part)
-      end.first
+      [reflection, *AssociationTraversal.through_parts(reflection)].find { |part| other_key?(part) }
     end
     private_class_method :keyed_part
 

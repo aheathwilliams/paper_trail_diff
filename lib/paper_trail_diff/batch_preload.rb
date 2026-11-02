@@ -35,19 +35,9 @@ module PaperTrailDiff
     #: (untyped) -> bool
     def self.cut_part?(reflection)
       reflection.collection? &&
-        (ScopeCondition.ranked_parts?(reflection) || through_parts(reflection).any?(&:has_one?))
+        (ScopeCondition.ranked_parts?(reflection) ||
+          AssociationTraversal.through_parts(reflection).any?(&:has_one?))
     end
     private_class_method :cut_part?
-
-    # Every part a through passes, at any depth.
-    #: (untyped) -> Array[untyped]
-    def self.through_parts(reflection)
-      return [] unless reflection.through_reflection?
-
-      [reflection.through_reflection, reflection.source_reflection].flat_map do |part|
-        [part, *through_parts(part)]
-      end
-    end
-    private_class_method :through_parts
   end
 end

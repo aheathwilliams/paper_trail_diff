@@ -25,20 +25,24 @@ module PaperTrailDiff
     # and an unversioned target has no history to compare.
     #: (untyped) -> untyped
     def self.separate_part(reflection)
-      if reflection.through_reflection?
-        return [reflection.through_reflection, reflection.source_reflection].filter_map do |part|
-          separate_part(part)
-        end.first
+      [reflection, *AssociationTraversal.through_parts(reflection)].find do |part|
+        !part.through_reflection? && separate?(part)
       end
-      return if reflection.polymorphic?
+    end
+    private_class_method :separate_part
+
+    #: (untyped) -> bool
+    def self.separate?(reflection)
+      return false if reflection.polymorphic?
 
       owner = reflection.active_record
       target = reflection.klass
-      return unless Support.versioned?(owner) && Support.versioned?(target)
+      return false unless Support.versioned?(owner) && Support.versioned?(target)
+      return false if tables(owner) == tables(target)
 
-      reflection unless tables(owner) == tables(target)
+      true
     end
-    private_class_method :separate_part
+    private_class_method :separate?
 
     # PT-AT's version association rows joined to the versions they were saved
     # with. Its `belongs_to :version` names PaperTrail's default class whatever

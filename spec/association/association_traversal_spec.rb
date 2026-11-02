@@ -20,6 +20,13 @@ class TraversalNote < ActiveRecord::Base
   has_many :holder_replies, through: :holder, source: :replies
 end
 
+class TraversalReplyAuthor < ActiveRecord::Base
+  self.table_name = 'tracked_authors'
+  has_many :articles, class_name: 'TrackedArticle', foreign_key: :author_id
+  has_many :comments, through: :articles
+  has_many :comment_replies, through: :comments, source: :replies
+end
+
 class TraversalNamedTag < ActiveRecord::Base
   self.table_name = 'tracked_tags'
   default_scope { where.not(name: '') }
@@ -126,6 +133,20 @@ RSpec.describe PaperTrailDiff::AssociationTraversal do
                         "TraversalNote #{note.id} has holder_type RenamedArticle, which names " \
                         'no class. If the model was renamed, replace the old name in that ' \
                         'column and in the versions that recorded it.')
+    end
+  end
+
+  describe '.through_parts' do
+    it 'lists every part a through passes, at any depth, each before its own parts' do
+      nested = TraversalReplyAuthor.reflect_on_association(:comment_replies)
+      parts = described_class.through_parts(nested).map do |part|
+        "#{part.active_record}##{part.name}"
+      end
+
+      expect(parts).to eq(%w[TraversalReplyAuthor#comments TraversalReplyAuthor#articles
+                             TrackedArticle#comments TrackedComment#replies])
+      expect(described_class.through_parts(TrackedArticle.reflect_on_association(:comments)))
+        .to eq([])
     end
   end
 

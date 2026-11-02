@@ -19,6 +19,11 @@ module PaperTrailDiff
     # : (untyped, untyped) -> bool
     def self.source_type_member?: (untyped, untyped) -> bool
 
+    # Every part a through passes, at any depth: its through part and that
+    # part's own parts, then its source part and that part's own parts.
+    # : (untyped) -> Array[untyped]
+    def self.through_parts: (untyped) -> Array[untyped]
+
     # The class a stored type names, or nil when it names none.
     # This class defines no constants of its own, so the one mutation left,
     # `const_get` on it rather than on Object, finds the same class.
