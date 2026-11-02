@@ -2,8 +2,10 @@
 # rbs_inline: enabled
 
 module PaperTrailDiff
-  # Loads direct-child identities active at or after one activity boundary. A
-  # composite foreign key reads none, as loaded history cannot index it.
+  # Loads the children of a has_many or has_one that its owners had from a
+  # start onward, from PT-AT's version associations and the live rows.
+  # Prepared history and activity both read children through it. A composite
+  # foreign key reads none, as loaded history cannot index it.
   class ActivityChildCandidateLoader
     #: (untyped, Array[untyped], untyped, untyped) -> void
     def initialize(parent_class, parent_ids, reflection, start_at)
@@ -32,6 +34,8 @@ module PaperTrailDiff
       foreign_key = @foreign_key
       return [] unless foreign_key
 
+      # Every row of the table, as history reads them: an STI subclass's
+      # siblings are left out where children are resolved.
       relation = @reflection.klass.base_class.unscoped.where(foreign_key => @parent_ids)
       relation = relation.where(@reflection.type => parent_types) if @reflection.type
       relation.pluck(foreign_key, @reflection.klass.primary_key)
