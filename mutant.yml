@@ -96,3 +96,4 @@ matcher:
     - PaperTrailDiff::ActivityRange*
     - PaperTrailDiff::VersionAssociationCandidateScope*
     - PaperTrailDiff::PreparedActivityIndex*
+    - PaperTrailDiff::Support*

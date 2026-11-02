@@ -10,15 +10,13 @@ module PaperTrailDiff
     # than they save.
     IDS_PER_STATEMENT = 500
 
-    module_function
-
     # Answers a question about `value` once for each Active Record class, in
     # `answers`: its respond_to? also looks through the instance's attributes,
     # which costs more than most of what reading a version does, and every
     # instance of a model answers alike, since this gem reads versions with
     # all their columns. Anything else is asked each time.
     #: [T] (Hash[untyped, T], untyped) { (untyped) -> T } -> T
-    def per_model(answers, value)
+    def self.per_model(answers, value)
       model = value.class
       return yield(value) unless model.respond_to?(:column_names)
 
@@ -26,7 +24,7 @@ module PaperTrailDiff
     end
 
     #: (untyped) -> untyped
-    def immutable_copy(value)
+    def self.immutable_copy(value)
       case value
       when Hash
         immutable_hash(value)
@@ -38,7 +36,7 @@ module PaperTrailDiff
     end
 
     #: (Hash[untyped, untyped]) -> Hash[untyped, untyped]
-    def immutable_hash(value)
+    def self.immutable_hash(value)
       copy = {} #: Hash[untyped, untyped]
       value.each do |key, item|
         copy[immutable_copy(key)] = immutable_copy(item)
@@ -48,7 +46,7 @@ module PaperTrailDiff
     private_class_method :immutable_hash
 
     #: (untyped) -> untyped
-    def serialize(value)
+    def self.serialize(value)
       case value
       when Hash
         serialized = {} #: Hash[untyped, untyped]
@@ -68,7 +66,7 @@ module PaperTrailDiff
     # id 10 before id 2, which is deterministic but reads as unsorted wherever a
     # result is rendered.
     #: (untyped, untyped) -> Array[untyped]
-    def sortable_identity(type, id)
+    def self.sortable_identity(type, id)
       key = case id
             when Numeric then [0, id]
             when String, Symbol then [1, id.to_s]
@@ -81,15 +79,15 @@ module PaperTrailDiff
     # by its class's name rather than the class, so a row still matches after
     # its class is reloaded.
     #: (untyped) -> Array[untyped]
-    def row_key(row)
+    def self.row_key(row)
       [row.class.name, row.id]
     end
 
     # Which record a model and id name, as Endpoint.identity reads a record:
     # by its base class, so a subclass and its base name the same row.
     #: (untyped, untyped) -> Array[String]
-    def record_identity(model_class, id)
-      [model_class.base_class.name.to_s, id.to_s]
+    def self.record_identity(model_class, id)
+      [model_class.base_class.name, id.to_s]
     end
 
     # Only quoting helpers are needed where this is used, so the model's
@@ -98,7 +96,7 @@ module PaperTrailDiff
     # Record 7.1 has no `with_connection` and reaches the same connection
     # through the accessor.
     #: [T] (untyped) { (untyped) -> T } -> T
-    def with_connection(model, &block)
+    def self.with_connection(model, &block)
       return model.with_connection(&block) if model.respond_to?(:with_connection)
 
       yield(model.connection)
@@ -109,17 +107,17 @@ module PaperTrailDiff
     # spelling of the lookup finds the same constant.
     # mutant:disable
     #: (String) -> untyped
-    def constant(name)
+    def self.constant(name)
       Object.const_get(name)
     end
 
     #: (untyped) -> Array[untyped]
-    def chronological_version_key(version)
+    def self.chronological_version_key(version)
       version_key(version.created_at, version.id)
     end
 
     #: (untyped, untyped) -> Array[untyped]
-    def version_key(created_at, id)
+    def self.version_key(created_at, id)
       [created_at, id.to_s.rjust(32, '0')]
     end
 
@@ -128,7 +126,7 @@ module PaperTrailDiff
     # does; a UUID does not, so a tie between UUID-keyed versions is genuinely
     # unorderable and any timeline built from it would be fiction.
     #: (Array[untyped]) -> Array[untyped]
-    def chronological_sort(versions)
+    def self.chronological_sort(versions)
       sorted = versions.sort_by { |version| chronological_version_key(version) }
       ambiguous = ambiguous_pair(sorted)
       return sorted unless ambiguous
@@ -137,7 +135,7 @@ module PaperTrailDiff
     end
 
     #: (Array[untyped]) -> Array[untyped]?
-    def ambiguous_pair(sorted)
+    def self.ambiguous_pair(sorted)
       sorted.each_cons(2).find do |left, right|
         left.created_at == right.created_at && !orderable_tie?(left, right)
       end
@@ -146,14 +144,14 @@ module PaperTrailDiff
     # Ids order versions saved in one instant only when they count up in one
     # table. Two version tables count separately, so ids there say nothing.
     #: (untyped, untyped) -> bool
-    def orderable_tie?(left, right)
+    def self.orderable_tie?(left, right)
       version_table(left) == version_table(right) &&
         sequential_id?(left.id) && sequential_id?(right.id)
     end
 
     #: (untyped) -> untyped
-    def version_table(version)
-      version.class.respond_to?(:table_name) ? version.class.table_name : version.class.name
+    def self.version_table(version)
+      version.class.respond_to?(:table_name) ? version.class.table_name : version.class
     end
     private_class_method :version_table
 
@@ -162,7 +160,7 @@ module PaperTrailDiff
     # so association state cannot be told apart across such a pair even when the
     # scalar sequence is perfectly recoverable.
     #: (Array[untyped]) -> Array[untyped]?
-    def tied_timestamp_pair(versions)
+    def self.tied_timestamp_pair(versions)
       versions.each_cons(2).find { |left, right| left.created_at == right.created_at }
     end
 
@@ -175,7 +173,7 @@ module PaperTrailDiff
     # distinguish the two, which is why this lives in one place: the predicate is
     # easy to write in a form that looks right and always answers true.
     #: (untyped) -> bool
-    def versioned?(model_class)
+    def self.versioned?(model_class)
       model_class.respond_to?(:paper_trail_options) && !model_class.paper_trail_options.nil?
     end
 
@@ -184,20 +182,20 @@ module PaperTrailDiff
     # is cast to the key's type, or the same record read once from history and
     # once from its live row would count as two.
     #: (untyped, untyped) -> untyped
-    def record_id(model_class, id)
+    def self.record_id(model_class, id)
       key = model_class.primary_key
-      return id if id.nil? || !key.is_a?(String)
+      return id unless key.instance_of?(String)
 
       model_class.type_for_attribute(key).cast(id)
     end
 
     #: (untyped) -> bool
-    def sequential_id?(id)
-      id.is_a?(Integer) || id.to_s.match?(/\A\d+\z/)
+    def self.sequential_id?(id)
+      id.instance_of?(Integer) || id.to_s.match?(/\A\d+\z/)
     end
 
     #: (Array[untyped]) -> String
-    def ambiguous_message(pair)
+    def self.ambiguous_message(pair)
       left, right = pair
       "versions #{left.id.inspect} and #{right.id.inspect} share the timestamp " \
         "#{left.created_at.inspect} and have ids that do not order them, so their " \
@@ -206,44 +204,41 @@ module PaperTrailDiff
     end
 
     #: (untyped, untyped) -> Integer
-    def compare_versions(left, right)
+    def self.compare_versions(left, right)
       chronological_version_key(left) <=> chronological_version_key(right) ||
         raise(ConfigurationError, 'versions have incomparable timestamps')
     end
 
     #: (String, String | Symbol) -> String
-    def association_path(parent, name)
+    def self.association_path(parent, name)
       parent.empty? ? name.to_s : "#{parent}.#{name}"
     end
 
+    # Groups of one name are joined: their ids, and their owners where both
+    # know some. A group that knows none has no :owners key.
     #: (Hash[String, Hash[Symbol, untyped]], Hash[String, Hash[Symbol, untyped]]) -> Hash[String, Hash[Symbol, untyped]]
-    def merge_record_groups(existing, incoming)
+    def self.merge_record_groups(existing, incoming)
       existing.merge(incoming) do |_name, left, right|
         merged = left.merge(right, ids: (left.fetch(:ids) | right.fetch(:ids)))
-        owners = merge_record_owners(left[:owners], right[:owners])
-        owners ? merged.merge(owners: owners) : merged
+        next merged unless left.key?(:owners) && right.key?(:owners)
+
+        owners = left.fetch(:owners).merge(right.fetch(:owners)) do |_owner, first, second|
+          first | second
+        end
+        merged.merge(owners: owners)
       end
     end
 
     #: (untyped) -> untyped
-    def duplicate_and_freeze(value)
+    def self.duplicate_and_freeze(value)
       value.dup.freeze
     rescue TypeError
       value
     end
     private_class_method :duplicate_and_freeze
 
-    #: (Hash[String, Array[untyped]]?, Hash[String, Array[untyped]]?) -> Hash[String, Array[untyped]]?
-    def merge_record_owners(left, right)
-      return right unless left
-      return left unless right
-
-      left.merge(right) { |_owner, first, second| first | second }
-    end
-    private_class_method :merge_record_owners
-
     #: (untyped) -> bool
-    def paper_trail_diff_value?(value)
+    def self.paper_trail_diff_value?(value)
       class_name = value.class.name
       class_name&.start_with?('PaperTrailDiff::') && value.respond_to?(:to_h)
     end

@@ -155,7 +155,9 @@ passes is behavior nothing checks. `mutant.yml` lists the classes it mutates:
 - which association paths history cannot read exactly, and whether a request
   reads one with PT-AT: `ApproximatePaths` and `FallbackPaths`;
 - which records an association scope admits, and how it ranks them:
-  `ScopeCondition` and `ScopeRanking`.
+  `ScopeCondition` and `ScopeRanking`;
+- the helpers these share, which order versions, name records, and copy
+  values: `Support`.
 
 The specs for the classes that read the database use tables of their own
 (`spec/support/filter_database.rb`, `spec/support/normalizer_database.rb`,
