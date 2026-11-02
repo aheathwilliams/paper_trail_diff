@@ -95,6 +95,16 @@ RSpec.describe 'Windows that meet inside a transaction',
     step.diff.associations['comments']&.changed&.map { |change| change.attributes.keys }
   end
 
+  # The bodies of the comments each step adds and removes.
+  def bodies(article, within, method, group)
+    timeline(article, within, method, group).reject(&:empty?).map do |step|
+      comments = step.diff.associations['comments']
+      comments && [comments.added, comments.removed].map do |records|
+        records.map { |record| record.attributes.fetch('body') }
+      end
+    end
+  end
+
   def window(article)
     article.versions.minimum(:created_at)..Time.now.utc
   end
@@ -147,18 +157,35 @@ RSpec.describe 'Windows that meet inside a transaction',
           article.update!(title: 'Second')
           whole = window(article)
           edge = added.versions.first.created_at
-          bodies = lambda do |within|
-            timeline(article, within, method, group).reject(&:empty?).map do |step|
-              comments = step.diff.associations['comments']
-              comments && [comments.added, comments.removed].map do |records|
-                records.map { |record| record.attributes.fetch('body') }
-              end
-            end
-          end
+          read = ->(within) { bodies(article, within, method, group) }
 
-          expect(bodies.call(whole.begin...edge) + bodies.call(edge..whole.end))
-            .to eq(bodies.call(whole))
-          expect(bodies.call(edge..whole.end).first).to eq([['new'], ['before']])
+          expect(read.call(whole.begin...edge) + read.call(edge..whole.end)).to eq(read.call(whole))
+          expect(read.call(edge..whole.end).first).to eq([['new'], ['before']])
+        end
+
+        # The comment it edited after the edge was on another article then,
+        # and moves to this one later. The later window leaves that edit out,
+        # so the earlier one reports the transaction, and the later one
+        # starts after it.
+        it 'reports such a transaction in the earlier window when nothing it saved after ' \
+           'the edge is in the tree' do
+          article, comment = article_with_comment
+          elsewhere = WindowArticle.create!(title: 'Other').comments.create!(body: 'elsewhere')
+          WindowArticle.transaction do
+            comment.destroy!
+            elsewhere.update!(body: 'edited')
+          end
+          elsewhere.update!(article: article)
+          article.update!(title: 'Second')
+          whole = window(article)
+          edge = elsewhere.versions.where(event: 'update').first.created_at
+          read = ->(within) { bodies(article, within, method, group) }
+          later = PaperTrailDiff.analyze_many([article], within: edge..whole.end, activity: true,
+                                                         associations: paths, group: group)
+
+          expect(read.call(whole.begin...edge) + read.call(edge..whole.end)).to eq(read.call(whole))
+          expect(read.call(whole.begin...edge).last).to eq([[], ['before']])
+          expect(later.values.first.diff.associations.fetch('comments').removed).to eq([])
         end
 
         it 'does so when the root saved first' do

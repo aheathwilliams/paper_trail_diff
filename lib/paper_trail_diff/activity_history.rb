@@ -83,7 +83,6 @@ module PaperTrailDiff
       @steps = []
       @root_snapshots = {}
       @first_snapshot = nil
-      @first_snapshot_seen = false
       @previous_snapshot = nil
       @selected_last_snapshot = nil
       @previous_boundary = nil
@@ -108,11 +107,17 @@ module PaperTrailDiff
 
     # A left-out event bounds nothing. A reported step it would have opened
     # still moves the reported range's end past it, to the next boundary.
+    #
+    # The history starts at its first kept event. The events left out before
+    # it change nothing the root shows, unless they are of a transaction that
+    # crossed the window's start and has no event kept here: the snapshot at
+    # them is the state before that transaction, whose changes the window
+    # before this one reports (see ActivityTreeFilter).
     #: (ActivityEvent, RecordSnapshot?, bool) -> void
     def consume(event, snapshot, kept)
-      capture_first(snapshot)
       return pass(event) unless kept
 
+      @first_snapshot = snapshot unless @previous_boundary
       boundary = ActivityBoundary.from_version(
         event.version, recorded: @view.recorded_reader(root: event.root?)
       )
@@ -128,14 +133,6 @@ module PaperTrailDiff
     #: (ActivityEvent) -> void
     def pass(event)
       @passed_reported = true if !@include_step || @include_step.call(event)
-    end
-
-    #: (RecordSnapshot?) -> void
-    def capture_first(snapshot)
-      return if @first_snapshot_seen
-
-      @first_snapshot = snapshot
-      @first_snapshot_seen = true
     end
 
     #: (ActivityBoundary, RecordSnapshot?) -> void

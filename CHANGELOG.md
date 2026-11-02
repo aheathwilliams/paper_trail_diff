@@ -72,17 +72,17 @@ project follows [Semantic Versioning](https://semver.org/).
 - Back-to-back windows, or a `report` with `since:` after an earlier report,
   that meet inside a transaction that saved associated records on both sides
   of the edge, and no version of the root, report the changes it saved before
-  the edge. Neither window reported them: the earlier one ends at the state
+  the edge. Neither window reported them: the earlier one ended at the state
   before the transaction, as any window ending inside one does, and the later
   one started after them, and did not know a record the transaction
-  destroyed before the edge. The later window now starts from the state
-  before the transaction, so all of its changes are reported there, once,
-  unless none of the versions it saved after the edge is on a requested path
-  (see the reference's limitations). A transaction group in that window lists
-  in `sources` only the versions inside it. Finding such transactions takes
-  one statement per 500 of the transactions a window's history reads; when it
-  finds one, the window's history is read again from where that transaction
-  began.
+  destroyed before the edge. Now all of the transaction's changes are
+  reported once: in the later window, which starts from the state before the
+  transaction, when a version it saved after the edge is of a record on the
+  requested paths, and otherwise in the earlier window. A transaction group
+  lists in `sources` only the versions inside its window. Finding such
+  transactions takes one statement per 500 of the transactions a window's
+  history reads; when it finds one, the window's history is read again from
+  where that transaction began.
 
 - Activity reports a change to a `belongs_to` target that the root took
   without a version, such as an author set while `has_paper_trail only:`

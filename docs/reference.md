@@ -178,15 +178,14 @@ when a range [starts or ends at a version](#choosing-a-range). This applies to
 transactions that saved a version of the root record, such as a comment edit
 and the `touch: true` article version saved with it. A transaction that saved
 only associated records moves no edge. When it saved some of them before the
-edge and some after, its changes are still all in the later window: the
-earlier window ends at the state before the transaction, and the later one
-starts there (with one exception under [limitations](#limitations)). A
-[transaction group](#one-step-per-transaction-group-transaction) in the later
-window then lists in `sources` only the versions inside the window. So
-back-to-back windows, or a `report` with `since:` after an earlier report,
-show each change exactly once, credited to the transaction that made it. Each
-root moves its own edges, so in a batch two roots can start a few moments
-apart.
+edge and some after, its changes are still all in one window: in the later
+one when a version it saved after the edge is of a record on the requested
+paths before or after the transaction, and otherwise in the earlier one. A
+[transaction group](#one-step-per-transaction-group-transaction) lists in
+`sources` only the versions inside its window. So back-to-back windows, or a
+`report` with `since:` after an earlier report, show each change exactly
+once, credited to the transaction that made it. Each root moves its own
+edges, so in a batch two roots can start a few moments apart.
 
 `analysis.window` is the window an `Analysis` covers after any such move, as a
 Ruby range. It is `nil` when `within:` or `since:` was not given. Every step of
@@ -1520,11 +1519,6 @@ Results can only be as complete as the history PaperTrail and PT-AT recorded.
 - A savepoint that rolls back can split one transaction into several
   transaction groups; see
   [one step per transaction group](#one-step-per-transaction-group-transaction).
-- Back-to-back windows that meet inside a transaction that saved no version
-  of the root report its changes in the later window through the versions it
-  saved after the edge. When none of those is on a requested path, the changes
-  it made before the edge appear in neither window. See
-  [time windows](#time-windows).
 - HABTM membership history exists only where PT-AT recorded it in a
   transaction, and only for the root record without a scope: a scoped HABTM,
   or one below the root, raises `UnsupportedAssociationError`, and a transaction that another record with

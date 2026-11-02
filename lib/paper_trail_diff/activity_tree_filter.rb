@@ -18,10 +18,16 @@ module PaperTrailDiff
   # closes on. A record in neither was outside the tree throughout.
   #
   # The root's own events are always kept, and so is an event whose step is
-  # not reported, which only bounds one that is. A snapshot does not hold a
-  # through's join rows, so their versions are judged when they are
-  # collected, by the row's own state (PreparedActivityIndex#join_versions),
-  # and kept here.
+  # not reported, which only bounds one that is, unless its transaction has an
+  # event whose step is: the transaction crossed the window's end. A version
+  # it saved after the edge reads each record as it stood before the
+  # transaction, so a step ending there shows none of its changes. Judged
+  # like the rest, as the window after the edge judges it, the event bounds
+  # that step when the later window reports the transaction; left out, the
+  # step runs past it and reports the changes here instead (see
+  # ActivityHistoryBuilder#consume). A snapshot does not hold a through's join
+  # rows, so their versions are judged when they are collected, by the row's
+  # own state (PreparedActivityIndex#join_versions), and kept here.
   class ActivityTreeFilter
     # `closing` is the snapshot after the last event: the current record's,
     # or nil when nothing follows, as after the root's destruction.
@@ -29,7 +35,9 @@ module PaperTrailDiff
     def initialize(events, reported:, closing:)
       @reported = reported
       @closing = closing
-      @starts, @ends = spans(events)
+      @keys = transaction_keys(events)
+      @starts, @ends = spans(@keys)
+      @judged = reported_transactions(events)
       @types = {} #: Hash[String, Array[String?]]
     end
 
@@ -47,13 +55,15 @@ module PaperTrailDiff
 
     # @rbs @reported: untyped
     # @rbs @closing: RecordSnapshot?
+    # @rbs @keys: Array[Array[untyped] | Integer]
     # @rbs @starts: Array[Integer]
     # @rbs @ends: Array[Integer]
+    # @rbs @judged: Set[Array[untyped] | Integer]
     # @rbs @types: Hash[String, Array[String?]]
 
     #: (ActivityEvent, Integer, Array[[ActivityEvent, RecordSnapshot?]]) -> bool
     def keep?(event, index, pairs)
-      return true if event.root? || event.join? || !reported?(event)
+      return true if event.root? || event.join? || !@judged.include?(@keys.fetch(index))
 
       position = @ends.fetch(index)
       after = position < pairs.length ? pairs.fetch(position).last : @closing
@@ -68,9 +78,8 @@ module PaperTrailDiff
     # Where each event's transaction starts, and the position just past its
     # last event. Two transactions can interleave, so a transaction's events
     # need not be adjacent.
-    #: (Array[ActivityEvent]) -> [Array[Integer], Array[Integer]]
-    def spans(events)
-      keys = transaction_keys(events)
+    #: (Array[Array[untyped] | Integer]) -> [Array[Integer], Array[Integer]]
+    def spans(keys)
       first = {} #: Hash[Array[untyped] | Integer, Integer]
       last = {} #: Hash[Array[untyped] | Integer, Integer]
       keys.each_with_index do |key, index|
@@ -78,6 +87,13 @@ module PaperTrailDiff
         last[key] = index
       end
       [keys.map { |key| first.fetch(key) }, keys.map { |key| last.fetch(key) + 1 }]
+    end
+
+    # The transactions that have an event whose step is reported.
+    #: (Array[ActivityEvent]) -> Set[Array[untyped] | Integer]
+    def reported_transactions(events)
+      events.each_index.select { |index| reported?(events.fetch(index)) }
+            .to_set { |index| @keys.fetch(index) }
     end
 
     # A version saved outside a transaction is a transaction of its own,

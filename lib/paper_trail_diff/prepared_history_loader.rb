@@ -72,10 +72,11 @@ module PaperTrailDiff
     # and a history read from the window's start holds neither the versions
     # it saved before the start nor the records only those versions name, such
     # as one it destroyed there. Without them the window would start after
-    # changes that the window before it, whose last boundary is in the same
-    # transaction, left to this one, and neither would report them. So the
-    # history is read again from where the earliest such transaction began;
-    # the window's events still start at its start.
+    # changes that the window before it left to this one, by ending its step
+    # at one of the transaction's events here (see ActivityTreeFilter), and
+    # neither would report them. So the history is read again from where the
+    # earliest such transaction began; the window's events still start at its
+    # start.
     #: (Array[Array[untyped]], untyped) -> PreparedHistory
     def reload(keys, earliest)
       PreparedHistoryLoader.new(

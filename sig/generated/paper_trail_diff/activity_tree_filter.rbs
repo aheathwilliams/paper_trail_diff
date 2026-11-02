@@ -17,10 +17,16 @@ module PaperTrailDiff
   # closes on. A record in neither was outside the tree throughout.
   #
   # The root's own events are always kept, and so is an event whose step is
-  # not reported, which only bounds one that is. A snapshot does not hold a
-  # through's join rows, so their versions are judged when they are
-  # collected, by the row's own state (PreparedActivityIndex#join_versions),
-  # and kept here.
+  # not reported, which only bounds one that is, unless its transaction has an
+  # event whose step is: the transaction crossed the window's end. A version
+  # it saved after the edge reads each record as it stood before the
+  # transaction, so a step ending there shows none of its changes. Judged
+  # like the rest, as the window after the edge judges it, the event bounds
+  # that step when the later window reports the transaction; left out, the
+  # step runs past it and reports the changes here instead (see
+  # ActivityHistoryBuilder#consume). A snapshot does not hold a through's join
+  # rows, so their versions are judged when they are collected, by the row's
+  # own state (PreparedActivityIndex#join_versions), and kept here.
   class ActivityTreeFilter
     # `closing` is the snapshot after the last event: the current record's,
     # or nil when nothing follows, as after the root's destruction.
@@ -38,6 +44,10 @@ module PaperTrailDiff
 
     @ends: Array[Integer]
 
+    @judged: Set[Array[untyped] | Integer]
+
+    @keys: Array[Array[untyped] | Integer]
+
     @reported: untyped
 
     @starts: Array[Integer]
@@ -53,8 +63,12 @@ module PaperTrailDiff
     # Where each event's transaction starts, and the position just past its
     # last event. Two transactions can interleave, so a transaction's events
     # need not be adjacent.
-    # : (Array[ActivityEvent]) -> [Array[Integer], Array[Integer]]
-    def spans: (Array[ActivityEvent]) -> [ Array[Integer], Array[Integer] ]
+    # : (Array[Array[untyped] | Integer]) -> [Array[Integer], Array[Integer]]
+    def spans: (Array[Array[untyped] | Integer]) -> [ Array[Integer], Array[Integer] ]
+
+    # The transactions that have an event whose step is reported.
+    # : (Array[ActivityEvent]) -> Set[Array[untyped] | Integer]
+    def reported_transactions: (Array[ActivityEvent]) -> Set[Array[untyped] | Integer]
 
     # A version saved outside a transaction is a transaction of its own,
     # keyed by its position.
