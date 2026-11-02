@@ -6,10 +6,10 @@ module PaperTrailDiff
   # versions and preparing their association history once for the whole batch
   # rather than once per root.
   class AnalysisBatch
-    #: (Array[untyped], time_range: TimeRange?, live_loader: untyped, history_preparer: untyped, analyzer: untyped, ?version_scope: untyped, ?context_required: bool) -> void
+    #: (Array[untyped], time_range: TimeRange?, live_loader: untyped, history_preparer: untyped, analyzer: untyped, version_scope: untyped, context_required: bool) -> void
     def initialize( # rubocop:disable Metrics/ParameterLists
-      records, time_range:, live_loader:, history_preparer:, analyzer:, version_scope: nil,
-      context_required: false
+      records, time_range:, live_loader:, history_preparer:, analyzer:, version_scope:,
+      context_required:
     )
       @records = records
       @context_required = context_required

@@ -122,8 +122,9 @@ passes is behavior nothing checks. `mutant.yml` lists the classes it mutates:
   `SnapshotPool`, and `StoredTimePrecision`;
 - which versions a range reads: `TimeRange`, `TimelineRange`, `VersionRange`,
   `TimeVersionRange`, `RootVersionPlan`, and `TransactionCut`;
-- which versions a batch or filter reads: `BatchedRootVersions`,
-  `BatchedRootAnalyses`, `DeletedAnalysisBatch`, and `HistoricalFilter`;
+- which versions a batch or filter reads: `AnalysisBatch`,
+  `BatchedRootVersions`, `BatchedRootAnalyses`, `DeletedAnalysisBatch`,
+  `HistoricalFilter`, and `VersionScopeFilter`;
 - what a version recorded: `RecordedChanges` and `RecordedChangesReader`;
 - how a step flattens into rows: `ChangeRow` and `ChangeRows`;
 - which records a scope or report selects: `ScopedRootSelection`,

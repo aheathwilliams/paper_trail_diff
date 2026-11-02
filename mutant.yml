@@ -43,6 +43,7 @@ matcher:
     - PaperTrailDiff::TimelineRange*
     - PaperTrailDiff::RootVersionPlan*
     - PaperTrailDiff::HistoricalFilter*
+    - PaperTrailDiff::VersionScopeFilter*
     - PaperTrailDiff::TimeRange*
     - PaperTrailDiff::TransactionCut*
     - PaperTrailDiff::VersionTable*
@@ -50,6 +51,7 @@ matcher:
     - PaperTrailDiff::TimeVersionRange*
     - PaperTrailDiff::BatchedRootVersions*
     - PaperTrailDiff::BatchedRootAnalyses*
+    - PaperTrailDiff::AnalysisBatch*
     - PaperTrailDiff::DeletedAnalysisBatch*
     - PaperTrailDiff::DeletedRootFilter*
     - PaperTrailDiff::RecordedChanges*
