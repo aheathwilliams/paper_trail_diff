@@ -184,6 +184,13 @@ Mutant counts a mutation that runs past its time limit as caught, so
 `mutant.yml` sets the limit well above the time the whole suite takes. With
 mutant's 5-second default, mutations no spec caught were reported as caught.
 
+A group nested for one method, such as `describe '.call'`, names that method,
+and mutant then runs only that group for it, so the group must catch every
+mutation in the method by itself. A private method gets every example of its
+class. Mutant cannot reach a method that `module_function` defines: it mutates
+the private copy no caller uses. The mutated modules define their methods with
+`def self.` instead.
+
 In CI, a pull request mutates only the methods it changes. The full set runs
 nightly in `.github/workflows/mutation.yml`, and only when `main` has a commit
 that has not passed yet. Start it by hand from the Actions tab with "Run
