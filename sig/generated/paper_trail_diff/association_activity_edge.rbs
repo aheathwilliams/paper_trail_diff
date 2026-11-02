@@ -119,13 +119,6 @@ module PaperTrailDiff
       # mutant:disable
       # : () -> untyped
       def arel: () -> untyped
-
-      # Active Record 7.1 has no `with_connection`; see VersionAssociationCandidateScope.
-      # Only that version takes the fallback, so no spec run on a newer one can
-      # tell its mutations apart.
-      # mutant:disable
-      # : [T] () { (untyped) -> T } -> T
-      def connected: [T] () { (untyped) -> T } -> T
     end
 
     # The owners whose versions PT-AT recorded a HABTM target with, keyed by

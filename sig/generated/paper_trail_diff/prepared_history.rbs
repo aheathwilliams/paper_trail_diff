@@ -100,9 +100,6 @@ module PaperTrailDiff
     # : (untyped, untyped, untyped) -> bool
     def member_of?: (untyped, untyped, untyped) -> bool
 
-    # : (untyped) -> String?
-    def scalar_foreign_key: (untyped) -> String?
-
     # : (untyped, untyped) -> Array[String]
     def owner_types: (untyped, untyped) -> Array[String]
 

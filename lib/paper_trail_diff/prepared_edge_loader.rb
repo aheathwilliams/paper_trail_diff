@@ -29,7 +29,7 @@ module PaperTrailDiff
 
     #: (untyped, Array[untyped], untyped) -> Hash[String, Hash[Symbol, untyped]]
     def belongs_to_groups(owner_class, owner_ids, reflection)
-      key = scalar_foreign_key(reflection)
+      key = AssociationKey.scalar_foreign_key(reflection)
       return {} unless key
       unless reflection.polymorphic?
         return group_for(reflection.klass,
@@ -50,7 +50,7 @@ module PaperTrailDiff
 
     #: (untyped, Array[untyped], untyped) -> Hash[String, Hash[Symbol, untyped]]
     def child_groups(owner_class, owner_ids, reflection)
-      key = scalar_foreign_key(reflection)
+      key = AssociationKey.scalar_foreign_key(reflection)
       return {} unless key
 
       historical = historical_child_ids(owner_class, owner_ids, reflection, key)
@@ -163,12 +163,6 @@ module PaperTrailDiff
     #: (Hash[String, Array[untyped]], Hash[String, Array[untyped]]) -> Hash[String, Array[untyped]]
     def merge_owners(left, right)
       left.merge(right) { |_owner, first, second| first | second }
-    end
-
-    #: (untyped) -> String?
-    def scalar_foreign_key(reflection)
-      key = reflection.foreign_key
-      key unless key.is_a?(Array)
     end
 
     #: (untyped) -> Array[String?]

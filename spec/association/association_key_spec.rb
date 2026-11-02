@@ -67,6 +67,18 @@ class KeyedSpecAuthor < ActiveRecord::Base
 end
 
 RSpec.describe PaperTrailDiff::AssociationKey do
+  describe '.scalar_foreign_key' do
+    it 'names the foreign key column, or nothing for a composite key' do
+      comments = TrackedArticle.reflect_on_association(:comments)
+      # An Array subclass, as a composite key may be, so only `is_a?` sees it.
+      composite = instance_double(ActiveRecord::Reflection::BelongsToReflection,
+                                  foreign_key: Class.new(Array).new(%w[shop_id order_id]))
+
+      expect(described_class.scalar_foreign_key(comments)).to eq('article_id')
+      expect(described_class.scalar_foreign_key(composite)).to be_nil
+    end
+  end
+
   def reason(model, name)
     described_class.unsupported_reason(model.reflect_on_association(name))
   end

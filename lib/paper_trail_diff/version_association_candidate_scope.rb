@@ -24,20 +24,9 @@ module PaperTrailDiff
     # @rbs @start_at: untyped
     # @rbs @end_at: untyped
 
-    # Only quoting helpers are needed, so the connection is borrowed for the
-    # duration of building the condition rather than checked out permanently,
-    # which Active Record 7.2 and newer can deprecate. Active Record 7.1 has no
-    # `with_connection` and reaches the same connection through the accessor.
-    #: () { (untyped) -> String } -> String
-    def with_connection(&block)
-      return @version_class.with_connection(&block) if @version_class.respond_to?(:with_connection)
-
-      yield(@version_class.connection)
-    end
-
     #: () -> String
     def candidate_condition
-      with_connection { |connection| condition_sql(connection) }
+      Support.with_connection(@version_class) { |connection| condition_sql(connection) }
     end
 
     #: (untyped) -> String
