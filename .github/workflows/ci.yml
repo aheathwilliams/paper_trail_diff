@@ -238,12 +238,18 @@ jobs:
 
   # Mutation testing of the methods a pull request changes (see mutant.yml).
   # Mutant needs Ruby 3.3+, so it has its own bundle. The full set runs nightly
-  # in mutation.yml, where a newer push cannot cancel it.
+  # in mutation.yml, where a newer push cannot cancel it. The methods are split
+  # across jobs (see script/mutant_shard.rb): one runner took over half an hour
+  # for a pull request that changed 84 of them.
   mutation:
-    name: Mutation testing
+    name: Mutation testing (${{ matrix.shard }}/4)
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
 
     env:
       BUNDLE_GEMFILE: gemfiles/mutant.gemfile
@@ -260,5 +266,5 @@ jobs:
           ruby-version: '4.0'
           bundler-cache: true
 
-      - name: Mutate the subjects this pull request touches
-        run: bundle exec mutant run --since "origin/${{ github.base_ref }}"
+      - name: Mutate this shard of the subjects this pull request touches
+        run: ruby script/mutant_shard.rb "$(( ${{ matrix.shard }} - 1 ))" 4 "origin/${{ github.base_ref }}"

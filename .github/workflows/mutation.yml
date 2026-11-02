@@ -37,12 +37,17 @@ jobs:
             --commit "$GITHUB_SHA" --status success --json databaseId --jq length)
           echo "tested=$([ "$passed" -gt 0 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
 
+  # Split across jobs by method, as in ci.yml (see script/mutant_shard.rb).
   mutation:
-    name: Mutation testing
+    name: Mutation testing (${{ matrix.shard }}/4)
     needs: check
     if: github.event_name == 'workflow_dispatch' || needs.check.outputs.tested != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
 
     env:
       BUNDLE_GEMFILE: gemfiles/mutant.gemfile
@@ -57,5 +62,5 @@ jobs:
           ruby-version: '4.0'
           bundler-cache: true
 
-      - name: Mutate every configured subject
-        run: bundle exec mutant run
+      - name: Mutate this shard of every configured subject
+        run: ruby script/mutant_shard.rb "$(( ${{ matrix.shard }} - 1 ))" 4
