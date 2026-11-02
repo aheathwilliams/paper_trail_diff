@@ -178,19 +178,13 @@ module PaperTrailDiff
       live ? [*recorded, live] : recorded
     end
 
-    # The classes the record had at any point, or either side of one version.
+    # The classes the record had at any point, or either side of one version:
+    # a create has no state before it and a destroy none after.
     #: (?untyped) -> Array[untyped]
     def model_classes(version = nil)
       return states.map(&:model_class) unless version
 
-      states_around(version).map(&:model_class)
-    end
-
-    # The states either side of one version; a create has none before it and a
-    # destroy none after.
-    #: (untyped) -> Array[PreparedRecordState]
-    def states_around(version)
-      states_across(version, version)
+      states_across(version, version).map(&:model_class)
     end
 
     # The states before `first` and after `last`, where they exist.
@@ -404,11 +398,6 @@ module PaperTrailDiff
     #: (untyped, untyped, ?untyped) -> Array[untyped]
     def model_classes(model_class, id, version = nil)
       @series.fetch(identity(model_class, id)).model_classes(version)
-    end
-
-    #: (untyped, untyped, untyped) -> Array[PreparedRecordState]
-    def states_around(model_class, id, version)
-      @series.fetch(identity(model_class, id)).states_around(version)
     end
 
     # The attributes before `first` and after `last`, where they exist, typed

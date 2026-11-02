@@ -5,11 +5,8 @@ module PaperTrailDiff
   # Reloads the current records a call compares with, with their requested
   # associations, once per call.
   class LiveEndpointProvider
-    attr_reader :comparison_payload #: Hash[Symbol, untyped]
-
     #: (tree: AssociationTree) -> void
     def initialize(tree:)
-      @comparison_payload = Instrumentation.comparison_payload(association_paths: tree.paths).freeze
       @loader = LiveEndpointBatchLoader.new(tree: tree)
       @loaded = {} #: Hash[identity, untyped]
     end

@@ -74,8 +74,7 @@ module PaperTrailDiff
       return versions if path.open?
 
       runs = versions.group_by { |version| join_run(version) }.values
-      off_path = [] #: Array[untyped]
-      runs.flat_map { |run| on_path?(group.fetch(:model), run, path) ? run : off_path }
+      runs.select { |run| on_path?(group.fetch(:model), run, path) }.flat_map(&:itself)
     end
 
     #: (untyped, Array[untyped], untyped, ActivityRange) -> Array[untyped]

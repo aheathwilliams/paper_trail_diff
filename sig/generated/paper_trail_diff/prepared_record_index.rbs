@@ -88,14 +88,10 @@ module PaperTrailDiff
     # : () -> Array[PreparedRecordState]
     def states: () -> Array[PreparedRecordState]
 
-    # The classes the record had at any point, or either side of one version.
+    # The classes the record had at any point, or either side of one version:
+    # a create has no state before it and a destroy none after.
     # : (?untyped) -> Array[untyped]
     def model_classes: (?untyped) -> Array[untyped]
-
-    # The states either side of one version; a create has none before it and a
-    # destroy none after.
-    # : (untyped) -> Array[PreparedRecordState]
-    def states_around: (untyped) -> Array[PreparedRecordState]
 
     # The states before `first` and after `last`, where they exist.
     # : (untyped, untyped) -> Array[PreparedRecordState]
@@ -194,9 +190,6 @@ module PaperTrailDiff
 
     # : (untyped, untyped, ?untyped) -> Array[untyped]
     def model_classes: (untyped, untyped, ?untyped) -> Array[untyped]
-
-    # : (untyped, untyped, untyped) -> Array[PreparedRecordState]
-    def states_around: (untyped, untyped, untyped) -> Array[PreparedRecordState]
 
     # The attributes before `first` and after `last`, where they exist, typed
     # as a reified record's are.

@@ -18,7 +18,7 @@ module PaperTrailDiff
       @traversal_preparer = TraversalPreparer.new(tree: @association_tree, traversal: @traversal,
                                                   allow_approximate: allow_approximate)
       @live_endpoints = LiveEndpointProvider.new(tree: @association_tree)
-      @instrumentation_payload = @live_endpoints.comparison_payload
+      @instrumentation_payload = { association_paths: @association_tree.paths }.freeze
       @snapshot_pool = SnapshotPool.new
       @normalizer = SnapshotNormalizer.new(
         tree: @association_tree, ignore_policy: @ignore_policy,
