@@ -52,6 +52,12 @@ module PaperTrailDiff
     # : [T] (untyped) { (untyped) -> T } -> T
     def self?.with_connection: [T] (untyped) { (untyped) -> T } -> T
 
+    # One of Active Record's classes, untyped: Active Record ships no
+    # signatures. Any spelling of the constant finds the same class.
+    # mutant:disable
+    # : (Symbol) -> untyped
+    def self?.active_record: (Symbol) -> untyped
+
     # : (untyped) -> Array[untyped]
     def self?.chronological_version_key: (untyped) -> Array[untyped]
 

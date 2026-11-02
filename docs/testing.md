@@ -127,7 +127,8 @@ passes is behavior nothing checks. `mutant.yml` lists the classes it mutates:
 - which versions a batch or filter reads: `AnalysisBatch`,
   `BatchedRootVersions`, `BatchedRootAnalyses`, `BatchBoundaryResolver`,
   `DeletedAnalysisBatch`, `HistoricalFilter`, and `VersionScopeFilter`;
-- what a version recorded: `RecordedChanges` and `RecordedChangesReader`;
+- what a version recorded: `RecordedChanges`, `RecordedChangesReader`, and
+  `RecordedClass`;
 - how a step flattens into rows: `ChangeRow` and `ChangeRows`;
 - which records a scope or report selects: `ScopedRootSelection`,
   `AssociationActivitySelection`, `AssociationActivityEdge`, and

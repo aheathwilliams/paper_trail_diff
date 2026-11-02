@@ -8,19 +8,16 @@ module PaperTrailDiff
   # A version that stored neither stays on the base class.
   module RecordedClass
     # : (untyped) -> untyped
-    def self?.for: (untyped) -> untyped
+    def self.for: (untyped) -> untyped
 
     # The class a version recorded, or a live record's own class.
     # : (untyped) -> untyped
-    def self?.of_endpoint: (untyped) -> untyped
+    def self.of_endpoint: (untyped) -> untyped
 
     # : (untyped) -> bool
-    def self?.sti_base?: (untyped) -> bool
+    def self.sti_base?: (untyped) -> bool
 
     # : (untyped, untyped) -> untyped
-    def self?.stored_type: (untyped, untyped) -> untyped
-
-    # : (StandardError) -> bool
-    def self?.subclass_not_found?: (StandardError) -> bool
+    def self.stored_type: (untyped, untyped) -> untyped
   end
 end

@@ -104,6 +104,14 @@ module PaperTrailDiff
       yield(model.connection)
     end
 
+    # One of Active Record's classes, untyped: Active Record ships no
+    # signatures. Any spelling of the constant finds the same class.
+    # mutant:disable
+    #: (Symbol) -> untyped
+    def active_record(name)
+      Object.const_get(:ActiveRecord).const_get(name)
+    end
+
     #: (untyped) -> Array[untyped]
     def chronological_version_key(version)
       version_key(version.created_at, version.id)
