@@ -10,6 +10,11 @@ module PaperTrailDiff
     # : (PreparedRecordIndex, ?activity_index: PreparedActivityIndex?) -> void
     def initialize: (PreparedRecordIndex, ?activity_index: PreparedActivityIndex?) -> void
 
+    # The transactions that crossed the history's start; see
+    # PreparedRecordIndex#load_opening_transactions.
+    # : () -> Array[Array[untyped]]
+    def opening_transactions: () -> Array[Array[untyped]]
+
     # Returns every group the edge now holds.
     # : (untyped, untyped, Hash[String, Hash[Symbol, untyped]]) -> Hash[String, Hash[Symbol, untyped]]
     def merge_edge: (untyped, untyped, Hash[String, Hash[Symbol, untyped]]) -> Hash[String, Hash[Symbol, untyped]]

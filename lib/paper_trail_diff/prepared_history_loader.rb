@@ -5,7 +5,10 @@ module PaperTrailDiff
   # Expands the explicit association tree into a request-scoped PreparedHistory.
   class PreparedHistoryLoader
     # Without `end_at`, the activity range closes on the last root version.
-    #: (untyped, root_ids: Array[untyped], root_versions: Array[untyped], tree: AssociationTree, traversal: AssociationTraversal, start_at: untyped, end_at: untyped, live_records: Array[untyped]) -> void
+    # A `window` is a time range, whose start can fall inside a transaction
+    # (see PreparedRecordIndex#load_opening_transactions); a range of versions
+    # starts at the state its first version names.
+    #: (untyped, root_ids: Array[untyped], root_versions: Array[untyped], tree: AssociationTree, traversal: AssociationTraversal, start_at: untyped, end_at: untyped, live_records: Array[untyped], ?window: bool) -> void
     def initialize( # rubocop:disable Metrics/ParameterLists
       record,
       root_ids:,
@@ -14,8 +17,10 @@ module PaperTrailDiff
       traversal:,
       start_at:,
       end_at:,
-      live_records:
+      live_records:,
+      window: false
     )
+      @window = window
       @record = record
       @root_ids = root_ids
       @root_versions = root_versions
@@ -33,11 +38,13 @@ module PaperTrailDiff
     def call
       @records.seed(@record.class, @root_ids, @root_versions)
       load_node(@record.class, @root_ids, @tree, path: '')
+      @records.load_opening_transactions if @window
       @history
     end
 
     private
 
+    # @rbs @window: bool
     # @rbs @record: untyped
     # @rbs @root_ids: Array[untyped]
     # @rbs @root_versions: Array[untyped]

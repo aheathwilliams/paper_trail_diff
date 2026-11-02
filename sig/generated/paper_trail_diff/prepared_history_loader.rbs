@@ -4,8 +4,11 @@ module PaperTrailDiff
   # Expands the explicit association tree into a request-scoped PreparedHistory.
   class PreparedHistoryLoader
     # Without `end_at`, the activity range closes on the last root version.
-    # : (untyped, root_ids: Array[untyped], root_versions: Array[untyped], tree: AssociationTree, traversal: AssociationTraversal, start_at: untyped, end_at: untyped, live_records: Array[untyped]) -> void
-    def initialize: (untyped, root_ids: Array[untyped], root_versions: Array[untyped], tree: AssociationTree, traversal: AssociationTraversal, start_at: untyped, end_at: untyped, live_records: Array[untyped]) -> void
+    # A `window` is a time range, whose start can fall inside a transaction
+    # (see PreparedRecordIndex#load_opening_transactions); a range of versions
+    # starts at the state its first version names.
+    # : (untyped, root_ids: Array[untyped], root_versions: Array[untyped], tree: AssociationTree, traversal: AssociationTraversal, start_at: untyped, end_at: untyped, live_records: Array[untyped], ?window: bool) -> void
+    def initialize: (untyped, root_ids: Array[untyped], root_versions: Array[untyped], tree: AssociationTree, traversal: AssociationTraversal, start_at: untyped, end_at: untyped, live_records: Array[untyped], ?window: bool) -> void
 
     # : () -> PreparedHistory
     def call: () -> PreparedHistory
@@ -31,6 +34,8 @@ module PaperTrailDiff
     @traversal: AssociationTraversal
 
     @tree: AssociationTree
+
+    @window: bool
 
     # : (untyped, Array[untyped], AssociationTree, path: String) -> void
     def load_node: (untyped, Array[untyped], AssociationTree, path: String) -> void

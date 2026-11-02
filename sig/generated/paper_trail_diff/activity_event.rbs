@@ -55,8 +55,12 @@ module PaperTrailDiff
     # : (untyped) -> Array[untyped]?
     def self.transaction_key: (untyped) -> Array[untyped]?
 
-    # : (Array[ActivityEvent]) -> void
-    def initialize: (Array[ActivityEvent]) -> void
+    # An `opening` transaction began before the history's start, so its
+    # versions there are not events, yet the state after it has their changes
+    # (see PreparedRecordIndex#load_opening_transactions). The snapshot after
+    # it is read whole rather than refreshed from its events alone.
+    # : (Array[ActivityEvent], ?opening: Array[Array[untyped]]) -> void
+    def initialize: (Array[ActivityEvent], ?opening: Array[Array[untyped]]) -> void
 
     # : (ActivityEvent) -> Array[String]?
     def branches_for: (ActivityEvent) -> Array[String]?
@@ -69,6 +73,8 @@ module PaperTrailDiff
     @branches: Hash[Array[untyped], Array[String]?]
 
     @group_sizes: Hash[Array[untyped], Integer]
+
+    @opening: Array[Array[untyped]]
 
     # : (Hash[Array[untyped], Array[ActivityEvent]]) -> Hash[Array[untyped], Array[String]?]
     def build_groups: (Hash[Array[untyped], Array[ActivityEvent]]) -> Hash[Array[untyped], Array[String]?]

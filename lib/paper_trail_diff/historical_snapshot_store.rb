@@ -20,12 +20,14 @@ module PaperTrailDiff
       @live_roots = {} #: Hash[identity, untyped]
     end
 
-    #: (untyped, Array[untyped], ?start_at: untyped, ?end_at: untyped) -> PreparedHistory?
+    # A `window` is a time range; see PreparedHistoryLoader.
+    #: (untyped, Array[untyped], ?start_at: untyped, ?end_at: untyped, ?window: bool) -> PreparedHistory?
     def prepare(
       record,
       root_versions,
       start_at: root_versions.first.created_at,
-      end_at: root_versions.last.created_at
+      end_at: root_versions.last.created_at,
+      window: false
     )
       return if @tree.empty?
 
@@ -35,16 +37,17 @@ module PaperTrailDiff
 
       PreparedHistoryLoader.new(
         record, root_ids: [record.id], root_versions: root_versions, start_at: start_at,
-                end_at: end_at, tree: @tree, traversal: @traversal, live_records: []
+                end_at: end_at, tree: @tree, traversal: @traversal, live_records: [],
+                window: window
       ).call
     end
 
-    #: (Array[untyped], Array[untyped], ?start_at: untyped, ?end_at: untyped) -> void
-    def prepare_batch(records, root_versions, start_at: nil, end_at: nil)
+    #: (Array[untyped], Array[untyped], ?start_at: untyped, ?end_at: untyped, ?window: bool) -> void
+    def prepare_batch(records, root_versions, start_at: nil, end_at: nil, window: false)
       return if @tree.empty? || records.empty? || root_versions.empty?
 
       Instrumentation.instrument('prepare_history', batch_payload(records, root_versions)) do
-        register_batch(records, root_versions, start_at: start_at, end_at: end_at)
+        register_batch(records, root_versions, start_at: start_at, end_at: end_at, window: window)
       end
       # A batch passes its roots as it just loaded them, so the current state
       # they close on is read from them rather than once more per root.
@@ -54,11 +57,13 @@ module PaperTrailDiff
     # Missing roots, and roots compared only between versions, have no live
     # graph to collect. Reading their associations here would issue a query
     # per root and seed nonexistent rows as live state.
+    # Only a window gives deleted roots a start.
     #: (Array[untyped], Array[untyped], ?start_at: untyped, ?end_at: untyped) -> void
     def prepare_deleted_batch(records, root_versions, start_at: nil, end_at: nil)
       return if @tree.empty? || records.empty? || root_versions.empty?
 
-      register_batch(records, root_versions, live_records: [], start_at: start_at, end_at: end_at)
+      register_batch(records, root_versions, live_records: [], start_at: start_at, end_at: end_at,
+                                             window: !start_at.nil?)
     end
 
     # `history` is the one `prepare` returned for this root, if any.
@@ -135,9 +140,9 @@ module PaperTrailDiff
         model_type: records.first.class.base_class.name.to_s, batched: true }
     end
 
-    #: (Array[untyped], Array[untyped], ?live_records: Array[untyped], ?start_at: untyped, ?end_at: untyped) -> void
-    def register_batch(records, root_versions, live_records: @live_graph_collector.call(records),
-                       start_at: nil, end_at: nil)
+    #: (Array[untyped], Array[untyped], ?live_records: Array[untyped], ?start_at: untyped, ?end_at: untyped, ?window: bool) -> void
+    def register_batch(records, root_versions, live_records: @live_graph_collector.call(records), # rubocop:disable Metrics/ParameterLists
+                       start_at: nil, end_at: nil, window: false)
       history = PreparedHistoryLoader.new(
         records.first,
         root_ids: records.map(&:id),
@@ -146,7 +151,8 @@ module PaperTrailDiff
         end_at: end_at || root_versions.map(&:created_at).max,
         tree: @tree,
         traversal: @traversal,
-        live_records: live_records
+        live_records: live_records,
+        window: window
       ).call
       root_versions.each { |version| @prepared_histories[context_key(version)] = history }
     end

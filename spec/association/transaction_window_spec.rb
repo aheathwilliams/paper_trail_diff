@@ -66,6 +66,18 @@ RSpec.describe 'Windows that meet inside a transaction',
     [article.reload, article.versions.where(event: 'update').first, comment.versions.last]
   end
 
+  # A transaction that saves no version of the root: the comment's update,
+  # then a new comment.
+  def comments_only
+    article, comment = article_with_comment
+    WindowArticle.transaction do
+      comment.update!(body: 'after')
+      article.comments.create!(body: 'new')
+    end
+    article.update!(title: 'Second')
+    [article.reload, comment.versions.last, WindowComment.find_by!(body: 'new').versions.first]
+  end
+
   def steps(article, within, method: :activity_timeline, group: nil)
     timeline(article, within, method, group).reject(&:empty?).map do |step|
       [step.sources.map(&:version_id), step.diff.attributes.keys, changed_keys(step)]
@@ -101,6 +113,26 @@ RSpec.describe 'Windows that meet inside a transaction',
           expect(right.first).to include([['body']])
           expect(right.first.first).to include(root.id)
           expect(left.flatten).not_to include(child.id)
+        end
+
+        # It moves no edge, but each record in it still reads at its later
+        # versions as it was before it began, here and in a window ending
+        # inside it, so the part saved before the edge is in the later window.
+        # That window's group lists only the versions inside it.
+        it 'reports a transaction of children split by the edge in the later window' do
+          article, before_edge, at_edge = comments_only
+          whole = window(article)
+          by_transaction = lambda do |within|
+            steps(article, within, method: method, group: group).map do |sources, *diff|
+              [PaperTrail::Version.where(id: sources).distinct.pluck(:transaction_id), *diff]
+            end
+          end
+          left = by_transaction.call(whole.begin...at_edge.created_at)
+          right = by_transaction.call(at_edge.created_at..whole.end)
+
+          expect(left + right).to eq(by_transaction.call(whole))
+          expect(right.first).to eq([[at_edge.transaction_id], [], [['body']]])
+          expect(left.flatten).not_to include(before_edge.transaction_id)
         end
 
         it 'does so when the root saved first' do

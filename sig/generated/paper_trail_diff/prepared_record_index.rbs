@@ -65,6 +65,12 @@ module PaperTrailDiff
     # : (versions: Array[untyped], live: PreparedRecordState?, ?state_loader: PreparedVersionStateLoader) -> void
     def initialize: (versions: Array[untyped], live: PreparedRecordState?, ?state_loader: PreparedVersionStateLoader) -> void
 
+    # Versions the record saved before the history's start in transactions
+    # that saved more from the start onward. The series does not hold them,
+    # but the state before such a transaction lies in its first one here.
+    # : (Array[untyped]) -> void
+    def add_opening: (Array[untyped]) -> void
+
     # : (untyped) -> untyped
     def record_before: (untyped) -> untyped
 
@@ -104,6 +110,8 @@ module PaperTrailDiff
 
     @live: PreparedRecordState?
 
+    @opening: Hash[untyped, untyped]
+
     @state_loader: PreparedVersionStateLoader
 
     @states: Hash[untyped, PreparedRecordState?]
@@ -139,6 +147,10 @@ module PaperTrailDiff
 
   # Request-scoped scalar history loaded once per model identity.
   class PreparedRecordIndex
+    # The transactions load_opening_transactions found crossing the start, keyed
+    # as ActivityTransactionGroups keys a version's.
+    attr_reader opening_transactions: Array[Array[untyped]]
+
     # : (untyped, ?end_at: untyped, ?live_records: Array[untyped]) -> void
     def initialize: (untyped, ?end_at: untyped, ?live_records: Array[untyped]) -> void
 
@@ -147,6 +159,11 @@ module PaperTrailDiff
 
     # : (untyped, Array[untyped], Array[untyped]) -> void
     def seed: (untyped, Array[untyped], Array[untyped]) -> void
+
+    # A window's history starts at the window, which can fall inside a
+    # transaction; see PreparedOpeningLoader.
+    # : () -> void
+    def load_opening_transactions: () -> void
 
     # : (untyped, untyped, untyped) -> untyped
     def record_before: (untyped, untyped, untyped) -> untyped
@@ -205,6 +222,8 @@ module PaperTrailDiff
 
     @end_time: untyped
 
+    @opening_transactions: Array[Array[untyped]]
+
     @seeded_live_records: Hash[Array[String], untyped]
 
     @series: Hash[Array[String], PreparedRecordSeries]
@@ -243,5 +262,44 @@ module PaperTrailDiff
 
     # : (untyped, Array[untyped]) -> Array[untyped]
     def live_records_for: (untyped, Array[untyped]) -> Array[untyped]
+  end
+
+  # A transaction that crosses a window's start and saved a version of the
+  # root moves the window's edge back to where it began (see TransactionCut);
+  # one that saved only associated records moves nothing. A boundary in such a
+  # transaction still reads each record as it stood before the transaction
+  # began (see PreparedRecordSeries#boundary_index), so a record that saved its
+  # part before the start needs those versions too. Without them the window
+  # would start after a change that the window before it, whose last boundary
+  # is in the same transaction, left to this one, and neither would report
+  # it. This gives each record held its versions from before the start in the
+  # transactions its index's versions from the start onward belong to, in one
+  # statement per 500 transactions.
+  class PreparedOpeningLoader
+    # Transactions per statement, as TransactionCut slices them.
+    SLICE: ::Integer
+
+    # : (Hash[Array[String], PreparedRecordSeries], untyped) -> void
+    def initialize: (Hash[Array[String], PreparedRecordSeries], untyped) -> void
+
+    # The transactions that crossed the start, keyed as ActivityTransactionGroups
+    # keys a version's.
+    # : () -> Array[Array[untyped]]
+    def call: () -> Array[Array[untyped]]
+
+    private
+
+    @series: Hash[Array[String], PreparedRecordSeries]
+
+    @start: untyped
+
+    # Of the versions saved before the start, those of records held.
+    # : (Array[untyped]) -> Array[Array[untyped]]
+    def add: (Array[untyped]) -> Array[Array[untyped]]
+
+    # The transactions of the versions held from the start onward, by version
+    # class, since each version table numbers its own.
+    # : () -> Hash[untyped, Array[untyped]]
+    def transactions: () -> Hash[untyped, Array[untyped]]
   end
 end

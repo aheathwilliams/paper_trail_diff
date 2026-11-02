@@ -77,6 +77,24 @@ RSpec.describe PaperTrailDiff::PreparedHistoryLoader do
     expect([handled, after.body]).to eq([true, 'comment'])
   end
 
+  # A boundary in a transaction that crossed a window's start reads its
+  # records as they were before it began. A range of versions starts at its
+  # first version's state instead, so it looks for no such transaction.
+  it 'finds, for a window only, the transactions that crossed its start' do
+    article = TrackedArticle.create!(title: 'Root')
+    comment = article.comments.create!(body: 'before')
+    added = TrackedArticle.transaction do
+      comment.update!(body: 'after')
+      article.comments.create!(body: 'added')
+    end
+    edge = versions_of(added).first
+    window = load_history(article, ['comments'], start_at: edge.created_at, window: true)
+    range = load_history(article, ['comments'], start_at: edge.created_at)
+
+    expect(window.opening_transactions).to eq([[edge.class.name, edge.transaction_id]])
+    expect(range.opening_transactions).to eq([])
+  end
+
   it 'prepares every root it is given, as one batch' do
     articles = Array.new(2) { |index| TrackedArticle.create!(title: "Root #{index}") }
     comments = articles.map { |article| article.comments.create!(body: 'comment') }

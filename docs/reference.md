@@ -176,10 +176,16 @@ A window edge that falls inside a transaction moves back to where that
 transaction began, so the whole transaction is in the later window, as it is
 when a range [starts or ends at a version](#choosing-a-range). This applies to
 transactions that saved a version of the root record, such as a comment edit
-and the `touch: true` article version saved with it. So back-to-back windows,
-or a `report` with `since:` after an earlier report, show each change exactly
-once, credited to the transaction that made it. Each root moves its own edges,
-so in a batch two roots can start a few moments apart.
+and the `touch: true` article version saved with it. A transaction that saved
+only associated records moves no edge. When it saved some of them before the
+edge and some after, its changes are still all in the later window: the
+earlier window ends at the state before the transaction, and the later one
+starts there. A [transaction group](#one-step-per-transaction-group-transaction)
+in the later window then lists in `sources` only the versions inside the
+window. So back-to-back windows, or a `report` with `since:` after an earlier
+report, show each change exactly once, credited to the transaction that made
+it. Each root moves its own edges, so in a batch two roots can start a few
+moments apart.
 
 `analysis.window` is the window an `Analysis` covers after any such move, as a
 Ruby range. It is `nil` when `within:` or `since:` was not given. Every step of
@@ -475,7 +481,9 @@ PaperTrailDiff.activity_timeline(article, associations: [:comments], group: :tra
 - Its `source_boundary` is the first event in the transaction. That event's
   author is not necessarily the author of every grouped change. `step.sources`
   lists every event in the transaction, each with its own author, except
-  those of records that were outside the tree before and after it.
+  those of records that were outside the tree before and after it, and those
+  saved before a window that starts inside a transaction of associated
+  records only (see [time windows](#time-windows)).
 - Versions without a `transaction_id` are never grouped.
 - A savepoint that rolls back can split one transaction into more than one
   group. PT-AT clears the transaction id when the savepoint rolls back, so the

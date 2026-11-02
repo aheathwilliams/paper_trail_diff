@@ -23,6 +23,17 @@ project follows [Semantic Versioning](https://semver.org/).
   but still held both snapshots; both are `nil` now, as for any analysis that
   reports nothing.
 
+- Back-to-back windows, or a `report` with `since:` after an earlier report,
+  that meet inside a transaction that saved associated records on both sides
+  of the edge, and no version of the root, report the changes it saved before
+  the edge. Neither window reported them: the earlier one ends at the state
+  before the transaction, as any window ending inside one does, and the later
+  one started after them. The later window now starts from the state before
+  the transaction, so all of its changes are reported there, once. A
+  transaction group in that window lists in `sources` only the versions
+  inside it. Finding such transactions takes one statement per 500 of the
+  transactions a window's history reads.
+
 ### Development
 
 - `spec/oracle/shapes_history_spec.rb` compares rebuilt history with plain
@@ -32,7 +43,7 @@ project follows [Semantic Versioning](https://semver.org/).
   a child's own `belongs_to`, scoped and ranked `has_many` and `has_one`, and
   a default scope. It checks every endpoint, timeline step, activity step,
   window and window split, through `spec/support/graph_oracle.rb`, which
-  reads the expected states for any model. It found both bugs above.
+  reads the expected states for any model. It found the three bugs above.
   `ORACLE_SHOW` prints more than the first five mismatches.
 
 ## [0.16.0] - 2026-11-01
