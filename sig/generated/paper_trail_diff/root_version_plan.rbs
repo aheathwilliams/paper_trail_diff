@@ -75,6 +75,9 @@ module PaperTrailDiff
 
     @mutation_keys: Set[Array[untyped]]
 
+    # : (**untyped) -> RootVersionPlan
+    def copy: (**untyped) -> RootVersionPlan
+
     # : () -> Array[untyped]
     def default_mutations: () -> Array[untyped]
 

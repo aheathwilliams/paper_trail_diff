@@ -18,9 +18,10 @@ module PaperTrailDiff
     INCOMPLETE: ::String
 
     # `selected` is what a filter keeps of `in_range`; one that keeps every
-    # version is no filter. A `whole` plan replays every version in the range,
-    # as one without a filter does, and the filter names only which of them
-    # are mutations.
+    # version is no filter. Activity on associations reports the changes a
+    # filter keeps on them wherever they fall in the range, so a `whole` plan
+    # replays every root version there, as one without a filter does, and the
+    # filter names only which of them are the root's own mutations.
     # : (in_range: Array[untyped], selected: Array[untyped], after_range: untyped, windowed: bool, ?context_required: bool, ?live_endpoint: untyped, ?whole: bool) -> void
     def initialize: (in_range: Array[untyped], selected: Array[untyped], after_range: untyped, windowed: bool, ?context_required: bool, ?live_endpoint: untyped, ?whole: bool) -> void
 
@@ -39,17 +40,11 @@ module PaperTrailDiff
 
     @live_endpoint: untyped
 
+    @reported: Array[untyped]
+
     @selected: Array[untyped]
 
-    @whole: bool
-
     @windowed: bool
-
-    # Activity on associations reports the changes a filter keeps on them
-    # wherever they fall in the range, so it replays every root version
-    # there; the filter still names the root's own mutations.
-    # : () -> RootVersionPlan
-    def whole_plan: () -> RootVersionPlan
 
     # A window reaching past the last recorded version has only the live record
     # left to show what its final mutation produced. That record is a closing

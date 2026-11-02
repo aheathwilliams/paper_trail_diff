@@ -44,11 +44,7 @@ module PaperTrailDiff
       end
 
       #: () -> RootVersionPlan
-      def empty
-        versions = [] #: Array[untyped]
-        steps = [] #: Array[[untyped, untyped]]
-        new(versions: versions, steps: steps)
-      end
+      def empty = closing_on(nil)
 
       # No root version to report or replay: only descendants moved, and the
       # live record is the root's state throughout.
@@ -82,24 +78,12 @@ module PaperTrailDiff
     end
 
     #: () -> RootVersionPlan
-    def closing_on_destroy
-      self.class.new(
-        versions: versions, steps: steps, context_version: context_version,
-        reconstruction_versions: reconstruction_versions, mutations: mutations,
-        closing_record: closing_record, closes_on_destroy: true
-      )
-    end
+    def closing_on_destroy = copy(closes_on_destroy: true)
 
     # The same plan reporting only `selected` as mutations, of the versions it
     # holds.
     #: (Array[untyped]) -> RootVersionPlan
-    def reporting(selected)
-      self.class.new(
-        versions: versions, steps: steps, context_version: context_version,
-        reconstruction_versions: reconstruction_versions, mutations: selected,
-        closing_record: closing_record, closes_on_destroy: closes_on_destroy
-      )
-    end
+    def reporting(selected) = copy(mutations: selected)
 
     # What the range's final state is read from, which is the live record when
     # the window closes on current state and the last version otherwise.
@@ -116,6 +100,15 @@ module PaperTrailDiff
     private
 
     # @rbs @mutation_keys: Set[Array[untyped]]
+
+    #: (**untyped) -> RootVersionPlan
+    def copy(**changes)
+      self.class.new(
+        versions: versions, steps: steps, context_version: context_version,
+        reconstruction_versions: reconstruction_versions, mutations: mutations,
+        closing_record: closing_record, closes_on_destroy: closes_on_destroy, **changes
+      )
+    end
 
     #: () -> Array[untyped]
     def default_mutations

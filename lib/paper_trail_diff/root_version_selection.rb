@@ -21,55 +21,45 @@ module PaperTrailDiff
                  'the window to end before the last recorded version'
 
     # `selected` is what a filter keeps of `in_range`; one that keeps every
-    # version is no filter. A `whole` plan replays every version in the range,
-    # as one without a filter does, and the filter names only which of them
-    # are mutations.
+    # version is no filter. Activity on associations reports the changes a
+    # filter keeps on them wherever they fall in the range, so a `whole` plan
+    # replays every root version there, as one without a filter does, and the
+    # filter names only which of them are the root's own mutations.
     #: (in_range: Array[untyped], selected: Array[untyped], after_range: untyped, windowed: bool, ?context_required: bool, ?live_endpoint: untyped, ?whole: bool) -> void
     def initialize( # rubocop:disable Metrics/ParameterLists
       in_range:, selected:, after_range:, windowed:, context_required: false, live_endpoint: nil,
       whole: false
     )
       @in_range = in_range
-      @selected = selected
+      @reported = selected
+      @selected = whole ? in_range : selected
       @after_range = after_range
       @windowed = windowed
       @context_required = context_required
-      @filtered = selected.length < in_range.length
+      @filtered = @selected.length < in_range.length
       @live_endpoint = live_endpoint
-      @whole = whole
     end
 
     #: () -> RootVersionPlan
     def call
-      return whole_plan if @whole && @filtered
       return without_selection if @selected.empty?
 
       closing = revealing_version || @live_endpoint
       plan = @filtered ? filtered_plan(closing) : contiguous_plan(closing)
-      closes_on_destroy?(closing) ? plan.closing_on_destroy : plan
+      plan = plan.closing_on_destroy if closes_on_destroy?(closing)
+      plan.reporting(@reported)
     end
 
     private
 
     # @rbs @in_range: Array[untyped]
+    # @rbs @reported: Array[untyped]
     # @rbs @selected: Array[untyped]
     # @rbs @after_range: untyped
     # @rbs @windowed: bool
     # @rbs @context_required: bool
     # @rbs @filtered: bool
     # @rbs @live_endpoint: untyped
-    # @rbs @whole: bool
-
-    # Activity on associations reports the changes a filter keeps on them
-    # wherever they fall in the range, so it replays every root version
-    # there; the filter still names the root's own mutations.
-    #: () -> RootVersionPlan
-    def whole_plan
-      RootVersionSelection.new(
-        in_range: @in_range, selected: @in_range, after_range: @after_range,
-        windowed: @windowed, context_required: @context_required, live_endpoint: @live_endpoint
-      ).call.reporting(@selected)
-    end
 
     # A window reaching past the last recorded version has only the live record
     # left to show what its final mutation produced. That record is a closing
@@ -123,8 +113,7 @@ module PaperTrailDiff
       RootVersionPlan.new(
         versions: versions, steps: steps,
         context_version: (revealing unless live),
-        reconstruction_versions: spanned(versions),
-        mutations: @selected, closing_record: live
+        reconstruction_versions: spanned(versions), closing_record: live
       )
     end
 
