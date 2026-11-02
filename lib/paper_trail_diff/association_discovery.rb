@@ -69,7 +69,7 @@ module PaperTrailDiff
 
     #: (untyped, prefix: String, ancestry: Array[untyped], depth: Integer) -> Array[AssociationDescriptor]
     def describe_and_descend(reflection, prefix:, ancestry:, depth:)
-      path = association_path(prefix, reflection.name.to_s)
+      path = Support.association_path(prefix, reflection.name)
       target_class = reflection_target(reflection)
       cycle = target_class ? ancestry.include?(target_class) : false
       descriptor = descriptor_for(reflection, path, target_class, cycle)
@@ -125,11 +125,6 @@ module PaperTrailDiff
     #: (untyped) -> String?
     def reflection_target_name(reflection)
       reflection.class_name.to_s unless reflection.polymorphic?
-    end
-
-    #: (String, String) -> String
-    def association_path(prefix, name)
-      prefix.empty? ? name : "#{prefix}.#{name}"
     end
   end
 end

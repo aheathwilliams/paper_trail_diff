@@ -59,8 +59,5 @@ module PaperTrailDiff
 
     # : (untyped) -> String?
     def reflection_target_name: (untyped) -> String?
-
-    # : (String, String) -> String
-    def association_path: (String, String) -> String
   end
 end
