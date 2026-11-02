@@ -4,8 +4,8 @@ module PaperTrailDiff
   # Collects root and selected-descendant versions relevant to one root history range.
   # Descendants are found in the root's prepared history.
   class ActivityVersionCollector
-    # : (untyped, root_versions: Array[untyped], tree: AssociationTree, ?range_start: untyped, ?range_end: untyped, ?prepared: PreparedActivityIndex?) -> void
-    def initialize: (untyped, root_versions: Array[untyped], tree: AssociationTree, ?range_start: untyped, ?range_end: untyped, ?prepared: PreparedActivityIndex?) -> void
+    # : (untyped, root_versions: Array[untyped], tree: AssociationTree, range_start: untyped, range_end: untyped, prepared: PreparedActivityIndex?) -> void
+    def initialize: (untyped, root_versions: Array[untyped], tree: AssociationTree, range_start: untyped, range_end: untyped, prepared: PreparedActivityIndex?) -> void
 
     # A tie between version tables, or between ids that do not count up,
     # raises rather than building a timeline in an arbitrary order.
@@ -26,41 +26,53 @@ module PaperTrailDiff
 
     @traversal: AssociationTraversal
 
-    @tree: AssociationTree
-
-    # : (untyped, Array[untyped], AssociationTree, path: String, branch: String?) -> void
-    def collect_tree: (untyped, Array[untyped], AssociationTree, path: String, branch: String?) -> void
+    # Each event is credited to the top-level association it was reached
+    # through.
+    # : (Hash[Symbol, untyped], AssociationTree, path: String, branch: String?) -> void
+    def collect_tree: (Hash[Symbol, untyped], AssociationTree, path: String, branch: String?) -> void
 
     # : (Hash[Symbol, untyped], untyped, AssociationTree, String, String) -> void
     def collect_reflection: (Hash[Symbol, untyped], untyped, AssociationTree, String, String) -> void
 
-    # : (Hash[Symbol, untyped], untyped, String) -> Hash[String, untyped]
-    def edge_groups: (Hash[Symbol, untyped], untyped, String) -> Hash[String, untyped]
+    # The groups of records an edge leads to, one for each class.
+    # : (Hash[Symbol, untyped], untyped, String) -> Array[Hash[Symbol, untyped]]
+    def edge_groups: (Hash[Symbol, untyped], untyped, String) -> Array[Hash[Symbol, untyped]]
 
-    # : (Hash[Symbol, untyped], untyped, String) -> Hash[String, untyped]
-    def through_groups: (Hash[Symbol, untyped], untyped, String) -> Hash[String, untyped]
+    # A through's join part is one class, never polymorphic, so one group of
+    # join rows leads to its targets.
+    # : (Hash[Symbol, untyped], untyped, String) -> Array[Hash[Symbol, untyped]]
+    def through_groups: (Hash[Symbol, untyped], untyped, String) -> Array[Hash[Symbol, untyped]]
 
     # Every target the owners pointed at in the range, not only those their own
     # changes there recorded: an author renamed under an article nobody edited
     # is still that article's activity. Prepared history holds every target its
     # snapshots can contain. One it did not load -- a key changed without a
     # version -- has no state to compare.
-    # : (untyped, Array[untyped], untyped) -> Hash[String, untyped]
-    def belongs_to_groups: (untyped, Array[untyped], untyped) -> Hash[String, untyped]
+    # : (untyped, Array[untyped], untyped) -> Array[Hash[Symbol, untyped]]
+    def belongs_to_groups: (untyped, Array[untyped], untyped) -> Array[Hash[Symbol, untyped]]
 
-    # : (untyped, Array[untyped], untyped) -> Hash[String, untyped]
-    def direct_child_groups: (untyped, Array[untyped], untyped) -> Hash[String, untyped]
+    # With no children, nothing below them is read: prepared history registers
+    # only the classes it loaded records of.
+    # : (untyped, Array[untyped], untyped) -> Array[Hash[Symbol, untyped]]
+    def direct_child_groups: (untyped, Array[untyped], untyped) -> Array[Hash[Symbol, untyped]]
 
-    # : (untyped, Array[untyped], untyped) -> Hash[String, untyped]
-    def habtm_groups: (untyped, Array[untyped], untyped) -> Hash[String, untyped]
+    # : (untyped, Array[untyped], untyped) -> Array[Hash[Symbol, untyped]]
+    def habtm_groups: (untyped, Array[untyped], untyped) -> Array[Hash[Symbol, untyped]]
 
-    # : (Array[untyped], untyped) ?{ (untyped, untyped) -> bool } -> Hash[String, untyped]
-    def identity_groups: (Array[untyped], untyped) ?{ (untyped, untyped) -> bool } -> Hash[String, untyped]
+    # A type a polymorphic row stored that names no class has no versions to
+    # read.
+    # : (Array[untyped], untyped) ?{ (untyped, untyped) -> bool } -> Array[Hash[Symbol, untyped]]
+    def identity_groups: (Array[untyped], untyped) ?{ (untyped, untyped) -> bool } -> Array[Hash[Symbol, untyped]]
+
+    # Each target once, however many rows name it, and none for a row that
+    # names none. The registry keeps a version once, and a missing target has
+    # no versions, so this only saves reading them again, which is why mutant
+    # leaves it alone.
+    # mutant:disable
+    # : (Array[untyped]) -> Array[untyped]
+    def target_ids: (Array[untyped]) -> Array[untyped]
 
     # : (untyped, Array[untyped]) -> Hash[Symbol, untyped]
     def group: (untyped, Array[untyped]) -> Hash[Symbol, untyped]
-
-    # : (Hash[String, untyped], Hash[String, untyped]) -> void
-    def merge_groups!: (Hash[String, untyped], Hash[String, untyped]) -> void
   end
 end

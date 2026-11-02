@@ -137,8 +137,8 @@ passes is behavior nothing checks. `mutant.yml` lists the classes it mutates:
 - where an activity range starts and ends, and which association history its
   query reads: `ActivityRange` and `VersionAssociationCandidateScope`;
 - what activity a record shows: `ActivityTimelineBuilder`,
-  `ActivityTransactionGrouper`, `ActivityTreeFilter`, `ActivityScopeFilter`,
-  and `ActivityView`;
+  `ActivityVersionCollector`, `ActivityTransactionGrouper`, `ActivityTreeFilter`,
+  `ActivityScopeFilter`, and `ActivityView`;
 - what an update did to a record, and whether it moved the record to another
   owner: `ActivitySnapshotDelta`;
 - which association paths a request accepts: `AssociationTraversal`,

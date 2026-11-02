@@ -67,6 +67,7 @@ matcher:
     - PaperTrailDiff::PreparedHistoryLoader*
     - PaperTrailDiff::PreparedEdgeLoader*
     - PaperTrailDiff::ActivityTimelineBuilder*
+    - PaperTrailDiff::ActivityVersionCollector*
     - PaperTrailDiff::ActivityTreeFilter*
     - PaperTrailDiff::ActivityTransactionGrouper*
     - PaperTrailDiff::ActivityView*
