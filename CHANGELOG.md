@@ -43,6 +43,12 @@ project follows [Semantic Versioning](https://semver.org/).
   decoded once for each of them, and a step nobody read cost as much as one
   that was. A decoding error now raises when the changes are read.
 
+- Activity asks Active Record whether a value is a version or a record once
+  for each model class, rather than on every read: Active Record answers
+  `respond_to?` by also looking through the record's attributes. An
+  `analyze_many` of 2,000 articles with their comments took about 9% less
+  time.
+
 ### Fixed
 
 - Activity on a `has_many :through` leaves out the versions a join record

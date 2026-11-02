@@ -72,17 +72,12 @@ module PaperTrailDiff
 
     #: (untyped) -> bool
     def version?(endpoint)
-      endpoint.respond_to?(:reify) &&
-        endpoint.respond_to?(:item_type) &&
-        endpoint.respond_to?(:item_id)
+      EndpointKind.call(endpoint) == :version
     end
 
     #: (untyped) -> bool
     def record?(endpoint)
-      !version?(endpoint) &&
-        endpoint.respond_to?(:persisted?) &&
-        endpoint.respond_to?(:destroyed?) &&
-        endpoint.class.respond_to?(:base_class)
+      EndpointKind.call(endpoint) == :record
     end
 
     #: (untyped) -> Array[String]
@@ -141,5 +136,37 @@ module PaperTrailDiff
       raise InvalidEndpointError, 'current record endpoint must not have unsaved changes'
     end
     private_class_method :validate_record!
+  end
+
+  # Whether a value is a version, a record, or neither. Answered once for each
+  # Active Record class: its respond_to? also looks through the instance's
+  # attributes, which costs more than most of what reading a version does, and
+  # every instance of a model answers alike, since this gem reads versions with
+  # all their columns. Anything else is asked each time.
+  module EndpointKind
+    @kinds = {} #: Hash[untyped, Symbol]
+
+    #: (untyped) -> Symbol
+    def self.call(endpoint)
+      model = endpoint.class
+      return classify(endpoint) unless model.respond_to?(:column_names)
+
+      kinds = @kinds #: Hash[untyped, Symbol]
+      kinds[model] ||= classify(endpoint)
+    end
+
+    #: (untyped) -> Symbol
+    def self.classify(endpoint)
+      if endpoint.respond_to?(:reify) && endpoint.respond_to?(:item_type) &&
+         endpoint.respond_to?(:item_id)
+        :version
+      elsif endpoint.respond_to?(:persisted?) && endpoint.respond_to?(:destroyed?) &&
+            endpoint.class.respond_to?(:base_class)
+        :record
+      else
+        :other
+      end
+    end
+    private_class_method :classify
   end
 end

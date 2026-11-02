@@ -4,6 +4,8 @@
 module PaperTrailDiff
   # Places one version relative to another on the recorded timeline.
   module VersionBoundary
+    @transactional = {} #: Hash[untyped, bool]
+
     module_function
 
     # Whether `candidate` was recorded at or after `boundary`. Versions sharing
@@ -58,8 +60,19 @@ module PaperTrailDiff
     # groups with nothing.
     #: (untyped) -> untyped
     def transaction_id(version)
-      version.transaction_id if version.respond_to?(:transaction_id)
+      version.transaction_id if transactional?(version)
     end
+
+    # Answered once for each Active Record class, as Endpoint.version? is.
+    #: (untyped) -> bool
+    def transactional?(version)
+      model = version.class
+      return version.respond_to?(:transaction_id) unless model.respond_to?(:column_names)
+
+      known = @transactional #: Hash[untyped, bool]
+      known.fetch(model) { known[model] = version.respond_to?(:transaction_id) }
+    end
+    private_class_method :transactional?
 
     #: (untyped) -> bool
     def version_record?(value)
