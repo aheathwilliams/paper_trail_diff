@@ -138,21 +138,15 @@ module PaperTrailDiff
     private_class_method :validate_record!
   end
 
-  # Whether a value is a version, a record, or neither. Answered once for each
-  # Active Record class: its respond_to? also looks through the instance's
-  # attributes, which costs more than most of what reading a version does, and
-  # every instance of a model answers alike, since this gem reads versions with
-  # all their columns. Anything else is asked each time.
+  # Whether a value is a version, a record, or neither, answered once for
+  # each Active Record class (see Support.per_model).
   module EndpointKind
     @kinds = {} #: Hash[untyped, Symbol]
 
     #: (untyped) -> Symbol
     def self.call(endpoint)
-      model = endpoint.class
-      return classify(endpoint) unless model.respond_to?(:column_names)
-
       kinds = @kinds #: Hash[untyped, Symbol]
-      kinds[model] ||= classify(endpoint)
+      Support.per_model(kinds, endpoint) { |value| classify(value) }
     end
 
     #: (untyped) -> Symbol

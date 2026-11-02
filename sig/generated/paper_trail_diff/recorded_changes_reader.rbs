@@ -20,7 +20,8 @@ module PaperTrailDiff
     @lock: Thread::Mutex
 
     # One boundary's recorded changes, read when first asked for. It lets go of
-    # the version once read, so a result keeps only what was decoded.
+    # the version and the reader once read, so a result keeps only what was
+    # decoded, and not the decodes of the whole call.
     class Pending
       # : (RecordedChangesReader, untyped) -> void
       def initialize: (RecordedChangesReader, untyped) -> void
@@ -30,9 +31,7 @@ module PaperTrailDiff
 
       @lock: Thread::Mutex
 
-      @read: bool
-
-      @reader: RecordedChangesReader
+      @reader: RecordedChangesReader?
 
       @value: Hash[String, ValueChange]?
 

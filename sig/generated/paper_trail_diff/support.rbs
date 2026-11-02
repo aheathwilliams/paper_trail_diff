@@ -3,6 +3,14 @@
 module PaperTrailDiff
   # Internal helpers for isolating and serializing values held by result objects.
   module Support
+    # Answers a question about `value` once for each Active Record class, in
+    # `answers`: its respond_to? also looks through the instance's attributes,
+    # which costs more than most of what reading a version does, and every
+    # instance of a model answers alike, since this gem reads versions with
+    # all their columns. Anything else is asked each time.
+    # : [T] (Hash[untyped, T], untyped) { (untyped) -> T } -> T
+    def self?.per_model: [T] (Hash[untyped, T], untyped) { (untyped) -> T } -> T
+
     # : (untyped) -> untyped
     def self?.immutable_copy: (untyped) -> untyped
 

@@ -31,7 +31,7 @@ module PaperTrailDiff
     # : (untyped) -> untyped
     def self?.transaction_id: (untyped) -> untyped
 
-    # Answered once for each Active Record class, as Endpoint.version? is.
+    # Answered once for each Active Record class (see Support.per_model).
     # : (untyped) -> bool
     def self?.transactional?: (untyped) -> bool
 

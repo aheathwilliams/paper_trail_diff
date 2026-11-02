@@ -63,14 +63,11 @@ module PaperTrailDiff
       version.transaction_id if transactional?(version)
     end
 
-    # Answered once for each Active Record class, as Endpoint.version? is.
+    # Answered once for each Active Record class (see Support.per_model).
     #: (untyped) -> bool
     def transactional?(version)
-      model = version.class
-      return version.respond_to?(:transaction_id) unless model.respond_to?(:column_names)
-
       known = @transactional #: Hash[untyped, bool]
-      known.fetch(model) { known[model] = version.respond_to?(:transaction_id) }
+      Support.per_model(known, version) { |value| value.respond_to?(:transaction_id) }
     end
     private_class_method :transactional?
 

@@ -74,7 +74,7 @@ module PaperTrailDiff
 
     @group_sizes: Hash[Array[untyped], Integer]
 
-    @opening: Array[Array[untyped]]
+    @opening: Set[Array[untyped]]
 
     # : (Hash[Array[untyped], Array[ActivityEvent]]) -> Hash[Array[untyped], Array[String]?]
     def build_groups: (Hash[Array[untyped], Array[ActivityEvent]]) -> Hash[Array[untyped], Array[String]?]

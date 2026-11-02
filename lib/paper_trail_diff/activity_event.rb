@@ -107,7 +107,7 @@ module PaperTrailDiff
       groups = grouped_events(events)
       @branches = build_groups(groups)
       @group_sizes = groups.transform_values(&:length)
-      @opening = opening
+      @opening = opening.to_set
     end
 
     #: (ActivityEvent) -> Array[String]?
@@ -129,7 +129,7 @@ module PaperTrailDiff
 
     # @rbs @branches: Hash[Array[untyped], Array[String]?]
     # @rbs @group_sizes: Hash[Array[untyped], Integer]
-    # @rbs @opening: Array[Array[untyped]]
+    # @rbs @opening: Set[Array[untyped]]
 
     #: (Hash[Array[untyped], Array[ActivityEvent]]) -> Hash[Array[untyped], Array[String]?]
     def build_groups(groups)

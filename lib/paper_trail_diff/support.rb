@@ -6,6 +6,19 @@ module PaperTrailDiff
   module Support # rubocop:disable Metrics/ModuleLength
     module_function
 
+    # Answers a question about `value` once for each Active Record class, in
+    # `answers`: its respond_to? also looks through the instance's attributes,
+    # which costs more than most of what reading a version does, and every
+    # instance of a model answers alike, since this gem reads versions with
+    # all their columns. Anything else is asked each time.
+    #: [T] (Hash[untyped, T], untyped) { (untyped) -> T } -> T
+    def per_model(answers, value)
+      model = value.class
+      return yield(value) unless model.respond_to?(:column_names)
+
+      answers.fetch(model) { answers[model] = yield(value) }
+    end
+
     #: (untyped) -> untyped
     def immutable_copy(value)
       case value
