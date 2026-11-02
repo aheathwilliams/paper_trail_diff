@@ -6,9 +6,9 @@ module PaperTrailDiff
   # queries. Only the range forms that mean the same thing for every root are
   # supported: a shared wall-clock window, or each root's own whole history.
   class BatchedRootVersions
-    #: (Array[untyped], time_range: TimeRange?, version_scope: untyped, live_endpoints: Hash[Array[String], untyped]?, context_required: bool, windows: Hash[Array[String], TimeRange]) -> void
+    #: (Array[untyped], time_range: TimeRange?, version_scope: untyped, live_endpoints: Hash[Array[String], untyped]?, context_required: bool, whole: bool, windows: Hash[Array[String], TimeRange]) -> void
     def initialize( # rubocop:disable Metrics/ParameterLists
-      records, time_range:, version_scope:, live_endpoints:, context_required:, windows:
+      records, time_range:, version_scope:, live_endpoints:, context_required:, whole:, windows:
     )
       @records = records
       # Roots whose window moved to a transaction's start, by identity.
@@ -16,6 +16,9 @@ module PaperTrailDiff
       # An activity view needs a root to reconstruct from even in a window with
       # no root version, exactly as a single-record activity timeline does.
       @context_required = context_required
+      # Activity on associations replays every version a filter leaves out
+      # (see RootVersionSelection), whether or not the root takes a context.
+      @whole = whole
       @time_range = time_range
       @version_scope = version_scope
       @live_endpoints = live_endpoints
@@ -38,6 +41,7 @@ module PaperTrailDiff
     # @rbs @version_scope: untyped
     # @rbs @live_endpoints: Hash[Array[String], untyped]?
     # @rbs @context_required: bool
+    # @rbs @whole: bool
     # @rbs @windows: Hash[Array[String], TimeRange]
 
     #: (untyped, Array[untyped], Hash[Array[String], RootVersionPlan]) -> void
@@ -85,8 +89,6 @@ module PaperTrailDiff
       TimeRange.new(range.exclude_end? ? (start...range.end_time) : (start..range.end_time))
     end
 
-    # Activity on associations, which is what needs a context, also replays
-    # every version a filter leaves out (see RootVersionSelection).
     #: (Array[untyped], untyped, Set[untyped]?, untyped) -> RootVersionPlan
     def versions_for(in_range, after_range, chosen, live_endpoint)
       RootVersionSelection.new(
@@ -96,7 +98,7 @@ module PaperTrailDiff
         windowed: !@time_range.nil?,
         context_required: @context_required,
         live_endpoint: live_endpoint,
-        whole: @context_required
+        whole: @whole
       ).call
     end
 

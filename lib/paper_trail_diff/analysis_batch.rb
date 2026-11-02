@@ -26,10 +26,11 @@ module PaperTrailDiff
       records = validated_records
       loaded = @live_loader.call(records)
       windows = TransactionCut.batch_windows(records, @time_range)
+      # Activity on associations both takes a context and replays whole plans.
       selected = BatchedRootVersions.new(
         records, time_range: @time_range, version_scope: @version_scope,
-                 live_endpoints: loaded,
-                 context_required: @context_required, windows: windows
+                 live_endpoints: loaded, context_required: @context_required,
+                 whole: @context_required, windows: windows
       ).call
       prepare(records, selected, loaded, windows)
       records.to_h do |record|

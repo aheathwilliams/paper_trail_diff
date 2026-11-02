@@ -26,11 +26,11 @@ RSpec.describe PaperTrailDiff::BatchedRootVersions do
   end
 
   def select(records, within: nil, version_scope: nil, live_endpoints: nil, context_required: false, # rubocop:disable Metrics/ParameterLists
-             windows: {})
+             whole: false, windows: {})
     described_class.new(
       records, time_range: within && PaperTrailDiff::TimeRange.new(within),
                version_scope: version_scope, live_endpoints: live_endpoints,
-               context_required: context_required,
+               context_required: context_required, whole: whole,
                windows: windows.transform_values { |range| PaperTrailDiff::TimeRange.new(range) }
     ).call
   end
@@ -203,13 +203,14 @@ RSpec.describe PaperTrailDiff::BatchedRootVersions do
       expect(plan.steps).to eq([[created, reviewed]])
     end
 
-    # Activity on associations, which needs a context, reads every version.
-    it 'replays every version, reporting those it keeps, when context is required' do
+    # As activity on associations reads it, whether or not the root takes a
+    # context.
+    it 'replays every version of a whole plan, reporting those it keeps' do
       article, created, reviewed, published = history
       only_review = ->(versions) { versions.where(id: reviewed.id) }
 
       plan = select([article], within: at(0)...at(2), version_scope: only_review,
-                               context_required: true).fetch(key(article))
+                               whole: true).fetch(key(article))
 
       expect(plan.reconstruction_versions).to eq([created, reviewed, published])
       expect(plan.steps).to eq([[created, reviewed], [reviewed, published]])

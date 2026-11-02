@@ -5,8 +5,8 @@ module PaperTrailDiff
   # queries. Only the range forms that mean the same thing for every root are
   # supported: a shared wall-clock window, or each root's own whole history.
   class BatchedRootVersions
-    # : (Array[untyped], time_range: TimeRange?, version_scope: untyped, live_endpoints: Hash[Array[String], untyped]?, context_required: bool, windows: Hash[Array[String], TimeRange]) -> void
-    def initialize: (Array[untyped], time_range: TimeRange?, version_scope: untyped, live_endpoints: Hash[Array[String], untyped]?, context_required: bool, windows: Hash[Array[String], TimeRange]) -> void
+    # : (Array[untyped], time_range: TimeRange?, version_scope: untyped, live_endpoints: Hash[Array[String], untyped]?, context_required: bool, whole: bool, windows: Hash[Array[String], TimeRange]) -> void
+    def initialize: (Array[untyped], time_range: TimeRange?, version_scope: untyped, live_endpoints: Hash[Array[String], untyped]?, context_required: bool, whole: bool, windows: Hash[Array[String], TimeRange]) -> void
 
     # Returns a plan per record identity.
     # : () -> Hash[Array[String], RootVersionPlan]
@@ -24,6 +24,8 @@ module PaperTrailDiff
 
     @version_scope: untyped
 
+    @whole: bool
+
     @windows: Hash[Array[String], TimeRange]
 
     # : (untyped, Array[untyped], Hash[Array[String], RootVersionPlan]) -> void
@@ -40,8 +42,6 @@ module PaperTrailDiff
     # : (Array[untyped]) -> TimeRange?
     def widest_range: (Array[untyped]) -> TimeRange?
 
-    # Activity on associations, which is what needs a context, also replays
-    # every version a filter leaves out (see RootVersionSelection).
     # : (Array[untyped], untyped, Set[untyped]?, untyped) -> RootVersionPlan
     def versions_for: (Array[untyped], untyped, Set[untyped]?, untyped) -> RootVersionPlan
 

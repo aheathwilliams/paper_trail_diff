@@ -34,7 +34,10 @@ module PaperTrailDiff
     @version_scope: untyped
 
     # A root destroyed before the window had no state inside it to read, so
-    # only the others take the version after the window as context.
+    # only the others take the version after the window as context. Every
+    # root replays the whole of its window for activity on associations: one
+    # whose destroy saved in a transaction that crossed the window's start
+    # has the destroy inside its moved window.
     # : (Array[untyped], Array[untyped], Hash[Array[String], TimeRange]) -> Hash[Array[String], RootVersionPlan]
     def plans: (Array[untyped], Array[untyped], Hash[Array[String], TimeRange]) -> Hash[Array[String], RootVersionPlan]
 

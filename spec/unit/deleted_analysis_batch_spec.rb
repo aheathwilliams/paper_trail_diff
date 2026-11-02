@@ -178,6 +178,22 @@ RSpec.describe PaperTrailDiff::DeletedAnalysisBatch do
       .to eq([[late.id, [after]]])
   end
 
+  # Its destroy saved in a transaction that crossed the window's start, which
+  # moved back to take it in. Activity on associations replays it, as it
+  # replays any root, however little of it the scope keeps.
+  it 'replays the moved window of a root destroyed just before the start' do
+    article, _created, _updated, destroyed = deleted
+    destroyed.update_columns(transaction_id: 7)
+    FilterVersion.insert({ item_type: 'FilterNote', item_id: 1, event: 'update',
+                           created_at: at(2.5), transaction_id: 7 })
+
+    analyze([key(article)], within: at(2.25)..at(3), version_scope: :none.to_proc, context: true)
+
+    plan = analyzed.sole[1]
+    expect(plan.reconstruction_versions).to eq([destroyed])
+    expect(plan.mutations).to eq([])
+  end
+
   it 'passes the version scope on to version selection' do
     article, _created, updated, = deleted
 
