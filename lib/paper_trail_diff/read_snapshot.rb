@@ -28,15 +28,13 @@ module PaperTrailDiff
     SQL_SERVER_SNAPSHOT_STATE =
       'SELECT snapshot_isolation_state FROM sys.databases WHERE database_id = DB_ID()'
 
-    module_function
-
     # Yields once. Each connection the values read through gets a snapshot
     # transaction first, unless that connection already has a transaction open:
     # its isolation level belongs to the caller, and this gem cannot change it.
     # A value may be a model class, a relation, a record, or a version. Any
     # other value reads no table and is ignored.
     #: (Array[untyped]) { () -> untyped } -> untyped
-    def call(values, &block)
+    def self.call(values, &block)
       classes = connection_classes(values)
       classes.reverse_each.reduce(block) do |inner, klass|
         connection = klass.connection
@@ -50,20 +48,20 @@ module PaperTrailDiff
     # The isolation level that gives this connection's statements one view, or
     # nil when it has none.
     #: (untyped) -> Symbol?
-    def isolation(connection)
+    def self.isolation(connection)
       return :repeatable_read if adapter?(connection, SNAPSHOT_ADAPTERS)
 
       :snapshot if adapter?(connection, [SQL_SERVER_ADAPTER]) && sql_server_snapshot?(connection)
     end
 
     #: (untyped, Array[String]) -> bool
-    def adapter?(connection, names)
+    def self.adapter?(connection, names)
       connection.class.ancestors.any? { |ancestor| names.include?(ancestor.name) }
     end
 
     # Named as a schema query, as Active Record names its own catalog reads.
     #: (untyped) -> bool
-    def sql_server_snapshot?(connection)
+    def self.sql_server_snapshot?(connection)
       connection.select_value(SQL_SERVER_SNAPSHOT_STATE, 'SCHEMA').to_i == 1
     end
 
@@ -71,7 +69,7 @@ module PaperTrailDiff
     # repeats through a shared connection dropped. An associated model on
     # another database is not among them, so it is read outside the snapshot.
     #: (Array[untyped]) -> Array[untyped]
-    def connection_classes(values)
+    def self.connection_classes(values)
       values.filter_map { |value| model_for(value) }
             .flat_map { |model| [model, model.paper_trail.version_class] }
             .uniq(&:connection)
@@ -79,22 +77,20 @@ module PaperTrailDiff
 
     # The versioned model a value reads from, or nil.
     #: (untyped) -> untyped
-    def model_for(value)
-      active_record = Object.const_get(:ActiveRecord) #: untyped
+    def self.model_for(value)
       model = case value
-              when active_record.const_get(:Relation) then value.klass
+              when Support.constant('ActiveRecord::Relation') then value.klass
               when Class then value
               else endpoint_model(value)
               end
-      model if model.is_a?(Class) && Support.versioned?(model)
+      model if Support.versioned?(model)
     end
 
-    # A version reads the model of its item; a record reads its own class.
+    # A version reads the model of its item; anything else its own class,
+    # which is a versioned model only for a record.
     #: (untyped) -> untyped
-    def endpoint_model(value)
-      return Endpoint.model_class(value) if Endpoint.version?(value)
-
-      value.class if Endpoint.record?(value)
+    def self.endpoint_model(value)
+      Endpoint.version?(value) ? Endpoint.model_class(value) : value.class
     end
 
     private_class_method :isolation, :adapter?, :sql_server_snapshot?, :model_for,

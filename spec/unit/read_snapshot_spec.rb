@@ -23,9 +23,24 @@ RSpec.describe PaperTrailDiff::ReadSnapshot do
     stub_const('PostGISAdapterStandIn', Class.new(base)).new(open)
   end
 
-  def read(connection)
+  def read(connection, values = [FilterArticle])
     allow(FilterArticle).to receive(:connection).and_return(connection)
-    described_class.call([FilterArticle]) { :read }
+    described_class.call(values) { :read }
+  end
+
+  # A versioned model on a connection of its own, whose transactions are
+  # listed in `opened`. Its versions are its own unless another model holds
+  # them.
+  def model_on(connection, opened, name, versions: nil)
+    Class.new do
+      define_singleton_method(:connection) { connection }
+      define_singleton_method(:paper_trail_options) { {} }
+      define_singleton_method(:paper_trail) { Struct.new(:version_class).new(versions || self) }
+      define_singleton_method(:transaction) do |isolation:, &block|
+        opened << [name, isolation]
+        block.call
+      end
+    end
   end
 
   it 'takes a snapshot on an adapter built on a snapshot adapter' do
@@ -34,6 +49,52 @@ RSpec.describe PaperTrailDiff::ReadSnapshot do
 
     expect(read(connection)).to eq(:read)
     expect(FilterArticle).to have_received(:transaction).with(isolation: :repeatable_read)
+  end
+
+  it 'reads the model of a relation, a record or a version, and nothing of anything else' do
+    article = FilterArticle.create!(title: 'Draft')
+    connection = built_on_postgresql
+    allow(FilterArticle).to receive(:transaction).and_yield
+    unversioned = stub_const('UnversionedArticle',
+                             Class.new(ActiveRecord::Base) { self.table_name = 'filter_articles' })
+
+    [FilterArticle.where(title: 'Draft'), article, article.versions.first].each do |value|
+      read(connection, [value])
+    end
+    expect(read(connection, ['a title', nil, String, unversioned, unversioned.new])).to eq(:read)
+    expect(FilterArticle).to have_received(:transaction).exactly(3).times
+  end
+
+  # A relation runs some of its model's class methods in its own scope, which
+  # would scope the whole read.
+  it "opens a relation's snapshot on its model rather than on the relation" do
+    relation = FilterArticle.where(title: 'Draft')
+    allow(relation).to receive(:transaction).and_raise('opened on the relation')
+    allow(FilterArticle).to receive(:transaction).and_yield
+
+    expect(read(built_on_postgresql, [relation])).to eq(:read)
+    expect(FilterArticle).to have_received(:transaction)
+  end
+
+  it "opens one snapshot for each connection, the first value's outermost" do
+    opened = []
+    first = model_on(built_on_postgresql, opened, :first)
+    second = model_on(built_on_postgresql, opened, :second)
+    shared = model_on(first.connection, opened, :shared)
+
+    described_class.call([first, second, shared, first]) { opened << :read }
+
+    expect(opened).to eq([%i[first repeatable_read], %i[second repeatable_read], :read])
+  end
+
+  it "takes a snapshot on the connection of a model's versions too" do
+    opened = []
+    versions = model_on(built_on_postgresql, opened, :versions)
+    model = model_on(built_on_postgresql, opened, :model, versions: versions)
+
+    described_class.call([model]) { opened << :read }
+
+    expect(opened).to eq([%i[model repeatable_read], %i[versions repeatable_read], :read])
   end
 
   # A SQL Server connection, and the snapshot_isolation_state its database
@@ -49,9 +110,15 @@ RSpec.describe PaperTrailDiff::ReadSnapshot do
   it 'takes a SNAPSHOT read on SQL Server only when its database allows one' do
     allow(FilterArticle).to receive(:transaction).and_yield
 
-    expect([read(sql_server(1)), read(sql_server(0)), read(sql_server(nil))])
-      .to eq(%i[read read read])
-    expect(FilterArticle).to have_received(:transaction).with(isolation: :snapshot).once
+    steps = []
+    allow(FilterArticle).to receive(:transaction) do |isolation:, &block|
+      steps << isolation
+      block.call
+    end
+
+    [1, '1', 0, nil].each { |state| steps << read(sql_server(state)) }
+
+    expect(steps).to eq(%i[snapshot read snapshot read read read])
   end
 
   it 'reads nothing from SQL Server inside the caller\'s transaction' do
@@ -66,8 +133,10 @@ RSpec.describe PaperTrailDiff::ReadSnapshot do
   it "takes none on another adapter, or inside the caller's transaction" do
     allow(FilterArticle).to receive(:transaction)
     other = stub_const('OtherAdapterStandIn', adapter_class).new(false)
+    unnamed = adapter_class.new(false)
 
-    expect([read(other), read(built_on_postgresql(open: true))]).to eq(%i[read read])
+    expect([read(other), read(unnamed), read(built_on_postgresql(open: true))])
+      .to eq(%i[read read read])
     expect(FilterArticle).not_to have_received(:transaction)
   end
 

@@ -55,6 +55,7 @@ matcher:
     - PaperTrailDiff::VersionTable*
     - PaperTrailDiff::VersionRange*
     - PaperTrailDiff::VersionQuery*
+    - PaperTrailDiff::ReadSnapshot*
     - PaperTrailDiff::TimeVersionRange*
     - PaperTrailDiff::BatchedRootVersions*
     - PaperTrailDiff::BatchBoundaryResolver*
