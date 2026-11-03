@@ -1454,7 +1454,8 @@ Two kinds of value come back as something their type cannot cast back:
   `{ "due" => "2026-11-03" }`.
 - PaperTrail's JSON serializer stores a `binary` column as
   `{ "value" => bytes }`, and cannot store bytes that are not UTF-8. The gem
-  reads the bytes.
+  reads the bytes. On PostgreSQL, PaperTrail cannot read such a `bytea` value
+  back at all: its `reify` raises `TypeError`, and so does the gem.
 
 ### Writing history in tests
 

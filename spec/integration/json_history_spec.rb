@@ -134,14 +134,28 @@ RSpec.describe 'History stored as JSON' do
   describe 'values JSON gives back as other types' do
     let(:meta) { { 'due' => Date.new(2026, 11, 3), 'state' => :draft } }
 
+    # PaperTrail must write the history and read it back itself: on
+    # PostgreSQL its reify raises TypeError on the stored binary value, and
+    # SQL Server's adapter has no json column, so PaperTrail writes YAML.
     before do
       JsonHistoryFile.delete_all
+      skip "#{model.paper_trail.version_class} keeps no JSON here" unless json_history?
+      skip_unless_readable
+    end
+
+    def skip_unless_readable
       model.transaction do
-        model.create!(title: 'Probe', meta: meta, blob: 'bytes')
+        model.create!(title: 'Probe', meta: meta, blob: 'bytes').update!(title: 'Read')
+        model.last.versions.last.reify
         raise ActiveRecord::Rollback
       end
     rescue StandardError => e
-      skip "PaperTrail cannot record JSON history here: #{e.class}: #{e.message}"
+      skip "PaperTrail cannot record and read JSON history here: #{e.class}: #{e.message}"
+    end
+
+    def json_history?
+      model.paper_trail.version_class.object_col_is_json? ||
+        PaperTrail.serializer.equal?(PaperTrail::Serializers::JSON)
     end
 
     # Each version, and the current row, as the gem reads them.
