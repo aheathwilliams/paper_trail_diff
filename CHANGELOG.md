@@ -89,8 +89,10 @@ project follows [Semantic Versioning](https://semver.org/).
 
 - The performance guide's query counts were measured again, and it compares
   PaperTrail's JSON serializer with its default YAML one: a report read JSON
-  in about 40% less time. The architecture guide no longer says a window's
-  transaction lookups take four per root, sent 200 roots per query.
+  in about 40% less time. It also says what `historical_filter:` costs on SQL
+  Server, where each page of matching records lists every matching id. The
+  architecture guide no longer says a window's transaction lookups take four
+  per root, sent 200 roots per query.
 
 - The reference says what happens when two transactions save in the same
   tree at the same time, so that their versions interleave: each forms more

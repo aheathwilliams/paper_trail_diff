@@ -119,6 +119,14 @@ Finding the relation's records among the candidates takes up to two queries
 per 500 of them, and with PT-AT, finding where their windows move one to three
 statements per edge for each 500.
 
+The relation then reads the records that matched in pages of up to 2,000, and
+each page lists every matching id, so the relation keeps its own order,
+`limit`, and `offset`. A version table whose `item_id` does not share the key's
+type selects records the same way. SQL Server compiles each such statement
+afresh: with 10,000 matching records, each page took about 0.7 s, 5 s of a
+12 s report, and with about 20,000 a page can outlast the adapter's default
+timeout of 5 seconds. Narrow the window, or page with the relation.
+
 ## Large reports
 
 - Report on a window with `since:` or `within:`, not on all history.
