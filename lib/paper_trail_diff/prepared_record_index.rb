@@ -47,7 +47,8 @@ module PaperTrailDiff
     def stored_attributes(model_class, attributes)
       attributes = TimeOfDay.apply(model_class, attributes)
       digits = StoredTimePrecision.digits(model_class)
-      Support.immutable_copy(StoredTimePrecision.apply(attributes, digits))
+      stored = digits ? StoredJsonValues.apply(model_class, attributes) : attributes
+      Support.immutable_copy(StoredTimePrecision.apply(stored, digits))
     end
   end
 

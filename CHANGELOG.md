@@ -139,6 +139,14 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- History stored as JSON no longer reports two kinds of value as changed in
+  every comparison with the current record, though nothing changed them. A
+  `json` or `jsonb` `object` column stores a `serialize`d attribute as JSON
+  writes it, so a `Date` or `Symbol` inside it came back as a String: that
+  attribute is now read as JSON writes it on every side, the current
+  record's included. PaperTrail's JSON serializer stores a `binary` column
+  as `{ "value" => bytes }`, which is now read as the bytes.
+
 - Without associations, activity (`activity_timeline`, `activity: true`, and
   `report`) reports a change saved without a version, such as one by
   `update_columns` or with versioning off, in the step for the record's

@@ -32,11 +32,17 @@ module PaperTrailDiff
     # : (untyped) -> bool
     def self.json_history?: (untyped) -> bool
 
+    # Whether the version table keeps this column as `json` or `jsonb`, which
+    # PaperTrail writes without its serializer.
+    # : (untyped, String) -> bool
+    def self.json_column?: (untyped, String) -> bool
+
     # mutant:disable - Every mutation that survives here reads the same
     # constant another way: from this module rather than Object, or with `::`.
     # : () -> Integer
     def self.json_time_precision: () -> Integer
 
+    # Whether PaperTrail writes history with its JSON serializer.
     # mutant:disable - As for json_time_precision.
     # : () -> bool
     def self.json_serializer?: () -> bool

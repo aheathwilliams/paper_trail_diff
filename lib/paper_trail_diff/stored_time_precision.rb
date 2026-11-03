@@ -48,13 +48,17 @@ module PaperTrailDiff
 
     #: (untyped) -> bool
     def self.json_history?(version_class)
-      columns = version_class.columns_hash
-      json_column = %w[object object_changes].any? do |name|
-        JSON_COLUMN_TYPES.include?(columns[name]&.type)
-      end
-      json_column || json_serializer?
+      %w[object object_changes].any? { |name| json_column?(version_class, name) } ||
+        json_serializer?
     end
     private_class_method :json_history?
+
+    # Whether the version table keeps this column as `json` or `jsonb`, which
+    # PaperTrail writes without its serializer.
+    #: (untyped, String) -> bool
+    def self.json_column?(version_class, name)
+      JSON_COLUMN_TYPES.include?(version_class.columns_hash[name]&.type)
+    end
 
     # mutant:disable - Every mutation that survives here reads the same
     # constant another way: from this module rather than Object, or with `::`.
@@ -65,12 +69,12 @@ module PaperTrailDiff
     end
     private_class_method :json_time_precision
 
+    # Whether PaperTrail writes history with its JSON serializer.
     # mutant:disable - As for json_time_precision.
     #: () -> bool
     def self.json_serializer?
       paper_trail = Object.const_get(:PaperTrail) #: untyped
       paper_trail.serializer.equal?(paper_trail.const_get(:Serializers).const_get(:JSON))
     end
-    private_class_method :json_serializer?
   end
 end
