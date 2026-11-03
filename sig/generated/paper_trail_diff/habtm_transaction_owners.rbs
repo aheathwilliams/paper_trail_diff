@@ -10,7 +10,8 @@ module PaperTrailDiff
     def initialize: (untyped, untyped) -> void
 
     # The given transactions (one id or several) in which more than one
-    # possible owner saved a version, as strings.
+    # possible owner saved a version, as strings. Each statement reads up to
+    # 500 of them.
     # : (untyped) -> Array[String]
     def shared: (untyped) -> Array[String]
 

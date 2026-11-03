@@ -16,11 +16,13 @@ module PaperTrailDiff
     end
 
     # The given transactions (one id or several) in which more than one
-    # possible owner saved a version, as strings.
+    # possible owner saved a version, as strings. Each statement reads up to
+    # 500 of them.
     #: (untyped) -> Array[String]
     def shared(transaction_ids)
-      items = @versions.where(transaction_id: transaction_ids).distinct
-                       .pluck(:transaction_id, :item_type, :item_id)
+      items = Array(transaction_ids).uniq.each_slice(Support::IDS_PER_STATEMENT).flat_map do |slice|
+        @versions.where(transaction_id: slice).distinct.pluck(:transaction_id, :item_type, :item_id)
+      end
       owners = items.select { |_, type, _| owner_type?(type) }
       owners.group_by { |transaction_id, _, _| transaction_id.to_s }
             .filter_map { |transaction_id, rows| transaction_id if rows.size > 1 }

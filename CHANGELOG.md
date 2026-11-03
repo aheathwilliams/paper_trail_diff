@@ -58,6 +58,16 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- History on a `has_and_belongs_to_many` groups the members PT-AT recorded
+  by transaction once. Each of the root's transactions looked through every
+  member recorded for all of them, so the cost grew with the square of the
+  root's versions: a `timeline` of an article with 2,000 versions and its
+  tags took 9.2 s and now takes 1.9 s, and an `analyze_many` of 200 tagged
+  articles with 20 versions each took 34.6 s and now takes 4.0 s. The
+  members and the transactions' owners are read 500 transactions per
+  statement, as other lists of ids are: on SQL Server, a statement listing
+  40,000 ids timed out.
+
 - With `recorded_changes: true`, a boundary decodes its version's changes the
   first time its `recorded_changes` is read, and each version is decoded once
   for the whole call. Every boundary decoded its version when it was built,

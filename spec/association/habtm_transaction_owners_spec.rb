@@ -32,6 +32,24 @@ RSpec.describe PaperTrailDiff::HabtmTransactionOwners do
       expect(owners.shared([10, 20])).to eq(['10'])
     end
 
+    # SQL Server compiles a long list of ids slowly.
+    it 'reads 500 transactions per statement, each once' do
+      version('TrackedArticle', 1, 10)
+      version('TrackedArticle', 2, 10)
+      version('TrackedArticle', 1, 20)
+      version('TrackedArticle', 1, 30)
+      stub_const('PaperTrailDiff::Support::IDS_PER_STATEMENT', 2)
+      sql = []
+      callback = ->(*, payload) { sql << payload[:sql] }
+
+      shared = ActiveSupport::Notifications.subscribed(callback, 'sql.active_record') do
+        owners.shared([10, 20, 20, 30])
+      end
+
+      expect(shared).to eq(['10'])
+      expect(sql.grep(/versions/).length).to eq(2)
+    end
+
     it 'counts a record that saved twice in the transaction once' do
       version('TrackedArticle', 1, 10)
       version('TrackedArticle', 1, 10)

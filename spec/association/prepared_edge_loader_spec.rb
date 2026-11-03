@@ -344,6 +344,29 @@ RSpec.describe PaperTrailDiff::PreparedEdgeLoader do
       expect(memberships).to eq(own.transaction_id.to_s => [ruby.id])
     end
 
+    # SQL Server compiles a long list of ids slowly.
+    it 'reads the members of 500 transactions per statement, each transaction once' do
+      article = TrackedArticle.create!(title: 'Tagged')
+      ruby = TrackedTag.create!(name: 'ruby')
+      first = tag_version(article, ruby)
+      second = tag_version(article)
+      third = tag_version(article)
+      stub_const('PaperTrailDiff::Support::IDS_PER_STATEMENT', 2)
+      sql = []
+      callback = ->(*, payload) { sql << payload[:sql] }
+
+      # The second transaction saved two root versions.
+      edge = ActiveSupport::Notifications.subscribed(callback, 'sql.active_record') do
+        load_edge(TrackedArticle, [article.id], :tags, [first, second, second, third])
+      end
+
+      memberships = [first, second, third].to_h do |version|
+        [version.transaction_id.to_s, [ruby.id]]
+      end
+      expect(edge).to eq([{ 'TrackedTag' => { model: TrackedTag, ids: [ruby.id] } }, memberships])
+      expect(sql.grep(/version_associations/).length).to eq(2)
+    end
+
     it 'skips root versions saved outside a transaction' do
       article = TrackedArticle.create!(title: 'Tagged')
       version = tag_version(article, TrackedTag.create!(name: 'ruby'))

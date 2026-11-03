@@ -68,25 +68,29 @@ module PaperTrailDiff
     #: (untyped, untyped) -> [Hash[String, Hash[Symbol, untyped]], Hash[String, Array[untyped]]]
     def habtm_groups(owner_class, reflection)
       rows = habtm_rows(owner_class, reflection)
-      shared = HabtmTransactionOwners.new(owner_class, reflection).shared(rows.map(&:version_id))
-      memberships = @transaction_ids.to_h do |transaction_id|
-        [transaction_id.to_s, membership_ids(rows, transaction_id)]
-      end
-      [group_for(reflection.klass, rows.map(&:foreign_key_id)), memberships.except(*shared)]
+      recorded = rows.group_by { |row| row.version_id.to_s }
+      shared = HabtmTransactionOwners.new(owner_class, reflection).shared(recorded.keys)
+      [group_for(reflection.klass, rows.map(&:foreign_key_id)),
+       memberships(recorded).except(*shared)]
     end
 
+    # Each root transaction's members, from its rows grouped by transaction.
+    #: (Hash[String, Array[untyped]]) -> Hash[String, Array[untyped]]
+    def memberships(recorded)
+      empty = [] #: Array[untyped]
+      @transaction_ids.to_h do |transaction_id|
+        key = transaction_id.to_s
+        [key, recorded.fetch(key, empty).map(&:foreign_key_id)]
+      end
+    end
+
+    # Each statement reads up to 500 of the root transactions: SQL Server
+    # compiles a long list of ids slowly.
     #: (untyped, untyped) -> Array[untyped]
     def habtm_rows(owner_class, reflection)
-      owner_class.paper_trail.version_association_class.where(
-        version_id: @transaction_ids,
-        foreign_key_name: reflection.name
-      )
-    end
-
-    #: (Array[untyped], untyped) -> Array[untyped]
-    def membership_ids(rows, transaction_id)
-      rows.filter_map do |row|
-        row.foreign_key_id if row.version_id.to_s == transaction_id.to_s
+      associations = owner_class.paper_trail.version_association_class
+      @transaction_ids.uniq.each_slice(Support::IDS_PER_STATEMENT).flat_map do |slice|
+        associations.where(version_id: slice, foreign_key_name: reflection.name)
       end
     end
 
