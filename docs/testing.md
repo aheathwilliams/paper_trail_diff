@@ -120,13 +120,18 @@ passes is behavior nothing checks. `mutant.yml` lists the classes it mutates:
   `CollectionIdentityIndex`, `NestedComparator`, and `CollectionTransition`;
 - which columns are compared, and how precisely times are: `SnapshotNormalizer`,
   `SnapshotPool`, and `StoredTimePrecision`;
+- which endpoints a call accepts, and which item and model each names:
+  `Endpoint` and `EndpointKind`;
 - which versions a range reads: `TimeRange`, `TimelineRange`, `VersionRange`,
   `TimeVersionRange`, `RootVersionSelection`, `RootVersionPlan`,
-  `TransactionCut`, `OpeningTransactions`, and `VersionQuery`;
+  `TransactionCut`, `OpeningTransactions`, `VersionBoundary`, and
+  `VersionQuery`;
 - which versions a batch or filter reads: `AnalysisBatch`,
   `BatchedRootVersions`, `BatchedRootAnalyses`, `BatchBoundaryResolver`,
   `DeletedAnalysisBatch`, `HistoricalFilter`, and `VersionScopeFilter`;
-- what a version recorded: `RecordedChanges` and `RecordedChangesReader`;
+- whether a read sees one database snapshot: `ReadSnapshot`;
+- what a version recorded: `RecordedChanges`, `RecordedChangesReader`, and
+  `RecordedClass`;
 - how a step flattens into rows: `ChangeRow` and `ChangeRows`;
 - which records a scope or report selects: `ScopedRootSelection`,
   `AssociationActivitySelection`, `AssociationActivityEdge`, and
@@ -150,7 +155,9 @@ passes is behavior nothing checks. `mutant.yml` lists the classes it mutates:
 - which association paths history cannot read exactly, and whether a request
   reads one with PT-AT: `ApproximatePaths` and `FallbackPaths`;
 - which records an association scope admits, and how it ranks them:
-  `ScopeCondition` and `ScopeRanking`.
+  `ScopeCondition` and `ScopeRanking`;
+- the helpers these share, which order versions, name records, and copy
+  values: `Support`.
 
 The specs for the classes that read the database use tables of their own
 (`spec/support/filter_database.rb`, `spec/support/normalizer_database.rb`,
@@ -176,6 +183,13 @@ as `spec/unit/read_snapshot_spec.rb` does for SQL Server.
 Mutant counts a mutation that runs past its time limit as caught, so
 `mutant.yml` sets the limit well above the time the whole suite takes. With
 mutant's 5-second default, mutations no spec caught were reported as caught.
+
+A group nested for one method, such as `describe '.call'`, names that method,
+and mutant then runs only that group for it, so the group must catch every
+mutation in the method by itself. A private method gets every example of its
+class. Mutant cannot reach a method that `module_function` defines: it mutates
+the private copy no caller uses. The mutated modules define their methods with
+`def self.` instead.
 
 In CI, a pull request mutates only the methods it changes. The full set runs
 nightly in `.github/workflows/mutation.yml`, and only when `main` has a commit

@@ -41,6 +41,8 @@ matcher:
     - PaperTrailDiff::SnapshotNormalizer*
     - PaperTrailDiff::SnapshotPool*
     - PaperTrailDiff::StoredTimePrecision*
+    - PaperTrailDiff::Endpoint*
+    - PaperTrailDiff::EndpointKind*
     - PaperTrailDiff::TimelineRange*
     - PaperTrailDiff::RootVersionPlan*
     - PaperTrailDiff::RootVersionSelection*
@@ -49,9 +51,11 @@ matcher:
     - PaperTrailDiff::TimeRange*
     - PaperTrailDiff::TransactionCut*
     - PaperTrailDiff::OpeningTransactions*
+    - PaperTrailDiff::VersionBoundary*
     - PaperTrailDiff::VersionTable*
     - PaperTrailDiff::VersionRange*
     - PaperTrailDiff::VersionQuery*
+    - PaperTrailDiff::ReadSnapshot*
     - PaperTrailDiff::TimeVersionRange*
     - PaperTrailDiff::BatchedRootVersions*
     - PaperTrailDiff::BatchBoundaryResolver*
@@ -61,6 +65,7 @@ matcher:
     - PaperTrailDiff::DeletedRootFilter*
     - PaperTrailDiff::RecordedChanges*
     - PaperTrailDiff::RecordedChangesReader*
+    - PaperTrailDiff::RecordedClass*
     - PaperTrailDiff::ChangeRow*
     - PaperTrailDiff::ChangeRows*
     - PaperTrailDiff::AssociationActivitySelection*
@@ -91,3 +96,4 @@ matcher:
     - PaperTrailDiff::ActivityRange*
     - PaperTrailDiff::VersionAssociationCandidateScope*
     - PaperTrailDiff::PreparedActivityIndex*
+    - PaperTrailDiff::Support*

@@ -4,7 +4,7 @@ module PaperTrailDiff
   # Validates and describes explicit PaperTrail-version and live-record endpoints.
   module Endpoint
     # : (untyped, untyped) -> void
-    def self?.validate_pair!: (untyped, untyped) -> void
+    def self.validate_pair!: (untyped, untyped) -> void
 
     # Two versions carry no visible cue about which is earlier, so transposing
     # them is easy to do by accident and impossible to detect afterwards: the
@@ -13,59 +13,68 @@ module PaperTrailDiff
     # change is `from`. A current-record endpoint is exempt: it is self-evidently
     # the live state, so putting it first is a deliberate reverse comparison.
     # : (untyped, untyped) -> void
-    def self?.validate_order!: (untyped, untyped) -> void
+    def self.validate_order!: (untyped, untyped) -> void
 
     # : (untyped, untyped) -> bool
-    def self?.reversed_versions?: (untyped, untyped) -> bool
+    def self.reversed_versions?: (untyped, untyped) -> bool
 
     # : (untyped) -> void
-    def self?.validate!: (untyped) -> void
+    def self.validate!: (untyped) -> void
 
     # The record a method reads the history of: a record, saved or destroyed,
     # of a model PaperTrail versions.
     # : (untyped) -> void
-    def self?.validate_root!: (untyped) -> void
+    def self.validate_root!: (untyped) -> void
 
-    # A relation is named rather than inspected, which would load it.
-    # : (untyped) -> String
-    def self?.described: (untyped) -> String
+    # What a message names the value as. A relation is named rather than
+    # inspected, which would load it, and by the name Active Record gives its
+    # class. A class without a name is printed, as a class given itself is.
+    # : (untyped) -> (String | Module)
+    def self.described: (untyped) -> (String | Module)
 
     # : (untyped) -> bool
-    def self?.version?: (untyped) -> bool
+    def self.version?: (untyped) -> bool
 
     # : (untyped) -> bool
-    def self?.record?: (untyped) -> bool
+    def self.record?: (untyped) -> bool
 
     # : (untyped) -> Array[String]
-    def self?.identity: (untyped) -> Array[String]
+    def self.identity: (untyped) -> Array[String]
 
     # : (untyped) -> untyped
-    def self?.model_class: (untyped) -> untyped
+    def self.model_class: (untyped) -> untyped
 
-    # Whether versions of this class have an `item_subtype` column, answered
-    # once for each Active Record class (see Support.per_model).
+    # : (String) -> untyped
+    def self.model_named: (String) -> untyped
+
+    # Whether the version has an `item_subtype` to read. An Active Record
+    # version is asked whether it was read with the column, which costs less
+    # than respond_to? (see Support.per_model) and answers for this row: a
+    # version a caller read without the column has none.
     # : (untyped) -> bool
-    def self?.subtyped?: (untyped) -> bool
+    def self.subtyped?: (untyped) -> bool
 
     # Every PaperTrail version of the record, whatever scope its versions
-    # association has.
+    # association has. Active Record reads a record given as an item_id as its
+    # id, so mutant cannot tell `record` from `record.id` here.
+    # mutant:disable
     # : (untyped) -> untyped
-    def self?.versions: (untyped) -> untyped
+    def self.versions: (untyped) -> untyped
 
     # : (untyped) -> untyped
-    def self?.reload_record: (untyped) -> untyped
+    def self.reload_record: (untyped) -> untyped
 
     # : (untyped) -> void
-    def self?.validate_record!: (untyped) -> void
+    def self.validate_record!: (untyped) -> void
   end
 
   # Whether a value is a version, a record, or neither, answered once for
   # each Active Record class (see Support.per_model).
   module EndpointKind
     # : (untyped) -> Symbol
-    def self?.call: (untyped) -> Symbol
+    def self.call: (untyped) -> Symbol
 
     # : (untyped) -> Symbol
-    def self?.classify: (untyped) -> Symbol
+    def self.classify: (untyped) -> Symbol
   end
 end
