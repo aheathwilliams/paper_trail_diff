@@ -2,7 +2,10 @@
 
 require 'paper_trail_diff'
 
-RSpec.describe PaperTrailDiff::ChangeRows do
+# ChangeRow is checked here too, through the rows ChangeRows builds. Named for
+# ChangeRows alone, this spec would not run for ChangeRow's mutations.
+RSpec.describe PaperTrailDiff::ChangeRows,
+               mutant_expression: %w[PaperTrailDiff::ChangeRows PaperTrailDiff::ChangeRow] do
   let(:source) do
     PaperTrailDiff::ActivityBoundary.new(
       kind: :version, version_id: 9, item_type: 'Article', item_id: 1,
