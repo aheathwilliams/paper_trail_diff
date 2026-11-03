@@ -10,12 +10,18 @@ module PaperTrailDiff
       @loader = PreparedVersionStateLoader.new
       @supported = {} #: Hash[untyped, bool]
       @defaults = {} #: Hash[untyped, Hash[untyped, untyped]]
+      @states = {} #: Hash[Array[untyped], PreparedRecordState?]
     end
 
+    # Each version is read once: activity reads a root's version again at
+    # every event it bounds, and decoding it is most of the cost.
     #: (untyped) -> PreparedRecordState?
     def call(version)
+      key = Support.row_key(version)
+      return @states[key] if @states.key?(key)
+
       state = @loader.call(version)
-      complete(state) if state
+      @states[key] = state && complete(state)
     end
 
     #: (PreparedRecordState) -> PreparedRecordState?
@@ -35,6 +41,7 @@ module PaperTrailDiff
     # @rbs @loader: PreparedVersionStateLoader
     # @rbs @supported: Hash[untyped, bool]
     # @rbs @defaults: Hash[untyped, Hash[untyped, untyped]]
+    # @rbs @states: Hash[Array[untyped], PreparedRecordState?]
 
     #: (untyped) -> bool
     def supported?(model)

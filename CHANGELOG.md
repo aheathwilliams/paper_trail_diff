@@ -79,6 +79,12 @@ project follows [Semantic Versioning](https://semver.org/).
   and skips the rows before it, so a selection of 10,000 articles changed in
   the window, with their comments, took 1.5 s on SQLite and now takes 0.3 s.
 
+- Activity on associations decodes each of the record's versions once for
+  the call. It decoded a version again at every event the version bounded,
+  up to five times: a `report` of 10,000 articles with their comments took
+  about 20 s on SQLite and now takes about 18 s, and peaks at about 100 MB
+  less memory.
+
 - History on a `has_and_belongs_to_many` groups the members PT-AT recorded
   by transaction once. Each of the root's transactions looked through every
   member recorded for all of them, so the cost grew with the square of the

@@ -7,6 +7,8 @@ module PaperTrailDiff
     # : () -> void
     def initialize: () -> void
 
+    # Each version is read once: activity reads a root's version again at
+    # every event it bounds, and decoding it is most of the cost.
     # : (untyped) -> PreparedRecordState?
     def call: (untyped) -> PreparedRecordState?
 
@@ -18,6 +20,8 @@ module PaperTrailDiff
     @defaults: Hash[untyped, Hash[untyped, untyped]]
 
     @loader: PreparedVersionStateLoader
+
+    @states: Hash[Array[untyped], PreparedRecordState?]
 
     @supported: Hash[untyped, bool]
 
