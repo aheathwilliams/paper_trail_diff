@@ -126,6 +126,14 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Without associations, activity (`activity_timeline`, `activity: true`, and
+  `report`) reports a change saved without a version, such as one by
+  `update_columns` or with versioning off, in the step for the record's
+  previous recorded change, as `timeline` and activity on associations do.
+  It was reported in the step for the record's next version, and so credited
+  to that version's author: a title written by `update_columns` after
+  Alice's edit was reported as part of Mallory's next edit.
+
 - `analyze_scope` and `report` read every record a relation selects when its
   order has ties, such as `Article.order(:status)`, and more than 250 records
   match. Records were read 250 at a time in that order, and PostgreSQL and

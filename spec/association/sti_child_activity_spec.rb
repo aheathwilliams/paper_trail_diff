@@ -140,40 +140,42 @@ RSpec.describe 'Activity on an STI belongs_to target' do
       .to eq(['StiChildPinnedBadge', { from: 'pinned', to: 'pinned 2' }])
   end
 
+  # Without prepared history, the next version or the live row says what a
+  # version left, as the class the row held then.
   describe PaperTrailDiff::ActivityEventRecordResolver do
     def state_after(version)
       described_class.new.record_after(version, direct: true)
     end
 
-    it 'builds a subclass row as its subclass without prepared history' do
+    it 'reads a subclass row as its subclass without prepared history' do
       badge = StiChildPinnedBadge.create!(label: 'pinned')
       badge.update!(label: 'pinned 2')
       created, updated = badge.versions.reorder(:id).to_a
 
       expect([state_after(created), state_after(updated)]
-               .map { |state| [state.model_class, state.attributes['label']] })
+               .map { |record| [record.class, record.label] })
         .to eq([[StiChildPinnedBadge, 'pinned'], [StiChildPinnedBadge, 'pinned 2']])
     end
 
-    it 'builds a row as the class its type changes to' do
+    it 'reads a row as the class its type changes to' do
       badge = StiChildPinnedBadge.create!(label: 'pinned')
       StiChildBadge.find(badge.id).update!(type: nil)
       badge = StiChildBadge.find(badge.id)
       badge.update!(type: 'StiChildPinnedBadge')
 
-      expect(badge.versions.reorder(:id).drop(1).map { |version| state_after(version).model_class })
+      expect(badge.versions.reorder(:id).drop(1).map { |version| state_after(version).class })
         .to eq([StiChildBadge, StiChildPinnedBadge])
     end
 
-    it 'leaves a type that names no class to the reified record' do
+    it 'includes a change saved after the version without one' do
       badge = StiChildBadge.create!(label: 'plain')
-      badge.update!(label: 'plain 2')
-      version = badge.versions.reorder(:id).last
-      retyped = version.object_changes.sub('label:', "type:\n- \n- StiChildGoneBadge\nlabel:")
-      version.update_column(:object_changes, retyped)
+      badge.update_columns(label: 'unrecorded')
+      badge.update!(type: 'StiChildPinnedBadge')
+      badge = StiChildBadge.find(badge.id)
+      badge.update_columns(label: 'unrecorded 2')
 
-      expect { state_after(version) }.not_to raise_error
-      expect(described_class.new.send(:direct_record_after, version)).to be_nil
+      expect(badge.versions.reorder(:id).map { |version| state_after(version).label })
+        .to eq(['unrecorded', 'unrecorded 2'])
     end
   end
 end

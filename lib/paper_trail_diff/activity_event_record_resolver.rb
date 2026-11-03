@@ -8,45 +8,25 @@ module PaperTrailDiff
     def initialize(record_transition: nil, prepared_record_after: nil)
       @record_transition = record_transition
       @prepared_record_after = prepared_record_after
-      @direct_loader = DirectRecordStateLoader.new
     end
 
+    # The record as the version left it: the state recorded next, which holds
+    # any change saved after the version without one of its own. Prepared
+    # history answers without a query; without it, the next version or the
+    # live row does.
     #: (untyped, ?direct: bool) -> untyped
     def record_after(version, direct: false)
       return if version.event.to_s == 'destroy'
 
       if direct
-        handled, state = direct_after(version)
+        handled, state = @prepared_record_after&.call(version, direct: true)
         return state if handled
       end
 
       handled, prepared = @prepared_record_after&.call(version)
       return prepared if handled
 
-      fallback_record_after(version)
-    end
-
-    #: (untyped) -> [bool, untyped]
-    def direct_after(version)
-      handled, state = @prepared_record_after&.call(version, direct: true)
-      return [true, state] if handled
-
-      state = direct_record_after(version)
-      [!state.nil?, state]
-    end
-
-    #: (untyped) -> untyped
-    def fallback_record_after(version)
-      changed_record = changed_record_after(version)
-      return changed_record if changed_record
-
-      successor = version.next
-      record = successor && Support.reify(successor, dup: true)
-      return record if record
-
-      model_class = Endpoint.model_class(version)
-      criteria = { model_class.primary_key => version.item_id } #: Hash[untyped, untyped]
-      model_class.unscoped.find_by(criteria)
+      recorded_after(version)
     end
 
     #: (untyped) -> ActivitySnapshotDelta?
@@ -60,30 +40,6 @@ module PaperTrailDiff
         before_attributes: transition.fetch(0),
         after_attributes: transition.fetch(1)
       )
-    end
-
-    #: (untyped) -> untyped
-    def changed_record_after(version)
-      case version.event.to_s
-      when 'create' then created_record_after(version)
-      when 'update' then updated_record_after(version)
-      end
-    end
-
-    #: (untyped) -> untyped
-    def created_record_after(version)
-      model_class = Endpoint.model_class(version)
-      changes = deserialized_changeset(version, model_class)
-      return unless changes.respond_to?(:each) && !changes.empty?
-
-      model_class.new(after_attributes(changes, model_class))
-    end
-
-    #: (untyped) -> untyped
-    def updated_record_after(version)
-      record = Support.reify(version, dup: true)
-      changes = deserialized_changeset(version, record&.class)
-      apply_changes(record, changes)
     end
 
     # Mirrors PaperTrail's changeset deserialization without resolving
@@ -107,44 +63,16 @@ module PaperTrailDiff
 
     # @rbs @record_transition: untyped
     # @rbs @prepared_record_after: untyped
-    # @rbs @direct_loader: DirectRecordStateLoader
 
-    #: (untyped) -> PreparedRecordState?
-    def direct_record_after(version)
-      model = Endpoint.model_class(version)
-      changes = deserialized_changeset(version, model)
-      return unless changes.respond_to?(:each) && !changes.empty?
+    #: (untyped) -> untyped
+    def recorded_after(version)
+      successor = version.next
+      record = successor && Support.reify(successor, dup: true)
+      return record if record
 
-      before = if version.object
-                 @direct_loader.call(version)
-               else
-                 PreparedRecordState.from_attributes(
-                   model, {}
-                 )
-               end
-      return unless before
-
-      attributes = before.attributes.merge(after_attributes(changes, model))
-      model_after = class_after(model, attributes)
-      return unless model_after
-
-      @direct_loader.complete(PreparedRecordState.from_attributes(model_after, attributes))
-    end
-
-    # Without `item_subtype` a version names only the STI base class, and a
-    # change can move the row to another class, so the type the row holds
-    # after the change decides. A type that names no class has no direct
-    # state; the caller falls back to reifying the record.
-    #: (untyped, Hash[untyped, untyped]) -> untyped
-    def class_after(model, attributes)
-      column = model.inheritance_column.to_s
-      return model unless model.columns_hash.key?(column)
-
-      type = attributes[column].to_s
-      type.empty? ? model.base_class : model.base_class.sti_class_for(type)
-    rescue StandardError => e
-      active_record = Object.const_get(:ActiveRecord) #: untyped
-      raise unless e.is_a?(active_record.const_get(:SubclassNotFound))
+      model_class = Endpoint.model_class(version)
+      criteria = { model_class.primary_key => version.item_id } #: Hash[untyped, untyped]
+      model_class.unscoped.find_by(criteria)
     end
 
     #: (untyped) -> untyped
@@ -156,30 +84,6 @@ module PaperTrailDiff
       (before.keys | after.keys).filter_map do |name|
         [name, [before[name], after[name]]] unless before[name] == after[name]
       end.to_h
-    end
-
-    #: (untyped, untyped) -> Hash[untyped, untyped]
-    def after_attributes(changes, model_class)
-      names = model_class.attribute_names
-      attributes = {} #: Hash[untyped, untyped]
-      changes.each do |name, values|
-        next unless names.include?(name.to_s)
-
-        attributes[name] = values.last
-      end
-      attributes
-    end
-
-    #: (untyped, untyped) -> untyped
-    def apply_changes(record, changes)
-      return unless record && changes.respond_to?(:each) && !changes.empty?
-
-      changes.each do |name, values|
-        next unless record.has_attribute?(name) && values.respond_to?(:last)
-
-        record[name] = values.last
-      end
-      record
     end
 
     #: (untyped, untyped, untyped) -> untyped

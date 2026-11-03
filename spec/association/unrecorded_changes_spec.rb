@@ -84,6 +84,29 @@ RSpec.describe 'Changes saved without a version' do
       .to eq(from: 'Draft', to: 'Unrecorded title')
   end
 
+  # Activity without associations prepares no history, and once read the
+  # state after Carol's version from her version alone. The unrecorded title
+  # then went to Erin, the next version's author.
+  it 'reports the same rule in activity without associations' do
+    article = history
+    actor('erin') { article.reload.update!(author_id: TrackedAuthor.create!(name: 'Ann').id) }
+    titles = lambda do |steps|
+      steps.to_h do |step|
+        [step.source_boundary.whodunnit, step.diff.attributes['title']&.to_h]
+      end
+    end
+    expected = { 'alice' => nil, 'carol' => { from: 'Draft', to: 'Unrecorded title' },
+                 'erin' => nil }
+    # The next version's record is loaded already; no version asks for its own.
+    expect_any_instance_of(PaperTrail::Version).not_to receive(:next)
+
+    expect(titles.call(PaperTrailDiff.timeline(article))).to eq(expected)
+    expect(titles.call(PaperTrailDiff.activity_timeline(article))).to eq(expected)
+    expect(titles.call(PaperTrailDiff.analyze(article, activity: true).timeline)).to eq(expected)
+    report = PaperTrailDiff.report(TrackedArticle, since: Time.now.utc - 3600, limit: 10)
+    expect(titles.call(report.analyses.values.first.activity_timeline)).to eq(expected)
+  end
+
   it "reads only the event's own edit from recorded_changes" do
     article = history
     carol = article.versions.find_by!(whodunnit: 'carol')

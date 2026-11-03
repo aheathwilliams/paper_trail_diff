@@ -254,8 +254,57 @@ RSpec.describe 'Activity replay against a full snapshot at every event' do
     end
   end
 
+  def root_steps(steps)
+    steps.map do |step|
+      [step.from_boundary.version_id, step.to_boundary.kind, step.to_boundary.version_id,
+       step.diff.to_h]
+    end
+  end
+
+  # Without associations activity prepares no history, which is a path of its
+  # own, so its steps are checked against the root timeline's instead.
+  def timeline_mismatches(history, seed)
+    random = Random.new(seed)
+    versions = PaperTrail::Version.order(:created_at, :id).to_a
+    history.roots.flat_map do |root|
+      starts = root.versions.reorder(:created_at, :id).first(4)
+      reads = starts.flat_map { |from| from_reads(root, from) }
+      reads += Array.new(3).flat_map do
+        window_reads(root, *versions.sample(2, random: random).sort_by(&:id))
+      end
+      reads.filter_map { |label, expected, actual| label unless actual == expected }
+    end
+  end
+
+  def from_reads(root, from)
+    expected = root_steps(PaperTrailDiff.timeline(root, from: from, to: root))
+    ReplayDifferential::GROUPS.map do |group|
+      ["#{root.id} from #{from.id} group #{group.inspect}", expected,
+       root_steps(PaperTrailDiff.activity_timeline(root, from: from, to: root, group: group))]
+    end
+  end
+
+  def window_reads(root, first, last)
+    within = first.created_at..last.created_at
+    expected = root_steps(PaperTrailDiff.analyze(root, within: within).timeline)
+    alone = PaperTrailDiff.analyze(root, within: within, activity: true)
+    batched = PaperTrailDiff.analyze_many([root], within: within, activity: true).values.first
+    [["#{root.id} within #{first.id}..#{last.id}", expected, root_steps(alone.activity_timeline)],
+     ["#{root.id} batched within #{first.id}..#{last.id}", expected,
+      root_steps(batched.activity_timeline)]]
+  end
+
   ReplayDifferential::CONFIGURATIONS.each_key do |configuration|
     Oracle.seeds([1, 2]).each do |seed|
+      it "matches the root timeline without associations under the #{configuration.downcase} " \
+         "configuration for seed #{seed}" do
+        models = ReplayDifferential.models(configuration)
+        history = ReplayDifferential::History.new(models, seed, steps: Oracle.steps(24)).build
+
+        expect(timeline_mismatches(history, seed)).to be_empty,
+                                                      -> { "transactions: #{history.log.inspect}" }
+      end
+
       it "agrees under the #{configuration.downcase} configuration for seed #{seed}" do
         models = ReplayDifferential.models(configuration)
         history = ReplayDifferential::History.new(models, seed, steps: Oracle.steps(24)).build
