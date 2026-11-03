@@ -56,6 +56,7 @@ module PaperTrailDiff
       @pool = pool
       @structural_columns = {} #: Hash[String, Array[String]]
       @excluded_attributes = {} #: Hash[Array[untyped], Array[String?]]
+      @leaves = {} #: Hash[String, Hash[PreparedRecordState, RecordSnapshot]]
     end
 
     #: (untyped, reifier: untyped) -> RecordSnapshot?
@@ -90,8 +91,22 @@ module PaperTrailDiff
     end
 
     # Same exclusions as AR normalization, applied to an already typed state.
+    # A state without associations is normalized once at each path: the
+    # same state is read again at every boundary it spans.
     #: (PreparedRecordState, tree: AssociationTree, path: String, ?incoming: untyped, ?associations: snapshot_associations) -> RecordSnapshot
     def from_state(state, tree:, path:, incoming: nil, associations: {})
+      unless associations.empty?
+        return snapshot_from_state(state, tree, path, incoming, associations)
+      end
+
+      leaves = @leaves[path] ||= {}
+      leaves[state] ||= snapshot_from_state(state, tree, path, incoming, associations)
+    end
+
+    private
+
+    #: (PreparedRecordState, AssociationTree, String, untyped, snapshot_associations) -> RecordSnapshot
+    def snapshot_from_state(state, tree, path, incoming, associations)
       model = state.model_class
       @structural_columns[path] ||= @traversal.incoming_relationship_columns(incoming) if incoming
       reflections = @traversal.reflections_for(model, tree, path: path)
@@ -103,8 +118,6 @@ module PaperTrailDiff
       )
       pool_state(path, snapshot)
     end
-
-    private
 
     # The id a live record of the same row reports: one value, or one per
     # column of a composite key.
@@ -125,6 +138,7 @@ module PaperTrailDiff
     # @rbs @pool: SnapshotPool
     # @rbs @structural_columns: Hash[String, Array[String]]
     # @rbs @excluded_attributes: Hash[Array[untyped], Array[String?]]
+    # @rbs @leaves: Hash[String, Hash[PreparedRecordState, RecordSnapshot]]
 
     #: (untyped, AssociationTree, String, untyped, Array[untyped]) -> RecordSnapshot
     def normalize_record(record, tree, path, reifier, reflections)
