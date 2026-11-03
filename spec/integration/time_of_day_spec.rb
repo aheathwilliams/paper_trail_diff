@@ -57,8 +57,9 @@ RSpec.describe 'History of a time of day' do
 
   # In UTC, a zone-aware time is stored as a TimeWithZone's fields under the
   # wrapper's tag, which PaperTrail reads; in any other zone, it wraps its time.
-  [AlarmClock, ZonedAlarmClock, CallbackAlarmClock].product(%w[UTC Pacific/Auckland])
-                                                   .each do |model, zone|
+  # A time of day in UTC can fall on the day after its local date, or before.
+  zones = %w[UTC Pacific/Auckland Pacific/Honolulu]
+  [AlarmClock, ZonedAlarmClock, CallbackAlarmClock].product(zones).each do |model, zone|
     context "with #{model.name} in #{zone}" do
       around { |example| Time.use_zone(zone) { example.run } }
 
@@ -76,6 +77,27 @@ RSpec.describe 'History of a time of day' do
         expect(PaperTrailDiff.compare(renamed, clock).attributes.keys).to eq(['name'])
         expect(PaperTrailDiff.recorded_changes(set).transform_values(&:to_h))
           .to eq('rings_at' => { from: nil, to: clock.rings_at })
+      end
+
+      # Active Record keeps the date of a time assigned in memory, and the
+      # versions saved from that instance store it, while the row keeps only
+      # the time. Without zone conversion nothing drops the date first.
+      it 'reads a time assigned with a date as the row keeps it' do
+        clock = model.create!(name: 'Kitchen')
+        clock.update!(rings_at: Time.zone.local(2032, 3, 4, 7, 30))
+        clock.update!(name: 'Bedroom')
+        clock.update!(name: 'Hall')
+        clock.reload
+        _created, set, renamed, = clock.versions.reorder(:created_at, :id).to_a
+
+        [PaperTrailDiff.timeline(clock), PaperTrailDiff.activity_timeline(clock),
+         PaperTrailDiff.report(model, since: Time.now.utc - 3600, limit: 1)
+                       .analyses.values.first.activity_timeline].each do |steps|
+          expect(steps.drop(1).map { |step| step.diff.attributes.keys })
+            .to eq([['rings_at'], ['name'], ['name']])
+        end
+        expect(PaperTrailDiff.compare(renamed, clock).attributes.keys).to eq(['name'])
+        expect(PaperTrailDiff.recorded_changes(set).fetch('rings_at').to).to eq(clock.rings_at)
       end
     end
   end

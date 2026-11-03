@@ -148,7 +148,10 @@ project follows [Semantic Versioning](https://semver.org/).
   a version that holds a column the model no longer has; the records a
   callable `historical_filter:` receives; and association members PT-AT
   rebuilds. Each such record's time is assigned from its own version, which
-  is decoded a second time only when it holds a time of day.
+  is decoded a second time only when it holds a time of day. A time is read
+  on 2000-01-01, as the row keeps it: a column that is not time-zone aware
+  keeps in memory the date of the time assigned to it, such as
+  `Time.current`'s, and the versions saved from that record store it.
 
 - `analyze_scope` and `report` accept a relation whose `limit` or `offset` is
   a String, as request parameters are, such as

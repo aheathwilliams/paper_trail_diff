@@ -27,6 +27,8 @@ RSpec.describe PaperTrailDiff::Support do
   end
 
   describe '.decodable' do
+    let(:time_of_day) { Time.utc(2000, 1, 1, 12) }
+
     # The wrapper delegates ==, so only its class tells it from the time.
     it 'keys stored values by name, unwrapping each time of day, alone or in a pair' do
       wrapped = ActiveRecord::Type::Time::Value.new(noon)
@@ -38,10 +40,24 @@ RSpec.describe PaperTrailDiff::Support do
                                             'title' => 'Draft', 'labels' => [1, 2],
                                             'zoned' => fields)
 
-      expect(decodable).to eq('rings_at' => noon, 'changed' => [nil, noon], 'title' => 'Draft',
-                              'labels' => [1, 2], 'zoned' => noon)
+      expect(decodable).to eq('rings_at' => time_of_day, 'changed' => [nil, time_of_day],
+                              'title' => 'Draft', 'labels' => [1, 2], 'zoned' => time_of_day)
       expect([decodable.fetch('rings_at'), decodable.fetch('changed').last])
         .to all(be_an_instance_of(Time))
+    end
+
+    # A time assigned in memory keeps its date there, and in its version, but
+    # the row keeps only the time, which reads back on 2000-01-01.
+    it 'reads a time of day on the date the database gives it, in its own zone' do
+      assigned = Time.new(2032, 3, 4, 7, 30, Rational(31, 2), '+13:00')
+      empty = ActiveRecord::Type::Time::Value.allocate
+
+      decodable = described_class.decodable('rings_at' => ActiveRecord::Type::Time::Value.new(assigned),
+                                            'unset' => empty)
+
+      expect(decodable).to eq('rings_at' => Time.new(2000, 1, 1, 7, 30, Rational(31, 2), '+13:00'),
+                              'unset' => nil)
+      expect(decodable.fetch('rings_at').utc_offset).to eq(13 * 3600)
     end
   end
 
@@ -83,10 +99,10 @@ RSpec.describe PaperTrailDiff::Support do
       record = model.new(version)
 
       expect(described_class.with_recorded_times(record)).to equal(record)
-      expect(record.assigned).to eq(rings_at: noon)
+      expect(record.assigned).to eq(rings_at: Time.utc(2000, 1, 1, 12))
       expect(record.assigned.fetch(:rings_at)).to be_an_instance_of(Time)
       expect(record.alarm).to be_an_instance_of(Time)
-      expect(record.alarm).to eq(noon)
+      expect(record.alarm).to eq(Time.utc(2000, 1, 1, 12))
     end
 
     it 'decodes nothing again when the stored text holds no time of day, or is not text' do
@@ -116,7 +132,7 @@ RSpec.describe PaperTrailDiff::Support do
       allow(version).to receive(:reify).with(dup: true, has_many: false).and_return(record)
 
       expect(described_class.reify(version, dup: true, has_many: false)).to equal(record)
-      expect(record.assigned).to eq(rings_at: noon)
+      expect(record.assigned).to eq(rings_at: Time.utc(2000, 1, 1, 12))
     end
   end
 

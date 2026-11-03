@@ -16,6 +16,9 @@ module PaperTrailDiff
     # under the wrapper's tag; any other wraps its time, and decodes as nil.
     TIME_VALUE = 'ActiveRecord::Type::Time::Value'
 
+    # The date a database gives a time of day it reads back.
+    TIME_OF_DAY_DATE = { year: 2000, month: 1, day: 1 }.freeze #: Hash[Symbol, Integer]
+
     # Answers a question about `value` once for each Active Record class, in
     # `answers`: its respond_to? also looks through the instance's attributes,
     # which costs more than most of what reading a version does, and every
@@ -45,11 +48,13 @@ module PaperTrailDiff
     end
     private_class_method :unwrapped_time
 
-    # The time a stored wrapper holds: the one it wraps, or the `@time`
-    # PaperTrail reads.
+    # The time a stored wrapper holds -- the one it wraps, or the `@time`
+    # PaperTrail reads -- on 2000-01-01, as the database keeps a time of day.
+    # Active Record keeps the date of a time assigned in memory, which
+    # PaperTrail stores, but the row holds only the time.
     #: (untyped) -> untyped
     def self.recorded_time(value)
-      value.__getobj__ { value.instance_variable_get(:@time) }
+      value.__getobj__ { value.instance_variable_get(:@time) }&.change(**TIME_OF_DAY_DATE)
     end
     private_class_method :recorded_time
 
