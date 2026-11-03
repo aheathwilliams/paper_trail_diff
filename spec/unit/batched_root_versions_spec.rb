@@ -148,6 +148,18 @@ RSpec.describe PaperTrailDiff::BatchedRootVersions do
       expect(plans.fetch(key(article)).context_version).to eq(later.first)
     end
 
+    # The database returns the versions in no set order; these come back in
+    # the order of their ids, the later one first.
+    it 'closes on the earliest version past a moved end, whatever order they are read in' do
+      article, _created, _reviewed, published = history(minutes: [0, 2, 1.75])
+
+      plan = select([article], within: at(0.5)..at(2.5),
+                               windows: { key(article) => at(0)...at(1.5) })
+             .fetch(key(article))
+
+      expect(plan.context_version).to eq(published)
+    end
+
     it 'leaves a moved window with nothing in or after it empty' do
       article, = history
 
