@@ -20,6 +20,13 @@ class TraversalNote < ActiveRecord::Base
   has_many :holder_replies, through: :holder, source: :replies
 end
 
+class TraversalReplyAuthor < ActiveRecord::Base
+  self.table_name = 'tracked_authors'
+  has_many :articles, class_name: 'TrackedArticle', foreign_key: :author_id
+  has_many :comments, through: :articles
+  has_many :comment_replies, through: :comments, source: :replies
+end
+
 class TraversalNamedTag < ActiveRecord::Base
   self.table_name = 'tracked_tags'
   default_scope { where.not(name: '') }
@@ -129,11 +136,37 @@ RSpec.describe PaperTrailDiff::AssociationTraversal do
     end
   end
 
+  describe '.through_parts' do
+    it 'lists every part a through passes, at any depth, each before its own parts' do
+      nested = TraversalReplyAuthor.reflect_on_association(:comment_replies)
+      parts = described_class.through_parts(nested).map do |part|
+        "#{part.active_record}##{part.name}"
+      end
+
+      expect(parts).to eq(%w[TraversalReplyAuthor#comments TraversalReplyAuthor#articles
+                             TrackedArticle#comments TrackedComment#replies])
+      expect(described_class.through_parts(TrackedArticle.reflect_on_association(:comments)))
+        .to eq([])
+    end
+  end
+
   describe '.named_class' do
     it 'returns the class a type names, or nil when it names none' do
       expect(described_class.named_class('TrackedArticle')).to eq(TrackedArticle)
       expect(described_class.named_class('RenamedArticle')).to be_nil
       expect(described_class.named_class('not a constant')).to be_nil
+    end
+  end
+
+  describe '.stored_target' do
+    it 'reads the declared class, or the class a polymorphic type names' do
+      reviewer = TraversalNote.reflect_on_association(:reviewer)
+      holder = TraversalNote.reflect_on_association(:holder)
+
+      expect(described_class.stored_target(reviewer, 'TrackedArticle')).to eq(TrackedAuthor)
+      expect(described_class.stored_target(holder, 'TrackedArticle')).to eq(TrackedArticle)
+      expect(described_class.stored_target(holder, nil)).to be_nil
+      expect(described_class.stored_target(holder, 'RenamedArticle')).to be_nil
     end
   end
 

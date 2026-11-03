@@ -26,11 +26,8 @@ module PaperTrailDiff
 
     #: (untyped) -> bool
     def self.composite_key?(reflection)
-      return true if reflection.foreign_key.is_a?(Array)
-      return false unless reflection.through_reflection?
-
-      [reflection.through_reflection, reflection.source_reflection].any? do |part|
-        composite_key?(part)
+      [reflection, *AssociationTraversal.through_parts(reflection)].any? do |part|
+        part.foreign_key.is_a?(Array)
       end
     end
     private_class_method :composite_key?

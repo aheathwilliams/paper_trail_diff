@@ -39,6 +39,19 @@ module PaperTrailDiff
     # : (untyped) -> Array[untyped]
     def self?.row_key: (untyped) -> Array[untyped]
 
+    # Which record a model and id name, as Endpoint.identity reads a record:
+    # by its base class, so a subclass and its base name the same row.
+    # : (untyped, untyped) -> Array[String]
+    def self?.record_identity: (untyped, untyped) -> Array[String]
+
+    # Only quoting helpers are needed where this is used, so the model's
+    # connection is borrowed for the block rather than checked out
+    # permanently, which Active Record 7.2 and newer can deprecate. Active
+    # Record 7.1 has no `with_connection` and reaches the same connection
+    # through the accessor.
+    # : [T] (untyped) { (untyped) -> T } -> T
+    def self?.with_connection: [T] (untyped) { (untyped) -> T } -> T
+
     # : (untyped) -> Array[untyped]
     def self?.chronological_version_key: (untyped) -> Array[untyped]
 

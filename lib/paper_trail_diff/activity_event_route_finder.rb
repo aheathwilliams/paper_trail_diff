@@ -4,6 +4,14 @@
 module PaperTrailDiff
   # Finds explicitly selected collection and belongs-to routes for one event type.
   class ActivityEventRouteFinder
+    # An edit can move a record into or out of a scope, which a change in
+    # place cannot show, so an event on a scoped route has its branch read
+    # again from history instead.
+    #: (Array[Array[untyped]]) -> bool
+    def self.scoped_route?(routes)
+      routes.any? { |route| route.any? { |entry| ScopeCondition.scoped_path?(entry.fetch(1)) } }
+    end
+
     #: (AssociationTraversal) -> void
     def initialize(traversal)
       @traversal = traversal

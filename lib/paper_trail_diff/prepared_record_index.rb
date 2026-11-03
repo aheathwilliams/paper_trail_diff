@@ -279,13 +279,8 @@ module PaperTrailDiff
 
   # Request-scoped scalar history loaded once per model identity.
   class PreparedRecordIndex
-    # The transactions that crossed a window's start, keyed as
-    # ActivityTransactionGroups keys a version's; see PreparedHistoryLoader.
-    attr_reader :opening_transactions #: Array[Array[untyped]]
-
-    #: (untyped, ?end_at: untyped, ?live_records: Array[untyped], ?opening_transactions: Array[Array[untyped]]) -> void
-    def initialize(start_at, end_at: nil, live_records: [], opening_transactions: [])
-      @opening_transactions = opening_transactions
+    #: (untyped, ?end_at: untyped, ?live_records: Array[untyped]) -> void
+    def initialize(start_at, end_at: nil, live_records: [])
       @start_time = boundary_time(start_at)
       @end_time = boundary_time(end_at)
       @seeded_live_records = live_records.to_h do |record|
@@ -343,8 +338,7 @@ module PaperTrailDiff
       state = series.state_before(boundary)
       return [true, nil] unless state
 
-      @direct_states[state] = @direct_loader.complete(state) unless @direct_states.key?(state)
-      prepared = @direct_states[state]
+      prepared = direct_state(state)
       [!prepared.nil?, prepared]
     end
 
@@ -365,7 +359,7 @@ module PaperTrailDiff
       return [false, nil] unless handled
       return [true, state] unless direct && state
 
-      prepared = @direct_loader.complete(state)
+      prepared = direct_state(state)
       [!prepared.nil?, prepared]
     end
 
@@ -379,7 +373,7 @@ module PaperTrailDiff
       plain_reader = generated_reader?(model_class, name)
       ids.flat_map do |id|
         @series.fetch(identity(model_class, id)).states.map do |state|
-          direct = @direct_loader.complete(state) if plain_reader
+          direct = direct_state(state) if plain_reader
           direct ? direct.attributes[name] : state.instantiate.public_send(name)
         end
       end
@@ -419,11 +413,17 @@ module PaperTrailDiff
     # instantiating it, as reify does.
     #: (PreparedRecordState) -> Hash[untyped, untyped]
     def typed_attributes(state)
-      @direct_states[state] = @direct_loader.complete(state) unless @direct_states.key?(state)
-      typed = @direct_states[state]
+      typed = direct_state(state)
       return typed.attributes if typed
 
       PreparedRecordState.new(state.instantiate).attributes
+    end
+
+    # A state completed as a record of its class would hold it, or nil where
+    # only instantiating can tell; each state is completed once.
+    #: (PreparedRecordState) -> PreparedRecordState?
+    def direct_state(state)
+      @direct_states.fetch(state) { @direct_states[state] = @direct_loader.complete(state) }
     end
 
     #: (untyped, String) -> bool
@@ -439,7 +439,6 @@ module PaperTrailDiff
     # @rbs @series: Hash[Array[String], PreparedRecordSeries]
     # @rbs @direct_loader: DirectRecordStateLoader
     # @rbs @direct_states: Hash[PreparedRecordState, PreparedRecordState?]
-    # @rbs @opening_transactions: Array[Array[untyped]]
 
     # Callers bound the range with either a version or a bare timestamp.
     #: (untyped) -> untyped
@@ -449,7 +448,7 @@ module PaperTrailDiff
 
     #: (untyped, untyped) -> Array[String]
     def identity(model_class, id)
-      [model_class.base_class.name.to_s, id.to_s]
+      Support.record_identity(model_class, id)
     end
 
     #: (untyped, Array[untyped]) -> Array[untyped]
@@ -473,12 +472,8 @@ module PaperTrailDiff
     # recorded between the requested range and the present.
     #: (untyped, Array[untyped]) -> Array[untyped]
     def versions_for(model_class, ids)
-      version_class = model_class.paper_trail.version_class
-      scope = version_class.where(
-        item_type: model_class.base_class.name,
-        item_id: ids
-      ).where(created_at: @start_time..)
-      scope = scope.where(window_condition(version_class)) if @end_time
+      scope = VersionQuery.for_items(model_class, ids).where(created_at: @start_time..)
+      scope = scope.where(window_condition(model_class.paper_trail.version_class)) if @end_time
       scope.order(:id).to_a
     end
 

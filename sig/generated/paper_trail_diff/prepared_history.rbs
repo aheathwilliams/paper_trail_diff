@@ -5,15 +5,13 @@ module PaperTrailDiff
   class PreparedHistory
     attr_reader activity_index: PreparedActivityIndex?
 
-    DIRECT_RESOLVERS: untyped
-
-    # : (PreparedRecordIndex, ?activity_index: PreparedActivityIndex?) -> void
-    def initialize: (PreparedRecordIndex, ?activity_index: PreparedActivityIndex?) -> void
-
-    # The transactions that crossed the history's start; see
+    # The transactions that crossed the history's start, keyed as
+    # ActivityTransactionGroups keys a version's; see
     # PreparedHistoryLoader#reload.
-    # : () -> Array[Array[untyped]]
-    def opening_transactions: () -> Array[Array[untyped]]
+    attr_reader opening_transactions: Array[Array[untyped]]
+
+    # : (PreparedRecordIndex, ?activity_index: PreparedActivityIndex?, ?opening_transactions: Array[Array[untyped]]) -> void
+    def initialize: (PreparedRecordIndex, ?activity_index: PreparedActivityIndex?, ?opening_transactions: Array[Array[untyped]]) -> void
 
     # : () -> Array[untyped]
     def versions: () -> Array[untyped]
@@ -67,12 +65,6 @@ module PaperTrailDiff
     # : (untyped, untyped, untyped, untyped, bool) -> Array[untyped]?
     def direct_records: (untyped, untyped, untyped, untyped, bool) -> Array[untyped]?
 
-    # : (untyped, untyped, untyped, untyped, bool) -> Array[untyped]?
-    def resolve_belongs_to: (untyped, untyped, untyped, untyped, bool) -> Array[untyped]?
-
-    # : (untyped, untyped, untyped, untyped, bool) -> Array[untyped]
-    def resolve_children: (untyped, untyped, untyped, untyped, bool) -> Array[untyped]
-
     # : (untyped, untyped, untyped, bool) -> Array[untyped]?
     def belongs_to_records: (untyped, untyped, untyped, bool) -> Array[untyped]?
 
@@ -107,9 +99,6 @@ module PaperTrailDiff
 
     # : (untyped, untyped, untyped) -> bool
     def member_of?: (untyped, untyped, untyped) -> bool
-
-    # : (untyped) -> String?
-    def scalar_foreign_key: (untyped) -> String?
 
     # : (untyped, untyped) -> Array[String]
     def owner_types: (untyped, untyped) -> Array[String]

@@ -19,12 +19,22 @@ module PaperTrailDiff
     # : (untyped, untyped) -> bool
     def self.source_type_member?: (untyped, untyped) -> bool
 
+    # Every part a through passes, at any depth: its through part and that
+    # part's own parts, then its source part and that part's own parts.
+    # : (untyped) -> Array[untyped]
+    def self.through_parts: (untyped) -> Array[untyped]
+
     # The class a stored type names, or nil when it names none.
     # This class defines no constants of its own, so the one mutation left,
     # `const_get` on it rather than on Object, finds the same class.
     # mutant:disable
     # : (String) -> untyped
     def self.named_class: (String) -> untyped
+
+    # The class a belongs_to's target is, given the type a polymorphic one
+    # stored: nil when that names no class.
+    # : (untyped, untyped) -> untyped
+    def self.stored_target: (untyped, untyped) -> untyped
 
     # A type left by a renamed or removed model names no class. Active Record
     # and PT-AT raise a bare NameError for it, which does not say where it is.

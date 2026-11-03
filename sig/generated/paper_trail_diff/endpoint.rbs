@@ -42,6 +42,11 @@ module PaperTrailDiff
     # : (untyped) -> untyped
     def self?.model_class: (untyped) -> untyped
 
+    # Whether versions of this class have an `item_subtype` column, answered
+    # once for each Active Record class (see Support.per_model).
+    # : (untyped) -> bool
+    def self?.subtyped?: (untyped) -> bool
+
     # Every PaperTrail version of the record, whatever scope its versions
     # association has.
     # : (untyped) -> untyped

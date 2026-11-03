@@ -86,7 +86,7 @@ module PaperTrailDiff
     #: (?prefix: String) -> Array[String]
     def paths(prefix: '')
       children.flat_map do |name, subtree|
-        path = prefix.empty? ? name : "#{prefix}.#{name}"
+        path = Support.association_path(prefix, name)
         [path, *subtree.paths(prefix: path)]
       end.freeze
     end

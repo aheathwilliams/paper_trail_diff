@@ -21,8 +21,5 @@ module PaperTrailDiff
 
     # : (untyped) -> untyped
     def trailing_version: (untyped) -> untyped
-
-    # : (Array[untyped]) -> Array[untyped]
-    def ordered: (Array[untyped]) -> Array[untyped]
   end
 end

@@ -31,17 +31,7 @@ module PaperTrailDiff
       # until a caller reads them, and which one who never does should not pay.
       #: (untyped, ?recorded: RecordedChangesReader?) -> ActivityBoundary
       def from_version(version, recorded: nil)
-        new(
-          kind: :version,
-          version_id: version.id,
-          item_type: version.item_type,
-          item_id: version.item_id,
-          recorded_at: version.created_at,
-          event: version.event,
-          whodunnit: version.whodunnit,
-          transaction_id: VersionBoundary.transaction_id(version),
-          recorded_changes: recorded_changes(version, recorded)
-        )
+        of_version(version, :version, recorded)
       end
 
       # The current record has no version, so it recorded nothing.
@@ -62,8 +52,15 @@ module PaperTrailDiff
       # holds the record; this one is the absence that follows it.
       #: (untyped, ?recorded: RecordedChangesReader?) -> ActivityBoundary
       def destroyed(version, recorded: nil)
+        of_version(version, :destroyed, recorded)
+      end
+
+      private
+
+      #: (untyped, Symbol, RecordedChangesReader?) -> ActivityBoundary
+      def of_version(version, kind, recorded)
         new(
-          kind: :destroyed,
+          kind: kind,
           version_id: version.id,
           item_type: version.item_type,
           item_id: version.item_id,
@@ -74,8 +71,6 @@ module PaperTrailDiff
           recorded_changes: recorded_changes(version, recorded)
         )
       end
-
-      private
 
       #: (untyped, RecordedChangesReader?) -> untyped
       def recorded_changes(version, reader)

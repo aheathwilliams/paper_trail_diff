@@ -174,7 +174,7 @@ module PaperTrailDiff
           context_required: activity && !@association_tree.empty?,
           live_loader: method(:load_batch_endpoints),
           history_preparer: @historical_store.method(:prepare_batch),
-          analyzer: batched_root_analyzer(activity, within: within, view: view)
+          analyzer: batched_root_analyzer(activity, view: view)
         ).call
       end
     end
@@ -218,8 +218,7 @@ module PaperTrailDiff
     #: (untyped, Array[Array[String]], Hash[Symbol, untyped]) -> Hash[Array[String], Analysis?]
     def analyze_deleted(model, identities, options)
       within = options.fetch(:within)
-      analyzer = batched_root_analyzer(options.fetch(:activity), within: within,
-                                                                 view: options.fetch(:view))
+      analyzer = batched_root_analyzer(options.fetch(:activity), view: options.fetch(:view))
       DeletedAnalysisBatch.new(
         model, identities: identities, time_range: within.nil? ? nil : TimeRange.new(within),
                version_scope: options.fetch(:version_scope),
@@ -331,14 +330,14 @@ module PaperTrailDiff
       )
     end
 
-    #: (bool, within: untyped, view: ActivityView) -> BatchedRootAnalyzer
-    def batched_root_analyzer(activity, within:, view:)
+    #: (bool, view: ActivityView) -> BatchedRootAnalyzer
+    def batched_root_analyzer(activity, view:)
       BatchedRootAnalyzer.new(
         tree: @association_tree,
         timeline_snapshotter: @timeline_snapshotter,
         activity_snapshotter: @activity_snapshotter,
         preparer: @traversal_preparer.method(:call),
-        activity: activity, within: within, view: view
+        activity: activity, view: view
       )
     end
 

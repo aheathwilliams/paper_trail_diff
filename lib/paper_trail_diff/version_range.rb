@@ -52,10 +52,10 @@ module PaperTrailDiff
 
     #: (untyped, whole: bool, ?through: untyped, ?live_endpoint: untyped) -> RootVersionPlan
     def select_plan(relation, whole:, through: nil, live_endpoint: nil)
-      in_range = ordered(relation.select do |version|
+      in_range = relation.select do |version|
         Support.compare_versions(@from, version) <= 0 &&
           (!through || Support.compare_versions(version, through) <= 0)
-      end)
+      end
       RootVersionSelection.new(
         in_range: in_range,
         selected: VersionScopeFilter.new(@version_scope).call(relation, in_range),
@@ -63,11 +63,6 @@ module PaperTrailDiff
         windowed: false,
         live_endpoint: live_endpoint, whole: whole
       ).call
-    end
-
-    #: (Array[untyped]) -> Array[untyped]
-    def ordered(versions)
-      Support.chronological_sort(versions)
     end
 
     #: (untyped, untyped, boundary: Symbol) -> void

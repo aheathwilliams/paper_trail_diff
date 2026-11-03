@@ -103,7 +103,7 @@ module PaperTrailDiff
     def add_model_boundaries(index, model_class, ids)
       firsts = first_versions(model_class, ids)
       ids.each do |id|
-        index[identity_key(model_class, id)] = { first: firsts[id.to_s] }
+        index[Support.record_identity(model_class, id)] = { first: firsts[id.to_s] }
       end
     end
 
@@ -118,11 +118,6 @@ module PaperTrailDiff
                                .where(VersionQuery.no_earlier_version(table)).to_a
       candidates.group_by { |version| version.item_id.to_s }
                 .transform_values { |versions| Support.chronological_sort(versions).first }
-    end
-
-    #: (untyped, untyped) -> Array[String]
-    def identity_key(model_class, id)
-      [model_class.base_class.name.to_s, id.to_s]
     end
   end
 end

@@ -95,7 +95,9 @@ module PaperTrailDiff
 
       members = through_members(record, reflection, source)
       association = record.association(reflection.name)
-      association.target = members.uniq { |member| [member.class.base_class.name, member.id] }
+      association.target = members.uniq do |member|
+        Support.record_identity(member.class, member.id)
+      end
       association.loaded!
     end
 

@@ -48,6 +48,9 @@ module PaperTrailDiff
     # : (untyped, ?recorded: RecordedChangesReader?) -> ActivityBoundary
     def self.destroyed: (untyped, ?recorded: RecordedChangesReader?) -> ActivityBoundary
 
+    # : (untyped, Symbol, RecordedChangesReader?) -> ActivityBoundary
+    private def self.of_version: (untyped, Symbol, RecordedChangesReader?) -> ActivityBoundary
+
     # : (untyped, RecordedChangesReader?) -> untyped
     private def self.recorded_changes: (untyped, RecordedChangesReader?) -> untyped
 

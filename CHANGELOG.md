@@ -78,6 +78,12 @@ project follows [Semantic Versioning](https://semver.org/).
   comments, read its own history, at about nine statements each. A batch of
   20 such articles took 188 statements and now takes 14, as many as one.
 
+- `analyze` and `activity_timeline` with activity on associations read the
+  current record's row once for the snapshots that start from it, as
+  `analyze_many` already did. Each such snapshot read the row again: after
+  four transactions that changed two comments each, an article's activity
+  read its row ten times rather than four.
+
 ### Fixed
 
 - Activity on a `has_many :through` leaves out the versions a join record
@@ -144,6 +150,13 @@ project follows [Semantic Versioning](https://semver.org/).
   empty, as is any analysis in which nothing is reported. It reported the
   record as destroyed: its `diff` held a presence change to `nil`, and its
   `to_snapshot` was `nil`.
+
+- `analyze_many` and `analyze_scope` without associations raise
+  `AmbiguousVersionOrderError` for versions they cannot order, as `timeline`
+  and `analyze` already did: versions that share a timestamp and whose ids
+  do not count up, such as UUIDs. They read such versions in the order of
+  their ids, so a record's steps could follow a random sequence, including
+  a destroy and re-creation that never happened.
 
 ### Development
 

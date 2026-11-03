@@ -267,9 +267,10 @@ module PaperTrailDiff
             'relation, or raise limit: to the page size you intend to analyze'
     end
 
+    # Keyed as Endpoint.identity keys the record, which the analyses use.
     #: (String) -> Array[String]
     def identity(id)
-      [item_type, id].freeze
+      Support.record_identity(model, id).freeze
     end
 
     #: () -> String

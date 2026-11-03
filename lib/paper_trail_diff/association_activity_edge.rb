@@ -166,7 +166,7 @@ module PaperTrailDiff
 
       #: () -> Hash[String, Symbol?]
       def join_columns
-        connected do |connection|
+        Support.with_connection(@owner) do |connection|
           connection.columns(@reflection.join_table).to_h { |column| [column.name, column.type] }
         end
       end
@@ -176,7 +176,7 @@ module PaperTrailDiff
       # mutant:disable
       #: () -> untyped
       def quoted_owner_column
-        connected do |connection|
+        Support.with_connection(@owner) do |connection|
           arel.sql("#{connection.quote_table_name(@reflection.join_table)}." \
                    "#{connection.quote_column_name(@reflection.foreign_key)}")
         end
@@ -188,17 +188,6 @@ module PaperTrailDiff
       #: () -> untyped
       def arel
         Object.const_get(:Arel)
-      end
-
-      # Active Record 7.1 has no `with_connection`; see VersionAssociationCandidateScope.
-      # Only that version takes the fallback, so no spec run on a newer one can
-      # tell its mutations apart.
-      # mutant:disable
-      #: [T] () { (untyped) -> T } -> T
-      def connected(&block)
-        return @owner.with_connection(&block) if @owner.respond_to?(:with_connection)
-
-        yield(@owner.connection)
       end
     end
 

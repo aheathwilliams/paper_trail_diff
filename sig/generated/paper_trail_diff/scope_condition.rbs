@@ -26,8 +26,6 @@ module PaperTrailDiff
 
     BIND_PARAM: ::String
 
-    ATTRIBUTE: ::String
-
     # Adapters that compare strings exactly by default. MySQL and SQL Server
     # ignore case and trailing spaces by default, which Ruby cannot follow.
     EXACT_TEXT_ADAPTERS: untyped

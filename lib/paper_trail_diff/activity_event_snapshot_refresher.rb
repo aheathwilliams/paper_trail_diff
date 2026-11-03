@@ -61,7 +61,7 @@ module PaperTrailDiff
 
       tree, normalizer = @components.call(branches)
       routes = @route_finder.collection_routes(
-        endpoint_model_class(root_endpoint), tree, event.version.item_type.to_s
+        RecordedClass.of_endpoint(root_endpoint), tree, event.version.item_type.to_s
       )
       unless routes.empty?
         delta = @record_resolver.snapshot_delta(event.version)
@@ -105,7 +105,7 @@ module PaperTrailDiff
     #: (untyped, AssociationTree, Array[Array[untyped]], ActivityEvent, ActivitySnapshotDelta?) -> bool
     def collection_safe?(root_endpoint, tree, routes, event, delta)
       version = event.version
-      !@route_finder.through_part?(endpoint_model_class(root_endpoint), tree,
+      !@route_finder.through_part?(RecordedClass.of_endpoint(root_endpoint), tree,
                                    version.item_type.to_s) &&
         @collection_applier.safe?(routes, version, delta)
     end
@@ -118,11 +118,6 @@ module PaperTrailDiff
     #: (untyped, untyped) -> untyped
     def deserialized_changeset(version, model_class)
       @record_resolver.deserialized_changeset(version, model_class)
-    end
-
-    #: (untyped) -> untyped
-    def endpoint_model_class(endpoint)
-      Endpoint.version?(endpoint) ? RecordedClass.for(endpoint) : endpoint.class
     end
   end
 end

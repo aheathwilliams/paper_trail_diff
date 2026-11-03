@@ -2,6 +2,7 @@
 
 module PaperTrailDiff
   # Collects root and selected-descendant versions relevant to one root history range.
+  # Descendants are found in the root's prepared history.
   class ActivityVersionCollector
     # : (untyped, root_versions: Array[untyped], tree: AssociationTree, ?range_start: untyped, ?range_end: untyped, ?prepared: PreparedActivityIndex?) -> void
     def initialize: (untyped, root_versions: Array[untyped], tree: AssociationTree, ?range_start: untyped, ?range_end: untyped, ?prepared: PreparedActivityIndex?) -> void
@@ -13,7 +14,7 @@ module PaperTrailDiff
 
     private
 
-    @prepared: PreparedActivityIndex?
+    @prepared: PreparedActivityIndex
 
     @range: ActivityRange
 
@@ -41,12 +42,11 @@ module PaperTrailDiff
 
     # Every target the owners pointed at in the range, not only those their own
     # changes there recorded: an author renamed under an article nobody edited
-    # is still that article's activity.
+    # is still that article's activity. Prepared history holds every target its
+    # snapshots can contain. One it did not load -- a key changed without a
+    # version -- has no state to compare.
     # : (untyped, Array[untyped], untyped) -> Hash[String, untyped]
     def belongs_to_groups: (untyped, Array[untyped], untyped) -> Hash[String, untyped]
-
-    # : (untyped, Array[untyped], untyped) -> Hash[String, untyped]
-    def unprepared_belongs_to_groups: (untyped, Array[untyped], untyped) -> Hash[String, untyped]
 
     # : (untyped, Array[untyped], untyped) -> Hash[String, untyped]
     def direct_child_groups: (untyped, Array[untyped], untyped) -> Hash[String, untyped]
@@ -62,11 +62,5 @@ module PaperTrailDiff
 
     # : (Hash[String, untyped], Hash[String, untyped]) -> void
     def merge_groups!: (Hash[String, untyped], Hash[String, untyped]) -> void
-
-    # : (untyped, Array[untyped]) -> Array[untyped]
-    def versions_for: (untyped, Array[untyped]) -> Array[untyped]
-
-    # : (untyped, untyped) -> untyped
-    def target_class: (untyped, untyped) -> untyped
   end
 end

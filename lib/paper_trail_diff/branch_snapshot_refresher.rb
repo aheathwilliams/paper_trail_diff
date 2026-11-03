@@ -70,15 +70,12 @@ module PaperTrailDiff
                                             branches, event)
       end
 
-      endpoints = [root_endpoint, context_endpoint]
-      handled, incremental = incremental_event(endpoints, previous_snapshot, branches, event,
-                                               isolated)
-      return incremental if handled
-
-      partial = partial_snapshot(root_endpoint, context_endpoint, branches)
-      return full_snapshot(root_endpoint, context_endpoint) unless partial
-
-      merge(previous_snapshot, partial)
+      if isolated
+        handled, incremental = @event_refresher.call(root_endpoint, context_endpoint,
+                                                     previous_snapshot, branches, event)
+        return incremental if handled
+      end
+      refreshed(root_endpoint, context_endpoint, previous_snapshot, branches)
     end
 
     private
@@ -101,19 +98,6 @@ module PaperTrailDiff
       root = Endpoint.version?(root_endpoint) &&
              VersionBoundary.same_version?(root_endpoint, context_endpoint)
       root ? branches | @traversal.habtm_paths(RecordedClass.for(root_endpoint)) : branches
-    end
-
-    #: (Array[untyped], RecordSnapshot, Array[String], ActivityEvent?, bool) -> [bool, RecordSnapshot?]
-    def incremental_event(endpoints, previous, branches, event, isolated)
-      return [false, nil] unless isolated
-
-      @event_refresher.call(
-        endpoints.fetch(0),
-        endpoints.fetch(1),
-        previous,
-        branches,
-        event
-      )
     end
 
     #: (untyped, untyped, RecordSnapshot, Array[String], ActivityEvent) -> RecordSnapshot?
@@ -142,10 +126,15 @@ module PaperTrailDiff
       end
       return snapshot if remaining.empty?
 
-      partial = partial_snapshot(root_endpoint, context_endpoint, remaining)
-      return full_snapshot(root_endpoint, context_endpoint) unless partial
+      refreshed(root_endpoint, context_endpoint, snapshot, remaining)
+    end
 
-      merge(snapshot, partial)
+    # The snapshot with these branches read again from history, or a full
+    # snapshot when they cannot be read alone.
+    #: (untyped, untyped, RecordSnapshot, Array[String]) -> RecordSnapshot?
+    def refreshed(root_endpoint, context_endpoint, snapshot, branches)
+      partial = partial_snapshot(root_endpoint, context_endpoint, branches)
+      partial ? merge(snapshot, partial) : full_snapshot(root_endpoint, context_endpoint)
     end
 
     #: (untyped, untyped, Array[String]) -> RecordSnapshot?

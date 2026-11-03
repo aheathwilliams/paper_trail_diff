@@ -23,7 +23,6 @@ module PaperTrailDiff
     TEXT_TYPE = 'ActiveModel::Type::ImmutableString'
     ENUM_TYPE = 'ActiveRecord::Enum::EnumType'
     BIND_PARAM = 'Arel::Nodes::BindParam'
-    ATTRIBUTE = 'Arel::Attributes::Attribute'
     # Adapters that compare strings exactly by default. MySQL and SQL Server
     # ignore case and trailing spaces by default, which Ruby cannot follow.
     EXACT_TEXT_ADAPTERS = %w[sqlite3 postgresql].freeze
@@ -41,11 +40,9 @@ module PaperTrailDiff
     # A through also filters by the scopes of each reflection it passes.
     #: (untyped) -> bool
     def self.scoped_path?(reflection)
-      return !reflection.scope.nil? if reflection.polymorphic?
-      return true if scoped?(reflection)
-      return false unless reflection.through_reflection?
-
-      scoped_path?(reflection.through_reflection) || scoped_path?(reflection.source_reflection)
+      [reflection, *AssociationTraversal.through_parts(reflection)].any? do |part|
+        part.polymorphic? ? !part.scope.nil? : scoped?(part)
+      end
     end
 
     # Returns nil when the scope cannot be read as plain conditions and an
@@ -114,11 +111,7 @@ module PaperTrailDiff
     # a has_one order.
     #: (untyped) -> bool
     def self.ranked_parts?(reflection)
-      return false unless reflection.through_reflection?
-
-      [reflection.through_reflection, reflection.source_reflection].any? do |part|
-        ranked_part?(part) || ranked_parts?(part)
-      end
+      AssociationTraversal.through_parts(reflection).any? { |part| ranked_part?(part) }
     end
 
     # A polymorphic part's class, and so its scope, is known only per record.
@@ -395,12 +388,9 @@ module PaperTrailDiff
       # type compares alike.
       #: (untyped, ?null_test: bool) -> String
       def column(attribute, null_test: false)
-        raise Unreadable unless ATTRIBUTE.eql?(attribute.class.name)
-
-        table = attribute.relation
-        raise Unreadable unless table.name == @model_class.table_name && table.table_alias.nil?
-
-        name = attribute.name
+        # Nil for anything but a column of the model's own table, which finds
+        # no column below.
+        name = ScopeRanking.own_column(attribute, @model_class) #: String
         column = @model_class.columns_hash[name]
         raise Unreadable unless column && (null_test || comparable?(name, column))
 

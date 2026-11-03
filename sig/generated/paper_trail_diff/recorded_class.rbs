@@ -10,6 +10,10 @@ module PaperTrailDiff
     # : (untyped) -> untyped
     def self?.for: (untyped) -> untyped
 
+    # The class a version recorded, or a live record's own class.
+    # : (untyped) -> untyped
+    def self?.of_endpoint: (untyped) -> untyped
+
     # : (untyped) -> bool
     def self?.sti_base?: (untyped) -> bool
 

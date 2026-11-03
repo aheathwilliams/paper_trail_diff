@@ -18,16 +18,19 @@ module PaperTrailDiff
         'history is recorded by primary key'
     end
 
+    # The association's foreign key column, or nil for a composite key, which
+    # loaded history cannot index. Active Record names a column as a string.
+    #: (untyped) -> String?
+    def self.scalar_foreign_key(reflection)
+      key = reflection.foreign_key
+      key unless key.is_a?(Array)
+    end
+
     # The reflection, or the first part of a through, keyed on a column other
     # than its owner's or target's primary key.
     #: (untyped) -> untyped
     def self.keyed_part(reflection)
-      return reflection if other_key?(reflection)
-      return unless reflection.through_reflection?
-
-      [reflection.through_reflection, reflection.source_reflection].filter_map do |part|
-        keyed_part(part)
-      end.first
+      [reflection, *AssociationTraversal.through_parts(reflection)].find { |part| other_key?(part) }
     end
     private_class_method :keyed_part
 

@@ -21,9 +21,5 @@ module PaperTrailDiff
 
     # : (untyped) -> bool
     def self.cut_part?: (untyped) -> bool
-
-    # Every part a through passes, at any depth.
-    # : (untyped) -> Array[untyped]
-    def self.through_parts: (untyped) -> Array[untyped]
   end
 end

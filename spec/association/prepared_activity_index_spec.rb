@@ -352,6 +352,24 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
     expect(queries).to eq(0)
   end
 
+  # The latest row before the start names the author a page had there, so the
+  # rows it replaced cannot matter, and are not read.
+  it 'reads no author row that a later one before the start replaced' do
+    first, second, third = %w[Ann Bea Cy].map { |name| TrackedAuthor.create!(name: name) }
+    page = IndexSpecPage.create!(title: 'Page', author: first)
+    page.update!(author: second)
+    origin = Time.now.utc
+    page.update!(author: third)
+    index = index_for(origin, { IndexSpecPage => [page.id] })
+    index.register(IndexSpecPage, [page.id])
+
+    historical, = index.send(:target_candidates, IndexSpecPage,
+                             IndexSpecPage.reflect_on_association(:author))
+
+    expect(historical.fetch(page.id.to_s).map(&:foreign_key_id))
+      .to contain_exactly(second.id, third.id)
+  end
+
   # Each state a link recorded names its target by type and id; one with no
   # target names none, and a key of two columns is left to the record path.
   it "reads the targets an owner's recorded states name" do

@@ -95,11 +95,12 @@ RSpec.describe 'PaperTrailDiff association tracking' do
       associations: associations,
       ignore: PaperTrailDiff::DEFAULT_IGNORED_ATTRIBUTES
     )
+    provider = adapter.instance_variable_get(:@activity_snapshotter)
     PaperTrailDiff::ActivityTimelineBuilder.new(
       record,
       range: PaperTrailDiff::TimelineRange.new(record, from: from, to: to, within: nil),
       tree: tree,
-      snapshotter: FullSnapshotter.new(adapter.method(:snapshot_at)),
+      snapshotter: FullSnapshotter.new(adapter.method(:snapshot_at), provider),
       view: PaperTrailDiff::ActivityView.new
     ).build
   end
@@ -1224,7 +1225,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
 
     expect(optimized.map(&:to_h)).to eq(reference.map(&:to_h))
     expect(optimized.map { |step| step.from_boundary.item_type })
-      .to include('TrackedAuthor')
+      .to eq(%w[TrackedArticle TrackedAuthor TrackedProfile TrackedComment TrackedReply])
   end
 
   it 'keeps same-branch descendant events atomic within one transaction' do
@@ -1414,8 +1415,9 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     )
 
     expect(optimized.map(&:to_h)).to eq(reference.map(&:to_h))
-    expect(optimized.map { |step| step.from_boundary.item_type })
-      .to include('TrackedAuthor')
+    expect(optimized.map { |step| [step.from_boundary.item_type, step.source_boundary.event] })
+      .to eq([%w[TrackedArticle update], %w[TrackedComment update], %w[TrackedAuthor update],
+              %w[TrackedAuthor destroy]])
   end
 
   it 'applies direct-child membership deltas against an existing immutable snapshot' do

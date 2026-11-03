@@ -38,11 +38,13 @@ module PaperTrailDiff
     # : (untyped, untyped, Array[String]) -> Array[String]
     def with_habtm: (untyped, untyped, Array[String]) -> Array[String]
 
-    # : (Array[untyped], RecordSnapshot, Array[String], ActivityEvent?, bool) -> [bool, RecordSnapshot?]
-    def incremental_event: (Array[untyped], RecordSnapshot, Array[String], ActivityEvent?, bool) -> [ bool, RecordSnapshot? ]
-
     # : (untyped, untyped, RecordSnapshot, Array[String], ActivityEvent) -> RecordSnapshot?
     def refresh_independent_branches: (untyped, untyped, RecordSnapshot, Array[String], ActivityEvent) -> RecordSnapshot?
+
+    # The snapshot with these branches read again from history, or a full
+    # snapshot when they cannot be read alone.
+    # : (untyped, untyped, RecordSnapshot, Array[String]) -> RecordSnapshot?
+    def refreshed: (untyped, untyped, RecordSnapshot, Array[String]) -> RecordSnapshot?
 
     # : (untyped, untyped, Array[String]) -> RecordSnapshot?
     def partial_snapshot: (untyped, untyped, Array[String]) -> RecordSnapshot?

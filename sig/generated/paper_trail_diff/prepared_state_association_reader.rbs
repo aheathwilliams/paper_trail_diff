@@ -34,9 +34,6 @@ module PaperTrailDiff
     # : (PreparedRecordState, untyped, untyped, bool) -> [bool, Array[PreparedRecordState]]
     def target: (PreparedRecordState, untyped, untyped, bool) -> [ bool, Array[PreparedRecordState] ]
 
-    # : (PreparedRecordState, untyped) -> untyped
-    def target_class: (PreparedRecordState, untyped) -> untyped
-
     # The members of each join record the owner had at the boundary, as
     # PreparedHistory#through_records reads them from records. Under
     # `source_type:`, only join records of that type count. A has_many

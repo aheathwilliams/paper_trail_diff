@@ -56,6 +56,7 @@ module PaperTrailDiff
 
     # Moved windows only start and end earlier, so the versions read for the
     # widest of them hold each root's own, and the first left past a moved end.
+    # They are read in no order, so the first is found by time and id.
     #: (Array[String], String, Hash[String, Array[untyped]], Hash[String, untyped]) -> [Array[untyped], untyped]
     def own_window(key, id, in_range, trailing)
       loaded = in_range.fetch(id, [])
@@ -64,7 +65,8 @@ module PaperTrailDiff
       # A batch moves windows only when it has one, so this is never nil.
       window = @windows.fetch(key) { @time_range } #: untyped
       own, rest = loaded.partition { |version| window.include?(version.created_at) }
-      [own, rest.find { |version| version.created_at >= window.end_time } || trailing[id]]
+      past = rest.select { |version| version.created_at >= window.end_time }
+      [own, past.min_by { |version| Support.chronological_version_key(version) } || trailing[id]]
     end
 
     #: (untyped, Array[untyped]) -> [Hash[String, Array[untyped]], Set[untyped]?, Hash[String, untyped]]
@@ -120,10 +122,10 @@ module PaperTrailDiff
       VersionScopeFilter.new(@version_scope).chosen_ids(range_scope(model_class, records, range))
     end
 
+    # RootVersionSelection puts each root's versions in order.
     #: (untyped, Array[untyped], TimeRange?) -> Hash[String, Array[untyped]]
     def grouped_versions(model_class, records, range)
-      VersionQuery.chronological(range_scope(model_class, records, range))
-                  .group_by { |version| version.item_id.to_s }
+      range_scope(model_class, records, range).group_by { |version| version.item_id.to_s }
     end
 
     #: (untyped, Array[untyped], TimeRange?) -> untyped

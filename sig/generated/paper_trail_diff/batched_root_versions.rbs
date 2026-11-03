@@ -33,6 +33,7 @@ module PaperTrailDiff
 
     # Moved windows only start and end earlier, so the versions read for the
     # widest of them hold each root's own, and the first left past a moved end.
+    # They are read in no order, so the first is found by time and id.
     # : (Array[String], String, Hash[String, Array[untyped]], Hash[String, untyped]) -> [Array[untyped], untyped]
     def own_window: (Array[String], String, Hash[String, Array[untyped]], Hash[String, untyped]) -> [ Array[untyped], untyped ]
 
@@ -55,6 +56,7 @@ module PaperTrailDiff
     # : (untyped, Array[untyped], TimeRange?) -> Set[untyped]?
     def chosen_version_ids: (untyped, Array[untyped], TimeRange?) -> Set[untyped]?
 
+    # RootVersionSelection puts each root's versions in order.
     # : (untyped, Array[untyped], TimeRange?) -> Hash[String, Array[untyped]]
     def grouped_versions: (untyped, Array[untyped], TimeRange?) -> Hash[String, Array[untyped]]
 

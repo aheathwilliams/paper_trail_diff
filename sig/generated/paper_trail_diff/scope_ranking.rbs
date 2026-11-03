@@ -68,8 +68,13 @@ module PaperTrailDiff
     # : (untyped, untyped) -> String?
     def self.column: (untyped, untyped) -> String?
 
-    # : (untyped, String) -> bool
-    def self.orderable?: (untyped, String) -> bool
+    # The name an Arel attribute gives a column of the model's own table, not
+    # of another table or an alias of its own; nil for anything else.
+    # : (untyped, untyped) -> String?
+    def self.own_column: (untyped, untyped) -> String?
+
+    # : (untyped, String?) -> bool
+    def self.orderable?: (untyped, String?) -> bool
 
     # The value the database sorts by, as the column's type casts it. An enum
     # sorts by the integer it stores; other types are compared cast, since an

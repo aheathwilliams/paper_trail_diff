@@ -65,13 +65,13 @@ module PaperTrailDiff
 
     @nodes: Hash[String, Array[untyped]]
 
-    @range: ActivityRange
-
     @records: PreparedRecordIndex
 
     @roots: Hash[Array[String], Array[untyped]]
 
     @rows: Hash[untyped, Hash[String, Array[untyped]]]
+
+    @start_at: untyped
 
     @targets: Hash[untyped, untyped]
 

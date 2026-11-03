@@ -23,9 +23,9 @@ module PaperTrailDiff
       return [false, nil] unless %w[update destroy].include?(version.event.to_s)
 
       routes = @route_finder.belongs_to_routes(
-        endpoint_model_class(root_endpoint), tree, version.item_type.to_s
+        RecordedClass.of_endpoint(root_endpoint), tree, version.item_type.to_s
       )
-      return [false, nil] if routes.empty? || scoped_route?(routes)
+      return [false, nil] if routes.empty? || ActivityEventRouteFinder.scoped_route?(routes)
 
       snapshot = previous
       routes.each do |route|
@@ -42,15 +42,6 @@ module PaperTrailDiff
     # @rbs @route_finder: ActivityEventRouteFinder
     # @rbs @record_resolver: ActivityEventRecordResolver
     # @rbs @record_normalizer: ActivityEventRecordNormalizer
-
-    # An edit can move a target into or out of a scope, which a replacement
-    # in place cannot show, so a scoped route's branch is read again instead.
-    #: (Array[Array[untyped]]) -> bool
-    def scoped_route?(routes)
-      routes.any? do |route|
-        route.any? { |entry| ScopeCondition.scoped_path?(entry.fetch(1)) }
-      end
-    end
 
     #: (Array[untyped], untyped, SnapshotNormalizer, untyped, untyped) -> RecordSnapshot?
     def normalized_route_record(route, version, normalizer, root_endpoint, context_endpoint)
@@ -116,11 +107,6 @@ module PaperTrailDiff
     def same_table?(record, version)
       model = AssociationTraversal.named_class(record.type.to_s)
       !model.nil? && model.base_class == Endpoint.model_class(version).base_class
-    end
-
-    #: (untyped) -> untyped
-    def endpoint_model_class(endpoint)
-      Endpoint.version?(endpoint) ? RecordedClass.for(endpoint) : endpoint.class
     end
   end
 end

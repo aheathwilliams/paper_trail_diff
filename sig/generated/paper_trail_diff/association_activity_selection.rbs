@@ -107,10 +107,5 @@ module PaperTrailDiff
     # mutant:disable
     # : (source, Symbol?) -> Query?
     def subquery: (source, Symbol?) -> Query?
-
-    # A type naming no class has no versions to read; `changed` skips one that
-    # names an unversioned class.
-    # : (String) -> untyped
-    def target_class: (String) -> untyped
   end
 end

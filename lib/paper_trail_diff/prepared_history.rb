@@ -6,17 +6,15 @@ module PaperTrailDiff
   class PreparedHistory
     attr_reader :activity_index #: PreparedActivityIndex?
 
-    DIRECT_RESOLVERS = {
-      belongs_to: :resolve_belongs_to,
-      has_one: :resolve_children,
-      has_many: :resolve_children,
-      has_and_belongs_to_many: :habtm_records
-    }.freeze
-    private_constant :DIRECT_RESOLVERS
+    # The transactions that crossed the history's start, keyed as
+    # ActivityTransactionGroups keys a version's; see
+    # PreparedHistoryLoader#reload.
+    attr_reader :opening_transactions #: Array[Array[untyped]]
 
-    #: (PreparedRecordIndex, ?activity_index: PreparedActivityIndex?) -> void
-    def initialize(records, activity_index: nil)
+    #: (PreparedRecordIndex, ?activity_index: PreparedActivityIndex?, ?opening_transactions: Array[Array[untyped]]) -> void
+    def initialize(records, activity_index: nil, opening_transactions: [])
       @records = records
+      @opening_transactions = opening_transactions
       @conditions = ScopeCondition::Cache.new
       @state_reader = PreparedStateAssociationReader.new(records, method(:edge), @conditions)
       @activity_index = activity_index
@@ -24,11 +22,6 @@ module PaperTrailDiff
       @unsupported = {} #: Hash[Array[String], bool]
       @habtm = {} #: Hash[Array[String], Hash[String, Array[untyped]]]
     end
-
-    # The transactions that crossed the history's start; see
-    # PreparedHistoryLoader#reload.
-    #: () -> Array[Array[untyped]]
-    def opening_transactions = @records.opening_transactions
 
     #: () -> Array[untyped]
     def versions = @records.versions
@@ -105,23 +98,17 @@ module PaperTrailDiff
 
     #: (untyped, untyped, untyped, untyped, bool) -> Array[untyped]?
     def direct_records(record, reflection, boundary, habtm_boundary, ranked)
-      resolver = DIRECT_RESOLVERS.fetch(reflection.macro)
-      send(resolver, record, reflection, boundary, habtm_boundary, ranked)
-    end
-
-    #: (untyped, untyped, untyped, untyped, bool) -> Array[untyped]?
-    def resolve_belongs_to(record, reflection, boundary, _habtm_boundary, ranked)
-      belongs_to_records(record, reflection, boundary, ranked)
-    end
-
-    #: (untyped, untyped, untyped, untyped, bool) -> Array[untyped]
-    def resolve_children(record, reflection, boundary, _habtm_boundary, ranked)
-      child_records(record, reflection, boundary, ranked)
+      case reflection.macro
+      when :belongs_to then belongs_to_records(record, reflection, boundary, ranked)
+      when :has_one, :has_many then child_records(record, reflection, boundary, ranked)
+      when :has_and_belongs_to_many
+        habtm_records(record, reflection, boundary, habtm_boundary, ranked)
+      end
     end
 
     #: (untyped, untyped, untyped, bool) -> Array[untyped]?
     def belongs_to_records(record, reflection, boundary, ranked)
-      foreign_key = scalar_foreign_key(reflection)
+      foreign_key = AssociationKey.scalar_foreign_key(reflection)
       return unless foreign_key
 
       id = record.public_send(foreign_key)
@@ -210,19 +197,13 @@ module PaperTrailDiff
 
     #: (untyped, untyped, untyped) -> bool
     def member_of?(child, reflection, owner)
-      foreign_key = scalar_foreign_key(reflection)
+      foreign_key = AssociationKey.scalar_foreign_key(reflection)
       return false unless foreign_key
       return false unless child.public_send(foreign_key).to_s == owner.id.to_s
       return false unless AssociationTraversal.sti_member?(reflection.klass, child.attributes)
       return true unless reflection.options[:as]
 
       owner_types(reflection, owner).include?(child.public_send(reflection.type).to_s)
-    end
-
-    #: (untyped) -> String?
-    def scalar_foreign_key(reflection)
-      key = reflection.foreign_key
-      key.to_s unless key.is_a?(Array)
     end
 
     #: (untyped, untyped) -> Array[String]
@@ -238,7 +219,7 @@ module PaperTrailDiff
 
     #: (Array[untyped]) -> Array[untyped]
     def unique_records(records)
-      records.uniq { |record| [record.class.base_class.name, record.id.to_s] }
+      records.uniq { |record| Support.record_identity(record.class, record.id) }
     end
 
     #: (untyped, untyped) -> Array[String]

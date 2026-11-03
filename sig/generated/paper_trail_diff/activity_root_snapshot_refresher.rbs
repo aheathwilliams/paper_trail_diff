@@ -11,6 +11,16 @@ module PaperTrailDiff
 
     private
 
+    # The record after a root version and the branches its change reaches, or
+    # nil when the version cannot be applied to the previous snapshot alone.
+    # : (RecordSnapshot, untyped) -> [untyped, Array[String]]?
+    def advance_target: (RecordSnapshot, untyped) -> [ untyped, Array[String] ]?
+
+    # The previous snapshot with the record's attributes and any branches read
+    # again, or the previous snapshot itself when nothing differs.
+    # : (RecordSnapshot, untyped, RecordSnapshot?) -> RecordSnapshot
+    def advanced: (RecordSnapshot, untyped, RecordSnapshot?) -> RecordSnapshot
+
     @changeset: untyped
 
     @normalizer: SnapshotNormalizer

@@ -9,7 +9,9 @@ module PaperTrailDiff
   # a filter must never remove it.
   #
   # Both the single-record and the batched selectors resolve this here, because
-  # the rule is subtle enough that two copies of it would drift apart.
+  # the rule is subtle enough that two copies of it would drift apart. Their
+  # versions are put in order here too, which refuses a sequence that cannot
+  # be ordered (see Support.chronological_sort) whichever selector read it.
   class RootVersionSelection
     # An error is a specification, so it names the way out as well as the wall.
     # A window ending at the present can never gain a later version, which makes
@@ -30,13 +32,13 @@ module PaperTrailDiff
       in_range:, selected:, after_range:, windowed:, context_required: false, live_endpoint: nil,
       whole: false
     )
-      @in_range = in_range
-      @reported = selected
-      @selected = whole ? in_range : selected
+      @in_range = Support.chronological_sort(in_range)
+      @reported = Support.chronological_sort(selected)
+      @selected = whole ? @in_range : @reported
       @after_range = after_range
       @windowed = windowed
       @context_required = context_required
-      @filtered = @selected.length < in_range.length
+      @filtered = @selected.length < @in_range.length
       @live_endpoint = live_endpoint
     end
 
