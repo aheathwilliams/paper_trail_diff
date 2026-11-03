@@ -141,6 +141,13 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Activity over a window (`activity: true`, `activity_timeline`, and
+  `report`) no longer raises `KeyError` when a record on one requested path,
+  such as an author, is also a `belongs_to` target on another path with
+  associations requested below it (`["author", "comments.reviewer.reviewed_comments"]`).
+  A target named only by a version saved after the window was followed as if
+  its own associations had been read, and they had not been.
+
 - With `historical_filter:`, `analyze_scope` and `report` accept a relation
   grouped by anything but the ID, such as each author's latest article
   (`select("MAX(id) AS id").group(:author_id)`), and select the records it

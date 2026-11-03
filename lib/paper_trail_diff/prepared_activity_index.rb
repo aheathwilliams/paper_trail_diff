@@ -81,14 +81,20 @@ module PaperTrailDiff
       runs.select { |run| on_path?(group.fetch(:model), run, path) }.flat_map(&:itself)
     end
 
+    # Only the children the history loaded. Snapshots read children only under
+    # an owner the history prepared, and it loaded every child of those. An
+    # owner reached another way, such as a belongs_to target loaded for a
+    # different path, can have children the history never loaded, which no
+    # snapshot holds.
     #: (untyped, Array[untyped], untyped, ActivityRange) -> Array[untyped]
     def child_ids(model, ids, reflection, range)
       # An owner the edges did not read is read with every other one this
       # history holds, so that the next needs nothing more.
       historical, live = @children.call(model, ids, reflection) { node_ids(model) }
-      empty = [] #: Array[untyped]
-      selected = historical_ids(reflection.klass, ids, historical, range)
-      selected | ids.flat_map { |id| live.fetch(id.to_s, empty) }
+      child = reflection.klass
+      # An owner with no live children reads as nil, which names no record.
+      current = ids.flat_map { |id| live[id.to_s] }.select { |id| loaded?(child, id) }
+      historical_ids(child, ids, historical, range) | current
     end
 
     # The `belongs_to` targets each owner pointed at from the range's start
@@ -170,6 +176,8 @@ module PaperTrailDiff
       ids.flat_map do |id|
         historical.fetch(id.to_s, empty).filter_map do |row|
           _owner, child_id, timestamp, event = row
+          next unless loaded?(model, child_id)
+
           child_id if eligible_version?(model, child_id, timestamp, event, range)
         end
       end

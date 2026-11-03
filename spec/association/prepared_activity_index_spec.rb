@@ -196,6 +196,25 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
     expect(found).to match_array(kept.map(&:id))
   end
 
+  # Snapshots read children only under an owner the history prepared, and the
+  # history loaded every child of those. An owner activity reaches another way,
+  # such as a belongs_to target loaded for a different path, can have children
+  # the history never loaded, recorded before the range or live; no snapshot
+  # holds them.
+  it 'leaves out the children the history did not load' do
+    page = IndexSpecPage.create!(title: 'Page')
+    unloaded = IndexSpecSection.create!(title: 'unloaded', page: page)
+    origin = Time.now.utc
+    loaded = IndexSpecSection.create!(title: 'loaded', page: page)
+    IndexSpecSection.create!(title: 'live only', page: page)
+    index = index_for(origin, { IndexSpecSection => [loaded.id] })
+    index.register(IndexSpecPage, [page.id])
+
+    found = index.child_ids(IndexSpecPage, [page.id], sections, range(origin, Time.now.utc))
+
+    expect([found, unloaded.versions.first.created_at < origin]).to eq([[loaded.id], true])
+  end
+
   # Children are found by key across the whole table, so a subclass keeps the
   # records that had its class or a descendant's at some point, and of those
   # the versions in the range that had it before or after.
@@ -239,9 +258,8 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
   # PT-AT records a version's foreign keys after its change: the latest one
   # before the range names the children at its start. A section moved away
   # before the index's own start is outside it. One saved after the range's
-  # end, even after the index was built, or only in the live row, is a
-  # candidate whatever the end: a key written without a version is recorded
-  # only after it.
+  # end, or only in the live row, is a candidate whatever the end: a key
+  # written without a version is recorded only after it.
   it "reads a page's sections from the range start onward, and live ones" do
     page, other, bare = %w[Page Other Bare].map { |title| IndexSpecPage.create!(title: title) }
     early = IndexSpecSection.create!(title: 'early', page: page)
@@ -258,12 +276,12 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
     added.update!(title: 'added again')
     finish = TrackedAuthor.create!(name: 'End').versions.last
     late = IndexSpecSection.create!(title: 'late', page: page)
+    fleeting = IndexSpecSection.create!(title: 'fleeting', page: page).tap(&:destroy!)
     # Saved without a version, so only the live row has it.
     IndexSpecSection.where(id: adopted.id).update_all(page_id: page.id)
-    ids = [early, kept, moved, gone, adopted, added, late].map(&:id)
+    ids = [early, kept, moved, gone, adopted, added, late, fleeting].map(&:id)
     index = index_for(origin, { IndexSpecSection => ids })
     index.register(IndexSpecPage, [page.id, other.id, bare.id])
-    fleeting = IndexSpecSection.create!(title: 'fleeting', page: page).tap(&:destroy!)
 
     closed = index.child_ids(IndexSpecPage, [page.id], sections, range(start, finish))
     current = index.child_ids(IndexSpecPage, [page.id, bare.id], sections,
