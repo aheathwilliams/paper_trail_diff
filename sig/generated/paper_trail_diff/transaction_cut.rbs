@@ -160,19 +160,6 @@ module PaperTrailDiff
     # : (untyped, Edge, Array[String]) -> untyped
     def self.later_version: (untyped, Edge, Array[String]) -> untyped
 
-    # The version table under a second name, for a subquery over it. Any name
-    # serves, and SQLite even accepts an empty one other databases refuse, so
-    # no spec can tell the mutations apart.
-    # mutant:disable
-    # : (untyped) -> untyped
-    def self.other_versions: (untyped) -> untyped
-
-    # Arel ships no signatures; see VersionQuery. Any spelling of the constant
-    # finds the same module.
-    # mutant:disable
-    # : () -> untyped
-    def self.arel: () -> untyped
-
     # : (TimeRange, Time?, Time?) -> TimeRange
     def self.moved: (TimeRange, Time?, Time?) -> TimeRange
   end

@@ -26,20 +26,19 @@ module PaperTrailDiff
     # : (untyped) ?{ (untyped) -> untyped } -> untyped
     def self.no_earlier_version: (untyped) ?{ (untyped) -> untyped } -> untyped
 
+    # Whether a version exists that the block's condition accepts. The block
+    # is given the version table under a second name, beside `table`.
+    # : (untyped) { (untyped) -> untyped } -> untyped
+    def self.exists: (untyped) { (untyped) -> untyped } -> untyped
+
     # : (untyped, untyped) ?{ (untyped) -> untyped } -> untyped
     def self.earlier_version: (untyped, untyped) ?{ (untyped) -> untyped } -> untyped
 
     # The version table under a second name, for a subquery over it. Any name
     # serves, and SQLite even accepts an empty one other databases refuse, so
-    # no spec can tell the mutations apart (see TransactionCut).
+    # no spec can tell the mutations apart.
     # mutant:disable
     # : (untyped) -> untyped
-    def self.earlier_versions: (untyped) -> untyped
-
-    # Arel ships no signatures, so it is reached as an untyped constant. Any
-    # spelling of the constant finds the same module.
-    # mutant:disable
-    # : () -> untyped
-    def self.arel: () -> untyped
+    def self.other_versions: (untyped) -> untyped
   end
 end

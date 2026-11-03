@@ -147,7 +147,7 @@ module PaperTrailDiff
       #: (untyped, TimeRange?) -> void
       def initialize(reflection, time_range)
         super
-        @table = arel::Table.new(reflection.join_table)
+        @table = Support.arel::Table.new(reflection.join_table)
         columns = join_columns
         @type = columns.fetch(reflection.foreign_key)
         @filter_type = columns.fetch(reflection.association_foreign_key)
@@ -177,17 +177,9 @@ module PaperTrailDiff
       #: () -> untyped
       def quoted_owner_column
         Support.with_connection(@owner) do |connection|
-          arel.sql("#{connection.quote_table_name(@reflection.join_table)}." \
-                   "#{connection.quote_column_name(@reflection.foreign_key)}")
+          Support.arel.sql("#{connection.quote_table_name(@reflection.join_table)}." \
+                           "#{connection.quote_column_name(@reflection.foreign_key)}")
         end
-      end
-
-      # Arel ships no signatures; see VersionQuery. Any spelling of the
-      # constant finds the same module.
-      # mutant:disable
-      #: () -> untyped
-      def arel
-        Object.const_get(:Arel)
       end
     end
 

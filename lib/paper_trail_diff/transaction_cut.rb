@@ -221,7 +221,7 @@ module PaperTrailDiff
       own = versions.where(item_id: records)
       table = own.arel_table
       instants = nearest_instants(own, edge)
-      own.joins(arel::Nodes::InnerJoin.new(instants, at_either(table, instants)))
+      own.joins(Support.arel::Nodes::InnerJoin.new(instants, at_either(table, instants)))
          .where.not(transaction_id: nil)
          .select(table[:item_id], table[:transaction_id], after_edge(table, instants)).to_sql
     end
@@ -233,8 +233,8 @@ module PaperTrailDiff
     # mutant:disable
     #: (untyped, untyped) -> untyped
     def self.after_edge(table, instants)
-      arel::Nodes::Case.new.when(table[:created_at].eq(instants[:after_at])).then(1).else(0)
-                       .as('after_edge')
+      Support.arel::Nodes::Case.new.when(table[:created_at].eq(instants[:after_at]))
+                               .then(1).else(0).as('after_edge')
     end
     private_class_method :after_edge
 
@@ -254,8 +254,9 @@ module PaperTrailDiff
     def self.nearest_instants(own, edge)
       table = own.arel_table
       column = table[:created_at]
-      before = side_instant(arel::Nodes::Max, edge.left(column), column).as('before_at')
-      after = side_instant(arel::Nodes::Min, edge.right(column), column).as('after_at')
+      nodes = Support.arel::Nodes
+      before = side_instant(nodes::Max, edge.left(column), column).as('before_at')
+      after = side_instant(nodes::Min, edge.right(column), column).as('after_at')
       own.group(:item_id).select(table[:item_id], before, after).arel.as('paper_trail_diff_nearest')
     end
     private_class_method :nearest_instants
@@ -263,7 +264,7 @@ module PaperTrailDiff
     # The latest or earliest of the times on one side of the edge.
     #: (untyped, untyped, untyped) -> untyped
     def self.side_instant(aggregate, side, column)
-      aggregate.new([arel::Nodes::Case.new.when(side).then(column)])
+      aggregate.new([Support.arel::Nodes::Case.new.when(side).then(column)])
     end
     private_class_method :side_instant
 
@@ -272,7 +273,7 @@ module PaperTrailDiff
     def self.at_either(table, instants)
       column = table[:created_at]
       at_either = column.eq(instants[:before_at]).or(column.eq(instants[:after_at]))
-      arel::Nodes::On.new(table[:item_id].eq(instants[:item_id]).and(at_either))
+      Support.arel::Nodes::On.new(table[:item_id].eq(instants[:item_id]).and(at_either))
     end
     private_class_method :at_either
 
@@ -295,33 +296,13 @@ module PaperTrailDiff
     # of one of `types`.
     #: (untyped, Edge, Array[String]) -> untyped
     def self.later_version(table, edge, types)
-      other = other_versions(table)
-      arel::SelectManager.new.from(other).project('1')
-                         .where(other[:transaction_id].eq(table[:transaction_id])
-                                  .and(edge.right(other[:created_at]))
-                                  .and(other[:item_type].in(types)))
-                         .exists
+      VersionQuery.exists(table) do |other|
+        other[:transaction_id].eq(table[:transaction_id])
+                              .and(edge.right(other[:created_at]))
+                              .and(other[:item_type].in(types))
+      end
     end
     private_class_method :later_version
-
-    # The version table under a second name, for a subquery over it. Any name
-    # serves, and SQLite even accepts an empty one other databases refuse, so
-    # no spec can tell the mutations apart.
-    # mutant:disable
-    #: (untyped) -> untyped
-    def self.other_versions(table)
-      table.alias('paper_trail_diff_crossing_versions')
-    end
-    private_class_method :other_versions
-
-    # Arel ships no signatures; see VersionQuery. Any spelling of the constant
-    # finds the same module.
-    # mutant:disable
-    #: () -> untyped
-    def self.arel
-      Object.const_get(:Arel)
-    end
-    private_class_method :arel
 
     #: (TimeRange, Time?, Time?) -> TimeRange
     def self.moved(range, start, finish)
