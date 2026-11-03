@@ -134,9 +134,12 @@ module ReplayDifferential
 
     private
 
+    # Alice and Bob take turns, so that a version_scope: has some to keep.
     def run(operation)
       @log << operation
-      ActiveRecord::Base.transaction { send(operation) }
+      PaperTrail.request(whodunnit: %w[alice bob][@log.length % 2]) do
+        ActiveRecord::Base.transaction { send(operation) }
+      end
     end
 
     def model(name) = @models.fetch(name)
@@ -262,33 +265,39 @@ RSpec.describe 'Activity replay against a full snapshot at every event' do
   end
 
   # Without associations activity prepares no history, which is a path of its
-  # own, so its steps are checked against the root timeline's instead.
+  # own, so its steps are checked against the root timeline's instead, with
+  # every version and with Alice's only.
   def timeline_mismatches(history, seed)
     random = Random.new(seed)
     versions = PaperTrail::Version.order(:created_at, :id).to_a
-    history.roots.flat_map do |root|
+    history.roots.product([nil, Oracle::ALICE]).flat_map do |root, scope|
       starts = root.versions.reorder(:created_at, :id).first(4)
-      reads = starts.flat_map { |from| from_reads(root, from) }
+      reads = starts.flat_map { |from| from_reads(root, from, scope) }
       reads += Array.new(3).flat_map do
-        window_reads(root, *versions.sample(2, random: random).sort_by(&:id))
+        window_reads(root, *versions.sample(2, random: random).sort_by(&:id), scope)
       end
-      reads.filter_map { |label, expected, actual| label unless actual == expected }
+      reads.filter_map do |label, expected, actual|
+        "#{label}, #{whose(scope)} versions" if actual != expected
+      end
     end
   end
 
-  def from_reads(root, from)
-    expected = root_steps(PaperTrailDiff.timeline(root, from: from, to: root))
+  def whose(scope) = scope ? "Alice's" : "everyone's"
+
+  def from_reads(root, from, scope)
+    range = { from: from, to: root, version_scope: scope }
+    expected = root_steps(PaperTrailDiff.timeline(root, **range))
     ReplayDifferential::GROUPS.map do |group|
       ["#{root.id} from #{from.id} group #{group.inspect}", expected,
-       root_steps(PaperTrailDiff.activity_timeline(root, from: from, to: root, group: group))]
+       root_steps(PaperTrailDiff.activity_timeline(root, group: group, **range))]
     end
   end
 
-  def window_reads(root, first, last)
-    within = first.created_at..last.created_at
-    expected = root_steps(PaperTrailDiff.analyze(root, within: within).timeline)
-    alone = PaperTrailDiff.analyze(root, within: within, activity: true)
-    batched = PaperTrailDiff.analyze_many([root], within: within, activity: true).values.first
+  def window_reads(root, first, last, scope)
+    range = { within: first.created_at..last.created_at, version_scope: scope }
+    expected = root_steps(PaperTrailDiff.analyze(root, **range).timeline)
+    alone = PaperTrailDiff.analyze(root, activity: true, **range)
+    batched = PaperTrailDiff.analyze_many([root], activity: true, **range).values.first
     [["#{root.id} within #{first.id}..#{last.id}", expected, root_steps(alone.activity_timeline)],
      ["#{root.id} batched within #{first.id}..#{last.id}", expected,
       root_steps(batched.activity_timeline)]]
