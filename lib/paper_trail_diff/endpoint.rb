@@ -4,8 +4,6 @@
 module PaperTrailDiff
   # Validates and describes explicit PaperTrail-version and live-record endpoints.
   module Endpoint
-    @subtyped = {} #: Hash[untyped, bool]
-
     #: (untyped, untyped) -> void
     def self.validate_pair!(from_endpoint, to_endpoint)
       validate!(from_endpoint)
@@ -60,13 +58,15 @@ module PaperTrailDiff
             "#{record.class} is not versioned, so it has no history: add has_paper_trail to it"
     end
 
-    # A relation is named rather than inspected, which would load it.
-    #: (untyped) -> String?
+    # What a message names the value as. A relation is named rather than
+    # inspected, which would load it, and by the name Active Record gives its
+    # class. A class without a name is printed, as a class given itself is.
+    #: (untyped) -> (String | Module)
     def self.described(value)
       return 'nil' if value.nil?
       return "the class #{value}" if value.is_a?(Module)
 
-      value.class.name
+      value.class.name || value.class
     end
     private_class_method :described
 
@@ -105,12 +105,15 @@ module PaperTrailDiff
     end
     private_class_method :model_named
 
-    # Whether versions of this class have an `item_subtype` column, answered
-    # once for each Active Record class (see Support.per_model).
+    # Whether the version has an `item_subtype` to read. An Active Record
+    # version is asked whether it was read with the column, which costs less
+    # than respond_to? (see Support.per_model) and answers for this row: a
+    # version a caller read without the column has none.
     #: (untyped) -> bool
     def self.subtyped?(version)
-      known = @subtyped #: Hash[untyped, bool]
-      Support.per_model(known, version) { |value| value.respond_to?(:item_subtype) }
+      return version.respond_to?(:item_subtype) unless version.class.respond_to?(:column_names)
+
+      version.has_attribute?(:item_subtype)
     end
     private_class_method :subtyped?
 

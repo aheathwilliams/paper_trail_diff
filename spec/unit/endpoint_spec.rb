@@ -119,8 +119,10 @@ RSpec.describe PaperTrailDiff::Endpoint do
     it 'names what it was given instead of a record, without loading a relation' do
       _article, created, = history
       relation = FilterArticle.all
+      unnamed = Class.new
       given = [[nil, 'nil'], [FilterArticle, 'the class FilterArticle'],
-               [created, 'FilterVersion'], [relation, relation.class.name]]
+               [created, 'FilterVersion'], [relation, relation.class.name],
+               [unnamed.new, unnamed.to_s]]
 
       given.each do |value, named|
         expect { described_class.validate_root!(value) }
@@ -178,6 +180,22 @@ RSpec.describe PaperTrailDiff::Endpoint do
 
       expect(versions.map { |version| described_class.model_class(version) })
         .to eq([FilterArticle, FilterFeature, FilterArticle, FilterArticle])
+    end
+
+    # A version is asked whether it was read with the column, not its class.
+    it 'reads the subtype only of a version read with it' do
+      modelled = Struct.new(:item_type, :item_subtype, :columns) do
+        def self.column_names = %w[item_type item_subtype]
+        def has_attribute?(name) = columns.include?(name)
+      end
+      _feature, created, = history(FilterFeature)
+      partial = FilterVersion.select(:id, :item_type).find(created.id)
+      versions = [modelled.new('FilterArticle', 'FilterFeature', %i[item_type item_subtype]),
+                  modelled.new('FilterArticle', 'FilterFeature', %i[item_type]), partial,
+                  Struct.new(:item_type).new('FilterArticle')]
+
+      expect(versions.map { |version| described_class.model_class(version) })
+        .to eq([FilterFeature, FilterArticle, FilterArticle, FilterArticle])
     end
 
     it 'refuses a type that names no class, or no type' do

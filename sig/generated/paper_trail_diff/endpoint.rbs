@@ -26,9 +26,11 @@ module PaperTrailDiff
     # : (untyped) -> void
     def self.validate_root!: (untyped) -> void
 
-    # A relation is named rather than inspected, which would load it.
-    # : (untyped) -> String?
-    def self.described: (untyped) -> String?
+    # What a message names the value as. A relation is named rather than
+    # inspected, which would load it, and by the name Active Record gives its
+    # class. A class without a name is printed, as a class given itself is.
+    # : (untyped) -> (String | Module)
+    def self.described: (untyped) -> (String | Module)
 
     # : (untyped) -> bool
     def self.version?: (untyped) -> bool
@@ -45,8 +47,10 @@ module PaperTrailDiff
     # : (String) -> untyped
     def self.model_named: (String) -> untyped
 
-    # Whether versions of this class have an `item_subtype` column, answered
-    # once for each Active Record class (see Support.per_model).
+    # Whether the version has an `item_subtype` to read. An Active Record
+    # version is asked whether it was read with the column, which costs less
+    # than respond_to? (see Support.per_model) and answers for this row: a
+    # version a caller read without the column has none.
     # : (untyped) -> bool
     def self.subtyped?: (untyped) -> bool
 
