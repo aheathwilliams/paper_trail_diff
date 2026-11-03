@@ -41,6 +41,7 @@ matcher:
     - PaperTrailDiff::SnapshotNormalizer*
     - PaperTrailDiff::SnapshotPool*
     - PaperTrailDiff::StoredTimePrecision*
+    - PaperTrailDiff::TimeOfDay*
     - PaperTrailDiff::Endpoint*
     - PaperTrailDiff::EndpointKind*
     - PaperTrailDiff::TimelineRange*

@@ -155,6 +155,7 @@ module PaperTrailDiff
     def normalized_attributes(record, reflections, path)
       attributes = record.attributes
       excluded_attributes(record, reflections, path).each { |name| attributes.delete(name) }
+      attributes = TimeOfDay.apply(record.class, attributes)
       StoredTimePrecision.apply(attributes, StoredTimePrecision.digits(record.class))
     end
 

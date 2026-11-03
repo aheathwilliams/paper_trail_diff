@@ -151,7 +151,11 @@ project follows [Semantic Versioning](https://semver.org/).
   is decoded a second time only when it holds a time of day. A time is read
   on 2000-01-01, as the row keeps it: a column that is not time-zone aware
   keeps in memory the date of the time assigned to it, such as
-  `Time.current`'s, and the versions saved from that record store it.
+  `Time.current`'s, and the versions saved from that record store it. Before
+  Active Record 8.1, a zone-aware time read from the database falls on
+  2000-01-01 in UTC, and one assigned on 2000-01-01 in the time zone, so
+  every time of day is compared on 2000-01-01 in its own zone, as Active
+  Record 8.1 reads both.
 
 - `analyze_scope` and `report` accept a relation whose `limit` or `offset` is
   a String, as request parameters are, such as

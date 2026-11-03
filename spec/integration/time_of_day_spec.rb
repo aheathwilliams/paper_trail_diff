@@ -57,15 +57,17 @@ RSpec.describe 'History of a time of day' do
 
   # In UTC, a zone-aware time is stored as a TimeWithZone's fields under the
   # wrapper's tag, which PaperTrail reads; in any other zone, it wraps its time.
-  # A time of day in UTC can fall on the day after its local date, or before.
-  zones = %w[UTC Pacific/Auckland Pacific/Honolulu]
-  [AlarmClock, ZonedAlarmClock, CallbackAlarmClock].product(zones).each do |model, zone|
+  # Each time falls in UTC on another day than in its zone: Active Record
+  # before 8.1 then reads a zone-aware one from the database on another date
+  # than it assigns it.
+  zones = { 'UTC' => '07:30', 'Pacific/Auckland' => '07:30', 'Pacific/Honolulu' => '20:00' }
+  [AlarmClock, ZonedAlarmClock, CallbackAlarmClock].product(zones.to_a).each do |model, (zone, at)|
     context "with #{model.name} in #{zone}" do
       around { |example| Time.use_zone(zone) { example.run } }
 
       it 'reads the time each version recorded' do
         clock = model.create!(name: 'Kitchen')
-        clock.update!(rings_at: '07:30')
+        clock.update!(rings_at: at)
         clock.update!(name: 'Bedroom')
         clock.reload
         _created, set, renamed = clock.versions.reorder(:created_at, :id).to_a
@@ -84,7 +86,7 @@ RSpec.describe 'History of a time of day' do
       # the time. Without zone conversion nothing drops the date first.
       it 'reads a time assigned with a date as the row keeps it' do
         clock = model.create!(name: 'Kitchen')
-        clock.update!(rings_at: Time.zone.local(2032, 3, 4, 7, 30))
+        clock.update!(rings_at: Time.zone.parse("2032-03-04 #{at}"))
         clock.update!(name: 'Bedroom')
         clock.update!(name: 'Hall')
         clock.reload
