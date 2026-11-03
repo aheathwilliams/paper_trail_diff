@@ -1,15 +1,17 @@
 # Generated from lib/paper_trail_diff/time_range.rb with RBS::Inline
 
 module PaperTrailDiff
-  # Validates and applies a finite wall-clock range without loading model state.
+  # Validates and applies a wall-clock range without loading model state.
   #
   # A Date is a whole day and a String a local time, both in Time.zone, as
   # Rails reads them, or in UTC without one: never the server's own zone. An
-  # inclusive Date end runs through that day.
+  # inclusive Date end runs through that day. An endless range has no end:
+  # it runs through every version saved since it began, whatever the clock
+  # that dated them read, as a report through the current state does.
   class TimeRange
     attr_reader begin_time: Time
 
-    attr_reader end_time: Time
+    attr_reader end_time: Time?
 
     # : (untyped) -> void
     def initialize: (untyped) -> void
@@ -23,10 +25,12 @@ module PaperTrailDiff
     # : (untyped) -> untyped
     def scope: (untyped) -> untyped
 
-    # The window as a Ruby range, its end included or left out as given.
-    # : () -> Range[Time]
-    def to_range: () -> Range[Time]
+    # The window as a Ruby range, its end included or left out as given, or
+    # endless.
+    # : () -> Range[Time?]
+    def to_range: () -> Range[Time?]
 
+    # The versions after the window; none follows an endless one.
     # : (untyped) -> untyped
     def trailing_scope: (untyped) -> untyped
 
@@ -40,8 +44,11 @@ module PaperTrailDiff
 
     @exclude_end: bool
 
-    # : (untyped) -> untyped
-    def after_end: (untyped) -> untyped
+    # : (untyped, Time) -> untyped
+    def after: (untyped, Time) -> untyped
+
+    # : (untyped, Time) -> untyped
+    def after_end: (untyped, Time) -> untyped
 
     # : (untyped, boundary: Symbol) -> Time
     def coerce_time: (untyped, boundary: Symbol) -> Time

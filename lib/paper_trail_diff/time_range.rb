@@ -2,24 +2,27 @@
 # rbs_inline: enabled
 
 module PaperTrailDiff
-  # Validates and applies a finite wall-clock range without loading model state.
+  # Validates and applies a wall-clock range without loading model state.
   #
   # A Date is a whole day and a String a local time, both in Time.zone, as
   # Rails reads them, or in UTC without one: never the server's own zone. An
-  # inclusive Date end runs through that day.
+  # inclusive Date end runs through that day. An endless range has no end:
+  # it runs through every version saved since it began, whatever the clock
+  # that dated them read, as a report through the current state does.
   class TimeRange
     attr_reader :begin_time #: Time
-    attr_reader :end_time #: Time
+    attr_reader :end_time #: Time?
 
     #: (untyped) -> void
     def initialize(value)
-      unless value.is_a?(Range) && value.begin && value.end
-        raise InvalidTimeRangeError, '`within` must be a finite Range'
+      unless value.is_a?(Range) && value.begin
+        raise InvalidTimeRangeError, '`within` must be a Range with a beginning'
       end
 
       @begin_time = coerce_time(value.begin, boundary: :begin)
-      @exclude_end = value.exclude_end? || calendar_date?(value.end)
-      @end_time = coerce_time(end_value(value), boundary: :end)
+      last = value.end
+      @exclude_end = !last.nil? && (value.exclude_end? || calendar_date?(last))
+      @end_time = (coerce_time(end_value(value), boundary: :end) unless last.nil?)
       validate_order!
       freeze
     end
@@ -34,7 +37,10 @@ module PaperTrailDiff
       timestamp = coerce_time(value, boundary: :timestamp)
       return false if timestamp < begin_time
 
-      exclude_end? ? timestamp < end_time : timestamp <= end_time
+      finish = end_time
+      return true unless finish
+
+      exclude_end? ? timestamp < finish : timestamp <= finish
     end
 
     #: (untyped) -> untyped
@@ -42,15 +48,18 @@ module PaperTrailDiff
       relation.where(created_at: to_range)
     end
 
-    # The window as a Ruby range, its end included or left out as given.
-    #: () -> Range[Time]
+    # The window as a Ruby range, its end included or left out as given, or
+    # endless.
+    #: () -> Range[Time?]
     def to_range
       exclude_end? ? (begin_time...end_time) : (begin_time..end_time)
     end
 
+    # The versions after the window; none follows an endless one.
     #: (untyped) -> untyped
     def trailing_scope(relation)
-      relation.where(after_end(relation.arel_table[:created_at]))
+      finish = end_time
+      finish ? after(relation, finish) : relation.none
     end
 
     # Each item's earliest version after the range, keyed by item id. One row
@@ -58,12 +67,14 @@ module PaperTrailDiff
     # the query stays portable; a timestamp tie keeps the lower id.
     #: (untyped) -> Hash[String, untyped]
     def first_trailing_versions(relation)
-      table = relation.arel_table
-      first_after = VersionQuery.no_earlier_version(table) do |earlier|
-        after_end(earlier[:created_at])
-      end
-      versions = VersionQuery.chronological(trailing_scope(relation).where(first_after))
+      finish = end_time
       first = {} #: Hash[String, untyped]
+      return first unless finish
+
+      first_after = VersionQuery.no_earlier_version(relation.arel_table) do |earlier|
+        after_end(earlier[:created_at], finish)
+      end
+      versions = VersionQuery.chronological(after(relation, finish).where(first_after))
       versions.each { |version| first[version.item_id.to_s] ||= version }
       first
     end
@@ -72,9 +83,14 @@ module PaperTrailDiff
 
     # @rbs @exclude_end: bool
 
-    #: (untyped) -> untyped
-    def after_end(column)
-      exclude_end? ? column.gteq(end_time) : column.gt(end_time)
+    #: (untyped, Time) -> untyped
+    def after(relation, finish)
+      relation.where(after_end(relation.arel_table[:created_at], finish))
+    end
+
+    #: (untyped, Time) -> untyped
+    def after_end(column, finish)
+      exclude_end? ? column.gteq(finish) : column.gt(finish)
     end
 
     #: (untyped, boundary: Symbol) -> Time
@@ -116,7 +132,8 @@ module PaperTrailDiff
 
     #: () -> void
     def validate_order!
-      return unless begin_time > end_time
+      finish = end_time
+      return unless finish && begin_time > finish
 
       raise InvalidTimeRangeError, '`within` beginning must not follow its end'
     end

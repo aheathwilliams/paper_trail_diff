@@ -31,9 +31,10 @@ module PaperTrailDiff
       # : (TimeRange) -> Edge
       def self.start_of: (TimeRange) -> Edge
 
-      # A window's end, strict when the window includes it.
-      # : (TimeRange) -> Edge
-      def self.end_of: (TimeRange) -> Edge
+      # A window's end, strict when the window includes it; an endless window
+      # has none.
+      # : (TimeRange) -> Edge?
+      def self.end_of: (TimeRange) -> Edge?
 
       # : (Time, bool) -> void
       def initialize: (Time, bool) -> void

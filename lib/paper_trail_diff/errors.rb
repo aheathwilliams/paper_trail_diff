@@ -23,7 +23,8 @@ module PaperTrailDiff
   # Raised when a timeline boundary is absent or the requested range is reversed.
   class InvalidTimelineRangeError < Error; end
 
-  # Raised when `within` is not a finite, chronological range of time-like values.
+  # Raised when `within` is not a chronological range of time-like values with
+  # a beginning.
   class InvalidTimeRangeError < InvalidTimelineRangeError; end
 
   # Raised when an in-range mutation has no later root boundary for reconstruction.

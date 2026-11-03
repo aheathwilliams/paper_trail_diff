@@ -299,6 +299,20 @@ RSpec.describe PaperTrailDiff::TransactionCut do
         .to eq(article.id.to_s => [at(0), at(2), true])
     end
 
+    it 'moves only the start of an endless window, and reads for no end' do
+      article, = history(transactions: { 0 => 6, 2 => 8 })
+      other(0.5, 6)
+      other(2.5, 8)
+      statements = []
+      counter = ->(*, payload) { statements << payload[:sql] unless payload[:name] == 'SCHEMA' }
+
+      moved = ActiveSupport::Notifications.subscribed(counter, 'sql.active_record') do
+        windows([article], at(0.25)..)
+      end
+
+      expect([moved, statements.length]).to eq([{ article.id.to_s => [at(0), nil, false] }, 2])
+    end
+
     it 'leaves a window inside a transaction empty' do
       article, = history(transactions: { 1 => 7 })
       other(1.5, 7)

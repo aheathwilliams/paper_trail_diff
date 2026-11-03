@@ -172,6 +172,10 @@ all of today and `august...september` stops before September 1. A string is a
 time in `Time.zone` unless it names an offset. Without `Time.zone`, both are
 read in UTC, never in the server's own zone.
 
+An endless range, such as `1.day.ago..`, runs through the current saved state:
+it holds every version saved since it began, whatever time its server's clock
+gave it, and it ends at the current record. `report` uses one.
+
 A window edge that falls inside a transaction moves back to where that
 transaction began, so the whole transaction is in the later window, as it is
 when a range [starts or ends at a version](#choosing-a-range). It moves when
@@ -195,10 +199,11 @@ once, credited to the transaction that made it. Each root moves its own
 edges, so in a batch two roots can start a few moments apart.
 
 `analysis.window` is the window an `Analysis` covers after any such move, as a
-Ruby range. It is `nil` when `within:` or `since:` was not given. Every step of
-the analysis is inside it, so to check a step against the window, use
-`analysis.window` rather than the range you passed: a step at the start of a
-moved window begins before the time you asked for.
+Ruby range, endless for `report` and any other endless window. It is `nil` when
+`within:` or `since:` was not given. Every step of the analysis is inside it,
+so to check a step against the window, use `analysis.window` rather than the
+range you passed: a step at the start of a moved window begins before the time
+you asked for.
 
 ```ruby
 analysis = PaperTrailDiff.analyze_many(articles, within: window, activity: true).values.first
@@ -723,9 +728,8 @@ all history.
 
 ### report
 
-`report(scope, since:, limit:)` is `analyze_scope` with
-`within: since..Time.now.utc` and `activity: true`. Use it for "what happened
-recently":
+`report(scope, since:, limit:)` is `analyze_scope` with `within: since..`, an
+endless window, and `activity: true`. Use it for "what happened recently":
 
 ```ruby
 report = PaperTrailDiff.report(Article.all, since: 1.day.ago, limit: 100)
@@ -1543,7 +1547,7 @@ All errors inherit from `PaperTrailDiff::Error`.
 | `VersionMismatchError` | Two endpoints belong to different records |
 | `ReversedEndpointsError` | Two versions are given newest first |
 | `InvalidTimelineRangeError` | A range is invalid, for example `within:` with `from:`, or `:last` |
-| `InvalidTimeRangeError` | `within:` is not a finite, time-ordered range |
+| `InvalidTimeRangeError` | `within:` is not a range with a beginning, in time order |
 | `IncompleteTimeRangeError` | A window's last change has no later version and the record has no saved row to read instead |
 | `AmbiguousVersionOrderError` | Versions cannot be ordered (see [version order](#version-order)) |
 | `BatchLimitExceededError` | More records are selected than `limit:` allows |

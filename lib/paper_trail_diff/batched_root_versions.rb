@@ -69,8 +69,16 @@ module PaperTrailDiff
       # A batch moves windows only when it has one, so this is never nil.
       window = @windows.fetch(key) { @time_range } #: untyped
       own, rest = loaded.partition { |version| window.include?(version.created_at) }
-      past = rest.select { |version| version.created_at >= window.end_time }
-      [own, past.min_by { |version| Support.chronological_version_key(version) } || trailing[id]]
+      [own, first_past(rest, window.end_time) || trailing[id]]
+    end
+
+    # The first of the versions outside a moved window that come after its end.
+    #: (Array[untyped], Time?) -> untyped
+    def first_past(versions, finish)
+      return unless finish
+
+      versions.select { |version| version.created_at >= finish }
+              .min_by { |version| Support.chronological_version_key(version) }
     end
 
     #: (untyped, Array[untyped]) -> [Hash[String, Array[untyped]], Set[untyped]?, Hash[String, untyped]]

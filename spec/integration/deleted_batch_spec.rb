@@ -126,8 +126,8 @@ RSpec.describe 'deleted root reporting' do
     expect(result.analyses.values.first.activity_timeline.last.to_snapshot.attributes['title'])
       .to eq('After')
     expect(result.deleted.fetch(PaperTrailDiff::Endpoint.identity(deleted))).not_to be_nil
-    expect { PaperTrailDiff.report(CoreArticle, since: Time.now.utc + 3600, limit: 5) }
-      .to raise_error(PaperTrailDiff::InvalidTimeRangeError)
+    expect(PaperTrailDiff.report(CoreArticle, since: Time.now.utc + 3600, limit: 5).analyses)
+      .to eq({})
   end
 
   it 'applies historical filtering to the missing population before batch analysis' do

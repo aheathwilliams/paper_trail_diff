@@ -49,6 +49,9 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `within:` accepts an endless range, such as `1.day.ago..`, which runs
+  through the current saved state, as `report` does.
+
 - `diagnose` warns with `inverted_version_order` when a record's versions are
   dated in another order than their IDs show they were saved in. PaperTrail
   dates an update with the record's `updated_at` unless `has_paper_trail
@@ -68,6 +71,16 @@ project follows [Semantic Versioning](https://semver.org/).
   first, in one statement; without it, nothing changes.
 
 ### Changed
+
+- `report` reads every version saved since `since:`, with no end. Its window
+  ended at the time of the call, so a version a server whose clock ran ahead
+  of the reporting server's had dated a moment later was left out, and the
+  report ended before a change the current record already held. It no longer
+  looks for transactions that cross that end, or for each record's first
+  version after it, which saves up to three statements per 500 records.
+  `analysis.window` is endless (`since..`) for a report, and a `since:` in the
+  future gives an empty report rather than raising `InvalidTimeRangeError`,
+  whose message named `within:`.
 
 - `analyze_many`, `analyze_scope`, `report`, and `compare_many` list at most
   500 ids in a statement, as the rest of the gem does. Reading the batch's

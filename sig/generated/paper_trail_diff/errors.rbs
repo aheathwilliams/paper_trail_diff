@@ -29,7 +29,8 @@ module PaperTrailDiff
   class InvalidTimelineRangeError < Error
   end
 
-  # Raised when `within` is not a finite, chronological range of time-like values.
+  # Raised when `within` is not a chronological range of time-like values with
+  # a beginning.
   class InvalidTimeRangeError < InvalidTimelineRangeError
   end
 

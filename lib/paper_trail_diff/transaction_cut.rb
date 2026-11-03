@@ -32,9 +32,13 @@ module PaperTrailDiff
       #: (TimeRange) -> Edge
       def self.start_of(range) = new(range.begin_time, false)
 
-      # A window's end, strict when the window includes it.
-      #: (TimeRange) -> Edge
-      def self.end_of(range) = new(range.end_time, !range.exclude_end?)
+      # A window's end, strict when the window includes it; an endless window
+      # has none.
+      #: (TimeRange) -> Edge?
+      def self.end_of(range)
+        finish = range.end_time
+        new(finish, !range.exclude_end?) if finish
+      end
 
       #: (Time, bool) -> void
       def initialize(time, strict)
@@ -88,7 +92,8 @@ module PaperTrailDiff
 
       types = traversal&.path_types(model_class) || []
       starts = moved_edges(versions, records, Edge.start_of(range), types)
-      ends = moved_edges(versions, records, Edge.end_of(range), types)
+      finish = Edge.end_of(range)
+      ends = finish ? moved_edges(versions, records, finish, types) : {} #: Hash[String, Time]
       (starts.keys | ends.keys).to_h do |id|
         [id, moved_window(model_class, id, range, starts[id], ends[id])]
       end
