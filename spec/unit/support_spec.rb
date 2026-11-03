@@ -222,6 +222,26 @@ RSpec.describe PaperTrailDiff::Support do
     end
   end
 
+  describe '.limit' do
+    # Active Record 8.1 casts a limit as it is set, so only a stand-in keeps
+    # one as given, as earlier versions do.
+    it "reads a relation's limit as Active Record writes it into SQL" do
+      relation = Struct.new(:limit_value)
+
+      expect([nil, 2, '2'].map { |value| described_class.limit(relation.new(value)) })
+        .to eq([nil, 2, 2])
+      expect { described_class.limit(relation.new('two')) }.to raise_error(ArgumentError)
+    end
+  end
+
+  describe '.offset' do
+    it "reads a relation's offset as Active Record writes it into SQL" do
+      offsets = [FilterArticle.all, FilterArticle.offset(1), FilterArticle.offset('1')]
+
+      expect(offsets.map { |relation| described_class.offset(relation) }).to eq([0, 1, 1])
+    end
+  end
+
   describe '.sequential_id?' do
     it 'is true for an integer, or a string of digits alone' do
       ids = [5, -5, '5', '05', 'a5', '5a', "5\n", 2.0, nil]

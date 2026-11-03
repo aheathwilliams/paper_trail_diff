@@ -54,11 +54,6 @@ module PaperTrailDiff
     # : (untyped) -> bool
     def self.own?: (untyped) -> bool
 
-    # Active Record casts a limit to an integer but keeps an offset as given,
-    # which may be a String or SQL.
-    # : (untyped) -> bool
-    def self.plain_offset?: (untyped) -> bool
-
     # The order's keys up to the primary key, which makes it total. Keys
     # after it never decide anything.
     # : (Array[untyped], untyped) -> Array[[String, bool]]?
@@ -93,8 +88,8 @@ module PaperTrailDiff
     # : (untyped, untyped) -> bool
     def self.exact_time?: (untyped, untyped) -> bool
 
-    # : (untyped, Array[[String, bool]], bool, Integer?, Integer?) -> void
-    def initialize: (untyped, Array[[ String, bool ]], bool, Integer?, Integer?) -> void
+    # : (untyped, Array[[String, bool]], bool, Integer?, Integer) -> void
+    def initialize: (untyped, Array[[ String, bool ]], bool, Integer?, Integer) -> void
 
     # The members among records that met the scope's conditions, in order.
     # : (Array[untyped]) -> Array[untyped]
@@ -110,7 +105,7 @@ module PaperTrailDiff
 
     @nulls_last: bool
 
-    @offset: Integer?
+    @offset: Integer
 
     # Keys compare in turn, and the primary key always decides. A descending
     # key negates its places, which also moves NULL to the other end, as each

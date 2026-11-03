@@ -118,7 +118,7 @@ RSpec.describe PaperTrailDiff::ScopeRanking do
     expect(build(-> { order(table[:id].desc).limit(1) })).not_to be_nil
   end
 
-  it 'reads a has_many, through or not, or a direct has_one, with an integer offset' do
+  it 'reads a has_many, through or not, or a direct has_one' do
     expect(build(-> { order(:id).offset(1) }, macro: :has_one, name: :second)).not_to be_nil
     expect(build(-> { order(:id).limit(1) }, macro: :belongs_to, name: :owner_item)).to be_nil
     ScopeRankingOwner.has_many :ranked_through, -> { order(:id).limit(1) },
@@ -132,8 +132,19 @@ RSpec.describe PaperTrailDiff::ScopeRanking do
       described_class.build(relation(-> { order(:id).limit(1) }),
                             ScopeRankingOwner.reflect_on_association(name), ScopeRankingItem)
     end.map(&:nil?)).to eq([false, true])
-    expect(build(-> { order(:id).offset(Arel.sql('1')) })).to be_nil
-    expect(build(-> { order(:id).offset('1') })).to be_nil
+  end
+
+  # Active Record 8.1 casts a limit as it is set; earlier versions keep it as
+  # given, as every version keeps an offset, and cast both in SQL.
+  it 'reads a limit and an offset given as Strings or SQL, as Active Record does' do
+    rows = [row(id: 3), row(id: 1), row(id: 2)]
+    limited = relation(-> { order(:id).limit(1) })
+    allow(limited).to receive(:limit_value).and_return('1')
+
+    expect([-> { order(:id).offset('1') }, -> { order(:id).offset(Arel.sql('1')) }]
+             .map { |scope| ranked(scope, rows) }).to eq([[2, 3], [2, 3]])
+    expect(described_class.build(limited, reflection(nil), ScopeRankingItem).call(rows)
+             .map { |ranked_row| ranked_row.attributes.fetch('id') }).to eq([1])
   end
 
   # JSON history keeps milliseconds by default, and local times repeat an hour.

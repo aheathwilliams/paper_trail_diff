@@ -122,6 +122,15 @@ module PaperTrailDiff
     # : (untyped, untyped) -> untyped
     def self.record_id: (untyped, untyped) -> untyped
 
+    # A relation's limit and offset as Active Record writes them into SQL.
+    # Before 8.1 it keeps a limit as given, as every version keeps an offset,
+    # so either may be a String, as request parameters are.
+    # : (untyped) -> Integer?
+    def self.limit: (untyped) -> Integer?
+
+    # : (untyped) -> Integer
+    def self.offset: (untyped) -> Integer
+
     # : (untyped) -> bool
     def self.sequential_id?: (untyped) -> bool
 

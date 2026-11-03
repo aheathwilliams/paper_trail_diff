@@ -210,6 +210,20 @@ module PaperTrailDiff
       model_class.type_for_attribute(key).cast(id)
     end
 
+    # A relation's limit and offset as Active Record writes them into SQL.
+    # Before 8.1 it keeps a limit as given, as every version keeps an offset,
+    # so either may be a String, as request parameters are.
+    #: (untyped) -> Integer?
+    def self.limit(relation)
+      value = relation.limit_value
+      Integer(value) unless value.nil?
+    end
+
+    #: (untyped) -> Integer
+    def self.offset(relation)
+      relation.offset_value.to_i
+    end
+
     #: (untyped) -> bool
     def self.sequential_id?(id)
       id.instance_of?(Integer) || id.to_s.match?(/\A\d+\z/)

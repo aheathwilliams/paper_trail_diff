@@ -241,12 +241,12 @@ module PaperTrailDiff
       count = page_limit(consumed)
       return [] if count.zero?
 
-      relation.offset((@scope.offset_value || 0) + consumed).limit(count)
+      relation.offset(Support.offset(@scope) + consumed).limit(count)
     end
 
     #: (Integer) -> Integer
     def page_limit(consumed)
-      remaining = @scope.limit_value
+      remaining = Support.limit(@scope)
       [remaining ? remaining - consumed : PAGE_SIZE, PAGE_SIZE].min
     end
 

@@ -133,6 +133,15 @@ project follows [Semantic Versioning](https://semver.org/).
   PaperTrail's `reify`, the time still reads as `nil`; see the reference's
   limitations.
 
+- `analyze_scope` and `report` accept a relation whose `limit` or `offset` is
+  a String, as request parameters are, such as
+  `Article.offset(params[:offset])`. A String offset raised `TypeError`, and
+  before Active Record 8.1, which casts a limit as it is set, a String limit
+  raised `NoMethodError`. A String `limit` or `offset` in an association's
+  scope is read from history as an Integer one is: before 8.1 a String limit
+  raised `TypeError` there, and a String offset made the association one that
+  only `allow_approximate: true` reads.
+
 - Activity on a `has_many :through` leaves out the versions a join record
   saved while it joined another record, judged by transaction as any record
   is: by whether it joined the owner before the transaction or after it. A

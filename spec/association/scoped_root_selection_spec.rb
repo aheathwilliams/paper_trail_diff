@@ -143,6 +143,14 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
       expect(select(model.limit(0)).records).to eq([])
     end
 
+    # As request parameters give them.
+    it 'reads a limit and an offset given as Strings, as Active Record does' do
+      records = Array.new(4) { |index| model.create!(title: "Record #{index}") }
+
+      expect(select(model.order(id: :desc).offset('1').limit('2')).records)
+        .to eq([records[2], records[1]])
+    end
+
     it 'tells a root its default scope hides from one that has no row' do
       start = Time.now.utc
       hidden = hidden_model.create!(title: 'Hidden')
