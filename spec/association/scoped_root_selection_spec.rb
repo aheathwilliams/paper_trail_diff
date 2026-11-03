@@ -233,12 +233,13 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
       queries { select(scope) }.grep(/FROM "tracked_articles"/).grep(/LIMIT|FETCH NEXT/).first
     end
 
-    it 'orders by key only a relation that has no order of its own' do
+    # Pages hold only under a total order; see TotalOrder.
+    it 'reads pages in the relation order, completed by the key' do
       TrackedArticle.create!(title: 'One')
 
       expect(page_sql(TrackedArticle)).to include('ORDER BY "tracked_articles"."id" ASC')
       expect(page_sql(TrackedArticle.order(title: :desc)))
-        .to match(/ORDER BY "tracked_articles"."title" DESC (LIMIT|OFFSET)/)
+        .to include('ORDER BY "tracked_articles"."title" DESC, "tracked_articles"."id" ASC')
     end
   end
 
@@ -261,6 +262,18 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
 
       expect(sql.grep(/FROM "tracked_articles" INNER JOIN/).length).to eq(3)
       expect(pages).to eq([[0, 2], [2, 2], [4, 2]])
+    end
+
+    # A database may return rows that tie in a different order for each page,
+    # as PostgreSQL does, so that pages skip some records and repeat others
+    # unless the key completes the order.
+    it 'reads every record once under an order with ties' do
+      articles = Array.new(40) { |index| TrackedArticle.create!(title: %w[b a][index % 2]) }
+      stub_const('PaperTrailDiff::ScopedRootSelection::PAGE_SIZE', 4)
+
+      records = select(TrackedArticle.order(title: :desc), limit: 40).records
+
+      expect(records).to eq(articles.partition { |article| article.title == 'b' }.flatten)
     end
 
     it 'stops at the relation limit without a query past it' do

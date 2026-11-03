@@ -91,6 +91,15 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- `analyze_scope` and `report` read every record a relation selects when its
+  order has ties, such as `Article.order(:status)`, and more than 250 records
+  match. Records were read 250 at a time in that order, and PostgreSQL and
+  MySQL may return rows that tie in a different order for each query, so some
+  records were read twice and others never, without an error: of 2,000
+  changed articles ordered by status, PostgreSQL selected 1,606. The ID now
+  ends any order that does not already sort by it. SQL text counts as sorting
+  by the ID when it names the column, alone or after the table's name.
+
 - Activity on a `has_many :through` leaves out the versions a join record
   saved while it joined another record, judged by transaction as any record
   is: by whether it joined the owner before the transaction or after it. A

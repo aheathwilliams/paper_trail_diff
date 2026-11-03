@@ -751,8 +751,13 @@ and `allow_approximate:`.
   selected, the call raises `BatchLimitExceededError` instead of returning part
   of the answer. Narrow the relation or the window, or raise the limit.
 - **To paginate, use the relation.** Its `order`, `limit`, and `offset` choose
-  the page. Without an `order`, records are taken in ascending ID order. Add an
-  ID tie-breaker to any other order. If a join repeats a record, it is analyzed
+  the page. Without an `order`, records are taken in ascending ID order. Any
+  other order gets the ID as a last tie-breaker unless it already sorts by it,
+  so that records that tie are neither skipped nor read twice. SQL text counts
+  as sorting by the ID when it names the column, alone or after the table's
+  name, as `order("title, id")` does. Give the queries that show the page the
+  same tie-breaker, such as `order(:status, :id)`, so that they list the
+  records the report analyzed. If a join repeats a record, it is analyzed
   once, in order of first appearance.
 - Selection still scans the versions in the window, so keep windows reasonable
   for large tables. Each requested association adds one query per level, however

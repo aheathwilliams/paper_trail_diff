@@ -74,6 +74,7 @@ matcher:
     - PaperTrailDiff::PreparedChildCandidates*
     - PaperTrailDiff::ActivityTargetCandidateLoader*
     - PaperTrailDiff::ScopedRootSelection*
+    - PaperTrailDiff::TotalOrder*
     - PaperTrailDiff::PreparedHistoryLoader*
     - PaperTrailDiff::PreparedEdgeLoader*
     - PaperTrailDiff::ActivityTimelineBuilder*

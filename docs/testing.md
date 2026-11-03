@@ -133,9 +133,9 @@ passes is behavior nothing checks. `mutant.yml` lists the classes it mutates:
 - what a version recorded: `RecordedChanges`, `RecordedChangesReader`, and
   `RecordedClass`;
 - how a step flattens into rows: `ChangeRow` and `ChangeRows`;
-- which records a scope or report selects: `ScopedRootSelection`,
-  `AssociationActivitySelection`, `AssociationActivityEdge`, and
-  `DeletedRootFilter`;
+- which records a scope or report selects, and in what order:
+  `ScopedRootSelection`, `TotalOrder`, `AssociationActivitySelection`,
+  `AssociationActivityEdge`, and `DeletedRootFilter`;
 - which children and targets a record had at each point:
   `PreparedHistoryLoader`, `PreparedEdgeLoader`, `ActivityChildCandidateLoader`,
   `PreparedChildCandidates`, `ActivityTargetCandidateLoader`, and
