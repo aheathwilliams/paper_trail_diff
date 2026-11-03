@@ -82,6 +82,19 @@ project follows [Semantic Versioning](https://semver.org/).
   future gives an empty report rather than raising `InvalidTimeRangeError`,
   whose message named `within:`.
 
+- The README said change rows leave out the blank fields of a record that
+  appeared or disappeared. Only `nil` fields are left out: an empty string or
+  `false` gets a row.
+
+- The performance guide's query counts were measured again, and it compares
+  PaperTrail's JSON serializer with its default YAML one: a report read JSON
+  in about 40% less time. The architecture guide no longer says a window's
+  transaction lookups take four per root, sent 200 roots per query.
+
+- The reference says that two transactions saving in the same tree at the
+  same time, so that their versions interleave, each form more than one group
+  with `group: :transaction`.
+
 - `analyze_many`, `analyze_scope`, `report`, and `compare_many` list at most
   500 ids in a statement, as the rest of the gem does. Reading the batch's
   versions, the transactions its first versions belong to, its associations'

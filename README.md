@@ -240,9 +240,9 @@ records last. Each value lists that record's rows in time order. Each row
 covers one of two things:
 
 - **A field**: `attribute` names it, and `change` is `:changed` for an edit.
-  For a record that appeared or disappeared, each of its fields gets an
-  `:added` or `:removed` row, holding its value in `to` or `from`. Blank
-  fields of such a record get no row.
+  For a record that appeared or disappeared, each of its fields that is not
+  `nil` gets an `:added` or `:removed` row, holding its value in `to` or
+  `from`. An empty string or `false` still gets one.
 - **A whole record**: `attribute` is `nil`, and `change` is `:added` or
   `:removed`. The record was created or deleted, a comment joined or left the
   article, or a `belongs_to` pointed somewhere new, which gives a `:removed`

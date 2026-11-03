@@ -503,6 +503,11 @@ PaperTrailDiff.activity_timeline(article, associations: [:comments], group: :tra
   group. PT-AT clears the transaction id when the savepoint rolls back, so the
   versions the transaction saves afterwards form a separate group. Releasing
   the savepoint keeps one group.
+- A step joins only the group of the step just before it. Two transactions
+  that save in the same tree at the same time, so that their versions
+  interleave, each form a group for every run of their own versions: the
+  state between two runs holds the other transaction's change, so no single
+  step could show either one alone.
 - Also accepted by `analyze`, `analyze_many`, and `analyze_scope` with
   `activity: true`, and by `report`.
 
@@ -1257,7 +1262,7 @@ row.to_h             # the above, plus version_id, event, whodunnit, recorded_at
 
 - An edited field is one `:changed` row. A record that appeared or disappeared
   gets an `:added` or `:removed` row with `attribute` `nil`, then a row for each
-  field that has a value and for each record it holds.
+  field that is not `nil` and for each record it holds.
 - A replaced `belongs_to` or `has_one` target gives the old record `:removed`
   rows, then the new one `:added` rows.
 - Rows follow the diff's walking order, and an analysis's rows follow its steps
@@ -1597,9 +1602,9 @@ Results can only be as complete as the history PaperTrail and PT-AT recorded.
   and not others. A long call holds its snapshot until it ends: on PostgreSQL
   that can keep VACUUM from reclaiming old row versions, on MySQL it keeps
   undo history, and on SQL Server it keeps row versions in `tempdb`.
-- A savepoint that rolls back can split one transaction into several
-  transaction groups; see
-  [one step per transaction group](#one-step-per-transaction-group-transaction).
+- A savepoint that rolls back, or another transaction saving in the same tree
+  at the same time, can split one transaction into several transaction groups;
+  see [one step per transaction group](#one-step-per-transaction-group-transaction).
 - HABTM membership history exists only where PT-AT recorded it in a
   transaction, and only for the root record without a scope: a scoped HABTM,
   or one below the root, raises `UnsupportedAssociationError`, and a transaction that another record with

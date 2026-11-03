@@ -125,8 +125,9 @@ Keep PT-AT's own index on `version_associations` (`foreign_key_name`,
 - Repeated events in one very wide collection still copy that collection's
   list of records for each step. The comparison work stays small, but memory
   traffic grows with *events × collection size*.
-- With PT-AT installed, a `within:` or `since:` window looks up each root's
-  versions on either side of both edges, to move an edge that falls inside a
-  transaction (see [time windows](reference.md#time-windows)). These are
-  four indexed lookups per root, sent 200 roots per query, whatever the
-  length of the root's history: about 0.2 ms per root on SQLite.
+- With PT-AT installed, a `within:` or `since:` window reads each root's
+  versions nearest each edge, to move an edge that falls inside a
+  transaction (see [time windows](reference.md#time-windows)). Each edge
+  takes one to three statements per 500 roots, whatever the length of their
+  histories; a `report` window has no end, so only its start is read. See
+  [performance](performance.md) for the cost on a large table.
