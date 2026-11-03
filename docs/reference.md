@@ -1415,6 +1415,19 @@ the gem raises `AmbiguousVersionOrderError` naming both instead of guessing.
 Timestamps stored to the second, as on a MySQL `datetime` column, make ties
 common. `diagnose` reports this as an error.
 
+A record's versions should also be dated in the order they were saved.
+PaperTrail dates an update with the record's `updated_at` unless the model
+sets `has_paper_trail synchronize_version_creation_timestamp: false`, so a save
+that sets `updated_at` itself, such as an import that keeps another system's
+times, or one made with timestamps off, can date its version before the one
+saved before it. Versions are read in time order, so such an update is read
+before the change it followed, and one dated before the record's `create`
+reads as the record deleted and created again. When IDs that count up show a
+record's versions dated out of the order they were saved in, `diagnose` warns
+with `inverted_version_order`. Set the option on models whose `updated_at`
+your application sets, and correct the stored `created_at` of versions
+already saved.
+
 `created_at` comes from your application server's clock. A clock that jumps
 backwards, or servers whose clocks disagree, can record a later change with an
 earlier time. Keep server clocks synchronized.
