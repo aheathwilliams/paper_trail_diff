@@ -75,6 +75,22 @@ RSpec.describe PaperTrailDiff::DeletedAnalysisBatch do
     expect(plan.versions).to eq([created, updated, destroyed])
   end
 
+  it 'reads the destroys Support::IDS_PER_STATEMENT roots to a statement' do
+    stub_const('PaperTrailDiff::Support::IDS_PER_STATEMENT', 2)
+    articles = Array.new(3) { deleted.first }
+    statements = []
+    count = lambda do |*, payload|
+      statements << payload[:sql] if payload[:sql].match?(/'destroy'|event. = /)
+    end
+
+    result = ActiveSupport::Notifications.subscribed(count, 'sql.active_record') do
+      analyze(articles.map { |article| key(article) })
+    end
+
+    expect(result.values).to eq(articles.map { |article| AnalysisStandIn.new(article.id) })
+    expect(statements.length).to eq(2)
+  end
+
   it 'passes each root the window it moved to the start of a transaction crossing its edge' do
     article, _created, updated, = deleted
     updated.update_columns(transaction_id: 7)

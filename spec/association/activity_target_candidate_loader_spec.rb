@@ -101,6 +101,26 @@ RSpec.describe PaperTrailDiff::ActivityTargetCandidateLoader do
     expect(live).to all(be_frozen)
   end
 
+  it 'reads the owners Support::IDS_PER_STATEMENT to a statement' do
+    stub_const('PaperTrailDiff::Support::IDS_PER_STATEMENT', 2)
+    author = TrackedAuthor.create!(name: 'Ann')
+    ids = Array.new(3) do |index|
+      TrackedArticle.create!(title: "Article #{index}", author: author).id
+    end
+    statements = []
+    count = ->(*, payload) { statements << payload[:sql] unless payload[:name] == 'SCHEMA' }
+
+    historical, live = ActiveSupport::Notifications.subscribed(count, 'sql.active_record') do
+      reader = loader(TrackedArticle, ids, :author, Time.now.utc - 3600)
+      [reader.historical_rows, reader.current_rows]
+    end
+
+    expect(fields(historical))
+      .to match_array(ids.map { |id| [id, author.id, 'TrackedAuthor', 'create'] })
+    expect(fields(live)).to match_array(ids.map { |id| [id, author.id, nil, nil] })
+    expect(statements.length).to eq(4)
+  end
+
   # The comment and the profile share an id, and both record an `article_id`.
   it 'reads only the requested owners, their model, and the reflection key' do
     author = TrackedAuthor.create!(name: 'Ann')

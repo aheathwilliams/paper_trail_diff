@@ -47,6 +47,7 @@ module PaperTrailDiff
     # : (Array[untyped]) -> Array[untyped]
     def historical_roots: (Array[untyped]) -> Array[untyped]
 
+    # Each statement reads the destroys of 500 records.
     # : () -> Array[untyped]
     def destroy_versions: () -> Array[untyped]
   end

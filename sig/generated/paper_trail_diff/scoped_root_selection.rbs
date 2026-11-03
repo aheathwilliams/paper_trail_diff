@@ -83,6 +83,13 @@ module PaperTrailDiff
     # : (Array[String]) -> Result
     def plucked_selection: (Array[String]) -> Result
 
+    # Every page repeats the ids the relation is read among, so pages as long
+    # as the list read it about once, rather than once for each 250 records.
+    # More roots than `limit:` raise however long the list, so a page never
+    # needs more than one past it.
+    # : (Array[String]) -> Array[untyped]
+    def listed_records: (Array[String]) -> Array[untyped]
+
     # Comparing the two columns in SQL needs them to share a type: PostgreSQL
     # rejects an integer key against a string item_id outright. A composite
     # key names no single attribute, so it has no type and never matches.
@@ -132,18 +139,18 @@ module PaperTrailDiff
     # Read bounded pages until the relation ends or too many unique roots appear.
     # Each candidate source is an id list or a subquery; a record matching any
     # of them is selected.
-    # : (Array[untyped]) -> Array[untyped]
-    def selected_records: (Array[untyped]) -> Array[untyped]
+    # : (Array[untyped], ?page_size: Integer) -> Array[untyped]
+    def selected_records: (Array[untyped], ?page_size: Integer) -> Array[untyped]
 
     # Pages are read by offset, so under a total order.
     # : (Array[untyped]) -> untyped
     def candidate_relation: (Array[untyped]) -> untyped
 
-    # : (untyped, Integer) -> Array[untyped]
-    def record_page: (untyped, Integer) -> Array[untyped]
+    # : (untyped, Integer, Integer) -> Array[untyped]
+    def record_page: (untyped, Integer, Integer) -> Array[untyped]
 
-    # : (Integer) -> Integer
-    def page_limit: (Integer) -> Integer
+    # : (Integer, Integer) -> Integer
+    def page_limit: (Integer, Integer) -> Integer
 
     # : (Integer) -> void
     def reject_oversized!: (Integer) -> void

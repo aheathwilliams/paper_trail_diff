@@ -84,11 +84,14 @@ module PaperTrailDiff
       end
     end
 
+    # Each statement reads the destroys of 500 records.
     #: () -> Array[untyped]
     def destroy_versions
-      destroys = VersionQuery.for_items(@model, @identities.map(&:last)).where(event: 'destroy')
-      # Oldest first, so each item keeps its latest destroy.
-      VersionQuery.chronological(destroys).index_by(&:item_id).values
+      @identities.map(&:last).each_slice(Support::IDS_PER_STATEMENT).flat_map do |ids|
+        destroys = VersionQuery.for_items(@model, ids).where(event: 'destroy')
+        # Oldest first, so each item keeps its latest destroy.
+        VersionQuery.chronological(destroys).index_by(&:item_id).values
+      end
     end
   end
 end

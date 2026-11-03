@@ -58,6 +58,19 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- `analyze_many`, `analyze_scope`, `report`, and `compare_many` list at most
+  500 ids in a statement, as the rest of the gem does. Reading the batch's
+  versions, the transactions its first versions belong to, its associations'
+  candidates and rows, its deleted records' destroys, and its current rows
+  and their associations each listed every record of the batch at once. On
+  SQL Server, which writes such a list into the statement and compiles it
+  afresh, a `report` of 10,000 articles and their comments took 17.1 s and
+  now takes 11.4 s, and one of 20,000 took 38.9 s and now takes 23.0 s; a
+  statement listing 20,000 transactions alone failed with error 8623. With
+  `historical_filter:`, or a version table whose `item_id` does not share the
+  key's type, the records are read among a list of ids, which each page of
+  250 repeated: they are now read in pages as long as the list.
+
 - History on a `has_and_belongs_to_many` groups the members PT-AT recorded
   by transaction once. Each of the root's transactions looked through every
   member recorded for all of them, so the cost grew with the square of the

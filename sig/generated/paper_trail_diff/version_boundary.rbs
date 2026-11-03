@@ -19,7 +19,7 @@ module PaperTrailDiff
     # version, can be recorded before the start, so the start moves back to
     # the earliest version of each root's first transaction in the range.
     # History loaded from the start alone would read that child after its
-    # change.
+    # change. The transactions go 500 to a statement.
     # : (Array[untyped], untyped) -> untyped
     def self.transaction_start: (Array[untyped], untyped) -> untyped
 

@@ -123,8 +123,17 @@ module PaperTrailDiff
         live = filter.call(ids_in(@scope.except(:order, :limit, :offset), live).uniq)
         missing = filter.call(missing, counted: false)
       end
-      Result.new(records: selected_records([live]),
+      Result.new(records: listed_records(live),
                  unreachable: missing.sort.map { |id| identity(id) }.freeze)
+    end
+
+    # Every page repeats the ids the relation is read among, so pages as long
+    # as the list read it about once, rather than once for each 250 records.
+    # More roots than `limit:` raise however long the list, so a page never
+    # needs more than one past it.
+    #: (Array[String]) -> Array[untyped]
+    def listed_records(ids)
+      selected_records([ids], page_size: ids.length.clamp(PAGE_SIZE, [@limit + 1, PAGE_SIZE].max))
     end
 
     # Comparing the two columns in SQL needs them to share a type: PostgreSQL
@@ -211,16 +220,16 @@ module PaperTrailDiff
     # Read bounded pages until the relation ends or too many unique roots appear.
     # Each candidate source is an id list or a subquery; a record matching any
     # of them is selected.
-    #: (Array[untyped]) -> Array[untyped]
-    def selected_records(candidates)
+    #: (Array[untyped], ?page_size: Integer) -> Array[untyped]
+    def selected_records(candidates, page_size: PAGE_SIZE)
       relation = candidate_relation(candidates)
       records = {} #: Hash[untyped, untyped]
       consumed = 0
       loop do
-        page = record_page(relation, consumed)
+        page = record_page(relation, consumed, page_size)
         page.each { |record| records[record.id] ||= record }
         reject_oversized!(records.length)
-        break if page.length < PAGE_SIZE
+        break if page.length < page_size
 
         consumed += page.length
       end
@@ -236,18 +245,18 @@ module PaperTrailDiff
       end.reduce(:or)
     end
 
-    #: (untyped, Integer) -> Array[untyped]
-    def record_page(relation, consumed)
-      count = page_limit(consumed)
+    #: (untyped, Integer, Integer) -> Array[untyped]
+    def record_page(relation, consumed, page_size)
+      count = page_limit(consumed, page_size)
       return [] if count.zero?
 
       relation.offset(Support.offset(@scope) + consumed).limit(count)
     end
 
-    #: (Integer) -> Integer
-    def page_limit(consumed)
+    #: (Integer, Integer) -> Integer
+    def page_limit(consumed, page_size)
       remaining = Support.limit(@scope)
-      [remaining ? remaining - consumed : PAGE_SIZE, PAGE_SIZE].min
+      [remaining ? remaining - consumed : page_size, page_size].min
     end
 
     #: (Integer) -> void

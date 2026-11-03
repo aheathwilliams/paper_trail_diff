@@ -122,6 +122,7 @@ module PaperTrailDiff
     # : (untyped, untyped, untyped, String?, ActivityRange) -> bool
     def eligible_version?: (untyped, untyped, untyped, String?, ActivityRange) -> bool
 
+    # Each statement reads the rows of 500 transactions.
     # : (untyped, untyped) -> Hash[String, Array[untyped]]
     def load_habtm_rows: (untyped, untyped) -> Hash[String, Array[untyped]]
 

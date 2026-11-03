@@ -220,6 +220,46 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
       expect(sql.grep(/SELECT "string_item_posts"."id" FROM "string_item_posts" WHERE/).length)
         .to eq(2)
     end
+
+    # Each page lists every candidate, so the pages are as long as the list:
+    # at least PAGE_SIZE, and at most one past the limit.
+    describe 'reading the candidates' do
+      before { stub_const('PaperTrailDiff::ScopedRootSelection::PAGE_SIZE', 2) }
+
+      def pages
+        pages = []
+        allow_any_instance_of(described_class).to receive(:record_page)
+          .and_wrap_original do |original, *args|
+            original.call(*args).tap { |page| pages << [page.offset_value, page.limit_value] }
+          end
+        pages
+      end
+
+      it 'reads them in pages as long as their list' do
+        posts = Array.new(5) { |index| StringItemPost.create!(title: "Post #{index}") }
+        read = pages
+
+        expect(select(StringItemPost).records).to eq(posts)
+        expect(read).to eq([[0, 5], [5, 5]])
+      end
+
+      it 'reads a short list in pages of PAGE_SIZE' do
+        post = StringItemPost.create!(title: 'Post')
+        read = pages
+
+        expect(select(StringItemPost).records).to eq([post])
+        expect(read).to eq([[0, 2]])
+      end
+
+      it 'reads one past the limit before raising' do
+        5.times { |index| StringItemPost.create!(title: "Post #{index}") }
+        read = pages
+
+        expect { select(StringItemPost, limit: 3) }
+          .to raise_error(PaperTrailDiff::BatchLimitExceededError, /more than 3 roots/)
+        expect(read).to eq([[0, 4]])
+      end
+    end
   end
 
   # A plain document's versions share the base class's item_type, and its

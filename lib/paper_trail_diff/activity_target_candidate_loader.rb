@@ -38,18 +38,20 @@ module PaperTrailDiff
       @start_at = start_at
     end
 
-    # One shared query keeps the owner and timestamp needed to partition a
-    # batch's candidates back into each root's exact activity range.
+    # Queries shared by a batch's roots keep the owner and timestamp needed to
+    # partition its candidates back into each root's exact activity range.
     #: () -> Array[Row]
     def historical_rows
       return [] if composite_foreign_key?
 
       version_class = @owner_class.paper_trail.version_class
-      relation = VersionAssociationCandidateScope.new(version_class, @start_at)
-                                                 .call(historical_relation(version_class))
-      historical_columns(relation, version_class).map do |row|
-        owner_id, id, type, created_at, event = row
-        Row.new(Support.record_id(@owner_class, owner_id), id, type, created_at, event)
+      scope = VersionAssociationCandidateScope.new(version_class, @start_at)
+      owner_slices.flat_map do |owners|
+        relation = scope.call(historical_relation(version_class, owners))
+        historical_columns(relation, version_class).map do |row|
+          owner_id, id, type, created_at, event = row
+          Row.new(Support.record_id(@owner_class, owner_id), id, type, created_at, event)
+        end
       end
     end
 
@@ -70,12 +72,18 @@ module PaperTrailDiff
     # @rbs @reflection: untyped
     # @rbs @start_at: untyped
 
-    #: (untyped) -> untyped
-    def historical_relation(version_class)
+    # Each statement reads the targets of 500 owners.
+    #: () -> Enumerator[Array[untyped], untyped]
+    def owner_slices
+      @owner_ids.each_slice(Support::IDS_PER_STATEMENT)
+    end
+
+    #: (untyped, Array[untyped]) -> untyped
+    def historical_relation(version_class, owners)
       VersionTable.joined(association_class, version_class)
                   .where(foreign_key_name: @reflection.foreign_key)
                   .where(version_class.table_name => {
-                           item_type: @owner_class.base_class.name, item_id: @owner_ids
+                           item_type: @owner_class.base_class.name, item_id: owners
                          })
     end
 
@@ -93,11 +101,13 @@ module PaperTrailDiff
     # the owners of an association through one subclass.
     #: () -> Array[Array[untyped]]
     def live_rows
-      relation = @owner_class.base_class.unscoped.where(@owner_class.primary_key => @owner_ids)
       key = @reflection.foreign_key
-      return relation.pluck(@owner_class.primary_key, key) unless @reflection.polymorphic?
+      owner_slices.flat_map do |owners|
+        relation = @owner_class.base_class.unscoped.where(@owner_class.primary_key => owners)
+        next relation.pluck(@owner_class.primary_key, key) unless @reflection.polymorphic?
 
-      relation.pluck(@owner_class.primary_key, key, @reflection.foreign_type)
+        relation.pluck(@owner_class.primary_key, key, @reflection.foreign_type)
+      end
     end
 
     #: () -> untyped

@@ -2,9 +2,9 @@
 # rbs_inline: enabled
 
 module PaperTrailDiff
-  # Resolves `:first` endpoints for a whole batch in a fixed number of queries per
-  # model class. Left to the caller this is a per-root lookup, which reintroduces
-  # exactly the queries a batched comparison exists to remove.
+  # Resolves `:first` endpoints for a whole batch in one query per 500 roots
+  # of a model class. Left to the caller this is a per-root lookup, which
+  # reintroduces exactly the queries a batched comparison exists to remove.
   class BatchBoundaryResolver
     BOUNDARIES = %i[first].freeze
 
@@ -71,7 +71,7 @@ module PaperTrailDiff
     end
 
     # Each named record's earliest version, by the record's identity, in one
-    # statement for each model class.
+    # statement for each 500 records of a model class.
     #: () -> Hash[Array[String], untyped]
     def first_versions
       firsts = {} #: Hash[Array[String], untyped]
@@ -101,15 +101,17 @@ module PaperTrailDiff
       nil
     end
 
-    # Each root's earliest version by time, in one query whatever the size of
-    # the batch. The lowest id is not the earliest version when ids are not
+    # Each root's earliest version by time, in one query for every 500 roots.
+    # The lowest id is not the earliest version when ids are not
     # sequential, as with UUIDs, so time decides and the usual ordering breaks
     # a tie -- refusing one that ids cannot order.
     #: (untyped, Array[untyped]) -> Hash[Array[String], untyped]
     def first_versions_of(model_class, ids)
       table = model_class.paper_trail.version_class.arel_table
-      candidates = VersionQuery.for_items(model_class, ids)
-                               .where(VersionQuery.no_earlier_version(table))
+      first = VersionQuery.no_earlier_version(table)
+      candidates = ids.each_slice(Support::IDS_PER_STATEMENT).flat_map do |slice|
+        VersionQuery.for_items(model_class, slice).where(first)
+      end
       candidates.group_by { |version| Support.record_identity(model_class, version.item_id) }
                 .transform_values { |versions| Support.chronological_sort(versions).first }
     end
