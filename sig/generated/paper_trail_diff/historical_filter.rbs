@@ -11,8 +11,6 @@ module PaperTrailDiff
   class HistoricalFilter
     DEFAULT_VERSION_LIMIT: ::Integer
 
-    CANDIDATE_BATCH: ::Integer
-
     # : (untyped, predicate: untyped, time_range: TimeRange?, limit: Integer, max_versions: Integer) -> void
     def initialize: (untyped, predicate: untyped, time_range: TimeRange?, limit: Integer, max_versions: Integer) -> void
 

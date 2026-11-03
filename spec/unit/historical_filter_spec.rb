@@ -338,9 +338,9 @@ RSpec.describe PaperTrailDiff::HistoricalFilter do
       early.update!(title: 'Review')
       late = FilterArticle.create!(title: 'Draft')
       4.times { |index| late.update!(title: "Edit #{index}") }
-      # 250 candidates fit in one batch, so `late` is read in a second one.
-      fillers = Array.new(249) { |index| (10_000 + index).to_s }
-      candidates = [early.id.to_s] + fillers + [late.id.to_s]
+      # Two candidates fit in a batch, so `late` is read in a second one.
+      stub_const('PaperTrailDiff::Support::IDS_PER_STATEMENT', 2)
+      candidates = [early.id.to_s, '10000', late.id.to_s]
       error = nil
 
       _, loaded = queries do

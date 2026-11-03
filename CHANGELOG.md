@@ -116,6 +116,10 @@ project follows [Semantic Versioning](https://semver.org/).
   and skips the rows before it, so a selection of 10,000 articles changed in
   the window, with their comments, took 1.5 s on SQLite and now takes 0.3 s.
 
+- `historical_filter:` reads its candidates' versions, and selecting a record
+  by a change on its associations reads ids, 500 to a statement rather than
+  250, as the rest of the gem does.
+
 - Activity on associations decodes each of the record's versions once for
   the call. It decoded a version again at every event the version bounded,
   up to five times: a `report` of 10,000 articles with their comments took

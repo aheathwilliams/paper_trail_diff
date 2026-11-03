@@ -11,7 +11,6 @@ module PaperTrailDiff
   # the window, or in the live row when nothing follows; a destroy leaves none.
   class HistoricalFilter
     DEFAULT_VERSION_LIMIT = 10_000
-    CANDIDATE_BATCH = 250
 
     #: (untyped, predicate: untyped, time_range: TimeRange?, limit: Integer, max_versions: Integer) -> void
     def initialize(model, predicate:, time_range:, limit:, max_versions:)
@@ -29,7 +28,7 @@ module PaperTrailDiff
     #: (Array[String], ?counted: bool) -> Array[String]
     def call(candidates, counted: true)
       matched = [] #: Array[String]
-      candidates.each_slice(CANDIDATE_BATCH) do |slice|
+      candidates.each_slice(Support::IDS_PER_STATEMENT) do |slice|
         versions = candidate_versions(slice)
         closing = closing_states(slice, versions)
         slice.each do |id|

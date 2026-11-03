@@ -15,9 +15,6 @@ module PaperTrailDiff
   # per root. Ids stay in a subquery while the columns compared share a type;
   # otherwise they are read and the edge runs over them in slices.
   class AssociationActivitySelection
-    SLICE = 250
-    private_constant :SLICE
-
     # The ids a one-column subquery selects, with that column's type: a
     # database compares columns of one type only, and PostgreSQL rejects an
     # integer key against a string item_id outright.
@@ -176,7 +173,7 @@ module PaperTrailDiff
 
     #: (AssociationActivityEdge, Array[untyped]) -> Array[untyped]
     def read(edge, values)
-      values.each_slice(SLICE).flat_map do |slice|
+      values.each_slice(Support::IDS_PER_STATEMENT).flat_map do |slice|
         edge.relation(slice).pluck(edge.column)
       end.compact.uniq
     end
