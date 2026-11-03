@@ -148,9 +148,11 @@ module PaperTrailDiff
       end + versions).uniq
     end
 
+    # The versions in range are in order, so the first one after a version is
+    # found by a search rather than by passing every version before it.
     #: (untyped) -> untyped
     def immediate_successor(version)
-      @in_range.find { |candidate| Support.compare_versions(version, candidate).negative? }
+      @in_range.bsearch { |candidate| Support.compare_versions(version, candidate).negative? }
     end
 
     # A version left out by a filter is still the state the last selected change

@@ -68,6 +68,13 @@ project follows [Semantic Versioning](https://semver.org/).
   statement, as other lists of ids are: on SQL Server, a statement listing
   40,000 ids timed out.
 
+- With `version_scope:`, `timeline`, `analyze`, and the batch methods find
+  the version after each one the filter keeps with a search. They passed
+  every version in range before it, so the cost grew with the square of the
+  record's versions: a `timeline` of an article with 4,000 versions, half of
+  them kept, took 9.5 s and now takes 1.4 s, about as long as without the
+  filter.
+
 - With `recorded_changes: true`, a boundary decodes its version's changes the
   first time its `recorded_changes` is read, and each version is decoded once
   for the whole call. Every boundary decoded its version when it was built,

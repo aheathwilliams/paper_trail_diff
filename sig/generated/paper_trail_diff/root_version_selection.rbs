@@ -91,6 +91,8 @@ module PaperTrailDiff
     # : (Array[untyped]) -> Array[untyped]?
     def spanned: (Array[untyped]) -> Array[untyped]?
 
+    # The versions in range are in order, so the first one after a version is
+    # found by a search rather than by passing every version before it.
     # : (untyped) -> untyped
     def immediate_successor: (untyped) -> untyped
 
