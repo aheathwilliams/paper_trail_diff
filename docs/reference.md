@@ -758,7 +758,10 @@ and `allow_approximate:`.
   name, as `order("title, id")` does. Give the queries that show the page the
   same tie-breaker, such as `order(:status, :id)`, so that they list the
   records the report analyzed. If a join repeats a record, it is analyzed
-  once, in order of first appearance.
+  once, in order of first appearance. A relation grouped by anything but the
+  ID, such as `select("MAX(id) AS id").group(:author_id)`, keeps its own
+  order, since a database sorts groups only by what they group or aggregate.
+  It needs one that tells its groups apart, such as `order(:author_id)`.
 - Selection still scans the versions in the window, so keep windows reasonable
   for large tables. Each requested association adds one query per level, however
   many records it selects. Changes to associations are found from PT-AT's

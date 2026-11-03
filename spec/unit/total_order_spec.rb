@@ -47,5 +47,21 @@ RSpec.describe PaperTrailDiff::TotalOrder do
       expect(order_of(FilterArticle.order(Arel.sql("#{quoted('filter_articles', 'id')} DESC"))))
         .to eq("#{key} DESC")
     end
+
+    # A database sorts groups only by what they group or aggregate.
+    it 'keeps the order of a relation grouped by anything but the key' do
+      latest = FilterArticle.select('MAX(id) AS id')
+      key = '"filter_articles"."id" ASC'
+
+      expect(order_of(latest.group(:title).order(:title))).to eq('"filter_articles"."title" ASC')
+      expect(order_of(latest.group(:title).order(Arel.sql('MAX(id) DESC')))).to eq('MAX(id) DESC')
+      # Without an order of its own it is sorted by the key, which a database
+      # rejects; it needs one.
+      expect(order_of(latest.group(:title))).to eq(key)
+      [:id, 'filter_articles.id', FilterArticle.arel_table[:id]].each do |group|
+        expect(order_of(FilterArticle.group(group, :title).order(:title)))
+          .to eq(%("filter_articles"."title" ASC, #{key}))
+      end
+    end
   end
 end

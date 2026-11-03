@@ -122,7 +122,9 @@ project follows [Semantic Versioning](https://semver.org/).
   records were read twice and others never, without an error: of 2,000
   changed articles ordered by status, PostgreSQL selected 1,606. The ID now
   ends any order that does not already sort by it. SQL text counts as sorting
-  by the ID when it names the column, alone or after the table's name.
+  by the ID when it names the column, alone or after the table's name. The
+  order of a relation grouped by anything but the ID is kept as given, since
+  a database sorts groups only by what they group or aggregate.
 
 - With PaperTrail's default YAML serializer, a `time` column reads as the
   time each version recorded. PaperTrail 16 and 17 decode such a value as

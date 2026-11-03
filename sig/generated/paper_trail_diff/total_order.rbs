@@ -8,12 +8,18 @@ module PaperTrailDiff
   module TotalOrder
     # The relation sorted by its key after its own order, unless that order
     # already sorts by the key. Such an order is kept as given, since SQL
-    # Server rejects a column listed twice. A relation answers for its model
-    # the key and table name read here.
+    # Server rejects a column listed twice. So is the order of a relation
+    # grouped by anything but the key: each of its rows is a group, which a
+    # database sorts only by what it groups or aggregates. A relation answers
+    # for its model the key and table name read here.
     # : (untyped) -> untyped
     def self.apply: (untyped) -> untyped
 
-    # An Arel order names its column; SQL text is read by key_in_sql?.
+    # : (untyped) -> bool
+    def self.grouped_by_other?: (untyped) -> bool
+
+    # An Arel order or group names its column; SQL text, or the name a group
+    # may be given as, is read by key_in_sql?.
     # : (untyped, untyped) -> bool
     def self.key?: (untyped, untyped) -> bool
 

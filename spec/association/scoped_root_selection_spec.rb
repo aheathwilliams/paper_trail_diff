@@ -284,6 +284,15 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
       expect(records).to eq(articles.partition { |article| article.title == 'b' }.flatten)
     end
 
+    # Each row is a group, which PostgreSQL, MySQL and SQL Server sort only
+    # by what it groups or aggregates, not by the key.
+    it 'reads a relation grouped by anything but the key in its own order' do
+      articles = %w[b a b a].map { |title| TrackedArticle.create!(title: title) }
+      latest = TrackedArticle.select('MAX(tracked_articles.id) AS id').group(:title)
+
+      expect(select(latest.order(:title)).records.map(&:id)).to eq([articles[3].id, articles[2].id])
+    end
+
     it 'stops at the relation limit without a query past it' do
       articles = Array.new(5) { |index| TrackedArticle.create!(title: "Article #{index}") }
       stub_const('PaperTrailDiff::ScopedRootSelection::PAGE_SIZE', 2)

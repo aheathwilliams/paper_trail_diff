@@ -9,22 +9,34 @@ module PaperTrailDiff
   module TotalOrder
     # The relation sorted by its key after its own order, unless that order
     # already sorts by the key. Such an order is kept as given, since SQL
-    # Server rejects a column listed twice. A relation answers for its model
-    # the key and table name read here.
+    # Server rejects a column listed twice. So is the order of a relation
+    # grouped by anything but the key: each of its rows is a group, which a
+    # database sorts only by what it groups or aggregates. A relation answers
+    # for its model the key and table name read here.
     #: (untyped) -> untyped
     def self.apply(relation)
-      return relation if relation.order_values.any? { |order| key?(order, relation) }
+      orders = relation.order_values
+      return relation if orders.any? { |order| key?(order, relation) }
+      return relation if !orders.empty? && grouped_by_other?(relation)
 
       relation.order(relation.primary_key => :asc)
     end
 
-    # An Arel order names its column; SQL text is read by key_in_sql?.
-    #: (untyped, untyped) -> bool
-    def self.key?(order, relation)
-      order = order.expr if ScopeRanking::DIRECTIONS.key?(order.class.name)
-      return key_in_sql?(order, relation) if order.is_a?(String)
+    #: (untyped) -> bool
+    def self.grouped_by_other?(relation)
+      groups = relation.group_values
+      !groups.empty? && groups.none? { |group| key?(group, relation) }
+    end
+    private_class_method :grouped_by_other?
 
-      relation.primary_key.eql?(ScopeRanking.own_column(order, relation))
+    # An Arel order or group names its column; SQL text, or the name a group
+    # may be given as, is read by key_in_sql?.
+    #: (untyped, untyped) -> bool
+    def self.key?(term, relation)
+      term = term.expr if ScopeRanking::DIRECTIONS.key?(term.class.name)
+      return key_in_sql?(term.to_s, relation) if term.is_a?(String) || term.instance_of?(Symbol)
+
+      relation.primary_key.eql?(ScopeRanking.own_column(term, relation))
     end
     private_class_method :key?
 
