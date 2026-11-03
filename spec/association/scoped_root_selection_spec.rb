@@ -222,7 +222,7 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
     end
 
     # Each page lists every candidate, so the pages are as long as the list:
-    # at least PAGE_SIZE, and at most one past the limit.
+    # at least PAGE_SIZE, and at most LISTED_PAGE_SIZE and one past the limit.
     describe 'reading the candidates' do
       before { stub_const('PaperTrailDiff::ScopedRootSelection::PAGE_SIZE', 2) }
 
@@ -249,6 +249,15 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
 
         expect(select(StringItemPost).records).to eq([post])
         expect(read).to eq([[0, 2]])
+      end
+
+      it 'reads at most LISTED_PAGE_SIZE records a page' do
+        stub_const('PaperTrailDiff::ScopedRootSelection::LISTED_PAGE_SIZE', 3)
+        posts = Array.new(5) { |index| StringItemPost.create!(title: "Post #{index}") }
+        read = pages
+
+        expect(select(StringItemPost).records).to eq(posts)
+        expect(read).to eq([[0, 3], [3, 3]])
       end
 
       it 'reads one past the limit before raising' do

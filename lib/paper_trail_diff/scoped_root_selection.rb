@@ -27,7 +27,8 @@ module PaperTrailDiff
   # not the same set as what was published while the window was open.
   class ScopedRootSelection
     PAGE_SIZE = 250
-    private_constant :PAGE_SIZE
+    LISTED_PAGE_SIZE = 2_000
+    private_constant :PAGE_SIZE, :LISTED_PAGE_SIZE
 
     # A plain class rather than Data.define, which arrived in Ruby 3.2 while this
     # gem supports 3.1.
@@ -128,12 +129,15 @@ module PaperTrailDiff
     end
 
     # Every page repeats the ids the relation is read among, so pages as long
-    # as the list read it about once, rather than once for each 250 records.
-    # More roots than `limit:` raise however long the list, so a page never
-    # needs more than one past it.
+    # as the list read it fewer times than pages of 250. A page holds at most
+    # 2,000 records: SQL Server compiles a statement with its ids written in,
+    # and one that listed 20,000 and returned them all outlasted the adapter's
+    # default timeout of 5 seconds. More roots than `limit:` raise however
+    # long the list, so a page never needs more than one past it.
     #: (Array[String]) -> Array[untyped]
     def listed_records(ids)
-      selected_records([ids], page_size: ids.length.clamp(PAGE_SIZE, [@limit + 1, PAGE_SIZE].max))
+      page_size = [ids.length, @limit + 1].min
+      selected_records([ids], page_size: page_size.clamp(PAGE_SIZE, LISTED_PAGE_SIZE))
     end
 
     # The candidates the relation's conditions accept. A grouped relation's
@@ -142,9 +146,7 @@ module PaperTrailDiff
     # filter reads each, and the relation groups those that match.
     #: (Array[String]) -> Array[String]
     def relation_members(ids)
-      return ids unless @scope.group_values.empty?
-
-      ids_in(@scope.except(:order, :limit, :offset), ids).uniq
+      @scope.group_values.empty? ? ids_in(@scope.except(:order, :limit, :offset), ids).uniq : ids
     end
 
     # Comparing the two columns in SQL needs them to share a type: PostgreSQL

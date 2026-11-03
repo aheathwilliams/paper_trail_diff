@@ -69,7 +69,9 @@ project follows [Semantic Versioning](https://semver.org/).
   statement listing 20,000 transactions alone failed with error 8623. With
   `historical_filter:`, or a version table whose `item_id` does not share the
   key's type, the records are read among a list of ids, which each page of
-  250 repeated: they are now read in pages as long as the list.
+  250 repeated: they are now read in pages as long as the list, up to 2,000.
+  On SQL Server, such a report of 10,000 articles took 47.4 s and now takes
+  14.4 s, and one of 20,000 took 280.5 s and now takes 51.1 s.
 
 - History on a `has_and_belongs_to_many` groups the members PT-AT recorded
   by transaction once. Each of the root's transactions looked through every

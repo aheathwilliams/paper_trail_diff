@@ -27,6 +27,8 @@ module PaperTrailDiff
   class ScopedRootSelection
     PAGE_SIZE: ::Integer
 
+    LISTED_PAGE_SIZE: ::Integer
+
     # A plain class rather than Data.define, which arrived in Ruby 3.2 while this
     # gem supports 3.1.
     class Result
@@ -84,9 +86,11 @@ module PaperTrailDiff
     def plucked_selection: (Array[String]) -> Result
 
     # Every page repeats the ids the relation is read among, so pages as long
-    # as the list read it about once, rather than once for each 250 records.
-    # More roots than `limit:` raise however long the list, so a page never
-    # needs more than one past it.
+    # as the list read it fewer times than pages of 250. A page holds at most
+    # 2,000 records: SQL Server compiles a statement with its ids written in,
+    # and one that listed 20,000 and returned them all outlasted the adapter's
+    # default timeout of 5 seconds. More roots than `limit:` raise however
+    # long the list, so a page never needs more than one past it.
     # : (Array[String]) -> Array[untyped]
     def listed_records: (Array[String]) -> Array[untyped]
 
