@@ -276,6 +276,28 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
     expect(both).to contain_exactly(kept.id, added.id, moved.id, early.id, *later)
   end
 
+  # A range starting at a version starts before that version's transaction
+  # (see VersionBoundary.transaction_start), so a section that left the page
+  # earlier in it was still one of the page's sections at the start.
+  it 'reads the sections that left a page in the transaction a version start opens' do
+    page, other = %w[Page Other].map { |title| IndexSpecPage.create!(title: title) }
+    moved, gone = %w[moved gone].map { |title| IndexSpecSection.create!(title: title, page: page) }
+    start = IndexSpecPage.transaction do
+      moved.update!(page: other)
+      gone.destroy!
+      page.update!(title: 'Renamed')
+      page.versions.reorder(:created_at, :id).last
+    end
+    origin = PaperTrailDiff::VersionBoundary.transaction_start([start], start.created_at)
+    index = index_for(origin, { IndexSpecSection => [moved.id, gone.id] })
+    index.register(IndexSpecPage, [page.id, other.id])
+
+    expect(index.child_ids(IndexSpecPage, [page.id], sections, range(start, Time.now.utc)))
+      .to contain_exactly(moved.id, gone.id)
+    expect(index.child_ids(IndexSpecPage, [page.id], sections,
+                           range(start.created_at, Time.now.utc))).to be_empty
+  end
+
   it 'reads the rows of each association once for every page' do
     origin = Time.now.utc
     page, other = %w[Page Other].map { |title| IndexSpecLandingPage.create!(title: title) }

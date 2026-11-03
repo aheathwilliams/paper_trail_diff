@@ -26,6 +26,18 @@ module PaperTrailDiff
       after_start?(version, key) && before_end?(version, key)
     end
 
+    # A range starting at a version starts before that version's transaction,
+    # where PT-AT reads its associations. A version saved earlier in it, such
+    # as the child update behind a `touch: true` parent version, is a change
+    # inside the range.
+    #: (untyped) -> bool
+    def opening?(version)
+      opening = @opening_transaction
+      return false unless opening
+
+      ActivityTransactionGroups.transaction_key(version) == opening
+    end
+
     private
 
     # @rbs @end_boundary: untyped
@@ -34,14 +46,9 @@ module PaperTrailDiff
     # @rbs @end_key: Array[untyped]?
     # @rbs @opening_transaction: Array[untyped]?
 
-    # A range starting at a version starts before that version's transaction,
-    # where PT-AT reads its associations. A version saved earlier in it, such
-    # as the child update behind a `touch: true` parent version, is a change
-    # inside the range.
     #: (untyped, Array[untyped]) -> bool
     def after_start?(version, key)
-      opening = @opening_transaction
-      return true if opening && ActivityTransactionGroups.transaction_key(version) == opening
+      return true if opening?(version)
 
       start_key = @start_key
       return key_before_or_equal?(start_key, key) if start_key

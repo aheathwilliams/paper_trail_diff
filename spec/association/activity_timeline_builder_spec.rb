@@ -40,6 +40,15 @@ RSpec.describe PaperTrailDiff::ActivityTimelineBuilder do
     snapshot.associations.fetch('comments').records.map { |comment| comment.attributes['body'] }
   end
 
+  def membership(step)
+    comments = step.diff.associations['comments']
+    return [[], []] unless comments
+
+    [comments.added, comments.removed].map do |records|
+      records.map { |comment| comment.attributes['body'] }
+    end
+  end
+
   def comment_bodies(step)
     comments = step.diff.associations['comments']
     return [] unless comments
@@ -141,6 +150,29 @@ RSpec.describe PaperTrailDiff::ActivityTimelineBuilder do
       expect(bodies(steps.last.to_snapshot)).to eq(['one'])
       expect(kinds(result.activity_timeline)).to eq(kinds(steps))
       expect(bodies(result.to_snapshot)).to eq(['one'])
+    end
+
+    # The other edge: a range starting at a version starts before its
+    # transaction, so a comment that left the article earlier in it leaves in
+    # the first step, not in the next one that reads the comments.
+    it 'starts before a comment that left in the transaction of its first version' do
+      article = TrackedArticle.create!(title: 'Article')
+      other = TrackedArticle.create!(title: 'Other')
+      moved, destroyed = %w[moved destroyed].map { |body| article.comments.create!(body: body) }
+      from = TrackedArticle.transaction do
+        moved.update!(article: other)
+        destroyed.destroy!
+        article.update!(title: 'Renamed')
+        version_of(article)
+      end
+      article.comments.create!(body: 'added')
+      to = checkpoint(article)
+
+      steps = timeline(article, from: from, to: to, group: :transaction, snapshots: true)
+
+      expect(steps.map { |step| membership(step) })
+        .to eq([[[], %w[moved destroyed]], [['added'], []]])
+      expect(bodies(steps.first.to_snapshot)).to eq([])
     end
 
     it 'does not add a removal when the range does not end on a destroy' do

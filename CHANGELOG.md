@@ -155,6 +155,14 @@ project follows [Semantic Versioning](https://semver.org/).
   raised `TypeError` there, and a String offset made the association one that
   only `allow_approximate: true` reads.
 
+- Activity from a version reports a record that left one of the requested
+  associations earlier in that version's transaction, such as a comment
+  moved to another article or destroyed just before the article's version
+  was saved. The range starts from the state before the transaction, which
+  holds the record, but the record's own versions were not read, so its
+  removal was left out, or reported in the next step that read the
+  association again, under that step's transaction and author.
+
 - Activity on a `has_many :through` leaves out the versions a join record
   saved while it joined another record, judged by transaction as any record
   is: by whether it joined the owner before the transaction or after it. A
