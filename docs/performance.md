@@ -107,7 +107,7 @@ queries. `max_filter_versions:` (10,000 by default) caps the versions it loads.
 Either way, every version of every candidate in the window is decoded: with
 1,000 candidates and no match, a hash and a callable each took about 0.8 s.
 Finding the relation's records among the candidates takes up to two queries
-per 250 of them.
+per 500 of them.
 
 ## Large reports
 

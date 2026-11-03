@@ -26,9 +26,9 @@ module PaperTrailDiff
   # window. `where(status: 'published')` selects what is published now, which is
   # not the same set as what was published while the window was open.
   class ScopedRootSelection
-    PAGE_SIZE = 250
-    LISTED_PAGE_SIZE = 2_000
-    private_constant :PAGE_SIZE, :LISTED_PAGE_SIZE
+    MIN_PAGE_SIZE = 250
+    MAX_PAGE_SIZE = 2_000
+    private_constant :MIN_PAGE_SIZE, :MAX_PAGE_SIZE
 
     # A plain class rather than Data.define, which arrived in Ruby 3.2 while this
     # gem supports 3.1.
@@ -127,20 +127,8 @@ module PaperTrailDiff
         live = filter.call(relation_members(live))
         missing = filter.call(missing, counted: false)
       end
-      Result.new(records: listed_records(live),
+      Result.new(records: selected_records([live]),
                  unreachable: missing.sort.map { |id| identity(id) }.freeze)
-    end
-
-    # Every page repeats the ids the relation is read among, so pages as long
-    # as the list read it fewer times than pages of 250. A page holds at most
-    # 2,000 records: SQL Server compiles a statement with its ids written in,
-    # and one that listed 20,000 and returned them all outlasted the adapter's
-    # default timeout of 5 seconds. More roots than `limit:` raise however
-    # long the list, so a page never needs more than one past it.
-    #: (Array[String]) -> Array[untyped]
-    def listed_records(ids)
-      page_size = [ids.length, @limit + 1].min
-      selected_records([ids], page_size: page_size.clamp(PAGE_SIZE, LISTED_PAGE_SIZE))
     end
 
     # The candidates the relation's conditions accept. A grouped relation's
@@ -226,7 +214,7 @@ module PaperTrailDiff
 
     #: (untyped, Array[String]) -> Array[String]
     def ids_in(relation, candidates)
-      candidates.each_slice(PAGE_SIZE).flat_map do |slice|
+      candidates.each_slice(Support::IDS_PER_STATEMENT).flat_map do |slice|
         relation.where(primary_key => slice).pluck(primary_key).map(&:to_s)
       end
     end
@@ -236,13 +224,13 @@ module PaperTrailDiff
     # Read bounded pages until the relation ends or too many unique roots appear.
     # Each candidate source is an id list or a subquery; a record matching any
     # of them is selected.
-    #: (Array[untyped], ?page_size: Integer) -> Array[untyped]
-    def selected_records(candidates, page_size: PAGE_SIZE)
+    #: (Array[untyped]) -> Array[untyped]
+    def selected_records(candidates)
       relation = candidate_relation(candidates)
       records = {} #: Hash[untyped, untyped]
       consumed = 0
       loop do
-        page = record_page(relation, consumed, page_size)
+        page = record_page(relation, consumed)
         page.each { |record| records[record.id] ||= record }
         reject_oversized!(records.length)
         break if page.length < page_size
@@ -261,18 +249,31 @@ module PaperTrailDiff
       end.reduce(:or)
     end
 
-    #: (untyped, Integer, Integer) -> Array[untyped]
-    def record_page(relation, consumed, page_size)
-      count = page_limit(consumed, page_size)
+    #: (untyped, Integer) -> Array[untyped]
+    def record_page(relation, consumed)
+      count = page_limit(consumed)
       return [] if count.zero?
 
       relation.offset(Support.offset(@scope) + consumed).limit(count)
     end
 
-    #: (Integer, Integer) -> Integer
-    def page_limit(consumed, page_size)
+    #: (Integer) -> Integer
+    def page_limit(consumed)
       remaining = Support.limit(@scope)
       [remaining ? remaining - consumed : page_size, page_size].min
+    end
+
+    # Every page repeats the candidates, a list of ids or the subqueries that
+    # find them, and skips the rows read before it, so pages much smaller than
+    # the selection read the candidates many times over. More roots than
+    # `limit:` raise, so a page never needs more than one past it. A page
+    # holds at least 250 rows, for a relation whose joins repeat a record,
+    # and at most 2,000: SQL Server compiles a statement with its ids written
+    # in, and one that listed 20,000 and returned them all outlasted the
+    # adapter's default timeout of 5 seconds.
+    #: () -> Integer
+    def page_size
+      (@limit + 1).clamp(MIN_PAGE_SIZE, MAX_PAGE_SIZE)
     end
 
     #: (Integer) -> void
