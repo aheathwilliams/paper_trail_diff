@@ -114,6 +114,7 @@ module PaperTrailDiff
     #: (versions: Array[untyped], live: PreparedRecordState?, ?state_loader: PreparedVersionStateLoader) -> void
     def initialize(versions:, live:, state_loader: PreparedVersionStateLoader.new)
       @versions = Support.chronological_sort(versions).freeze
+      @times = @versions.map(&:created_at).freeze
       @version_positions = @versions.each_with_index.to_h do |version, index|
         [version.id.to_s, index]
       end.freeze
@@ -202,6 +203,7 @@ module PaperTrailDiff
 
     private
 
+    # @rbs @times: Array[untyped]
     # @rbs @live: PreparedRecordState?
     # @rbs @state_loader: PreparedVersionStateLoader
     # @rbs @states: Hash[untyped, PreparedRecordState?]
@@ -222,11 +224,14 @@ module PaperTrailDiff
     # "At or after" is decided by the version order rather than the timestamp
     # alone. A version written in the same instant as the boundary but before
     # it already took effect there; reading its pre-change state would put the
-    # boundary on the wrong side of a change it follows.
+    # boundary on the wrong side of a change it follows. Each time is read
+    # once, since every record is placed against every boundary.
     #: (untyped) -> Integer?
     def boundary_index(boundary)
-      chronological = versions.bsearch_index do |candidate|
-        VersionBoundary.at_or_after?(candidate, boundary)
+      boundary_time = boundary.created_at
+      chronological = (0...versions.length).bsearch do |index|
+        VersionBoundary.at_or_after?(versions.fetch(index), boundary,
+                                     time: @times.fetch(index), boundary_time: boundary_time)
       end
       transactional = transaction_index(boundary)
       return chronological unless transactional

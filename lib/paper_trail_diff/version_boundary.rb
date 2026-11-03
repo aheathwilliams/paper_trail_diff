@@ -12,10 +12,12 @@ module PaperTrailDiff
     # sequential ids in one version table; any other tie cannot be ordered, and
     # guessing would place a change on an arbitrary side of the boundary. A
     # bare instant has no position among same-time versions, so it keeps them.
-    #: (untyped, untyped) -> bool
-    def self.at_or_after?(candidate, boundary)
-      tied = candidate.created_at == boundary.created_at
-      return candidate.created_at > boundary.created_at unless tied
+    # `time` and `boundary_time` are when each was recorded, which a caller
+    # placing many versions against one boundary reads once.
+    #: (untyped, untyped, ?time: untyped, ?boundary_time: untyped) -> bool
+    def self.at_or_after?(candidate, boundary, time: candidate.created_at,
+                          boundary_time: boundary.created_at)
+      return time > boundary_time unless time == boundary_time
       return true unless version_record?(boundary)
       return true if same_version?(candidate, boundary)
 

@@ -36,6 +36,24 @@ RSpec.describe PaperTrailDiff::PreparedRecordIndex do
       .to eq(['read:Before', 'read:After'])
   end
 
+  # Every record is placed against every boundary, so its versions' times
+  # are read once, when its series is built.
+  it "places a record against boundaries without reading its versions' times again" do
+    author = TrackedAuthor.create!(name: 'First')
+    2.times { |index| author.update!(name: "Name #{index}") }
+    versions = author.versions.reorder(:id).to_a
+    series = PaperTrailDiff::PreparedRecordSeries.new(versions: versions, live: nil)
+    times = versions.map(&:created_at)
+    versions.each { |version| allow(version).to receive(:created_at).and_raise('read again') }
+    instants = [times.fetch(0) + ((times.fetch(1) - times.fetch(0)) / 2),
+                times.fetch(1) + ((times.fetch(2) - times.fetch(1)) / 2)]
+
+    names = instants.map { |time| series.state_before(Struct.new(:created_at).new(time)) }
+                    .map { |state| state.attributes.fetch('name') }
+
+    expect(names).to eq(['First', 'Name 0'])
+  end
+
   it 'uses the first future pre-change state and then the live fallback' do
     article = TrackedArticle.create!(title: 'Temporal index')
     author = TrackedAuthor.create!(name: 'Before')

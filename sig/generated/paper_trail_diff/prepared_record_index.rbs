@@ -105,6 +105,8 @@ module PaperTrailDiff
 
     @states: Hash[untyped, PreparedRecordState?]
 
+    @times: Array[untyped]
+
     @transaction_positions: Hash[untyped, Integer]
 
     @version_positions: Hash[String, Integer]
@@ -120,7 +122,8 @@ module PaperTrailDiff
     # "At or after" is decided by the version order rather than the timestamp
     # alone. A version written in the same instant as the boundary but before
     # it already took effect there; reading its pre-change state would put the
-    # boundary on the wrong side of a change it follows.
+    # boundary on the wrong side of a change it follows. Each time is read
+    # once, since every record is placed against every boundary.
     # : (untyped) -> Integer?
     def boundary_index: (untyped) -> Integer?
 
