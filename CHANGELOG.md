@@ -82,6 +82,17 @@ project follows [Semantic Versioning](https://semver.org/).
   `analyze_many` of 3,000 authors with their articles and the comments
   through them, but the total grew with the square of the batch.
 
+- Snapshots of a record with its associations do less work at each version
+  of the record, with the same results. Each member's version times and its
+  scope's condition are read once rather than at every version, a member
+  that did not change is normalized once, and a snapshot that starts from
+  the current record reads its associations from prepared history, as one
+  that starts from a version does, rather than building each member as an
+  Active Record record. A `timeline` of an article with 2,001 versions and
+  300 comments took 14.9 s and now takes 7.5 s, and an `analyze_scope` with
+  activity over a day's changes to 373 articles, with their comments,
+  replies, reviewers, and authors, took 4.3 s and now takes 3.9 s.
+
 - With `recorded_changes: true`, a boundary decodes its version's changes the
   first time its `recorded_changes` is read, and each version is decoded once
   for the whole call. Every boundary decoded its version when it was built,

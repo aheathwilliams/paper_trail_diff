@@ -20,6 +20,15 @@ module PaperTrailDiff
       build(state, boundary, tree, normalizer, history, path: '')
     end
 
+    # The current row of a root, with its associations as `boundary` reads
+    # them. Its attributes are the record's own, as the record path
+    # normalizes them, so its model need not be plain; its members are read
+    # as a version's are.
+    #: (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer, history: PreparedHistory?) -> [bool, RecordSnapshot?]
+    def live(record, boundary, tree:, normalizer:, history:)
+      build(PreparedRecordState.new(record), boundary, tree, normalizer, history, path: '')
+    end
+
     private
 
     # @rbs @traversal: AssociationTraversal

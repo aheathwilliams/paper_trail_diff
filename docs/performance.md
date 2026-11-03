@@ -52,11 +52,12 @@ Flat query counts do not make a report's cost flat:
   article. `limit:` is a safety ceiling, not a page size, so to bound memory,
   page with the relation (`Article.where(...).order(:id).limit(200)`), or
   report on shorter windows.
-- **A wide collection in an activity timeline grows with its size times its
-  changes.** Each step copies the collection's list of records, so an
-  activity timeline over `n` comments that changed `m` times does about
-  `n × m` work: 800 comments edited 1,000 times took about 3 s. `timeline`, which has a step per
-  version of the root rather than per change, does less.
+- **Work on a wide collection grows with its size times its history.** Each
+  step of an activity timeline copies the collection's list of records, so
+  an activity timeline over `n` comments that changed `m` times does about
+  `n × m` work: 800 comments edited 1,000 times took about 3 s. `timeline`
+  reads every member at each version of the root instead: 300 comments over
+  2,001 versions of their article took about 7.5 s.
 - **`snapshots: true` and `recorded_changes: true` cost memory and time.** Ask
   for them only when you use them.
 - **Each edge of a window takes one or two statements per 500 records.** A
@@ -136,8 +137,9 @@ backwards cannot reorder the versions they seed. Compare counts as well as
 times, and run the correctness suites separately; no CI job checks timings.
 
 The query counts in the first table were measured on 2026-11-02, after
-history and activity began reading each owner's children once; the other
-numbers on 2026-10-30 at revision `6c3d30b`. Both used Ruby
+history and activity began reading each owner's children once, and the
+`timeline` of 300 comments on 2026-11-03; the other numbers on 2026-10-30
+at revision `6c3d30b`. Both used Ruby
 4.0.1, Active Record 8.1.3.1, PaperTrail 17.0.0, and SQLite 3.53.2, on WSL2
 on an AMD Ryzen 7 7800X3D. The memory, wide-collection, and index figures come
 from one-off scripts rather than these two. The benchmark's raw samples are in

@@ -172,10 +172,17 @@ module PaperTrailDiff
                                          habtm_version: root_version, history: history)
     end
 
+    # Read from prepared history where it can be, as a version is, without
+    # instantiating the root's members.
     #: (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer, history: PreparedHistory?) -> RecordSnapshot?
     def snapshot_from_live_root(root_record, context_version, tree:, normalizer:, history:)
       record = live_root(root_record)
       @preparer.call(record.class, historical: true)
+      handled, snapshot = @prepared_snapshotter.live(
+        record, context_version, tree: tree, normalizer: normalizer, history: history
+      )
+      return snapshot if handled
+
       normalize(record, context_version, tree: tree, normalizer: normalizer,
                                          habtm_version: context_version, history: history)
     end
