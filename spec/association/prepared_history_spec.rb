@@ -260,8 +260,6 @@ RSpec.describe PaperTrailDiff::PreparedHistory do
       instance_double(PaperTrailDiff::PreparedRecordIndex),
       []
     )
-    expect(loader.send(:group_ids_by_owner, [[10, 1], [10, 1], [10, 2]]))
-      .to eq('10' => [1, 2])
     expect(loader.send(:group_for, TrackedComment, [], owners: {})).to eq({})
   end
 end

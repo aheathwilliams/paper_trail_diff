@@ -11,14 +11,18 @@ module PaperTrailDiff
   # and the snapshots read it from there. ActivityTreeFilter leaves out the
   # events of a candidate that was outside the tree throughout.
   class PreparedActivityIndex
+    # The children the history's owners had, which its edge loader reads
+    # first for most of them.
+    attr_reader :children #: PreparedChildCandidates
+
     #: (PreparedRecordIndex, Array[untyped], start_at: untyped) -> void
     def initialize(records, root_versions, start_at:)
       @records = records
       @start_at = start_at
+      @children = PreparedChildCandidates.new(start_at)
       @roots = root_versions.group_by { |version| Endpoint.identity(version) }
       @nodes = {} #: Hash[String, Array[untyped]]
       # Rows are cached by reflection, which a subclass shares with its base.
-      @children = {} #: Hash[untyped, untyped]
       @targets = {} #: Hash[untyped, untyped]
       @rows = {} #: Hash[untyped, Hash[String, Array[untyped]]]
       @conditions = ScopeCondition::Cache.new
@@ -79,7 +83,9 @@ module PaperTrailDiff
 
     #: (untyped, Array[untyped], untyped, ActivityRange) -> Array[untyped]
     def child_ids(model, ids, reflection, range)
-      historical, live = @children[reflection] ||= child_rows(model, reflection)
+      # An owner the edges did not read is read with every other one this
+      # history holds, so that the next needs nothing more.
+      historical, live = @children.call(model, ids, reflection) { node_ids(model) }
       empty = [] #: Array[untyped]
       selected = historical_ids(reflection.klass, ids, historical, range)
       selected | ids.flat_map { |id| live.fetch(id.to_s, empty) }
@@ -113,7 +119,6 @@ module PaperTrailDiff
     # @rbs @start_at: untyped
     # @rbs @roots: Hash[Array[String], Array[untyped]]
     # @rbs @nodes: Hash[String, Array[untyped]]
-    # @rbs @children: Hash[untyped, untyped]
     # @rbs @targets: Hash[untyped, untyped]
     # @rbs @rows: Hash[untyped, Hash[String, Array[untyped]]]
     # @rbs @conditions: ScopeCondition::Cache
@@ -178,14 +183,6 @@ module PaperTrailDiff
               "prepared activity graph is missing #{name}; " \
               'register the model before collecting activity'
       end
-    end
-
-    #: (untyped, untyped) -> untyped
-    def child_rows(model, reflection)
-      loader = ActivityChildCandidateLoader.new(model, node_ids(model), reflection, @start_at)
-      [loader.historical_rows.group_by { |row| row.first.to_s },
-       loader.current_pairs.group_by { |row| row.first.to_s }
-             .transform_values { |rows| rows.map(&:last) }]
     end
 
     #: (Hash[String, Array[ActivityTargetCandidateLoader::Row]], Array[untyped]) -> Array[ActivityTargetCandidateLoader::Row]

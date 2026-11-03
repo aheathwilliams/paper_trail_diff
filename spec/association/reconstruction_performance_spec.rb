@@ -181,6 +181,22 @@ RSpec.describe 'bounded event reconstruction' do
 
   # A transaction's changes are read again as a branch of the snapshot that
   # starts from the current record; each such snapshot copies one read of it.
+  # Preparation reads them for its edges, and activity then reads the same
+  # rows to find its events. The patterns pass any adapter's quoting.
+  it "reads the owners' children once for preparation and activity alike" do
+    3.times { seed }
+    sqls = []
+    callback = ->(*args) { sqls << args.last[:sql] }
+    ActiveSupport::Notifications.subscribed(callback, 'sql.active_record') do
+      PaperTrailDiff.analyze_many(TrackedArticle.all.to_a,
+                                  within: (Time.now.utc - 3600)..Time.now.utc,
+                                  associations: [:comments], activity: true)
+    end
+
+    expect(sqls.grep(/version_associations/).length).to eq(1)
+    expect(sqls.grep(/tracked_comments\W*\.\W*article_id\W*,/).length).to eq(1)
+  end
+
   it 'reads the current root once however many snapshots start from it' do
     expect(root_reads(4)).to eq(root_reads(1))
   end

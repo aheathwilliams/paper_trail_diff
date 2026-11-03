@@ -3,8 +3,10 @@
 module PaperTrailDiff
   # Loads every historical identity that can participate in one association edge.
   class PreparedEdgeLoader
-    # : (PreparedRecordIndex, Array[untyped], ?start_at: untyped) -> void
-    def initialize: (PreparedRecordIndex, Array[untyped], ?start_at: untyped) -> void
+    # A history shares `children` with its activity index, which reads the
+    # children this finds again.
+    # : (PreparedRecordIndex, Array[untyped], ?start_at: untyped, ?children: PreparedChildCandidates) -> void
+    def initialize: (PreparedRecordIndex, Array[untyped], ?start_at: untyped, ?children: PreparedChildCandidates) -> void
 
     # HABTM alone also returns each root transaction's members.
     # : (untyped, Array[untyped], untyped) -> [Hash[String, Hash[Symbol, untyped]], Hash[String, Array[untyped]]?]
@@ -12,15 +14,16 @@ module PaperTrailDiff
 
     private
 
-    @records: PreparedRecordIndex
+    @children: PreparedChildCandidates
 
-    @start_at: untyped
+    @records: PreparedRecordIndex
 
     @transaction_ids: Array[untyped]
 
     # : (untyped, Array[untyped], untyped) -> Hash[String, Hash[Symbol, untyped]]
     def belongs_to_groups: (untyped, Array[untyped], untyped) -> Hash[String, Hash[Symbol, untyped]]
 
+    # Each owner's children, recorded or live, each once.
     # : (untyped, Array[untyped], untyped) -> Hash[String, Hash[Symbol, untyped]]
     def child_groups: (untyped, Array[untyped], untyped) -> Hash[String, Hash[Symbol, untyped]]
 
@@ -40,12 +43,5 @@ module PaperTrailDiff
 
     # : (untyped, Array[untyped], ?owners: Hash[String, Array[untyped]]?) -> Hash[String, Hash[Symbol, untyped]]
     def group_for: (untyped, Array[untyped], ?owners: Hash[String, Array[untyped]]?) -> Hash[String, Hash[Symbol, untyped]]
-
-    # A set rather than a scan, so that a wide edge stays linear in its width.
-    # : (Array[Array[untyped]]) -> Hash[String, Array[untyped]]
-    def group_ids_by_owner: (Array[Array[untyped]]) -> Hash[String, Array[untyped]]
-
-    # : (Hash[String, Array[untyped]], Hash[String, Array[untyped]]) -> Hash[String, Array[untyped]]
-    def merge_owners: (Hash[String, Array[untyped]], Hash[String, Array[untyped]]) -> Hash[String, Array[untyped]]
   end
 end

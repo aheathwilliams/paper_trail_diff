@@ -4,11 +4,14 @@
 module PaperTrailDiff
   # Loads every historical identity that can participate in one association edge.
   class PreparedEdgeLoader
-    #: (PreparedRecordIndex, Array[untyped], ?start_at: untyped) -> void
-    def initialize(records, root_versions, start_at: root_versions.first&.created_at)
+    # A history shares `children` with its activity index, which reads the
+    # children this finds again.
+    #: (PreparedRecordIndex, Array[untyped], ?start_at: untyped, ?children: PreparedChildCandidates) -> void
+    def initialize(records, root_versions, start_at: root_versions.first&.created_at,
+                   children: PreparedChildCandidates.new(start_at))
       @records = records
       @transaction_ids = root_versions.filter_map(&:transaction_id)
-      @start_at = start_at
+      @children = children
     end
 
     # HABTM alone also returns each root transaction's members.
@@ -25,7 +28,7 @@ module PaperTrailDiff
 
     # @rbs @records: PreparedRecordIndex
     # @rbs @transaction_ids: Array[untyped]
-    # @rbs @start_at: untyped
+    # @rbs @children: PreparedChildCandidates
 
     #: (untyped, Array[untyped], untyped) -> Hash[String, Hash[Symbol, untyped]]
     def belongs_to_groups(owner_class, owner_ids, reflection)
@@ -48,11 +51,15 @@ module PaperTrailDiff
       grouped
     end
 
+    # Each owner's children, recorded or live, each once.
     #: (untyped, Array[untyped], untyped) -> Hash[String, Hash[Symbol, untyped]]
     def child_groups(owner_class, owner_ids, reflection)
-      loader = ActivityChildCandidateLoader.new(owner_class, owner_ids, reflection, @start_at)
-      owners = merge_owners(group_ids_by_owner(loader.historical_rows),
-                            group_ids_by_owner(loader.current_pairs))
+      historical, live = @children.call(owner_class, owner_ids, reflection)
+      empty = [] #: Array[untyped]
+      owners = owner_ids.to_h do |id|
+        key = id.to_s
+        [key, historical.fetch(key, empty).map { |row| row.fetch(1) } | live.fetch(key, empty)]
+      end
       group_for(reflection.klass, owners.values.flatten, owners: owners)
     end
 
@@ -97,19 +104,6 @@ module PaperTrailDiff
       group = { model: model_class, ids: unique } #: Hash[Symbol, untyped]
       group[:owners] = owners if owners
       { model_class.name => group }
-    end
-
-    # A set rather than a scan, so that a wide edge stays linear in its width.
-    #: (Array[Array[untyped]]) -> Hash[String, Array[untyped]]
-    def group_ids_by_owner(pairs)
-      grouped = {} #: Hash[String, Set[untyped]]
-      pairs.each { |owner_id, child_id| (grouped[owner_id.to_s] ||= Set.new) << child_id }
-      grouped.transform_values(&:to_a)
-    end
-
-    #: (Hash[String, Array[untyped]], Hash[String, Array[untyped]]) -> Hash[String, Array[untyped]]
-    def merge_owners(left, right)
-      left.merge(right) { |_owner, first, second| first | second }
     end
   end
 end

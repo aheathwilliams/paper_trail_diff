@@ -34,7 +34,7 @@ module PaperTrailDiff
       @activity = PreparedActivityIndex.new(@records, root_versions, start_at: start_at)
       @history = PreparedHistory.new(@records, activity_index: @activity,
                                                opening_transactions: opening)
-      @edges = PreparedEdgeLoader.new(@records, root_versions, start_at: start_at)
+      @edges = PreparedEdgeLoader.new(@records, root_versions, children: @activity.children)
       @prepared = {} #: Hash[untyped, Array[String]]
     end
 
