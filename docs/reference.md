@@ -1540,7 +1540,10 @@ Results can only be as complete as the history PaperTrail and PT-AT recorded.
   the records it passes to a callable `historical_filter:`, but your own
   calls to those PaperTrail methods still return `nil`. PaperTrail's JSON
   serializer, and SQL Server, whose adapter stores a time its own way, are
-  not affected.
+  not affected. Snapshots and diffs show every time of day on 2000-01-01 in
+  its own zone, as Active Record 8.1 reads one. Active Record before 8.1
+  reads a zone-aware time from the database on 2000-01-01 in UTC, so
+  `record.opens_at` can show another date than the snapshot of that time.
 - Each call reads its history and live rows in one snapshot on PostgreSQL and
   MySQL (through mysql2 or trilogy), and on adapters built on them such as
   PostGIS, so a commit that lands during the call is seen by none of its
