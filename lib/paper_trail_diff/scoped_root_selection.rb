@@ -120,7 +120,7 @@ module PaperTrailDiff
       live = ids_in(base_class.unscoped, candidates)
       missing = candidates - live
       if (filter = @historical_filter)
-        live = filter.call(ids_in(@scope.except(:order, :limit, :offset), live).uniq)
+        live = filter.call(relation_members(live))
         missing = filter.call(missing, counted: false)
       end
       Result.new(records: listed_records(live),
@@ -134,6 +134,17 @@ module PaperTrailDiff
     #: (Array[String]) -> Array[untyped]
     def listed_records(ids)
       selected_records([ids], page_size: ids.length.clamp(PAGE_SIZE, [@limit + 1, PAGE_SIZE].max))
+    end
+
+    # The candidates the relation's conditions accept. A grouped relation's
+    # rows are groups, which a condition on one record cannot decide, and its
+    # aggregates read every candidate at once, so it keeps them all: the
+    # filter reads each, and the relation groups those that match.
+    #: (Array[String]) -> Array[String]
+    def relation_members(ids)
+      return ids unless @scope.group_values.empty?
+
+      ids_in(@scope.except(:order, :limit, :offset), ids).uniq
     end
 
     # Comparing the two columns in SQL needs them to share a type: PostgreSQL
@@ -272,11 +283,6 @@ module PaperTrailDiff
     #: (String) -> Array[String]
     def identity(id)
       Support.record_identity(model, id).freeze
-    end
-
-    #: () -> String
-    def item_type
-      base_class.name
     end
 
     # A relation delegates class methods to its model, so every mutation here,

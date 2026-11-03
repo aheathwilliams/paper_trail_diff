@@ -90,6 +90,13 @@ module PaperTrailDiff
     # : (Array[String]) -> Array[untyped]
     def listed_records: (Array[String]) -> Array[untyped]
 
+    # The candidates the relation's conditions accept. A grouped relation's
+    # rows are groups, which a condition on one record cannot decide, and its
+    # aggregates read every candidate at once, so it keeps them all: the
+    # filter reads each, and the relation groups those that match.
+    # : (Array[String]) -> Array[String]
+    def relation_members: (Array[String]) -> Array[String]
+
     # Comparing the two columns in SQL needs them to share a type: PostgreSQL
     # rejects an integer key against a string item_id outright. A composite
     # key names no single attribute, so it has no type and never matches.
@@ -158,9 +165,6 @@ module PaperTrailDiff
     # Keyed as Endpoint.identity keys the record, which the analyses use.
     # : (String) -> Array[String]
     def identity: (String) -> Array[String]
-
-    # : () -> String
-    def item_type: () -> String
 
     # A relation delegates class methods to its model, so every mutation here,
     # which drops `.model`, answers the same.

@@ -139,6 +139,14 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- With `historical_filter:`, `analyze_scope` and `report` accept a relation
+  grouped by anything but the ID, such as each author's latest article
+  (`select("MAX(id) AS id").group(:author_id)`), and select the records it
+  groups among those that match. Before filtering, they asked the relation
+  for the IDs among each 250 candidates, which reads a group's column
+  instead of its aggregate: PostgreSQL, MySQL, and SQL Server rejected the
+  query, and SQLite returned any record of each group.
+
 - History stored as JSON no longer reports two kinds of value as changed in
   every comparison with the current record, though nothing changed them. A
   `json` or `jsonb` `object` column stores a `serialize`d attribute as JSON

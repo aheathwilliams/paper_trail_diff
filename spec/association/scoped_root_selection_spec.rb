@@ -372,6 +372,21 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
       expect([empty.records, empty.unreachable]).to eq([[], []])
     end
 
+    # Each author's latest article among those that were drafts: the
+    # relation groups the records that match, not the candidates.
+    it 'groups the records that match under a grouped relation' do
+      start = Time.now.utc
+      ann, bea = %w[Ann Bea].map { |name| TrackedAuthor.create!(name: name) }
+      ann_draft, = [['Draft', ann], ['Other', ann], ['Draft', bea], ['Draft', bea]]
+                   .map { |title, author| TrackedArticle.create!(title: title, author: author) }
+      latest = TrackedArticle.select('MAX(tracked_articles.id) AS id').group(:author_id)
+                             .order(:author_id)
+
+      result = select(latest, time_range: since(start), historical_filter: { 'title' => 'Draft' })
+
+      expect(result.records.map(&:id)).to eq([ann_draft.id, TrackedArticle.maximum(:id)])
+    end
+
     it 'reads states from the window only' do
       article = TrackedArticle.create!(title: 'Old')
       article.update!(title: 'Draft')
