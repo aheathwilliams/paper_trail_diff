@@ -126,6 +126,21 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
       expect(select(model, time_range: since(start)).records).to eq([live])
     end
 
+    # Such a transaction moves the root's window back to take its version in
+    # (see TransactionCut).
+    it 'selects a root saved before the window in a transaction that saved its paths inside it' do
+      root, other = %w[Root Other].map { |title| model.create!(title: title) }
+      start = model.transaction do
+        root.update!(title: 'Root edited')
+        Time.now.utc.tap { other.update!(title: 'Other edited') }
+      end
+      paths = instance_double(PaperTrailDiff::AssociationTraversal)
+      allow(paths).to receive(:path_types).with(model).and_return([model.name])
+
+      expect(select(model, time_range: since(start), traversal: paths).records).to eq([root, other])
+      expect(select(model, time_range: since(start)).records).to eq([other])
+    end
+
     it 'selects nothing from an empty window' do
       model.create!(title: 'Before')
 

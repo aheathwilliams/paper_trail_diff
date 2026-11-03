@@ -6,12 +6,15 @@ module PaperTrailDiff
   # versions and preparing their association history once for the whole batch
   # rather than once per root.
   class AnalysisBatch
-    #: (Array[untyped], time_range: TimeRange?, live_loader: untyped, history_preparer: untyped, analyzer: untyped, version_scope: untyped, context_required: bool) -> void
+    # `traversal` names the requested paths, which decide where a window's
+    # edges move (see TransactionCut).
+    #: (Array[untyped], time_range: TimeRange?, live_loader: untyped, history_preparer: untyped, analyzer: untyped, version_scope: untyped, context_required: bool, traversal: AssociationTraversal?) -> void
     def initialize( # rubocop:disable Metrics/ParameterLists
       records, time_range:, live_loader:, history_preparer:, analyzer:, version_scope:,
-      context_required:
+      context_required:, traversal:
     )
       @records = records
+      @traversal = traversal
       @context_required = context_required
       @time_range = time_range
       # Checked up front rather than failing partway through a batch.
@@ -25,7 +28,7 @@ module PaperTrailDiff
     def call
       records = validated_records
       loaded = @live_loader.call(records)
-      windows = TransactionCut.batch_windows(records, @time_range)
+      windows = TransactionCut.batch_windows(records, @time_range, traversal: @traversal)
       # Activity on associations both takes a context and replays whole plans.
       plans = BatchedRootVersions.new(
         records, time_range: @time_range, version_scope: @version_scope,
@@ -41,6 +44,7 @@ module PaperTrailDiff
     private
 
     # @rbs @records: Array[untyped]
+    # @rbs @traversal: AssociationTraversal?
     # @rbs @time_range: TimeRange?
     # @rbs @version_scope: untyped
     # @rbs @context_required: bool

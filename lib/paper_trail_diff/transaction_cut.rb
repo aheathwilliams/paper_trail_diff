@@ -15,14 +15,27 @@ module PaperTrailDiff
   # Only the root's own versions on either side of an edge are consulted:
   # rows locked by an update keep two transactions of one root from
   # interleaving, so a transaction holding a root version and crossing the edge
-  # holds the root's nearest version on one side of it. Each edge is moved from
-  # where it was asked for, never from where another edge moved, so adjacent
-  # windows move their shared edge alike.
+  # holds the root's nearest version on one side of it. One that saved the root
+  # after the edge moves it. One that saved the root only before the edge moves
+  # it only when it saved a record of a type on the requested paths after it,
+  # which the root's history reads: without one, the root's change is in the
+  # earlier window, where its version is, as selecting by a window's versions
+  # finds it, and ScopedRootSelection selects the roots such a move brings into
+  # a window. Each edge is moved from where it was asked for, never from where
+  # another edge moved, so adjacent windows move their shared edge alike.
   module TransactionCut # rubocop:disable Metrics/ModuleLength
     # One edge of a window. A strict edge keeps versions recorded at its
     # instant on the left, as an inclusive end does. A plain class rather than
     # Data.define, which arrived in Ruby 3.2 while this gem supports 3.1.
     class Edge
+      # A window's start, which keeps versions recorded at it on the right.
+      #: (TimeRange) -> Edge
+      def self.start_of(range) = new(range.begin_time, false)
+
+      # A window's end, strict when the window includes it.
+      #: (TimeRange) -> Edge
+      def self.end_of(range) = new(range.end_time, !range.exclude_end?)
+
       #: (Time, bool) -> void
       def initialize(time, strict)
         @time = time
@@ -45,14 +58,14 @@ module PaperTrailDiff
     end
 
     # The same as `windows` for a batch of roots, keyed by identity.
-    #: (Array[untyped], TimeRange?) -> Hash[Array[String], TimeRange]
-    def self.batch_windows(records, range)
+    #: (Array[untyped], TimeRange?, ?traversal: AssociationTraversal?) -> Hash[Array[String], TimeRange]
+    def self.batch_windows(records, range, traversal: nil)
       return {} unless range
 
       moved = {} #: Hash[Array[String], TimeRange]
       records.group_by(&:class).each_with_object(moved) do |(model_class, group), by_identity|
         identities = group.to_h { |record| [record.id.to_s, Endpoint.identity(record)] }
-        windows(model_class, group, range).each do |id, window|
+        windows(model_class, group, range, traversal: traversal).each do |id, window|
           by_identity[identities.fetch(id)] = window
         end
       end
@@ -67,14 +80,15 @@ module PaperTrailDiff
     end
 
     # The windows that move, keyed by root id. A root missing from the result
-    # keeps the window as asked.
-    #: (untyped, Array[untyped], TimeRange) -> Hash[String, TimeRange]
-    def self.windows(model_class, records, range)
+    # keeps the window as asked. `traversal` names the requested paths.
+    #: (untyped, Array[untyped], TimeRange, ?traversal: AssociationTraversal?) -> Hash[String, TimeRange]
+    def self.windows(model_class, records, range, traversal: nil)
       versions = transaction_versions(model_class)
       return {} unless versions
 
-      starts = moved_edges(versions, records, Edge.new(range.begin_time, false))
-      ends = moved_edges(versions, records, Edge.new(range.end_time, !range.exclude_end?))
+      types = traversal&.path_types(model_class) || []
+      starts = moved_edges(versions, records, Edge.start_of(range), types)
+      ends = moved_edges(versions, records, Edge.end_of(range), types)
       (starts.keys | ends.keys).to_h do |id|
         [id, moved_window(model_class, id, range, starts[id], ends[id])]
       end
@@ -96,59 +110,138 @@ module PaperTrailDiff
     end
     private_class_method :moved_window
 
+    # The model's versions in a window, and those saved before it in a
+    # transaction that saved a record of one of `types` inside it, which
+    # moves their root's window back to take them in: the versions that
+    # select a root for the window. Without a window, every version does.
+    #: (untyped, TimeRange?, Array[String]) -> untyped
+    def self.window_versions(model_class, range, types)
+      versions = VersionQuery.for_model(model_class)
+      return versions unless range
+
+      inside = range.scope(versions)
+      version_class = model_class.paper_trail.version_class
+      return inside if types.empty? || !transactional?(version_class)
+
+      inside.or(crossing_versions(versions, version_class, range, types))
+    end
+
+    #: (untyped, untyped, TimeRange, Array[String]) -> untyped
+    def self.crossing_versions(versions, version_class, range, types)
+      transactions = range.scope(version_class.where(item_type: types)).select(:transaction_id)
+      versions.where(version_class.arel_table[:created_at].lt(range.begin_time))
+              .where(transaction_id: transactions)
+    end
+    private_class_method :crossing_versions
+
     #: (untyped) -> untyped
     def self.transaction_versions(model_class)
-      return unless model_class.paper_trail.version_class.column_names.include?('transaction_id')
-
-      VersionQuery.for_model(model_class)
+      VersionQuery.for_model(model_class) if transactional?(model_class.paper_trail.version_class)
     end
     private_class_method :transaction_versions
 
-    # Each root's earliest start among its transactions that cross the edge.
-    #: (untyped, Array[untyped], Edge) -> Hash[String, Time]
-    def self.moved_edges(versions, records, edge)
-      roots = nearest_roots(versions, records, edge)
+    #: (untyped) -> bool
+    def self.transactional?(version_class)
+      version_class.column_names.include?('transaction_id')
+    end
+    private_class_method :transactional?
+
+    # Each root's earliest start among its transactions that cross the edge:
+    # the one that saved its first version after the edge, which crosses when
+    # it began before it, and the one that saved its last version before it,
+    # which crosses when it saved a record of one of `types` after it.
+    #: (untyped, Array[untyped], Edge, Array[String]) -> Hash[String, Time]
+    def self.moved_edges(versions, records, edge, types)
       moved = {} #: Hash[String, Time]
-      starts = crossing_starts(versions.klass, roots.keys, edge)
-      starts.each_with_object(moved) do |(transaction, start), edges|
-        roots.fetch(transaction).each { |id| edges[id] = [edges[id], start].compact.min }
+      crossing(versions, records, edge, types).each_with_object(moved) do |(roots, starts), found|
+        starts.each do |transaction, start|
+          roots.fetch(transaction).each { |id| found[id] = [found[id], start].compact.min }
+        end
       end
     end
     private_class_method :moved_edges
 
-    # The roots whose versions next to the edge each transaction holds.
-    #: (untyped, Array[untyped], Edge) -> Hash[untyped, Array[String]]
+    # For each side of the edge, the roots its transactions hold next to the
+    # edge, and where those that cross it began.
+    #: (untyped, Array[untyped], Edge, Array[String]) -> Array[[Hash[untyped, Array[String]], Hash[untyped, Time]]]
+    def self.crossing(versions, records, edge, types)
+      later, earlier = nearest_roots(versions, records, edge)
+      # @type var sides: Array[[Hash[untyped, Array[String]], Hash[untyped, Time]]]
+      sides = [[later, crossing_starts(versions.klass, later.keys, edge)]]
+      return sides if types.empty?
+
+      sides << [earlier, crossing_starts(versions.klass, earlier.keys, edge, types)]
+    end
+    private_class_method :crossing
+
+    # The roots whose versions next to the edge each transaction holds, those
+    # after the edge and those before it.
+    #: (untyped, Array[untyped], Edge) -> [Hash[untyped, Array[String]], Hash[untyped, Array[String]]]
     def self.nearest_roots(versions, records, edge)
-      records.each_slice(Support::IDS_PER_STATEMENT).flat_map { |slice| nearest(versions, slice, edge) }
-             .group_by(&:last).transform_values { |pairs| pairs.map(&:first) }
+      rows = records.each_slice(Support::IDS_PER_STATEMENT).flat_map do |slice|
+        nearest(versions, slice, edge)
+      end
+      later, earlier = rows.partition(&:last)
+      [by_transaction(later), by_transaction(earlier)]
     end
     private_class_method :nearest_roots
 
+    # The roots of the rows, by the transaction each row names.
+    #: (Array[[String, untyped, bool]]) -> Hash[untyped, Array[String]]
+    def self.by_transaction(rows)
+      rows.group_by { |row| row.fetch(1) }.transform_values { |group| group.map(&:first) }
+    end
+    private_class_method :by_transaction
+
     # Each root's nearest versions on either side of an edge, as [id,
-    # transaction] pairs; versions tied at the nearest instant are all kept.
-    # One statement per slice: a grouped pass over the roots' versions finds
-    # both instants, and a join reads the versions saved at either. A lookup
-    # per root, joined by UNION ALL, took SQL Server about a second per 200
-    # roots to compile. Rows read without a model come back as the adapter
-    # returns them, so the transaction is cast as the grouped query's keys are.
-    #: (untyped, Array[untyped], Edge) -> Array[[String, untyped]]
+    # transaction, after the edge] rows; versions tied at the nearest instant
+    # are all kept. One statement per slice: a grouped pass over the roots'
+    # versions finds both instants, and a join reads the versions saved at
+    # either. A lookup per root, joined by UNION ALL, took SQL Server about a
+    # second per 200 roots to compile. Rows read without a model come back as
+    # the adapter returns them, so the transaction is cast as the grouped
+    # query's keys are.
+    #: (untyped, Array[untyped], Edge) -> Array[[String, untyped, bool]]
     def self.nearest(versions, records, edge)
       transaction = versions.type_for_attribute('transaction_id')
-      versions.connection.select_rows(nearest_sql(versions, records, edge)).map do |id, value|
-        [id.to_s, transaction.cast(value)]
-      end
+      rows = versions.connection.select_rows(nearest_sql(versions, records, edge))
+      rows.map { |id, value, flag| [id.to_s, transaction.cast(value), after_edge?(flag)] }
     end
     private_class_method :nearest
 
-    # The roots' versions saved in a transaction at either nearest instant.
+    # The roots' versions saved in a transaction at either nearest instant,
+    # each with whether it is the one after the edge.
     #: (untyped, Array[untyped], Edge) -> String
     def self.nearest_sql(versions, records, edge)
       own = versions.where(item_id: records)
+      table = own.arel_table
       instants = nearest_instants(own, edge)
-      own.joins(arel::Nodes::InnerJoin.new(instants, at_either(own.arel_table, instants)))
-         .where.not(transaction_id: nil).select(:item_id, :transaction_id).to_sql
+      own.joins(arel::Nodes::InnerJoin.new(instants, at_either(table, instants)))
+         .where.not(transaction_id: nil)
+         .select(table[:item_id], table[:transaction_id], after_edge(table, instants)).to_sql
     end
     private_class_method :nearest_sql
+
+    # 1 for a version saved at the instant after the edge, 0 for one before.
+    # Only the 1 is read (see after_edge?), so another value or alias, or none,
+    # answers the same.
+    # mutant:disable
+    #: (untyped, untyped) -> untyped
+    def self.after_edge(table, instants)
+      arel::Nodes::Case.new.when(table[:created_at].eq(instants[:after_at])).then(1).else(0)
+                       .as('after_edge')
+    end
+    private_class_method :after_edge
+
+    # Whether after_edge flagged a row as saved after the edge. Adapters
+    # return the flag as an Integer or a String, so any spelling that reads
+    # only 1 as after answers the same.
+    # mutant:disable
+    #: (untyped) -> bool
+    def self.after_edge?(flag)
+      flag.to_i == 1
+    end
+    private_class_method :after_edge?
 
     # Each root's latest instant before the edge and earliest after it, from
     # every version, saved in a transaction or not.
@@ -178,26 +271,30 @@ module PaperTrailDiff
     end
     private_class_method :at_either
 
-    # Where each transaction that has versions on both sides of the edge began.
-    #: (untyped, Array[untyped], Edge) -> Hash[untyped, Time]
-    def self.crossing_starts(version_class, transactions, edge)
-      earlier = edge.left(version_class.arel_table[:created_at])
-      later = later_version(version_class.arel_table, edge)
+    # Where each transaction that saved a version before the edge began; with
+    # `types`, only one that also saved a record of one of them after it.
+    #: (untyped, Array[untyped], Edge, ?Array[String]?) -> Hash[untyped, Time]
+    def self.crossing_starts(version_class, transactions, edge, types = nil)
+      table = version_class.arel_table
+      earlier = edge.left(table[:created_at])
       starts = {} #: Hash[untyped, Time]
       transactions.each_slice(Support::IDS_PER_STATEMENT).with_object(starts) do |slice, found|
-        crossing = version_class.where(transaction_id: slice).where(earlier).where(later)
+        crossing = version_class.where(transaction_id: slice).where(earlier)
+        crossing = crossing.where(later_version(table, edge, types)) if types
         found.merge!(crossing.group(:transaction_id).minimum(:created_at))
       end
     end
     private_class_method :crossing_starts
 
-    # Another version of the same transaction on the edge's later side.
-    #: (untyped, Edge) -> untyped
-    def self.later_version(table, edge)
+    # A version of the same transaction on the edge's later side, of a record
+    # of one of `types`.
+    #: (untyped, Edge, Array[String]) -> untyped
+    def self.later_version(table, edge, types)
       other = other_versions(table)
       arel::SelectManager.new.from(other).project('1')
                          .where(other[:transaction_id].eq(table[:transaction_id])
-                                  .and(edge.right(other[:created_at])))
+                                  .and(edge.right(other[:created_at]))
+                                  .and(other[:item_type].in(types)))
                          .exists
     end
     private_class_method :later_version

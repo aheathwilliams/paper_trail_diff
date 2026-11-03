@@ -27,14 +27,24 @@ RSpec.describe PaperTrailDiff::TransactionCut do
   end
 
   # Another record's version saved in a transaction, as a child's would be.
-  def other(minute, transaction)
-    FilterVersion.insert({ item_type: 'FilterNote', item_id: 1, event: 'update',
+  def other(minute, transaction, type: 'FilterNote')
+    FilterVersion.insert({ item_type: type, item_id: 1, event: 'update',
                            created_at: at(minute), transaction_id: transaction })
   end
 
-  def windows(records, within)
+  # Requested paths that reach the records of `types` from `model`.
+  def paths(model, types)
+    instance_double(PaperTrailDiff::AssociationTraversal).tap do |traversal|
+      allow(traversal).to receive(:path_types).with(model).and_return(types)
+    end
+  end
+
+  # The requested paths reach the notes `other` saves, unless `types` says
+  # which records they reach.
+  def windows(records, within, types: ['FilterNote'])
     model = records.first.class
-    moved = described_class.windows(model, records, PaperTrailDiff::TimeRange.new(within))
+    moved = described_class.windows(model, records, PaperTrailDiff::TimeRange.new(within),
+                                    traversal: paths(model, types))
     moved.transform_values { |range| [range.begin_time, range.end_time, range.exclude_end?] }
   end
 
@@ -73,6 +83,68 @@ RSpec.describe PaperTrailDiff::TransactionCut do
 
       expect(windows([article], at(1.25)...at(2)))
         .to eq(article.id.to_s => [at(1), at(2), true])
+    end
+
+    # The root's change is then in the earlier window, where its version is.
+    it 'leaves a start where a transaction saved the root before it and nothing on its paths' do
+      article, = history(transactions: { 1 => 7 })
+      other(1.5, 7, type: 'FilterArticle')
+      other(1.6, 7, type: 'FilterOther')
+      within = at(1.25)...at(2)
+
+      expect([windows([article], within), windows([article], within, types: [])]).to eq([{}, {}])
+    end
+
+    it 'moves a start back to where a transaction that saved the root before it began' do
+      article, = history(transactions: { 1 => 7 })
+      other(0.9, 7)
+      other(1.5, 7)
+
+      expect(windows([article], at(1.25)..at(3)))
+        .to eq(article.id.to_s => [at(0.9), at(3), false])
+    end
+
+    it 'moves a start to the earlier of the transactions on either side of it' do
+      article, _, review, published = history(transactions: { 1 => 7, 2 => 8 })
+      published.update_columns(created_at: at(1.5))
+      other(0.9, 7)
+      other(1.6, 7)
+      other(1.1, 8)
+
+      expect(windows([article], at(1.25)..at(3)))
+        .to eq(article.id.to_s => [at(0.9), at(3), false])
+      expect(review.transaction_id).to eq(7)
+    end
+
+    it 'moves each root back to the start of its own transaction after the edge, in one batch' do
+      article, = history(transactions: { 1 => 7 })
+      later, = history(transactions: { 1 => 8 })
+      other(0.5, 7)
+      other(0.6, 8)
+
+      expect(windows([article, later], at(0.75)..at(3)))
+        .to eq(article.id.to_s => [at(0.5), at(3), false], later.id.to_s => [at(0.6), at(3), false])
+    end
+
+    it 'reads no transaction before an edge when the paths reach nothing' do
+      article, = history(transactions: { 1 => 7 })
+      other(1.5, 7)
+      statements = []
+      counter = ->(*, payload) { statements << payload[:sql] unless payload[:name] == 'SCHEMA' }
+
+      moved = ActiveSupport::Notifications.subscribed(counter, 'sql.active_record') do
+        windows([article], at(1.25)..at(3), types: [])
+      end
+
+      expect([moved, statements.length]).to eq([{}, 2])
+    end
+
+    it 'moves a start back to a transaction that saved the root after it, whatever the paths' do
+      article, = history(transactions: { 1 => 7 })
+      other(0.5, 7, type: 'FilterOther')
+
+      expect(windows([article], at(0.75)..at(1.5), types: []))
+        .to eq(article.id.to_s => [at(0.5), at(1.5), false])
     end
 
     it 'leaves a start where a transaction ended before it' do
@@ -296,6 +368,69 @@ RSpec.describe PaperTrailDiff::TransactionCut do
     end
   end
 
+  describe '.window_versions' do
+    # The root's versions at 0 and 1, and at 2 in transaction 7, which saved a
+    # note at 1.5; the window starts at 1.75.
+    def selected(types, notes: { 1.5 => 7 }, range: at(1.75)..at(3))
+      _, created, review, published = history(transactions: { 2 => 7 })
+      review.update_columns(transaction_id: 6)
+      notes.each { |minute, transaction| other(minute, transaction) }
+      window = range && PaperTrailDiff::TimeRange.new(range)
+      ids = described_class.window_versions(FilterArticle, window, types).pluck(:id)
+      [created, review, published].map { |version| ids.include?(version.id) }
+    end
+
+    it 'selects every version without a window' do
+      expect(selected(['FilterNote'], range: nil)).to eq([true, true, true])
+    end
+
+    it 'selects the versions in a window' do
+      expect(selected([])).to eq([false, false, true])
+    end
+
+    # Its transaction moves the root's window back to take it in.
+    it 'selects a version before a window in a transaction that saved its paths in it' do
+      expect(selected(['FilterNote'], notes: { 1.5 => 7, 2.5 => 6 })).to eq([false, true, true])
+    end
+
+    it 'selects no version before a window for a record off the paths' do
+      expect(selected(['FilterOther'], notes: { 2.5 => 6 })).to eq([false, false, true])
+    end
+
+    it 'selects no version before a window for a record on the paths after it' do
+      expect(selected(['FilterNote'], notes: { 3.5 => 6 })).to eq([false, false, true])
+    end
+
+    it 'selects no version after a window, whatever its transaction saved in it' do
+      _, _, review = history(transactions: { 1 => 6 })
+      review.update_columns(created_at: at(3.5))
+      other(2.5, 6)
+      window = PaperTrailDiff::TimeRange.new(at(1.75)..at(3))
+      ids = described_class.window_versions(FilterArticle, window, ['FilterNote']).pluck(:id)
+
+      expect(ids).not_to include(review.id)
+    end
+
+    it 'reads no transaction for a window without paths' do
+      window = PaperTrailDiff::TimeRange.new(at(0)..at(1))
+      sql = described_class.window_versions(FilterArticle, window, []).to_sql
+
+      expect(sql).not_to include('transaction_id')
+    end
+
+    it 'selects a version in a window once, whatever its transaction saved' do
+      expect(selected(['FilterNote'], notes: { 2.5 => 6 }, range: at(0.5)..at(3)))
+        .to eq([false, true, true])
+    end
+
+    it 'selects only the versions in a window from a version table without transactions' do
+      allow(FilterVersion).to receive(:column_names)
+        .and_return(FilterVersion.column_names - ['transaction_id'])
+
+      expect(selected(['FilterNote'], notes: { 2.5 => 6 })).to eq([false, false, true])
+    end
+  end
+
   describe PaperTrailDiff::TransactionCut::Edge do
     it 'is frozen' do
       expect(described_class.new(at(0), true)).to be_frozen
@@ -315,8 +450,9 @@ RSpec.describe PaperTrailDiff::TransactionCut do
       other(1.5, 7)
       other(1.5, 8)
       range = PaperTrailDiff::TimeRange.new(at(1.25)..at(3))
+      traversal = instance_double(PaperTrailDiff::AssociationTraversal, path_types: ['FilterNote'])
 
-      moved = described_class.batch_windows([article, feature], range)
+      moved = described_class.batch_windows([article, feature], range, traversal: traversal)
 
       expect(moved.keys)
         .to eq([['FilterArticle', article.id.to_s], ['FilterArticle', feature.id.to_s]])

@@ -141,6 +141,17 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- `analyze_scope` and `report` no longer lose a record's change when a
+  window's edge falls inside a transaction that saved the record before the
+  edge and another article, or a record off the requested paths, after it.
+  The record's window moved to the later window, which did not select it,
+  while the earlier window left the change out: an update, or a deletion with
+  `include_deleted: true`, was in neither report. Such a transaction now moves
+  no edge, so the change is in the earlier window, with the record's version.
+  When the transaction saved a record on the requested paths after the edge,
+  the edge still moves, and `analyze_scope` and `report` now select the record
+  in the later window with or without `activity: true`.
+
 - Activity over a window (`activity: true`, `activity_timeline`, and
   `report`) no longer raises `KeyError` when a record on one requested path,
   such as an author, is also a `belongs_to` target on another path with

@@ -43,9 +43,10 @@ module PaperTrailDiff
     # `activity_tree` names the association paths whose changes also select a
     # root, as an activity analysis reports them. Without one, only a root's
     # own versions select it. `version_scope` narrows which of either count,
-    # as it narrows which are reported.
-    # : (untyped, time_range: TimeRange?, limit: Integer, ?historical_filter: untyped, ?max_filter_versions: Integer, ?activity_tree: AssociationTree?, ?version_scope: untyped) -> void
-    def initialize: (untyped, time_range: TimeRange?, limit: Integer, ?historical_filter: untyped, ?max_filter_versions: Integer, ?activity_tree: AssociationTree?, ?version_scope: untyped) -> void
+    # as it narrows which are reported. `traversal` names the requested paths,
+    # which decide where a window's edges move (see TransactionCut).
+    # : (untyped, time_range: TimeRange?, limit: Integer, ?historical_filter: untyped, ?max_filter_versions: Integer, ?activity_tree: AssociationTree?, ?version_scope: untyped, ?traversal: AssociationTraversal?) -> void
+    def initialize: (untyped, time_range: TimeRange?, limit: Integer, ?historical_filter: untyped, ?max_filter_versions: Integer, ?activity_tree: AssociationTree?, ?version_scope: untyped, ?traversal: AssociationTraversal?) -> void
 
     # : () -> Result
     def call: () -> Result
@@ -55,6 +56,8 @@ module PaperTrailDiff
     @historical_filter: untyped
 
     @limit: Integer
+
+    @path_types: Array[String]
 
     @related: AssociationActivitySelection?
 
@@ -119,7 +122,9 @@ module PaperTrailDiff
     def missing_ids: () -> Array[String]
 
     # Only the versions `version_scope` keeps select a root: one whose versions
-    # in the window it drops would have nothing to report.
+    # in the window it drops would have nothing to report. A version saved
+    # just before the window selects its root when TransactionCut moves the
+    # root's window back to take it in.
     # : () -> untyped
     def window_versions: () -> untyped
 

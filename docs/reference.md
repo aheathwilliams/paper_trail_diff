@@ -174,13 +174,20 @@ read in UTC, never in the server's own zone.
 
 A window edge that falls inside a transaction moves back to where that
 transaction began, so the whole transaction is in the later window, as it is
-when a range [starts or ends at a version](#choosing-a-range). This applies to
-transactions that saved a version of the root record, such as a comment edit
-and the `touch: true` article version saved with it. A transaction that saved
-only associated records moves no edge. When it saved some of them before the
-edge and some after, its changes are still all in one window: in the later
-one when a version it saved after the edge is of a record on the requested
-paths before or after the transaction, and otherwise in the earlier one. A
+when a range [starts or ends at a version](#choosing-a-range). It moves when
+the transaction saved the root record after the edge, such as a comment edit
+and the `touch: true` article version saved with it, or saved the root before
+the edge and a record of a class on the requested paths after it. A
+transaction that saved the root only before the edge, and nothing on its paths
+after it, moves no edge: the root's change is in the earlier window, with its
+version, even when the transaction went on to save another article. A
+transaction that saved only associated records moves no edge either. When it
+saved some of them before the edge and some after, its changes are still all
+in one window: in the later one when a version it saved after the edge is of a
+record on the requested paths before or after the transaction, and otherwise
+in the earlier one. A polymorphic `belongs_to` names its target's class only in
+each record, so a target saved after the edge moves nothing: the root's change
+is then in the earlier window and the target's in the later one. A
 [transaction group](#one-step-per-transaction-group-transaction) lists in
 `sources` only the versions inside its window. So back-to-back windows, or a
 `report` with `since:` after an earlier report, show each change exactly

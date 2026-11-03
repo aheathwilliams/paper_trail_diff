@@ -59,11 +59,14 @@ RSpec.describe PaperTrailDiff::AnalysisBatch do
     end
   end
 
+  # The requested paths reach the notes a transaction saves with a root.
   def batch(records, within: nil, version_scope: nil, context: false)
     described_class.new(
       records, time_range: within && PaperTrailDiff::TimeRange.new(within),
                live_loader: live_loader, history_preparer: history_preparer,
-               analyzer: analyzer, version_scope: version_scope, context_required: context
+               analyzer: analyzer, version_scope: version_scope, context_required: context,
+               traversal: instance_double(PaperTrailDiff::AssociationTraversal,
+                                          path_types: ['FilterNote'])
     )
   end
 

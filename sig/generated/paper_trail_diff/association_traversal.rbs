@@ -101,6 +101,13 @@ module PaperTrailDiff
     # : (untyped) -> Array[Array[untyped]]
     def selected_reflections: (untyped) -> Array[Array[untyped]]
 
+    # The names the versions of the records on the requested paths are stored
+    # under: each association's class and every part a through passes. A
+    # polymorphic belongs_to names its target's class only in each record, so
+    # it adds none.
+    # : (untyped) -> Array[String]
+    def path_types: (untyped) -> Array[String]
+
     # : (untyped, untyped) -> void
     def ensure_habtm_history!: (untyped, untyped) -> void
 

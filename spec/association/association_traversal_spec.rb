@@ -74,6 +74,13 @@ end
 class TraversalDocument < PreparedDocument
 end
 
+# Its documents are a subclass, whose versions are stored under the base class.
+class TraversalDocumentHolder < ActiveRecord::Base
+  self.table_name = 'tracked_articles'
+  belongs_to :special_document, class_name: 'PreparedSpecialDocument', foreign_key: :author_id,
+                                optional: true
+end
+
 class TraversalSpecialDocument < TraversalDocument
 end
 
@@ -440,6 +447,30 @@ RSpec.describe PaperTrailDiff::AssociationTraversal do
       expect { traversal(:article_tags).selected_reflections(TraversalAuthor) }
         .to raise_error(PaperTrailDiff::UnsupportedAssociationError,
                         unsupported('article_tags', 'TrackedArticle#tags'))
+    end
+  end
+
+  describe '#path_types' do
+    it 'names nothing without paths' do
+      expect(traversal.path_types(TrackedArticle)).to eq([])
+    end
+
+    it "names each class the paths and a through's parts reach, once" do
+      types = traversal('comments.replies', :author, :contributors).path_types(TrackedArticle)
+
+      expect(types).to eq(%w[TrackedAuthor TrackedComment TrackedReply TrackedAuthorship])
+    end
+
+    it 'names a class by the base class its versions are stored under' do
+      expect(traversal(:special_document).path_types(TraversalDocumentHolder))
+        .to eq(['PreparedDocument'])
+    end
+
+    # Each record names its own target's class, so the reflection names none.
+    it "names no polymorphic target, only a through's source type" do
+      expect(traversal(:holder, :reviewer).path_types(TraversalNote)).to eq(['TrackedAuthor'])
+      expect(traversal(:linked_authors).path_types(SourceTypeHolder))
+        .to eq(%w[SourceTypeAuthor SourceTypeLink])
     end
   end
 

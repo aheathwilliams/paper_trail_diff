@@ -6,12 +6,15 @@ module PaperTrailDiff
   class DeletedAnalysisBatch
     # `context_required` reads a root that did not change in the window from
     # the version after it, so its associations' activity can be reported.
-    #: (untyped, identities: Array[Array[String]], time_range: TimeRange?, analyzer: untyped, history_preparer: untyped, version_scope: untyped, context_required: bool) -> void
+    # `traversal` names the requested paths, which decide where a window's
+    # edges move (see TransactionCut).
+    #: (untyped, identities: Array[Array[String]], time_range: TimeRange?, analyzer: untyped, history_preparer: untyped, version_scope: untyped, context_required: bool, traversal: AssociationTraversal?) -> void
     def initialize( # rubocop:disable Metrics/ParameterLists
       model, identities:, time_range:, analyzer:, history_preparer:, version_scope:,
-      context_required:
+      context_required:, traversal:
     )
       @model = model
+      @traversal = traversal
       @context_required = context_required
       @identities = identities
       @time_range = time_range
@@ -24,7 +27,7 @@ module PaperTrailDiff
     def call
       destroys = destroy_versions
       records = historical_roots(destroys)
-      windows = TransactionCut.batch_windows(records, @time_range)
+      windows = TransactionCut.batch_windows(records, @time_range, traversal: @traversal)
       analyses = BatchedRootAnalyses.new(
         time_range: @time_range, windows: windows, history_preparer: @history_preparer,
         analyzer: @analyzer
@@ -40,6 +43,7 @@ module PaperTrailDiff
     end
 
     # @rbs @model: untyped
+    # @rbs @traversal: AssociationTraversal?
     # @rbs @context_required: bool
     # @rbs @identities: Array[Array[String]]
     # @rbs @time_range: TimeRange?

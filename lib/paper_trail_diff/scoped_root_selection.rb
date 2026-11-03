@@ -47,14 +47,16 @@ module PaperTrailDiff
     # `activity_tree` names the association paths whose changes also select a
     # root, as an activity analysis reports them. Without one, only a root's
     # own versions select it. `version_scope` narrows which of either count,
-    # as it narrows which are reported.
-    #: (untyped, time_range: TimeRange?, limit: Integer, ?historical_filter: untyped, ?max_filter_versions: Integer, ?activity_tree: AssociationTree?, ?version_scope: untyped) -> void
+    # as it narrows which are reported. `traversal` names the requested paths,
+    # which decide where a window's edges move (see TransactionCut).
+    #: (untyped, time_range: TimeRange?, limit: Integer, ?historical_filter: untyped, ?max_filter_versions: Integer, ?activity_tree: AssociationTree?, ?version_scope: untyped, ?traversal: AssociationTraversal?) -> void
     def initialize(scope, time_range:, limit:, historical_filter: nil, # rubocop:disable Metrics/ParameterLists
                    max_filter_versions: HistoricalFilter::DEFAULT_VERSION_LIMIT, activity_tree: nil,
-                   version_scope: nil)
+                   version_scope: nil, traversal: nil)
       @scope = normalize_scope(scope)
       reject_unversioned!
       @time_range = time_range
+      @path_types = traversal ? traversal.path_types(model) : [] #: Array[String]
       @version_scope = VersionScopeFilter.validated(version_scope)
       @limit = validate_limit(limit)
       @related = activity_tree && AssociationActivitySelection.new(
@@ -84,6 +86,7 @@ module PaperTrailDiff
     # @rbs @historical_filter: untyped
     # @rbs @related: AssociationActivitySelection?
     # @rbs @version_scope: untyped
+    # @rbs @path_types: Array[String]
 
     # Leaves the candidate set in the database. Plucking every root changed in
     # the window would cost memory and a statement proportional to all activity
@@ -176,12 +179,12 @@ module PaperTrailDiff
     end
 
     # Only the versions `version_scope` keeps select a root: one whose versions
-    # in the window it drops would have nothing to report.
+    # in the window it drops would have nothing to report. A version saved
+    # just before the window selects its root when TransactionCut moves the
+    # root's window back to take it in.
     #: () -> untyped
     def window_versions
-      relation = VersionQuery.for_model(model)
-      range = @time_range
-      relation = range.scope(relation) if range
+      relation = TransactionCut.window_versions(model, @time_range, @path_types)
       @version_scope ? @version_scope.call(relation) : relation
     end
 

@@ -60,12 +60,13 @@ Flat query counts do not make a report's cost flat:
   2,001 versions of their article took about 7.5 s.
 - **`snapshots: true` and `recorded_changes: true` cost memory and time.** Ask
   for them only when you use them.
-- **Each edge of a window takes one or two statements per 500 records.** A
+- **Each edge of a window takes one to three statements per 500 records.** A
   report with `within:` or `since:` looks for transactions that cross either
-  edge. With associations, it also takes one statement per 500 of the
-  transactions its history reads, to find one that saved associated records
-  on both sides of its start; when it finds one, it reads the window's
-  history again from where that transaction began.
+  edge, and with associations also for those that saved a record before it
+  and an associated record after it. With associations, it also takes one
+  statement per 500 of the transactions its history reads, to find one that
+  saved associated records on both sides of its start; when it finds one, it
+  reads the window's history again from where that transaction began.
   On 1.4 million versions, 10,800 records took about 6 s on SQL Server and
   1.5 s on PostgreSQL and MySQL.
 - **`version_scope:` on activity reads every version in the range**, as

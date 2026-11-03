@@ -65,15 +65,8 @@ module PaperTrailDiff
       ReadSnapshot.call([record]) do
         @traversal_preparer.call(record.class, historical: true)
         from, to = default_range(record, from, to, within)
-        TimelineBuilder.new(
-          record,
-          from: from,
-          to: to,
-          within: within,
-          version_scope: version_scope,
-          live_endpoint: live_endpoint_for(record, within),
-          snapshotter: @timeline_snapshotter
-        ).build
+        timeline_builder(record, from: from, to: to, within: within, version_scope: version_scope,
+                                 live_endpoint: live_endpoint_for(record, within)).build
       end
     end
 
@@ -155,12 +148,19 @@ module PaperTrailDiff
                             live_endpoint: live, view: view
                   )
                 else
-                  TimelineBuilder.new(
-                    record, from: from, to: to, within: within, version_scope: version_scope,
-                            live_endpoint: live, snapshotter: @timeline_snapshotter
-                  )
+                  timeline_builder(record, from: from, to: to, within: within,
+                                           version_scope: version_scope, live_endpoint: live)
                 end
       builder.analyze.with_window(builder.window)
+    end
+
+    #: (untyped, from: untyped, to: untyped, within: untyped, version_scope: untyped, live_endpoint: untyped) -> TimelineBuilder
+    def timeline_builder(record, from:, to:, within:, version_scope:, live_endpoint:) # rubocop:disable Metrics/ParameterLists
+      TimelineBuilder.new(
+        record, from: from, to: to, within: within, version_scope: version_scope,
+                live_endpoint: live_endpoint, snapshotter: @timeline_snapshotter,
+                traversal: @traversal
+      )
     end
 
     #: (Array[untyped], within: untyped, activity: bool, version_scope: untyped, view: ActivityView) -> Hash[identity, Analysis]
@@ -171,7 +171,7 @@ module PaperTrailDiff
         AnalysisBatch.new(
           records,
           time_range: within.nil? ? nil : TimeRange.new(within), version_scope: version_scope,
-          context_required: activity && !@association_tree.empty?,
+          context_required: activity && !@association_tree.empty?, traversal: @traversal,
           live_loader: method(:load_batch_endpoints),
           history_preparer: @historical_store.method(:prepare_batch),
           analyzer: batched_root_analyzer(activity, view: view)
@@ -223,7 +223,7 @@ module PaperTrailDiff
         model, identities: identities, time_range: within.nil? ? nil : TimeRange.new(within),
                version_scope: options.fetch(:version_scope),
                history_preparer: @historical_store.method(:prepare_deleted_batch),
-               analyzer: analyzer,
+               analyzer: analyzer, traversal: @traversal,
                context_required: options.fetch(:activity) && !@association_tree.empty?
       ).call
     end
@@ -244,7 +244,8 @@ module PaperTrailDiff
                },
                # Checkpoints compare a root's own versions, so only activity can
                # report a window in which just its associations changed.
-               activity_tree: (@association_tree if activity), version_scope: version_scope
+               activity_tree: (@association_tree if activity), version_scope: version_scope,
+               traversal: @traversal
       )
     end
 
@@ -372,7 +373,7 @@ module PaperTrailDiff
         record,
         range: TimelineRange.new(
           record, from: from, to: to, within: within, version_scope: version_scope,
-                  live_endpoint: live_endpoint
+                  live_endpoint: live_endpoint, traversal: @traversal
         ),
         tree: @association_tree,
         snapshotter: @activity_snapshotter,

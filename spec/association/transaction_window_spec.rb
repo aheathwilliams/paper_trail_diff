@@ -263,4 +263,75 @@ RSpec.describe 'Windows that meet inside a transaction',
     expect(first.sources.map(&:version_id)).to eq([child.id, root.id])
     expect(changed_keys(first)).to eq([['body']])
   end
+
+  # Its window moves back to where the transaction began, so a relation's
+  # report selects it in the later window, by the version the move takes in,
+  # whether it compares the root's versions or reads activity.
+  it 'selects a root saved before the edge in a transaction that saved its paths after it' do
+    article, comment = article_with_comment
+    start = Time.now.utc
+    WindowArticle.transaction do
+      article.update!(title: 'Second')
+      comment.update!(body: 'after')
+    end
+    edge = comment.versions.last.created_at
+    titles = lambda do |within, activity|
+      analyses = PaperTrailDiff.analyze_scope(WindowArticle.all, within: within, limit: 5,
+                                                                 associations: paths,
+                                                                 activity: activity).analyses
+      analyses.transform_values { |analysis| analysis.diff.attributes['title']&.to_h }
+    end
+    key = PaperTrailDiff::Endpoint.identity(article)
+
+    expect([false, true].map { |activity| titles.call(edge..Time.now.utc, activity) })
+      .to all(eq(key => { from: 'First', to: 'Second' }))
+    expect([false, true].map { |activity| titles.call(start...edge, activity) })
+      .to all(eq(key => nil))
+  end
+
+  # Two roots saved in one transaction, one before the edge and one after it.
+  # A report selects a record by its versions inside its window, so each
+  # root's change is in the window its version is in. Moved into the later
+  # window, the first root's change was in neither report.
+  def split_across_roots
+    first, second = %w[one two].map { |title| WindowArticle.create!(title: title) }
+    start = Time.now.utc
+    edge = WindowArticle.transaction do
+      yield second
+      Time.now.utc.tap { first.update!(title: 'one edited') }
+    end
+    [first, second, start, edge]
+  end
+
+  it 'reports a root saved before the edge, in a transaction another root saved after it' do
+    first, second, start, edge = split_across_roots { |root| root.update!(title: 'two edited') }
+    titles = lambda do |result|
+      result.analyses.transform_values { |analysis| analysis.diff.attributes['title']&.to_h }
+            .compact
+    end
+
+    earlier = PaperTrailDiff.analyze_scope(WindowArticle.all, within: start...edge, limit: 5,
+                                                              activity: true)
+    later = PaperTrailDiff.report(WindowArticle.all, since: edge, limit: 5)
+
+    expect([titles.call(earlier), titles.call(later)])
+      .to eq([{ ['WindowArticle', second.id.to_s] => { from: 'two', to: 'two edited' } },
+              { ['WindowArticle', first.id.to_s] => { from: 'one', to: 'one edited' } }])
+  end
+
+  it 'reports a root destroyed before the edge, in a transaction another root saved after it' do
+    _, second, start, edge = split_across_roots(&:destroy!)
+    removed = lambda do |result|
+      result.deleted.transform_values do |analysis|
+        analysis.activity_timeline.last.diff.record_presence_change.from.attributes['title']
+      end
+    end
+
+    earlier = PaperTrailDiff.analyze_scope(WindowArticle.all, within: start...edge, limit: 5,
+                                                              activity: true, include_deleted: true)
+    later = PaperTrailDiff.report(WindowArticle.all, since: edge, limit: 5, include_deleted: true)
+
+    expect([removed.call(earlier), removed.call(later)])
+      .to eq([{ ['WindowArticle', second.id.to_s] => 'two' }, {}])
+  end
 end

@@ -49,6 +49,9 @@ module PaperTrailDiff
     # : (untyped, from: untyped, to: untyped, within: untyped, activity: bool, version_scope: untyped, view: ActivityView) -> Analysis
     def analyze_record: (untyped, from: untyped, to: untyped, within: untyped, activity: bool, version_scope: untyped, view: ActivityView) -> Analysis
 
+    # : (untyped, from: untyped, to: untyped, within: untyped, version_scope: untyped, live_endpoint: untyped) -> TimelineBuilder
+    def timeline_builder: (untyped, from: untyped, to: untyped, within: untyped, version_scope: untyped, live_endpoint: untyped) -> TimelineBuilder
+
     # : (Array[untyped], within: untyped, activity: bool, version_scope: untyped, view: ActivityView) -> Hash[identity, Analysis]
     def analyze_batch: (Array[untyped], within: untyped, activity: bool, version_scope: untyped, view: ActivityView) -> Hash[identity, Analysis]
 
