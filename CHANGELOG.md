@@ -56,8 +56,9 @@ project follows [Semantic Versioning](https://semver.org/).
   dated in another order than their IDs show they were saved in. PaperTrail
   dates an update with the record's `updated_at` unless `has_paper_trail
   synchronize_version_creation_timestamp: false`, so a save that set
-  `updated_at` itself, such as an import keeping another system's times, or
-  one made with timestamps off, can date its version in the past. History is
+  `updated_at` itself, such as an import keeping another system's times, a
+  `touch(time:)`, or one made with timestamps off, can date its version in
+  the past. History is
   read in time order, so such an update is read before the change it
   followed, and one dated before the record's `create` reads as the record
   deleted and created again. The [version order](docs/reference.md#version-order)

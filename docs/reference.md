@@ -1428,8 +1428,8 @@ A record's versions should also be dated in the order they were saved.
 PaperTrail dates an update with the record's `updated_at` unless the model
 sets `has_paper_trail synchronize_version_creation_timestamp: false`, so a save
 that sets `updated_at` itself, such as an import that keeps another system's
-times, or one made with timestamps off, can date its version before the one
-saved before it. Versions are read in time order, so such an update is read
+times, a `touch(time:)`, or one made with timestamps off, can date its version
+before the one saved before it. Versions are read in time order, so such an update is read
 before the change it followed, and one dated before the record's `create`
 reads as the record deleted and created again. When IDs that count up show a
 record's versions dated out of the order they were saved in, `diagnose` warns
@@ -1614,7 +1614,8 @@ Results can only be as complete as the history PaperTrail and PT-AT recorded.
   can appear in the other's steps, crediting that transaction with adding
   or removing it, and a window's starting state and diff can hold it too.
   Row locks keep the two from saving the same record, so this needs both to
-  save different records of one tree within moments of each other.
+  save different records of one tree within moments of each other. See
+  [version order](#version-order).
 - HABTM membership history exists only where PT-AT recorded it in a
   transaction, and only for the root record without a scope: a scoped HABTM,
   or one below the root, raises `UnsupportedAssociationError`, and a transaction that another record with
