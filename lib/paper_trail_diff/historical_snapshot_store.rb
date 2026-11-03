@@ -167,7 +167,7 @@ module PaperTrailDiff
       )
       return snapshot if handled
 
-      record = root_version.reify(dup: true)
+      record = Support.reify(root_version, dup: true)
       normalize(record, context_version, tree: tree, normalizer: normalizer,
                                          habtm_version: root_version, history: history)
     end

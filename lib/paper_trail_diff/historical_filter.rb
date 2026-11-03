@@ -153,7 +153,7 @@ module PaperTrailDiff
         return attributes_match?(version)
       end
 
-      state = version.reify(dup: true)
+      state = Support.reify(version, dup: true)
       state && @predicate.call(state)
     end
 

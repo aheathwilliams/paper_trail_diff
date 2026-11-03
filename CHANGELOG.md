@@ -142,9 +142,13 @@ project follows [Semantic Versioning](https://semver.org/).
   `nil`, and so did the gem, so the step that set a time showed no change,
   every comparison of a later version with the current record showed the
   time changing from `nil`, and `recorded_changes` reported
-  `{ from: nil, to: nil }`. Where the gem rebuilds a record with
-  PaperTrail's `reify`, the time still reads as `nil`; see the reference's
-  limitations.
+  `{ from: nil, to: nil }`. That includes records the gem rebuilds with
+  PaperTrail's `reify`: models with initialization callbacks, custom types or
+  defaults, default scopes that assign attributes, or encrypted attributes;
+  a version that holds a column the model no longer has; the records a
+  callable `historical_filter:` receives; and association members PT-AT
+  rebuilds. Each such record's time is assigned from its own version, which
+  is decoded a second time only when it holds a time of day.
 
 - `analyze_scope` and `report` accept a relation whose `limit` or `offset` is
   a String, as request parameters are, such as

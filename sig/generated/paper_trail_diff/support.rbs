@@ -31,6 +31,26 @@ module PaperTrailDiff
     # : (untyped) -> untyped
     def self.unwrapped_time: (untyped) -> untyped
 
+    # PaperTrail's `reify`, with each time of day its version recorded.
+    # : (untyped, **untyped) -> untyped
+    def self.reify: (untyped, **untyped) -> untyped
+
+    # A record PaperTrail rebuilt, with each time of day assigned from the
+    # version it was rebuilt from, which PaperTrail decodes as nil. PaperTrail
+    # assigns stored attributes after building the record and links it to
+    # that version, PT-AT's members too, so this assigns what PaperTrail would
+    # if it unwrapped the value. Only a version whose stored text names the
+    # wrapper is decoded again; any other record is returned as it is.
+    # : [T] (T) -> T
+    def self.with_recorded_times: [T] (T) -> T
+
+    # : (untyped) -> untyped
+    def self.rebuilt_from: (untyped) -> untyped
+
+    # As PaperTrail assigns a stored attribute.
+    # : (untyped, String, untyped) -> void
+    def self.assign_recorded: (untyped, String, untyped) -> void
+
     # : (untyped) -> untyped
     def self.immutable_copy: (untyped) -> untyped
 

@@ -41,6 +41,79 @@ RSpec.describe PaperTrailDiff::Support do
     end
   end
 
+  describe '.with_recorded_times and .reify' do
+    # A record as PaperTrail's reify leaves it: linked to its version, with
+    # the time of day nil.
+    let(:model) do
+      Class.new do
+        attr_reader :version, :assigned
+        attr_accessor :alarm
+
+        def self.version_association_name = :version
+
+        def initialize(version)
+          @version = version
+          @assigned = {}
+        end
+
+        def has_attribute?(name) = name == 'rings_at'
+
+        def []=(name, value)
+          @assigned[name] = value
+        end
+      end
+    end
+
+    let(:wrapped) { ActiveRecord::Type::Time::Value.new(noon) }
+
+    def stored(object, attributes = {})
+      double(object: object, object_deserialized: attributes)
+    end
+
+    it 'assigns each time of day its version recorded, as PaperTrail assigns attributes' do
+      version = stored("rings_at: !ruby/object:#{described_class::TIME_VALUE}",
+                       'rings_at' => wrapped, 'alarm' => wrapped, 'gone' => wrapped,
+                       'title' => 'Draft')
+      record = model.new(version)
+
+      expect(described_class.with_recorded_times(record)).to equal(record)
+      expect(record.assigned).to eq(rings_at: noon)
+      expect(record.assigned.fetch(:rings_at)).to be_an_instance_of(Time)
+      expect(record.alarm).to be_an_instance_of(Time)
+      expect(record.alarm).to eq(noon)
+    end
+
+    it 'decodes nothing again when the stored text holds no time of day, or is not text' do
+      ['title: Draft', { 'rings_at' => '12:00' }, nil].each do |object|
+        version = stored(object)
+        record = model.new(version)
+
+        expect(described_class.with_recorded_times(record)).to equal(record)
+        expect(version).not_to have_received(:object_deserialized)
+        expect(record.assigned).to be_empty
+      end
+    end
+
+    it 'returns a record PaperTrail did not rebuild, or none, as it is' do
+      record = model.new(nil)
+      plain = Object.new
+
+      expect(described_class.with_recorded_times(record)).to equal(record)
+      expect(described_class.with_recorded_times(plain)).to equal(plain)
+      expect(described_class.with_recorded_times(nil)).to be_nil
+    end
+
+    it "is PaperTrail's reify with the options given, and the version's times" do
+      version = stored("rings_at: !ruby/object:#{described_class::TIME_VALUE}",
+                       'rings_at' => wrapped)
+      record = model.new(version)
+      allow(version).to receive(:reify).with(dup: true, has_many: false).and_return(record)
+
+      expect(described_class.reify(version, dup: true, has_many: false)).to equal(record)
+      expect(record.assigned).to eq(rings_at: noon)
+    end
+  end
+
   describe '.immutable_copy' do
     it 'copies hashes and arrays all the way down, keys too, and freezes the copy' do
       key = [+'key']

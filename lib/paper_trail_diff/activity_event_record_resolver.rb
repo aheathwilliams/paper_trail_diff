@@ -41,7 +41,7 @@ module PaperTrailDiff
       return changed_record if changed_record
 
       successor = version.next
-      record = successor&.reify(dup: true)
+      record = successor && Support.reify(successor, dup: true)
       return record if record
 
       model_class = Endpoint.model_class(version)
@@ -81,7 +81,7 @@ module PaperTrailDiff
 
     #: (untyped) -> untyped
     def updated_record_after(version)
-      record = version.reify(dup: true)
+      record = Support.reify(version, dup: true)
       changes = deserialized_changeset(version, record&.class)
       apply_changes(record, changes)
     end

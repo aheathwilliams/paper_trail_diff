@@ -266,7 +266,8 @@ module PaperTrailDiff
       prepared = @state_loader.call(version)
       return @states[version.id] = prepared if prepared
 
-      record = version.reify(
+      record = Support.reify(
+        version,
         dup: true,
         has_many: false,
         has_one: false,

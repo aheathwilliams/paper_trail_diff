@@ -44,6 +44,53 @@ module PaperTrailDiff
     end
     private_class_method :unwrapped_time
 
+    # PaperTrail's `reify`, with each time of day its version recorded.
+    #: (untyped, **untyped) -> untyped
+    def self.reify(version, **options)
+      with_recorded_times(version.reify(**options))
+    end
+
+    # A record PaperTrail rebuilt, with each time of day assigned from the
+    # version it was rebuilt from, which PaperTrail decodes as nil. PaperTrail
+    # assigns stored attributes after building the record and links it to
+    # that version, PT-AT's members too, so this assigns what PaperTrail would
+    # if it unwrapped the value. Only a version whose stored text names the
+    # wrapper is decoded again; any other record is returned as it is.
+    #: [T] (T) -> T
+    def self.with_recorded_times(record)
+      version = rebuilt_from(record)
+      return record unless version
+
+      version.object_deserialized.each do |name, value|
+        next unless TIME_VALUE.eql?(value.class.name)
+
+        assign_recorded(record, name, value.__getobj__)
+      end
+      record
+    end
+
+    #: (untyped) -> untyped
+    def self.rebuilt_from(record)
+      model = record.class
+      return unless model.respond_to?(:version_association_name)
+
+      version = record.public_send(model.version_association_name)
+      stored = version&.object
+      version if stored.instance_of?(String) && stored.include?(TIME_VALUE)
+    end
+    private_class_method :rebuilt_from
+
+    # As PaperTrail assigns a stored attribute.
+    #: (untyped, String, untyped) -> void
+    def self.assign_recorded(record, name, value)
+      if record.has_attribute?(name)
+        record[name.to_sym] = value
+      elsif record.respond_to?(:"#{name}=")
+        record.public_send(:"#{name}=", value)
+      end
+    end
+    private_class_method :assign_recorded
+
     #: (untyped) -> untyped
     def self.immutable_copy(value)
       case value

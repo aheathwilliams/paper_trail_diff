@@ -236,6 +236,7 @@ module PaperTrailDiff
     def normalize_children(records, tree, path, reifier)
       reflections_by_class = {} #: Hash[untyped, Array[untyped]]
       records.map do |child|
+        Support.with_recorded_times(child)
         reflections = reflections_by_class[child.class] ||= reflections_for(child, tree, path)
         reifier.reify(child, reflections) unless reflections.empty?
         normalize_record(child, tree, path, reifier, reflections)

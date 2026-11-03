@@ -21,6 +21,14 @@ class ZonedAlarmClock < ActiveRecord::Base
   has_paper_trail
 end
 
+# An initialization callback makes the gem rebuild each version with
+# PaperTrail's reify, which it cannot read directly.
+class CallbackAlarmClock < ActiveRecord::Base
+  self.table_name = 'alarm_clocks'
+  after_initialize { @initialized = true }
+  has_paper_trail
+end
+
 # PaperTrail's YAML serializer stores a time column's value as the
 # ActiveRecord::Type::Time::Value that wraps it.
 RSpec.describe 'History of a time of day' do
@@ -45,7 +53,7 @@ RSpec.describe 'History of a time of day' do
     AlarmClock.delete_all
   end
 
-  [AlarmClock, ZonedAlarmClock].each do |model|
+  [AlarmClock, ZonedAlarmClock, CallbackAlarmClock].each do |model|
     context "with #{model.name}" do
       it 'reads the time each version recorded' do
         clock = model.create!(name: 'Kitchen')
@@ -63,5 +71,23 @@ RSpec.describe 'History of a time of day' do
           .to eq('rings_at' => { from: nil, to: clock.rings_at })
       end
     end
+  end
+
+  it 'gives a callable historical_filter: the time each version recorded' do
+    clock = AlarmClock.create!(name: 'Kitchen', rings_at: '07:30')
+    clock.update!(name: 'Bedroom')
+    seen = []
+    filter = lambda do |state|
+      seen << state.rings_at
+      true
+    end
+
+    PaperTrailDiff.analyze_scope(
+      AlarmClock, limit: 1, within: (Time.now.utc - 3600)..(Time.now.utc + 60),
+                  historical_filter: filter
+    )
+
+    expect(seen).not_to be_empty
+    expect(seen).to all(eq(clock.reload.rings_at))
   end
 end
