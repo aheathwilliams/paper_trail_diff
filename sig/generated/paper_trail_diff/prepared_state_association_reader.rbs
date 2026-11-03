@@ -57,14 +57,16 @@ module PaperTrailDiff
     # : (PreparedRecordState) -> Array[untyped]
     def identity: (PreparedRecordState) -> Array[untyped]
 
+    # The scope's condition and the owner's id are read once for all the
+    # owner's children, which are read at every boundary.
     # : (PreparedRecordState, untyped, untyped, bool) -> [bool, Array[PreparedRecordState]]
     def children: (PreparedRecordState, untyped, untyped, bool) -> [ bool, Array[PreparedRecordState] ]
 
-    # : (untyped, PreparedRecordState) -> Array[untyped]
-    def ids_for: (untyped, PreparedRecordState) -> Array[untyped]
+    # : (untyped, String) -> Array[untyped]
+    def ids_for: (untyped, String) -> Array[untyped]
 
-    # : (PreparedRecordState, PreparedRecordState, untyped, bool) -> bool
-    def member?: (PreparedRecordState, PreparedRecordState, untyped, bool) -> bool
+    # : (PreparedRecordState, PreparedRecordState, String, untyped, ScopeCondition) -> bool
+    def member?: (PreparedRecordState, PreparedRecordState, String, untyped, ScopeCondition) -> bool
 
     # : (PreparedRecordState) -> String
     def owner_id: (PreparedRecordState) -> String

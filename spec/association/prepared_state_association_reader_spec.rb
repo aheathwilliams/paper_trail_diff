@@ -75,6 +75,30 @@ RSpec.describe PaperTrailDiff::PreparedStateAssociationReader do
     end
   end
 
+  # How often a timeline reads scope conditions, for a root with that many
+  # comments.
+  def condition_lookups(children)
+    article = TrackedArticle.create!(title: 'Root')
+    children.times { |index| article.comments.create!(body: "Comment #{index}") }
+    article.update!(title: 'Edited')
+    lookups = 0
+    allow_any_instance_of(PaperTrailDiff::ScopeCondition::Cache).to receive(:call)
+      .and_wrap_original do |original, *arguments, **options|
+        lookups += 1
+        original.call(*arguments, **options)
+      end
+    PaperTrailDiff.timeline(article, associations: [:comments])
+    lookups
+  ensure
+    RSpec::Mocks.space.reset_all
+  end
+
+  # Every child is placed at every boundary, so what the owner and the
+  # reflection fix is read once for all of them.
+  it "reads the scope's condition once for all of an owner's children" do
+    expect(condition_lookups(4)).to eq(condition_lookups(1))
+  end
+
   it 'reads a has_many :through over moved and destroyed join records and members' do
     ada, bea = %w[Ada Bea].map { |name| TrackedAuthor.create!(name: name) }
     moved = TrackedArticle.create!(title: 'Moved', author: ada)

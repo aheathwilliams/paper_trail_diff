@@ -223,10 +223,12 @@ module PaperTrailDiff
     # A model and a tree resolve to the same reflections wherever they are
     # read: a tree is only ever walked from one place, the root tree at the
     # root and a subtree below it. Beyond that, the path only names a failure,
-    # and a failure is not cached.
+    # and a failure is not cached. Each record is read at every boundary, so
+    # the lookup builds no key.
     #: (untyped, AssociationTree, path: String) -> Array[untyped]
     def reflections_for(model_class, tree, path:)
-      @reflection_cache[[model_class, tree]] ||= requested_reflections(model_class, tree, path)
+      by_class = @reflection_cache[tree] ||= {}
+      by_class[model_class] ||= requested_reflections(model_class, tree, path)
     end
 
     # Active Record names keys as strings. A polymorphic child also points back
@@ -242,7 +244,7 @@ module PaperTrailDiff
     private
 
     # @rbs @tree: AssociationTree
-    # @rbs @reflection_cache: Hash[Array[untyped], Array[untyped]]
+    # @rbs @reflection_cache: Hash[AssociationTree, Hash[untyped, Array[untyped]]]
 
     #: (untyped, AssociationTree, path: String) -> Array[Array[untyped]]
     def collect_reflections(model_class, tree, path:)
