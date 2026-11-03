@@ -102,4 +102,39 @@ RSpec.describe 'Activity windows where only descendants changed',
     expect(steps.flat_map { |step| comment_summary(step.diff)[:changed] })
       .to eq([{ from: 'one', to: 'two' }])
   end
+
+  def statements(&)
+    count = 0
+    callback = ->(*args) { count += 1 unless %w[SCHEMA TRANSACTION].include?(args.last[:name]) }
+    ActiveSupport::Notifications.subscribed(callback, 'sql.active_record', &)
+    count
+  end
+
+  # Roots with no version in the window read their children's history from the
+  # batch's preparation, as roots with versions there do, rather than one root
+  # at a time.
+  it 'prepares a batch of roots whose comments alone changed together' do
+    articles = Array.new(5) do |index|
+      article = TrackedArticle.create!(title: "Root #{index}")
+      article.comments.create!(body: 'one')
+      article
+    end
+    window_start = Time.now.utc
+    articles.each { |article| article.comments.first.update!(body: 'two') }
+    options = { within: window_start..Time.now.utc, associations: [:comments], activity: true }
+    roots = articles.map { |article| TrackedArticle.find(article.id) }
+
+    one = statements { PaperTrailDiff.analyze_many(roots.first(1), **options) }
+    many = nil
+    five = statements { many = PaperTrailDiff.analyze_many(roots, **options) }
+
+    expect(five).to eq(one)
+    roots.each do |root|
+      single = PaperTrailDiff.analyze(root, **options)
+      batch = many.fetch(PaperTrailDiff::Endpoint.identity(root))
+      expect(batch.activity_timeline.map { |step| step.diff.to_h })
+        .to eq(single.activity_timeline.map { |step| step.diff.to_h })
+      expect(batch.diff.to_h).to eq(single.diff.to_h)
+    end
+  end
 end

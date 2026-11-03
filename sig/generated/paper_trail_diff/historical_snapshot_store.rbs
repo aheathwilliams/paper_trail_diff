@@ -2,9 +2,9 @@
 
 module PaperTrailDiff
   # Reconstructs and caches immutable historical snapshots for one adapter
-  # configuration. It keeps the histories batches prepare, by root version;
-  # one prepared for a single root goes back to the caller, who passes it to
-  # every read for that root.
+  # configuration. It keeps the histories batches prepare, by root and by root
+  # version; one prepared for a single root goes back to the caller, who
+  # passes it to every read for that root.
   class HistoricalSnapshotStore
     # : (tree: AssociationTree, traversal: AssociationTraversal, normalizer: SnapshotNormalizer, preparer: untyped) -> void
     def initialize: (tree: AssociationTree, traversal: AssociationTraversal, normalizer: SnapshotNormalizer, preparer: untyped) -> void
@@ -14,7 +14,8 @@ module PaperTrailDiff
     # : (untyped, Array[untyped], ?start_at: untyped, ?end_at: untyped) -> PreparedHistory?
     def prepare: (untyped, Array[untyped], ?start_at: untyped, ?end_at: untyped) -> PreparedHistory?
 
-    # A `start_at` is a window's, as for `prepare`.
+    # A `start_at` is a window's, as for `prepare`. A window's roots may have
+    # no version in it, when only their descendants changed there.
     # : (Array[untyped], Array[untyped], ?start_at: untyped, ?end_at: untyped) -> void
     def prepare_batch: (Array[untyped], Array[untyped], ?start_at: untyped, ?end_at: untyped) -> void
 
@@ -38,6 +39,8 @@ module PaperTrailDiff
     def association_reader: (untyped, habtm_version: untyped, ?history: PreparedHistory?) -> untyped
 
     private
+
+    @batched_roots: Hash[identity, PreparedHistory]
 
     @live_graph_collector: LiveGraphCollector
 
@@ -66,6 +69,10 @@ module PaperTrailDiff
 
     # : (Array[untyped], Array[untyped], ?live_records: Array[untyped], ?start_at: untyped, ?end_at: untyped) -> void
     def register_batch: (Array[untyped], Array[untyped], ?live_records: Array[untyped], ?start_at: untyped, ?end_at: untyped) -> void
+
+    # Snapshot reads find the history by root version, and `prepare` by root.
+    # : (PreparedHistory, Array[untyped], Array[untyped]) -> void
+    def register: (PreparedHistory, Array[untyped], Array[untyped]) -> void
 
     # : (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer, history: PreparedHistory?) -> RecordSnapshot?
     def snapshot_from_version: (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer, history: PreparedHistory?) -> RecordSnapshot?

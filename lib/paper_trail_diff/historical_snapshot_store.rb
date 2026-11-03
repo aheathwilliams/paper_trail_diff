@@ -3,9 +3,9 @@
 
 module PaperTrailDiff
   # Reconstructs and caches immutable historical snapshots for one adapter
-  # configuration. It keeps the histories batches prepare, by root version;
-  # one prepared for a single root goes back to the caller, who passes it to
-  # every read for that root.
+  # configuration. It keeps the histories batches prepare, by root and by root
+  # version; one prepared for a single root goes back to the caller, who
+  # passes it to every read for that root.
   class HistoricalSnapshotStore
     #: (tree: AssociationTree, traversal: AssociationTraversal, normalizer: SnapshotNormalizer, preparer: untyped) -> void
     def initialize(tree:, traversal:, normalizer:, preparer:)
@@ -17,6 +17,7 @@ module PaperTrailDiff
       @live_graph_collector = LiveGraphCollector.new(tree: tree, traversal: traversal)
       @snapshots = {} #: Hash[Array[untyped], RecordSnapshot?]
       @prepared_histories = {} #: Hash[Array[untyped], PreparedHistory]
+      @batched_roots = {} #: Hash[identity, PreparedHistory]
       @live_roots = {} #: Hash[identity, untyped]
     end
 
@@ -26,9 +27,10 @@ module PaperTrailDiff
     def prepare(record, root_versions, start_at: nil, end_at: root_versions.last.created_at)
       return if @tree.empty?
 
-      # A batched preparation already covers these roots.
-      batched = root_versions.find { |version| @prepared_histories.key?(Support.row_key(version)) }
-      return @prepared_histories.fetch(Support.row_key(batched)) if batched
+      # A batch prepared this root with the others, including a root with no
+      # version in the window that closes on its current state.
+      batched = @batched_roots[Endpoint.identity(record)]
+      return batched if batched
 
       PreparedHistoryLoader.new(
         record, root_ids: [record.id], root_versions: root_versions,
@@ -37,10 +39,11 @@ module PaperTrailDiff
       ).call
     end
 
-    # A `start_at` is a window's, as for `prepare`.
+    # A `start_at` is a window's, as for `prepare`. A window's roots may have
+    # no version in it, when only their descendants changed there.
     #: (Array[untyped], Array[untyped], ?start_at: untyped, ?end_at: untyped) -> void
     def prepare_batch(records, root_versions, start_at: nil, end_at: nil)
-      return if @tree.empty? || records.empty? || root_versions.empty?
+      return if @tree.empty? || records.empty? || (root_versions.empty? && start_at.nil?)
 
       Instrumentation.instrument('prepare_history', batch_payload(records, root_versions)) do
         register_batch(records, root_versions, start_at: start_at, end_at: end_at)
@@ -115,6 +118,7 @@ module PaperTrailDiff
     # @rbs @live_graph_collector: LiveGraphCollector
     # @rbs @snapshots: Hash[Array[untyped], RecordSnapshot?]
     # @rbs @prepared_histories: Hash[Array[untyped], PreparedHistory]
+    # @rbs @batched_roots: Hash[identity, PreparedHistory]
     # @rbs @live_roots: Hash[identity, untyped]
 
     # A batch's history for the version wins over the one a caller passes.
@@ -143,7 +147,14 @@ module PaperTrailDiff
         live_records: live_records,
         window: !start_at.nil?
       ).call
+      register(history, records, root_versions)
+    end
+
+    # Snapshot reads find the history by root version, and `prepare` by root.
+    #: (PreparedHistory, Array[untyped], Array[untyped]) -> void
+    def register(history, records, root_versions)
       root_versions.each { |version| @prepared_histories[Support.row_key(version)] = history }
+      records.each { |record| @batched_roots[Endpoint.identity(record)] = history }
     end
 
     #: (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer, history: PreparedHistory?) -> RecordSnapshot?

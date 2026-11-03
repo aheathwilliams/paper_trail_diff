@@ -66,28 +66,29 @@ module PaperTrailDiff
 
     # Association history is prepared per model class across every selected root
     # version, which is the work that would otherwise repeat for each record.
+    # Roots that close on their current state are prepared even without a
+    # version in the window, since their descendants may have changed there.
     # The roots are preloaded first, because preparation reads their current
     # association state as a fallback and would otherwise walk it one root at a
     # time.
     #: (Array[untyped], Hash[Array[String], RootVersionPlan], Hash[Array[String], untyped], Hash[Array[String], TimeRange]) -> void
     def prepare(records, selected, loaded, windows)
-      records.group_by(&:class).each_value do |grouped|
-        versions = grouped.flat_map do |record|
-          selected.fetch(Endpoint.identity(record), RootVersionPlan.empty).reconstruction_versions
-        end
-        next if versions.empty?
-
-        roots = grouped.map { |record| loaded.fetch(Endpoint.identity(record), record) }
-        live = closes_live?(grouped, selected)
-        @history_preparer.call(roots, versions, **preparation_range(versions, windows, live: live))
+      records.group_by(&:class).each_value do |group|
+        prepare_group(group, selected, loaded, windows)
       end
     end
 
-    #: (Array[untyped], Hash[Array[String], RootVersionPlan]) -> bool
-    def closes_live?(records, selected)
-      records.any? do |record|
-        !selected.fetch(Endpoint.identity(record), RootVersionPlan.empty).closing_record.nil?
+    #: (Array[untyped], Hash[Array[String], RootVersionPlan], Hash[Array[String], untyped], Hash[Array[String], TimeRange]) -> void
+    def prepare_group(records, selected, loaded, windows)
+      plans = records.map do |record|
+        selected.fetch(Endpoint.identity(record), RootVersionPlan.empty)
       end
+      versions = plans.flat_map(&:reconstruction_versions)
+      live = plans.any?(&:closing_record)
+      return if versions.empty? && !live
+
+      roots = records.map { |record| loaded.fetch(Endpoint.identity(record), record) }
+      @history_preparer.call(roots, versions, **preparation_range(versions, windows, live: live))
     end
 
     # A plan closing on the live record reads history up to now; the others
