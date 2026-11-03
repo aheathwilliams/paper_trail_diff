@@ -197,6 +197,13 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- With `historical_filter:`, `analyze_scope` and `report` test each record over
+  the window its analysis covers. A transaction that crosses the window's
+  start or end moves that window to where the transaction began, but the
+  filter read the window as asked: it missed a value the record held at the
+  moved start, such as its title before the transaction changed it, and
+  matched one held only past a moved end.
+
 - `analyze_scope` and `report` no longer lose a record's change when a
   window's edge falls inside a transaction that saved the record before the
   edge and another article, or a record off the requested paths, after it.

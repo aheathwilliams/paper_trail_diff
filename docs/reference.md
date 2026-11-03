@@ -833,8 +833,11 @@ report = PaperTrailDiff.report(
 )
 ```
 
-The filter checks the record as it was when the window started and after each
-change made inside it. A record matches if any of those states match. With a
+The filter checks the record as it was when its window started and after each
+change made inside it. That window is the one its analysis covers
+(`analysis.window`): a transaction that crosses an edge moves the edge to where
+the transaction began (see [time windows](#time-windows)). A record matches if
+any of those states match. With a
 hash, every key must be equal (`==`) once both sides are cast to the
 attribute's type, as `where` casts its values: `{ status: :published }` matches
 an enum, and a date or time matches whether the history stored it as YAML or

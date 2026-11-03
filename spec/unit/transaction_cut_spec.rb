@@ -372,6 +372,23 @@ RSpec.describe PaperTrailDiff::TransactionCut do
                               requested: at(1.25)..at(3), window: at(1)..at(3) }])
     end
 
+    it 'moves the same windows unreported when told not to report them' do
+      feature, = history(FilterFeature, transactions: { 1 => 7 })
+      other(1.5, 7)
+      range = PaperTrailDiff::TimeRange.new(at(1.25)..at(3))
+      events = []
+      subscriber = ->(*, payload) { events << payload }
+      name = 'moved_window.paper_trail_diff'
+
+      moved = ActiveSupport::Notifications.subscribed(subscriber, name) do
+        described_class.windows(FilterFeature, [feature], range,
+                                traversal: paths(FilterFeature, ['FilterNote']), report: false)
+      end
+
+      expect([moved.transform_values(&:to_range), events])
+        .to eq([{ feature.id.to_s => at(1)..at(3) }, []])
+    end
+
     it "does not move a root for another root's transaction" do
       article, = history
       FilterVersion.insert({ item_type: 'FilterArticle', item_id: article.id + 1, event: 'update',
@@ -379,6 +396,27 @@ RSpec.describe PaperTrailDiff::TransactionCut do
       other(1.5, 7)
 
       expect(windows([article], at(1.25)..at(3))).to eq({})
+    end
+  end
+
+  describe '.reader' do
+    it 'reads the windows of ids for a range by the paths it was given, unreported' do
+      article, = history(transactions: { 1 => 7 })
+      other(1.5, 7)
+      range = PaperTrailDiff::TimeRange.new(at(1.25)..at(3))
+      events = []
+      subscriber = ->(*, payload) { events << payload }
+      read = lambda do |types|
+        reader = described_class.reader(FilterArticle, paths(FilterArticle, types))
+        reader.call([article.id.to_s], range)
+      end
+      name = 'moved_window.paper_trail_diff'
+
+      moved = ActiveSupport::Notifications.subscribed(subscriber, name) do
+        [read.call([]), read.call(['FilterNote']).transform_values(&:to_range)]
+      end
+
+      expect([moved, events]).to eq([[{}, { article.id.to_s => at(1)..at(3) }], []])
     end
   end
 

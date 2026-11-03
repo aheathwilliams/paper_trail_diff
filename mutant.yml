@@ -60,6 +60,7 @@ matcher:
     - PaperTrailDiff::ReadSnapshot*
     - PaperTrailDiff::TimeVersionRange*
     - PaperTrailDiff::BatchedRootVersions*
+    - PaperTrailDiff::OwnWindow*
     - PaperTrailDiff::BatchBoundaryResolver*
     - PaperTrailDiff::BatchedRootAnalyses*
     - PaperTrailDiff::AnalysisBatch*

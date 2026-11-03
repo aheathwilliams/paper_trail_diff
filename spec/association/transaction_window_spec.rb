@@ -289,6 +289,26 @@ RSpec.describe 'Windows that meet inside a transaction',
       .to all(eq(key => nil))
   end
 
+  # Its analysis starts where the transaction began, so a historical filter
+  # reads it from there too: it held its old title in the later window.
+  it 'filters a root moved into the later window by what it held where its window starts' do
+    article, comment = article_with_comment
+    WindowArticle.transaction do
+      article.update!(title: 'Second')
+      comment.update!(body: 'after')
+    end
+    edge = comment.versions.last.created_at
+    selected = lambda do |title|
+      PaperTrailDiff.analyze_scope(WindowArticle.all, within: edge..Time.now.utc, limit: 5,
+                                                      associations: paths,
+                                                      historical_filter: { title: title })
+                    .analyses.keys
+    end
+    key = PaperTrailDiff::Endpoint.identity(article)
+
+    expect(%w[First Second Third].map(&selected)).to eq([[key], [key], []])
+  end
+
   # Two roots saved in one transaction, one before the edge and one after it.
   # A report selects a record by its versions inside its window, so each
   # root's change is in the window its version is in. Moved into the later

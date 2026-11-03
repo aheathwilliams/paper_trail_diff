@@ -119,6 +119,10 @@ module PaperTrailDiff
     # : () -> untyped
     def window_versions: () -> untyped
 
+    # The filter reads each candidate over the window its analysis will.
+    # : (untyped, Integer, AssociationTraversal?) -> HistoricalFilter?
+    def historical_filter_for: (untyped, Integer, AssociationTraversal?) -> HistoricalFilter?
+
     # Accepts a model class as readily as a relation: `Article` and
     # `Article.where(...)` both name a population, and `all` is what makes them
     # the same kind of thing.

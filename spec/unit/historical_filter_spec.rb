@@ -10,10 +10,17 @@ RSpec.describe PaperTrailDiff::HistoricalFilter do
     FilterEvent.delete_all
   end
 
-  def filter(predicate, within: nil, limit: 10, max_versions: 100, model: FilterArticle)
+  # Each slice of candidates and window the filter asks where windows move.
+  let(:asked) { [] }
+
+  # `windows` gives the moved windows by id, as TransactionCut would.
+  def filter(predicate, within: nil, limit: 10, max_versions: 100, # rubocop:disable Metrics/ParameterLists
+             model: FilterArticle, windows: {})
     time_range = within && PaperTrailDiff::TimeRange.new(within)
+    moved = windows.transform_values { |range| PaperTrailDiff::TimeRange.new(range) }
+    reader = ->(ids, range) { moved.tap { asked << [ids, range.to_range] } }
     described_class.new(model, predicate: predicate, time_range: time_range,
-                               limit: limit, max_versions: max_versions)
+                               limit: limit, max_versions: max_versions, windows: reader)
   end
 
   def matches(predicate, articles, **options)
@@ -240,6 +247,64 @@ RSpec.describe PaperTrailDiff::HistoricalFilter do
       expect(matches({ title: 'Draft' }, [article], within: created..edited, max_versions: 2))
         .to eq([article.id.to_s])
       expect(neighbour.versions.count).to eq(3)
+    end
+  end
+
+  describe 'with windows moved to transaction edges' do
+    def key(article) = article.id.to_s
+
+    it 'reads a candidate from where its window moved back to' do
+      article, created, edited, published = history
+
+      moved = { key(article) => created..published }
+
+      expect(matches({ title: 'Draft' }, [article], within: edited..published)).to eq([])
+      expect(matches({ title: 'Draft' }, [article], within: edited..published, windows: moved))
+        .to eq([key(article)])
+    end
+
+    it 'closes a window whose end moved on the first version past it' do
+      article, created, edited, published = history
+      moved = { key(article) => created...edited }
+
+      expect(matches({ title: 'Review' }, [article], within: created..published, windows: moved))
+        .to eq([key(article)])
+      expect(matches({ title: 'Published' }, [article], within: created..published, windows: moved))
+        .to eq([])
+    end
+
+    it 'reads the other candidates over the window as asked' do
+      moved, moved_created, = history
+      other, _other_created, other_edited, other_published = history
+      windows = { key(moved) => moved_created..other_published }
+
+      expect(matches({ title: 'Draft' }, [moved, other], within: other_edited..other_published,
+                                                         windows: windows))
+        .to eq([key(moved)])
+    end
+
+    it 'asks where the windows of each batch of candidates move, for the window' do
+      stub_const('PaperTrailDiff::Support::IDS_PER_STATEMENT', 2)
+      articles = Array.new(3) { history.first }
+      window = (Time.now - 60)..Time.now
+
+      matches({ title: 'Draft' }, articles, within: window)
+      matches({ title: 'Draft' }, articles)
+
+      expect(asked).to eq([[articles.first(2).map { |article| key(article) }, window],
+                           [[key(articles.last)], window]])
+    end
+
+    it 'has no state after a destroy in a moved window, whatever comes past its end' do
+      article = FilterArticle.create!(title: 'Draft')
+      start = Time.now
+      article.destroy!
+      finish = Time.now
+      record_version(article, 'update', { 'id' => article.id, 'title' => 'Restored' })
+
+      expect(matches({ title: 'Restored' }, [article], within: start..Time.now,
+                                                       windows: { key(article) => start...finish }))
+        .to eq([])
     end
   end
 

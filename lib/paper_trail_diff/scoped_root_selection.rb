@@ -62,11 +62,7 @@ module PaperTrailDiff
       @related = activity_tree && AssociationActivitySelection.new(
         model, tree: activity_tree, time_range: time_range, version_scope: @version_scope
       )
-      @historical_filter = unless historical_filter.nil?
-                             HistoricalFilter.new(base_class, predicate: historical_filter,
-                                                              time_range: time_range, limit: @limit,
-                                                              max_versions: max_filter_versions)
-                           end
+      @historical_filter = historical_filter_for(historical_filter, max_filter_versions, traversal)
     end
 
     #: () -> Result
@@ -174,6 +170,16 @@ module PaperTrailDiff
     def window_versions
       relation = TransactionCut.window_versions(model, @time_range, @path_types)
       @version_scope ? @version_scope.call(relation) : relation
+    end
+
+    # The filter reads each candidate over the window its analysis will.
+    #: (untyped, Integer, AssociationTraversal?) -> HistoricalFilter?
+    def historical_filter_for(predicate, max_versions, traversal)
+      return if predicate.nil?
+
+      HistoricalFilter.new(base_class, predicate: predicate, time_range: @time_range,
+                                       limit: @limit, max_versions: max_versions,
+                                       windows: TransactionCut.reader(model, traversal))
     end
 
     # Accepts a model class as readily as a relation: `Article` and

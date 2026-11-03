@@ -426,6 +426,24 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
       expect(result.records.map(&:id)).to eq([ann_draft.id, TrackedArticle.maximum(:id)])
     end
 
+    # Such a transaction moves the root's window back to where it began, so
+    # the filter reads it from there (see TransactionCut).
+    it 'reads a root over the window a transaction crossing its start moved it to' do
+      root, other = %w[Root Other].map { |title| TrackedArticle.create!(title: title) }
+      start = TrackedArticle.transaction do
+        root.update!(title: 'Root edited')
+        Time.now.utc.tap { other.update!(title: 'Other edited') }
+      end
+      paths = instance_double(PaperTrailDiff::AssociationTraversal)
+      allow(paths).to receive(:path_types).with(TrackedArticle).and_return(['TrackedArticle'])
+      filtered = lambda do |traversal|
+        select(TrackedArticle, time_range: since(start), historical_filter: { 'title' => 'Root' },
+                               traversal: traversal).records
+      end
+
+      expect([filtered.call(paths), filtered.call(nil)]).to eq([[root], []])
+    end
+
     it 'reads states from the window only' do
       article = TrackedArticle.create!(title: 'Old')
       article.update!(title: 'Draft')

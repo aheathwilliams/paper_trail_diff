@@ -85,8 +85,10 @@ module PaperTrailDiff
 
     # The windows that move, keyed by root id. A root missing from the result
     # keeps the window as asked. `traversal` names the requested paths.
-    #: (untyped, Array[untyped], TimeRange, ?traversal: AssociationTraversal?) -> Hash[String, TimeRange]
-    def self.windows(model_class, records, range, traversal: nil)
+    # `records` may be ids. Each move is reported unless `report` is false,
+    # for a reader that looks before the analysis that reports them.
+    #: (untyped, Array[untyped], TimeRange, ?traversal: AssociationTraversal?, ?report: bool) -> Hash[String, TimeRange]
+    def self.windows(model_class, records, range, traversal: nil, report: true)
       versions = transaction_versions(model_class)
       return {} unless versions
 
@@ -95,25 +97,31 @@ module PaperTrailDiff
       finish = Edge.end_of(range)
       ends = finish ? moved_edges(versions, records, finish, types) : {} #: Hash[String, Time]
       (starts.keys | ends.keys).to_h do |id|
-        [id, moved_window(model_class, id, range, starts[id], ends[id])]
+        window = moved(range, starts[id], ends[id])
+        report_move(model_class, id, range, window) if report
+        [id, window]
       end
+    end
+
+    # Reads the windows of `model_class` ids for a range, unreported.
+    #: (untyped, AssociationTraversal?) -> ^(Array[String], TimeRange) -> Hash[String, TimeRange]
+    def self.reader(model_class, traversal)
+      ->(ids, range) { windows(model_class, ids, range, traversal: traversal, report: false) }
     end
 
     # A transaction holds its rows only while it runs, so in history as an
     # application saves it an edge moves by moments. A longer move means a
     # long transaction or rewritten times, which only the application can
     # judge, so each move is reported rather than logged or refused.
-    #: (untyped, String, TimeRange, Time?, Time?) -> TimeRange
-    def self.moved_window(model_class, id, range, start, finish)
-      window = moved(range, start, finish)
+    #: (untyped, String, TimeRange, TimeRange) -> void
+    def self.report_move(model_class, id, range, window)
       Instrumentation.notify(
         'moved_window',
         item_type: model_class.base_class.name, item_id: id,
         requested: range.to_range, window: window.to_range
       )
-      window
     end
-    private_class_method :moved_window
+    private_class_method :report_move
 
     # The model's versions in a window, and those saved before it in a
     # transaction that saved a record of one of `types` inside it, which
