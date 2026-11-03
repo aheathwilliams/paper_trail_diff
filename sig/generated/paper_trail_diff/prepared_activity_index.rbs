@@ -10,6 +10,10 @@ module PaperTrailDiff
   # and the snapshots read it from there. ActivityTreeFilter leaves out the
   # events of a candidate that was outside the tree throughout.
   class PreparedActivityIndex
+    # The children the history's owners had, which its edge loader reads
+    # first for most of them.
+    attr_reader children: PreparedChildCandidates
+
     # : (PreparedRecordIndex, Array[untyped], start_at: untyped) -> void
     def initialize: (PreparedRecordIndex, Array[untyped], start_at: untyped) -> void
 
@@ -59,8 +63,6 @@ module PaperTrailDiff
 
     private
 
-    @children: Hash[untyped, untyped]
-
     @conditions: ScopeCondition::Cache
 
     @nodes: Hash[String, Array[untyped]]
@@ -101,9 +103,6 @@ module PaperTrailDiff
 
     # : (untyped) -> Array[untyped]
     def node_ids: (untyped) -> Array[untyped]
-
-    # : (untyped, untyped) -> untyped
-    def child_rows: (untyped, untyped) -> untyped
 
     # : (Hash[String, Array[ActivityTargetCandidateLoader::Row]], Array[untyped]) -> Array[ActivityTargetCandidateLoader::Row]
     def rows_for: (Hash[String, Array[ActivityTargetCandidateLoader::Row]], Array[untyped]) -> Array[ActivityTargetCandidateLoader::Row]

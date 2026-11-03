@@ -1,0 +1,39 @@
+# Generated from lib/paper_trail_diff/prepared_child_candidates.rb with RBS::Inline
+
+module PaperTrailDiff
+  # The children each owner of a has_many or has_one had from a history's
+  # start onward, and has now, read once for each owner across the history
+  # (see ActivityChildCandidateLoader). Preparation reads them for the owners
+  # it loads, and activity then finds them here.
+  class PreparedChildCandidates
+    # What one class's association has read: the rows recorded under each
+    # owner and its live children's ids, by the owner's id.
+    class Read
+      attr_reader historical: Hash[String, Array[Array[untyped]]]
+
+      attr_reader live: Hash[String, Array[untyped]]
+
+      # : () -> void
+      def initialize: () -> void
+
+      # : (Array[untyped]) -> Array[untyped]
+      def unread: (Array[untyped]) -> Array[untyped]
+
+      # : (Array[untyped], ActivityChildCandidateLoader) -> void
+      def add: (Array[untyped], ActivityChildCandidateLoader) -> void
+    end
+
+    # : (untyped) -> void
+    def initialize: (untyped) -> void
+
+    # The owners not read yet are read in one statement, with the others the
+    # block names, so that owners asked about later need none. Each owner
+    # class reads its own, as a polymorphic row can store the class's name.
+    # : (untyped, Array[untyped], untyped) ?{ () -> Array[untyped] } -> [Hash[String, Array[Array[untyped]]], Hash[String, Array[untyped]]]
+    def call: (untyped, Array[untyped], untyped) ?{ () -> Array[untyped] } -> [ Hash[String, Array[Array[untyped]]], Hash[String, Array[untyped]] ]
+
+    @read: Hash[Array[untyped], Read]
+
+    @start_at: untyped
+  end
+end

@@ -78,6 +78,11 @@ project follows [Semantic Versioning](https://semver.org/).
   comments, read its own history, at about nine statements each. A batch of
   20 such articles took 188 statements and now takes 14, as many as one.
 
+- Activity on a `has_many` or `has_one` reads the children each owner had
+  once. Preparing the history read them for its snapshots, and finding the
+  activity read them again: an `analyze_many` of three articles with their
+  comments took 16 statements and now takes 14.
+
 - `analyze` and `activity_timeline` with activity on associations read the
   current record's row once for the snapshots that start from it, as
   `analyze_many` already did. Each such snapshot read the row again: after

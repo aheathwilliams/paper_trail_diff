@@ -285,6 +285,8 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
     index.register(IndexSpecPage, [page.id, other.id])
     index.register(IndexSpecSection, [listed.id, featured.id])
     window = range(origin, Time.now.utc)
+    # Children are read for each owner class, whose own name a polymorphic
+    # row can store, so both reads are of the subclass the pages are.
     index.child_ids(IndexSpecLandingPage, [page.id], sections, window)
     owner = ->(name) { IndexSpecSection.reflect_on_association(name) }
     owners = lambda do |name|
@@ -293,7 +295,8 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
     end
 
     queries = statements do
-      expect(index.child_ids(IndexSpecPage, [other.id], sections, window)).to eq([listed.id])
+      expect(index.child_ids(IndexSpecLandingPage, [other.id], sections, window))
+        .to eq([listed.id])
     end
     expect(queries).to eq(0)
     expect(index.child_ids(IndexSpecPage, [page.id],

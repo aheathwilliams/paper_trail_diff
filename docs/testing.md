@@ -138,7 +138,8 @@ passes is behavior nothing checks. `mutant.yml` lists the classes it mutates:
   `DeletedRootFilter`;
 - which children and targets a record had at each point:
   `PreparedHistoryLoader`, `PreparedEdgeLoader`, `ActivityChildCandidateLoader`,
-  `ActivityTargetCandidateLoader`, and `PreparedActivityIndex`;
+  `PreparedChildCandidates`, `ActivityTargetCandidateLoader`, and
+  `PreparedActivityIndex`;
 - where an activity range starts and ends, and which association history its
   query reads: `ActivityRange` and `VersionAssociationCandidateScope`;
 - what activity a record shows: `ActivityTimelineBuilder`,

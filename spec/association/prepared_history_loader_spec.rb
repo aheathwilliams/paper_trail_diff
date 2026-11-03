@@ -343,7 +343,11 @@ RSpec.describe PaperTrailDiff::PreparedHistoryLoader do
     end_at = Time.now.utc
     live = [article]
     allow(PaperTrailDiff::PreparedRecordIndex).to receive(:new).and_call_original
-    allow(PaperTrailDiff::PreparedActivityIndex).to receive(:new).and_call_original
+    activities = []
+    allow(PaperTrailDiff::PreparedActivityIndex).to receive(:new)
+      .and_wrap_original do |original, *args, **options|
+        original.call(*args, **options).tap { |index| activities << index }
+      end
     allow(PaperTrailDiff::PreparedEdgeLoader).to receive(:new).and_call_original
 
     load_history(article, [:comments], root_versions: versions, start_at: start_at,
@@ -354,8 +358,12 @@ RSpec.describe PaperTrailDiff::PreparedHistoryLoader do
       .with(start_at, end_at: end_at, live_records: live)
     expect(PaperTrailDiff::PreparedActivityIndex).to have_received(:new)
       .with(instance_of(PaperTrailDiff::PreparedRecordIndex), versions, start_at: start_at).twice
-    expect(PaperTrailDiff::PreparedEdgeLoader).to have_received(:new)
-      .with(instance_of(PaperTrailDiff::PreparedRecordIndex), versions, start_at: start_at).twice
+    # Each edge loader reads children into its activity index's.
+    activities.each do |activity|
+      expect(PaperTrailDiff::PreparedEdgeLoader).to have_received(:new)
+        .with(instance_of(PaperTrailDiff::PreparedRecordIndex), versions,
+              children: equal(activity.children))
+    end
   end
 
   it 'marks an edge with a composite foreign key as unsupported' do
