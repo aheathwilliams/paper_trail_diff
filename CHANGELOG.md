@@ -75,6 +75,13 @@ project follows [Semantic Versioning](https://semver.org/).
   them kept, took 9.5 s and now takes 1.4 s, about as long as without the
   filter.
 
+- Preparing history no longer checks each record against every one before
+  it in two lists: the targets of a polymorphic `belongs_to`, and the owners
+  of an association requested both alone and as the first part of a
+  `has_many :through`. Each check cost little, about 0.1 s in an
+  `analyze_many` of 3,000 authors with their articles and the comments
+  through them, but the total grew with the square of the batch.
+
 - With `recorded_changes: true`, a boundary decodes its version's changes the
   first time its `recorded_changes` is read, and each version is decoded once
   for the whole call. Every boundary decoded its version when it was built,

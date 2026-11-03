@@ -23,6 +23,11 @@ module PaperTrailDiff
     # : (untyped, Array[untyped], untyped) -> Hash[String, Hash[Symbol, untyped]]
     def belongs_to_groups: (untyped, Array[untyped], untyped) -> Hash[String, Hash[Symbol, untyped]]
 
+    # Grouping only decides what to preload, so a type that names no class is
+    # left to raise where that state is read.
+    # : (untyped, Array[untyped], untyped, String) -> Hash[String, Hash[Symbol, untyped]]
+    def polymorphic_groups: (untyped, Array[untyped], untyped, String) -> Hash[String, Hash[Symbol, untyped]]
+
     # Each owner's children, recorded or live, each once.
     # : (untyped, Array[untyped], untyped) -> Hash[String, Hash[Symbol, untyped]]
     def child_groups: (untyped, Array[untyped], untyped) -> Hash[String, Hash[Symbol, untyped]]
