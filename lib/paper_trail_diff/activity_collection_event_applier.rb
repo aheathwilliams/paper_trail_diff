@@ -95,9 +95,8 @@ module PaperTrailDiff
       routes.any? do |route|
         _name, reflection, subtree, = route.last
         subtree.children.each_key.any? do |name|
-          owned_keys(reflection.klass.reflect_on_association(name)).any? do |key|
-            delta.before_value(key).to_s != delta.after_value(key).to_s
-          end
+          keys = owned_keys(reflection.klass.reflect_on_association(name))
+          keys.any? { |key| delta.changed?(key) }
         end
       end
     end

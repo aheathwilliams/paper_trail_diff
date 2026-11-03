@@ -19,18 +19,26 @@ module PaperTrailDiff
     # Fractional digits a model's history keeps for times, or nil when the
     # history is stored losslessly.
     # : (untyped) -> Integer?
-    def self?.digits: (untyped) -> Integer?
+    def self.digits: (untyped) -> Integer?
 
     # : (Hash[untyped, untyped], Integer?) -> Hash[untyped, untyped]
-    def self?.apply: (Hash[untyped, untyped], Integer?) -> Hash[untyped, untyped]
+    def self.apply: (Hash[untyped, untyped], Integer?) -> Hash[untyped, untyped]
 
+    # From nine digits on, the step is one nanosecond or a fraction of one, so
+    # nothing is cut.
     # : (untyped, Integer) -> untyped
-    def self?.truncate: (untyped, Integer) -> untyped
+    def self.truncate: (untyped, Integer) -> untyped
 
     # : (untyped) -> bool
-    def self?.json_history?: (untyped) -> bool
+    def self.json_history?: (untyped) -> bool
 
+    # mutant:disable - Every mutation that survives here reads the same
+    # constant another way: from this module rather than Object, or with `::`.
+    # : () -> Integer
+    def self.json_time_precision: () -> Integer
+
+    # mutant:disable - As for json_time_precision.
     # : () -> bool
-    def self?.json_serializer?: () -> bool
+    def self.json_serializer?: () -> bool
   end
 end

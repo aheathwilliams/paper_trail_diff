@@ -34,6 +34,8 @@ module PaperTrailDiff
 
     @traversal: AssociationTraversal
 
+    # Validation rejects a path that continues past a polymorphic target, so
+    # only a target of one class has a subtree to search.
     # : (untyped, AssociationTree, String, String) -> bool
     def through_part_below?: (untyped, AssociationTree, String, String) -> bool
 
@@ -42,12 +44,10 @@ module PaperTrailDiff
 
     # Timelines interleave event types, so every requested combination is
     # retained. Model, tree, and path are fixed per adapter, leaving one entry
-    # per selected item type.
+    # per selected item type. The strings are kept as frozen copies, which a
+    # caller cannot change.
     # : (Hash[Array[untyped], Array[Array[untyped]]], untyped, AssociationTree, String, String, Symbol) -> Array[Array[untyped]]
     def cached: (Hash[Array[untyped], Array[Array[untyped]]], untyped, AssociationTree, String, String, Symbol) -> Array[Array[untyped]]
-
-    # : (Array[untyped]) -> Array[untyped]
-    def cache_key: (Array[untyped]) -> Array[untyped]
 
     # : (Array[Array[untyped]]) -> Array[Array[untyped]]
     def freeze_routes: (Array[Array[untyped]]) -> Array[Array[untyped]]
@@ -55,6 +55,7 @@ module PaperTrailDiff
     # : (untyped, AssociationTree, String, Symbol, path: String) -> Array[Array[untyped]]
     def routes: (untyped, AssociationTree, String, Symbol, path: String) -> Array[Array[untyped]]
 
+    # Each reflection is of a child the tree names.
     # : (untyped, AssociationTree, String, Symbol, String) -> Array[Array[untyped]]
     def routes_for_reflection: (untyped, AssociationTree, String, Symbol, String) -> Array[Array[untyped]]
 

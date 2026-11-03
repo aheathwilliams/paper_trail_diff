@@ -5,21 +5,13 @@ module PaperTrailDiff
   # Collects root and selected-descendant versions relevant to one root history range.
   # Descendants are found in the root's prepared history.
   class ActivityVersionCollector
-    #: (untyped, root_versions: Array[untyped], tree: AssociationTree, ?range_start: untyped, ?range_end: untyped, ?prepared: PreparedActivityIndex?) -> void
-    def initialize( # rubocop:disable Metrics/ParameterLists
-      record,
-      root_versions:,
-      tree:,
-      range_start: root_versions.first,
-      range_end: root_versions.last,
-      prepared: nil
-    )
+    #: (untyped, root_versions: Array[untyped], tree: AssociationTree, range_start: untyped, range_end: untyped, prepared: PreparedActivityIndex?) -> void
+    def initialize(record, root_versions:, tree:, range_start:, range_end:, prepared:) # rubocop:disable Metrics/ParameterLists
       # Only a tree's descendants are read from it, and a tree is always read
       # with prepared history (see HistoricalSnapshotStore#prepare).
       @prepared = prepared #: PreparedActivityIndex
       @record = record
       @root_versions = root_versions
-      @tree = tree
       @traversal = AssociationTraversal.new(tree)
       @range = ActivityRange.new(range_start, range_end)
       @registry = ActivityEventRegistry.new
@@ -30,7 +22,10 @@ module PaperTrailDiff
     #: () -> Array[ActivityEvent]
     def call
       @registry.add(@root_versions)
-      collect_tree(@record.class, [@record.id], @tree, path: '', branch: nil) unless @tree.empty?
+      tree = @traversal.tree
+      unless tree.empty?
+        collect_tree(group(@record.class, [@record.id]), tree, path: '', branch: nil)
+      end
       events = @registry.to_a.sort_by { |event| Support.chronological_version_key(event.version) }
       pair = Support.ambiguous_pair(events.map(&:version))
       pair ? raise(AmbiguousVersionOrderError, Support.ambiguous_message(pair)) : events.freeze
@@ -41,67 +36,57 @@ module PaperTrailDiff
     # @rbs @prepared: PreparedActivityIndex
     # @rbs @record: untyped
     # @rbs @root_versions: Array[untyped]
-    # @rbs @tree: AssociationTree
     # @rbs @traversal: AssociationTraversal
     # @rbs @range: ActivityRange
     # @rbs @registry: ActivityEventRegistry
 
-    #: (untyped, Array[untyped], AssociationTree, path: String, branch: String?) -> void
-    def collect_tree(parent_class, parent_ids, tree, path:, branch:)
-      parent = group(parent_class, parent_ids)
-      @registry.add(parent.fetch(:versions), branch: branch) unless path.empty?
-      @traversal.reflections_for(parent_class, tree, path: path).each do |reflection|
-        subtree = tree.child(reflection.name)
-        next unless subtree
-
-        selected_branch = branch || reflection.name.to_s
-        collect_reflection(parent, reflection, subtree, path, selected_branch)
+    # Each event is credited to the top-level association it was reached
+    # through.
+    #: (Hash[Symbol, untyped], AssociationTree, path: String, branch: String?) -> void
+    def collect_tree(parent, tree, path:, branch:)
+      @traversal.reflections_for(parent.fetch(:model), tree, path: path).each do |reflection|
+        # Each reflection is of a child the tree names.
+        subtree = tree.child(reflection.name) #: AssociationTree
+        collect_reflection(parent, reflection, subtree, path, branch || reflection.name.to_s)
       end
     end
 
     #: (Hash[Symbol, untyped], untyped, AssociationTree, String, String) -> void
     def collect_reflection(parent, reflection, subtree, path, branch)
-      groups = edge_groups(parent, reflection, branch)
-      groups.each_value do |group|
+      edge_groups(parent, reflection, branch).each do |group|
         @registry.add(group.fetch(:versions), branch: branch)
-        next if subtree.empty?
-
-        child_path = Support.association_path(path, reflection.name)
-        collect_tree(group.fetch(:model), group.fetch(:ids), subtree,
-                     path: child_path, branch: branch)
+        collect_tree(group, subtree, path: Support.association_path(path, reflection.name),
+                                     branch: branch)
       end
     end
 
-    #: (Hash[Symbol, untyped], untyped, String) -> Hash[String, untyped]
+    # The groups of records an edge leads to, one for each class.
+    #: (Hash[Symbol, untyped], untyped, String) -> Array[Hash[Symbol, untyped]]
     def edge_groups(parent, reflection, branch)
-      return through_groups(parent, reflection, branch) if reflection.options[:through]
+      return through_groups(parent, reflection, branch) if reflection.through_reflection?
 
       case reflection.macro
       when :belongs_to
         belongs_to_groups(parent.fetch(:model), parent.fetch(:ids), reflection)
-      when :has_one, :has_many
-        direct_child_groups(parent.fetch(:model), parent.fetch(:ids), reflection)
       when :has_and_belongs_to_many
         habtm_groups(parent.fetch(:model), parent.fetch(:versions), reflection)
       else
-        {}
+        direct_child_groups(parent.fetch(:model), parent.fetch(:ids), reflection)
       end
     end
 
-    #: (Hash[Symbol, untyped], untyped, String) -> Hash[String, untyped]
+    # A through's join part is one class, never polymorphic, so one group of
+    # join rows leads to its targets.
+    #: (Hash[Symbol, untyped], untyped, String) -> Array[Hash[Symbol, untyped]]
     def through_groups(parent, reflection, branch)
-      through = reflection.through_reflection
-      intermediate = edge_groups(parent, through, branch)
-      result = {} #: Hash[String, untyped]
-      intermediate.each_value do |group|
-        versions = @prepared.join_versions(parent, group, reflection)
-        @registry.add(versions, branch: branch, join: true)
-        source = reflection.source_reflection
-        children = edge_groups(group, source, branch)
-        merge_groups!(result, children)
+      targets = edge_groups(parent, reflection.through_reflection, branch).flat_map do |group|
+        joins = @prepared.join_versions(parent, group, reflection)
+        @registry.add(joins, branch: branch, join: true)
+        edge_groups(group, reflection.source_reflection, branch)
       end
       # Under `source_type:`, only targets of that type are members.
-      reflection.options[:source_type]&.then { |type| result.slice(type.to_s) } || result
+      type = reflection.options[:source_type]
+      type ? targets.select { |group| type.to_s.eql?(group.fetch(:model).name) } : targets
     end
 
     # Every target the owners pointed at in the range, not only those their own
@@ -109,39 +94,48 @@ module PaperTrailDiff
     # is still that article's activity. Prepared history holds every target its
     # snapshots can contain. One it did not load -- a key changed without a
     # version -- has no state to compare.
-    #: (untyped, Array[untyped], untyped) -> Hash[String, untyped]
+    #: (untyped, Array[untyped], untyped) -> Array[Hash[Symbol, untyped]]
     def belongs_to_groups(parent_class, parent_ids, reflection)
       rows = @prepared.target_rows(parent_class, parent_ids, reflection, @range)
       identity_groups(rows, reflection) { |model_class, id| @prepared.loaded?(model_class, id) }
     end
 
-    #: (untyped, Array[untyped], untyped) -> Hash[String, untyped]
+    # With no children, nothing below them is read: prepared history registers
+    # only the classes it loaded records of.
+    #: (untyped, Array[untyped], untyped) -> Array[Hash[Symbol, untyped]]
     def direct_child_groups(parent_class, parent_ids, reflection)
       item_ids = @prepared.child_ids(parent_class, parent_ids, reflection, @range)
-      return {} if item_ids.empty?
-
-      { reflection.klass.name => group(reflection.klass, item_ids) }
+      item_ids.empty? ? [] : [group(reflection.klass, item_ids)]
     end
 
-    #: (untyped, Array[untyped], untyped) -> Hash[String, untyped]
+    #: (untyped, Array[untyped], untyped) -> Array[Hash[Symbol, untyped]]
     def habtm_groups(parent_class, parent_versions, reflection)
       identity_groups(@prepared.habtm_rows(parent_class, parent_versions, reflection), reflection)
     end
 
-    #: (Array[untyped], untyped) ?{ (untyped, untyped) -> bool } -> Hash[String, untyped]
+    # A type a polymorphic row stored that names no class has no versions to
+    # read.
+    #: (Array[untyped], untyped) ?{ (untyped, untyped) -> bool } -> Array[Hash[Symbol, untyped]]
     def identity_groups(rows, reflection)
       identities = rows.group_by do |row|
         AssociationTraversal.stored_target(reflection, row.foreign_type)
       end
-      groups = {} #: Hash[String, untyped]
-      identities.each do |model_class, class_rows|
+      identities.filter_map do |model_class, class_rows|
         next unless model_class
 
-        ids = class_rows.filter_map(&:foreign_key_id).uniq
-        ids = ids.select { |id| yield(model_class, id) } if block_given?
-        groups[model_class.name] = group(model_class, ids)
+        ids = target_ids(class_rows)
+        group(model_class, block_given? ? ids.select { |id| yield(model_class, id) } : ids)
       end
-      groups
+    end
+
+    # Each target once, however many rows name it, and none for a row that
+    # names none. The registry keeps a version once, and a missing target has
+    # no versions, so this only saves reading them again, which is why mutant
+    # leaves it alone.
+    # mutant:disable
+    #: (Array[untyped]) -> Array[untyped]
+    def target_ids(rows)
+      rows.filter_map(&:foreign_key_id).uniq
     end
 
     #: (untyped, Array[untyped]) -> Hash[Symbol, untyped]
@@ -149,20 +143,6 @@ module PaperTrailDiff
       ids = @prepared.member_ids(model_class, ids)
       { model: model_class, ids: ids,
         versions: @prepared.member_versions(model_class, ids, @range) }
-    end
-
-    #: (Hash[String, untyped], Hash[String, untyped]) -> void
-    def merge_groups!(destination, source)
-      source.each do |name, incoming|
-        existing = destination[name]
-        unless existing
-          destination[name] = incoming
-          next
-        end
-
-        ids = (existing.fetch(:ids) | incoming.fetch(:ids))
-        destination[name] = group(existing.fetch(:model), ids)
-      end
     end
   end
 end

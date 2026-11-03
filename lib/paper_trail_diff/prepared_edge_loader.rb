@@ -50,12 +50,9 @@ module PaperTrailDiff
 
     #: (untyped, Array[untyped], untyped) -> Hash[String, Hash[Symbol, untyped]]
     def child_groups(owner_class, owner_ids, reflection)
-      key = AssociationKey.scalar_foreign_key(reflection)
-      return {} unless key
-
-      historical = historical_child_ids(owner_class, owner_ids, reflection, key)
-      live = live_child_ids(owner_class, owner_ids, reflection, key)
-      owners = merge_owners(historical, live)
+      loader = ActivityChildCandidateLoader.new(owner_class, owner_ids, reflection, @start_at)
+      owners = merge_owners(group_ids_by_owner(loader.historical_rows),
+                            group_ids_by_owner(loader.current_pairs))
       group_for(reflection.klass, owners.values.flatten, owners: owners)
     end
 
@@ -86,56 +83,6 @@ module PaperTrailDiff
       end
     end
 
-    #: (untyped, Array[untyped], untyped, String) -> Hash[String, Array[untyped]]
-    def historical_child_ids(
-      owner_class,
-      owner_ids,
-      reflection,
-      foreign_key
-    )
-      version_class = owner_class.paper_trail.version_class
-      association_class = owner_class.paper_trail.version_association_class
-      relation = historical_child_relation(owner_class, owner_ids, reflection, foreign_key)
-      pairs = child_candidate_scope(version_class).call(relation).pluck(
-        association_class.arel_table[:foreign_key_id],
-        version_class.arel_table[:item_id]
-      )
-      group_ids_by_owner(typed_child_ids(reflection.klass, pairs))
-    end
-
-    #: (untyped, Array[Array[untyped]]) -> Array[Array[untyped]]
-    def typed_child_ids(model_class, pairs)
-      pairs.map { |owner_id, child_id| [owner_id, Support.record_id(model_class, child_id)] }
-    end
-
-    #: (untyped, Array[untyped], untyped, String) -> untyped
-    def historical_child_relation(owner_class, owner_ids, reflection, foreign_key)
-      version_class = owner_class.paper_trail.version_class
-      associations = owner_class.paper_trail.version_association_class
-      VersionTable.joined(associations, version_class).where(
-        foreign_key_name: foreign_key,
-        foreign_key_id: owner_ids,
-        foreign_type: parent_types(owner_class)
-      ).where(version_class.table_name => { item_type: reflection.klass.base_class.name })
-    end
-
-    #: (untyped) -> VersionAssociationCandidateScope
-    def child_candidate_scope(version_class)
-      VersionAssociationCandidateScope.new(
-        version_class,
-        @start_at
-      )
-    end
-
-    #: (untyped, Array[untyped], untyped, String) -> Hash[String, Array[untyped]]
-    def live_child_ids(owner_class, owner_ids, reflection, foreign_key)
-      # Every row of the table, as history reads them: an STI subclass's
-      # siblings are left out where children are resolved.
-      relation = reflection.klass.base_class.unscoped.where(foreign_key => owner_ids)
-      relation = relation.where(reflection.type => parent_types(owner_class)) if reflection.type
-      group_ids_by_owner(relation.pluck(foreign_key, reflection.klass.primary_key))
-    end
-
     #: (Hash[String, Hash[Symbol, untyped]], untyped, untyped) -> void
     def add_identity(groups, model_class, id)
       group = groups[model_class.name.to_s] ||= { model: model_class, ids: [] }
@@ -163,11 +110,6 @@ module PaperTrailDiff
     #: (Hash[String, Array[untyped]], Hash[String, Array[untyped]]) -> Hash[String, Array[untyped]]
     def merge_owners(left, right)
       left.merge(right) { |_owner, first, second| first | second }
-    end
-
-    #: (untyped) -> Array[String?]
-    def parent_types(owner_class)
-      [nil, '', owner_class.name, owner_class.base_class.name]
     end
   end
 end

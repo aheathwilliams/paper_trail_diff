@@ -117,29 +117,38 @@ a time and expects a spec to fail each time. A change that every spec still
 passes is behavior nothing checks. `mutant.yml` lists the classes it mutates:
 
 - what counts as a change: `Engine`, `CollectionComparator`,
-  `CollectionIdentityIndex`, and `NestedComparator`;
-- which columns are compared: `SnapshotNormalizer` and `SnapshotPool`;
+  `CollectionIdentityIndex`, `NestedComparator`, and `CollectionTransition`;
+- which columns are compared, and how precisely times are: `SnapshotNormalizer`,
+  `SnapshotPool`, and `StoredTimePrecision`;
 - which versions a range reads: `TimeRange`, `TimelineRange`, `VersionRange`,
-  `TimeVersionRange`, and `RootVersionPlan`;
-- which versions a batch or filter reads: `BatchedRootVersions`,
-  `BatchedRootAnalyses`, `DeletedAnalysisBatch`, and `HistoricalFilter`;
-- what a version recorded: `RecordedChanges`;
+  `TimeVersionRange`, `RootVersionSelection`, `RootVersionPlan`,
+  `TransactionCut`, `OpeningTransactions`, and `VersionQuery`;
+- which versions a batch or filter reads: `AnalysisBatch`,
+  `BatchedRootVersions`, `BatchedRootAnalyses`, `BatchBoundaryResolver`,
+  `DeletedAnalysisBatch`, `HistoricalFilter`, and `VersionScopeFilter`;
+- what a version recorded: `RecordedChanges` and `RecordedChangesReader`;
 - how a step flattens into rows: `ChangeRow` and `ChangeRows`;
 - which records a scope or report selects: `ScopedRootSelection`,
   `AssociationActivitySelection`, `AssociationActivityEdge`, and
   `DeletedRootFilter`;
 - which children and targets a record had at each point:
-  `PreparedHistoryLoader`, `PreparedEdgeLoader`,
+  `PreparedHistoryLoader`, `PreparedEdgeLoader`, `ActivityChildCandidateLoader`,
   `ActivityTargetCandidateLoader`, and `PreparedActivityIndex`;
 - where an activity range starts and ends, and which association history its
   query reads: `ActivityRange` and `VersionAssociationCandidateScope`;
-- what activity a record shows: `ActivityTimelineBuilder` and
-  `ActivityTransactionGrouper`;
-- which association paths a request accepts: `AssociationTraversal` and
-  `AssociationKey`;
+- what activity a record shows: `ActivityTimelineBuilder`,
+  `ActivityVersionCollector`, `ActivityHistoryBuilder`, `ActivityRootSteps`,
+  `ActivityTransactionGrouper`, `ActivityTransactionGroups`,
+  `ActivityTreeFilter`, `ActivityScopeFilter`, and `ActivityView`;
+- what an update did to a record, and whether it moved the record to another
+  owner: `ActivitySnapshotDelta`;
+- where in a carried snapshot an event's record sits: `ActivityEventRouteFinder`;
+- which association paths a request accepts: `AssociationTraversal`,
+  `AssociationKey`, and `VersionTable`;
 - whether a transaction's HABTM members are one record's:
   `HabtmTransactionOwners`;
-- which association paths history cannot read exactly: `ApproximatePaths`;
+- which association paths history cannot read exactly, and whether a request
+  reads one with PT-AT: `ApproximatePaths` and `FallbackPaths`;
 - which records an association scope admits, and how it ranks them:
   `ScopeCondition` and `ScopeRanking`.
 
@@ -214,8 +223,10 @@ increasing, in whole microseconds, for the test process. ActiveRecord
 timestamps, PaperTrail's `created_at`, and windows built from `Time.now` all
 read it, so they stay consistent however the host clock moves. The benchmark
 workload, `benchmark/support/workload.rb`, loads it too, because a step back
-could date a root's destroy before its last update. It affects only the specs
-and the benchmark; the gem itself reads the ordinary clock.
+could date a root's destroy before its last update, and so does the run of
+`examples/demo.rb` in `spec/association/demo_script_spec.rb`, whose versions
+are saved microseconds apart. It affects only the specs, the benchmark, and
+that run; the gem and the demo itself read the ordinary clock.
 
 ## Other databases locally
 

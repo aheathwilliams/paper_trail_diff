@@ -106,12 +106,11 @@ module PaperTrailDiff
       filtered_plan_for(steps, revealing)
     end
 
+    # The steps run in order, and so do the versions they pass.
     #: (Array[[untyped, untyped]], untyped) -> RootVersionPlan
     def filtered_plan_for(steps, revealing)
       live = revealing if Endpoint.record?(revealing)
-      versions = chronological(
-        (steps.flatten(1) + closing_versions).reject { |entry| Endpoint.record?(entry) }
-      )
+      versions = (steps.flatten + closing_versions).reject { |entry| Endpoint.record?(entry) }.uniq
       RootVersionPlan.new(
         versions: versions, steps: steps,
         context_version: (revealing unless live),
@@ -134,22 +133,19 @@ module PaperTrailDiff
     # state into the next reported step, so the two selected mutations either
     # side of a gap would disagree about what the record looked like between
     # them. One that stopped before the revealing version would read what the
-    # last one produced from history that ends before it.
-    #: (Array[untyped]) -> Array[untyped]
+    # last one produced from history that ends before it. Only the version
+    # that reveals the last can lie outside the range, and it comes after it.
+    # With no versions there is no span, and a plan replays its versions.
+    #: (Array[untyped]) -> Array[untyped]?
     def spanned(versions)
+      return if versions.empty?
+
       first = versions.first
       last = versions.last
-      return versions unless first && last
-
-      chronological(@in_range.select do |candidate|
+      (@in_range.select do |candidate|
         !Support.compare_versions(first, candidate).positive? &&
           !Support.compare_versions(candidate, last).positive?
-      end + versions)
-    end
-
-    #: (Array[untyped]) -> Array[untyped]
-    def chronological(versions)
-      Support.chronological_sort(versions.uniq { |version| Support.row_key(version) })
+      end + versions).uniq
     end
 
     #: (untyped) -> untyped
@@ -178,7 +174,7 @@ module PaperTrailDiff
     # nothing can follow it, so demanding one would reject the range forever.
     #: () -> bool
     def terminal_destroy?
-      @selected.last&.event.to_s == 'destroy'
+      @selected.last.event == 'destroy'
     end
   end
 end

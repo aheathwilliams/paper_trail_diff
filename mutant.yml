@@ -37,33 +37,50 @@ matcher:
     - PaperTrailDiff::CollectionComparator*
     - PaperTrailDiff::CollectionIdentityIndex*
     - PaperTrailDiff::NestedComparator*
+    - PaperTrailDiff::CollectionTransition*
     - PaperTrailDiff::SnapshotNormalizer*
     - PaperTrailDiff::SnapshotPool*
+    - PaperTrailDiff::StoredTimePrecision*
     - PaperTrailDiff::TimelineRange*
     - PaperTrailDiff::RootVersionPlan*
+    - PaperTrailDiff::RootVersionSelection*
     - PaperTrailDiff::HistoricalFilter*
+    - PaperTrailDiff::VersionScopeFilter*
     - PaperTrailDiff::TimeRange*
     - PaperTrailDiff::TransactionCut*
+    - PaperTrailDiff::OpeningTransactions*
     - PaperTrailDiff::VersionTable*
     - PaperTrailDiff::VersionRange*
+    - PaperTrailDiff::VersionQuery*
     - PaperTrailDiff::TimeVersionRange*
     - PaperTrailDiff::BatchedRootVersions*
+    - PaperTrailDiff::BatchBoundaryResolver*
     - PaperTrailDiff::BatchedRootAnalyses*
+    - PaperTrailDiff::AnalysisBatch*
     - PaperTrailDiff::DeletedAnalysisBatch*
     - PaperTrailDiff::DeletedRootFilter*
     - PaperTrailDiff::RecordedChanges*
+    - PaperTrailDiff::RecordedChangesReader*
     - PaperTrailDiff::ChangeRow*
+    - PaperTrailDiff::ChangeRows*
     - PaperTrailDiff::AssociationActivitySelection*
     - PaperTrailDiff::AssociationActivityEdge*
+    - PaperTrailDiff::ActivityChildCandidateLoader*
     - PaperTrailDiff::ActivityTargetCandidateLoader*
     - PaperTrailDiff::ScopedRootSelection*
     - PaperTrailDiff::PreparedHistoryLoader*
     - PaperTrailDiff::PreparedEdgeLoader*
     - PaperTrailDiff::ActivityTimelineBuilder*
+    - PaperTrailDiff::ActivityVersionCollector*
+    - PaperTrailDiff::ActivityRootSteps*
+    - PaperTrailDiff::ActivityHistoryBuilder*
+    - PaperTrailDiff::ActivityEventRouteFinder*
     - PaperTrailDiff::ActivityTreeFilter*
     - PaperTrailDiff::ActivityTransactionGrouper*
+    - PaperTrailDiff::ActivityTransactionGroups*
     - PaperTrailDiff::ActivityView*
     - PaperTrailDiff::ActivityScopeFilter*
+    - PaperTrailDiff::ActivitySnapshotDelta*
     - PaperTrailDiff::ApproximatePaths*
     - PaperTrailDiff::FallbackPaths*
     - PaperTrailDiff::ScopeCondition*

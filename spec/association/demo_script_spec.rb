@@ -8,10 +8,13 @@ require 'open3'
 RSpec.describe 'examples/demo.rb' do
   let(:script) { File.expand_path('../../examples/demo.rb', __dir__) }
 
+  # The demo saves its versions microseconds apart, so a step back of the
+  # host clock reorders them; it runs on the specs' clock (docs/testing.md).
   it 'runs standalone and reports who changed what' do
     lib = File.expand_path('../../lib', __dir__)
+    clock = File.expand_path('../support/monotonic_clock', __dir__)
     stdout, stderr, status = Open3.capture3(
-      RbConfig.ruby, '-I', lib, script, chdir: File.expand_path('../..', __dir__)
+      RbConfig.ruby, '-I', lib, '-r', clock, script, chdir: File.expand_path('../..', __dir__)
     )
 
     expect(stderr).to eq('')

@@ -62,6 +62,8 @@ module PaperTrailDiff
     # : (Array[ActivityEvent], ?opening: Array[Array[untyped]]) -> void
     def initialize: (Array[ActivityEvent], ?opening: Array[Array[untyped]]) -> void
 
+    # An event outside a transaction, or in one it was not given, keeps its
+    # own.
     # : (ActivityEvent) -> Array[String]?
     def branches_for: (ActivityEvent) -> Array[String]?
 
@@ -70,18 +72,21 @@ module PaperTrailDiff
 
     private
 
-    @branches: Hash[Array[untyped], Array[String]?]
+    @branches: Hash[Array[untyped]?, Array[String]?]
 
-    @group_sizes: Hash[Array[untyped], Integer]
+    @group_sizes: Hash[Array[untyped]?, Integer]
 
-    @opening: Set[Array[untyped]]
+    @opening: Array[untyped]
 
-    # : (Hash[Array[untyped], Array[ActivityEvent]]) -> Hash[Array[untyped], Array[String]?]
-    def build_groups: (Hash[Array[untyped], Array[ActivityEvent]]) -> Hash[Array[untyped], Array[String]?]
+    # : (Hash[Array[untyped]?, Array[ActivityEvent]]) -> Hash[Array[untyped]?, Array[String]?]
+    def build_groups: (Hash[Array[untyped]?, Array[ActivityEvent]]) -> Hash[Array[untyped]?, Array[String]?]
 
-    # : (Array[ActivityEvent]) -> Hash[Array[untyped], Array[ActivityEvent]]
-    def grouped_events: (Array[ActivityEvent]) -> Hash[Array[untyped], Array[ActivityEvent]]
+    # The events of each transaction; one outside a transaction is in none.
+    # : (Array[ActivityEvent]) -> Hash[Array[untyped]?, Array[ActivityEvent]]
+    def grouped_events: (Array[ActivityEvent]) -> Hash[Array[untyped]?, Array[ActivityEvent]]
 
+    # A transaction with a root event is read as the root's; every other
+    # event has branches.
     # : (Array[ActivityEvent]) -> Array[String]?
     def group_branches: (Array[ActivityEvent]) -> Array[String]?
 

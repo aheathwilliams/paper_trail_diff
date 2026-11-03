@@ -6,17 +6,14 @@ module PaperTrailDiff
   class ActivitySnapshotDelta
     #: (before_attributes: Hash[untyped, untyped], after_attributes: Hash[untyped, untyped]) -> void
     def initialize(before_attributes:, after_attributes:)
-      @before_attributes = normalize_hash(before_attributes)
-      @after_attributes = normalize_hash(after_attributes)
+      @before_attributes = before_attributes.transform_keys(&:to_s)
+      @after_attributes = after_attributes.transform_keys(&:to_s)
       freeze
     end
 
     #: (RecordSnapshot) -> RecordSnapshot
     def apply(snapshot)
-      attributes = snapshot.attributes.dup
-      attributes.each_key do |name|
-        attributes[name] = @after_attributes[name] if @after_attributes.key?(name)
-      end
+      attributes = snapshot.attributes.merge(@after_attributes.slice(*snapshot.attributes.keys))
       return snapshot if attributes == snapshot.attributes
 
       RecordSnapshot.new(
@@ -37,11 +34,16 @@ module PaperTrailDiff
       @after_attributes[name.to_s]
     end
 
+    # Compared as text, so an id read as a string matches one read as an
+    # integer.
+    #: (untyped) -> bool
+    def changed?(name)
+      !before_value(name).to_s.eql?(after_value(name).to_s)
+    end
+
     #: (untyped) -> bool
     def relationship_changed?(reflection)
-      relationship_keys(reflection).any? do |name|
-        before_value(name).to_s != after_value(name).to_s
-      end
+      relationship_keys(reflection).any? { |name| changed?(name) }
     end
 
     private
@@ -49,15 +51,10 @@ module PaperTrailDiff
     # @rbs @before_attributes: Hash[String, untyped]
     # @rbs @after_attributes: Hash[String, untyped]
 
-    #: (Hash[untyped, untyped]) -> Hash[String, untyped]
-    def normalize_hash(hash)
-      hash.to_h { |name, value| [name.to_s, value] }.freeze
-    end
-
     #: (untyped) -> Array[untyped]
     def relationship_keys(reflection)
       keys = Array(reflection.foreign_key)
-      keys << reflection.type if reflection.options[:as]
+      keys << reflection.type if reflection.options.key?(:as)
       keys
     end
   end

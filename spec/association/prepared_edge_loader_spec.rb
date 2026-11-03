@@ -355,7 +355,7 @@ RSpec.describe PaperTrailDiff::PreparedEdgeLoader do
 
   it 'reads nothing for a composite foreign key' do
     reflection = instance_double(ActiveRecord::Reflection::HasManyReflection,
-                                 macro: :has_many,
+                                 macro: :has_many, klass: TrackedComment,
                                  foreign_key: Class.new(Array).new(%w[article_id body]))
     article = TrackedArticle.create!(title: 'Owner')
     loader = described_class.new(index(nil), versions_of(article))

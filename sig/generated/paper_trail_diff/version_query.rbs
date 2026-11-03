@@ -7,26 +7,39 @@ module PaperTrailDiff
     # instant, and the timestamp comes first because ids need not follow time:
     # a UUID key does not.
     # : (untyped) -> untyped
-    def self?.chronological: (untyped) -> untyped
+    def self.chronological: (untyped) -> untyped
 
     # Every version of a model's items. They are read from the version class
     # rather than through the model's versions association, whose scope may
     # leave some out: a history replayed without them credits their changes to
     # the next version kept.
     # : (untyped) -> untyped
-    def self?.for_model: (untyped) -> untyped
+    def self.for_model: (untyped) -> untyped
 
     # The versions of the given items, read the same way.
     # : (untyped, untyped) -> untyped
-    def self?.for_items: (untyped, untyped) -> untyped
+    def self.for_items: (untyped, untyped) -> untyped
 
     # Keeps each item's earliest version among those the block also accepts:
     # no other version of the same item that the block accepts is earlier. A
     # correlated NOT EXISTS stays portable where window functions are not.
     # : (untyped) ?{ (untyped) -> untyped } -> untyped
-    def self?.no_earlier_version: (untyped) ?{ (untyped) -> untyped } -> untyped
+    def self.no_earlier_version: (untyped) ?{ (untyped) -> untyped } -> untyped
 
     # : (untyped, untyped) ?{ (untyped) -> untyped } -> untyped
-    def self?.earlier_version: (untyped, untyped) ?{ (untyped) -> untyped } -> untyped
+    def self.earlier_version: (untyped, untyped) ?{ (untyped) -> untyped } -> untyped
+
+    # The version table under a second name, for a subquery over it. Any name
+    # serves, and SQLite even accepts an empty one other databases refuse, so
+    # no spec can tell the mutations apart (see TransactionCut).
+    # mutant:disable
+    # : (untyped) -> untyped
+    def self.earlier_versions: (untyped) -> untyped
+
+    # Arel ships no signatures, so it is reached as an untyped constant. Any
+    # spelling of the constant finds the same module.
+    # mutant:disable
+    # : () -> untyped
+    def self.arel: () -> untyped
   end
 end
