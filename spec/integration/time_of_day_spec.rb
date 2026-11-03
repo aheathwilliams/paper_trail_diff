@@ -32,9 +32,11 @@ end
 # PaperTrail's YAML serializer stores a time column's value as the
 # ActiveRecord::Type::Time::Value that wraps it.
 RSpec.describe 'History of a time of day' do
-  # SQL Server's adapter stores a time as its own type instead.
+  # A zone-aware time stored as a TimeWithZone's fields names its zone. SQL
+  # Server's adapter stores a time as its own type instead.
   def time_classes
-    classes = [ActiveRecord::Type::Time::Value]
+    classes = [ActiveRecord::Type::Time::Value, ActiveSupport::TimeWithZone,
+               ActiveSupport::TimeZone]
     return classes unless ActiveRecord::Base.connection.adapter_name == 'SQLServer'
 
     classes + [ActiveRecord::ConnectionAdapters::SQLServer::Type::Time]
@@ -43,7 +45,7 @@ RSpec.describe 'History of a time of day' do
   around do |example|
     permitted = ActiveRecord.yaml_column_permitted_classes
     ActiveRecord.yaml_column_permitted_classes = permitted + time_classes
-    Time.use_zone('Pacific/Auckland') { example.run }
+    example.run
   ensure
     ActiveRecord.yaml_column_permitted_classes = permitted
   end
@@ -53,8 +55,13 @@ RSpec.describe 'History of a time of day' do
     AlarmClock.delete_all
   end
 
-  [AlarmClock, ZonedAlarmClock, CallbackAlarmClock].each do |model|
-    context "with #{model.name}" do
+  # In UTC, a zone-aware time is stored as a TimeWithZone's fields under the
+  # wrapper's tag, which PaperTrail reads; in any other zone, it wraps its time.
+  [AlarmClock, ZonedAlarmClock, CallbackAlarmClock].product(%w[UTC Pacific/Auckland])
+                                                   .each do |model, zone|
+    context "with #{model.name} in #{zone}" do
+      around { |example| Time.use_zone(zone) { example.run } }
+
       it 'reads the time each version recorded' do
         clock = model.create!(name: 'Kitchen')
         clock.update!(rings_at: '07:30')

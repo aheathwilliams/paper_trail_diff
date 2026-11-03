@@ -139,10 +139,10 @@ project follows [Semantic Versioning](https://semver.org/).
 
 - With PaperTrail's default YAML serializer, a `time` column reads as the
   time each version recorded. PaperTrail 16 and 17 decode such a value as
-  `nil`, and so did the gem, so the step that set a time showed no change,
-  every comparison of a later version with the current record showed the
-  time changing from `nil`, and `recorded_changes` reported
-  `{ from: nil, to: nil }`. That includes records the gem rebuilds with
+  `nil`, unless the column is time-zone aware and the time zone is UTC, and
+  so did the gem, so the step that set a time showed no change, every
+  comparison of a later version with the current record showed the time
+  changing from `nil`, and `recorded_changes` reported `{ from: nil, to: nil }`. That includes records the gem rebuilds with
   PaperTrail's `reify`: models with initialization callbacks, custom types or
   defaults, default scopes that assign attributes, or encrypted attributes;
   a version that holds a column the model no longer has; the records a

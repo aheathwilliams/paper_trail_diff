@@ -30,12 +30,16 @@ RSpec.describe PaperTrailDiff::Support do
     # The wrapper delegates ==, so only its class tells it from the time.
     it 'keys stored values by name, unwrapping each time of day, alone or in a pair' do
       wrapped = ActiveRecord::Type::Time::Value.new(noon)
+      # As YAML loads a zone-aware time stored as a TimeWithZone's fields.
+      fields = ActiveRecord::Type::Time::Value.allocate
+      fields.instance_variable_set(:@time, noon)
 
       decodable = described_class.decodable(rings_at: wrapped, 'changed' => [nil, wrapped],
-                                            'title' => 'Draft', 'labels' => [1, 2])
+                                            'title' => 'Draft', 'labels' => [1, 2],
+                                            'zoned' => fields)
 
       expect(decodable).to eq('rings_at' => noon, 'changed' => [nil, noon], 'title' => 'Draft',
-                              'labels' => [1, 2])
+                              'labels' => [1, 2], 'zoned' => noon)
       expect([decodable.fetch('rings_at'), decodable.fetch('changed').last])
         .to all(be_an_instance_of(Time))
     end
@@ -71,8 +75,10 @@ RSpec.describe PaperTrailDiff::Support do
     end
 
     it 'assigns each time of day its version recorded, as PaperTrail assigns attributes' do
+      fields = ActiveRecord::Type::Time::Value.allocate
+      fields.instance_variable_set(:@time, noon)
       version = stored("rings_at: !ruby/object:#{described_class::TIME_VALUE}",
-                       'rings_at' => wrapped, 'alarm' => wrapped, 'gone' => wrapped,
+                       'rings_at' => wrapped, 'alarm' => fields, 'gone' => wrapped,
                        'title' => 'Draft')
       record = model.new(version)
 

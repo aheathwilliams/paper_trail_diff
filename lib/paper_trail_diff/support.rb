@@ -11,8 +11,9 @@ module PaperTrailDiff
     IDS_PER_STATEMENT = 500
 
     # PaperTrail's YAML serializer stores a `time` column's value as this
-    # wrapper, which PaperTrail 16 and 17 decode as nil: they read an instance
-    # variable it does not have.
+    # wrapper, which PaperTrail 16 and 17 decode by reading its `@time`. Only
+    # some zone-aware times are stored with one, as a TimeWithZone's fields
+    # under the wrapper's tag; any other wraps its time, and decodes as nil.
     TIME_VALUE = 'ActiveRecord::Type::Time::Value'
 
     # Answers a question about `value` once for each Active Record class, in
@@ -40,9 +41,17 @@ module PaperTrailDiff
     def self.unwrapped_time(value)
       return value.map { |item| unwrapped_time(item) } if value.instance_of?(Array)
 
-      TIME_VALUE.eql?(value.class.name) ? value.__getobj__ : value
+      TIME_VALUE.eql?(value.class.name) ? recorded_time(value) : value
     end
     private_class_method :unwrapped_time
+
+    # The time a stored wrapper holds: the one it wraps, or the `@time`
+    # PaperTrail reads.
+    #: (untyped) -> untyped
+    def self.recorded_time(value)
+      value.__getobj__ { value.instance_variable_get(:@time) }
+    end
+    private_class_method :recorded_time
 
     # PaperTrail's `reify`, with each time of day its version recorded.
     #: (untyped, **untyped) -> untyped
@@ -51,7 +60,7 @@ module PaperTrailDiff
     end
 
     # A record PaperTrail rebuilt, with each time of day assigned from the
-    # version it was rebuilt from, which PaperTrail decodes as nil. PaperTrail
+    # version it was rebuilt from, which PaperTrail can decode as nil. PaperTrail
     # assigns stored attributes after building the record and links it to
     # that version, PT-AT's members too, so this assigns what PaperTrail would
     # if it unwrapped the value. Only a version whose stored text names the
@@ -64,7 +73,7 @@ module PaperTrailDiff
       version.object_deserialized.each do |name, value|
         next unless TIME_VALUE.eql?(value.class.name)
 
-        assign_recorded(record, name, value.__getobj__)
+        assign_recorded(record, name, recorded_time(value))
       end
       record
     end
