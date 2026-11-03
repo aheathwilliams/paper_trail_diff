@@ -58,11 +58,10 @@ project follows [Semantic Versioning](https://semver.org/).
   synchronize_version_creation_timestamp: false`, so a save that set
   `updated_at` itself, such as an import keeping another system's times, a
   `touch(time:)`, or one made with timestamps off, can date its version in
-  the past. History is
-  read in time order, so such an update is read before the change it
-  followed, and one dated before the record's `create` reads as the record
-  deleted and created again. The [version order](docs/reference.md#version-order)
-  section explains the fix.
+  the past. History is read in time order, so such an update is read before
+  the change it followed, and one dated before the record's `create` reads as
+  the record deleted and created again. The
+  [version order](docs/reference.md#version-order) section explains the fix.
 
 - On SQL Server, each call reads its history and live rows in one `SNAPSHOT`
   transaction when the database allows snapshot isolation
