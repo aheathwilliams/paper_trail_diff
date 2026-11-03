@@ -19,14 +19,14 @@ for one association, at 1, 5, and 20 records:
 | Association | Queries | `reify` calls |
 | --- | --- | --- |
 | None | 9 / 9 / 9 | 0 |
-| `has_many` | 18 / 18 / 18 | 0 |
+| `has_many` | 16 / 16 / 16 | 0 |
 | `belongs_to` | 16 / 16 / 16 | 0 |
-| A `has_many` scope of plain conditions, or a default scope | 18 / 18 / 18 | 0 |
-| `has_many :through` | 26 / 26 / 26 | 0 |
+| A `has_many` scope of plain conditions, or a default scope | 16 / 16 / 16 | 0 |
+| `has_many :through` | 22 / 22 / 22 | 0 |
 | Polymorphic `belongs_to` | 20 / 20 / 20 | 0 |
-| `has_many :through` with `source_type:` | 26 / 26 / 26 | 0 |
-| A `has_many` with `order(:id).limit(1)` | 19 / 23 / 38 | 0 |
-| A scope that takes the owner, read with PT-AT | 30 / 78 / 258 | 9 / 45 / 180 |
+| `has_many :through` with `source_type:` | 24 / 24 / 24 | 0 |
+| A `has_many` with `order(:id).limit(1)` | 17 / 21 / 36 | 0 |
+| A scope that takes the owner, read with PT-AT | 28 / 76 / 256 | 9 / 45 / 180 |
 | None, with a querying `after_initialize` | 13 / 29 / 89 | 2 / 10 / 40 |
 | None, with a callable `historical_filter:` that queries | 15 / 19 / 34 | 2 / 10 / 40 |
 
@@ -135,8 +135,8 @@ time from the [test clock](testing.md#test-clock), so a host clock that steps
 backwards cannot reorder the versions they seed. Compare counts as well as
 times, and run the correctness suites separately; no CI job checks timings.
 
-The query counts in the first table were measured on 2026-11-01, after
-windows began looking for transactions that cross their start; the other
+The query counts in the first table were measured on 2026-11-02, after
+history and activity began reading each owner's children once; the other
 numbers on 2026-10-30 at revision `6c3d30b`. Both used Ruby
 4.0.1, Active Record 8.1.3.1, PaperTrail 17.0.0, and SQLite 3.53.2, on WSL2
 on an AMD Ryzen 7 7800X3D. The memory, wide-collection, and index figures come
