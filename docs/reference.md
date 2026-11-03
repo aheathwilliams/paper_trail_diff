@@ -1605,6 +1605,16 @@ Results can only be as complete as the history PaperTrail and PT-AT recorded.
 - A savepoint that rolls back, or another transaction saving in the same tree
   at the same time, can split one transaction into several transaction groups;
   see [one step per transaction group](#one-step-per-transaction-group-transaction).
+- Two transactions that save in one record's tree at the same time, so that
+  their versions interleave, are read in the order of their versions. A
+  version reads the records its own transaction saved as they stood before
+  the transaction, but a version of the other transaction reads them as they
+  stood after the change saved before it. So a record that one transaction
+  changed and changed back, such as a comment it created and deleted again,
+  can appear in the other's steps, crediting that transaction with adding
+  or removing it, and a window's starting state and diff can hold it too.
+  Row locks keep the two from saving the same record, so this needs both to
+  save different records of one tree within moments of each other.
 - HABTM membership history exists only where PT-AT recorded it in a
   transaction, and only for the root record without a scope: a scoped HABTM,
   or one below the root, raises `UnsupportedAssociationError`, and a transaction that another record with

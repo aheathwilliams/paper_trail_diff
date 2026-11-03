@@ -91,9 +91,11 @@ project follows [Semantic Versioning](https://semver.org/).
   in about 40% less time. The architecture guide no longer says a window's
   transaction lookups take four per root, sent 200 roots per query.
 
-- The reference says that two transactions saving in the same tree at the
-  same time, so that their versions interleave, each form more than one group
-  with `group: :transaction`.
+- The reference says what happens when two transactions save in the same
+  tree at the same time, so that their versions interleave: each forms more
+  than one group with `group: :transaction`, and a record one of them changed
+  and changed back can appear in the other's steps, and in a window's
+  starting state and diff.
 
 - `analyze_many`, `analyze_scope`, `report`, and `compare_many` list at most
   500 ids in a statement, as the rest of the gem does. Reading the batch's
