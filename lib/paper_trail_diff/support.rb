@@ -84,8 +84,8 @@ module PaperTrailDiff
       return unless model.respond_to?(:version_association_name)
 
       version = record.public_send(model.version_association_name)
-      stored = version&.object
-      version if stored.instance_of?(String) && stored.include?(TIME_VALUE)
+      # A JSON column's Hash is keyed by attribute names, never this one.
+      version if version&.object&.include?(TIME_VALUE)
     end
     private_class_method :rebuilt_from
 

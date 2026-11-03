@@ -78,8 +78,8 @@ RSpec.describe PaperTrailDiff::Support do
       fields = ActiveRecord::Type::Time::Value.allocate
       fields.instance_variable_set(:@time, noon)
       version = stored("rings_at: !ruby/object:#{described_class::TIME_VALUE}",
-                       'rings_at' => wrapped, 'alarm' => fields, 'gone' => wrapped,
-                       'title' => 'Draft')
+                       'title' => 'Draft', 'rings_at' => wrapped, 'alarm' => fields,
+                       'gone' => wrapped)
       record = model.new(version)
 
       expect(described_class.with_recorded_times(record)).to equal(record)

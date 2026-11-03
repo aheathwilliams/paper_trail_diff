@@ -144,6 +144,21 @@ RSpec.describe PaperTrailDiff::SnapshotNormalizer do
         .to all(contain_exactly('body', 'type', 'subject_type', 'subject_id', 'parent_id'))
     end
 
+    # PT-AT rebuilds members with PaperTrail's reify, which can read a time of
+    # day as nil; the normalizer reads each member as Support repairs it.
+    it 'reads each member as it is after its recorded times are assigned' do
+      post = post_with_comments
+      allow(PaperTrailDiff::Support).to receive(:with_recorded_times) do |member|
+        member.body = member.body.upcase
+        member
+      end
+
+      comments = snapshot(post, 'comments').associations.fetch('comments')
+
+      expect(comments.records.map { |record| record.attributes.fetch('body') })
+        .to eq(%w[FIRST SECOND])
+    end
+
     it 'skips a member a reified history could not rebuild' do
       post = post_with_comments
       kept = post.comments.first
