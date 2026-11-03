@@ -26,6 +26,21 @@ RSpec.describe PaperTrailDiff::Support do
     end
   end
 
+  describe '.decodable' do
+    # The wrapper delegates ==, so only its class tells it from the time.
+    it 'keys stored values by name, unwrapping each time of day, alone or in a pair' do
+      wrapped = ActiveRecord::Type::Time::Value.new(noon)
+
+      decodable = described_class.decodable(rings_at: wrapped, 'changed' => [nil, wrapped],
+                                            'title' => 'Draft', 'labels' => [1, 2])
+
+      expect(decodable).to eq('rings_at' => noon, 'changed' => [nil, noon], 'title' => 'Draft',
+                              'labels' => [1, 2])
+      expect([decodable.fetch('rings_at'), decodable.fetch('changed').last])
+        .to all(be_an_instance_of(Time))
+    end
+  end
+
   describe '.immutable_copy' do
     it 'copies hashes and arrays all the way down, keys too, and freezes the copy' do
       key = [+'key']

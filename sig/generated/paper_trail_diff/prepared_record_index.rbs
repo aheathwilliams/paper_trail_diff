@@ -45,9 +45,6 @@ module PaperTrailDiff
 
     @serializers: Hash[untyped, untyped]
 
-    # : (Hash[untyped, untyped]) -> Hash[String, untyped]
-    def stringify_keys: (Hash[untyped, untyped]) -> Hash[String, untyped]
-
     # : (untyped, Hash[String, untyped]) -> untyped
     def reification_class: (untyped, Hash[String, untyped]) -> untyped
 

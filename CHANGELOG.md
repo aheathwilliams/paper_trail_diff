@@ -110,6 +110,15 @@ project follows [Semantic Versioning](https://semver.org/).
   ends any order that does not already sort by it. SQL text counts as sorting
   by the ID when it names the column, alone or after the table's name.
 
+- With PaperTrail's default YAML serializer, a `time` column reads as the
+  time each version recorded. PaperTrail 16 and 17 decode such a value as
+  `nil`, and so did the gem, so the step that set a time showed no change,
+  every comparison of a later version with the current record showed the
+  time changing from `nil`, and `recorded_changes` reported
+  `{ from: nil, to: nil }`. Where the gem rebuilds a record with
+  PaperTrail's `reify`, the time still reads as `nil`; see the reference's
+  limitations.
+
 - Activity on a `has_many :through` leaves out the versions a join record
   saved while it joined another record, judged by transaction as any record
   is: by whether it joined the owner before the transaction or after it. A

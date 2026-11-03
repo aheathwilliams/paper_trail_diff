@@ -65,7 +65,7 @@ module PaperTrailDiff
       attributes = version.object_deserialized
       return unless attributes.is_a?(Hash)
 
-      attributes = stringify_keys(attributes)
+      attributes = Support.decodable(attributes)
       model_class = reification_class(version, attributes)
       return unless direct_attributes?(model_class, attributes)
 
@@ -79,11 +79,6 @@ module PaperTrailDiff
 
     # @rbs @serializers: Hash[untyped, untyped]
     # @rbs @attribute_names: Hash[untyped, Array[String]]
-
-    #: (Hash[untyped, untyped]) -> Hash[String, untyped]
-    def stringify_keys(attributes)
-      attributes.to_h { |name, value| [name.to_s, value] }
-    end
 
     #: (untyped, Hash[String, untyped]) -> untyped
     def reification_class(version, attributes)

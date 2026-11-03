@@ -184,7 +184,7 @@ module PaperTrailDiff
 
     #: (untyped, untyped, untyped) -> untyped
     def standard_changeset(paper_trail, version, model_class)
-      raw_changes = version.send(:object_changes_deserialized)
+      raw_changes = Support.decodable(version.send(:object_changes_deserialized))
       active_support = Object.const_get(:ActiveSupport) #: untyped
       changes = active_support.const_get(:HashWithIndifferentAccess).new(raw_changes)
       serializers = paper_trail.const_get(:AttributeSerializers)

@@ -10,6 +10,11 @@ module PaperTrailDiff
     # than they save.
     IDS_PER_STATEMENT = 500
 
+    # PaperTrail's YAML serializer stores a `time` column's value as this
+    # wrapper, which PaperTrail 16 and 17 decode as nil: they read an instance
+    # variable it does not have.
+    TIME_VALUE = 'ActiveRecord::Type::Time::Value'
+
     # Answers a question about `value` once for each Active Record class, in
     # `answers`: its respond_to? also looks through the instance's attributes,
     # which costs more than most of what reading a version does, and every
@@ -22,6 +27,22 @@ module PaperTrailDiff
 
       answers.fetch(model) { answers[model] = yield(value) }
     end
+
+    # Stored attributes or changes ready for PaperTrail to decode: keyed by
+    # name, with each time of day unwrapped, which then decodes as any value
+    # does. A change's values are a pair.
+    #: (Hash[untyped, untyped]) -> Hash[String, untyped]
+    def self.decodable(stored)
+      stored.to_h { |name, value| [name.to_s, unwrapped_time(value)] }
+    end
+
+    #: (untyped) -> untyped
+    def self.unwrapped_time(value)
+      return value.map { |item| unwrapped_time(item) } if value.instance_of?(Array)
+
+      TIME_VALUE.eql?(value.class.name) ? value.__getobj__ : value
+    end
+    private_class_method :unwrapped_time
 
     #: (untyped) -> untyped
     def self.immutable_copy(value)

@@ -1530,6 +1530,16 @@ Results can only be as complete as the history PaperTrail and PT-AT recorded.
   [how PaperTrail stores history](#how-papertrail-stores-history).
 - Deleted versions, schema changes, and serializer changes can affect how old
   versions read.
+- With PaperTrail's default YAML serializer, PaperTrail 16 and 17 decode a
+  `time` (time of day) column as `nil`. The gem reads such a column from
+  stored history itself, but where it rebuilds a record with PaperTrail's
+  `reify`, the column reads as `nil`, and a comparison with the current record
+  reports it as changed. That is the case for models with initialization
+  callbacks, custom attribute types or defaults, default scopes that assign
+  attributes, or encrypted attributes; for a callable `historical_filter:`;
+  for a version that holds a column the model no longer has; and for
+  association paths read with PT-AT. PaperTrail's JSON serializer, and SQL
+  Server, whose adapter stores a time its own way, are not affected.
 - Each call reads its history and live rows in one snapshot on PostgreSQL and
   MySQL (through mysql2 or trilogy), and on adapters built on them such as
   PostGIS, so a commit that lands during the call is seen by none of its
