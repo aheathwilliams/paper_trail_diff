@@ -99,8 +99,7 @@ module PaperTrailDiff
     def root_state(root_endpoint)
       return @prepared_snapshotter.state(root_endpoint) if Endpoint.version?(root_endpoint)
 
-      @live_states[Endpoint.identity(root_endpoint)] ||=
-        PreparedRecordState.new(live_root(root_endpoint))
+      live_state(root_endpoint)
     end
 
     #: (untyped, habtm_version: untyped, ?history: PreparedHistory?) -> untyped
@@ -186,28 +185,46 @@ module PaperTrailDiff
     end
 
     # Read from prepared history where it can be, as a version is, without
-    # instantiating the root's members.
+    # instantiating the root's members. Only the fallback, which writes the
+    # members it rebuilds onto the root, needs a record of its own.
     #: (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer, history: PreparedHistory?) -> RecordSnapshot?
     def snapshot_from_live_root(root_record, context_version, tree:, normalizer:, history:)
-      record = live_root(root_record)
-      @preparer.call(record.class, historical: true)
+      state = live_state(root_record)
+      @preparer.call(state.model_class, historical: true)
       handled, snapshot = @prepared_snapshotter.live(
-        record, context_version, tree: tree, normalizer: normalizer, history: history
+        state, context_version, tree: tree, normalizer: normalizer, history: history
       )
       return snapshot if handled
 
-      normalize(record, context_version, tree: tree, normalizer: normalizer,
-                                         habtm_version: context_version, history: history)
+      normalize(live_root(root_record), context_version, tree: tree, normalizer: normalizer,
+                                                         habtm_version: context_version,
+                                                         history: history)
+    end
+
+    # The state of the root's row, read once for the call: every snapshot
+    # that starts from the row starts from the same state. Reading it writes
+    # nothing to the row, so it is read from the loaded record itself, whose
+    # columns the current snapshot reads too.
+    #: (untyped) -> PreparedRecordState
+    def live_state(root_record)
+      identity = Endpoint.identity(root_record)
+      @live_states[identity] ||= PreparedRecordState.new(loaded_root(root_record, identity))
     end
 
     # Rebuilding a version's associations writes them onto the record, so each
-    # snapshot gets its own copy of the root's row, built from the row's stored
-    # values without a query. A batch loaded the row already; otherwise it is
-    # read once, so every snapshot of the call starts from the same row.
+    # snapshot that does gets its own copy of the root's row, built from the
+    # row's stored values without a query.
     #: (untyped) -> untyped
     def live_root(root_record)
-      loaded = @live_roots[Endpoint.identity(root_record)] ||= Endpoint.reload_record(root_record)
+      loaded = loaded_root(root_record, Endpoint.identity(root_record))
       loaded.class.instantiate(loaded.attributes_before_type_cast)
+    end
+
+    # A batch loaded the row already; otherwise it is read once, so every
+    # snapshot of the call starts from the same row.
+    #: (untyped, identity) -> untyped
+    def loaded_root(root_record, identity)
+      @live_roots[identity] ||= Endpoint.reload_record(root_record)
     end
 
     #: (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer, habtm_version: untyped, history: PreparedHistory?) -> RecordSnapshot?

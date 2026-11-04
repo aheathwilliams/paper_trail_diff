@@ -232,9 +232,11 @@ project follows [Semantic Versioning](https://semver.org/).
   reads a current record's attributes for its history only when a read
   reaches past that record's last version. Most do not: in a `report` on
   10,000 articles with their comments, about a quarter of the 25,000 current
-  records were read that way. That report takes about 3% less time and
-  allocates 7% fewer objects; one on 2,000 articles edited ten times each
-  also takes about 3% less time. The results are the same.
+  records were read that way. The snapshots that start from a root's current
+  row also share one reading of it, from the record the call loaded. That
+  report takes about 7% less time and allocates 8% fewer objects; one on
+  2,000 articles edited ten times each, and one on 100 articles with 100
+  comments each, about 3% less time. The results are the same.
 
 ### Fixed
 

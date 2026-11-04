@@ -222,6 +222,36 @@ RSpec.describe 'bounded event reconstruction' do
     expect(root_reads(4)).to eq(root_reads(1))
   end
 
+  # After the article's last edit, the snapshots start from its current row:
+  # the one at the comment edited in the same transaction, carried from the
+  # article's, and the one at the other comment's edit, rebuilt once that
+  # transaction ends. Both start from one state of the row, read from the
+  # record the call loaded.
+  it "reads the current article's state once for every snapshot that starts from it" do
+    article = TrackedArticle.create!(title: 'Draft')
+    comments = Array.new(2) { |index| article.comments.create!(body: "comment #{index}") }
+    start = Time.now.utc
+    TrackedArticle.transaction do
+      article.update!(title: 'Edited')
+      comments.first.update!(body: 'edited')
+    end
+    comments.last.update!(body: 'edited')
+    read = 0
+    allow(PaperTrailDiff::PreparedRecordState).to receive(:new).and_wrap_original do |new, record|
+      read += 1 if record.is_a?(TrackedArticle)
+      new.call(record)
+    end
+
+    analysis = PaperTrailDiff.analyze(TrackedArticle.find(article.id), within: start..Time.now.utc,
+                                                                       associations: [:comments],
+                                                                       activity: true)
+
+    expect(read).to eq(1)
+    expect(analysis.diff.attributes.fetch('title').to_h).to eq(from: 'Draft', to: 'Edited')
+    expect(analysis.diff.associations.fetch('comments').changed.map { |change| change.record.id })
+      .to match_array(comments.map(&:id))
+  end
+
   # PT-AT reads what a transaction saved as it stood before the transaction
   # began, so after a comment's event the next event of the same transaction
   # reads the same state. The article's snapshot is built for its own event and
