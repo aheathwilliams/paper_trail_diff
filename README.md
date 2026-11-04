@@ -166,7 +166,8 @@ report.deleted     # Reports for those records, or nil when destroy history is m
 
 `report.analyses` is a hash of reports for records that still exist. Each key is
 `[model_name, id_as_a_string]`. Each value has the net `diff` and an
-`activity_timeline`. `report.roots` returns the selected ActiveRecord objects.
+`activity_timeline`. `report.roots` returns the selected ActiveRecord objects,
+and `report.analysis_for(record)` the report for one of them.
 
 `include_deleted: true` also builds reports from PaperTrail's destroy versions.
 Read them from `report.deleted` using the same keys:

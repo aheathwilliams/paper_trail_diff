@@ -44,6 +44,15 @@ module PaperTrailDiff
       each_root(&:change_rows)
     end
 
+    # The analysis of one of `roots`, found from the record itself. The keys
+    # are its base class's name and its ID as a string, which a subclass or an
+    # integer ID gets wrong when built by hand. Raises KeyError for a record
+    # the selection did not load; a deleted root's analysis is in `deleted`.
+    #: (untyped) -> Analysis
+    def analysis_for(record)
+      analyses.fetch(Endpoint.identity(record))
+    end
+
     # Each root's net changes, keyed as `change_rows` is; the block picks the
     # rows to keep, as for Analysis#net_changes.
     #: () ?{ (ChangeRow) -> boolish } -> Hash[Array[String], Array[NetChange]]

@@ -728,7 +728,11 @@ report.roots       # the selected records, in relation order
 report.unreachable # identities of selected records that no longer exist
 report.deleted     # { identity => Analysis or nil }, with include_deleted: true
 
-analyses, unreachable = report # destructures into the first two
+report.roots.each do |order|
+  report.analysis_for(order) # its Analysis, without building the identity
+end
+
+analyses, unreachable = report # destructures into analyses and unreachable
 ```
 
 It takes the same options as `analyze_many`, plus `limit:`, `historical_filter:`,
@@ -1515,7 +1519,8 @@ warning instead. `ok?` does not prove the history is complete.
 
 - **Single-table inheritance.** Results are keyed by the base class, as
   PaperTrail stores it: a `Book < Publication` is `["Publication", "12"]`. Use
-  `PaperTrailDiff::Endpoint.identity(record)` to build keys.
+  `PaperTrailDiff::Endpoint.identity(record)` to build keys, or
+  `analysis_for(record)` on the result of `analyze_scope` or `report`.
 - **Non-integer primary keys**, such as UUIDs, are supported, and so is a string
   `versions.item_id` column.
 - **Custom version classes** (`has_paper_trail versions: { class_name: }`) are

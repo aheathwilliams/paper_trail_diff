@@ -78,6 +78,11 @@ project follows [Semantic Versioning](https://semver.org/).
   snapshots, so it needs `snapshots: true`. See
   [net changes](docs/reference.md#net-changes).
 
+- `ScopedAnalysis#analysis_for(record)` returns the analysis of one of
+  `roots`, the records `analyze_scope` and `report` load, without building
+  its key: the base class's name and the ID as a string, which a subclass or
+  an integer ID gets wrong when built by hand.
+
 - `within:` accepts an endless range, such as `1.day.ago..`, which runs
   through the current saved state, as `report` does.
 
