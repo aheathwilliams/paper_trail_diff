@@ -230,8 +230,24 @@ forward one record at a time, as activity builds them. For every pair:
 inside a JSON column, including JSON text, symbol keys, and arrays, which are
 reported by membership.
 
+`spec/unit/net_changes_properties_spec.rb` checks the fold behind
+`net_changes`, over generated histories of a few records
+(`spec/support/snapshot_world.rb`) in which a record has one state wherever a
+snapshot reaches it: comments that come and go, replies that move between
+comments, an author who reviews several, and tags. For every history:
+
+- the rows of a run of steps fold into each record's change from the run's
+  first state to its last, whether the run is passed alone or picked out of
+  the whole history by the rows kept;
+- the root comes first, then each record in the order of its first kept
+  change, with each source once;
+- kept alone, the rows that move records in and out leave each record as its
+  last move left it;
+- a record that stayed changes only in fields a kept row set.
+
 They take about a second and run with the unit specs, so mutant runs them
-for `Engine` and `NestedComparator`. A failure names its case. The cases
+for `Engine`, `NestedComparator`, `NetChange`, and `NetChanges`. A failure
+names its case. The cases
 start small and grow, so the first one that fails is a small one.
 `PROPERTY_SEED` and `PROPERTY_CASES` choose other and more cases:
 

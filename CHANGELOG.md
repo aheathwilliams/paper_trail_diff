@@ -494,6 +494,15 @@ project follows [Semantic Versioning](https://semver.org/).
   engine's own specs missed two, which only integration and association
   examples caught.
 
+- `spec/unit/net_changes_properties_spec.rb` checks the fold behind
+  `net_changes` over generated histories in which each record has one state:
+  the rows of any run of steps fold into each record's change between the
+  run's first and last states, the root comes first and then each record by
+  its first kept change, the rows that move records in and out leave each, kept
+  alone, as its last move left it, and a record that stayed changes only in
+  fields a kept row set. Of six fold bugs injected to try them, they caught
+  all six, as the fold's own specs do.
+
 - `spec/oracle/unversioned_writes_spec.rb` builds seeded histories of saves
   and `update_columns` writes to an article, its comments and its author,
   several to a transaction, and checks every change row against the writes:
