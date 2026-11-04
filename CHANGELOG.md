@@ -219,9 +219,10 @@ project follows [Semantic Versioning](https://semver.org/).
 - Activity over a window (`activity: true`, `activity_timeline`, and
   `report`) no longer raises `KeyError` when a record on one requested path,
   such as an author, is also a `belongs_to` target on another path with
-  associations requested below it (`["author", "comments.reviewer.reviewed_comments"]`).
-  A target named only by a version saved after the window was followed as if
-  its own associations had been read, and they had not been.
+  associations requested below it
+  (`["author", "comments.reviewer.reviewed_comments"]`). A target named only
+  by a version saved after the window was followed as if its own associations
+  had been read, and they had not been.
 
 - With `historical_filter:`, `analyze_scope` and `report` accept a relation
   grouped by anything but the ID, such as each author's latest article
@@ -263,7 +264,8 @@ project follows [Semantic Versioning](https://semver.org/).
   `nil`, unless the column is time-zone aware and the time zone is UTC, and
   so did the gem, so the step that set a time showed no change, every
   comparison of a later version with the current record showed the time
-  changing from `nil`, and `recorded_changes` reported `{ from: nil, to: nil }`. That includes records the gem rebuilds with
+  changing from `nil`, and `recorded_changes` reported
+  `{ from: nil, to: nil }`. That includes records the gem rebuilds with
   PaperTrail's `reify`: models with initialization callbacks, custom types or
   defaults, default scopes that assign attributes, or encrypted attributes;
   a version that holds a column the model no longer has; the records a
