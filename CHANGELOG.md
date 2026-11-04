@@ -474,6 +474,18 @@ project follows [Semantic Versioning](https://semver.org/).
   replay differential oracle reports each read that differs, with both
   results, rather than only the transactions it made.
 
+- `spec/unit/engine_properties_spec.rb` and
+  `spec/unit/nested_comparator_properties_spec.rb` check the comparison
+  engine over generated snapshots and JSON values, without a database: an
+  equal copy compares as no change, a diff applied to the first snapshot gives
+  the second, comparing the other way gives the opposite diff, every change
+  is real and in order, a carried-forward collection reports what one built
+  whole does, and the result is frozen. The oracles compute the diffs they
+  expect with the engine, so they cannot catch a bug in it. Of six engine bugs
+  injected to try them, the properties caught all six in about a second; the
+  engine's own specs missed two, which only integration and association
+  examples caught.
+
 - `spec/oracle/unversioned_writes_spec.rb` builds seeded histories of saves
   and `update_columns` writes to an article, its comments and its author,
   several to a transaction, and checks every change row against the writes:

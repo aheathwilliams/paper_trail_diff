@@ -203,6 +203,39 @@ A generator runs each loop of random steps as `@random.steps(count) { ... }`
 rather than `count.times`, so the reducer can tell its steps apart. A new
 generator should too.
 
+## Comparison properties
+
+The oracles compute the change they expect with `PaperTrailDiff::Engine`, so a
+bug in the engine itself passes them. `spec/unit/engine_properties_spec.rb`
+checks the engine on its own, over a few hundred generated pairs of snapshots
+(`spec/support/snapshot_cases.rb`): attributes, to-one records and
+collections two levels deep, with mixed id types, and collections carried
+forward one record at a time, as activity builds them. For every pair:
+
+- an equal snapshot built separately, with its keys and records in another
+  order, compares as no change;
+- the diff, applied to the first snapshot, gives the second, so it misses no
+  change and reports none wrongly (`spec/support/diff_algebra.rb` applies a
+  diff from its hash alone, without the engine);
+- comparing the other way gives the opposite diff;
+- every change reported is a real one, in attribute name and record order;
+- a collection carried forward reports what the same collection built whole
+  does;
+- nothing in the diff can be changed.
+
+`spec/unit/nested_comparator_properties_spec.rb` does the same for the values
+inside a JSON column, including JSON text, symbol keys, and arrays, which are
+reported by membership.
+
+They take about a second and run with the unit specs, so mutant runs them
+for `Engine` and `NestedComparator`. A failure names its case. The cases
+start small and grow, so the first one that fails is a small one.
+`PROPERTY_SEED` and `PROPERTY_CASES` choose other and more cases:
+
+```console
+PROPERTY_SEED=2 PROPERTY_CASES=5000 mise exec -- bundle exec rspec spec/unit/engine_properties_spec.rb
+```
+
 ## Mutation testing
 
 [Mutant](https://github.com/mbj/mutant) changes the library one expression at
