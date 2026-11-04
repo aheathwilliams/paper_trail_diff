@@ -68,10 +68,11 @@ RSpec.describe 'History stored as JSON' do
   end
 
   shared_examples 'a lossy time history' do
-    # Some PaperTrail, Ruby, and adapter combinations cannot write JSON history
-    # at all -- PaperTrail 16 passes a keyword newer json gems removed, and the
-    # SQL Server adapter hands its JSON encoder a type wrapper that refuses
-    # `as_json`. There is no history to compare there, so say why and stop.
+    # Some gem and adapter combinations cannot write JSON history at all --
+    # Active Support 8.0, which the PaperTrail 16 bundle runs, passes a
+    # keyword json 3 removed, and the SQL Server adapter hands its JSON encoder
+    # a type wrapper that refuses `as_json`. There is no history to compare
+    # there, so say why and stop.
     before do
       model.transaction do
         model.create!(title: 'Probe', published_at: published_at)
@@ -211,7 +212,7 @@ RSpec.describe 'History stored as JSON' do
     end
   end
 
-  it 'keeps full time precision for YAML history' do
+  it 'keeps full time precision for YAML history', history: :yaml do
     article = JsonHistoryArticle.create!(title: 'Draft', published_at: published_at)
     article.update!(published_at: published_at + Rational(1, 1_000_000))
 

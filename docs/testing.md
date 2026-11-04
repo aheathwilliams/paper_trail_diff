@@ -26,6 +26,30 @@ and the 2019 job's does not, so each call's `SNAPSHOT` read is run both ways.
 The SQL jobs exercise the same regressions, including joined-column ordering,
 duplicate roots, pagination, and historical association reconstruction.
 
+## JSON history
+
+PaperTrail writes history with YAML unless an app sets its JSON serializer, so
+the suites do too. To run them with JSON history instead:
+
+```console
+PAPER_TRAIL_DIFF_SERIALIZER=json mise exec -- bundle exec rake spec
+```
+
+A CI job runs them that way on Ruby 4.0 and PaperTrail 17. The PaperTrail 16
+jobs run Active Support 8.0, whose JSON encoder passes a keyword
+(`quirks_mode:`) that json 3 rejects, and the SQL Server adapter hands the
+encoder a value it refuses, so nothing can be written as JSON there, and the
+specs that switch to JSON themselves skip.
+
+Write a fixture version with `PaperTrail.serializer.dump`, not `to_yaml`, so it
+holds what either run's history would. An example about YAML history itself
+is tagged `history: :yaml` and keeps YAML in both runs. JSON keeps times to
+milliseconds by default, so an oracle's truth, read from live rows, cuts times
+to the digits history keeps (`HistorySerializer.as_stored`), as the gem does
+when it compares a live row with history. A scope that orders or bounds a
+time more finely than that is refused under JSON, and the specs that read one
+leave it out there.
+
 ## Consistency checks
 
 `spec/association/consistency_spec.rb` and `spec/integration/consistency_spec.rb`

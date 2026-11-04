@@ -426,6 +426,16 @@ project follows [Semantic Versioning](https://semver.org/).
   changed 84 methods took 33 minutes on one runner, close to the job's
   45-minute limit.
 
+- `PAPER_TRAIL_DIFF_SERIALIZER=json` runs the suites with PaperTrail's JSON
+  serializer, and a new CI job runs them that way. Before, about 40 of some
+  1,800 examples wrote JSON history, and none on the PaperTrail 16 or SQL
+  Server jobs. Run with JSON, the suites found no fault in the gem: the specs
+  that failed wrote YAML fixtures by hand, were about YAML itself, or read
+  times more finely than JSON keeps them (milliseconds), which the gem
+  refuses or rounds as documented. Those specs now write fixtures with the
+  configured serializer, keep YAML where YAML is the subject, and compare
+  times as JSON history holds them.
+
 ## [0.16.0] - 2026-11-01
 
 ### Changed

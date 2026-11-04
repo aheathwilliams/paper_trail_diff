@@ -78,7 +78,9 @@ module OracleTreeTruth
   def build(record, tree, incoming)
     reflections = tree.keys.map { |name| record.class.reflect_on_association(name) }
     keys = reflections.select(&:belongs_to?).map { |reflection| reflection.foreign_key.to_s }
-    attributes = record.attributes.except(record.class.primary_key, 'updated_at', *incoming, *keys)
+    attributes = HistorySerializer.as_stored(
+      record, record.attributes.except(record.class.primary_key, 'updated_at', *incoming, *keys)
+    )
     associations = reflections.to_h do |reflection|
       members = Array(record.class.find(record.id).public_send(reflection.name))
       child_keys = reflection.belongs_to? ? [] : [reflection.foreign_key.to_s]

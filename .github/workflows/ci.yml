@@ -80,6 +80,30 @@ jobs:
       - name: Run specs, linting, and type checking
         run: bundle exec rake
 
+  # PaperTrail writes YAML history unless told otherwise, and so does every
+  # other job. This one runs the suites with its JSON serializer. The
+  # PaperTrail 16 bundle's Active Support 8.0 cannot encode JSON with json 3.
+  json:
+    name: JSON history / Ruby 4.0 / PaperTrail 17
+    runs-on: ubuntu-latest
+
+    env:
+      BUNDLE_GEMFILE: gemfiles/paper_trail_17.gemfile
+      PAPER_TRAIL_DIFF_SERIALIZER: json
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '4.0'
+          bundler-cache: true
+
+      - name: Run specs with JSON history
+        run: bundle exec rake spec
+
   databases:
     name: ${{ matrix.database }} / Ruby 4.0 / PaperTrail 17
     runs-on: ubuntu-latest

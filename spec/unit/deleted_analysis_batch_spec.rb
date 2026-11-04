@@ -153,8 +153,9 @@ RSpec.describe PaperTrailDiff::DeletedAnalysisBatch do
   # id, and stored the record as the base class.
   it 'builds the root from the latest destroy of a reused id' do
     feature, _created, updated, destroyed = deleted(FilterFeature)
+    stored = PaperTrail.serializer.load(destroyed.object).merge('type' => nil)
     updated.update_columns(event: 'destroy', created_at: at(9),
-                           object: destroyed.object.sub("type: FilterFeature\n", "type:\n"))
+                           object: PaperTrail.serializer.dump(stored))
 
     analyze([key(feature)])
 
