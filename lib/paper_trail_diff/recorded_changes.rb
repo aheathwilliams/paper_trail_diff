@@ -39,7 +39,7 @@ module PaperTrailDiff
       changes = ActivityEventRecordResolver.new.deserialized_changeset(@version, model_class)
       return if changes.nil?
 
-      value_changes(changes, Array(model_class.primary_key) + ignored)
+      value_changes(model_class, changes, Array(model_class.primary_key) + ignored)
     end
 
     private
@@ -68,16 +68,15 @@ module PaperTrailDiff
     end
 
     # Primary keys identify the record rather than describe it, as in a diff.
-    #: (untyped, Array[String]) -> Hash[String, ValueChange]
-    def value_changes(changes, excluded)
-      recorded = {} #: Hash[String, ValueChange]
-      changes.each do |name, values|
-        key = name.to_s
-        next if excluded.include?(key)
-
-        recorded[key] = ValueChange.new(from: values.first, to: values.last)
-      end
-      recorded.sort.to_h.freeze
+    # Each side is read as a step's diff reads it (see StoredValues), so a
+    # value compares equal to the state the change produced.
+    #: (untyped, untyped, Array[String]) -> Hash[String, ValueChange]
+    def value_changes(model_class, changes, excluded)
+      kept = changes.to_h { |name, values| [name.to_s, values] }.except(*excluded)
+      from = StoredValues.apply(model_class, kept.transform_values(&:first))
+      to = StoredValues.apply(model_class, kept.transform_values(&:last))
+      kept.keys.sort.to_h { |key| [key, ValueChange.new(from: from.fetch(key), to: to.fetch(key))] }
+          .freeze
     end
   end
 end

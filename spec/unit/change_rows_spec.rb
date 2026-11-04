@@ -138,4 +138,28 @@ RSpec.describe PaperTrailDiff::ChangeRows,
     expect(added.to_h.fetch(:to)).not_to be_frozen
     expect(removed.to_h.fetch(:from)).not_to be_frozen
   end
+
+  # An attribution credits each row, and can split one in two.
+  it 'lists the rows an attribution gives for each row, in order' do
+    unversioned = PaperTrailDiff::ActivityBoundary.unversioned(item_type: 'Article', item_id: 1)
+    attribution = Object.new
+    attribution.define_singleton_method(:call) do |row|
+      [row, PaperTrailDiff::ChangeRow.new(
+        change: :changed, association_path: [], association_kind: nil, record: nil,
+        attribute: row.attribute, from: row.to, to: "#{row.to}!", source: unversioned
+      )]
+    end
+    before = record('Article', 1, { 'title' => 'Draft', 'summary' => 'a' })
+    after = record('Article', 1, { 'title' => 'Published', 'summary' => 'b' })
+
+    split = described_class.call(PaperTrailDiff::Engine.compare(before, after),
+                                 source: source, attribution: attribution)
+
+    expect(split.map { |row| [row.attribute, row.from, row.to, row.unversioned?] })
+      .to eq([['summary', 'a', 'b', false], ['summary', 'b', 'b!', true],
+              ['title', 'Draft', 'Published', false], ['title', 'Published', 'Published!', true]])
+    expect(split).to be_frozen
+    expect(split.last.to_h).to include(version_id: nil, event: nil, whodunnit: nil,
+                                       recorded_at: nil, transaction_id: nil)
+  end
 end

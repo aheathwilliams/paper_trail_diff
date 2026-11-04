@@ -55,6 +55,15 @@ module PaperTrailDiff
         of_version(version, :destroyed, recorded)
       end
 
+      # Where a change saved without a version came from, such as an
+      # `update_columns` call: no version, event, author or time recorded it,
+      # so it has none to report. A change row names it as its source.
+      #: (item_type: String, item_id: untyped) -> ActivityBoundary
+      def unversioned(item_type:, item_id:)
+        new(kind: :unversioned, version_id: nil, item_type: item_type, item_id: item_id,
+            recorded_at: nil, recorded_changes: nil)
+      end
+
       private
 
       #: (untyped, Symbol, RecordedChangesReader?) -> ActivityBoundary
@@ -142,6 +151,11 @@ module PaperTrailDiff
       kind == :destroyed
     end
 
+    #: () -> bool
+    def unversioned?
+      kind == :unversioned
+    end
+
     #: (?metadata: bool) -> Hash[Symbol, untyped]
     def to_h(metadata: false)
       value = {
@@ -178,30 +192,38 @@ module PaperTrailDiff
     # which holds every event in it: an attribution that names only the first
     # would credit the rest of the save to whoever opened it.
     attr_reader :sources #: Array[ActivityBoundary]
+    # @api private
+    # What credits this step's change rows, which a transaction group extends
+    # over the steps it merges.
+    attr_reader :attribution #: ChangeAttribution?
 
     # Compares two reconstructed states and keeps them only when asked, which is
     # every caller's shape: the diff always comes from the pair, the pair itself
     # is retained on request.
-    #: (from_boundary: ActivityBoundary, to_boundary: ActivityBoundary, from_snapshot: RecordSnapshot?, to_snapshot: RecordSnapshot?, retain: bool, ?sources: Array[ActivityBoundary]?) -> ActivityStep
-    def self.between(from_boundary:, to_boundary:, from_snapshot:, to_snapshot:, retain:, sources: nil) # rubocop:disable Metrics/ParameterLists, Layout/LineLength
+    #: (from_boundary: ActivityBoundary, to_boundary: ActivityBoundary, from_snapshot: RecordSnapshot?, to_snapshot: RecordSnapshot?, retain: bool, ?sources: Array[ActivityBoundary]?, ?attribution: ChangeAttribution?) -> ActivityStep
+    def self.between(from_boundary:, to_boundary:, from_snapshot:, to_snapshot:, retain:, sources: nil, attribution: nil) # rubocop:disable Metrics/ParameterLists, Layout/LineLength
       new(
         from_boundary: from_boundary,
         to_boundary: to_boundary,
         diff: Engine.compare(from_snapshot, to_snapshot),
         from_snapshot: (from_snapshot if retain),
         to_snapshot: (to_snapshot if retain),
-        sources: sources
+        sources: sources,
+        attribution: attribution
       )
     end
 
-    #: (from_boundary: ActivityBoundary, to_boundary: ActivityBoundary, diff: Diff, ?from_snapshot: RecordSnapshot?, ?to_snapshot: RecordSnapshot?, ?sources: Array[ActivityBoundary]?) -> void
-    def initialize(from_boundary:, to_boundary:, diff:, from_snapshot: nil, to_snapshot: nil, sources: nil) # rubocop:disable Metrics/ParameterLists, Layout/LineLength
+    # `attribution` credits each change row to the version that made it (see
+    # ChangeAttribution); without it, every row names `source_boundary`.
+    #: (from_boundary: ActivityBoundary, to_boundary: ActivityBoundary, diff: Diff, ?from_snapshot: RecordSnapshot?, ?to_snapshot: RecordSnapshot?, ?sources: Array[ActivityBoundary]?, ?attribution: ChangeAttribution?) -> void
+    def initialize(from_boundary:, to_boundary:, diff:, from_snapshot: nil, to_snapshot: nil, sources: nil, attribution: nil) # rubocop:disable Metrics/ParameterLists, Layout/LineLength
       @from_boundary = from_boundary
       @to_boundary = to_boundary
       @diff = diff
       @from_snapshot = from_snapshot
       @to_snapshot = to_snapshot
       @sources = (sources || [from_boundary]).dup.freeze
+      @attribution = attribution
       freeze
     end
 
@@ -215,10 +237,12 @@ module PaperTrailDiff
     #: () -> ActivityBoundary
     def source_boundary = from_boundary
 
-    # The diff as flat rows, each attributed to `source_boundary`.
+    # The diff as flat rows, each credited to the event that made its change:
+    # the version of the row's record that recorded it, an unversioned source
+    # for a part saved without a version, or else `source_boundary`.
     #: () -> Array[ChangeRow]
     def change_rows
-      ChangeRows.call(diff, source: source_boundary)
+      ChangeRows.call(diff, source: source_boundary, attribution: @attribution)
     end
 
     # `metadata: true` also lists `sources`, since who made a change is

@@ -251,10 +251,25 @@ covers one of two things:
 
 `record` is the record the row is about, or `nil` for the article itself, and
 `association_path` is how it was reached, such as `["comments"]`. `to_h` adds
-the step's source version: `version_id`, `event`, `whodunnit`, `recorded_at`,
-and `transaction_id`. With `group: :transaction`, that is the transaction's
-first event; `step.sources` lists every event. `row.source` is the
+the version that made the change: `version_id`, `event`, `whodunnit`,
+`recorded_at`, and `transaction_id`. That is the version of the row's own
+record, even when another record's event opens the step, as in a transaction.
+A record that joined or left through another record's change, such as an
+article's new author, names the step's first event. `row.source` is the
 `ActivityBoundary` itself.
+
+A write made without a version, such as `update_columns`, shows up in the
+step of the record's previous change. Pass `recorded_changes: true` to
+`report` to tell it apart: the part of a change PaperTrail did not record
+gets a row of its own, with `row.unversioned?` true and no `version_id`,
+`event`, `whodunnit`, or `recorded_at`. To list only what versions recorded:
+
+```ruby
+recorded = report.change_rows.transform_values { |rows| rows.reject(&:unversioned?) }
+```
+
+Some writes cannot be told apart, such as one to a column `has_paper_trail`
+ignores; see [change rows](docs/reference.md#change-rows).
 
 `change_rows` is also on an `Analysis` built with `activity: true` and on each
 activity step. Labels, grouping, and formatting are left to your application.

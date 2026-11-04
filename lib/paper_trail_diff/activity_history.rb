@@ -12,9 +12,11 @@ module PaperTrailDiff
     attr_reader :last_event_snapshot #: RecordSnapshot?
     # The event of `last_boundary`.
     attr_reader :last_event #: ActivityEvent?
+    # What credits the rows of a step `last_boundary` opens.
+    attr_reader :last_attribution #: ChangeAttribution?
 
-    #: (steps: Array[ActivityStep], root_snapshots: Hash[Array[untyped], RecordSnapshot?], first_snapshot: RecordSnapshot?, last_snapshot: RecordSnapshot?, ?last_boundary: ActivityBoundary?, ?last_event_snapshot: RecordSnapshot?, ?last_event: ActivityEvent?) -> void
-    def initialize(steps:, root_snapshots:, first_snapshot:, last_snapshot:, last_boundary: nil, last_event_snapshot: nil, last_event: nil) # rubocop:disable Metrics/ParameterLists, Layout/LineLength
+    #: (steps: Array[ActivityStep], root_snapshots: Hash[Array[untyped], RecordSnapshot?], first_snapshot: RecordSnapshot?, last_snapshot: RecordSnapshot?, ?last_boundary: ActivityBoundary?, ?last_event_snapshot: RecordSnapshot?, ?last_event: ActivityEvent?, ?last_attribution: ChangeAttribution?) -> void
+    def initialize(steps:, root_snapshots:, first_snapshot:, last_snapshot:, last_boundary: nil, last_event_snapshot: nil, last_event: nil, last_attribution: nil) # rubocop:disable Metrics/ParameterLists, Layout/LineLength
       @steps = steps.freeze
       @root_snapshots = root_snapshots.freeze
       @first_snapshot = first_snapshot
@@ -22,6 +24,7 @@ module PaperTrailDiff
       @last_boundary = last_boundary
       @last_event_snapshot = last_event_snapshot
       @last_event = last_event
+      @last_attribution = last_attribution
       freeze
     end
 
@@ -36,10 +39,13 @@ module PaperTrailDiff
     # `closing` is the snapshot after the last event when the range closes on
     # the current record. Any other range ends at a root event, or at events
     # after a window whose steps are not reported, so nothing reads it.
-    # `include_step` says whether an event's step is reported.
-    #: (Array[untyped], Array[ActivityEvent], untyped, view: ActivityView, include_step: untyped, ?current: untyped, ?closing: RecordSnapshot?) -> void
+    # `include_step` says whether an event's step is reported. `root` names
+    # the root, whose steps then credit each change row to the version that
+    # made it (see ChangeAttribution).
+    #: (Array[untyped], Array[ActivityEvent], untyped, view: ActivityView, include_step: untyped, ?current: untyped, ?closing: RecordSnapshot?, ?root: RecordReference?) -> void
     def initialize( # rubocop:disable Metrics/ParameterLists
-      root_versions, events, snapshotter, view:, include_step:, current: nil, closing: nil
+      root_versions, events, snapshotter,
+      view:, include_step:, current: nil, closing: nil, root: nil
     )
       @root_versions = root_versions
       @events = events
@@ -48,9 +54,11 @@ module PaperTrailDiff
       @current = current
       @include_step = include_step
       @closing = closing
+      @root = root
       # A builder makes one pass; the rest of its state starts out nil.
       @steps = []
       @root_snapshots = {}
+      @transactions = {}
       @first_pending = true
     end
 
@@ -64,7 +72,8 @@ module PaperTrailDiff
         last_snapshot: @selected_last_snapshot,
         last_boundary: @previous_boundary,
         last_event_snapshot: @previous_snapshot,
-        last_event: @previous_event
+        last_event: @previous_event,
+        last_attribution: @previous_attribution
       )
     end
 
@@ -85,7 +94,11 @@ module PaperTrailDiff
     # @rbs @selected_last_snapshot: RecordSnapshot?
     # @rbs @previous_boundary: ActivityBoundary?
     # @rbs @previous_event: ActivityEvent?
+    # @rbs @previous_attribution: ChangeAttribution?
     # @rbs @passed_reported: bool?
+    # @rbs @root: RecordReference?
+    # @rbs @transactions: Hash[Array[untyped], ChangeAttribution::Transaction]
+    # @rbs @opening: Array[Array[untyped]]?
 
     #: () -> ActivityTreeFilter
     def filter
@@ -126,6 +139,36 @@ module PaperTrailDiff
       @previous_boundary = boundary
       @previous_event = event
       @previous_snapshot = snapshot
+      @previous_attribution = attribution(event, boundary)
+    end
+
+    # Inside a transaction a record's change can surface at a later event
+    # than its own, so the rows of a step its boundary opens are read with
+    # the boundaries its transaction kept before it (see ChangeAttribution).
+    # A version saved outside a transaction is a transaction of its own.
+    #: (ActivityEvent, ActivityBoundary) -> ChangeAttribution?
+    def attribution(event, boundary)
+      root = @root
+      return unless root
+
+      transaction = ChangeAttribution::Transaction.new
+      complete = true
+      key = ActivityTransactionGroups.transaction_key(event.version)
+      if key
+        transaction = @transactions[key] ||= transaction
+        complete = !opening.include?(key)
+      end
+      attribution = ChangeAttribution.new(root: root, sources: [boundary], transaction: transaction,
+                                          complete: complete)
+      transaction.add(boundary)
+      attribution
+    end
+
+    # The transactions that began before the history did (see
+    # PreparedHistoryLoader#reload).
+    #: () -> Array[Array[untyped]]
+    def opening
+      @opening ||= @snapshotter.opening_transactions
     end
 
     #: (ActivityEvent) -> void
@@ -155,7 +198,8 @@ module PaperTrailDiff
 
       @steps << ActivityStep.between(
         from_boundary: previous_boundary, to_boundary: boundary,
-        from_snapshot: @previous_snapshot, to_snapshot: snapshot, retain: @view.retain?
+        from_snapshot: @previous_snapshot, to_snapshot: snapshot, retain: @view.retain?,
+        attribution: @previous_attribution
       )
       @selected_last_snapshot = snapshot
     end

@@ -18,8 +18,11 @@ module PaperTrailDiff
     # The event of `last_boundary`.
     attr_reader last_event: ActivityEvent?
 
-    # : (steps: Array[ActivityStep], root_snapshots: Hash[Array[untyped], RecordSnapshot?], first_snapshot: RecordSnapshot?, last_snapshot: RecordSnapshot?, ?last_boundary: ActivityBoundary?, ?last_event_snapshot: RecordSnapshot?, ?last_event: ActivityEvent?) -> void
-    def initialize: (steps: Array[ActivityStep], root_snapshots: Hash[Array[untyped], RecordSnapshot?], first_snapshot: RecordSnapshot?, last_snapshot: RecordSnapshot?, ?last_boundary: ActivityBoundary?, ?last_event_snapshot: RecordSnapshot?, ?last_event: ActivityEvent?) -> void
+    # What credits the rows of a step `last_boundary` opens.
+    attr_reader last_attribution: ChangeAttribution?
+
+    # : (steps: Array[ActivityStep], root_snapshots: Hash[Array[untyped], RecordSnapshot?], first_snapshot: RecordSnapshot?, last_snapshot: RecordSnapshot?, ?last_boundary: ActivityBoundary?, ?last_event_snapshot: RecordSnapshot?, ?last_event: ActivityEvent?, ?last_attribution: ChangeAttribution?) -> void
+    def initialize: (steps: Array[ActivityStep], root_snapshots: Hash[Array[untyped], RecordSnapshot?], first_snapshot: RecordSnapshot?, last_snapshot: RecordSnapshot?, ?last_boundary: ActivityBoundary?, ?last_event_snapshot: RecordSnapshot?, ?last_event: ActivityEvent?, ?last_attribution: ChangeAttribution?) -> void
 
     # : () -> ActivityHistory
     def self.empty: () -> ActivityHistory
@@ -30,9 +33,11 @@ module PaperTrailDiff
     # `closing` is the snapshot after the last event when the range closes on
     # the current record. Any other range ends at a root event, or at events
     # after a window whose steps are not reported, so nothing reads it.
-    # `include_step` says whether an event's step is reported.
-    # : (Array[untyped], Array[ActivityEvent], untyped, view: ActivityView, include_step: untyped, ?current: untyped, ?closing: RecordSnapshot?) -> void
-    def initialize: (Array[untyped], Array[ActivityEvent], untyped, view: ActivityView, include_step: untyped, ?current: untyped, ?closing: RecordSnapshot?) -> void
+    # `include_step` says whether an event's step is reported. `root` names
+    # the root, whose steps then credit each change row to the version that
+    # made it (see ChangeAttribution).
+    # : (Array[untyped], Array[ActivityEvent], untyped, view: ActivityView, include_step: untyped, ?current: untyped, ?closing: RecordSnapshot?, ?root: RecordReference?) -> void
+    def initialize: (Array[untyped], Array[ActivityEvent], untyped, view: ActivityView, include_step: untyped, ?current: untyped, ?closing: RecordSnapshot?, ?root: RecordReference?) -> void
 
     # : () -> ActivityHistory
     def call: () -> ActivityHistory
@@ -51,13 +56,19 @@ module PaperTrailDiff
 
     @include_step: untyped
 
+    @opening: Array[Array[untyped]]?
+
     @passed_reported: bool?
+
+    @previous_attribution: ChangeAttribution?
 
     @previous_boundary: ActivityBoundary?
 
     @previous_event: ActivityEvent?
 
     @previous_snapshot: RecordSnapshot?
+
+    @root: RecordReference?
 
     @root_snapshots: Hash[Array[untyped], RecordSnapshot?]
 
@@ -68,6 +79,8 @@ module PaperTrailDiff
     @snapshotter: untyped
 
     @steps: Array[ActivityStep]
+
+    @transactions: Hash[Array[untyped], ChangeAttribution::Transaction]
 
     @view: ActivityView
 
@@ -88,6 +101,18 @@ module PaperTrailDiff
     # a version filter starts it at the first change it keeps.
     # : (ActivityEvent, RecordSnapshot?, bool) -> void
     def consume: (ActivityEvent, RecordSnapshot?, bool) -> void
+
+    # Inside a transaction a record's change can surface at a later event
+    # than its own, so the rows of a step its boundary opens are read with
+    # the boundaries its transaction kept before it (see ChangeAttribution).
+    # A version saved outside a transaction is a transaction of its own.
+    # : (ActivityEvent, ActivityBoundary) -> ChangeAttribution?
+    def attribution: (ActivityEvent, ActivityBoundary) -> ChangeAttribution?
+
+    # The transactions that began before the history did (see
+    # PreparedHistoryLoader#reload).
+    # : () -> Array[Array[untyped]]
+    def opening: () -> Array[Array[untyped]]
 
     # : (ActivityEvent) -> void
     def pass: (ActivityEvent) -> void

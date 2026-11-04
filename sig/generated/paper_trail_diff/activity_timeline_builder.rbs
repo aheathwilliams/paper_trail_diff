@@ -183,6 +183,14 @@ module PaperTrailDiff
     # : (RootVersionPlan, Array[ActivityEvent], untyped, current: untyped, closing: RecordSnapshot?) -> ActivityHistory
     def replay: (RootVersionPlan, Array[ActivityEvent], untyped, current: untyped, closing: RecordSnapshot?) -> ActivityHistory
 
+    # The root as a change row's `record` would name it. A root is a record,
+    # or a deleted one rebuilt from its destroy (see DeletedAnalysisBatch).
+    # A reference reads its type with `to_s`, so mutant cannot tell the class
+    # from its name here.
+    # mutant:disable
+    # : () -> RecordReference
+    def root_reference: () -> RecordReference
+
     # : (Array[ActivityStep]) -> Array[ActivityStep]
     def present: (Array[ActivityStep]) -> Array[ActivityStep]
   end

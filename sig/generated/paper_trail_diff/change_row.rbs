@@ -21,11 +21,21 @@ module PaperTrailDiff
 
     attr_reader to: untyped
 
-    # The step's source boundary: for a transaction group, its first event.
+    # The event that made the change: the version of the row's record that
+    # recorded it, or a source of kind `:unversioned` for a change saved
+    # without a version. A row the step's own events do not account for, such
+    # as a record joining a collection through another record's change, names
+    # the step's source boundary.
     attr_reader source: ActivityBoundary
 
     # : (change: Symbol, association_path: Array[String], association_kind: Symbol?, record: RecordReference?, attribute: String?, from: untyped, to: untyped, source: ActivityBoundary) -> void
     def initialize: (change: Symbol, association_path: Array[String], association_kind: Symbol?, record: RecordReference?, attribute: String?, from: untyped, to: untyped, source: ActivityBoundary) -> void
+
+    # Whether the change was saved without a version, such as with
+    # `update_columns`, which PaperTrail never recorded. Only told apart with
+    # `recorded_changes: true`.
+    # : () -> bool
+    def unversioned?: () -> bool
 
     # The source's identifying fields sit beside the change rather than nested,
     # so the hash is one row of a table as it stands.
@@ -56,16 +66,21 @@ module PaperTrailDiff
   class ChangeRows
     RECORD_ENTRIES: untyped
 
-    # : (Diff, source: ActivityBoundary) -> Array[ChangeRow]
-    def self.call: (Diff, source: ActivityBoundary) -> Array[ChangeRow]
+    # `attribution` credits each row to the event that made its change, and
+    # can split one in two (see ChangeAttribution); without it, every row is
+    # credited to `source`.
+    # : (Diff, source: ActivityBoundary, ?attribution: ChangeAttribution?) -> Array[ChangeRow]
+    def self.call: (Diff, source: ActivityBoundary, ?attribution: ChangeAttribution?) -> Array[ChangeRow]
 
-    # : (ActivityBoundary) -> void
-    def initialize: (ActivityBoundary) -> void
+    # : (ActivityBoundary, ChangeAttribution?) -> void
+    def initialize: (ActivityBoundary, ChangeAttribution?) -> void
 
     # : (Diff) -> Array[ChangeRow]
     def call: (Diff) -> Array[ChangeRow]
 
     private
+
+    @attribution: ChangeAttribution?
 
     @source: ActivityBoundary
 

@@ -41,7 +41,9 @@ module PaperTrailDiff
     def recorded?: () -> bool
 
     # Primary keys identify the record rather than describe it, as in a diff.
-    # : (untyped, Array[String]) -> Hash[String, ValueChange]
-    def value_changes: (untyped, Array[String]) -> Hash[String, ValueChange]
+    # Each side is read as a step's diff reads it (see StoredValues), so a
+    # value compares equal to the state the change produced.
+    # : (untyped, untyped, Array[String]) -> Hash[String, ValueChange]
+    def value_changes: (untyped, untyped, Array[String]) -> Hash[String, ValueChange]
   end
 end

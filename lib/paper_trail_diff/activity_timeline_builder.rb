@@ -241,7 +241,7 @@ module PaperTrailDiff
       ActivityStep.between(
         from_boundary: last, to_boundary: boundary,
         from_snapshot: history.last_event_snapshot, to_snapshot: snapshot,
-        retain: @view.retain?
+        retain: @view.retain?, attribution: history.last_attribution
       )
     end
 
@@ -314,8 +314,19 @@ module PaperTrailDiff
         current: current,
         include_step: ->(event) { reported?(event, plan) },
         view: @view,
-        closing: closing
+        closing: closing,
+        root: root_reference
       ).call
+    end
+
+    # The root as a change row's `record` would name it. A root is a record,
+    # or a deleted one rebuilt from its destroy (see DeletedAnalysisBatch).
+    # A reference reads its type with `to_s`, so mutant cannot tell the class
+    # from its name here.
+    # mutant:disable
+    #: () -> RecordReference
+    def root_reference
+      RecordReference.new(type: @record.class.name, id: @record.id)
     end
 
     #: (Array[ActivityStep]) -> Array[ActivityStep]

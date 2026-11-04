@@ -65,6 +65,14 @@ RSpec.describe 'History of a time of day' do
     context "with #{model.name} in #{zone}" do
       around { |example| Time.use_zone(zone) { example.run } }
 
+      # What a version recorded reads as a step's diff does: on 2000-01-01 in
+      # the time's own zone, as Active Record 8.1 reads a row (see TimeOfDay).
+      # Before 8.1 a zone-aware time reloaded from the row falls on that date
+      # in UTC instead, a day apart here.
+      def as_recorded(time)
+        time.change(year: 2000, month: 1, day: 1)
+      end
+
       it 'reads the time each version recorded' do
         clock = model.create!(name: 'Kitchen')
         clock.update!(rings_at: at)
@@ -78,7 +86,7 @@ RSpec.describe 'History of a time of day' do
         end
         expect(PaperTrailDiff.compare(renamed, clock).attributes.keys).to eq(['name'])
         expect(PaperTrailDiff.recorded_changes(set).transform_values(&:to_h))
-          .to eq('rings_at' => { from: nil, to: clock.rings_at })
+          .to eq('rings_at' => { from: nil, to: as_recorded(clock.rings_at) })
       end
 
       # Active Record keeps the date of a time assigned in memory, and the
@@ -99,7 +107,8 @@ RSpec.describe 'History of a time of day' do
             .to eq([['rings_at'], ['name'], ['name']])
         end
         expect(PaperTrailDiff.compare(renamed, clock).attributes.keys).to eq(['name'])
-        expect(PaperTrailDiff.recorded_changes(set).fetch('rings_at').to).to eq(clock.rings_at)
+        expect(PaperTrailDiff.recorded_changes(set).fetch('rings_at').to)
+          .to eq(as_recorded(clock.rings_at))
       end
     end
   end

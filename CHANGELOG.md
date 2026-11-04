@@ -49,6 +49,25 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- With `recorded_changes: true`, change rows tell a write saved without a
+  version, such as `update_columns`, apart from the change it follows.
+  PaperTrail reads such a write into the record's next version, or its
+  current row, so it shows up in the step of the record's previous change,
+  and its row was credited to that change's author. The part of a change no
+  version recorded now has a row of its own, whose `source` has kind
+  `:unversioned`, names the record, and has no version, event, author, or
+  time; `ChangeRow#unversioned?` and `ActivityBoundary#unversioned?` tell
+  them apart. A field a version recorded changing from 10 to 20, which an
+  `update_columns` then set to 99, gives two rows: 10 to 20, credited to the
+  version, and 20 to 99, unversioned. A write between two of a record's
+  versions in one transaction, which no step shows on its own, is split off
+  the same way. A row stays whole, credited to a version, where history
+  cannot show the write was unrecorded: a version that recorded no changes,
+  such as a `touch`; a column `has_paper_trail` leaves out of
+  `object_changes`; a field a create left at its default; and the start of a
+  transaction that began before a window and saved no version of the root.
+  The [change rows](docs/reference.md#change-rows) reference lists them.
+
 - `within:` accepts an endless range, such as `1.day.ago..`, which runs
   through the current saved state, as `report` does.
 
@@ -71,6 +90,24 @@ project follows [Semantic Versioning](https://semver.org/).
   first, in one statement; without it, nothing changes.
 
 ### Changed
+
+- A change row names the version of its own record that made the change.
+  It named its step's source boundary: for a transaction group, the
+  transaction's first event, whichever record that was; and without
+  grouping, a child's change that showed up at a later event of its
+  transaction, in a step another record's version opens, named that version.
+  A record created or destroyed names its create or destroy, and its fields
+  the version that recorded each value. A record that joined or left through
+  another record's change, such as a new `belongs_to` target, still names the
+  step's source boundary.
+  Without `recorded_changes: true` the gem cannot tell which of a record's
+  versions in a transaction made a change, and names the last of them.
+
+- `recorded_changes`, and each activity boundary's `recorded_changes`, read
+  values as a step's diff reads them, so a recorded value equals the state it
+  produced: a time of day on 2000-01-01, and with JSON history, times to the
+  digits history stores and binary and `serialize`d values as JSON stored
+  them.
 
 - `report` reads every version saved since `since:`, with no end. Its window
   ended at the time of the call, so a version a server whose clock ran ahead
@@ -412,6 +449,15 @@ project follows [Semantic Versioning](https://semver.org/).
   a destroy and re-creation that never happened.
 
 ### Development
+
+- `spec/oracle/unversioned_writes_spec.rb` builds seeded histories of saves
+  and `update_columns` writes to an article, its comments and its author,
+  several to a transaction, and checks every change row against the writes:
+  a field's rows chain into the step's change, a row credited to a version
+  ends at a value that version recorded, an unversioned row ends at a value
+  an `update_columns` wrote, and a write a later version or the current row
+  reads has a row of its own. It runs over the whole history, grouped and
+  not, and over windows that start and end inside transactions.
 
 - `spec/oracle/shapes_history_spec.rb` compares rebuilt history with plain
   Active Record for shapes the other oracles leave out: polymorphic
