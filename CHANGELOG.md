@@ -196,6 +196,15 @@ project follows [Semantic Versioning](https://semver.org/).
   four transactions that changed two comments each, an article's activity
   read its row ten times rather than four.
 
+- On SQL Server, a window's transaction-edge lookup sends its record ids as
+  bound parameters, as the other id lists do, instead of writing them into
+  each statement. SQL Server compiled each such statement afresh, at about
+  0.05 ms per id. On 10,000 roots, the lookup's SQL time fell from 1.4 s to
+  0.7 s and a report from 5.1 s to 4.4 s, with the same windows. The lookup
+  now names 250 ids a statement rather than 500, since each id appears twice
+  in it: 1,000 ids a statement was slower, and would exceed SQLite's old limit
+  of 1,000 bound parameters.
+
 ### Fixed
 
 - With `historical_filter:`, `analyze_scope` and `report` test each record over
@@ -454,7 +463,7 @@ project follows [Semantic Versioning](https://semver.org/).
 ### Fixed
 
 - Batch methods with `within:` or `since:` look for transactions that cross
-  the window's edges in one statement per 500 records. 0.15.0 wrote a
+  the window's edges in one statement per 250 records. 0.15.0 wrote a
   separate lookup for each record into the statement, which SQL Server took
   about a second to compile per 200 records, so a report on 10,800 records
   spent nearly two minutes there. On 1.4 million versions, 0.15.0 failed for

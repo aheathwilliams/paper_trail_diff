@@ -121,13 +121,17 @@ module PaperTrailDiff
     # second per 200 roots to compile. Rows read without a model come back as
     # the adapter returns them, so the transaction is cast as the grouped
     # query's keys are.
+    #
+    # The ids go to the adapter as bound parameters. Written into the
+    # statement, they made each slice's text new to SQL Server, which compiled
+    # it again, at about 0.05 ms per id.
     # : (untyped, Array[untyped], Edge) -> Array[[String, untyped, bool]]
     def self.nearest: (untyped, Array[untyped], Edge) -> Array[[ String, untyped, bool ]]
 
     # The roots' versions saved in a transaction at either nearest instant,
     # each with whether it is the one after the edge.
-    # : (untyped, Array[untyped], Edge) -> String
-    def self.nearest_sql: (untyped, Array[untyped], Edge) -> String
+    # : (untyped, Array[untyped], Edge) -> untyped
+    def self.nearest_query: (untyped, Array[untyped], Edge) -> untyped
 
     # 1 for a version saved at the instant after the edge, 0 for one before.
     # Only the 1 is read (see after_edge?), so another value or alias, or none,

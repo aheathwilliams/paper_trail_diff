@@ -191,7 +191,10 @@ module PaperTrailDiff
     # after the edge and those before it.
     #: (untyped, Array[untyped], Edge) -> [Hash[untyped, Array[String]], Hash[untyped, Array[String]]]
     def self.nearest_roots(versions, records, edge)
-      rows = records.each_slice(Support::IDS_PER_STATEMENT).flat_map do |slice|
+      # The lookup names its ids twice in one statement, for the grouped instants
+      # and for the versions they join, so half a statement's ids keep it under
+      # 1,000 bound parameters, the most SQLite allowed before 3.32.
+      rows = records.each_slice(Support::IDS_PER_STATEMENT / 2).flat_map do |slice|
         nearest(versions, slice, edge)
       end
       later, earlier = rows.partition(&:last)
@@ -214,26 +217,30 @@ module PaperTrailDiff
     # second per 200 roots to compile. Rows read without a model come back as
     # the adapter returns them, so the transaction is cast as the grouped
     # query's keys are.
+    #
+    # The ids go to the adapter as bound parameters. Written into the
+    # statement, they made each slice's text new to SQL Server, which compiled
+    # it again, at about 0.05 ms per id.
     #: (untyped, Array[untyped], Edge) -> Array[[String, untyped, bool]]
     def self.nearest(versions, records, edge)
       transaction = versions.type_for_attribute('transaction_id')
-      rows = versions.connection.select_rows(nearest_sql(versions, records, edge))
+      rows = versions.connection.select_rows(nearest_query(versions, records, edge))
       rows.map { |id, value, flag| [id.to_s, transaction.cast(value), after_edge?(flag)] }
     end
     private_class_method :nearest
 
     # The roots' versions saved in a transaction at either nearest instant,
     # each with whether it is the one after the edge.
-    #: (untyped, Array[untyped], Edge) -> String
-    def self.nearest_sql(versions, records, edge)
+    #: (untyped, Array[untyped], Edge) -> untyped
+    def self.nearest_query(versions, records, edge)
       own = versions.where(item_id: records)
       table = own.arel_table
       instants = nearest_instants(own, edge)
       own.joins(Support.arel::Nodes::InnerJoin.new(instants, at_either(table, instants)))
          .where.not(transaction_id: nil)
-         .select(table[:item_id], table[:transaction_id], after_edge(table, instants)).to_sql
+         .select(table[:item_id], table[:transaction_id], after_edge(table, instants)).arel
     end
-    private_class_method :nearest_sql
+    private_class_method :nearest_query
 
     # 1 for a version saved at the instant after the edge, 0 for one before.
     # Only the 1 is read (see after_edge?), so another value or alias, or none,
