@@ -41,7 +41,7 @@ module PaperTrailDiff
       return changed_record if changed_record
 
       successor = version.next
-      record = successor&.reify(dup: true)
+      record = successor && Support.reify(successor, dup: true)
       return record if record
 
       model_class = Endpoint.model_class(version)
@@ -81,7 +81,7 @@ module PaperTrailDiff
 
     #: (untyped) -> untyped
     def updated_record_after(version)
-      record = version.reify(dup: true)
+      record = Support.reify(version, dup: true)
       changes = deserialized_changeset(version, record&.class)
       apply_changes(record, changes)
     end
@@ -184,7 +184,7 @@ module PaperTrailDiff
 
     #: (untyped, untyped, untyped) -> untyped
     def standard_changeset(paper_trail, version, model_class)
-      raw_changes = version.send(:object_changes_deserialized)
+      raw_changes = Support.decodable(version.send(:object_changes_deserialized))
       active_support = Object.const_get(:ActiveSupport) #: untyped
       changes = active_support.const_get(:HashWithIndifferentAccess).new(raw_changes)
       serializers = paper_trail.const_get(:AttributeSerializers)

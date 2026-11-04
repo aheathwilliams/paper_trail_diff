@@ -135,16 +135,12 @@ module PaperTrailDiff
     # : (Array[untyped]) -> Array[untyped]
     def selected_records: (Array[untyped]) -> Array[untyped]
 
+    # Pages are read by offset, so under a total order.
     # : (Array[untyped]) -> untyped
     def candidate_relation: (Array[untyped]) -> untyped
 
     # : (untyped, Integer) -> Array[untyped]
     def record_page: (untyped, Integer) -> Array[untyped]
-
-    # Preserve explicit ordering: SQL Server rejects duplicate ORDER BY columns,
-    # even when the extra ordering would only have served as a tie-breaker.
-    # : () -> untyped
-    def ordered_scope: () -> untyped
 
     # : (Integer) -> Integer
     def page_limit: (Integer) -> Integer

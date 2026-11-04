@@ -9,6 +9,15 @@ module PaperTrailDiff
     # than they save.
     IDS_PER_STATEMENT: ::Integer
 
+    # PaperTrail's YAML serializer stores a `time` column's value as this
+    # wrapper, which PaperTrail 16 and 17 decode by reading its `@time`. Only
+    # some zone-aware times are stored with one, as a TimeWithZone's fields
+    # under the wrapper's tag; any other wraps its time, and decodes as nil.
+    TIME_VALUE: ::String
+
+    # The date a database gives a time of day it reads back.
+    TIME_OF_DAY_DATE: Hash[Symbol, Integer]
+
     # Answers a question about `value` once for each Active Record class, in
     # `answers`: its respond_to? also looks through the instance's attributes,
     # which costs more than most of what reading a version does, and every
@@ -16,6 +25,42 @@ module PaperTrailDiff
     # all their columns. Anything else is asked each time.
     # : [T] (Hash[untyped, T], untyped) { (untyped) -> T } -> T
     def self.per_model: [T] (Hash[untyped, T], untyped) { (untyped) -> T } -> T
+
+    # Stored attributes or changes ready for PaperTrail to decode: keyed by
+    # name, with each time of day unwrapped, which then decodes as any value
+    # does. A change's values are a pair.
+    # : (Hash[untyped, untyped]) -> Hash[String, untyped]
+    def self.decodable: (Hash[untyped, untyped]) -> Hash[String, untyped]
+
+    # : (untyped) -> untyped
+    def self.unwrapped_time: (untyped) -> untyped
+
+    # The time a stored wrapper holds -- the one it wraps, or the `@time`
+    # PaperTrail reads -- on 2000-01-01, as the database keeps a time of day.
+    # Active Record keeps the date of a time assigned in memory, which
+    # PaperTrail stores, but the row holds only the time.
+    # : (untyped) -> untyped
+    def self.recorded_time: (untyped) -> untyped
+
+    # PaperTrail's `reify`, with each time of day its version recorded.
+    # : (untyped, **untyped) -> untyped
+    def self.reify: (untyped, **untyped) -> untyped
+
+    # A record PaperTrail rebuilt, with each time of day assigned from the
+    # version it was rebuilt from, which PaperTrail can decode as nil. PaperTrail
+    # assigns stored attributes after building the record and links it to
+    # that version, PT-AT's members too, so this assigns what PaperTrail would
+    # if it unwrapped the value. Only a version whose stored text names the
+    # wrapper is decoded again; any other record is returned as it is.
+    # : [T] (T) -> T
+    def self.with_recorded_times: [T] (T) -> T
+
+    # : (untyped) -> untyped
+    def self.rebuilt_from: (untyped) -> untyped
+
+    # As PaperTrail assigns a stored attribute.
+    # : (untyped, String, untyped) -> void
+    def self.assign_recorded: (untyped, String, untyped) -> void
 
     # : (untyped) -> untyped
     def self.immutable_copy: (untyped) -> untyped
@@ -107,6 +152,15 @@ module PaperTrailDiff
     # once from its live row would count as two.
     # : (untyped, untyped) -> untyped
     def self.record_id: (untyped, untyped) -> untyped
+
+    # A relation's limit and offset as Active Record writes them into SQL.
+    # Before 8.1 it keeps a limit as given, as every version keeps an offset,
+    # so either may be a String, as request parameters are.
+    # : (untyped) -> Integer?
+    def self.limit: (untyped) -> Integer?
+
+    # : (untyped) -> Integer
+    def self.offset: (untyped) -> Integer
 
     # : (untyped) -> bool
     def self.sequential_id?: (untyped) -> bool

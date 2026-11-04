@@ -116,7 +116,8 @@ module PaperTrailDiff
     # A model and a tree resolve to the same reflections wherever they are
     # read: a tree is only ever walked from one place, the root tree at the
     # root and a subtree below it. Beyond that, the path only names a failure,
-    # and a failure is not cached.
+    # and a failure is not cached. Each record is read at every boundary, so
+    # the lookup builds no key.
     # : (untyped, AssociationTree, path: String) -> Array[untyped]
     def reflections_for: (untyped, AssociationTree, path: String) -> Array[untyped]
 
@@ -127,7 +128,7 @@ module PaperTrailDiff
 
     private
 
-    @reflection_cache: Hash[Array[untyped], Array[untyped]]
+    @reflection_cache: Hash[AssociationTree, Hash[untyped, Array[untyped]]]
 
     @tree: AssociationTree
 

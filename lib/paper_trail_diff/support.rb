@@ -10,6 +10,15 @@ module PaperTrailDiff
     # than they save.
     IDS_PER_STATEMENT = 500
 
+    # PaperTrail's YAML serializer stores a `time` column's value as this
+    # wrapper, which PaperTrail 16 and 17 decode by reading its `@time`. Only
+    # some zone-aware times are stored with one, as a TimeWithZone's fields
+    # under the wrapper's tag; any other wraps its time, and decodes as nil.
+    TIME_VALUE = 'ActiveRecord::Type::Time::Value'
+
+    # The date a database gives a time of day it reads back.
+    TIME_OF_DAY_DATE = { year: 2000, month: 1, day: 1 }.freeze #: Hash[Symbol, Integer]
+
     # Answers a question about `value` once for each Active Record class, in
     # `answers`: its respond_to? also looks through the instance's attributes,
     # which costs more than most of what reading a version does, and every
@@ -22,6 +31,79 @@ module PaperTrailDiff
 
       answers.fetch(model) { answers[model] = yield(value) }
     end
+
+    # Stored attributes or changes ready for PaperTrail to decode: keyed by
+    # name, with each time of day unwrapped, which then decodes as any value
+    # does. A change's values are a pair.
+    #: (Hash[untyped, untyped]) -> Hash[String, untyped]
+    def self.decodable(stored)
+      stored.to_h { |name, value| [name.to_s, unwrapped_time(value)] }
+    end
+
+    #: (untyped) -> untyped
+    def self.unwrapped_time(value)
+      return value.map { |item| unwrapped_time(item) } if value.instance_of?(Array)
+
+      TIME_VALUE.eql?(value.class.name) ? recorded_time(value) : value
+    end
+    private_class_method :unwrapped_time
+
+    # The time a stored wrapper holds -- the one it wraps, or the `@time`
+    # PaperTrail reads -- on 2000-01-01, as the database keeps a time of day.
+    # Active Record keeps the date of a time assigned in memory, which
+    # PaperTrail stores, but the row holds only the time.
+    #: (untyped) -> untyped
+    def self.recorded_time(value)
+      value.__getobj__ { value.instance_variable_get(:@time) }&.change(**TIME_OF_DAY_DATE)
+    end
+    private_class_method :recorded_time
+
+    # PaperTrail's `reify`, with each time of day its version recorded.
+    #: (untyped, **untyped) -> untyped
+    def self.reify(version, **options)
+      with_recorded_times(version.reify(**options))
+    end
+
+    # A record PaperTrail rebuilt, with each time of day assigned from the
+    # version it was rebuilt from, which PaperTrail can decode as nil. PaperTrail
+    # assigns stored attributes after building the record and links it to
+    # that version, PT-AT's members too, so this assigns what PaperTrail would
+    # if it unwrapped the value. Only a version whose stored text names the
+    # wrapper is decoded again; any other record is returned as it is.
+    #: [T] (T) -> T
+    def self.with_recorded_times(record)
+      version = rebuilt_from(record)
+      return record unless version
+
+      version.object_deserialized.each do |name, value|
+        next unless TIME_VALUE.eql?(value.class.name)
+
+        assign_recorded(record, name, recorded_time(value))
+      end
+      record
+    end
+
+    #: (untyped) -> untyped
+    def self.rebuilt_from(record)
+      model = record.class
+      return unless model.respond_to?(:version_association_name)
+
+      version = record.public_send(model.version_association_name)
+      # A JSON column's Hash is keyed by attribute names, never this one.
+      version if version&.object&.include?(TIME_VALUE)
+    end
+    private_class_method :rebuilt_from
+
+    # As PaperTrail assigns a stored attribute.
+    #: (untyped, String, untyped) -> void
+    def self.assign_recorded(record, name, value)
+      if record.has_attribute?(name)
+        record[name.to_sym] = value
+      elsif record.respond_to?(:"#{name}=")
+        record.public_send(:"#{name}=", value)
+      end
+    end
+    private_class_method :assign_recorded
 
     #: (untyped) -> untyped
     def self.immutable_copy(value)
@@ -187,6 +269,20 @@ module PaperTrailDiff
       return id unless key.instance_of?(String)
 
       model_class.type_for_attribute(key).cast(id)
+    end
+
+    # A relation's limit and offset as Active Record writes them into SQL.
+    # Before 8.1 it keeps a limit as given, as every version keeps an offset,
+    # so either may be a String, as request parameters are.
+    #: (untyped) -> Integer?
+    def self.limit(relation)
+      value = relation.limit_value
+      Integer(value) unless value.nil?
+    end
+
+    #: (untyped) -> Integer
+    def self.offset(relation)
+      relation.offset_value.to_i
     end
 
     #: (untyped) -> bool

@@ -112,35 +112,39 @@ module PaperTrailDiff
       [model.base_class.name, *Array(model.primary_key).map { |key| state.attributes[key].to_s }]
     end
 
+    # The scope's condition and the owner's id are read once for all the
+    # owner's children, which are read at every boundary.
     #: (PreparedRecordState, untyped, untyped, bool) -> [bool, Array[PreparedRecordState]]
     def children(owner, reflection, boundary, ranked)
+      condition = @conditions.call(reflection, ranked: ranked) #: ScopeCondition
+      owner_id = owner_id(owner)
       selected = [] #: Array[PreparedRecordState]
       @edges.call(owner.model_class, reflection).each_value do |group|
-        ids_for(group, owner).each do |id|
+        ids_for(group, owner_id).each do |id|
           handled, child = @records.snapshot_state_before(group.fetch(:model), id, boundary)
           return [false, []] unless handled
 
-          selected << child if child && member?(child, owner, reflection, ranked)
+          selected << child if child && member?(child, owner, owner_id, reflection, condition)
         end
       end
       return [true, selected] unless ranked
 
-      condition = @conditions.call(reflection) #: ScopeCondition
       [true, first_if_one(reflection, condition.rank(selected))]
     end
 
-    #: (untyped, PreparedRecordState) -> Array[untyped]
-    def ids_for(group, owner)
+    #: (untyped, String) -> Array[untyped]
+    def ids_for(group, owner_id)
       owners = group[:owners]
       empty = [] #: Array[untyped]
-      owners ? owners.fetch(owner_id(owner), empty) : group.fetch(:ids)
+      owners ? owners.fetch(owner_id, empty) : group.fetch(:ids)
     end
 
-    #: (PreparedRecordState, PreparedRecordState, untyped, bool) -> bool
-    def member?(child, owner, reflection, ranked)
-      return false unless child.attributes[reflection.foreign_key.to_s].to_s == owner_id(owner)
-      return false unless AssociationTraversal.sti_member?(reflection.klass, child.attributes)
-      return false unless in_scope?(child, reflection, ranked)
+    #: (PreparedRecordState, PreparedRecordState, String, untyped, ScopeCondition) -> bool
+    def member?(child, owner, owner_id, reflection, condition)
+      attributes = child.attributes
+      return false unless attributes[reflection.foreign_key.to_s].to_s == owner_id
+      return false unless AssociationTraversal.sti_member?(reflection.klass, attributes)
+      return false unless condition.matches?(attributes)
       return true unless reflection.options[:as]
 
       matching_type?(child, owner.model_class, reflection)

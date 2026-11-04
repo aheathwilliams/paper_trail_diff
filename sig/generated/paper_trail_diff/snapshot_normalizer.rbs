@@ -41,10 +41,15 @@ module PaperTrailDiff
     def attributes_for: (untyped, tree: AssociationTree, path: String) -> snapshot_attributes
 
     # Same exclusions as AR normalization, applied to an already typed state.
+    # A state without associations is normalized once at each path: the
+    # same state is read again at every boundary it spans.
     # : (PreparedRecordState, tree: AssociationTree, path: String, ?incoming: untyped, ?associations: snapshot_associations) -> RecordSnapshot
     def from_state: (PreparedRecordState, tree: AssociationTree, path: String, ?incoming: untyped, ?associations: snapshot_associations) -> RecordSnapshot
 
     private
+
+    # : (PreparedRecordState, AssociationTree, String, untyped, snapshot_associations) -> RecordSnapshot
+    def snapshot_from_state: (PreparedRecordState, AssociationTree, String, untyped, snapshot_associations) -> RecordSnapshot
 
     # The id a live record of the same row reports: one value, or one per
     # column of a composite key.
@@ -57,6 +62,8 @@ module PaperTrailDiff
     @excluded_attributes: Hash[Array[untyped], Array[String?]]
 
     @ignore_policy: IgnorePolicy
+
+    @leaves: Hash[String, Hash[PreparedRecordState, RecordSnapshot]]
 
     @pool: SnapshotPool
 

@@ -751,9 +751,17 @@ and `allow_approximate:`.
   selected, the call raises `BatchLimitExceededError` instead of returning part
   of the answer. Narrow the relation or the window, or raise the limit.
 - **To paginate, use the relation.** Its `order`, `limit`, and `offset` choose
-  the page. Without an `order`, records are taken in ascending ID order. Add an
-  ID tie-breaker to any other order. If a join repeats a record, it is analyzed
-  once, in order of first appearance.
+  the page. Without an `order`, records are taken in ascending ID order. Any
+  other order gets the ID as a last tie-breaker unless it already sorts by it,
+  so that records that tie are neither skipped nor read twice. SQL text counts
+  as sorting by the ID when it names the column, alone or after the table's
+  name, as `order("title, id")` does. Give the queries that show the page the
+  same tie-breaker, such as `order(:status, :id)`, so that they list the
+  records the report analyzed. If a join repeats a record, it is analyzed
+  once, in order of first appearance. A relation grouped by anything but the
+  ID, such as `select("MAX(id) AS id").group(:author_id)`, keeps its own
+  order, since a database sorts groups only by what they group or aggregate.
+  It needs one that tells its groups apart, such as `order(:author_id)`.
 - Selection still scans the versions in the window, so keep windows reasonable
   for large tables. Each requested association adds one query per level, however
   many records it selects. Changes to associations are found from PT-AT's
@@ -1525,6 +1533,17 @@ Results can only be as complete as the history PaperTrail and PT-AT recorded.
   [how PaperTrail stores history](#how-papertrail-stores-history).
 - Deleted versions, schema changes, and serializer changes can affect how old
   versions read.
+- With PaperTrail's default YAML serializer, PaperTrail 16 and 17 decode a
+  `time` (time of day) column as `nil`, in `reify` and `changeset` alike,
+  unless the column is time-zone aware, as a Rails app's are, and the time
+  zone is UTC. The gem reads the time each version recorded, including in
+  the records it passes to a callable `historical_filter:`, but your own
+  calls to those PaperTrail methods still return `nil`. PaperTrail's JSON
+  serializer, and SQL Server, whose adapter stores a time its own way, are
+  not affected. Snapshots and diffs show every time of day on 2000-01-01 in
+  its own zone, as Active Record 8.1 reads one. Active Record before 8.1
+  reads a zone-aware time from the database on 2000-01-01 in UTC, so
+  `record.opens_at` can show another date than the snapshot of that time.
 - Each call reads its history and live rows in one snapshot on PostgreSQL and
   MySQL (through mysql2 or trilogy), and on adapters built on them such as
   PostGIS, so a commit that lands during the call is seen by none of its

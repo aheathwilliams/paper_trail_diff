@@ -26,6 +26,116 @@ RSpec.describe PaperTrailDiff::Support do
     end
   end
 
+  describe '.decodable' do
+    let(:time_of_day) { Time.utc(2000, 1, 1, 12) }
+
+    # The wrapper delegates ==, so only its class tells it from the time.
+    it 'keys stored values by name, unwrapping each time of day, alone or in a pair' do
+      wrapped = ActiveRecord::Type::Time::Value.new(noon)
+      # As YAML loads a zone-aware time stored as a TimeWithZone's fields.
+      fields = ActiveRecord::Type::Time::Value.allocate
+      fields.instance_variable_set(:@time, noon)
+
+      decodable = described_class.decodable(rings_at: wrapped, 'changed' => [nil, wrapped],
+                                            'title' => 'Draft', 'labels' => [1, 2],
+                                            'zoned' => fields)
+
+      expect(decodable).to eq('rings_at' => time_of_day, 'changed' => [nil, time_of_day],
+                              'title' => 'Draft', 'labels' => [1, 2], 'zoned' => time_of_day)
+      expect([decodable.fetch('rings_at'), decodable.fetch('changed').last])
+        .to all(be_an_instance_of(Time))
+    end
+
+    # A time assigned in memory keeps its date there, and in its version, but
+    # the row keeps only the time, which reads back on 2000-01-01.
+    it 'reads a time of day on the date the database gives it, in its own zone' do
+      assigned = Time.new(2032, 3, 4, 7, 30, Rational(31, 2), '+13:00')
+      empty = ActiveRecord::Type::Time::Value.allocate
+
+      decodable = described_class.decodable('rings_at' => ActiveRecord::Type::Time::Value.new(assigned),
+                                            'unset' => empty)
+
+      expect(decodable).to eq('rings_at' => Time.new(2000, 1, 1, 7, 30, Rational(31, 2), '+13:00'),
+                              'unset' => nil)
+      expect(decodable.fetch('rings_at').utc_offset).to eq(13 * 3600)
+    end
+  end
+
+  describe '.with_recorded_times and .reify' do
+    # A record as PaperTrail's reify leaves it: linked to its version, with
+    # the time of day nil.
+    let(:model) do
+      Class.new do
+        attr_reader :version, :assigned
+        attr_accessor :alarm
+
+        def self.version_association_name = :version
+
+        def initialize(version)
+          @version = version
+          @assigned = {}
+        end
+
+        def has_attribute?(name) = name == 'rings_at'
+
+        def []=(name, value)
+          @assigned[name] = value
+        end
+      end
+    end
+
+    let(:wrapped) { ActiveRecord::Type::Time::Value.new(noon) }
+
+    def stored(object, attributes = {})
+      double(object: object, object_deserialized: attributes)
+    end
+
+    it 'assigns each time of day its version recorded, as PaperTrail assigns attributes' do
+      fields = ActiveRecord::Type::Time::Value.allocate
+      fields.instance_variable_set(:@time, noon)
+      version = stored("rings_at: !ruby/object:#{described_class::TIME_VALUE}",
+                       'title' => 'Draft', 'rings_at' => wrapped, 'alarm' => fields,
+                       'gone' => wrapped)
+      record = model.new(version)
+
+      expect(described_class.with_recorded_times(record)).to equal(record)
+      expect(record.assigned).to eq(rings_at: Time.utc(2000, 1, 1, 12))
+      expect(record.assigned.fetch(:rings_at)).to be_an_instance_of(Time)
+      expect(record.alarm).to be_an_instance_of(Time)
+      expect(record.alarm).to eq(Time.utc(2000, 1, 1, 12))
+    end
+
+    it 'decodes nothing again when the stored text holds no time of day, or is not text' do
+      ['title: Draft', { 'rings_at' => '12:00' }, nil].each do |object|
+        version = stored(object)
+        record = model.new(version)
+
+        expect(described_class.with_recorded_times(record)).to equal(record)
+        expect(version).not_to have_received(:object_deserialized)
+        expect(record.assigned).to be_empty
+      end
+    end
+
+    it 'returns a record PaperTrail did not rebuild, or none, as it is' do
+      record = model.new(nil)
+      plain = Object.new
+
+      expect(described_class.with_recorded_times(record)).to equal(record)
+      expect(described_class.with_recorded_times(plain)).to equal(plain)
+      expect(described_class.with_recorded_times(nil)).to be_nil
+    end
+
+    it "is PaperTrail's reify with the options given, and the version's times" do
+      version = stored("rings_at: !ruby/object:#{described_class::TIME_VALUE}",
+                       'rings_at' => wrapped)
+      record = model.new(version)
+      allow(version).to receive(:reify).with(dup: true, has_many: false).and_return(record)
+
+      expect(described_class.reify(version, dup: true, has_many: false)).to equal(record)
+      expect(record.assigned).to eq(rings_at: Time.utc(2000, 1, 1, 12))
+    end
+  end
+
   describe '.immutable_copy' do
     it 'copies hashes and arrays all the way down, keys too, and freezes the copy' do
       key = [+'key']
@@ -204,6 +314,26 @@ RSpec.describe PaperTrailDiff::Support do
       expect(['5', nil].map { |id| described_class.record_id(FilterArticle, id) }).to eq([5, nil])
       expect([composite, keyless].map { |model| described_class.record_id(model, '5') })
         .to eq(%w[5 5])
+    end
+  end
+
+  describe '.limit' do
+    # Active Record 8.1 casts a limit as it is set, so only a stand-in keeps
+    # one as given, as earlier versions do.
+    it "reads a relation's limit as Active Record writes it into SQL" do
+      relation = Struct.new(:limit_value)
+
+      expect([nil, 2, '2'].map { |value| described_class.limit(relation.new(value)) })
+        .to eq([nil, 2, 2])
+      expect { described_class.limit(relation.new('two')) }.to raise_error(ArgumentError)
+    end
+  end
+
+  describe '.offset' do
+    it "reads a relation's offset as Active Record writes it into SQL" do
+      offsets = [FilterArticle.all, FilterArticle.offset(1), FilterArticle.offset('1')]
+
+      expect(offsets.map { |relation| described_class.offset(relation) }).to eq([0, 1, 1])
     end
   end
 

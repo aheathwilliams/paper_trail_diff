@@ -114,6 +114,21 @@ RSpec.describe PaperTrailDiff::RootVersionSelection do
       )
     end
 
+    # The versions in range are in order, so the one after each selected
+    # version is found by a search rather than by passing every version.
+    it 'finds the version after each selected one with a search' do
+      versions = Array.new(256) do |index|
+        FilterVersion.new(id: index + 1, event: 'update', created_at: Time.utc(2032, 1, 1) + index)
+      end
+      selected = versions.each_slice(2).map(&:first)
+      allow(PaperTrailDiff::Support).to receive(:compare_versions).and_call_original
+
+      plan = select(versions, selected: selected)
+
+      expect(plan.steps).to eq(versions.each_slice(2).to_a)
+      expect(PaperTrailDiff::Support).to have_received(:compare_versions).at_most(256 * 8).times
+    end
+
     # Outside a window, the range ends at its last version, so nothing in it
     # reveals that version's own change.
     it 'leaves out of the steps a last selected version nothing reveals' do

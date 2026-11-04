@@ -106,7 +106,7 @@ module PaperTrailDiff
 
     #: (AssociationSnapshot, untyped, ActivityCollectionRouteChange) -> Integer?
     def nested_owner_position(association, reflection, change)
-      membership_record = change.record || change.version.reify(dup: true)
+      membership_record = change.record || Support.reify(change.version, dup: true)
       return unless membership_record
       return if membership_record.is_a?(ActivitySnapshotDelta) &&
                 membership_record.relationship_changed?(reflection)

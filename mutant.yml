@@ -41,6 +41,7 @@ matcher:
     - PaperTrailDiff::SnapshotNormalizer*
     - PaperTrailDiff::SnapshotPool*
     - PaperTrailDiff::StoredTimePrecision*
+    - PaperTrailDiff::TimeOfDay*
     - PaperTrailDiff::Endpoint*
     - PaperTrailDiff::EndpointKind*
     - PaperTrailDiff::TimelineRange*
@@ -74,6 +75,7 @@ matcher:
     - PaperTrailDiff::PreparedChildCandidates*
     - PaperTrailDiff::ActivityTargetCandidateLoader*
     - PaperTrailDiff::ScopedRootSelection*
+    - PaperTrailDiff::TotalOrder*
     - PaperTrailDiff::PreparedHistoryLoader*
     - PaperTrailDiff::PreparedEdgeLoader*
     - PaperTrailDiff::ActivityTimelineBuilder*

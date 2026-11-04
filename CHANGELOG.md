@@ -58,6 +58,41 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- History on a `has_and_belongs_to_many` groups the members PT-AT recorded
+  by transaction once. Each of the root's transactions looked through every
+  member recorded for all of them, so the cost grew with the square of the
+  root's versions: a `timeline` of an article with 2,000 versions and its
+  tags took 9.2 s and now takes 1.9 s, and an `analyze_many` of 200 tagged
+  articles with 20 versions each took 34.6 s and now takes 4.0 s. The
+  members and the transactions' owners are read 500 transactions per
+  statement, as other lists of ids are: on SQL Server, a statement listing
+  40,000 ids timed out.
+
+- With `version_scope:`, `timeline`, `analyze`, and the batch methods find
+  the version after each one the filter keeps with a search. They passed
+  every version in range before it, so the cost grew with the square of the
+  record's versions: a `timeline` of an article with 4,000 versions, half of
+  them kept, took 9.5 s and now takes 1.4 s, about as long as without the
+  filter.
+
+- Preparing history no longer checks each record against every one before
+  it in two lists: the targets of a polymorphic `belongs_to`, and the owners
+  of an association requested both alone and as the first part of a
+  `has_many :through`. Each check cost little, about 0.1 s in an
+  `analyze_many` of 3,000 authors with their articles and the comments
+  through them, but the total grew with the square of the batch.
+
+- Snapshots of a record with its associations do less work at each version
+  of the record, with the same results. Each member's version times and its
+  scope's condition are read once rather than at every version, a member
+  that did not change is normalized once, and a snapshot that starts from
+  the current record reads its associations from prepared history, as one
+  that starts from a version does, rather than building each member as an
+  Active Record record. A `timeline` of an article with 2,001 versions and
+  300 comments took 14.9 s and now takes 7.5 s, and an `analyze_scope` with
+  activity over a day's changes to 373 articles, with their comments,
+  replies, reviewers, and authors, took 4.3 s and now takes 3.9 s.
+
 - With `recorded_changes: true`, a boundary decodes its version's changes the
   first time its `recorded_changes` is read, and each version is decoded once
   for the whole call. Every boundary decoded its version when it was built,
@@ -90,6 +125,54 @@ project follows [Semantic Versioning](https://semver.org/).
   read its row ten times rather than four.
 
 ### Fixed
+
+- `analyze_scope` and `report` read every record a relation selects when its
+  order has ties, such as `Article.order(:status)`, and more than 250 records
+  match. Records were read 250 at a time in that order, and PostgreSQL and
+  MySQL may return rows that tie in a different order for each query, so some
+  records were read twice and others never, without an error: of 2,000
+  changed articles ordered by status, PostgreSQL selected 1,606. The ID now
+  ends any order that does not already sort by it. SQL text counts as sorting
+  by the ID when it names the column, alone or after the table's name. The
+  order of a relation grouped by anything but the ID is kept as given, since
+  a database sorts groups only by what they group or aggregate.
+
+- With PaperTrail's default YAML serializer, a `time` column reads as the
+  time each version recorded. PaperTrail 16 and 17 decode such a value as
+  `nil`, unless the column is time-zone aware and the time zone is UTC, and
+  so did the gem, so the step that set a time showed no change, every
+  comparison of a later version with the current record showed the time
+  changing from `nil`, and `recorded_changes` reported `{ from: nil, to: nil }`. That includes records the gem rebuilds with
+  PaperTrail's `reify`: models with initialization callbacks, custom types or
+  defaults, default scopes that assign attributes, or encrypted attributes;
+  a version that holds a column the model no longer has; the records a
+  callable `historical_filter:` receives; and association members PT-AT
+  rebuilds. Each such record's time is assigned from its own version, which
+  is decoded a second time only when it holds a time of day. A time is read
+  on 2000-01-01, as the row keeps it: a column that is not time-zone aware
+  keeps in memory the date of the time assigned to it, such as
+  `Time.current`'s, and the versions saved from that record store it. Before
+  Active Record 8.1, a zone-aware time read from the database falls on
+  2000-01-01 in UTC, and one assigned on 2000-01-01 in the time zone, so
+  every time of day is compared on 2000-01-01 in its own zone, as Active
+  Record 8.1 reads both.
+
+- `analyze_scope` and `report` accept a relation whose `limit` or `offset` is
+  a String, as request parameters are, such as
+  `Article.offset(params[:offset])`. A String offset raised `TypeError`, and
+  before Active Record 8.1, which casts a limit as it is set, a String limit
+  raised `NoMethodError`. A String `limit` or `offset` in an association's
+  scope is read from history as an Integer one is: before 8.1 a String limit
+  raised `TypeError` there, and a String offset made the association one that
+  only `allow_approximate: true` reads.
+
+- Activity from a version reports a record that left one of the requested
+  associations earlier in that version's transaction, such as a comment
+  moved to another article or destroyed just before the article's version
+  was saved. The range starts from the state before the transaction, which
+  holds the record, but the record's own versions were not read, so its
+  removal was left out, or reported in the next step that read the
+  association again, under that step's transaction and author.
 
 - Activity on a `has_many :through` leaves out the versions a join record
   saved while it joined another record, judged by transaction as any record

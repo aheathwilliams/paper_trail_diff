@@ -207,6 +207,9 @@ module PaperTrailDiff
     # Mirrors VersionAssociationCandidateScope's before-window rule. The loaded
     # series includes changes to other owners too, so an old membership cannot
     # survive a later pre-window reassignment just because that owner is absent.
+    # A range starting at a version starts before that version's transaction,
+    # as the scope's start does (see VersionBoundary.transaction_start), so a
+    # membership that ended earlier in that transaction still held there.
     #: (untyped, untyped, untyped, String?, ActivityRange) -> bool
     def eligible_version?(model, id, timestamp, event, range)
       return true if timestamp >= range.start_time
@@ -214,7 +217,7 @@ module PaperTrailDiff
 
       later = @records.versions_for_id(model, id)
                       .bsearch { |version| version.created_at > timestamp }
-      !later || later.created_at >= range.start_time
+      !later || later.created_at >= range.start_time || range.opening?(later)
     end
 
     #: (untyped, untyped) -> Hash[String, Array[untyped]]

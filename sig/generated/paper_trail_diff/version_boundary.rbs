@@ -8,8 +8,10 @@ module PaperTrailDiff
     # sequential ids in one version table; any other tie cannot be ordered, and
     # guessing would place a change on an arbitrary side of the boundary. A
     # bare instant has no position among same-time versions, so it keeps them.
-    # : (untyped, untyped) -> bool
-    def self.at_or_after?: (untyped, untyped) -> bool
+    # `time` and `boundary_time` are when each was recorded, which a caller
+    # placing many versions against one boundary reads once.
+    # : (untyped, untyped, ?time: untyped, ?boundary_time: untyped) -> bool
+    def self.at_or_after?: (untyped, untyped, ?time: untyped, ?boundary_time: untyped) -> bool
 
     # A range starting at a version starts before that version's transaction,
     # as PT-AT reads associations there. A version saved earlier in the same

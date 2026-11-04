@@ -91,8 +91,8 @@ module PaperTrailDiff
     # mutant:disable
     #: (untyped) -> Hash[String, untyped]?
     def reified_attributes(version)
-      version.reify(dup: true, has_many: false, has_one: false, belongs_to: false,
-                    has_and_belongs_to_many: false)&.attributes
+      Support.reify(version, dup: true, has_many: false, has_one: false, belongs_to: false,
+                             has_and_belongs_to_many: false)&.attributes
     end
   end
 end

@@ -227,11 +227,12 @@ module PaperTrailDiff
       records.values.freeze
     end
 
+    # Pages are read by offset, so under a total order.
     #: (Array[untyped]) -> untyped
     def candidate_relation(candidates)
       candidates.map do |ids|
         conditions = { primary_key => ids } #: Hash[untyped, untyped]
-        ordered_scope.where(conditions)
+        TotalOrder.apply(@scope).where(conditions)
       end.reduce(:or)
     end
 
@@ -240,21 +241,12 @@ module PaperTrailDiff
       count = page_limit(consumed)
       return [] if count.zero?
 
-      relation.offset((@scope.offset_value || 0) + consumed).limit(count)
-    end
-
-    # Preserve explicit ordering: SQL Server rejects duplicate ORDER BY columns,
-    # even when the extra ordering would only have served as a tie-breaker.
-    #: () -> untyped
-    def ordered_scope
-      return @scope unless @scope.order_values.empty?
-
-      @scope.order(primary_key => :asc)
+      relation.offset(Support.offset(@scope) + consumed).limit(count)
     end
 
     #: (Integer) -> Integer
     def page_limit(consumed)
-      remaining = @scope.limit_value
+      remaining = Support.limit(@scope)
       [remaining ? remaining - consumed : PAGE_SIZE, PAGE_SIZE].min
     end
 

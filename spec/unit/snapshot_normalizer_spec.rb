@@ -144,6 +144,21 @@ RSpec.describe PaperTrailDiff::SnapshotNormalizer do
         .to all(contain_exactly('body', 'type', 'subject_type', 'subject_id', 'parent_id'))
     end
 
+    # PT-AT rebuilds members with PaperTrail's reify, which can read a time of
+    # day as nil; the normalizer reads each member as Support repairs it.
+    it 'reads each member as it is after its recorded times are assigned' do
+      post = post_with_comments
+      allow(PaperTrailDiff::Support).to receive(:with_recorded_times) do |member|
+        member.body = member.body.upcase
+        member
+      end
+
+      comments = snapshot(post, 'comments').associations.fetch('comments')
+
+      expect(comments.records.map { |record| record.attributes.fetch('body') })
+        .to eq(%w[FIRST SECOND])
+    end
+
     it 'skips a member a reified history could not rebuild' do
       post = post_with_comments
       kept = post.comments.first
@@ -328,6 +343,42 @@ RSpec.describe PaperTrailDiff::SnapshotNormalizer do
 
       expect(first.attributes.keys).not_to include('post_id')
       expect(normalizer.from_state(state, tree: tree, path: 'comments')).to equal(first)
+    end
+
+    # The same state is read again at every boundary it spans, and another
+    # state of its record read in between does not displace it.
+    it 'normalizes a state without associations once at each path' do
+      normalizer = normalizer(tree)
+      first = normalizer.from_state(state, tree: tree, path: 'comments', incoming: incoming)
+      edited = PaperTrailDiff::PreparedRecordState.from_attributes(
+        NormComment, comment.attributes.merge('body' => 'edited')
+      )
+      normalizer.from_state(edited, tree: tree, path: 'comments')
+      loose = normalizer.from_state(state, tree: tree, path: 'loose')
+
+      expect(normalizer.from_state(state, tree: tree, path: 'comments')).to equal(first)
+      expect(loose.attributes.keys).to include('post_id')
+    end
+
+    # Two versions can hold one state, as when only an ignored column changed.
+    it 'shares one snapshot between equal states at a path' do
+      normalizer = normalizer(tree)
+      copy = PaperTrailDiff::PreparedRecordState.from_attributes(NormComment, comment.attributes)
+
+      expect(normalizer.from_state(copy, tree: tree, path: 'comments'))
+        .to equal(normalizer.from_state(state, tree: tree, path: 'comments'))
+    end
+
+    it 'leaves out the key that points back from a state with associations too' do
+      deep = tree('comments.replies')
+      replies = PaperTrailDiff::AssociationSnapshot.new(kind: :has_many, records: [])
+
+      result = normalizer(deep).from_state(state, tree: deep.child('comments'), path: 'comments',
+                                                  incoming: incoming,
+                                                  associations: { 'replies' => replies })
+
+      expect(result.attributes.keys).not_to include('post_id')
+      expect(result.associations).to eq('replies' => replies)
     end
 
     it 'reads a composite key the way a live record does' do

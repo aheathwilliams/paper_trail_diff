@@ -84,6 +84,16 @@ RSpec.describe PaperTrailDiff::ActivityRange do
     expect(range(in_transaction(5, noon, nil), noon + 60).include?(candidates.last)).to be(false)
   end
 
+  it 'names the versions of the transaction a version start opens' do
+    window = range(in_transaction(5, noon, 40), noon + 60)
+    candidates = [in_transaction(3, noon - 1, 40), in_transaction(9, noon + 1, 41),
+                  in_transaction(1, noon - 1, nil)]
+
+    expect(candidates.map { |candidate| window.opening?(candidate) }).to eq([true, false, false])
+    expect(range(noon, noon + 60).opening?(candidates.last)).to be(false)
+    expect(range(in_transaction(5, noon, nil), noon + 60).opening?(candidates.last)).to be(false)
+  end
+
   it 'raises rather than order versions without comparable timestamps' do
     window = range(version(5, noon), version(8, noon + 60))
     message = 'versions have incomparable timestamps'

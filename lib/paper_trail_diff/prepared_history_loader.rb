@@ -35,7 +35,7 @@ module PaperTrailDiff
       @history = PreparedHistory.new(@records, activity_index: @activity,
                                                opening_transactions: opening)
       @edges = PreparedEdgeLoader.new(@records, root_versions, children: @activity.children)
-      @prepared = {} #: Hash[untyped, Array[String]]
+      @prepared = {} #: Hash[untyped, Set[String]]
     end
 
     #: () -> PreparedHistory
@@ -62,7 +62,7 @@ module PaperTrailDiff
     # @rbs @activity: PreparedActivityIndex
     # @rbs @history: PreparedHistory
     # @rbs @edges: PreparedEdgeLoader
-    # @rbs @prepared: Hash[untyped, Array[String]]
+    # @rbs @prepared: Hash[untyped, Set[String]]
 
     # A transaction that crosses a window's start and saved a version of the
     # root moves the window's edge back to where it began (see
@@ -139,13 +139,13 @@ module PaperTrailDiff
     # the edge; a subclass that inherits it reads the same records.
     #: (Array[untyped], untyped) -> Array[untyped]
     def unprepared_ids(ids, reflection)
-      prepared = @prepared.fetch(reflection, [])
+      prepared = @prepared.fetch(reflection) { Set.new }
       ids.reject { |id| prepared.include?(id.to_s) }
     end
 
     #: (Array[untyped], untyped) -> void
     def mark_prepared(ids, reflection)
-      @prepared[reflection] = (@prepared.fetch(reflection, []) | ids.map(&:to_s))
+      (@prepared[reflection] ||= Set.new).merge(ids.map(&:to_s))
     end
 
     #: (untyped, untyped, Hash[String, Hash[Symbol, untyped]]) -> void

@@ -34,21 +34,23 @@ module PaperTrailDiff
     def belongs_to_groups(owner_class, owner_ids, reflection)
       key = AssociationKey.scalar_foreign_key(reflection)
       return {} unless key
-      unless reflection.polymorphic?
-        return group_for(reflection.klass,
-                         @records.attribute_values_for(owner_class, owner_ids, key))
-      end
+      return polymorphic_groups(owner_class, owner_ids, reflection, key) if reflection.polymorphic?
 
+      group_for(reflection.klass, @records.attribute_values_for(owner_class, owner_ids, key))
+    end
+
+    # Grouping only decides what to preload, so a type that names no class is
+    # left to raise where that state is read.
+    #: (untyped, Array[untyped], untyped, String) -> Hash[String, Hash[Symbol, untyped]]
+    def polymorphic_groups(owner_class, owner_ids, reflection, key)
       grouped = {} #: Hash[String, Hash[Symbol, untyped]]
-      # Grouping only decides what to preload, so a type that names no class is
-      # left to raise where that state is read.
       @records.records_for(owner_class, owner_ids).each do |owner|
         id = owner.public_send(key)
         type = owner.public_send(reflection.foreign_type).to_s
         model_class = AssociationTraversal.named_class(type)
         add_identity(grouped, model_class, id) if model_class && id
       end
-      grouped
+      grouped.transform_values { |group| group.merge(ids: group.fetch(:ids).uniq) }
     end
 
     # Each owner's children, recorded or live, each once.
@@ -68,32 +70,36 @@ module PaperTrailDiff
     #: (untyped, untyped) -> [Hash[String, Hash[Symbol, untyped]], Hash[String, Array[untyped]]]
     def habtm_groups(owner_class, reflection)
       rows = habtm_rows(owner_class, reflection)
-      shared = HabtmTransactionOwners.new(owner_class, reflection).shared(rows.map(&:version_id))
-      memberships = @transaction_ids.to_h do |transaction_id|
-        [transaction_id.to_s, membership_ids(rows, transaction_id)]
-      end
-      [group_for(reflection.klass, rows.map(&:foreign_key_id)), memberships.except(*shared)]
+      recorded = rows.group_by { |row| row.version_id.to_s }
+      shared = HabtmTransactionOwners.new(owner_class, reflection).shared(recorded.keys)
+      [group_for(reflection.klass, rows.map(&:foreign_key_id)),
+       memberships(recorded).except(*shared)]
     end
 
+    # Each root transaction's members, from its rows grouped by transaction.
+    #: (Hash[String, Array[untyped]]) -> Hash[String, Array[untyped]]
+    def memberships(recorded)
+      empty = [] #: Array[untyped]
+      @transaction_ids.to_h do |transaction_id|
+        key = transaction_id.to_s
+        [key, recorded.fetch(key, empty).map(&:foreign_key_id)]
+      end
+    end
+
+    # Each statement reads up to 500 of the root transactions: SQL Server
+    # compiles a long list of ids slowly.
     #: (untyped, untyped) -> Array[untyped]
     def habtm_rows(owner_class, reflection)
-      owner_class.paper_trail.version_association_class.where(
-        version_id: @transaction_ids,
-        foreign_key_name: reflection.name
-      )
-    end
-
-    #: (Array[untyped], untyped) -> Array[untyped]
-    def membership_ids(rows, transaction_id)
-      rows.filter_map do |row|
-        row.foreign_key_id if row.version_id.to_s == transaction_id.to_s
+      associations = owner_class.paper_trail.version_association_class
+      @transaction_ids.uniq.each_slice(Support::IDS_PER_STATEMENT).flat_map do |slice|
+        associations.where(version_id: slice, foreign_key_name: reflection.name)
       end
     end
 
     #: (Hash[String, Hash[Symbol, untyped]], untyped, untyped) -> void
     def add_identity(groups, model_class, id)
       group = groups[model_class.name.to_s] ||= { model: model_class, ids: [] }
-      group.fetch(:ids) << id unless group.fetch(:ids).include?(id)
+      group.fetch(:ids) << id
     end
 
     #: (untyped, Array[untyped], ?owners: Hash[String, Array[untyped]]?) -> Hash[String, Hash[Symbol, untyped]]

@@ -47,7 +47,7 @@ module PaperTrailDiff
     # Returns nil when the ranking cannot be read exactly.
     #: (untyped, untyped, untyped) -> ScopeRanking?
     def self.build(relation, reflection, model_class)
-      return unless own?(reflection) && plain_offset?(relation)
+      return unless own?(reflection)
 
       keys = keys(relation.order_values, model_class)
       return unless keys
@@ -55,7 +55,7 @@ module PaperTrailDiff
       nulls_last = NULLS_LAST[model_class.connection_db_config.adapter]
       return if nulls_last.nil?
 
-      new(model_class, keys, nulls_last, relation.limit_value, relation.offset_value)
+      new(model_class, keys, nulls_last, Support.limit(relation), Support.offset(relation))
     end
 
     #: (untyped) -> bool
@@ -63,14 +63,6 @@ module PaperTrailDiff
       reflection.macro == :has_many || (reflection.has_one? && !reflection.through_reflection?)
     end
     private_class_method :own?
-
-    # Active Record casts a limit to an integer but keeps an offset as given,
-    # which may be a String or SQL.
-    #: (untyped) -> bool
-    def self.plain_offset?(relation)
-      !relation.offset_value.is_a?(String)
-    end
-    private_class_method :plain_offset?
 
     # The order's keys up to the primary key, which makes it total. Keys
     # after it never decide anything.
@@ -150,7 +142,7 @@ module PaperTrailDiff
     end
     private_class_method :exact_time?
 
-    #: (untyped, Array[[String, bool]], bool, Integer?, Integer?) -> void
+    #: (untyped, Array[[String, bool]], bool, Integer?, Integer) -> void
     def initialize(model_class, keys, nulls_last, limit, offset)
       @model_class = model_class
       @keys = keys
@@ -163,10 +155,8 @@ module PaperTrailDiff
     # The members among records that met the scope's conditions, in order.
     #: (Array[untyped]) -> Array[untyped]
     def call(records)
-      offset = @offset
       limit = @limit
-      ranked = records.sort_by { |record| sort_key(record.attributes) }
-      ranked = ranked.drop(offset) if offset
+      ranked = records.sort_by { |record| sort_key(record.attributes) }.drop(@offset)
       limit ? ranked.first(limit) : ranked
     end
 
@@ -176,7 +166,7 @@ module PaperTrailDiff
     # @rbs @keys: Array[[String, bool]]
     # @rbs @nulls_last: bool
     # @rbs @limit: Integer?
-    # @rbs @offset: Integer?
+    # @rbs @offset: Integer
 
     # Keys compare in turn, and the primary key always decides. A descending
     # key negates its places, which also moves NULL to the other end, as each

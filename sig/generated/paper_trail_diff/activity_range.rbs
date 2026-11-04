@@ -11,6 +11,13 @@ module PaperTrailDiff
     # : (untyped) -> bool
     def include?: (untyped) -> bool
 
+    # A range starting at a version starts before that version's transaction,
+    # where PT-AT reads its associations. A version saved earlier in it, such
+    # as the child update behind a `touch: true` parent version, is a change
+    # inside the range.
+    # : (untyped) -> bool
+    def opening?: (untyped) -> bool
+
     private
 
     @end_boundary: untyped
@@ -23,10 +30,6 @@ module PaperTrailDiff
 
     @start_time: untyped
 
-    # A range starting at a version starts before that version's transaction,
-    # where PT-AT reads its associations. A version saved earlier in it, such
-    # as the child update behind a `touch: true` parent version, is a change
-    # inside the range.
     # : (untyped, Array[untyped]) -> bool
     def after_start?: (untyped, Array[untyped]) -> bool
 

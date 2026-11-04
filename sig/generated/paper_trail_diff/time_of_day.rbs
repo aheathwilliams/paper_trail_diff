@@ -1,0 +1,21 @@
+# Generated from lib/paper_trail_diff/time_of_day.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Reads every value of a `time` column on 2000-01-01, in its own zone.
+  #
+  # A time column keeps only the time, but Active Record before 8.1 gives a
+  # zone-aware one a date two ways: assigned, it falls on 2000-01-01 in the
+  # time zone; read from the database, on 2000-01-01 in UTC. A version rebuilt
+  # by assignment and the row read for the same time could then hold it a day
+  # apart, east of UTC in the morning and west of it in the evening, and
+  # compare as a change. Every side is read the way Active Record 8.1 reads
+  # both, which leaves a value already on that date as it is.
+  module TimeOfDay
+    # : (untyped, Hash[untyped, untyped]) -> Hash[untyped, untyped]
+    def self.apply: (untyped, Hash[untyped, untyped]) -> Hash[untyped, untyped]
+
+    # The model's `time` columns, which a model keeps as it was defined.
+    # : (untyped) -> Array[String]
+    def self.columns: (untyped) -> Array[String]
+  end
+end

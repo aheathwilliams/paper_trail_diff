@@ -25,7 +25,7 @@ module PaperTrailDiff
 
     @live_records: Array[untyped]
 
-    @prepared: Hash[untyped, Array[String]]
+    @prepared: Hash[untyped, Set[String]]
 
     @record: untyped
 

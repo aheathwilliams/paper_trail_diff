@@ -146,6 +146,27 @@ RSpec.describe 'bounded event reconstruction' do
     expect(series.record_after(instance_double(PaperTrail::Version, id: -1))).to eq([false, nil])
   end
 
+  # A root that changed only before the window starts from its current row,
+  # which is read with prepared history as a version is.
+  it 'normalizes a root that starts from its current row without historical AR instances' do
+    articles = Array.new(3) { TrackedArticle.create!(title: 'Root') }
+    comments = articles.map { |article| article.comments.create!(body: 'Before') }
+    start = Time.now.utc
+    comments.each { |comment| comment.update!(body: 'After') }
+    expect_any_instance_of(PaperTrailDiff::PreparedRecordState).not_to receive(:instantiate)
+
+    result = PaperTrailDiff.analyze_scope(TrackedArticle, within: start..Time.now.utc, limit: 10,
+                                                          activity: true, associations: [:comments])
+
+    bodies = result.analyses.values.map do |analysis|
+      analysis.activity_timeline.map do |step|
+        changes = step.diff.associations.fetch('comments').changed
+        changes.map { |change| change.attributes.fetch('body').to_h }
+      end
+    end
+    expect(bodies).to eq([[[{ from: 'Before', to: 'After' }]]] * 3)
+  end
+
   it 'discovers belongs-to identities without constructing historical owners' do
     author = TrackedAuthor.create!(name: 'Author')
     3.times { seed.update!(author: author) }

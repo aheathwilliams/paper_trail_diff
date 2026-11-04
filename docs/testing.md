@@ -98,6 +98,14 @@ mise exec -- bundle exec rake spec_oracle
 ORACLE_SEEDS=1..200 ORACLE_STEPS=40 mise exec -- bundle exec rake spec_oracle
 ```
 
+The 200-seed run is about 3,000 examples and takes about three hours in one
+process. Its database is in memory, so you can split it by seed range and run
+the parts side by side, each in its own shell: `ORACLE_SEEDS=1..25`, then
+`26..50`, and so on. Eight such parts took about 25 minutes. Check that each
+part ran all its examples: a run stopped early, by `timeout` for example,
+still ends with "N examples, 0 failures" for the ones it ran. Adding
+`SPEC_OPTS=--dry-run` to the same command prints how many there should be.
+
 The default seeds keep the run short; `rake spec` includes it, so
 the database jobs run it too. Mutant does not, because it would slow every
 mutation. A failure prints its seed, the transactions it made, and its first
@@ -133,9 +141,9 @@ passes is behavior nothing checks. `mutant.yml` lists the classes it mutates:
 - what a version recorded: `RecordedChanges`, `RecordedChangesReader`, and
   `RecordedClass`;
 - how a step flattens into rows: `ChangeRow` and `ChangeRows`;
-- which records a scope or report selects: `ScopedRootSelection`,
-  `AssociationActivitySelection`, `AssociationActivityEdge`, and
-  `DeletedRootFilter`;
+- which records a scope or report selects, and in what order:
+  `ScopedRootSelection`, `TotalOrder`, `AssociationActivitySelection`,
+  `AssociationActivityEdge`, and `DeletedRootFilter`;
 - which children and targets a record had at each point:
   `PreparedHistoryLoader`, `PreparedEdgeLoader`, `ActivityChildCandidateLoader`,
   `PreparedChildCandidates`, `ActivityTargetCandidateLoader`, and
