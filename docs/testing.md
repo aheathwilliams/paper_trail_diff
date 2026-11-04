@@ -257,10 +257,12 @@ comments, an author who reviews several, and tags. For every history:
 - a record that stayed changes only in fields a kept row set.
 
 They take about a second and run with the unit specs, so mutant runs them
-for `Engine`, `NestedComparator`, `NetChange`, and `NetChanges`. A failure
-names its case. The cases
-start small and grow, so the first one that fails is a small one.
-`PROPERTY_SEED` and `PROPERTY_CASES` choose other and more cases:
+for `Engine`, `NestedComparator`, `NetChange`, and `NetChanges` too. That
+about doubles mutant's work on those classes, from 15 to 27 minutes of worker
+time, though today the classes' own specs kill every mutation without them.
+A failure names its case. The cases start small and grow, so the first one
+that fails is a small one. `PROPERTY_SEED` and `PROPERTY_CASES` choose other
+and more cases:
 
 ```console
 PROPERTY_SEED=2 PROPERTY_CASES=5000 mise exec -- bundle exec rspec spec/unit/engine_properties_spec.rb
