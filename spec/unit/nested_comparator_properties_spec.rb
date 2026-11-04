@@ -48,12 +48,13 @@ RSpec.describe PaperTrailDiff::NestedComparator do
     end
   end
 
-  # Symbol keys for every Hash the comparison walks into, which leaves those
-  # inside arrays alone.
+  # Symbol keys for every Hash, at any depth and inside arrays.
   def symbolize(value)
-    return value unless value.is_a?(Hash)
-
-    value.to_h { |key, item| [key.to_sym, symbolize(item)] }
+    case value
+    when Hash then value.to_h { |key, item| [key.to_sym, symbolize(item)] }
+    when Array then value.map { |item| symbolize(item) }
+    else value
+    end
   end
 
   # A value reported whole keeps the keys it was given, so these compare

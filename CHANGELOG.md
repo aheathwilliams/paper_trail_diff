@@ -292,6 +292,13 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- `nested_changes` treats `:a` and `"a"` as one key inside arrays too, as it
+  already did in objects. An array whose objects differed only in key type,
+  such as a hash built in Ruby against one read back from JSON, was reported
+  as having lost one element and gained another. Elements are still reported
+  as they were given, and `{ a: 1, "a" => 2 }` inside an array now raises
+  `AmbiguousNestedKeyError`, as it does in an object.
+
 - With `historical_filter:`, `analyze_scope` and `report` test each record over
   the window its analysis covers. A transaction that crosses the window's
   start or end moves that window to where the transaction began, but the

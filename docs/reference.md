@@ -1403,6 +1403,8 @@ PaperTrailDiff.nested_changes(from_value, to_value) # also accepts two values
 ```
 
 - Paths are arrays because a key may contain a dot.
+- `:a` and `"a"` are one key at any depth, inside arrays too, so a path's keys
+  are strings. Values are reported as they were given.
 - Arrays are compared by their elements, not positions. An `ArrayChange` has
   `added`, `removed`, and `reordered?`, plus the whole `from` and `to`. Objects
   inside arrays are compared whole.
