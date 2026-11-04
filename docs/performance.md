@@ -70,7 +70,12 @@ Flat query counts do not make a report's cost flat:
   version of the root instead: 300 comments over 2,001 versions of their
   article took about 7.5 s.
 - **`snapshots: true` and `recorded_changes: true` cost memory and time.** Ask
-  for them only when you use them.
+  for them only when you use them. Records that did not change are shared
+  between steps, so the cost is modest: an activity `report` of 10,000
+  articles with their 57,000 comments (114,000 versions, 49,000 steps) took
+  about 7 minutes and held 372 MB, and 411 MB with snapshots, at the same
+  time within run-to-run noise. Folding its rows with `net_changes` took
+  another 17 s, and listing them with `change_rows` 13 s.
 - **Each edge of a window takes one statement per 250 records, and one or two
   per 500 transactions it finds.** A
   window from `within:` or `since:` looks for transactions that cross either
@@ -161,11 +166,11 @@ times, and run the correctness suites separately; no CI job checks timings.
 
 The query counts in the first table and the `timeline` of 300 comments were
 measured on 2026-11-03, the counts after `report`'s window lost its end; the
-serializers on 2026-11-04; the other numbers on 2026-10-30 at revision
-`6c3d30b`. Both used
-Ruby 4.0.1, Active Record 8.1.3.1, PaperTrail 17.0.0, and SQLite 3.53.2, on
-WSL2 on an AMD Ryzen 7 7800X3D. The memory, wide-collection, serializer, and
-index figures come from one-off scripts rather than these two. The benchmark's
+serializers and the snapshot and net change costs on 2026-11-04; the other
+numbers on 2026-10-30 at revision `6c3d30b`. Both used Ruby 4.0.1, Active
+Record 8.1.3.1, PaperTrail 17.0.0, and SQLite 3.53.2, on WSL2 on an AMD
+Ryzen 7 7800X3D. The memory, wide-collection, serializer, snapshot, and index
+figures come from one-off scripts rather than these two. The benchmark's
 raw samples are in
 [`benchmark/results/reporting-2026-10-30.json`](../benchmark/results/reporting-2026-10-30.json),
 next to earlier runs.
