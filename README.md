@@ -271,6 +271,25 @@ recorded = report.change_rows.transform_values { |rows| rows.reject(&:unversione
 Some writes cannot be told apart, such as one to a column `has_paper_trail`
 ignores; see [change rows](docs/reference.md#change-rows).
 
+For one entry per record instead, `net_changes` folds the rows a block keeps
+into each record's fields before and after them. This one keeps the changes
+people made, leaving out writes saved without a version, which have no
+author:
+
+<!-- executable:recipe-net-changes -->
+```ruby
+report = PaperTrailDiff.report(
+  Article.all, since: 1.day.ago, limit: 100, associations: [:comments],
+  snapshots: true, recorded_changes: true
+)
+
+changes = report.net_changes { |row| row.source.whodunnit }
+```
+
+Each value lists the article, then each comment that changed, was added, or
+was removed, with its `before` and `after` fields and the `diff` between
+them. See [net changes](docs/reference.md#net-changes).
+
 `change_rows` is also on an `Analysis` built with `activity: true` and on each
 activity step. Labels, grouping, and formatting are left to your application.
 

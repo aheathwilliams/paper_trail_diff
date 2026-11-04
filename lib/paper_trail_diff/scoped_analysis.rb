@@ -41,10 +41,14 @@ module PaperTrailDiff
     # without destroy history has no rows and is left out.
     #: () -> Hash[Array[String], Array[ChangeRow]]
     def change_rows
-      rows = {} #: Hash[Array[String], Array[ChangeRow]]
-      analyses.each { |identity, analysis| rows[identity] = analysis.change_rows }
-      deleted.each { |identity, analysis| rows[identity] = analysis.change_rows if analysis }
-      rows.freeze
+      each_root(&:change_rows)
+    end
+
+    # Each root's net changes, keyed as `change_rows` is; the block picks the
+    # rows to keep, as for Analysis#net_changes.
+    #: () ?{ (ChangeRow) -> boolish } -> Hash[Array[String], Array[NetChange]]
+    def net_changes(&keep)
+      each_root { |analysis| analysis.net_changes(&keep) }
     end
 
     # Two elements, not three: `roots` is reached by name so that existing
@@ -52,6 +56,16 @@ module PaperTrailDiff
     #: () -> [Hash[Array[String], Analysis], Array[Array[String]]]
     def to_ary
       [analyses, unreachable]
+    end
+
+    private
+
+    # What the block makes of each root's analysis: the roots that still
+    # exist, then the deleted ones that have history to report.
+    #: [T] () { (Analysis) -> T } -> Hash[Array[String], T]
+    def each_root(&block)
+      reported = deleted.filter_map { |identity, analysis| [identity, analysis] if analysis }
+      analyses.merge(reported.to_h).transform_values(&block).freeze
     end
   end
 end

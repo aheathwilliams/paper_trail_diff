@@ -68,6 +68,16 @@ project follows [Semantic Versioning](https://semver.org/).
   transaction that began before a window and saved no version of the root.
   The [change rows](docs/reference.md#change-rows) reference lists them.
 
+- `Analysis#net_changes` and `ScopedAnalysis#net_changes` fold an activity's
+  change rows into one `NetChange` for each record: its fields before the
+  rows a block keeps, its fields with only those changes made, and the
+  difference. Keeping the rows that name an author reports what people
+  changed, and with `recorded_changes: true` leaves out writes saved without
+  a version: `report.net_changes { |row| row.source.whodunnit }`. The root
+  comes first whenever anything changed. The states come from the steps'
+  snapshots, so it needs `snapshots: true`. See
+  [net changes](docs/reference.md#net-changes).
+
 - `within:` accepts an endless range, such as `1.day.ago..`, which runs
   through the current saved state, as `report` does.
 

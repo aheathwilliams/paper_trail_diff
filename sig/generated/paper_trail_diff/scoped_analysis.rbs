@@ -35,9 +35,21 @@ module PaperTrailDiff
     # : () -> Hash[Array[String], Array[ChangeRow]]
     def change_rows: () -> Hash[Array[String], Array[ChangeRow]]
 
+    # Each root's net changes, keyed as `change_rows` is; the block picks the
+    # rows to keep, as for Analysis#net_changes.
+    # : () ?{ (ChangeRow) -> boolish } -> Hash[Array[String], Array[NetChange]]
+    def net_changes: () ?{ (ChangeRow) -> boolish } -> Hash[Array[String], Array[NetChange]]
+
     # Two elements, not three: `roots` is reached by name so that existing
     # destructuring keeps working.
     # : () -> [Hash[Array[String], Analysis], Array[Array[String]]]
     def to_ary: () -> [ Hash[Array[String], Analysis], Array[Array[String]] ]
+
+    private
+
+    # What the block makes of each root's analysis: the roots that still
+    # exist, then the deleted ones that have history to report.
+    # : [T] () { (Analysis) -> T } -> Hash[Array[String], T]
+    def each_root: [T] () { (Analysis) -> T } -> Hash[Array[String], T]
   end
 end

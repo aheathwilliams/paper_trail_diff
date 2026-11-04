@@ -2,11 +2,12 @@
 
 require_relative '../support/unversioned_writes'
 
-# Change rows against the writes that made them (see
-# spec/support/unversioned_writes.rb). Over the whole history every check
-# holds. A window can start inside a transaction whose earlier versions it
-# does not read, where a row may stay credited to a version rather than be
-# split, so there only the checks a row must always pass are made.
+# Change rows, and the net changes they fold into, against the writes that
+# made them (see spec/support/unversioned_writes.rb). Over the whole history
+# every check holds. A window can start inside a transaction whose earlier
+# versions it does not read, where a row may stay credited to a version
+# rather than be split, so there only the checks a row must always pass are
+# made.
 RSpec.describe 'Change rows against unversioned writes' do
   before { Oracle.reset! }
 
@@ -27,7 +28,7 @@ RSpec.describe 'Change rows against unversioned writes' do
       groups.each do |group|
         steps = PaperTrailDiff.activity_timeline(
           history.article, associations: associations, recorded_changes: true, group: group,
-                           **options
+                           snapshots: true, **options
         )
         yield steps, "#{associations.inspect} group #{group.inspect}", structural
       end
@@ -43,6 +44,9 @@ RSpec.describe 'Change rows against unversioned writes' do
                                                   strict: true, structural: structural)
           check.call(steps)
           check.complete(steps.flat_map(&:change_rows))
+          UnversionedWrites::NetCheck.new(history, failures, label, strict: true,
+                                                                    structural: structural)
+                                     .call(steps)
         end
       end
     end
@@ -54,8 +58,9 @@ RSpec.describe 'Change rows against unversioned writes' do
         4.times do |index|
           start, finish = times.sample(2, random: random).sort
           each_timeline(history, within: start..finish) do |steps, label, _structural|
-            UnversionedWrites::RowCheck.new(history, failures, "window #{index} #{label}",
-                                            strict: false).call(steps)
+            window = "window #{index} #{label}"
+            UnversionedWrites::RowCheck.new(history, failures, window, strict: false).call(steps)
+            UnversionedWrites::NetCheck.new(history, failures, window, strict: false).call(steps)
           end
         end
       end

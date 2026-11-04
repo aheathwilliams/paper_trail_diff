@@ -74,6 +74,8 @@ matcher:
     - PaperTrailDiff::ChangeRow*
     - PaperTrailDiff::ChangeRows*
     - PaperTrailDiff::ChangeAttribution*
+    - PaperTrailDiff::NetChange*
+    - PaperTrailDiff::NetChanges*
     - PaperTrailDiff::AssociationActivitySelection*
     - PaperTrailDiff::AssociationActivityEdge*
     - PaperTrailDiff::ActivityChildCandidateLoader*

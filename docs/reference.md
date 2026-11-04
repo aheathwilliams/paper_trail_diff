@@ -539,6 +539,7 @@ step.from_snapshot.associations["comments"].records.first.attributes["author"]
   record did not exist yet.
 - Also accepted by `analyze`, `analyze_many`, and `analyze_scope` with
   `activity: true`, and by `report`.
+- [`net_changes`](#net-changes) reads them, so it needs this option.
 
 ### What each event recorded: `recorded_changes: true`
 
@@ -1195,6 +1196,7 @@ for numeric IDs).
 | `ActivityStep` | one `activity_timeline` step |
 | `ActivityBoundary` | one end of a step |
 | `ChangeRow` | one row from `change_rows` |
+| `NetChange` | one record's entry from `net_changes` |
 | `Analysis` | result of `analyze` |
 | `ScopedAnalysis` | result of `analyze_scope` and `report` |
 | `TraversalEntry`, `RecordReference` | entries from `each_change` and `each_entry` |
@@ -1326,6 +1328,62 @@ whole, credited to a version, where they cannot:
 
 Rows follow each step's diff, so a change a version recorded and a later write
 without a version undid, leaving the field as it was, has no row.
+
+### Net changes
+
+`net_changes` folds change rows into one entry per record: its fields before
+the rows a block keeps, and its fields with only their changes made. This
+example keeps the rows with an author. A write saved without a version has
+none, so with `recorded_changes: true` it is left out:
+
+<!-- executable:reference-net-changes -->
+```ruby
+analysis = PaperTrailDiff.analyze(
+  article, associations: [:comments], activity: true, snapshots: true,
+  recorded_changes: true
+)
+
+changes = analysis.net_changes { |row| row.source.whodunnit }
+```
+
+```ruby
+change = changes.first
+change.root?            # true for the article, which comes first
+change.record           # a RecordReference, or nil for the root
+change.association_path # ["comments"], or [] for the root
+change.before           # a RecordSnapshot of its fields, or nil if it was added
+change.after            # its fields after the kept changes, or nil if removed
+change.diff             # a Diff of before and after
+change.added?           # before is nil
+change.removed?         # after is nil
+change.sources          # the ActivityBoundary of each kept change, each once
+report.net_changes { |row| ... } # { identity => changes }, keyed as change_rows
+```
+
+Without a block, every row is kept, and `before` and `after` are the record's
+states around all of its changes.
+
+- `before` is the record's state when the step holding its first kept change
+  began, so it includes the changes dropped before then.
+- `after` is `before` with only the kept changes made: each field takes the
+  value of its last kept row. A record that appears takes the fields it
+  appeared with. A record appears or disappears only through its own row,
+  whose `attribute` is `nil`, so a block that keeps only some fields also
+  leaves out the records added and removed.
+- A record whose kept changes leave it as it was is left out, as is one added
+  and removed again.
+- The root comes first whenever anything is listed. When only the records it
+  holds changed, its `before` and `after` are the same and its `diff` is
+  empty.
+- `before` and `after` hold only the record's own fields; each record it holds
+  has an entry of its own. A record has one entry for each association path,
+  whichever records along the path hold it, so a reply moved from one comment
+  to another is one entry.
+- The states come from the steps' snapshots, so `net_changes` raises
+  `ConfigurationError` without `snapshots: true`, as it does without
+  `activity: true`.
+- To leave out only the writes saved without a version, keep the other rows:
+  `{ |row| !row.unversioned? }`.
 
 ## JSON columns
 
