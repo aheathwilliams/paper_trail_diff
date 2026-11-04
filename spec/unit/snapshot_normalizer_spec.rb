@@ -369,6 +369,18 @@ RSpec.describe PaperTrailDiff::SnapshotNormalizer do
         .to equal(normalizer.from_state(state, tree: tree, path: 'comments'))
     end
 
+    it 'pools each path apart, so another path does not displace it' do
+      normalizer = normalizer(tree)
+      first = normalizer.from_state(state, tree: tree, path: 'comments')
+      edited = PaperTrailDiff::PreparedRecordState.from_attributes(
+        NormComment, comment.attributes.merge('body' => 'edited')
+      )
+      normalizer.from_state(edited, tree: tree, path: 'loose')
+      copy = PaperTrailDiff::PreparedRecordState.from_attributes(NormComment, comment.attributes)
+
+      expect(normalizer.from_state(copy, tree: tree, path: 'comments')).to equal(first)
+    end
+
     it 'leaves out the key that points back from a state with associations too' do
       deep = tree('comments.replies')
       replies = PaperTrailDiff::AssociationSnapshot.new(kind: :has_many, records: [])
