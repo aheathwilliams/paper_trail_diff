@@ -291,10 +291,8 @@ module UnversionedWrites
 
   # Checks the net changes of a timeline (see PaperTrailDiff::NetChanges):
   #
-  # 1. With every row kept, a record's `before` is its state where the step
-  #    of its first row starts, its `after` its state where the timeline
-  #    ends, and it is listed exactly when the two differ. The root comes
-  #    first whenever anything is listed.
+  # 1. With every row kept, they are the timeline's own states (see
+  #    NetChangesCheck).
   # 2. With only the rows of versions kept, over the whole history, an
   #    article or comment still there ends at the value its last save with a
   #    version gave each field, where a row shows that save's change. A write
@@ -302,7 +300,6 @@ module UnversionedWrites
   #    no row (see RowCheck), and a field no save recorded holds what its
   #    create left, which can be a later write (see RowCheck#default?).
   class NetCheck
-    ROOT = [[], nil, nil].freeze
     CHECKED = %w[TrackedArticle TrackedComment].freeze
 
     def initialize(history, failures, label, strict:, structural: [])
@@ -314,43 +311,11 @@ module UnversionedWrites
     end
 
     def call(steps)
-      every_row(steps)
+      NetChangesCheck.check(@failures, @label, steps)
       recorded(steps) if @strict
     end
 
     private
-
-    def every_row(steps)
-      listed = PaperTrailDiff::NetChanges.call(steps, nil)
-      expected = expected_states(steps)
-      shown = listed.to_h { |change| [key(change), states(change.before, change.after)] }
-      return if shown.except(ROOT) == expected.except(ROOT) && root_first?(listed, expected, shown)
-
-      @failures.add("#{@label}: net changes of every row are not the timeline's states",
-                    { expected: expected, shown: shown })
-    end
-
-    # Each record a row is about, with its state where its first row's step
-    # starts and where the timeline ends, when the two differ.
-    def expected_states(steps)
-      first = {}
-      steps.each_with_index do |step, index|
-        step.change_rows.each { |row| first[key(row)] ||= index }
-      end
-      first.filter_map do |key, index|
-        before = find(steps.fetch(index).from_snapshot, key)
-        pair = states(before, find(steps.last.to_snapshot, key))
-        [key, pair] unless pair.first == pair.last
-      end.to_h
-    end
-
-    # Without a row that changed it, the root is listed unchanged.
-    def root_first?(listed, expected, shown)
-      return listed.empty? if expected.empty?
-
-      root = listed.first
-      root.root? && (expected.key?(ROOT) ? shown[ROOT] == expected[ROOT] : root.diff.empty?)
-    end
 
     def recorded(steps)
       listed = PaperTrailDiff::NetChanges.call(steps, ->(row) { !row.unversioned? })
@@ -392,28 +357,6 @@ module UnversionedWrites
     def fields(key)
       written = @history.writes.select { |write| write.key == key }.map(&:field)
       written.compact.uniq - @structural
-    end
-
-    def states(before, after)
-      [before&.attributes, after&.attributes]
-    end
-
-    # The record a key names in a snapshot, read anew from the whole tree.
-    def find(snapshot, (path, type, id))
-      return snapshot unless type
-
-      held(snapshot, path).find { |record| record.type == type && record.id == id }
-    end
-
-    def held(snapshot, path)
-      path.reduce([snapshot].compact) do |level, name|
-        level.flat_map { |record| record.associations[name]&.records || [] }
-      end
-    end
-
-    def key(item)
-      record = item.record
-      [item.association_path, record&.type, record&.id]
     end
 
     # The history's key for the record a change or row is about.

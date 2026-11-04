@@ -232,9 +232,11 @@ RSpec.describe 'Rebuilt tree history against the recorded states' do
       actual = PaperTrailDiff.compare(from, root, associations: paths)
       failures.check("compare #{key.inspect} from #{from.id}", expected.to_h, actual.to_h)
     end
-    steps = PaperTrailDiff.activity_timeline(root, associations: paths, group: :transaction)
+    steps = PaperTrailDiff.activity_timeline(root, associations: paths, group: :transaction,
+                                                   snapshots: true)
     failures.check("activity #{key.inspect}", expected_steps(history.recorder, key, versions.first),
                    steps.reject(&:empty?).map { |step| step.diff.to_h })
+    NetChangesCheck.check(failures, "activity #{key.inspect}", steps)
   end
 
   # Windows between two recorded transactions, over all roots at once, one of

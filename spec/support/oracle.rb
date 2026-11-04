@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative 'association_database'
+require_relative 'net_changes_check'
 
 # Checks rebuilt history against the truth rather than against another gem
 # method. A generated history applies random edits one transaction at a time
@@ -398,7 +399,7 @@ module Oracle
   }.freeze
 
   # Compares every reconstruction of one history with its recorded states.
-  class Checker
+  class Checker # rubocop:disable Metrics/ClassLength
     GROUPS = [nil, :transaction].freeze
 
     def initialize(history, failures, paths: ArticleHistory::PATHS)
@@ -431,10 +432,11 @@ module Oracle
       root_versions.each do |from|
         steps = PaperTrailDiff.activity_timeline(@root, from: from, to: @root, associations: @paths,
                                                         snapshots: true, group: group)
+        range = "activity from #{from.id} (group: #{group.inspect})"
+        NetChangesCheck.check(@failures, range, steps)
         steps.each_with_index do |step, index|
           source = step.source_boundary
-          label = "activity from #{from.id} (group: #{group.inspect}) step #{index} " \
-                  "(#{source.item_type} #{source.version_id})"
+          label = "#{range} step #{index} (#{source.item_type} #{source.version_id})"
           step_states(label, step, grouped: !group.nil?)
         end
       end
@@ -572,6 +574,7 @@ module Oracle
       @failures.check("#{label} to", last.state, Oracle.snapshot(analysis.to_snapshot))
       @failures.check("#{label} last step to", last.state, Oracle.snapshot(steps.last.to_snapshot))
       @failures.check("#{label} stray sources", [], @recorder.strays(@root, steps))
+      NetChangesCheck.check(@failures, label, steps)
       batches(within, analysis, label)
     end
 

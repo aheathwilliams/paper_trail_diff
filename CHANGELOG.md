@@ -474,6 +474,14 @@ project follows [Semantic Versioning](https://semver.org/).
   reads has a row of its own. It runs over the whole history, grouped and
   not, and over windows that start and end inside transactions.
 
+- Every oracle that reads an activity timeline from end to end also checks
+  its net changes (`spec/support/net_changes_check.rb`): with every row
+  kept, each record's `before` and `after` must be its state where the step
+  of its first row starts and where the timeline ends, and the record must
+  be listed exactly when the two differ. The unversioned-writes oracle also
+  keeps only the rows of versions and checks that each article and comment
+  ends at its last recorded save.
+
 - `spec/oracle/shapes_history_spec.rb` compares rebuilt history with plain
   Active Record for shapes the other oracles leave out: polymorphic
   `belongs_to`, `has_many` and `has_one` with `as:`, children that use

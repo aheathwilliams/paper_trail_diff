@@ -207,18 +207,21 @@ module Oracle
     def activity(root, paths, random)
       list = versions(root)
       [list.first, list.drop(1).sample(random: random)].compact.uniq.each do |from|
-        GROUPS.each do |group|
-          steps = PaperTrailDiff.activity_timeline(root, from: from, to: root, associations: paths,
-                                                         group: group, snapshots: true)
-          label = "activity #{[root.id, paths].inspect} from #{from.id} group #{group.inspect}"
-          if group
-            @failures.check("#{label} changes", expected_changes(root, paths, from),
-                            steps.reject(&:empty?).map { |step| step.diff.to_h })
-          end
-          steps.each_with_index do |step, index|
-            step_states("#{label} step #{index}", root, paths, step, grouped: !group.nil?)
-          end
-        end
+        GROUPS.each { |group| activity_from(root, paths, from, group) }
+      end
+    end
+
+    def activity_from(root, paths, from, group)
+      steps = PaperTrailDiff.activity_timeline(root, from: from, to: root, associations: paths,
+                                                     group: group, snapshots: true)
+      label = "activity #{[root.id, paths].inspect} from #{from.id} group #{group.inspect}"
+      NetChangesCheck.check(@failures, label, steps)
+      if group
+        @failures.check("#{label} changes", expected_changes(root, paths, from),
+                        steps.reject(&:empty?).map { |step| step.diff.to_h })
+      end
+      steps.each_with_index do |step, index|
+        step_states("#{label} step #{index}", root, paths, step, grouped: !group.nil?)
       end
     end
 
@@ -349,6 +352,7 @@ module Oracle
 
       @failures.check("analyze #{label} from", {}, mismatch(before, analysis.from_snapshot))
       @failures.check("analyze #{label} to", {}, mismatch(after, analysis.to_snapshot))
+      NetChangesCheck.check(@failures, "analyze #{label}", steps)
       window_steps("analyze #{label}", root, paths, after, steps)
     end
 

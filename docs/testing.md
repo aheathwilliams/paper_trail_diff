@@ -117,6 +117,20 @@ Mutant cannot check that carrying forward: a mutation that turns it off
 falls back to a full snapshot, which gives the same answers, more slowly. This
 check is what catches one that gives a different answer.
 
+`unversioned_writes_spec.rb` mixes saves with `update_columns` writes,
+several to a transaction, and logs every write. Each change row must match
+the write that made it: one credited to a version ends at a value that
+version recorded, one credited to no version at a value an `update_columns`
+wrote, and such a write whose value is read again has a row of its own.
+With only the rows of versions kept, each article and comment must end at
+the value of its last recorded save.
+
+Every oracle that reads an activity timeline from end to end also checks its
+net changes (`spec/support/net_changes_check.rb`). With every row kept, each
+record's `before` and `after` must be its state where the step of its first
+row starts and where the timeline ends, read from the whole snapshot tree,
+and the record must be listed exactly when the two differ.
+
 ```console
 mise exec -- bundle exec rake spec_oracle
 ORACLE_SEEDS=1..200 ORACLE_STEPS=40 mise exec -- bundle exec rake spec_oracle
