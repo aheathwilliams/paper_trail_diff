@@ -5,17 +5,20 @@ require 'json'
 require 'set'
 require_relative 'oracle_choices'
 
-# Reduces a failing oracle example to a short history that fails the same way.
+# Reduces a failing example whose histories draw from Oracle.random, the
+# oracles' and the consistency checks', to a short history that fails the same
+# way. Such a failure ends with the command that does it:
 #
-#   ORACLE_SEEDS=103 ORACLE_SHRINK=1 bundle exec rspec spec/oracle/shapes_history_spec.rb:251
+#   ORACLE_SEEDS=103 ORACLE_SHRINK=1 bundle exec rspec 'spec/oracle/shapes_history_spec.rb[1:1]'
 #
-# When an example under spec/oracle fails, the reducer runs it again, with its
-# before and after hooks, building each history from an edited copy of the
-# random choices that built it (Oracle::Choices). It first leaves out runs of
-# steps, longest first, then sets each remaining choice to 0, the first
-# operation or record. It keeps an edit when the run fails with the same first
-# mismatch, its numbers and times aside, or with the same error, and repeats
-# until no edit is kept or ORACLE_SHRINK_RUNS runs (default 300) are spent.
+# The reducer runs the example again, with its before and after hooks,
+# building each history from an edited copy of the random choices that built
+# it (Oracle::Choices). It first leaves out runs of steps, longest first, then
+# sets each remaining choice to 0, the first operation or record. It keeps an
+# edit when the run fails with the same first mismatch, its numbers and times
+# aside, or with the same error, and repeats until no edit is kept or
+# ORACLE_SHRINK_RUNS runs (default 300) are spent. ORACLE_SHRINK_EXAMPLES caps
+# how many failing examples one process reduces.
 #
 # The example then reports the shortest failing history: its failure, the
 # versions it wrote, and a file that replays it,
@@ -40,18 +43,18 @@ module Oracle
       # The run in progress while the reducer drives an example.
       attr_accessor :session
 
+      # Runs the example, from saved scripts if ORACLE_REPLAY names it. When it
+      # drew from Oracle.random and failed, it is reduced if ORACLE_SHRINK is
+      # set, and otherwise its failure says how to reduce it.
       def around(example)
         replay = Replay.scripts_for(example)
-        return example.run unless replay || reduce?
-
         attempt = Attempt.new(example)
         first = attempt.call(replay)
-        return unless reduce? && first.failed? && first.scripts.any?
+        return unless first.failed? && first.scripts.any?
+        return if replay && !reduce?
+        return Hint.add(example) unless reduce? && reductions_left?
 
-        limit = Integer(ENV.fetch('ORACLE_SHRINK_RUNS', 300))
-        warn "oracle reducer: reducing the #{Script.steps(first.scripts)} steps of #{example.id}"
-        reduction = Reduction.new(first, limit: limit) { |scripts| attempt.call(scripts) }
-        Report.new(example, first, reduction.call).apply
+        reduce(example, attempt, first)
       end
 
       def reduce?
@@ -63,6 +66,25 @@ module Oracle
       def generalize(text)
         text.gsub(/\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?(?:Z|[+-]\d\d:?\d\d)?/, 'TIME')
             .gsub(/\d+/, 'N')
+      end
+
+      private
+
+      def reduce(example, attempt, first)
+        @reductions = reductions + 1
+        limit = Integer(ENV.fetch('ORACLE_SHRINK_RUNS', 300))
+        warn "oracle reducer: reducing the #{Script.steps(first.scripts)} steps of #{example.id}"
+        reduction = Reduction.new(first, limit: limit) { |scripts| attempt.call(scripts) }
+        Report.new(example, first, reduction.call).apply
+      end
+
+      def reductions
+        @reductions || 0
+      end
+
+      def reductions_left?
+        limit = ENV.fetch('ORACLE_SHRINK_EXAMPLES', '')
+        limit.empty? || reductions < Integer(limit)
       end
     end
 
@@ -137,11 +159,11 @@ module Oracle
 
       private
 
-      # An expectation that reports no labels is known by where it failed; an
-      # error by its class and the first line of its message.
+      # An expectation that reports no labels is known by the spec line that
+      # failed; an error by its class and the first line of its message.
       def signature(exception)
         if exception.is_a?(RSpec::Expectations::ExpectationNotMetError)
-          [exception.class, exception.backtrace&.find { |line| line.include?('/spec/oracle/') }]
+          [exception.class, exception.backtrace&.find { |line| line.include?('/spec/') }]
         else
           [exception.class, Reducer.generalize(exception.message.lines.first.to_s.strip)]
         end
@@ -309,15 +331,34 @@ module Oracle
         path
       end
 
-      def command(example, path)
-        settings = %w[ORACLE_SEEDS PAPER_TRAIL_DIFF_SERIALIZER].filter_map do |name|
-          "#{name}=#{ENV.fetch(name)}" if ENV.key?(name)
-        end
+      # The command that runs the example alone: the settings named, as this
+      # run has them, then the ones given.
+      def command(example, names, *given)
+        settings = names.filter_map { |name| "#{name}=#{ENV.fetch(name)}" if ENV.key?(name) }
         location = example.id.delete_prefix('./')
-        line = [*settings, "ORACLE_REPLAY=#{path}", "bundle exec rspec '#{location}'"].join(' ')
-        database = ' with the same PAPER_TRAIL_DIFF_DATABASE_URL' if
-          ENV.key?('PAPER_TRAIL_DIFF_DATABASE_URL')
-        "#{line}#{database}"
+        line = [*settings, *given, "bundle exec rspec '#{location}'"].join(' ')
+        return line unless ENV.key?('PAPER_TRAIL_DIFF_DATABASE_URL')
+
+        "#{line}, with the same PAPER_TRAIL_DIFF_DATABASE_URL"
+      end
+    end
+
+    # Says, at the end of the failure of an example that drew from
+    # Oracle.random, how to reduce it.
+    module Hint
+      # What decides which examples there are and the history each builds.
+      SETTINGS = %w[ORACLE_SEEDS ORACLE_STEPS PAPER_TRAIL_DIFF_SERIALIZER].freeze
+
+      module_function
+
+      def add(example)
+        failure = example.exception
+        return if failure.is_a?(RSpec::Core::MultipleExceptionError)
+
+        command = Replay.command(example, SETTINGS, 'ORACLE_SHRINK=1')
+        hinted = failure.exception("#{failure.message}\n\nTo reduce it: #{command}")
+        example.example.display_exception = nil
+        example.example.set_exception(hinted)
       end
     end
 
@@ -343,7 +384,9 @@ module Oracle
       private
 
       def message(final, path)
-        lines = [summary, "Replay it: #{Replay.command(@example, path)}"]
+        replay = Replay.command(@example, %w[ORACLE_SEEDS PAPER_TRAIL_DIFF_SERIALIZER],
+                                "ORACLE_REPLAY=#{path}")
+        lines = [summary, "Replay it: #{replay}"]
         if final.failed?
           lines += ['', 'Versions in the database when it ended, by transaction:', *versions,
                     '', 'Its failure:', final.exception.message]
@@ -399,8 +442,7 @@ module Oracle
   end
 end
 
+# Every example: one that never draws from Oracle.random just runs.
 RSpec.configure do |config|
-  config.around(:example, file_path: %r{/spec/oracle/}) do |example|
-    Oracle::Reducer.around(example)
-  end
+  config.around { |example| Oracle::Reducer.around(example) }
 end

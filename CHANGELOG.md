@@ -479,7 +479,8 @@ project follows [Semantic Versioning](https://semver.org/).
   then reports the reduced history's versions and mismatches, and a file that
   replays it with `ORACLE_REPLAY`. An oracle failure prints the command. The
   replay differential oracle reports each read that differs, with both
-  results, rather than only the transactions it made.
+  results, rather than only the transactions it made. The consistency checks'
+  histories reduce the same way.
 
 - `spec/unit/engine_properties_spec.rb` and
   `spec/unit/nested_comparator_properties_spec.rb` check the comparison

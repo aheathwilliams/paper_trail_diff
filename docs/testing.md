@@ -60,8 +60,10 @@ agrees: `analyze`, `analyze_many`, and `analyze_scope`; checkpoint and activity
 modes; `compare` and `timeline` against `analyze`; and that activity steps
 chain into the final state. They run over random windows as well as the whole
 history, with integer and string `versions.item_id`, YAML and JSON history, and
-a `has_paper_trail skip:` column. When one fails, its seed reproduces it. Add a
-variant here when a bug turns out to depend on a schema or configuration.
+a `has_paper_trail skip:` column. When one fails, its seed reproduces it, and
+`ORACLE_SHRINK=1` reduces it, as for the oracles (see
+[Reducing a failure](#reducing-a-failure)). Add a variant here when a bug
+turns out to depend on a schema or configuration.
 
 ## SQL work
 
@@ -170,12 +172,12 @@ covered.
 
 ### Reducing a failure
 
-`ORACLE_SHRINK=1` cuts a failing history down to the few steps that matter.
-A failure prints the command, which runs the failing example alone with the
-seed it failed with, and with `ORACLE_STEPS` too if the run that failed set it:
+`ORACLE_SHRINK=1` cuts a failing history down to the few steps that matter, in
+the oracles and the consistency checks alike. A failure ends with the command,
+which runs that example alone with the settings that decide its history:
 
 ```console
-ORACLE_SEEDS=103 ORACLE_SHRINK=1 mise exec -- bundle exec rspec ./spec/oracle/shapes_history_spec.rb:251
+ORACLE_SEEDS=103 ORACLE_SHRINK=1 mise exec -- bundle exec rspec 'spec/oracle/shapes_history_spec.rb[1:1]'
 ```
 
 The generators draw their random choices through `Oracle.random(seed)`
@@ -188,7 +190,8 @@ operation in a generator's list. It keeps each change that fails with the same
 first mismatch, numbers aside, and stops when no change helps or after
 `ORACLE_SHRINK_RUNS` runs (300 by default). Leaving a step out keeps the
 other steps' choices as they were, though they may then act on different
-records.
+records. `ORACLE_SHRINK_EXAMPLES` caps how many failing examples one run
+reduces; the others just print the command.
 
 The example then fails with the reduced history: how many steps were left,
 the versions it wrote, its mismatches, and a command that replays it from a

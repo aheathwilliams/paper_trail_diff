@@ -198,21 +198,7 @@ module Oracle
         lines << "  expected: #{expected.inspect[0, 1500]}"
         lines << "  actual:   #{actual.inspect[0, 1500]}"
       end
-      [*lines, *reduce_hint].join("\n")
-    end
-
-    private
-
-    # How to reduce the history, unless that is what is running. The example
-    # is named by its line, which, unlike its id, stays put when ORACLE_SEEDS
-    # changes which examples there are.
-    def reduce_hint
-      metadata = RSpec.current_example&.metadata
-      return [] if metadata.nil? || Reducer.reduce?
-
-      steps = ("ORACLE_STEPS=#{ENV.fetch('ORACLE_STEPS')} " if ENV.key?('ORACLE_STEPS'))
-      location = "#{metadata.fetch(:rerun_file_path)}:#{metadata.fetch(:line_number)}"
-      ["to reduce it: ORACLE_SEEDS=#{@seed} #{steps}ORACLE_SHRINK=1 bundle exec rspec #{location}"]
+      lines.join("\n")
     end
   end
 

@@ -51,6 +51,20 @@ RSpec.describe Oracle::Reducer do
     expect(reduction.best.failed?).to be(true)
   end
 
+  it 'names the example alone, with the settings that decide its history' do
+    stub_const('ENV', { 'ORACLE_SEEDS' => '3..4', 'ORACLE_STEPS' => '40' })
+    example = Struct.new(:id).new('./spec/oracle/history_spec.rb[1:2]')
+
+    expect(described_class::Replay.command(example, described_class::Hint::SETTINGS,
+                                           'ORACLE_SHRINK=1'))
+      .to eq('ORACLE_SEEDS=3..4 ORACLE_STEPS=40 ORACLE_SHRINK=1 bundle exec rspec ' \
+             "'spec/oracle/history_spec.rb[1:2]'")
+    stub_const('ENV', { 'PAPER_TRAIL_DIFF_DATABASE_URL' => 'postgres://ci' })
+    expect(described_class::Replay.command(example, [], 'ORACLE_REPLAY=tmp/oracle/a.json'))
+      .to eq('ORACLE_REPLAY=tmp/oracle/a.json bundle exec rspec ' \
+             "'spec/oracle/history_spec.rb[1:2]', with the same PAPER_TRAIL_DIFF_DATABASE_URL")
+  end
+
   it 'finds every loop and draw in a script' do
     script = [[4, [[1, [[2]]], []], 0.5]]
 
