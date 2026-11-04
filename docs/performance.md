@@ -18,17 +18,17 @@ for one association, at 1, 5, and 20 records:
 
 | Association | Queries | `reify` calls |
 | --- | --- | --- |
-| None | 9 / 9 / 9 | 0 |
-| `has_many` | 16 / 16 / 16 | 0 |
-| `belongs_to` | 16 / 16 / 16 | 0 |
-| A `has_many` scope of plain conditions, or a default scope | 16 / 16 / 16 | 0 |
-| `has_many :through` | 22 / 22 / 22 | 0 |
-| Polymorphic `belongs_to` | 20 / 20 / 20 | 0 |
-| `has_many :through` with `source_type:` | 24 / 24 / 24 | 0 |
-| A `has_many` with `order(:id).limit(1)` | 17 / 21 / 36 | 0 |
-| A scope that takes the owner, read with PT-AT | 28 / 76 / 256 | 9 / 45 / 180 |
-| None, with a querying `after_initialize` | 13 / 29 / 89 | 2 / 10 / 40 |
-| None, with a callable `historical_filter:` that queries | 15 / 19 / 34 | 2 / 10 / 40 |
+| None | 6 / 6 / 6 | 0 |
+| `has_many` | 13 / 13 / 13 | 0 |
+| `belongs_to` | 13 / 13 / 13 | 0 |
+| A `has_many` scope of plain conditions, or a default scope | 13 / 13 / 13 | 0 |
+| `has_many :through` | 19 / 19 / 19 | 0 |
+| Polymorphic `belongs_to` | 17 / 17 / 17 | 0 |
+| `has_many :through` with `source_type:` | 21 / 21 / 21 | 0 |
+| A `has_many` with `order(:id).limit(1)` | 14 / 18 / 33 | 0 |
+| A scope that takes the owner, read with PT-AT | 25 / 73 / 253 | 9 / 45 / 180 |
+| None, with a querying `after_initialize` | 10 / 26 / 86 | 2 / 10 / 40 |
+| None, with a callable `historical_filter:` that queries | 11 / 15 / 30 | 2 / 10 / 40 |
 
 The last four rows grow with the number of records, for the reasons in
 [what costs a query per record](#what-costs-a-query-per-record).
@@ -47,6 +47,14 @@ Flat query counts do not make a report's cost flat:
   window is decoded and compared: an `analyze_scope` of articles with five
   updates each took about 1.5 ms per article, and one article with 5,000
   updates took 1.2 s.
+- **Versions stored as JSON read about 40% faster than YAML.** A `report` on
+  500 articles with 31 versions each took 7.9 s with PaperTrail's default
+  YAML serializer and 4.5 s with its JSON one, or 14.5 s and 8.6 s with their
+  comments, and peaked at a fifth to a quarter less memory. JSON keeps times
+  to milliseconds and stores a few values differently (see
+  [history stored as JSON](reference.md#history-stored-as-json)). PaperTrail
+  reads every stored version with the one serializer, so switching means
+  converting the versions already saved.
 - **Memory grows with the number of records.** A `report` of 1,000 articles
   with their comments, replies, and author peaked at about 100 KB per
   article. `limit:` is a safety ceiling, not a page size, so to bound memory,
@@ -60,14 +68,16 @@ Flat query counts do not make a report's cost flat:
   2,001 versions of their article took about 7.5 s.
 - **`snapshots: true` and `recorded_changes: true` cost memory and time.** Ask
   for them only when you use them.
-- **Each edge of a window takes one or two statements per 500 records.** A
-  report with `within:` or `since:` looks for transactions that cross either
-  edge. With associations, it also takes one statement per 500 of the
-  transactions its history reads, to find one that saved associated records
-  on both sides of its start; when it finds one, it reads the window's
-  history again from where that transaction began.
-  On 1.4 million versions, 10,800 records took about 6 s on SQL Server and
-  1.5 s on PostgreSQL and MySQL.
+- **Each edge of a window takes one to three statements per 500 records.** A
+  window from `within:` or `since:` looks for transactions that cross either
+  edge, and with associations also for those that saved a record before it
+  and an associated record after it. A `report` window has no end, so only
+  its start is read. With associations, it also takes one statement per 500
+  of the transactions its history reads, to find one that saved associated
+  records on both sides of its start; when it finds one, it reads the
+  window's history again from where that transaction began. On 1.4 million
+  versions, both edges of a window over 10,800 records took about 6 s on SQL
+  Server and 1.5 s on PostgreSQL and MySQL.
 - **`version_scope:` on activity reads every version in the range**, as
   activity without one does. With associations, it takes one more statement
   per 500 of the transactions its history reads, to find those the filter
@@ -106,7 +116,16 @@ queries. `max_filter_versions:` (10,000 by default) caps the versions it loads.
 Either way, every version of every candidate in the window is decoded: with
 1,000 candidates and no match, a hash and a callable each took about 0.8 s.
 Finding the relation's records among the candidates takes up to two queries
-per 250 of them.
+per 500 of them, and with PT-AT, finding where their windows move one to three
+statements per edge for each 500.
+
+The relation then reads the records that matched in pages of up to 2,000, and
+each page lists every matching id, so the relation keeps its own order,
+`limit`, and `offset`. A version table whose `item_id` does not share the key's
+type selects records the same way. SQL Server compiles each such statement
+afresh: with 10,000 matching records, each page took about 0.7 s, 5 s of a
+12 s report, and with about 20,000 a page can outlast the adapter's default
+timeout of 5 seconds. Narrow the window, or page with the relation.
 
 ## Large reports
 
@@ -136,12 +155,12 @@ time from the [test clock](testing.md#test-clock), so a host clock that steps
 backwards cannot reorder the versions they seed. Compare counts as well as
 times, and run the correctness suites separately; no CI job checks timings.
 
-The query counts in the first table were measured on 2026-11-02, after
-history and activity began reading each owner's children once, and the
-`timeline` of 300 comments on 2026-11-03; the other numbers on 2026-10-30
-at revision `6c3d30b`. Both used Ruby
-4.0.1, Active Record 8.1.3.1, PaperTrail 17.0.0, and SQLite 3.53.2, on WSL2
-on an AMD Ryzen 7 7800X3D. The memory, wide-collection, and index figures come
-from one-off scripts rather than these two. The benchmark's raw samples are in
+The query counts in the first table, the `timeline` of 300 comments, and the
+serializers were measured on 2026-11-03, the counts after `report`'s window
+lost its end; the other numbers on 2026-10-30 at revision `6c3d30b`. Both used
+Ruby 4.0.1, Active Record 8.1.3.1, PaperTrail 17.0.0, and SQLite 3.53.2, on
+WSL2 on an AMD Ryzen 7 7800X3D. The memory, wide-collection, serializer, and
+index figures come from one-off scripts rather than these two. The benchmark's
+raw samples are in
 [`benchmark/results/reporting-2026-10-30.json`](../benchmark/results/reporting-2026-10-30.json),
 next to earlier runs.

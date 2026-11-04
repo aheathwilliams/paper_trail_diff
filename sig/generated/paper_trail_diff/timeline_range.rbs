@@ -15,8 +15,10 @@ module PaperTrailDiff
 
     attr_reader time_range: TimeRange?
 
-    # : (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped, ?plan: RootVersionPlan?, ?live_endpoint: untyped) -> void
-    def initialize: (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped, ?plan: RootVersionPlan?, ?live_endpoint: untyped) -> void
+    # `traversal` names the requested paths, which decide where a window's
+    # edges move (see TransactionCut).
+    # : (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped, ?plan: RootVersionPlan?, ?live_endpoint: untyped, ?traversal: AssociationTraversal?) -> void
+    def initialize: (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped, ?plan: RootVersionPlan?, ?live_endpoint: untyped, ?traversal: AssociationTraversal?) -> void
 
     # A record with no versions has no first boundary to resolve, which
     # is an empty history rather than a bad request. Both endpoints are
@@ -56,6 +58,8 @@ module PaperTrailDiff
     @requested_to: untyped
 
     @to: untyped
+
+    @traversal: AssociationTraversal?
 
     @version_scope: untyped
 

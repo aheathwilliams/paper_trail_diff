@@ -191,6 +191,18 @@ module PaperTrailDiff
       collect_reflections(model_class, @tree, path: '').freeze
     end
 
+    # The names the versions of the records on the requested paths are stored
+    # under: each association's class and every part a through passes. A
+    # polymorphic belongs_to names its target's class only in each record, so
+    # it adds none.
+    #: (untyped) -> Array[String]
+    def path_types(model_class)
+      selected_reflections(model_class).flat_map do |_path, reflection|
+        parts = [reflection, *self.class.through_parts(reflection)].reject(&:polymorphic?)
+        parts.map { |part| part.klass.base_class.name }
+      end.uniq
+    end
+
     #: (untyped, untyped) -> void
     def ensure_habtm_history!(model_class, version)
       paths = habtm_paths(model_class)

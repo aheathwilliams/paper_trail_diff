@@ -9,10 +9,10 @@ module PaperTrailDiff
     attr_reader :activity_timeline #: Array[ActivityStep]?
     attr_reader :from_snapshot #: RecordSnapshot?
     attr_reader :to_snapshot #: RecordSnapshot?
-    # The time window the analysis covers, or nil without one. It is the
-    # window asked for unless a transaction crossed an edge, which moves the
-    # edge back to where that transaction began.
-    attr_reader :window #: Range[Time]?
+    # The time window the analysis covers, or nil without one; a report's has
+    # no end. It is the window asked for unless a transaction crossed an edge,
+    # which moves the edge back to where that transaction began.
+    attr_reader :window #: Range[Time?]?
 
     # The result for a record whose requested history contains no versions,
     # which is an empty history rather than a failed request. Its snapshots
@@ -29,7 +29,7 @@ module PaperTrailDiff
 
     # The reconstructed states the diff was taken between. A report that has to
     # render unchanged columns needs the whole final state, not only what moved.
-    #: (diff: Diff, timeline: Array[Step], ?activity_timeline: Array[ActivityStep]?, ?from_snapshot: RecordSnapshot?, ?to_snapshot: RecordSnapshot?, ?window: Range[Time]?) -> void
+    #: (diff: Diff, timeline: Array[Step], ?activity_timeline: Array[ActivityStep]?, ?from_snapshot: RecordSnapshot?, ?to_snapshot: RecordSnapshot?, ?window: Range[Time?]?) -> void
     def initialize( # rubocop:disable Metrics/ParameterLists
       diff:, timeline:, activity_timeline: nil, from_snapshot: nil, to_snapshot: nil, window: nil
     )

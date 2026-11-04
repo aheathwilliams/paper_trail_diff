@@ -5,8 +5,10 @@ module PaperTrailDiff
   class DeletedAnalysisBatch
     # `context_required` reads a root that did not change in the window from
     # the version after it, so its associations' activity can be reported.
-    # : (untyped, identities: Array[Array[String]], time_range: TimeRange?, analyzer: untyped, history_preparer: untyped, version_scope: untyped, context_required: bool) -> void
-    def initialize: (untyped, identities: Array[Array[String]], time_range: TimeRange?, analyzer: untyped, history_preparer: untyped, version_scope: untyped, context_required: bool) -> void
+    # `traversal` names the requested paths, which decide where a window's
+    # edges move (see TransactionCut).
+    # : (untyped, identities: Array[Array[String]], time_range: TimeRange?, analyzer: untyped, history_preparer: untyped, version_scope: untyped, context_required: bool, traversal: AssociationTraversal?) -> void
+    def initialize: (untyped, identities: Array[Array[String]], time_range: TimeRange?, analyzer: untyped, history_preparer: untyped, version_scope: untyped, context_required: bool, traversal: AssociationTraversal?) -> void
 
     # : () -> Hash[Array[String], Analysis?]
     def call: () -> Hash[Array[String], Analysis?]
@@ -27,6 +29,8 @@ module PaperTrailDiff
     @model: untyped
 
     @time_range: TimeRange?
+
+    @traversal: AssociationTraversal?
 
     @version_scope: untyped
 

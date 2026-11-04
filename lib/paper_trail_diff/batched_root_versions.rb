@@ -58,9 +58,7 @@ module PaperTrailDiff
       end
     end
 
-    # Moved windows only start and end earlier, so the versions read for the
-    # widest of them hold each root's own, and the first left past a moved end.
-    # They are read in no order, so the first is found by time and id.
+    # Each root's own versions, and the first after its window (see OwnWindow).
     #: (Array[String], String, Hash[String, Array[untyped]], Hash[String, untyped]) -> [Array[untyped], untyped]
     def own_window(key, id, in_range, trailing)
       loaded = in_range.fetch(id, [])
@@ -68,9 +66,8 @@ module PaperTrailDiff
 
       # A batch moves windows only when it has one, so this is never nil.
       window = @windows.fetch(key) { @time_range } #: untyped
-      own, rest = loaded.partition { |version| window.include?(version.created_at) }
-      past = rest.select { |version| version.created_at >= window.end_time }
-      [own, past.min_by { |version| Support.chronological_version_key(version) } || trailing[id]]
+      own, past = OwnWindow.split(window, loaded)
+      [own, past || trailing[id]]
     end
 
     #: (untyped, Array[untyped]) -> [Hash[String, Array[untyped]], Set[untyped]?, Hash[String, untyped]]
@@ -90,9 +87,7 @@ module PaperTrailDiff
       range = @time_range
       return unless range
 
-      moved = records.filter_map { |record| @windows[Endpoint.identity(record)]&.begin_time }
-      start = [range.begin_time, *moved].min
-      TimeRange.new(range.exclude_end? ? (start...range.end_time) : (start..range.end_time))
+      OwnWindow.widest(range, records.filter_map { |record| @windows[Endpoint.identity(record)] })
     end
 
     #: (Array[untyped], untyped, Set[untyped]?, untyped) -> RootVersionPlan

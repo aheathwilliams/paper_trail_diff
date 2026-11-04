@@ -62,6 +62,7 @@ require_relative 'paper_trail_diff/comparison_batch'
 require_relative 'paper_trail_diff/root_version_plan'
 require_relative 'paper_trail_diff/version_scope_filter'
 require_relative 'paper_trail_diff/root_version_selection'
+require_relative 'paper_trail_diff/own_window'
 require_relative 'paper_trail_diff/batched_root_versions'
 require_relative 'paper_trail_diff/snapshot_normalizer'
 require_relative 'paper_trail_diff/historical_snapshot_store'
@@ -363,9 +364,10 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
                                      'pass it as `within:` to analyze_scope'
       end
 
+      # Endless, so a version a server dated ahead of this one's clock is in it.
       analyze_scope(
         scope,
-        within: since..Time.now.utc, limit: limit, associations: associations,
+        within: (since..), limit: limit, associations: associations,
         ignore: ignore, activity: true, version_scope: version_scope, snapshots: snapshots,
         group: group,
         include_deleted: include_deleted, historical_filter: historical_filter,

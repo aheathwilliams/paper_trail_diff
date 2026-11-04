@@ -104,6 +104,10 @@ module PaperTrailDiff
     # : (String) -> untyped
     def self.constant: (String) -> untyped
 
+    # Arel, which ships no signatures either.
+    # : () -> untyped
+    def self.arel: () -> untyped
+
     # : (untyped) -> Array[untyped]
     def self.chronological_version_key: (untyped) -> Array[untyped]
 

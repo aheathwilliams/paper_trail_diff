@@ -172,15 +172,26 @@ all of today and `august...september` stops before September 1. A string is a
 time in `Time.zone` unless it names an offset. Without `Time.zone`, both are
 read in UTC, never in the server's own zone.
 
+An endless range, such as `1.day.ago..`, runs through the current saved state:
+it holds every version saved since it began, whatever time its server's clock
+gave it, and it ends at the current record. `report` uses one.
+
 A window edge that falls inside a transaction moves back to where that
 transaction began, so the whole transaction is in the later window, as it is
-when a range [starts or ends at a version](#choosing-a-range). This applies to
-transactions that saved a version of the root record, such as a comment edit
-and the `touch: true` article version saved with it. A transaction that saved
-only associated records moves no edge. When it saved some of them before the
-edge and some after, its changes are still all in one window: in the later
-one when a version it saved after the edge is of a record on the requested
-paths before or after the transaction, and otherwise in the earlier one. A
+when a range [starts or ends at a version](#choosing-a-range). It moves when
+the transaction saved the root record after the edge, such as a comment edit
+and the `touch: true` article version saved with it, or saved the root before
+the edge and a record of a class on the requested paths after it. A
+transaction that saved the root only before the edge, and nothing on its paths
+after it, moves no edge: the root's change is in the earlier window, with its
+version, even when the transaction went on to save another article. A
+transaction that saved only associated records moves no edge either. When it
+saved some of them before the edge and some after, its changes are still all
+in one window: in the later one when a version it saved after the edge is of a
+record on the requested paths before or after the transaction, and otherwise
+in the earlier one. A polymorphic `belongs_to` names its target's class only in
+each record, so a target saved after the edge moves nothing: the root's change
+is then in the earlier window and the target's in the later one. A
 [transaction group](#one-step-per-transaction-group-transaction) lists in
 `sources` only the versions inside its window. So back-to-back windows, or a
 `report` with `since:` after an earlier report, show each change exactly
@@ -188,10 +199,11 @@ once, credited to the transaction that made it. Each root moves its own
 edges, so in a batch two roots can start a few moments apart.
 
 `analysis.window` is the window an `Analysis` covers after any such move, as a
-Ruby range. It is `nil` when `within:` or `since:` was not given. Every step of
-the analysis is inside it, so to check a step against the window, use
-`analysis.window` rather than the range you passed: a step at the start of a
-moved window begins before the time you asked for.
+Ruby range, endless for `report` and any other endless window. It is `nil` when
+`within:` or `since:` was not given. Every step of the analysis is inside it,
+so to check a step against the window, use `analysis.window` rather than the
+range you passed: a step at the start of a moved window begins before the time
+you asked for.
 
 ```ruby
 analysis = PaperTrailDiff.analyze_many(articles, within: window, activity: true).values.first
@@ -491,6 +503,11 @@ PaperTrailDiff.activity_timeline(article, associations: [:comments], group: :tra
   group. PT-AT clears the transaction id when the savepoint rolls back, so the
   versions the transaction saves afterwards form a separate group. Releasing
   the savepoint keeps one group.
+- A step joins only the group of the step just before it. Two transactions
+  that save in the same tree at the same time, so that their versions
+  interleave, each form a group for every run of their own versions: the
+  state between two runs holds the other transaction's change, so no single
+  step could show either one alone.
 - Also accepted by `analyze`, `analyze_many`, and `analyze_scope` with
   `activity: true`, and by `report`.
 
@@ -716,9 +733,8 @@ all history.
 
 ### report
 
-`report(scope, since:, limit:)` is `analyze_scope` with
-`within: since..Time.now.utc` and `activity: true`. Use it for "what happened
-recently":
+`report(scope, since:, limit:)` is `analyze_scope` with `within: since..`, an
+endless window, and `activity: true`. Use it for "what happened recently":
 
 ```ruby
 report = PaperTrailDiff.report(Article.all, since: 1.day.ago, limit: 100)
@@ -817,8 +833,11 @@ report = PaperTrailDiff.report(
 )
 ```
 
-The filter checks the record as it was when the window started and after each
-change made inside it. A record matches if any of those states match. With a
+The filter checks the record as it was when its window started and after each
+change made inside it. That window is the one its analysis covers
+(`analysis.window`): a transaction that crosses an edge moves the edge to where
+the transaction began (see [time windows](#time-windows)). A record matches if
+any of those states match. With a
 hash, every key must be equal (`==`) once both sides are cast to the
 attribute's type, as `where` casts its values: `{ status: :published }` matches
 an enum, and a date or time matches whether the history stored it as YAML or
@@ -1246,7 +1265,7 @@ row.to_h             # the above, plus version_id, event, whodunnit, recorded_at
 
 - An edited field is one `:changed` row. A record that appeared or disappeared
   gets an `:added` or `:removed` row with `attribute` `nil`, then a row for each
-  field that has a value and for each record it holds.
+  field that is not `nil` and for each record it holds.
 - A replaced `belongs_to` or `has_one` target gives the old record `:removed`
   rows, then the new one `:added` rows.
 - Rows follow the diff's walking order, and an analysis's rows follow its steps
@@ -1408,6 +1427,19 @@ the gem raises `AmbiguousVersionOrderError` naming both instead of guessing.
 Timestamps stored to the second, as on a MySQL `datetime` column, make ties
 common. `diagnose` reports this as an error.
 
+A record's versions should also be dated in the order they were saved.
+PaperTrail dates an update with the record's `updated_at` unless the model
+sets `has_paper_trail synchronize_version_creation_timestamp: false`, so a save
+that sets `updated_at` itself, such as an import that keeps another system's
+times, a `touch(time:)`, or one made with timestamps off, can date its version
+before the one saved before it. Versions are read in time order, so such an update is read
+before the change it followed, and one dated before the record's `create`
+reads as the record deleted and created again. When IDs that count up show a
+record's versions dated out of the order they were saved in, `diagnose` warns
+with `inverted_version_order`. Set the option on models whose `updated_at`
+your application sets, and correct the stored `created_at` of versions
+already saved.
+
 `created_at` comes from your application server's clock. A clock that jumps
 backwards, or servers whose clocks disagree, can record a later change with an
 earlier time. Keep server clocks synchronized.
@@ -1523,7 +1555,7 @@ All errors inherit from `PaperTrailDiff::Error`.
 | `VersionMismatchError` | Two endpoints belong to different records |
 | `ReversedEndpointsError` | Two versions are given newest first |
 | `InvalidTimelineRangeError` | A range is invalid, for example `within:` with `from:`, or `:last` |
-| `InvalidTimeRangeError` | `within:` is not a finite, time-ordered range |
+| `InvalidTimeRangeError` | `within:` is not a range with a beginning, in time order |
 | `IncompleteTimeRangeError` | A window's last change has no later version and the record has no saved row to read instead |
 | `AmbiguousVersionOrderError` | Versions cannot be ordered (see [version order](#version-order)) |
 | `BatchLimitExceededError` | More records are selected than `limit:` allows |
@@ -1573,9 +1605,20 @@ Results can only be as complete as the history PaperTrail and PT-AT recorded.
   and not others. A long call holds its snapshot until it ends: on PostgreSQL
   that can keep VACUUM from reclaiming old row versions, on MySQL it keeps
   undo history, and on SQL Server it keeps row versions in `tempdb`.
-- A savepoint that rolls back can split one transaction into several
-  transaction groups; see
-  [one step per transaction group](#one-step-per-transaction-group-transaction).
+- A savepoint that rolls back, or another transaction saving in the same tree
+  at the same time, can split one transaction into several transaction groups;
+  see [one step per transaction group](#one-step-per-transaction-group-transaction).
+- Two transactions that save in one record's tree at the same time, so that
+  their versions interleave, are read in the order of their versions. A
+  version reads the records its own transaction saved as they stood before
+  the transaction, but a version of the other transaction reads them as they
+  stood after the change saved before it. So a record that one transaction
+  changed and changed back, such as a comment it created and deleted again,
+  can appear in the other's steps, crediting that transaction with adding
+  or removing it, and a window's starting state and diff can hold it too.
+  Row locks keep the two from saving the same record, so this needs both to
+  save different records of one tree within moments of each other. See
+  [version order](#version-order).
 - HABTM membership history exists only where PT-AT recorded it in a
   transaction, and only for the root record without a scope: a scoped HABTM,
   or one below the root, raises `UnsupportedAssociationError`, and a transaction that another record with

@@ -110,14 +110,18 @@ RSpec.describe PaperTrailDiff::TimelineRange do
       described_class.new(versioned_record, from: nil, to: nil, within: within, **options)
     end
 
+    # The requested paths decide which transactions move an edge.
     it 'moves its edges to transaction edges for a versioned record' do
       versioned('5' => moved)
+      paths = instance_double(PaperTrailDiff::AssociationTraversal)
 
-      expect(versioned_range(window).time_range).to equal(moved)
-      expect(PaperTrailDiff::TransactionCut).to have_received(:windows) do |model, records, asked|
-        expect([model, records, asked.begin_time, asked.end_time, asked.exclude_end?])
-          .to eq([versioned_record.class, [versioned_record], start_time, start_time + 3600, true])
-      end
+      expect(versioned_range(window, traversal: paths).time_range).to equal(moved)
+      expect(PaperTrailDiff::TransactionCut)
+        .to have_received(:windows) do |model, records, asked, traversal:|
+          expect([model, records, asked.begin_time, asked.end_time, asked.exclude_end?, traversal])
+            .to eq([versioned_record.class, [versioned_record], start_time, start_time + 3600,
+                    true, paths])
+        end
     end
 
     it 'keeps the window when no transaction crosses an edge' do

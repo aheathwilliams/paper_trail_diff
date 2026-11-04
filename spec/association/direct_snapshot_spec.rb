@@ -20,6 +20,22 @@ RSpec.describe 'direct snapshot compatibility' do
                           PaperTrail.serializer.dump(version.object_deserialized.except('name')))
   end
 
+  # Activity reads a root's version again at every event it bounds.
+  it 'decodes each version once, and declines it once' do
+    _, version = version_for(PreparedDocument)
+    _, declined = version_for(PreparedRewrittenDocument)
+    loader = PaperTrailDiff::DirectRecordStateLoader.new
+    [version, declined].each do |read|
+      allow(read).to receive(:object_deserialized).and_call_original
+    end
+
+    states = Array.new(2) { loader.call(version) }
+    2.times { loader.call(declined) }
+
+    expect(states.first).to be(states.last).and be_a(PaperTrailDiff::PreparedRecordState)
+    expect([version, declined]).to all(have_received(:object_deserialized).once)
+  end
+
   it 'normalizes STI states without reification or historical model construction' do
     document, version = version_for(PreparedSpecialDocument)
     expected = version.reify(dup: true).attributes.except('id', 'updated_at')

@@ -45,6 +45,11 @@ module PaperTrailDiff
     # : (Hash[Symbol, untyped], Hash[Symbol, untyped], untyped) -> Array[untyped]
     def join_versions: (Hash[Symbol, untyped], Hash[Symbol, untyped], untyped) -> Array[untyped]
 
+    # Only the children the history loaded. Snapshots read children only under
+    # an owner the history prepared, and it loaded every child of those. An
+    # owner reached another way, such as a belongs_to target loaded for a
+    # different path, can have children the history never loaded, which no
+    # snapshot holds.
     # : (untyped, Array[untyped], untyped, ActivityRange) -> Array[untyped]
     def child_ids: (untyped, Array[untyped], untyped, ActivityRange) -> Array[untyped]
 

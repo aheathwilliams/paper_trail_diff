@@ -46,11 +46,13 @@ RSpec.describe PaperTrailDiff::DeletedAnalysisBatch do
     ['FilterArticle', record.id.to_s]
   end
 
+  # The requested paths reach the notes a transaction saves with a root.
   def analyze(identities, model: FilterArticle, within: nil, version_scope: nil, context: false)
+    traversal = instance_double(PaperTrailDiff::AssociationTraversal, path_types: ['FilterNote'])
     described_class.new(
       model, identities: identities, time_range: within && PaperTrailDiff::TimeRange.new(within),
              analyzer: analyzer, history_preparer: history_preparer, version_scope: version_scope,
-             context_required: context
+             context_required: context, traversal: traversal
     ).call
   end
 

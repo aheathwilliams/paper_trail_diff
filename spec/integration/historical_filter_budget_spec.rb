@@ -24,9 +24,10 @@ RSpec.describe 'bounded historical filtering' do
   end
 
   it 'applies the version budget across candidate batches, not separately per batch' do
-    251.times { CoreArticle.create!(title: 'Other', internal_note: 'stable') }
+    stub_const('PaperTrailDiff::Support::IDS_PER_STATEMENT', 2)
+    3.times { CoreArticle.create!(title: 'Other', internal_note: 'stable') }
 
-    expect { report({ title: 'Missing' }, budget: 250) }
+    expect { report({ title: 'Missing' }, budget: 2) }
       .to raise_error(PaperTrailDiff::FilterLimitExceededError)
   end
 

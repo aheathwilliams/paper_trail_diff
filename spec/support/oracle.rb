@@ -382,11 +382,18 @@ module Oracle
     end
   end
 
-  # The activity timeline of one root over a window, read alone and in a batch.
+  # The activity timeline of one root over a window, read alone, in a batch,
+  # and through a relation, which selects the root by what changed in the
+  # window or reports nothing for it.
   SPLIT_READERS = {
     activity_timeline: ->(root, **options) { PaperTrailDiff.activity_timeline(root, **options) },
     analyze_many: lambda do |root, **options|
       PaperTrailDiff.analyze_many([root], activity: true, **options).values.first.activity_timeline
+    end,
+    analyze_scope: lambda do |root, **options|
+      scoped = PaperTrailDiff.analyze_scope(root.class.where(id: root.id), activity: true, limit: 1,
+                                                                           **options)
+      scoped.analyses[PaperTrailDiff::Endpoint.identity(root)]&.activity_timeline || []
     end
   }.freeze
 

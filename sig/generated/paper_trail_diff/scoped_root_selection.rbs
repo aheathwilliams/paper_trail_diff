@@ -25,9 +25,9 @@ module PaperTrailDiff
   # window. `where(status: 'published')` selects what is published now, which is
   # not the same set as what was published while the window was open.
   class ScopedRootSelection
-    PAGE_SIZE: ::Integer
+    MIN_PAGE_SIZE: ::Integer
 
-    LISTED_PAGE_SIZE: ::Integer
+    MAX_PAGE_SIZE: ::Integer
 
     # A plain class rather than Data.define, which arrived in Ruby 3.2 while this
     # gem supports 3.1.
@@ -43,9 +43,10 @@ module PaperTrailDiff
     # `activity_tree` names the association paths whose changes also select a
     # root, as an activity analysis reports them. Without one, only a root's
     # own versions select it. `version_scope` narrows which of either count,
-    # as it narrows which are reported.
-    # : (untyped, time_range: TimeRange?, limit: Integer, ?historical_filter: untyped, ?max_filter_versions: Integer, ?activity_tree: AssociationTree?, ?version_scope: untyped) -> void
-    def initialize: (untyped, time_range: TimeRange?, limit: Integer, ?historical_filter: untyped, ?max_filter_versions: Integer, ?activity_tree: AssociationTree?, ?version_scope: untyped) -> void
+    # as it narrows which are reported. `traversal` names the requested paths,
+    # which decide where a window's edges move (see TransactionCut).
+    # : (untyped, time_range: TimeRange?, limit: Integer, ?historical_filter: untyped, ?max_filter_versions: Integer, ?activity_tree: AssociationTree?, ?version_scope: untyped, ?traversal: AssociationTraversal?) -> void
+    def initialize: (untyped, time_range: TimeRange?, limit: Integer, ?historical_filter: untyped, ?max_filter_versions: Integer, ?activity_tree: AssociationTree?, ?version_scope: untyped, ?traversal: AssociationTraversal?) -> void
 
     # : () -> Result
     def call: () -> Result
@@ -55,6 +56,8 @@ module PaperTrailDiff
     @historical_filter: untyped
 
     @limit: Integer
+
+    @path_types: Array[String]
 
     @related: AssociationActivitySelection?
 
@@ -85,15 +88,6 @@ module PaperTrailDiff
     # : (Array[String]) -> Result
     def plucked_selection: (Array[String]) -> Result
 
-    # Every page repeats the ids the relation is read among, so pages as long
-    # as the list read it fewer times than pages of 250. A page holds at most
-    # 2,000 records: SQL Server compiles a statement with its ids written in,
-    # and one that listed 20,000 and returned them all outlasted the adapter's
-    # default timeout of 5 seconds. More roots than `limit:` raise however
-    # long the list, so a page never needs more than one past it.
-    # : (Array[String]) -> Array[untyped]
-    def listed_records: (Array[String]) -> Array[untyped]
-
     # The candidates the relation's conditions accept. A grouped relation's
     # rows are groups, which a condition on one record cannot decide, and its
     # aggregates read every candidate at once, so it keeps them all: the
@@ -119,9 +113,15 @@ module PaperTrailDiff
     def missing_ids: () -> Array[String]
 
     # Only the versions `version_scope` keeps select a root: one whose versions
-    # in the window it drops would have nothing to report.
+    # in the window it drops would have nothing to report. A version saved
+    # just before the window selects its root when TransactionCut moves the
+    # root's window back to take it in.
     # : () -> untyped
     def window_versions: () -> untyped
+
+    # The filter reads each candidate over the window its analysis will.
+    # : (untyped, Integer, AssociationTraversal?) -> HistoricalFilter?
+    def historical_filter_for: (untyped, Integer, AssociationTraversal?) -> HistoricalFilter?
 
     # Accepts a model class as readily as a relation: `Article` and
     # `Article.where(...)` both name a population, and `all` is what makes them
@@ -150,18 +150,29 @@ module PaperTrailDiff
     # Read bounded pages until the relation ends or too many unique roots appear.
     # Each candidate source is an id list or a subquery; a record matching any
     # of them is selected.
-    # : (Array[untyped], ?page_size: Integer) -> Array[untyped]
-    def selected_records: (Array[untyped], ?page_size: Integer) -> Array[untyped]
+    # : (Array[untyped]) -> Array[untyped]
+    def selected_records: (Array[untyped]) -> Array[untyped]
 
     # Pages are read by offset, so under a total order.
     # : (Array[untyped]) -> untyped
     def candidate_relation: (Array[untyped]) -> untyped
 
-    # : (untyped, Integer, Integer) -> Array[untyped]
-    def record_page: (untyped, Integer, Integer) -> Array[untyped]
+    # : (untyped, Integer) -> Array[untyped]
+    def record_page: (untyped, Integer) -> Array[untyped]
 
-    # : (Integer, Integer) -> Integer
-    def page_limit: (Integer, Integer) -> Integer
+    # : (Integer) -> Integer
+    def page_limit: (Integer) -> Integer
+
+    # Every page repeats the candidates, a list of ids or the subqueries that
+    # find them, and skips the rows read before it, so pages much smaller than
+    # the selection read the candidates many times over. More roots than
+    # `limit:` raise, so a page never needs more than one past it. A page
+    # holds at least 250 rows, for a relation whose joins repeat a record,
+    # and at most 2,000: SQL Server compiles a statement with its ids written
+    # in, and one that listed 20,000 and returned them all outlasted the
+    # adapter's default timeout of 5 seconds.
+    # : () -> Integer
+    def page_size: () -> Integer
 
     # : (Integer) -> void
     def reject_oversized!: (Integer) -> void

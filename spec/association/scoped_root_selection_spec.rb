@@ -47,6 +47,22 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
     PaperTrailDiff::AssociationTree.build(paths)
   end
 
+  # Pages of at least `min` and at most `max` rows.
+  def page_bounds(min, max = min)
+    stub_const('PaperTrailDiff::ScopedRootSelection::MIN_PAGE_SIZE', min)
+    stub_const('PaperTrailDiff::ScopedRootSelection::MAX_PAGE_SIZE', max)
+  end
+
+  # The offset and limit of each page the selection reads.
+  def pages
+    pages = []
+    allow_any_instance_of(described_class).to receive(:record_page)
+      .and_wrap_original do |original, *args|
+        original.call(*args).tap { |page| pages << [page.offset_value, page.limit_value] }
+      end
+    pages
+  end
+
   # Each query with its identifiers in double quotes, whatever the adapter
   # quotes them with, so that one pattern reads on every database.
   def queries(&block)
@@ -124,6 +140,21 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
       expect(result.unreachable).to eq(gone.map { |record| [model.name, record.id.to_s] }.sort)
       expect(result.unreachable).to all(be_frozen)
       expect(select(model, time_range: since(start)).records).to eq([live])
+    end
+
+    # Such a transaction moves the root's window back to take its version in
+    # (see TransactionCut).
+    it 'selects a root saved before the window in a transaction that saved its paths inside it' do
+      root, other = %w[Root Other].map { |title| model.create!(title: title) }
+      start = model.transaction do
+        root.update!(title: 'Root edited')
+        Time.now.utc.tap { other.update!(title: 'Other edited') }
+      end
+      paths = instance_double(PaperTrailDiff::AssociationTraversal)
+      allow(paths).to receive(:path_types).with(model).and_return([model.name])
+
+      expect(select(model, time_range: since(start), traversal: paths).records).to eq([root, other])
+      expect(select(model, time_range: since(start)).records).to eq([other])
     end
 
     it 'selects nothing from an empty window' do
@@ -213,7 +244,7 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
 
     it 'checks which candidates still exist in pages' do
       posts = Array.new(3) { |index| StringItemPost.create!(title: "Post #{index}") }
-      stub_const('PaperTrailDiff::ScopedRootSelection::PAGE_SIZE', 2)
+      stub_const('PaperTrailDiff::Support::IDS_PER_STATEMENT', 2)
 
       sql = queries { expect(select(StringItemPost).records).to eq(posts) }
 
@@ -221,38 +252,31 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
         .to eq(2)
     end
 
-    # Each page lists every candidate, so the pages are as long as the list:
-    # at least PAGE_SIZE, and at most LISTED_PAGE_SIZE and one past the limit.
+    # Each page lists every candidate, so the pages are as long as the
+    # selection can be: one past the limit, at least MIN_PAGE_SIZE and at most
+    # MAX_PAGE_SIZE.
     describe 'reading the candidates' do
-      before { stub_const('PaperTrailDiff::ScopedRootSelection::PAGE_SIZE', 2) }
+      before { page_bounds(2, 2_000) }
 
-      def pages
-        pages = []
-        allow_any_instance_of(described_class).to receive(:record_page)
-          .and_wrap_original do |original, *args|
-            original.call(*args).tap { |page| pages << [page.offset_value, page.limit_value] }
-          end
-        pages
-      end
-
-      it 'reads them in pages as long as their list' do
+      it 'reads them in pages of one past the limit' do
         posts = Array.new(5) { |index| StringItemPost.create!(title: "Post #{index}") }
         read = pages
 
         expect(select(StringItemPost).records).to eq(posts)
-        expect(read).to eq([[0, 5], [5, 5]])
+        expect(read).to eq([[0, 11]])
       end
 
-      it 'reads a short list in pages of PAGE_SIZE' do
+      it 'reads at least MIN_PAGE_SIZE records a page' do
+        page_bounds(3, 2_000)
         post = StringItemPost.create!(title: 'Post')
         read = pages
 
-        expect(select(StringItemPost).records).to eq([post])
-        expect(read).to eq([[0, 2]])
+        expect(select(StringItemPost, limit: 1).records).to eq([post])
+        expect(read).to eq([[0, 3]])
       end
 
-      it 'reads at most LISTED_PAGE_SIZE records a page' do
-        stub_const('PaperTrailDiff::ScopedRootSelection::LISTED_PAGE_SIZE', 3)
+      it 'reads at most MAX_PAGE_SIZE records a page' do
+        page_bounds(2, 3)
         posts = Array.new(5) { |index| StringItemPost.create!(title: "Post #{index}") }
         read = pages
 
@@ -306,19 +330,25 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
       other = TrackedArticle.create!(title: 'Other')
       3.times { article.comments.create!(body: 'join') }
       2.times { other.comments.create!(body: 'join') }
-      stub_const('PaperTrailDiff::ScopedRootSelection::PAGE_SIZE', 2)
+      page_bounds(2)
       scope = TrackedArticle.joins(:comments).order('tracked_comments.id')
-
-      pages = []
-      allow_any_instance_of(described_class).to receive(:record_page)
-        .and_wrap_original do |original, *args|
-          original.call(*args).tap { |page| pages << [page.offset_value, page.limit_value] }
-        end
+      read = pages
 
       sql = queries { expect(select(scope).records).to eq([article, other]) }
 
       expect(sql.grep(/FROM "tracked_articles" INNER JOIN/).length).to eq(3)
-      expect(pages).to eq([[0, 2], [2, 2], [4, 2]])
+      expect(read).to eq([[0, 2], [2, 2], [4, 2]])
+    end
+
+    # A page reads the candidates again, so the pages are as long as the
+    # selection can be, as for a list of candidates.
+    it 'reads the relation in pages of one past the limit' do
+      TrackedArticle.create!(title: 'One')
+      read = pages
+
+      select(TrackedArticle, limit: 300)
+
+      expect(read).to eq([[0, 301]])
     end
 
     # A database may return rows that tie in a different order for each page,
@@ -326,7 +356,7 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
     # unless the key completes the order.
     it 'reads every record once under an order with ties' do
       articles = Array.new(40) { |index| TrackedArticle.create!(title: %w[b a][index % 2]) }
-      stub_const('PaperTrailDiff::ScopedRootSelection::PAGE_SIZE', 4)
+      page_bounds(4)
 
       records = select(TrackedArticle.order(title: :desc), limit: 40).records
 
@@ -344,7 +374,7 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
 
     it 'stops at the relation limit without a query past it' do
       articles = Array.new(5) { |index| TrackedArticle.create!(title: "Article #{index}") }
-      stub_const('PaperTrailDiff::ScopedRootSelection::PAGE_SIZE', 2)
+      page_bounds(2)
 
       sql = queries do
         expect(select(TrackedArticle.offset(1).limit(4)).records).to eq(articles[1, 4])
@@ -355,7 +385,7 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
 
     it 'rejects too many roots as soon as a page holds them' do
       3.times { |index| TrackedArticle.create!(title: "Article #{index}") }
-      stub_const('PaperTrailDiff::ScopedRootSelection::PAGE_SIZE', 1)
+      page_bounds(1)
 
       expect { select(TrackedArticle, limit: 2) }
         .to raise_error(PaperTrailDiff::BatchLimitExceededError, /more than 2 roots/)
@@ -394,6 +424,24 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
       result = select(latest, time_range: since(start), historical_filter: { 'title' => 'Draft' })
 
       expect(result.records.map(&:id)).to eq([ann_draft.id, TrackedArticle.maximum(:id)])
+    end
+
+    # Such a transaction moves the root's window back to where it began, so
+    # the filter reads it from there (see TransactionCut).
+    it 'reads a root over the window a transaction crossing its start moved it to' do
+      root, other = %w[Root Other].map { |title| TrackedArticle.create!(title: title) }
+      start = TrackedArticle.transaction do
+        root.update!(title: 'Root edited')
+        Time.now.utc.tap { other.update!(title: 'Other edited') }
+      end
+      paths = instance_double(PaperTrailDiff::AssociationTraversal)
+      allow(paths).to receive(:path_types).with(TrackedArticle).and_return(['TrackedArticle'])
+      filtered = lambda do |traversal|
+        select(TrackedArticle, time_range: since(start), historical_filter: { 'title' => 'Root' },
+                               traversal: traversal).records
+      end
+
+      expect([filtered.call(paths), filtered.call(nil)]).to eq([[root], []])
     end
 
     it 'reads states from the window only' do

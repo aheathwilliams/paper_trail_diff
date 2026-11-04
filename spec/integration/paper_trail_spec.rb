@@ -547,6 +547,23 @@ RSpec.describe PaperTrailDiff do
         expect(report.errors.map(&:code)).to eq([:ambiguous_version_order])
       end
     end
+
+    # As PaperTrail dates an update saved with an updated_at set by hand. A
+    # time can be right and an id wrong, so it warns rather than refuses.
+    it 'warns from diagnose about a version dated before the one saved before it' do
+      article = CoreArticle.create!(title: 'one', internal_note: 'stable')
+      article.update!(title: 'two')
+      created, updated = PaperTrail::Version.where(item_type: 'CoreArticle', item_id: article.id)
+                                            .order(:id).to_a
+      updated.update_columns(created_at: created.created_at - 60)
+
+      report = described_class.diagnose(updated, article)
+
+      expect([report.ok?, report.warnings.map(&:code)]).to eq([true, [:inverted_version_order]])
+      expect(report.warnings.first.message)
+        .to start_with("versions #{created.id} and #{updated.id} were saved in that order")
+      expect(described_class.diagnose(created, article).warnings).to eq([])
+    end
   end
 
   describe 'a window that reaches the current record' do

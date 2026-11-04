@@ -282,6 +282,28 @@ RSpec.describe 'Activity over a window',
       .to eq([{ from: 'one', to: 'two' }])
   end
 
+  # A row of a comment saved after the window names its reviewer, but no state
+  # the history loaded does, so the history never prepared the reviewer's own
+  # comments. The reviewer is loaded anyway, as the article's author, and the
+  # comment it reviewed before the window was never loaded.
+  it 'reads no children of a target the history loaded only for another path' do
+    reviewer = TrackedAuthor.create!(name: 'Reviewer')
+    TrackedArticle.create!(title: 'elsewhere').comments.create!(body: 'early', reviewer: reviewer)
+    article = TrackedArticle.create!(title: 'one', author: reviewer)
+    start = now
+    article.update!(title: 'two')
+    finish = now
+    article.update!(title: 'three')
+    article.comments.create!(body: 'late', reviewer: reviewer).destroy!
+
+    paths = ['author', 'comments.reviewer.reviewed_comments']
+    result = PaperTrailDiff.analyze(article, within: start..finish, activity: true,
+                                             associations: paths)
+
+    expect(result.diff.to_h).to eq(record_presence_change: nil, associations: {},
+                                   attributes: { 'title' => { from: 'one', to: 'two' } })
+  end
+
   it 'keeps the steps between versions frozen when it closes on the live row' do
     article = TrackedArticle.create!(title: 'one')
     from = article.versions.reorder(:created_at, :id).first

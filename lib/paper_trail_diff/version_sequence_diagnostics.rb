@@ -21,6 +21,7 @@ module PaperTrailDiff
       versions = @from_version.class.transaction(requires_new: true) { ordered_range_versions }
       issues = [] #: Array[DiagnosticIssue?]
       issues << unorderable(versions)
+      issues << inverted(versions)
       issues << tied_timestamps(versions) if @fallback_selected
       issues.compact
     rescue StandardError
@@ -47,6 +48,37 @@ module PaperTrailDiff
         message: Support.ambiguous_message(pair),
         version_id: pair.first.id
       )
+    end
+
+    # Versions are read in time order, and ids that count up in one table say
+    # which was saved first. A later version dated earlier was usually dated
+    # by PaperTrail at an `updated_at` the application set itself, and the
+    # history then reads it before the change it followed: an update dated
+    # before the record's create reads as the record deleted and created
+    # again. A time can also be right and the id wrong, as for versions
+    # imported from elsewhere, so this warns rather than refuses.
+    #: (Array[untyped]) -> DiagnosticIssue?
+    def inverted(versions)
+      pair = versions.each_cons(2).find do |left, right|
+        Support.orderable_tie?(left, right) && Integer(right.id) < Integer(left.id)
+      end
+      return unless pair
+
+      saved_last, saved_first = pair
+      DiagnosticIssue.new(
+        severity: :warning, code: :inverted_version_order,
+        message: inverted_message(saved_first, saved_last), version_id: saved_last.id
+      )
+    end
+
+    #: (untyped, untyped) -> String
+    def inverted_message(saved_first, saved_last)
+      "versions #{saved_first.id.inspect} and #{saved_last.id.inspect} were saved in that " \
+        'order but are dated the other way round, at ' \
+        "#{saved_first.created_at.inspect} and #{saved_last.created_at.inspect}, and history " \
+        'reads them in time order; if a save set updated_at itself, which PaperTrail then ' \
+        'dates its version at, set has_paper_trail synchronize_version_creation_timestamp: ' \
+        'false and correct the stored created_at'
     end
 
     # Loaded history orders versions that share a timestamp by id, but PT-AT

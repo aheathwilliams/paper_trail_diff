@@ -28,6 +28,19 @@ module PaperTrailDiff
     # : (Array[untyped]) -> DiagnosticIssue?
     def unorderable: (Array[untyped]) -> DiagnosticIssue?
 
+    # Versions are read in time order, and ids that count up in one table say
+    # which was saved first. A later version dated earlier was usually dated
+    # by PaperTrail at an `updated_at` the application set itself, and the
+    # history then reads it before the change it followed: an update dated
+    # before the record's create reads as the record deleted and created
+    # again. A time can also be right and the id wrong, as for versions
+    # imported from elsewhere, so this warns rather than refuses.
+    # : (Array[untyped]) -> DiagnosticIssue?
+    def inverted: (Array[untyped]) -> DiagnosticIssue?
+
+    # : (untyped, untyped) -> String
+    def inverted_message: (untyped, untyped) -> String
+
     # Loaded history orders versions that share a timestamp by id, but PT-AT
     # places association changes by timestamp alone, so a path it reads loses
     # any change between such a pair. Unlike an unorderable sequence this is

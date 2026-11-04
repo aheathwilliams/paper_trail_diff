@@ -169,6 +169,19 @@ RSpec.describe PaperTrailDiff::BatchedRootVersions do
       expect(plan).to be_empty
     end
 
+    # The read starts at the other root's moved start, so it holds a version
+    # from before this root's own window, which is not past its end.
+    it 'closes an endless window on the live record, though it read a version before it' do
+      article, _created, reviewed, published = history
+      other, = history
+
+      plan = select([article, other], within: at(0.5).., live_endpoints: {},
+                                      windows: { key(other) => at(0).. })
+             .fetch(key(article))
+
+      expect([plan.mutations, plan.closing_record]).to eq([[reviewed, published], article])
+    end
+
     it 'keeps an exclusive end when widening the read for a moved start' do
       article, created, reviewed, published = history
 

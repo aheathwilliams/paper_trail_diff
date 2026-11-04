@@ -49,6 +49,20 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `within:` accepts an endless range, such as `1.day.ago..`, which runs
+  through the current saved state, as `report` does.
+
+- `diagnose` warns with `inverted_version_order` when a record's versions are
+  dated in another order than their IDs show they were saved in. PaperTrail
+  dates an update with the record's `updated_at` unless `has_paper_trail
+  synchronize_version_creation_timestamp: false`, so a save that set
+  `updated_at` itself, such as an import keeping another system's times, a
+  `touch(time:)`, or one made with timestamps off, can date its version in
+  the past. History is read in time order, so such an update is read before
+  the change it followed, and one dated before the record's `create` reads as
+  the record deleted and created again. The
+  [version order](docs/reference.md#version-order) section explains the fix.
+
 - On SQL Server, each call reads its history and live rows in one `SNAPSHOT`
   transaction when the database allows snapshot isolation
   (`ALTER DATABASE ... SET ALLOW_SNAPSHOT_ISOLATION ON`), as it does at
@@ -57,6 +71,33 @@ project follows [Semantic Versioning](https://semver.org/).
   first, in one statement; without it, nothing changes.
 
 ### Changed
+
+- `report` reads every version saved since `since:`, with no end. Its window
+  ended at the time of the call, so a version a server whose clock ran ahead
+  of the reporting server's had dated a moment later was left out, and the
+  report ended before a change the current record already held. It no longer
+  looks for transactions that cross that end, or for each record's first
+  version after it, which saves up to three statements per 500 records.
+  `analysis.window` is endless (`since..`) for a report, and a `since:` in the
+  future gives an empty report rather than raising `InvalidTimeRangeError`,
+  whose message named `within:`.
+
+- The README said change rows leave out the blank fields of a record that
+  appeared or disappeared. Only `nil` fields are left out: an empty string or
+  `false` gets a row.
+
+- The performance guide's query counts were measured again, and it compares
+  PaperTrail's JSON serializer with its default YAML one: a report read JSON
+  in about 40% less time. It also says what `historical_filter:` costs on SQL
+  Server, where each page of matching records lists every matching id. The
+  architecture guide no longer says a window's transaction lookups take four
+  per root, sent 200 roots per query.
+
+- The reference says what happens when two transactions save in the same
+  tree at the same time, so that their versions interleave: each forms more
+  than one group with `group: :transaction`, and a record one of them changed
+  and changed back can appear in the other's steps, and in a window's
+  starting state and diff.
 
 - `analyze_many`, `analyze_scope`, `report`, and `compare_many` list at most
   500 ids in a statement, as the rest of the gem does. Reading the batch's
@@ -69,9 +110,25 @@ project follows [Semantic Versioning](https://semver.org/).
   statement listing 20,000 transactions alone failed with error 8623. With
   `historical_filter:`, or a version table whose `item_id` does not share the
   key's type, the records are read among a list of ids, which each page of
-  250 repeated: they are now read in pages as long as the list, up to 2,000.
+  250 repeated: they are now read in pages of one past `limit:`, up to 2,000.
   On SQL Server, such a report of 10,000 articles took 47.4 s and now takes
   14.4 s, and one of 20,000 took 280.5 s and now takes 51.1 s.
+
+- `analyze_scope` and `report` read the records a relation selects in pages
+  of one past `limit:`, at least 250 and at most 2,000 records, rather than
+  250. Each page runs again the subqueries that find which records changed
+  and skips the rows before it, so a selection of 10,000 articles changed in
+  the window, with their comments, took 1.5 s on SQLite and now takes 0.3 s.
+
+- `historical_filter:` reads its candidates' versions, and selecting a record
+  by a change on its associations reads ids, 500 to a statement rather than
+  250, as the rest of the gem does.
+
+- Activity on associations decodes each of the record's versions once for
+  the call. It decoded a version again at every event the version bounded,
+  up to five times: a `report` of 10,000 articles with their comments took
+  about 20 s on SQLite and now takes about 18 s, and peaks at about 100 MB
+  less memory.
 
 - History on a `has_and_belongs_to_many` groups the members PT-AT recorded
   by transaction once. Each of the root's transactions looked through every
@@ -141,6 +198,32 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- With `historical_filter:`, `analyze_scope` and `report` test each record over
+  the window its analysis covers. A transaction that crosses the window's
+  start or end moves that window to where the transaction began, but the
+  filter read the window as asked: it missed a value the record held at the
+  moved start, such as its title before the transaction changed it, and
+  matched one held only past a moved end.
+
+- `analyze_scope` and `report` no longer lose a record's change when a
+  window's edge falls inside a transaction that saved the record before the
+  edge and another article, or a record off the requested paths, after it.
+  The record's window moved to the later window, which did not select it,
+  while the earlier window left the change out: an update, or a deletion with
+  `include_deleted: true`, was in neither report. Such a transaction now moves
+  no edge, so the change is in the earlier window, with the record's version.
+  When the transaction saved a record on the requested paths after the edge,
+  the edge still moves, and `analyze_scope` and `report` now select the record
+  in the later window with or without `activity: true`.
+
+- Activity over a window (`activity: true`, `activity_timeline`, and
+  `report`) no longer raises `KeyError` when a record on one requested path,
+  such as an author, is also a `belongs_to` target on another path with
+  associations requested below it
+  (`["author", "comments.reviewer.reviewed_comments"]`). A target named only
+  by a version saved after the window was followed as if its own associations
+  had been read, and they had not been.
+
 - With `historical_filter:`, `analyze_scope` and `report` accept a relation
   grouped by anything but the ID, such as each author's latest article
   (`select("MAX(id) AS id").group(:author_id)`), and select the records it
@@ -181,7 +264,8 @@ project follows [Semantic Versioning](https://semver.org/).
   `nil`, unless the column is time-zone aware and the time zone is UTC, and
   so did the gem, so the step that set a time showed no change, every
   comparison of a later version with the current record showed the time
-  changing from `nil`, and `recorded_changes` reported `{ from: nil, to: nil }`. That includes records the gem rebuilds with
+  changing from `nil`, and `recorded_changes` reported
+  `{ from: nil, to: nil }`. That includes records the gem rebuilds with
   PaperTrail's `reify`: models with initialization callbacks, custom types or
   defaults, default scopes that assign attributes, or encrypted attributes;
   a version that holds a column the model no longer has; the records a

@@ -33,9 +33,7 @@ module PaperTrailDiff
     # : (untyped, Array[untyped], Hash[Array[String], RootVersionPlan]) -> void
     def select_model: (untyped, Array[untyped], Hash[Array[String], RootVersionPlan]) -> void
 
-    # Moved windows only start and end earlier, so the versions read for the
-    # widest of them hold each root's own, and the first left past a moved end.
-    # They are read in no order, so the first is found by time and id.
+    # Each root's own versions, and the first after its window (see OwnWindow).
     # : (Array[String], String, Hash[String, Array[untyped]], Hash[String, untyped]) -> [Array[untyped], untyped]
     def own_window: (Array[String], String, Hash[String, Array[untyped]], Hash[String, untyped]) -> [ Array[untyped], untyped ]
 

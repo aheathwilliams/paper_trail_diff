@@ -193,6 +193,10 @@ module PaperTrailDiff
       Object.const_get(name)
     end
 
+    # Arel, which ships no signatures either.
+    #: () -> untyped
+    def self.arel = constant('Arel')
+
     #: (untyped) -> Array[untyped]
     def self.chronological_version_key(version)
       version_key(version.created_at, version.id)

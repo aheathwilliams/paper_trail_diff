@@ -9,17 +9,21 @@ module PaperTrailDiff
   # the window supply the state at its start and after every change but the
   # last. The state after the last change lives in the first version after
   # the window, or in the live row when nothing follows; a destroy leaves none.
+  #
+  # Each candidate is read over the window its analysis covers, which a
+  # transaction crossing an edge moves (see TransactionCut). `windows` gives
+  # the moved ones, keyed by id, for a slice of candidates and the window.
   class HistoricalFilter
     DEFAULT_VERSION_LIMIT = 10_000
-    CANDIDATE_BATCH = 250
 
-    #: (untyped, predicate: untyped, time_range: TimeRange?, limit: Integer, max_versions: Integer) -> void
-    def initialize(model, predicate:, time_range:, limit:, max_versions:)
+    #: (untyped, predicate: untyped, time_range: TimeRange?, limit: Integer, max_versions: Integer, windows: ^(Array[String], TimeRange) -> Hash[String, TimeRange]) -> void
+    def initialize(model, predicate:, time_range:, limit:, max_versions:, windows:) # rubocop:disable Metrics/ParameterLists
       @model = model
       @predicate = validate_predicate(predicate)
       @time_range = time_range
       @limit = limit
       @max_versions = validate_budget(max_versions)
+      @windows = windows
       @loaded = 0
       @state_loader = PreparedVersionStateLoader.new
     end
@@ -29,9 +33,9 @@ module PaperTrailDiff
     #: (Array[String], ?counted: bool) -> Array[String]
     def call(candidates, counted: true)
       matched = [] #: Array[String]
-      candidates.each_slice(CANDIDATE_BATCH) do |slice|
-        versions = candidate_versions(slice)
-        closing = closing_states(slice, versions)
+      candidates.each_slice(Support::IDS_PER_STATEMENT) do |slice|
+        versions, past = own_versions(slice)
+        closing = closing_states(slice, versions, past)
         slice.each do |id|
           next unless held?(versions.fetch(id, []), closing[id])
 
@@ -49,6 +53,7 @@ module PaperTrailDiff
     # @rbs @time_range: TimeRange?
     # @rbs @limit: Integer
     # @rbs @max_versions: Integer
+    # @rbs @windows: ^(Array[String], TimeRange) -> Hash[String, TimeRange]
     # @rbs @loaded: Integer
     # @rbs @state_loader: PreparedVersionStateLoader
 
@@ -86,10 +91,26 @@ module PaperTrailDiff
       raise ConfigurationError, 'max_filter_versions: must be a positive Integer'
     end
 
-    #: (Array[String]) -> Hash[String, Array[untyped]]
-    def candidate_versions(ids)
-      relation = VersionQuery.for_items(@model, ids)
+    # Each candidate's versions in its own window, read from the earliest
+    # moved start, and the first past each end that moved.
+    #: (Array[String]) -> [Hash[String, Array[untyped]], Hash[String, untyped]]
+    def own_versions(ids)
       range = @time_range
+      past = {} #: Hash[String, untyped]
+      return [candidate_versions(ids, nil), past] unless range
+
+      windows = @windows.call(ids, range)
+      loaded = candidate_versions(ids, OwnWindow.widest(range, windows.values))
+      own = loaded.to_h do |id, versions|
+        inside, past[id] = OwnWindow.split(windows.fetch(id, range), versions)
+        [id, inside]
+      end
+      [own, past]
+    end
+
+    #: (Array[String], TimeRange?) -> Hash[String, Array[untyped]]
+    def candidate_versions(ids, range)
+      relation = VersionQuery.for_items(@model, ids)
       relation = range.scope(relation) if range
       # One past the remaining budget is enough to know it was exceeded.
       versions = VersionQuery.chronological(relation).limit(@max_versions - @loaded + 1)
@@ -105,12 +126,16 @@ module PaperTrailDiff
       Endpoint.version?(closing) ? matches?(closing) : record_matches?(closing)
     end
 
-    # What each candidate held after its last change in the window.
-    #: (Array[String], Hash[String, Array[untyped]]) -> Hash[String, untyped]
-    def closing_states(ids, versions)
+    # What each candidate held after its last change in the window: the
+    # first version past an end that moved, read already, or past the end as
+    # asked, or the live row.
+    #: (Array[String], Hash[String, Array[untyped]], Hash[String, untyped]) -> Hash[String, untyped]
+    def closing_states(ids, versions, past)
       open = ids.reject { |id| versions.fetch(id, []).last&.event == 'destroy' }
-      trailing = trailing_versions(open)
-      trailing.merge(live_records(open - trailing.keys))
+      ended = past.slice(*open).compact
+      rest = open - ended.keys
+      trailing = trailing_versions(rest)
+      ended.merge(trailing, live_records(rest - trailing.keys))
     end
 
     #: (Array[String]) -> Hash[String, untyped]

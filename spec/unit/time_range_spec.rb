@@ -24,15 +24,26 @@ RSpec.describe PaperTrailDiff::TimeRange do
     expect(inclusive).to be_frozen
   end
 
+  # It runs through every version saved since it began, whatever the clock
+  # that dated it read.
+  it 'reads an endless range as one without an end' do
+    endless = described_class.new(start_time...)
+
+    expect([endless.end_time, endless.exclude_end?, endless.to_range])
+      .to eq([nil, false, start_time..])
+    expect([endless.include?(start_time - 1), endless.include?(start_time + (10**9))])
+      .to eq([false, true])
+    expect(endless.scope(FilterVersion.all).to_sql).not_to include('<')
+  end
+
   it 'reads back as a Ruby range with the same end' do
     expect(described_class.new(start_time..end_time).to_range).to eq(start_time..end_time)
     expect(described_class.new(start_time...end_time).to_range).to eq(start_time...end_time)
   end
 
-  it 'rejects open, non-time, and reversed ranges' do
+  it 'rejects ranges without a beginning, non-time, and reversed ranges' do
     expect { described_class.new(Range.new(nil, end_time)) }
-      .to invalid('`within` must be a finite Range')
-    expect { described_class.new(start_time..) }.to invalid('`within` must be a finite Range')
+      .to invalid('`within` must be a Range with a beginning')
     expect { described_class.new(1..2) }.to invalid('`within` begin must be time-like')
     expect { described_class.new(end_time..start_time) }
       .to invalid('`within` beginning must not follow its end')
@@ -42,7 +53,8 @@ RSpec.describe PaperTrailDiff::TimeRange do
     lookalike = Struct.new(:begin, :end).new(start_time, end_time)
     subclass = Class.new(Range)
 
-    expect { described_class.new(lookalike) }.to invalid('`within` must be a finite Range')
+    expect { described_class.new(lookalike) }
+      .to invalid('`within` must be a Range with a beginning')
     expect(described_class.new(subclass.new(start_time, end_time)).end_time).to eq(end_time)
   end
 
@@ -169,6 +181,20 @@ RSpec.describe PaperTrailDiff::TimeRange do
     end
 
     let(:relation) { FilterVersion.where(item_type: 'FilterArticle') }
+
+    # Nothing follows an endless range, so no statement looks.
+    it 'reads no versions after an endless range' do
+      version(1, start_time + 60)
+      endless = described_class.new(start_time..)
+      statements = []
+      counter = ->(*, payload) { statements << payload[:sql] unless payload[:name] == 'SCHEMA' }
+
+      following = ActiveSupport::Notifications.subscribed(counter, 'sql.active_record') do
+        [endless.trailing_scope(relation).first, endless.first_trailing_versions(relation)]
+      end
+
+      expect([following, statements]).to eq([[nil, {}], []])
+    end
 
     it 'scopes to versions inside the range' do
       inside = version(1, start_time)

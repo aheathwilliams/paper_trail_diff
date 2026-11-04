@@ -14,9 +14,12 @@ module PaperTrailDiff
     attr_reader :to #: untyped
     attr_reader :time_range #: TimeRange?
 
-    #: (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped, ?plan: RootVersionPlan?, ?live_endpoint: untyped) -> void
-    def initialize(record, from:, to:, within:, version_scope: nil, plan: nil, live_endpoint: nil) # rubocop:disable Metrics/ParameterLists
+    # `traversal` names the requested paths, which decide where a window's
+    # edges move (see TransactionCut).
+    #: (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped, ?plan: RootVersionPlan?, ?live_endpoint: untyped, ?traversal: AssociationTraversal?) -> void
+    def initialize(record, from:, to:, within:, version_scope: nil, plan: nil, live_endpoint: nil, traversal: nil) # rubocop:disable Metrics/ParameterLists, Layout/LineLength
       @record = record
+      @traversal = traversal
       @plan = plan
       @live_endpoint = live_endpoint
       @version_scope = version_scope
@@ -76,6 +79,7 @@ module PaperTrailDiff
     private
 
     # @rbs @record: untyped
+    # @rbs @traversal: AssociationTraversal?
     # @rbs @plan: RootVersionPlan?
     # @rbs @version_scope: untyped
     # @rbs @live_endpoint: untyped
@@ -133,7 +137,8 @@ module PaperTrailDiff
       range = TimeRange.new(within)
       return range unless Support.versioned?(@record.class)
 
-      TransactionCut.windows(@record.class, [@record], range).fetch(@record.id.to_s, range)
+      TransactionCut.windows(@record.class, [@record], range, traversal: @traversal)
+                    .fetch(@record.id.to_s, range)
     end
 
     #: () -> void

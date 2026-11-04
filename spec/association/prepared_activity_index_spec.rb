@@ -180,20 +180,46 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
   end
 
   # The batch registers each record under the class it found it as, and asks
-  # for its children under the class an association names.
+  # for its children under the class an association names. The first read
+  # takes in every owner registered under the class or its base class, so
+  # the next needs no statement.
   it 'reads every record registered under a class or its subclass, once each' do
     origin = Time.now.utc
-    first, second = %w[First Second].map { |title| IndexSpecLandingPage.create!(title: title) }
-    kept = [first, second].map { |page| IndexSpecSection.create!(title: 'kept', page: page) }
+    pages = %w[First Second Third].map { |title| IndexSpecLandingPage.create!(title: title) }
+    kept = pages.map { |page| IndexSpecSection.create!(title: 'kept', page: page) }
     index = index_for(origin, { IndexSpecSection => kept.map(&:id) })
-    index.register(IndexSpecLandingPage, [first.id])
-    index.register(IndexSpecPage, [second.id])
-    index.register(IndexSpecPage, [second.id])
+    first, second, third = pages
+    index.register(IndexSpecPage, [first.id])
+    index.register(IndexSpecLandingPage, [second.id])
+    index.register(IndexSpecPage, [third.id, third.id])
+    window = range(origin, Time.now.utc)
 
-    found = index.child_ids(IndexSpecLandingPage, [first.id, second.id], sections,
-                            range(origin, Time.now.utc))
+    found = index.child_ids(IndexSpecLandingPage, [third.id], sections, window)
+    queries = statements do
+      found += index.child_ids(IndexSpecLandingPage, [first.id, second.id], sections, window)
+    end
 
     expect(found).to match_array(kept.map(&:id))
+    expect(queries).to eq(0)
+  end
+
+  # Snapshots read children only under an owner the history prepared, and the
+  # history loaded every child of those. An owner activity reaches another way,
+  # such as a belongs_to target loaded for a different path, can have children
+  # the history never loaded, recorded before the range or live; no snapshot
+  # holds them.
+  it 'leaves out the children the history did not load' do
+    page = IndexSpecPage.create!(title: 'Page')
+    unloaded = IndexSpecSection.create!(title: 'unloaded', page: page)
+    origin = Time.now.utc
+    loaded = IndexSpecSection.create!(title: 'loaded', page: page)
+    IndexSpecSection.create!(title: 'live only', page: page)
+    index = index_for(origin, { IndexSpecSection => [loaded.id] })
+    index.register(IndexSpecPage, [page.id])
+
+    found = index.child_ids(IndexSpecPage, [page.id], sections, range(origin, Time.now.utc))
+
+    expect([found, unloaded.versions.first.created_at < origin]).to eq([[loaded.id], true])
   end
 
   # Children are found by key across the whole table, so a subclass keeps the
@@ -239,9 +265,8 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
   # PT-AT records a version's foreign keys after its change: the latest one
   # before the range names the children at its start. A section moved away
   # before the index's own start is outside it. One saved after the range's
-  # end, even after the index was built, or only in the live row, is a
-  # candidate whatever the end: a key written without a version is recorded
-  # only after it.
+  # end, or only in the live row, is a candidate whatever the end: a key
+  # written without a version is recorded only after it.
   it "reads a page's sections from the range start onward, and live ones" do
     page, other, bare = %w[Page Other Bare].map { |title| IndexSpecPage.create!(title: title) }
     early = IndexSpecSection.create!(title: 'early', page: page)
@@ -258,12 +283,12 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
     added.update!(title: 'added again')
     finish = TrackedAuthor.create!(name: 'End').versions.last
     late = IndexSpecSection.create!(title: 'late', page: page)
+    fleeting = IndexSpecSection.create!(title: 'fleeting', page: page).tap(&:destroy!)
     # Saved without a version, so only the live row has it.
     IndexSpecSection.where(id: adopted.id).update_all(page_id: page.id)
-    ids = [early, kept, moved, gone, adopted, added, late].map(&:id)
+    ids = [early, kept, moved, gone, adopted, added, late, fleeting].map(&:id)
     index = index_for(origin, { IndexSpecSection => ids })
     index.register(IndexSpecPage, [page.id, other.id, bare.id])
-    fleeting = IndexSpecSection.create!(title: 'fleeting', page: page).tap(&:destroy!)
 
     closed = index.child_ids(IndexSpecPage, [page.id], sections, range(start, finish))
     current = index.child_ids(IndexSpecPage, [page.id, bare.id], sections,

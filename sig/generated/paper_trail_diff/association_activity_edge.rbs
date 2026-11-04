@@ -113,12 +113,6 @@ module PaperTrailDiff
       # mutant:disable
       # : () -> untyped
       def quoted_owner_column: () -> untyped
-
-      # Arel ships no signatures; see VersionQuery. Any spelling of the
-      # constant finds the same module.
-      # mutant:disable
-      # : () -> untyped
-      def arel: () -> untyped
     end
 
     # The owners whose versions PT-AT recorded a HABTM target with, keyed by

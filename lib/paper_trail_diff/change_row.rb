@@ -65,9 +65,9 @@ module PaperTrailDiff
   #
   # Two kinds of entry add nothing a row would show. One that only groups
   # others (an edited record, an association, a relationship) is left out,
-  # because the rows under it name the same record. A blank field of an added
+  # because the rows under it name the same record. A nil field of an added
   # or removed record is left out too, because the record's own row already
-  # says it appeared or disappeared.
+  # says it appeared or disappeared; an empty string or false is a value.
   class ChangeRows
     RECORD_ENTRIES = %i[record_added record_removed record_included].freeze
     private_constant :RECORD_ENTRIES

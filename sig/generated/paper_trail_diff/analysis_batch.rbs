@@ -5,8 +5,10 @@ module PaperTrailDiff
   # versions and preparing their association history once for the whole batch
   # rather than once per root.
   class AnalysisBatch
-    # : (Array[untyped], time_range: TimeRange?, live_loader: untyped, history_preparer: untyped, analyzer: untyped, version_scope: untyped, context_required: bool) -> void
-    def initialize: (Array[untyped], time_range: TimeRange?, live_loader: untyped, history_preparer: untyped, analyzer: untyped, version_scope: untyped, context_required: bool) -> void
+    # `traversal` names the requested paths, which decide where a window's
+    # edges move (see TransactionCut).
+    # : (Array[untyped], time_range: TimeRange?, live_loader: untyped, history_preparer: untyped, analyzer: untyped, version_scope: untyped, context_required: bool, traversal: AssociationTraversal?) -> void
+    def initialize: (Array[untyped], time_range: TimeRange?, live_loader: untyped, history_preparer: untyped, analyzer: untyped, version_scope: untyped, context_required: bool, traversal: AssociationTraversal?) -> void
 
     # : () -> Hash[identity, Analysis]
     def call: () -> Hash[identity, Analysis]
@@ -24,6 +26,8 @@ module PaperTrailDiff
     @records: Array[untyped]
 
     @time_range: TimeRange?
+
+    @traversal: AssociationTraversal?
 
     @version_scope: untyped
 

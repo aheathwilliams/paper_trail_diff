@@ -421,7 +421,7 @@ RSpec.describe PaperTrailDiff::AssociationActivitySelection do
       posts.each { |post| post.update!(title: 'Renamed') }
       window = since(start)
       count = lambda do |slice|
-        stub_const('PaperTrailDiff::AssociationActivitySelection::SLICE', slice)
+        stub_const('PaperTrailDiff::Support::IDS_PER_STATEMENT', slice)
         found = nil
         [statements { found = sources(StringItemNote, [:post], window: window) }, found]
       end

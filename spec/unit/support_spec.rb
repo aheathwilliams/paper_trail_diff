@@ -225,6 +225,12 @@ RSpec.describe PaperTrailDiff::Support do
     end
   end
 
+  describe '.arel' do
+    it 'is Arel' do
+      expect(described_class.arel).to equal(Arel)
+    end
+  end
+
   describe '.chronological_version_key' do
     it 'keys a version by its time, then by its id padded to sort as a number' do
       expect(described_class.chronological_version_key(version.new(noon, 9)))

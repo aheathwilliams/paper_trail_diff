@@ -32,11 +32,15 @@ module PaperTrailDiff
     # correlated NOT EXISTS stays portable where window functions are not.
     #: (untyped) ?{ (untyped) -> untyped } -> untyped
     def self.no_earlier_version(table, &block)
-      other = earlier_versions(table)
-      arel::SelectManager.new.from(other).project('1')
-                         .where(earlier_version(table, other, &block))
-                         .exists
-                         .not
+      exists(table) { |other| earlier_version(table, other, &block) }.not
+    end
+
+    # Whether a version exists that the block's condition accepts. The block
+    # is given the version table under a second name, beside `table`.
+    #: (untyped) { (untyped) -> untyped } -> untyped
+    def self.exists(table)
+      other = other_versions(table)
+      Support.arel::SelectManager.new.from(other).project('1').where(yield(other)).exists
     end
 
     #: (untyped, untyped) ?{ (untyped) -> untyped } -> untyped
@@ -50,21 +54,12 @@ module PaperTrailDiff
 
     # The version table under a second name, for a subquery over it. Any name
     # serves, and SQLite even accepts an empty one other databases refuse, so
-    # no spec can tell the mutations apart (see TransactionCut).
+    # no spec can tell the mutations apart.
     # mutant:disable
     #: (untyped) -> untyped
-    def self.earlier_versions(table)
-      table.alias('paper_trail_diff_earlier_versions')
+    def self.other_versions(table)
+      table.alias('paper_trail_diff_other_versions')
     end
-    private_class_method :earlier_versions
-
-    # Arel ships no signatures, so it is reached as an untyped constant. Any
-    # spelling of the constant finds the same module.
-    # mutant:disable
-    #: () -> untyped
-    def self.arel
-      Object.const_get(:Arel)
-    end
-    private_class_method :arel
+    private_class_method :other_versions
   end
 end
