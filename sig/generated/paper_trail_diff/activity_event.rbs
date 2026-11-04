@@ -70,6 +70,11 @@ module PaperTrailDiff
     # : (ActivityEvent) -> bool
     def isolated?: (ActivityEvent) -> bool
 
+    # Whether two events were saved in one transaction that began inside the
+    # history.
+    # : (ActivityEvent, ActivityEvent) -> bool
+    def shared?: (ActivityEvent, ActivityEvent) -> bool
+
     private
 
     @branches: Hash[Array[untyped]?, Array[String]?]

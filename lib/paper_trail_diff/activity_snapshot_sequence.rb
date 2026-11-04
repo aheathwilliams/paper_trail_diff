@@ -153,7 +153,7 @@ module PaperTrailDiff
         incremental_root?(previous_event)
 
       branches = @transaction_groups.branches_for(previous_event)
-      return full_snapshot(event) unless branches
+      return rebuilt_snapshot(previous_event, event, previous_snapshot) unless branches
 
       @snapshotter.refresh(
         root_endpoint(event.version),
@@ -163,6 +163,18 @@ module PaperTrailDiff
         event: previous_event,
         isolated: @transaction_groups.isolated?(previous_event)
       )
+    end
+
+    # A transaction with a root event is read whole once it ends. Until then,
+    # PT-AT reads the records it saved as they stood before it began, so from
+    # one descendant's event to the next in the same transaction the snapshot
+    # is the same. The root's version can record what the transaction changed,
+    # such as HABTM membership, so a snapshot at a root event is rebuilt.
+    #: (ActivityEvent, ActivityEvent, RecordSnapshot?) -> RecordSnapshot?
+    def rebuilt_snapshot(previous_event, event, previous_snapshot)
+      unchanged = !previous_event.root? && !event.root? &&
+                  @transaction_groups.shared?(previous_event, event)
+      unchanged ? previous_snapshot : full_snapshot(event)
     end
 
     #: (ActivityEvent) -> bool

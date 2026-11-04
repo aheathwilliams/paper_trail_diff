@@ -221,4 +221,29 @@ RSpec.describe 'bounded event reconstruction' do
   it 'reads the current root once however many snapshots start from it' do
     expect(root_reads(4)).to eq(root_reads(1))
   end
+
+  # PT-AT reads what a transaction saved as it stood before the transaction
+  # began, so after a comment's event the next event of the same transaction
+  # reads the same state. The article's snapshot is built for its own event and
+  # the one after it, not again for each comment.
+  it 'builds the snapshot of a transaction once after its first comment' do
+    article = TrackedArticle.transaction do
+      TrackedArticle.create!(title: 'Draft').tap do |created|
+        3.times { |index| created.comments.create!(body: "Comment #{index}") }
+      end
+    end
+    comments = article.comments.order(:id).to_a
+    first = article.versions.reorder(:created_at, :id).first
+    expect_any_instance_of(PaperTrailDiff::PreparedActivitySnapshots)
+      .to receive(:call).twice.and_call_original
+
+    steps = PaperTrailDiff.activity_timeline(article, from: first, to: article,
+                                                      associations: [:comments])
+
+    reported = steps.reject(&:empty?)
+    expect(reported.map { |step| step.source_boundary.item_id })
+      .to eq([article.id, comments.last.id])
+    expect(reported.last.diff.associations.fetch('comments').added.map(&:id))
+      .to match_array(comments.map(&:id))
+  end
 end

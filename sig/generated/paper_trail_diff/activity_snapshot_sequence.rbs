@@ -99,6 +99,14 @@ module PaperTrailDiff
     # : (ActivityEvent, ActivityEvent, RecordSnapshot?) -> RecordSnapshot?
     def transition_snapshot: (ActivityEvent, ActivityEvent, RecordSnapshot?) -> RecordSnapshot?
 
+    # A transaction with a root event is read whole once it ends. Until then,
+    # PT-AT reads the records it saved as they stood before it began, so from
+    # one descendant's event to the next in the same transaction the snapshot
+    # is the same. The root's version can record what the transaction changed,
+    # such as HABTM membership, so a snapshot at a root event is rebuilt.
+    # : (ActivityEvent, ActivityEvent, RecordSnapshot?) -> RecordSnapshot?
+    def rebuilt_snapshot: (ActivityEvent, ActivityEvent, RecordSnapshot?) -> RecordSnapshot?
+
     # : (ActivityEvent) -> bool
     def incremental_root?: (ActivityEvent) -> bool
 

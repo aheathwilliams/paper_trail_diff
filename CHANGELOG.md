@@ -202,8 +202,19 @@ project follows [Semantic Versioning](https://semver.org/).
   0.05 ms per id. On 10,000 roots, the lookup's SQL time fell from 1.4 s to
   0.7 s and a report from 5.1 s to 4.4 s, with the same windows. The lookup
   now names 250 ids a statement rather than 500, since each id appears twice
-  in it: 1,000 ids a statement was slower, and would exceed SQLite's old limit
-  of 1,000 bound parameters.
+  in it: 1,000 ids a statement was slower, and would exceed the 999 bound
+  parameters SQLite allowed before 3.32.
+
+- Activity reads the state of a transaction that saved its root together
+  with descendants once for that transaction's descendant events, not again
+  at each one. PT-AT reads what a transaction saved as it stood before the
+  transaction began, so from one descendant's event to the next in the same
+  transaction the snapshot is the same; it was rebuilt whole each time. A
+  `report` on 100 articles, each created with 100 comments in one transaction
+  and edited with all of them in another, took 20.1 s and now takes 4.6 s,
+  and allocated a quarter as many objects. On 10,000 articles at about 1.5
+  versions each with their comments, it took 14.6 s and now takes 13.9 s.
+  The results are the same.
 
 ### Fixed
 

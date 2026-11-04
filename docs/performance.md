@@ -63,9 +63,12 @@ Flat query counts do not make a report's cost flat:
 - **Work on a wide collection grows with its size times its history.** Each
   step of an activity timeline copies the collection's list of records, so
   an activity timeline over `n` comments that changed `m` times does about
-  `n × m` work: 800 comments edited 1,000 times took about 3 s. `timeline`
-  reads every member at each version of the root instead: 300 comments over
-  2,001 versions of their article took about 7.5 s.
+  `n × m` work: 800 comments edited 1,000 times took about 3 s. Members
+  saved in one transaction share one snapshot: a `report` on 100 articles,
+  each created with 100 comments in one transaction and edited with all of
+  them in another, took about 4.6 s. `timeline` reads every member at each
+  version of the root instead: 300 comments over 2,001 versions of their
+  article took about 7.5 s.
 - **`snapshots: true` and `recorded_changes: true` cost memory and time.** Ask
   for them only when you use them.
 - **Each edge of a window takes one statement per 250 records, and one or two
