@@ -180,20 +180,27 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
   end
 
   # The batch registers each record under the class it found it as, and asks
-  # for its children under the class an association names.
+  # for its children under the class an association names. The first read
+  # takes in every owner registered under the class or its base class, so
+  # the next needs no statement.
   it 'reads every record registered under a class or its subclass, once each' do
     origin = Time.now.utc
-    first, second = %w[First Second].map { |title| IndexSpecLandingPage.create!(title: title) }
-    kept = [first, second].map { |page| IndexSpecSection.create!(title: 'kept', page: page) }
+    pages = %w[First Second Third].map { |title| IndexSpecLandingPage.create!(title: title) }
+    kept = pages.map { |page| IndexSpecSection.create!(title: 'kept', page: page) }
     index = index_for(origin, { IndexSpecSection => kept.map(&:id) })
-    index.register(IndexSpecLandingPage, [first.id])
-    index.register(IndexSpecPage, [second.id])
-    index.register(IndexSpecPage, [second.id])
+    first, second, third = pages
+    index.register(IndexSpecPage, [first.id])
+    index.register(IndexSpecLandingPage, [second.id])
+    index.register(IndexSpecPage, [third.id, third.id])
+    window = range(origin, Time.now.utc)
 
-    found = index.child_ids(IndexSpecLandingPage, [first.id, second.id], sections,
-                            range(origin, Time.now.utc))
+    found = index.child_ids(IndexSpecLandingPage, [third.id], sections, window)
+    queries = statements do
+      found += index.child_ids(IndexSpecLandingPage, [first.id, second.id], sections, window)
+    end
 
     expect(found).to match_array(kept.map(&:id))
+    expect(queries).to eq(0)
   end
 
   # Snapshots read children only under an owner the history prepared, and the
