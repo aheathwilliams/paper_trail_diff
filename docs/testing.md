@@ -153,7 +153,7 @@ mise exec -- bundle exec rake spec_oracle
 ORACLE_SEEDS=1..200 ORACLE_STEPS=40 mise exec -- bundle exec rake spec_oracle
 ```
 
-The 200-seed run is about 3,000 examples and takes about three hours in one
+The 200-seed run is about 4,000 examples and takes three hours or more in one
 process. Its database is in memory, so you can split it by seed range and run
 the parts side by side, each in its own shell: `ORACLE_SEEDS=1..25`, then
 `26..50`, and so on. Eight such parts took about 25 minutes. Check that each
@@ -165,6 +165,14 @@ The default seeds keep the run short; `rake spec` includes it, so
 the database jobs run it too. Mutant does not, because it would slow every
 mutation. A failure prints its seed, the transactions it made, its first five
 mismatches (`ORACLE_SHOW=50` prints more), and the command that reduces it.
+
+A scheduled workflow, `.github/workflows/oracle.yml`, runs 200 more seeds each
+night with `ORACLE_STEPS=40`, in eight jobs of 25. The seeds move on 200 a day
+from seed 201, so each night tries histories no run has; run by hand, the
+workflow takes the first of its 200 seeds as `first_seed`. A job reduces the
+first two examples that fail and keeps its log and `tmp/oracle` as an
+artifact: copy that `tmp/oracle` into a checkout and run the `Replay it:`
+command from the log.
 
 When a bug turns out to depend on a schema, configuration, or kind of edit,
 add it to the generator or as a new context, so the whole class of bug stays

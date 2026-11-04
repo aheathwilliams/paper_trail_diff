@@ -1,0 +1,80 @@
+name: Oracle sweep
+
+# Every CI job runs the oracles on their default seeds. This runs 200 more
+# each night, with longer histories, from a window of seeds that moves every
+# day, so the generators keep reaching histories no run has tried; a sweep like
+# it found the bug behind shapes seed 103. A job reduces the first examples
+# that fail to the few steps that matter (see docs/testing.md) and keeps its
+# log and their replay files as an artifact.
+on:
+  schedule:
+    - cron: '43 9 * * *'
+  workflow_dispatch:
+    inputs:
+      first_seed:
+        description: First of the 200 seeds to run (the day's window if left empty)
+        required: false
+
+concurrency:
+  group: oracle
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  sweep:
+    name: Oracle seeds (${{ matrix.part }}/8)
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        part: [1, 2, 3, 4, 5, 6, 7, 8]
+
+    env:
+      BUNDLE_GEMFILE: gemfiles/paper_trail_17.gemfile
+      ORACLE_STEPS: '40'
+      ORACLE_SHRINK: '1'
+      ORACLE_SHRINK_RUNS: '100'
+      ORACLE_SHRINK_EXAMPLES: '2'
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '4.0'
+          bundler-cache: true
+
+      # 25 seeds a job. The window moves 200 seeds a day from seed 201 and
+      # starts over after 500 days; seeds 1 to 200 are the sweep the testing
+      # guide runs by hand.
+      - name: Choose this job's seeds
+        env:
+          FIRST_SEED: ${{ inputs.first_seed }}
+          PART: ${{ matrix.part }}
+        run: |
+          first=${FIRST_SEED:-$(( 201 + $(date -u +%s) / 86400 % 500 * 200 ))}
+          case $first in
+            '' | *[!0-9]*) echo "first_seed must be a whole number, not '$first'" >&2; exit 1 ;;
+          esac
+          start=$(( 10#$first + (PART - 1) * 25 ))
+          echo "ORACLE_SEEDS=$start..$(( start + 24 ))" >> "$GITHUB_ENV"
+          echo "Seeds $start..$(( start + 24 ))"
+
+      - name: Run the oracles
+        shell: bash
+        run: bundle exec rake spec_oracle 2>&1 | tee oracle.log
+
+      - name: Keep the log and the reduced histories
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: oracle-seeds-${{ env.ORACLE_SEEDS }}
+          path: |
+            oracle.log
+            tmp/oracle/
+          if-no-files-found: ignore

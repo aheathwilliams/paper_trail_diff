@@ -482,6 +482,11 @@ project follows [Semantic Versioning](https://semver.org/).
   results, rather than only the transactions it made. The consistency checks'
   histories reduce the same way.
 
+- `.github/workflows/oracle.yml` runs 200 more oracle seeds each night with
+  `ORACLE_STEPS=40`, in eight jobs, from a window that moves 200 seeds a day,
+  so each night tries histories no run has. A job reduces its first two
+  failing examples and keeps its log and their replay files as an artifact.
+
 - `spec/unit/engine_properties_spec.rb` and
   `spec/unit/nested_comparator_properties_spec.rb` check the comparison
   engine over generated snapshots and JSON values, without a database: an
