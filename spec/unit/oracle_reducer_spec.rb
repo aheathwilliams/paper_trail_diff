@@ -16,10 +16,17 @@ RSpec.describe Oracle::Reducer do
                              labels: failed ? ["operation 7 at step #{seven} then 3"] : [])
   end
 
-  def reduce(scripts, limit: 300)
-    first = run(scripts)
+  # Histories, one a stream, that fail when any of them has an operation 7.
+  def run_any(scripts)
+    failed = scripts.any? { |items| items.fetch(0, []).any? { |step| step.first == 7 } }
+    described_class::Run.new(scripts: scripts, exception: (StandardError.new('mismatch') if failed),
+                             labels: failed ? ['operation 7'] : [])
+  end
+
+  def reduce(scripts, limit: 300, check: method(:run))
+    first = check.call(scripts)
     reduction = described_class::Reduction.new(first, limit: limit, log: StringIO.new) do |edited|
-      run(edited)
+      check.call(edited)
     end
     reduction.call
   end
@@ -37,6 +44,20 @@ RSpec.describe Oracle::Reducer do
 
     expect(reduction.best.scripts).to eq([[[[7, 0], [3, 0]]]])
     expect(reduction.runs).to be < 60
+  end
+
+  # An example that builds a history for each seed reruns them all each time,
+  # so a history the failure does not need goes whole, before any one step.
+  it 'first leaves out the histories a failure does not need, half of them at a time' do
+    histories = Array.new(8) do |stream|
+      [Array.new(20) { |step| [stream == 5 && step == 9 ? 7 : 0] }]
+    end
+    after_six = reduce(histories, limit: 6, check: method(:run_any)).best.scripts
+
+    expect(after_six.map { |items| described_class::Script.steps([items]) })
+      .to eq([0, 0, 0, 0, 0, 20, 0, 0])
+    expect(reduce(histories, check: method(:run_any)).best.scripts)
+      .to eq([[], [], [], [], [], [[[7]]], [], []])
   end
 
   it 'keeps only an edit that fails with the same first mismatch, numbers aside' do

@@ -186,21 +186,24 @@ would, so a seed builds the history it always has, and it keeps each draw,
 grouped by step. When an example fails, the reducer
 (`spec/support/oracle_reducer.rb`) runs it again with runs of steps left out,
 then with each remaining choice set to the first one, such as the first
-operation in a generator's list. It keeps each change that fails with the same
-first mismatch, numbers aside, and stops when no change helps or after
+operation in a generator's list. An example that builds a history for each
+seed, such as the article oracle's windows that meet inside a transaction,
+first loses whole histories, half of them at a time, since every run builds
+them all. The reducer keeps each change that fails with the same first
+mismatch, numbers aside, and stops when no change helps or after
 `ORACLE_SHRINK_RUNS` runs (300 by default). Leaving a step out keeps the
 other steps' choices as they were, though they may then act on different
 records. `ORACLE_SHRINK_EXAMPLES` caps how many failing examples one run
 reduces; the others just print the command.
 
 The example then fails with the reduced history: how many steps were left,
-the versions it wrote, its mismatches, and a command that replays it from a
-file in `tmp/oracle`, followed by the original failure. Tried against a bug
-injected into activity's carry-forward, it brought one example of each
-generator from 20 to 66 steps down to 2 to 5, in 21 to 38 runs, taking from 4
-seconds to 5 minutes; the shapes oracle's checks are the slowest. Write the
-reduced history as a named spec beside the code it covers, so the cause is
-readable without the generator.
+the versions it wrote if it built one history, its mismatches, and a command
+that replays it from a file in `tmp/oracle`, followed by the original
+failure. Tried against a bug injected into activity's carry-forward, it
+brought one example of each generator from 20 to 66 steps down to 2 to 5, in
+21 to 38 runs, taking from 4 seconds to 5 minutes; the shapes oracle's checks
+are the slowest. Write the reduced history as a named spec beside the code it
+covers, so the cause is readable without the generator.
 
 A generator runs each loop of random steps as `@random.steps(count) { ... }`
 rather than `count.times`, so the reducer can tell its steps apart. A new

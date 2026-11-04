@@ -13,7 +13,9 @@ require_relative 'oracle_choices'
 #
 # The reducer runs the example again, with its before and after hooks,
 # building each history from an edited copy of the random choices that built
-# it (Oracle::Choices). It first leaves out runs of steps, longest first, then
+# it (Oracle::Choices). An example that builds a history for each of several
+# seeds first loses every step of as many histories as it can, half of them
+# at a time. Then the reducer leaves out runs of steps, longest first, and
 # sets each remaining choice to 0, the first operation or record. It keeps an
 # edit when the run fails with the same first mismatch, its numbers and times
 # aside, or with the same error, and repeats until no edit is kept or
@@ -186,6 +188,7 @@ module Oracle
       end
 
       def call
+        leave_out_histories
         loop do
           before = @best.scripts
           leave_out_steps
@@ -199,6 +202,24 @@ module Oracle
 
       def spent?
         @runs >= @limit
+      end
+
+      # An example that builds a history for each of several seeds usually
+      # fails in one, and each run builds them all, so whole histories go
+      # first, half of them at a time, then a quarter, and so on, rather than
+      # a few steps at a time.
+      def leave_out_histories
+        count = @best.scripts.length
+        size = count / 2
+        while size.positive? && !spent?
+          (count - size).step(0, -size) do |start|
+            streams = start...(start + size)
+            next if Script.steps(@best.scripts[streams]).zero?
+
+            keep_if_failing(Script.cleared(@best.scripts, streams))
+          end
+          size /= 2
+        end
       end
 
       # Each loop, outermost first, losing runs of steps from its end: a
@@ -297,6 +318,12 @@ module Oracle
         edit(scripts, path[0...-1]) { |items| items.dup.tap { |copy| copy[path.last] = value } }
       end
 
+      # A copy of the scripts in which the streams in the range hold nothing,
+      # so each of their draws is 0 and each of their loops runs no steps.
+      def cleared(scripts, streams)
+        scripts.each_with_index.map { |items, stream| streams.cover?(stream) ? [] : items }
+      end
+
       # A copy of the scripts with the node at the path replaced by the
       # block's value.
       def edit(node, path, &block)
@@ -388,8 +415,7 @@ module Oracle
                                 "ORACLE_REPLAY=#{path}")
         lines = [summary, "Replay it: #{replay}"]
         if final.failed?
-          lines += ['', 'Versions in the database when it ended, by transaction:', *versions,
-                    '', 'Its failure:', final.exception.message]
+          lines += ['', *database, '', 'Its failure:', final.exception.message]
         else
           lines << 'The reduced history passed when run again, so the failure may be intermittent.'
         end
@@ -400,6 +426,16 @@ module Oracle
         from = Script.steps(@first.scripts)
         to = Script.steps(@reduction.best.scripts)
         "ORACLE_SHRINK reduced #{from} generated steps to #{to} in #{@reduction.runs} runs."
+      end
+
+      # The versions the history wrote, when the example built one: after
+      # several, the database need not hold the one that failed.
+      def database
+        count = @reduction.best.scripts.length
+        return ['Versions in the database when it ended, by transaction:', *versions] if count == 1
+
+        ["It built #{count} histories, so the versions in the database are not listed: " \
+         "they need not be the failing one's."]
       end
 
       def versions
