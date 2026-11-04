@@ -338,7 +338,7 @@ module PaperTrailDiff
         timeline_snapshotter: @timeline_snapshotter,
         activity_snapshotter: @activity_snapshotter,
         preparer: @traversal_preparer.method(:call),
-        activity: activity, view: view
+        activity: activity, view: view, traversal: @traversal
       )
     end
 
@@ -378,7 +378,7 @@ module PaperTrailDiff
         ),
         tree: @association_tree,
         snapshotter: @activity_snapshotter,
-        view: view
+        view: view, traversal: @traversal
       )
     end
 

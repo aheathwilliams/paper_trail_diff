@@ -5,11 +5,14 @@ module PaperTrailDiff
   # Builds one root's Analysis inside a batch, from versions the batch already
   # selected and history it already prepared.
   class BatchedRootAnalyzer
-    #: (tree: AssociationTree, timeline_snapshotter: untyped, activity_snapshotter: untyped, preparer: untyped, activity: bool, view: ActivityView) -> void
+    # `traversal` reads `tree`'s reflections for every root of the batch.
+    #: (tree: AssociationTree, timeline_snapshotter: untyped, activity_snapshotter: untyped, preparer: untyped, activity: bool, view: ActivityView, ?traversal: AssociationTraversal) -> void
     def initialize( # rubocop:disable Metrics/ParameterLists
-      tree:, timeline_snapshotter:, activity_snapshotter:, preparer:, activity:, view:
+      tree:, timeline_snapshotter:, activity_snapshotter:, preparer:, activity:, view:,
+      traversal: AssociationTraversal.new(tree)
     )
       @tree = tree
+      @traversal = traversal
       @timeline_snapshotter = timeline_snapshotter
       @activity_snapshotter = activity_snapshotter
       @preparer = preparer
@@ -43,6 +46,7 @@ module PaperTrailDiff
     private
 
     # @rbs @tree: AssociationTree
+    # @rbs @traversal: AssociationTraversal
     # @rbs @timeline_snapshotter: untyped
     # @rbs @activity_snapshotter: untyped
     # @rbs @preparer: untyped
@@ -56,7 +60,8 @@ module PaperTrailDiff
                 within: window, plan: plan
       )
       ActivityTimelineBuilder.new(
-        record, range: range, tree: @tree, snapshotter: @activity_snapshotter, view: @view
+        record, range: range, tree: @tree, snapshotter: @activity_snapshotter, view: @view,
+                traversal: @traversal
       ).analyze
     end
   end

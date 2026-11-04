@@ -10,13 +10,19 @@ module PaperTrailDiff
   # window reports only the events inside it, and closes on a final destroy,
   # or on the live row when nothing recorded follows it.
   class ActivityTimelineBuilder # rubocop:disable Metrics/ClassLength
-    #: (untyped, range: TimelineRange, tree: AssociationTree, snapshotter: untyped, view: ActivityView) -> void
-    def initialize(record, range:, tree:, snapshotter:, view:)
+    # `traversal` reads the tree's reflections; the adapter passes the one it
+    # reads every root with, so they are resolved once for a call rather than
+    # once for each root.
+    #: (untyped, range: TimelineRange, tree: AssociationTree, snapshotter: untyped, view: ActivityView, ?traversal: AssociationTraversal) -> void
+    def initialize( # rubocop:disable Metrics/ParameterLists
+      record, range:, tree:, snapshotter:, view:, traversal: AssociationTraversal.new(tree)
+    )
       @view = view
       @record = record
       @to = range.to
       @range = range
       @tree = tree
+      @traversal = traversal
       @snapshotter = snapshotter
       # The root's own activity reads a version filter's answers from the plan.
       @filter = (view.version_filter unless tree.empty?)
@@ -55,6 +61,7 @@ module PaperTrailDiff
     # @rbs @to: untyped
     # @rbs @range: TimelineRange
     # @rbs @tree: AssociationTree
+    # @rbs @traversal: AssociationTraversal
     # @rbs @snapshotter: untyped
     # @rbs @view: ActivityView
     # @rbs @filter: ActivityScopeFilter?
@@ -255,7 +262,7 @@ module PaperTrailDiff
 
     #: () -> void
     def reject_live_habtm!
-      AssociationTraversal.new(@tree).reject_live_habtm_activity!(@record.class)
+      @traversal.reject_live_habtm_activity!(@record.class)
     end
 
     #: () -> RecordedChangesReader?
@@ -280,7 +287,7 @@ module PaperTrailDiff
       events = ActivityVersionCollector.new(
         @record,
         root_versions: root_versions,
-        tree: @tree,
+        traversal: @traversal,
         prepared: snapshots.activity_index,
         range_start: @range.begin_time || root_versions.first,
         range_end: range_end

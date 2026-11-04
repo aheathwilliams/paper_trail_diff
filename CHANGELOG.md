@@ -227,6 +227,15 @@ project follows [Semantic Versioning](https://semver.org/).
   and now takes 14.8 s, with a fifth fewer allocations. The results are the
   same.
 
+- A batch reads its requested associations' reflections once for the whole
+  call, where each root's activity resolved and checked them again, and it
+  reads a current record's attributes for its history only when a read
+  reaches past that record's last version. Most do not: in a `report` on
+  10,000 articles with their comments, about a quarter of the 25,000 current
+  records were read that way. That report takes about 3% less time and
+  allocates 7% fewer objects; one on 2,000 articles edited ten times each
+  also takes about 3% less time. The results are the same.
+
 ### Fixed
 
 - With `historical_filter:`, `analyze_scope` and `report` test each record over

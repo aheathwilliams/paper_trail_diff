@@ -59,8 +59,11 @@ module PaperTrailDiff
   class PreparedRecordSeries
     attr_reader versions: Array[untyped]
 
-    # : (versions: Array[untyped], live: PreparedRecordState?, ?state_loader: PreparedVersionStateLoader) -> void
-    def initialize: (versions: Array[untyped], live: PreparedRecordState?, ?state_loader: PreparedVersionStateLoader) -> void
+    # The live fallback is a state, or a current record whose state is read
+    # the first time a read reaches past the last version. Most reads stop at
+    # a version, and reading a row's state casts every column it has.
+    # : (versions: Array[untyped], live: PreparedRecordState?, ?live_record: untyped, ?state_loader: PreparedVersionStateLoader) -> void
+    def initialize: (versions: Array[untyped], live: PreparedRecordState?, ?live_record: untyped, ?state_loader: PreparedVersionStateLoader) -> void
 
     # : (untyped) -> untyped
     def record_before: (untyped) -> untyped
@@ -101,6 +104,8 @@ module PaperTrailDiff
 
     @live: PreparedRecordState?
 
+    @live_record: untyped
+
     @state_loader: PreparedVersionStateLoader
 
     @states: Hash[untyped, PreparedRecordState?]
@@ -113,6 +118,9 @@ module PaperTrailDiff
 
     # : (Integer) -> PreparedRecordState?
     def state_after: (Integer) -> PreparedRecordState?
+
+    # : () -> PreparedRecordState?
+    def live: () -> PreparedRecordState?
 
     # A version is eligible when it is at or after the boundary, or shares the
     # boundary's transaction. The first is monotonic over the chronological

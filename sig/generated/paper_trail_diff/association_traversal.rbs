@@ -111,6 +111,10 @@ module PaperTrailDiff
     # : (untyped, untyped) -> void
     def ensure_habtm_history!: (untyped, untyped) -> void
 
+    # Every snapshot of a version asks, so each class's answer is kept; the
+    # tree and the class decide it. Reading it again each time answers the
+    # same, which is why mutant leaves the cache alone.
+    # mutant:disable
     # : (untyped) -> Array[String]
     def habtm_paths: (untyped) -> Array[String]
 
@@ -134,6 +138,8 @@ module PaperTrailDiff
     def incoming_relationship_columns: (untyped) -> Array[String]
 
     private
+
+    @habtm_paths: Hash[untyped, Array[String]]
 
     @reflection_cache: Hash[AssociationTree, Hash[untyped, Array[untyped]]]
 

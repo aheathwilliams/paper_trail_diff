@@ -80,10 +80,13 @@ RSpec.describe PaperTrailDiff::ActivityVersionCollector do
     snapshots = adapter.instance_variable_get(:@activity_snapshotter).prepare(record, root_versions)
     index = snapshots&.activity_index
     yield index if block_given?
-    described_class.new(record, root_versions: root_versions,
-                                tree: PaperTrailDiff::AssociationTree.build(tree),
+    described_class.new(record, root_versions: root_versions, traversal: traversal(tree),
                                 range_start: root_versions.first, range_end: root_versions.last,
                                 prepared: index).call
+  end
+
+  def traversal(paths)
+    PaperTrailDiff::AssociationTraversal.new(PaperTrailDiff::AssociationTree.build(paths))
   end
 
   # Each event's version type and event, its branches, and whether it is a
@@ -287,7 +290,7 @@ RSpec.describe PaperTrailDiff::ActivityVersionCollector do
       end.new(index + 1, Time.utc(2026, 1, 1), 'TrackedArticle', article.id)
     end
     collector = described_class.new(article, root_versions: tied,
-                                             tree: PaperTrailDiff::AssociationTree.build([]),
+                                             traversal: traversal([]),
                                              range_start: tied.first, range_end: tied.last,
                                              prepared: nil)
 

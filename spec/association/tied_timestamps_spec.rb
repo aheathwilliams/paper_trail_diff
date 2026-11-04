@@ -101,7 +101,8 @@ RSpec.describe 'Association history with tied version timestamps' do
     article = TrackedArticle.create!(title: 'Tied')
     tied = [tied_version('versions', 7), tied_version('comments', 3)]
     collector = PaperTrailDiff::ActivityVersionCollector.new(
-      article, root_versions: tied, tree: PaperTrailDiff::AssociationTree.build([]),
+      article, root_versions: tied,
+               traversal: PaperTrailDiff::AssociationTraversal.new(PaperTrailDiff::AssociationTree.build([])),
                range_start: tied.first, range_end: tied.last, prepared: nil
     )
 
