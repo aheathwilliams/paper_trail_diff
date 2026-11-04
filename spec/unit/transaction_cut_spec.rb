@@ -253,7 +253,7 @@ RSpec.describe PaperTrailDiff::TransactionCut do
         sql = []
         connection = model.paper_trail.version_class.connection
         allow(connection).to receive(:select_rows).and_wrap_original do |original, query, *rest|
-          sql << query
+          sql << connection.to_sql(query)
           original.call(query, *rest)
         end
         described_class.windows(model, records, PaperTrailDiff::TimeRange.new(at(0)..at(1)))
@@ -266,6 +266,21 @@ RSpec.describe PaperTrailDiff::TransactionCut do
         sql = lookups(FilterArticle, [article])
 
         expect([sql.scan('MAX(').length, sql.scan('MIN(').length]).to eq([1, 1])
+      end
+
+      # The ids are named twice in each lookup, so 250 to a statement keeps it
+      # under 1,000 bound parameters for SQLite builds before 3.32.
+      it 'reads 250 records to a statement' do
+        queries = []
+        connection = FilterArticle.paper_trail.version_class.connection
+        allow(connection).to receive(:select_rows).and_wrap_original do |original, query, *rest|
+          queries << query
+          original.call(query, *rest)
+        end
+
+        described_class.windows(FilterArticle, (1..500).to_a, PaperTrailDiff::TimeRange.new(at(0)..))
+
+        expect(queries.length).to eq(2)
       end
     end
 

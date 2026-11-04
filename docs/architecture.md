@@ -128,6 +128,7 @@ Keep PT-AT's own index on `version_associations` (`foreign_key_name`,
 - With PT-AT installed, a `within:` or `since:` window reads each root's
   versions nearest each edge, to move an edge that falls inside a
   transaction (see [time windows](reference.md#time-windows)). Each edge
-  takes one to three statements per 500 roots, whatever the length of their
-  histories; a `report` window has no end, so only its start is read. See
+  takes one statement per 250 roots and one or two per 500 transactions they
+  find, whatever the length of their histories; a `report` window has no end,
+  so only its start is read. See
   [performance](performance.md) for the cost on a large table.

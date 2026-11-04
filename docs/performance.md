@@ -68,7 +68,8 @@ Flat query counts do not make a report's cost flat:
   2,001 versions of their article took about 7.5 s.
 - **`snapshots: true` and `recorded_changes: true` cost memory and time.** Ask
   for them only when you use them.
-- **Each edge of a window takes one to three statements per 500 records.** A
+- **Each edge of a window takes one statement per 250 records, and one or two
+  per 500 transactions it finds.** A
   window from `within:` or `since:` looks for transactions that cross either
   edge, and with associations also for those that saved a record before it
   and an associated record after it. A `report` window has no end, so only
@@ -116,8 +117,8 @@ queries. `max_filter_versions:` (10,000 by default) caps the versions it loads.
 Either way, every version of every candidate in the window is decoded: with
 1,000 candidates and no match, a hash and a callable each took about 0.8 s.
 Finding the relation's records among the candidates takes up to two queries
-per 500 of them, and with PT-AT, finding where their windows move one to three
-statements per edge for each 500.
+per 500 of them, and with PT-AT, finding where their windows move takes one
+statement per 250 of them and one or two per 500 transactions, for each edge.
 
 The relation then reads the records that matched in pages of up to 2,000, and
 each page lists every matching id, so the relation keeps its own order,
