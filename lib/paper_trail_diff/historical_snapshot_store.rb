@@ -19,6 +19,7 @@ module PaperTrailDiff
       @prepared_histories = {} #: Hash[Array[untyped], PreparedHistory]
       @batched_roots = {} #: Hash[identity, PreparedHistory]
       @live_roots = {} #: Hash[identity, untyped]
+      @live_states = {} #: Hash[identity, PreparedRecordState]
     end
 
     # A `start_at` is a window's (see PreparedHistoryLoader); a range of
@@ -91,6 +92,17 @@ module PaperTrailDiff
                                                                history: history)
     end
 
+    # The state a snapshot of the root at this endpoint starts from when built
+    # from prepared history: the one a version stored, or the live row's.
+    # Nil where a version's is read another way.
+    #: (untyped) -> PreparedRecordState?
+    def root_state(root_endpoint)
+      return @prepared_snapshotter.state(root_endpoint) if Endpoint.version?(root_endpoint)
+
+      @live_states[Endpoint.identity(root_endpoint)] ||=
+        PreparedRecordState.new(live_root(root_endpoint))
+    end
+
     #: (untyped, habtm_version: untyped, ?history: PreparedHistory?) -> untyped
     def association_reader(context_version, habtm_version:, history: nil)
       fallback = HistoricalAssociationReifier.new(
@@ -120,6 +132,7 @@ module PaperTrailDiff
     # @rbs @prepared_histories: Hash[Array[untyped], PreparedHistory]
     # @rbs @batched_roots: Hash[identity, PreparedHistory]
     # @rbs @live_roots: Hash[identity, untyped]
+    # @rbs @live_states: Hash[identity, PreparedRecordState]
 
     # A batch's history for the version wins over the one a caller passes.
     #: (untyped, PreparedHistory?) -> PreparedHistory?

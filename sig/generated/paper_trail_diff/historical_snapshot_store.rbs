@@ -35,6 +35,12 @@ module PaperTrailDiff
     # : (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer, ?history: PreparedHistory?) -> RecordSnapshot?
     def custom: (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer, ?history: PreparedHistory?) -> RecordSnapshot?
 
+    # The state a snapshot of the root at this endpoint starts from when built
+    # from prepared history: the one a version stored, or the live row's.
+    # Nil where a version's is read another way.
+    # : (untyped) -> PreparedRecordState?
+    def root_state: (untyped) -> PreparedRecordState?
+
     # : (untyped, habtm_version: untyped, ?history: PreparedHistory?) -> untyped
     def association_reader: (untyped, habtm_version: untyped, ?history: PreparedHistory?) -> untyped
 
@@ -45,6 +51,8 @@ module PaperTrailDiff
     @live_graph_collector: LiveGraphCollector
 
     @live_roots: Hash[identity, untyped]
+
+    @live_states: Hash[identity, PreparedRecordState]
 
     @normalizer: SnapshotNormalizer
 

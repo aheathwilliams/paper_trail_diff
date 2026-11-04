@@ -363,7 +363,8 @@ module PaperTrailDiff
         partial_snapshotter: snapshots.method(:custom),
         association_reader: snapshots.method(:association_reader),
         record_transition: snapshots.method(:record_transition),
-        prepared_record_after: snapshots.method(:record_after)
+        prepared_record_after: snapshots.method(:record_after),
+        root_state: snapshots.method(:root_state)
       )
     end
 

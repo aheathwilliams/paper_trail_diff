@@ -246,4 +246,55 @@ RSpec.describe 'bounded event reconstruction' do
     expect(reported.last.diff.associations.fetch('comments').added.map(&:id))
       .to match_array(comments.map(&:id))
   end
+
+  # The snapshot at the article's update reads the comments as they stood
+  # before its transaction, and so does the one at the comment's event after
+  # it, in the same transaction: only the article's own version lies between
+  # them, so its snapshot is carried forward, as after an update alone in its
+  # transaction. The create has none to carry.
+  it "carries the article's snapshot to the next event of its transaction" do
+    article = TrackedArticle.create!(title: 'Draft')
+    comment = article.comments.create!(body: 'First')
+    TrackedArticle.transaction do
+      article.update!(title: 'Edited')
+      comment.update!(body: 'Edited')
+    end
+    first = article.versions.reorder(:created_at, :id).first
+    carried = []
+    allow_any_instance_of(PaperTrailDiff::ActivityRootSnapshotRefresher)
+      .to receive(:call).and_wrap_original do |original, *arguments|
+        original.call(*arguments).tap { |result| carried << result.first }
+      end
+
+    steps = PaperTrailDiff.activity_timeline(article, from: first, to: article.reload,
+                                                      associations: [:comments])
+
+    expect(carried).to eq([false, true])
+    edit, comment_edit = steps.last(2)
+    expect(edit.diff.attributes.fetch('title').to_h).to eq(from: 'Draft', to: 'Edited')
+    expect(comment_edit.diff.associations.fetch('comments').changed
+      .map { |change| change.attributes.fetch('body').to_h })
+      .to eq([{ from: 'First', to: 'Edited' }])
+  end
+
+  # The snapshot at a root version starts from the state that version stored,
+  # and the next one from the state stored at the root's next version, which
+  # is decoded for it anyway. Comparing the two says which branches to read
+  # again, without decoding the version's recorded changes.
+  it "carries an article's edits forward without decoding their recorded changes" do
+    article = TrackedArticle.create!(title: 'Draft')
+    article.comments.create!(body: 'First')
+    3.times { |index| article.update!(title: "Edit #{index}") }
+    first = article.versions.reorder(:created_at, :id).first
+    expect_any_instance_of(PaperTrailDiff::ActivityEventRecordResolver)
+      .not_to receive(:deserialized_changeset)
+    expect_any_instance_of(PaperTrailDiff::PreparedRecordIndex).not_to receive(:transition)
+
+    steps = PaperTrailDiff.activity_timeline(article, from: first, to: article.reload,
+                                                      associations: [:comments])
+
+    titles = steps.filter_map { |step| step.diff.attributes['title']&.to_h }
+    expect(titles).to eq([{ from: 'Draft', to: 'Edit 0' }, { from: 'Edit 0', to: 'Edit 1' },
+                          { from: 'Edit 1', to: 'Edit 2' }])
+  end
 end

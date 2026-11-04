@@ -3,13 +3,34 @@
 module PaperTrailDiff
   # Advances scalar-only root events while retaining already reconstructed associations.
   class ActivityRootSnapshotRefresher
-    # : (tree: AssociationTree, traversal: AssociationTraversal, normalizer: SnapshotNormalizer, record_after: untyped, changeset: untyped, partial_snapshotter: untyped, ?record_transition: untyped) -> void
-    def initialize: (tree: AssociationTree, traversal: AssociationTraversal, normalizer: SnapshotNormalizer, record_after: untyped, changeset: untyped, partial_snapshotter: untyped, ?record_transition: untyped) -> void
+    # `root_state` gives the state a root endpoint's snapshot is built from,
+    # where prepared history builds it.
+    # : (tree: AssociationTree, traversal: AssociationTraversal, normalizer: SnapshotNormalizer, record_after: untyped, changeset: untyped, partial_snapshotter: untyped, ?record_transition: untyped, ?root_state: untyped) -> void
+    def initialize: (tree: AssociationTree, traversal: AssociationTraversal, normalizer: SnapshotNormalizer, record_after: untyped, changeset: untyped, partial_snapshotter: untyped, ?record_transition: untyped, ?root_state: untyped) -> void
 
+    # `previous` is the snapshot at the root's `event`, and the result the one
+    # at the next event, whose root is read at `root_endpoint`.
     # : (untyped, untyped, RecordSnapshot?, ActivityEvent) -> [bool, RecordSnapshot?]
     def call: (untyped, untyped, RecordSnapshot?, ActivityEvent) -> [ bool, RecordSnapshot? ]
 
     private
+
+    # The snapshot at a root version starts from the state stored in that
+    # version, and the next one from the state at its own root endpoint. Where
+    # prepared history built both from those states, the two are compared
+    # directly; nothing else needs to be decoded. Otherwise the version's
+    # recorded change and the record after it are read.
+    # : (RecordSnapshot, untyped, untyped) -> [untyped, Array[String]]?
+    def target: (RecordSnapshot, untyped, untyped) -> [ untyped, Array[String] ]?
+
+    # The state at the next event and the branches whose reads the root's
+    # change between the two states can alter. A change of STI class can
+    # change the associations themselves, so it is rebuilt in full.
+    # : (RecordSnapshot, untyped, PreparedRecordState, PreparedRecordState) -> [PreparedRecordState, Array[String]]?
+    def state_target: (RecordSnapshot, untyped, PreparedRecordState, PreparedRecordState) -> [ PreparedRecordState, Array[String] ]?
+
+    # : (PreparedRecordState, PreparedRecordState) -> Array[String]
+    def changed_between: (PreparedRecordState, PreparedRecordState) -> Array[String]
 
     # The record after a root version and the branches its change reaches, or
     # nil when the version cannot be applied to the previous snapshot alone.
@@ -32,6 +53,8 @@ module PaperTrailDiff
     @record_transition: untyped
 
     @relationship_reflections: Hash[String, Array[untyped]]
+
+    @root_state: untyped
 
     @traversal: AssociationTraversal
 

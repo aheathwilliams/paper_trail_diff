@@ -88,6 +88,13 @@ module PaperTrailDiff
                                                      history: @history)
     end
 
+    # The state this root's snapshot at an endpoint is built from, where
+    # prepared history builds it.
+    #: (untyped) -> PreparedRecordState?
+    def root_state(root_endpoint)
+      @store.root_state(root_endpoint) if @history
+    end
+
     #: (untyped, habtm_version: untyped) -> untyped
     def association_reader(context_version, habtm_version:)
       @store.association_reader(context_version, habtm_version: habtm_version, history: @history)
@@ -168,13 +175,19 @@ module PaperTrailDiff
     # A transaction with a root event is read whole once it ends. Until then,
     # PT-AT reads the records it saved as they stood before it began, so from
     # one descendant's event to the next in the same transaction the snapshot
-    # is the same. The root's version can record what the transaction changed,
-    # such as HABTM membership, so a snapshot at a root event is rebuilt.
+    # is the same, and from the root's event to a descendant's only the root's
+    # own version applies, as when it is alone in its transaction. A create
+    # leaves nothing to advance. The root's version can record what the
+    # transaction changed, such as HABTM membership, so a snapshot at a root
+    # event is rebuilt.
     #: (ActivityEvent, ActivityEvent, RecordSnapshot?) -> RecordSnapshot?
     def rebuilt_snapshot(previous_event, event, previous_snapshot)
-      unchanged = !previous_event.root? && !event.root? &&
-                  @transaction_groups.shared?(previous_event, event)
-      unchanged ? previous_snapshot : full_snapshot(event)
+      return full_snapshot(event) if event.root?
+      return full_snapshot(event) unless @transaction_groups.shared?(previous_event, event)
+      return previous_snapshot unless previous_event.root?
+      return full_snapshot(event) unless previous_snapshot
+
+      advance_root(previous_event, event, previous_snapshot)
     end
 
     #: (ActivityEvent) -> bool

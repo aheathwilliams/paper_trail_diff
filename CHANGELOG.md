@@ -216,6 +216,17 @@ project follows [Semantic Versioning](https://semver.org/).
   versions each with their comments, it took 14.6 s and now takes 13.9 s.
   The results are the same.
 
+- Activity carries the snapshot at a root's version to the next event by
+  comparing the root's state at the two, which the snapshots decode anyway.
+  It decoded the version's recorded changes and the state after it a second
+  time instead, which took longer than rebuilding the snapshot whole. The
+  next descendant's event in the same transaction as a root's update is now
+  carried forward the same way, where it was rebuilt whole. A `report` on
+  2,000 articles with about 1.5 comments each, each article edited ten
+  times and about a fifth of those edits saved with a comment, took 19.9 s
+  and now takes 14.8 s, with a fifth fewer allocations. The results are the
+  same.
+
 ### Fixed
 
 - With `historical_filter:`, `analyze_scope` and `report` test each record over

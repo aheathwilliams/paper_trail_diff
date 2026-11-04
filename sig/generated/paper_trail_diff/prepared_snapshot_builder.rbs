@@ -9,6 +9,11 @@ module PaperTrailDiff
     # : (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer, history: PreparedHistory?) -> [bool, RecordSnapshot?]
     def call: (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer, history: PreparedHistory?) -> [ bool, RecordSnapshot? ]
 
+    # The state `call` builds a version's snapshot from, or nil when the
+    # version stored none or must be reified.
+    # : (untyped) -> PreparedRecordState?
+    def state: (untyped) -> PreparedRecordState?
+
     # The current row of a root, with its associations as `boundary` reads
     # them. Its attributes are the record's own, as the record path
     # normalizes them, so its model need not be plain; its members are read
