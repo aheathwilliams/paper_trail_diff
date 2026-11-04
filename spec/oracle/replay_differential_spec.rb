@@ -115,7 +115,7 @@ module ReplayDifferential
 
     def initialize(models, seed, steps:)
       @models = models
-      @random = Random.new(seed)
+      @random = Oracle.random(seed)
       @steps = steps
       @counter = 0
       @log = []
@@ -125,12 +125,15 @@ module ReplayDifferential
       @authors = Array.new(3) { |index| model('Author').create!(name: "author #{index}") }
       @root_id = model('Article').create!(title: 'root 0', author: @authors.first).id
       @other_id = model('Article').create!(title: 'other 0').id
-      3.times { run(:create_comment) }
-      @steps.times { run(OPERATIONS.sample(random: @random)) }
+      @random.steps(3) { run(:create_comment) }
+      @random.steps(@steps) { run(OPERATIONS.sample(random: @random)) }
       self
     end
 
     def roots = [root, model('Article').find(@other_id)]
+
+    # The operations, for Oracle::Failures.
+    def describe = @log.inspect
 
     private
 
@@ -239,30 +242,37 @@ RSpec.describe 'Activity replay against a full snapshot at every event' do
   end
 
   # Each read, from several starts and over random windows, both ways.
-  def mismatches(history, seed)
+  def check_replays(history, seed, failures)
     random = Random.new(seed)
     versions = PaperTrail::Version.order(:created_at, :id).to_a
-    history.roots.flat_map do |root|
-      reads = root.versions.reorder(:created_at, :id).first(4).flat_map do |from|
-        ReplayDifferential::GROUPS.map do |group|
-          ["#{root.id} from #{from.id} group #{group.inspect}",
-           -> { activity(root, from).call(group) }]
-        end
+    history.roots.each do |root|
+      replay_reads(root, versions, random).each do |label, read|
+        carried = read.call
+        failures.check(label, ReplayDifferential.full(&read), carried)
       end
-      reads += Array.new(3) do
-        first, last = versions.sample(2, random: random).sort_by(&:id)
-        ["#{root.id} within #{first.id}..#{last.id}", window(root, first, last)]
+    end
+  end
+
+  # Activity from the root's first versions, grouped and not, and over three
+  # random windows.
+  def replay_reads(root, versions, random)
+    reads = root.versions.reorder(:created_at, :id).first(4).flat_map do |from|
+      ReplayDifferential::GROUPS.map do |group|
+        ["#{root.id} from #{from.id} group #{group.inspect}",
+         -> { activity(root, from).call(group) }]
       end
-      reads.filter_map { |label, read| label unless read.call == ReplayDifferential.full(&read) }
+    end
+    reads + Array.new(3) do
+      first, last = versions.sample(2, random: random).sort_by(&:id)
+      ["#{root.id} within #{first.id}..#{last.id}", window(root, first, last)]
     end
   end
 
   # Each activity read's net changes against its own steps (see
   # NetChangesCheck), from the same starts and over the same windows.
-  def net_mismatches(history, seed)
-    net_reads(history, Random.new(seed)).filter_map do |label, steps|
-      problem = NetChangesCheck.mismatch(steps)
-      ["#{label} net changes", problem] if problem
+  def check_net_changes(history, seed, failures)
+    net_reads(history, Random.new(seed)).each do |label, steps|
+      NetChangesCheck.check(failures, label, steps)
     end
   end
 
@@ -296,17 +306,17 @@ RSpec.describe 'Activity replay against a full snapshot at every event' do
   # Without associations activity prepares no history, which is a path of its
   # own, so its steps are checked against the root timeline's instead, with
   # every version and with Alice's only.
-  def timeline_mismatches(history, seed)
+  def check_timelines(history, seed, failures)
     random = Random.new(seed)
     versions = PaperTrail::Version.order(:created_at, :id).to_a
-    history.roots.product([nil, Oracle::ALICE]).flat_map do |root, scope|
+    history.roots.product([nil, Oracle::ALICE]).each do |root, scope|
       starts = root.versions.reorder(:created_at, :id).first(4)
       reads = starts.flat_map { |from| from_reads(root, from, scope) }
       reads += Array.new(3).flat_map do
         window_reads(root, *versions.sample(2, random: random).sort_by(&:id), scope)
       end
-      reads.filter_map do |label, expected, actual|
-        "#{label}, #{whose(scope)} versions" if actual != expected
+      reads.each do |label, expected, actual|
+        failures.check("#{label}, #{whose(scope)} versions", expected, actual)
       end
     end
   end
@@ -332,24 +342,28 @@ RSpec.describe 'Activity replay against a full snapshot at every event' do
       root_steps(batched.activity_timeline)]]
   end
 
+  def expect_agreement(configuration, seed)
+    models = ReplayDifferential.models(configuration)
+    history = ReplayDifferential::History.new(models, seed, steps: Oracle.steps(24)).build
+    failures = Oracle::Failures.new(seed, history)
+    yield history, failures
+    expect(failures).to be_empty, -> { failures.message }
+  end
+
   ReplayDifferential::CONFIGURATIONS.each_key do |configuration|
     Oracle.seeds([1, 2]).each do |seed|
       it "matches the root timeline without associations under the #{configuration.downcase} " \
          "configuration for seed #{seed}" do
-        models = ReplayDifferential.models(configuration)
-        history = ReplayDifferential::History.new(models, seed, steps: Oracle.steps(24)).build
-
-        expect(timeline_mismatches(history, seed)).to be_empty,
-                                                      -> { "transactions: #{history.log.inspect}" }
+        expect_agreement(configuration, seed) do |history, failures|
+          check_timelines(history, seed, failures)
+        end
       end
 
       it "agrees under the #{configuration.downcase} configuration for seed #{seed}" do
-        models = ReplayDifferential.models(configuration)
-        history = ReplayDifferential::History.new(models, seed, steps: Oracle.steps(24)).build
-
-        expect(mismatches(history, seed)).to be_empty, -> { "transactions: #{history.log.inspect}" }
-        expect(net_mismatches(history, seed)).to be_empty,
-                                                 -> { "transactions: #{history.log.inspect}" }
+        expect_agreement(configuration, seed) do |history, failures|
+          check_replays(history, seed, failures)
+          check_net_changes(history, seed, failures)
+        end
       end
     end
   end

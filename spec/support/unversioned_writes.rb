@@ -20,7 +20,7 @@ module UnversionedWrites
     attr_reader :article, :writes
 
     def initialize(seed, steps:)
-      @random = Random.new(seed)
+      @random = Oracle.random(seed)
       @steps = steps
       @writes = []
       @counter = 0
@@ -32,7 +32,7 @@ module UnversionedWrites
         @article = created(TrackedArticle.create!(title: 'start'), 'title')
         2.times { created(@article.comments.create!(body: next_value('body')), 'body') }
       end
-      @steps.times { |index| transaction(index) }
+      @random.steps(@steps) { |index| transaction(index) }
       self
     end
 
@@ -62,7 +62,7 @@ module UnversionedWrites
         ActiveRecord::Base.transaction do
           root = TrackedArticle.find(@article.id)
           comments = root.comments.order(:id).to_a
-          (1 + @random.rand(3)).times { operate(root, comments) }
+          @random.steps(1 + @random.rand(3)) { operate(root, comments) }
         end
       end
     end

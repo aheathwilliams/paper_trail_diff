@@ -465,6 +465,15 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Development
 
+- `ORACLE_SHRINK=1` reduces a failing oracle example to the few steps that
+  matter. The generators draw through a random source that keeps each draw
+  by step, and the reducer runs the example again with steps left out and
+  choices set to the first one, while it still fails the same way. The example
+  then reports the reduced history's versions and mismatches, and a file that
+  replays it with `ORACLE_REPLAY`. An oracle failure prints the command. The
+  replay differential oracle reports each read that differs, with both
+  results, rather than only the transactions it made.
+
 - `spec/oracle/unversioned_writes_spec.rb` builds seeded histories of saves
   and `update_columns` writes to an article, its comments and its author,
   several to a transaction, and checks every change row against the writes:

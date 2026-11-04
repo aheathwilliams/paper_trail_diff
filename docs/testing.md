@@ -161,15 +161,47 @@ still ends with "N examples, 0 failures" for the ones it ran. Adding
 
 The default seeds keep the run short; `rake spec` includes it, so
 the database jobs run it too. Mutant does not, because it would slow every
-mutation. A failure prints its seed, the transactions it made, and its first
-five mismatches; `ORACLE_SHOW=50` prints more. To fix one, reproduce it with
-that seed, reduce it to the few edits that matter, and add that as a named
-spec beside the code it covers, so the cause is readable without the
-generator.
+mutation. A failure prints its seed, the transactions it made, its first five
+mismatches (`ORACLE_SHOW=50` prints more), and the command that reduces it.
 
 When a bug turns out to depend on a schema, configuration, or kind of edit,
 add it to the generator or as a new context, so the whole class of bug stays
 covered.
+
+### Reducing a failure
+
+`ORACLE_SHRINK=1` cuts a failing history down to the few steps that matter.
+A failure prints the command, which runs the failing example alone with the
+seed it failed with, and with `ORACLE_STEPS` too if the run that failed set it:
+
+```console
+ORACLE_SEEDS=103 ORACLE_SHRINK=1 mise exec -- bundle exec rspec ./spec/oracle/shapes_history_spec.rb:251
+```
+
+The generators draw their random choices through `Oracle.random(seed)`
+(`spec/support/oracle_choices.rb`). It hands out what `Random.new(seed)`
+would, so a seed builds the history it always has, and it keeps each draw,
+grouped by step. When an example fails, the reducer
+(`spec/support/oracle_reducer.rb`) runs it again with runs of steps left out,
+then with each remaining choice set to the first one, such as the first
+operation in a generator's list. It keeps each change that fails with the same
+first mismatch, numbers aside, and stops when no change helps or after
+`ORACLE_SHRINK_RUNS` runs (300 by default). Leaving a step out keeps the
+other steps' choices as they were, though they may then act on different
+records.
+
+The example then fails with the reduced history: how many steps were left,
+the versions it wrote, its mismatches, and a command that replays it from a
+file in `tmp/oracle`, followed by the original failure. Tried against a bug
+injected into activity's carry-forward, it brought one example of each
+generator from 20 to 66 steps down to 2 to 5, in 21 to 38 runs, taking from 4
+seconds to 5 minutes; the shapes oracle's checks are the slowest. Write the
+reduced history as a named spec beside the code it covers, so the cause is
+readable without the generator.
+
+A generator runs each loop of random steps as `@random.steps(count) { ... }`
+rather than `count.times`, so the reducer can tell its steps apart. A new
+generator should too.
 
 ## Mutation testing
 
