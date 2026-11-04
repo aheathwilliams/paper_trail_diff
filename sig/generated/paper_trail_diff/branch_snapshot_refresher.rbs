@@ -6,6 +6,10 @@ module PaperTrailDiff
     # : (tree: AssociationTree, ignore_policy: IgnorePolicy, traversal: AssociationTraversal, pool: SnapshotPool, normalizer: SnapshotNormalizer, full_snapshotter: untyped, partial_snapshotter: untyped, association_reader: untyped, record_transition: untyped, ?prepared_record_after: untyped) -> void
     def initialize: (tree: AssociationTree, ignore_policy: IgnorePolicy, traversal: AssociationTraversal, pool: SnapshotPool, normalizer: SnapshotNormalizer, full_snapshotter: untyped, partial_snapshotter: untyped, association_reader: untyped, record_transition: untyped, ?prepared_record_after: untyped) -> void
 
+    # Without associations there is no prepared history, so nothing but the
+    # version's own record could say what it left, and that misses a change
+    # saved after it without a version. A full snapshot reads the next
+    # recorded state instead, and with no branches to carry it costs no more.
     # : (untyped, untyped, RecordSnapshot?, event: ActivityEvent) -> RecordSnapshot?
     def advance_root: (untyped, untyped, RecordSnapshot?, event: ActivityEvent) -> RecordSnapshot?
 

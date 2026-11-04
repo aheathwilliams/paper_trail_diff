@@ -1,0 +1,35 @@
+# Generated from lib/paper_trail_diff/stored_json_values.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Reads values in the form JSON history gives them back.
+  #
+  # A `json` or `jsonb` object column stores a record's attributes as they
+  # are, without PaperTrail's attribute serializer, so a `serialize`d value
+  # comes back as JSON writes it: keys as strings, and dates, times and
+  # symbols inside it as strings, which its type does not cast back.
+  # PaperTrail's JSON serializer stores a binary value as `{"value" => bytes}`,
+  # which its type does not cast back either. Compared as they are, the live
+  # row and every version would differ though nothing was edited. So every
+  # side is read in one form: a `serialize`d value as JSON writes it, and a
+  # binary value as its bytes. Both leave a value read from history as it is.
+  module StoredJsonValues
+    SERIALIZED_TYPE: ::String
+
+    BINARY_TYPE: ::String
+
+    BINARY_KEYS: untyped
+
+    # For a model whose history is JSON, which StoredTimePrecision.digits
+    # tells: a `json` or `jsonb` object column, or the JSON serializer.
+    # : (untyped, Hash[untyped, untyped]) -> Hash[untyped, untyped]
+    def self.apply: (untyped, Hash[untyped, untyped]) -> Hash[untyped, untyped]
+
+    # The attributes with the value of each of this type converted. An
+    # adapter's type can be a subclass, as PostgreSQL's `bytea` is of binary.
+    # : (untyped, Hash[untyped, untyped], String) { (untyped) -> untyped } -> Hash[untyped, untyped]
+    def self.convert: (untyped, Hash[untyped, untyped], String) { (untyped) -> untyped } -> Hash[untyped, untyped]
+
+    # : (untyped) -> untyped
+    def self.bytes: (untyped) -> untyped
+  end
+end

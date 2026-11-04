@@ -9,8 +9,8 @@ module PaperTrailDiff
     # : (untyped, Array[untyped], untyped, untyped) -> void
     def initialize: (untyped, Array[untyped], untyped, untyped) -> void
 
-    # One shared query retains the owner and timestamp needed to partition a
-    # batch's candidates back into each root's exact activity range.
+    # Queries shared by a batch's roots keep the owner and timestamp needed to
+    # partition its candidates back into each root's exact activity range.
     # : () -> Array[Array[untyped]]
     def historical_rows: () -> Array[Array[untyped]]
 
@@ -32,8 +32,12 @@ module PaperTrailDiff
     # : (Array[Array[untyped]]) -> Array[Array[untyped]]
     def typed_rows: (Array[Array[untyped]]) -> Array[Array[untyped]]
 
-    # : (untyped, String) -> untyped
-    def historical_relation: (untyped, String) -> untyped
+    # Each statement reads the children of 500 owners.
+    # : () -> Enumerator[Array[untyped], untyped]
+    def owner_slices: () -> Enumerator[Array[untyped], untyped]
+
+    # : (untyped, String, Array[untyped]) -> untyped
+    def historical_relation: (untyped, String, Array[untyped]) -> untyped
 
     # : (untyped, untyped) -> Array[Array[untyped]]
     def pluck_rows: (untyped, untyped) -> Array[Array[untyped]]

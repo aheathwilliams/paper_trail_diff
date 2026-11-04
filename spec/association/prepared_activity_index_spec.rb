@@ -452,6 +452,29 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
     expect(rows.call(TrackedTag, [retagged], :articles)).to contain_exactly(article.id, other.id)
   end
 
+  it 'reads the tags Support::IDS_PER_STATEMENT transactions to a statement' do
+    stub_const('PaperTrailDiff::Support::IDS_PER_STATEMENT', 2)
+    origin = Time.now.utc
+    articles = Array.new(3) { |index| TrackedArticle.create!(title: "Tagged #{index}") }
+    tags = articles.map do |article|
+      TrackedTag.create!(name: article.title).tap { |tag| article.tags << tag }
+    end
+    tagged = articles.map { |article| checkpoint(article) }
+    index = index_for(origin, { TrackedArticle => articles.map(&:id) })
+    index.register(TrackedArticle, articles.map(&:id))
+    transactions = PaperTrail::Version.where(item_type: 'TrackedArticle').distinct
+                                      .pluck(:transaction_id)
+
+    found = nil
+    queries = statements do
+      found = index.habtm_rows(TrackedArticle, tagged, TrackedArticle.reflect_on_association(:tags))
+    end
+
+    expect(found.map(&:foreign_key_id)).to match_array(tags.map(&:id))
+    expect(transactions.length).to be > 2
+    expect(queries).to eq(transactions.each_slice(2).count)
+  end
+
   describe '#join_versions' do
     let!(:origin) { Time.now.utc }
     let(:board) { IndexSpecBoard.create! }

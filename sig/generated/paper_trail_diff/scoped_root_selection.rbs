@@ -27,6 +27,8 @@ module PaperTrailDiff
   class ScopedRootSelection
     PAGE_SIZE: ::Integer
 
+    LISTED_PAGE_SIZE: ::Integer
+
     # A plain class rather than Data.define, which arrived in Ruby 3.2 while this
     # gem supports 3.1.
     class Result
@@ -83,6 +85,22 @@ module PaperTrailDiff
     # : (Array[String]) -> Result
     def plucked_selection: (Array[String]) -> Result
 
+    # Every page repeats the ids the relation is read among, so pages as long
+    # as the list read it fewer times than pages of 250. A page holds at most
+    # 2,000 records: SQL Server compiles a statement with its ids written in,
+    # and one that listed 20,000 and returned them all outlasted the adapter's
+    # default timeout of 5 seconds. More roots than `limit:` raise however
+    # long the list, so a page never needs more than one past it.
+    # : (Array[String]) -> Array[untyped]
+    def listed_records: (Array[String]) -> Array[untyped]
+
+    # The candidates the relation's conditions accept. A grouped relation's
+    # rows are groups, which a condition on one record cannot decide, and its
+    # aggregates read every candidate at once, so it keeps them all: the
+    # filter reads each, and the relation groups those that match.
+    # : (Array[String]) -> Array[String]
+    def relation_members: (Array[String]) -> Array[String]
+
     # Comparing the two columns in SQL needs them to share a type: PostgreSQL
     # rejects an integer key against a string item_id outright. A composite
     # key names no single attribute, so it has no type and never matches.
@@ -132,18 +150,18 @@ module PaperTrailDiff
     # Read bounded pages until the relation ends or too many unique roots appear.
     # Each candidate source is an id list or a subquery; a record matching any
     # of them is selected.
-    # : (Array[untyped]) -> Array[untyped]
-    def selected_records: (Array[untyped]) -> Array[untyped]
+    # : (Array[untyped], ?page_size: Integer) -> Array[untyped]
+    def selected_records: (Array[untyped], ?page_size: Integer) -> Array[untyped]
 
     # Pages are read by offset, so under a total order.
     # : (Array[untyped]) -> untyped
     def candidate_relation: (Array[untyped]) -> untyped
 
-    # : (untyped, Integer) -> Array[untyped]
-    def record_page: (untyped, Integer) -> Array[untyped]
+    # : (untyped, Integer, Integer) -> Array[untyped]
+    def record_page: (untyped, Integer, Integer) -> Array[untyped]
 
-    # : (Integer) -> Integer
-    def page_limit: (Integer) -> Integer
+    # : (Integer, Integer) -> Integer
+    def page_limit: (Integer, Integer) -> Integer
 
     # : (Integer) -> void
     def reject_oversized!: (Integer) -> void
@@ -151,9 +169,6 @@ module PaperTrailDiff
     # Keyed as Endpoint.identity keys the record, which the analyses use.
     # : (String) -> Array[String]
     def identity: (String) -> Array[String]
-
-    # : () -> String
-    def item_type: () -> String
 
     # A relation delegates class methods to its model, so every mutation here,
     # which drops `.model`, answers the same.

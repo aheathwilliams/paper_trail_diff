@@ -3,8 +3,9 @@
 
 module PaperTrailDiff
   # Selects each root's versions for a batched range in a fixed number of
-  # queries. Only the range forms that mean the same thing for every root are
-  # supported: a shared wall-clock window, or each root's own whole history.
+  # queries per 500 roots. Only the range forms that mean the same thing for
+  # every root are supported: a shared wall-clock window, or each root's own
+  # whole history.
   class BatchedRootVersions
     #: (Array[untyped], time_range: TimeRange?, version_scope: untyped, live_endpoints: Hash[Array[String], untyped]?, context_required: bool, whole: bool, windows: Hash[Array[String], TimeRange]) -> void
     def initialize( # rubocop:disable Metrics/ParameterLists
@@ -44,13 +45,16 @@ module PaperTrailDiff
     # @rbs @whole: bool
     # @rbs @windows: Hash[Array[String], TimeRange]
 
+    # Each statement reads the versions of 500 roots.
     #: (untyped, Array[untyped], Hash[Array[String], RootVersionPlan]) -> void
     def select_model(model_class, records, selected)
-      in_range, chosen, trailing = model_versions(model_class, records)
-      records.each do |record|
-        key = Endpoint.identity(record)
-        own = own_window(key, record.id.to_s, in_range, trailing)
-        selected[key] = versions_for(*own, chosen, live_endpoint(key, record))
+      records.each_slice(Support::IDS_PER_STATEMENT) do |slice|
+        in_range, chosen, trailing = model_versions(model_class, slice)
+        slice.each do |record|
+          key = Endpoint.identity(record)
+          own = own_window(key, record.id.to_s, in_range, trailing)
+          selected[key] = versions_for(*own, chosen, live_endpoint(key, record))
+        end
       end
     end
 

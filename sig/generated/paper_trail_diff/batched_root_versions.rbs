@@ -2,8 +2,9 @@
 
 module PaperTrailDiff
   # Selects each root's versions for a batched range in a fixed number of
-  # queries. Only the range forms that mean the same thing for every root are
-  # supported: a shared wall-clock window, or each root's own whole history.
+  # queries per 500 roots. Only the range forms that mean the same thing for
+  # every root are supported: a shared wall-clock window, or each root's own
+  # whole history.
   class BatchedRootVersions
     # : (Array[untyped], time_range: TimeRange?, version_scope: untyped, live_endpoints: Hash[Array[String], untyped]?, context_required: bool, whole: bool, windows: Hash[Array[String], TimeRange]) -> void
     def initialize: (Array[untyped], time_range: TimeRange?, version_scope: untyped, live_endpoints: Hash[Array[String], untyped]?, context_required: bool, whole: bool, windows: Hash[Array[String], TimeRange]) -> void
@@ -28,6 +29,7 @@ module PaperTrailDiff
 
     @windows: Hash[Array[String], TimeRange]
 
+    # Each statement reads the versions of 500 roots.
     # : (untyped, Array[untyped], Hash[Array[String], RootVersionPlan]) -> void
     def select_model: (untyped, Array[untyped], Hash[Array[String], RootVersionPlan]) -> void
 

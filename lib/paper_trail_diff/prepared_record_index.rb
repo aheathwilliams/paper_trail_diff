@@ -47,7 +47,8 @@ module PaperTrailDiff
     def stored_attributes(model_class, attributes)
       attributes = TimeOfDay.apply(model_class, attributes)
       digits = StoredTimePrecision.digits(model_class)
-      Support.immutable_copy(StoredTimePrecision.apply(attributes, digits))
+      stored = digits ? StoredJsonValues.apply(model_class, attributes) : attributes
+      Support.immutable_copy(StoredTimePrecision.apply(stored, digits))
     end
   end
 
@@ -471,12 +472,15 @@ module PaperTrailDiff
     # A PaperTrail version is a pre-change snapshot, so the state at the last
     # selected boundary can only live in the next version after it. One
     # trailing version per identity is retained, rather than every version
-    # recorded between the requested range and the present.
+    # recorded between the requested range and the present. Each record's
+    # versions are read in one statement, which takes 500 records.
     #: (untyped, Array[untyped]) -> Array[untyped]
     def versions_for(model_class, ids)
-      scope = VersionQuery.for_items(model_class, ids).where(created_at: @start_time..)
-      scope = scope.where(window_condition(model_class.paper_trail.version_class)) if @end_time
-      scope.order(:id).to_a
+      ids.each_slice(Support::IDS_PER_STATEMENT).flat_map do |slice|
+        scope = VersionQuery.for_items(model_class, slice).where(created_at: @start_time..)
+        scope = scope.where(window_condition(model_class.paper_trail.version_class)) if @end_time
+        scope.order(:id).to_a
+      end
     end
 
     # In range, or the earliest version after it, resolved in the same query
@@ -504,7 +508,9 @@ module PaperTrailDiff
       primary_key = model_class.primary_key
       return [] if primary_key.is_a?(Array)
 
-      model_class.base_class.unscoped.where(primary_key => ids).to_a
+      ids.each_slice(Support::IDS_PER_STATEMENT).flat_map do |slice|
+        model_class.base_class.unscoped.where(primary_key => slice).to_a
+      end
     end
   end
 

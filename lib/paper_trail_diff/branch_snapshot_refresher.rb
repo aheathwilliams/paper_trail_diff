@@ -40,8 +40,14 @@ module PaperTrailDiff
       )
     end
 
+    # Without associations there is no prepared history, so nothing but the
+    # version's own record could say what it left, and that misses a change
+    # saved after it without a version. A full snapshot reads the next
+    # recorded state instead, and with no branches to carry it costs no more.
     #: (untyped, untyped, RecordSnapshot?, event: ActivityEvent) -> RecordSnapshot?
     def advance_root(root_endpoint, context_endpoint, previous_snapshot, event:)
+      return full_snapshot(root_endpoint, context_endpoint) if @tree.empty?
+
       handled, incremental = @root_refresher.call(
         root_endpoint,
         context_endpoint,

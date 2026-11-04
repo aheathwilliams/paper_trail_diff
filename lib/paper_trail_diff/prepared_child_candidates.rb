@@ -39,9 +39,9 @@ module PaperTrailDiff
       @read = {} #: Hash[Array[untyped], Read]
     end
 
-    # The owners not read yet are read in one statement, with the others the
-    # block names, so that owners asked about later need none. Each owner
-    # class reads its own, as a polymorphic row can store the class's name.
+    # The owners not read yet are read together, with the others the block
+    # names, so that owners asked about later need none. Each owner class
+    # reads its own, as a polymorphic row can store the class's name.
     #: (untyped, Array[untyped], untyped) ?{ () -> Array[untyped] } -> [Hash[String, Array[Array[untyped]]], Hash[String, Array[untyped]]]
     def call(model, ids, reflection)
       read = @read[[model, reflection]] ||= Read.new

@@ -155,6 +155,24 @@ RSpec.describe PaperTrailDiff::ActivityChildCandidateLoader do
       .to eq([[article.id, comment.id]])
   end
 
+  it 'reads the owners Support::IDS_PER_STATEMENT to a statement' do
+    stub_const('PaperTrailDiff::Support::IDS_PER_STATEMENT', 2)
+    articles = Array.new(3) { |index| TrackedArticle.create!(title: "Article #{index}") }
+    comments = articles.map { |article| article.comments.create!(body: 'First') }
+    statements = []
+    count = ->(*, payload) { statements << payload[:sql] unless payload[:name] == 'SCHEMA' }
+
+    rows, pairs = ActiveSupport::Notifications.subscribed(count, 'sql.active_record') do
+      reader = loader(TrackedArticle, articles.map(&:id), :comments, Time.now.utc - 3600)
+      [reader.historical_rows, reader.current_pairs]
+    end
+
+    owned = articles.map(&:id).zip(comments.map(&:id))
+    expect(rows.map { |row| row.first(2) }).to match_array(owned)
+    expect(pairs).to match_array(owned)
+    expect(statements.length).to eq(4)
+  end
+
   it 'reads nothing for a composite foreign key' do
     article = TrackedArticle.create!(title: 'Article')
     TrackedComment.create!(article: article, body: 'Comment')

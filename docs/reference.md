@@ -1444,6 +1444,19 @@ precision was never recorded and cannot be reported. A `json` or `jsonb`
 column also returns times and dates as strings, which PaperTrail leaves as
 they are; the gem casts them back to the attribute's type.
 
+Two kinds of value come back as something their type cannot cast back:
+
+- A `json` or `jsonb` `object` column stores a `serialize`d attribute as
+  JSON writes it, so keys come back as strings, and dates, times, and symbols
+  inside it as strings. The gem reads that attribute in this form on every
+  side, the current record's too, so a value nothing changed is not reported
+  as changed: `{ due: Date.new(2026, 11, 3) }` appears as
+  `{ "due" => "2026-11-03" }`.
+- PaperTrail's JSON serializer stores a `binary` column as
+  `{ "value" => bytes }`, and cannot store bytes that are not UTF-8. The gem
+  reads the bytes. On PostgreSQL, PaperTrail cannot read such a `bytea` value
+  back at all: its `reify` raises `TypeError`, and so does the gem.
+
 ### Writing history in tests
 
 To give versions fixed times in a test, save them at those times with

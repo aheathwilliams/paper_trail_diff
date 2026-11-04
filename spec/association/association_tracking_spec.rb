@@ -1487,16 +1487,6 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     expect(relationship.member_of_owner?(subject, polymorphic, previous)).to be(true)
     subject.subject_type = 'OtherType'
     expect(relationship.member_of_owner?(subject, polymorphic, previous)).to be(false)
-
-    resolver = PaperTrailDiff::ActivityEventRecordResolver.new
-    irrelevant = instance_double(PaperTrail::Version, event: 'touch')
-    expect(resolver.changed_record_after(irrelevant)).to be_nil
-    missing_record = instance_double(PaperTrail::Version, reify: nil)
-    expect(resolver.updated_record_after(missing_record)).to be_nil
-
-    create_version = comment.versions.find_by!(event: 'create')
-    allow(resolver).to receive(:deserialized_changeset).and_return(nil)
-    expect(resolver.created_record_after(create_version)).to be_nil
   end
 
   it 'jumps directly to the nested collection owner by foreign key' do

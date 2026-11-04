@@ -18,6 +18,12 @@ ActiveRecord::Schema.define do
     table.datetime :published_at, precision: 6
     table.timestamps null: false, precision: 6
   end
+
+  create_table :json_history_files, force: true do |table|
+    table.string :title, null: false
+    table.text :meta
+    table.binary :blob
+  end
 end
 
 class JsonColumnVersion < ActiveRecord::Base
@@ -31,6 +37,19 @@ end
 
 class JsonColumnHistoryArticle < ActiveRecord::Base
   self.table_name = 'json_history_articles'
+  has_paper_trail versions: { class_name: 'JsonColumnVersion' }
+end
+
+# A serialized value and a binary one, which JSON history gives back as other
+# types.
+class JsonHistoryFile < ActiveRecord::Base
+  serialize :meta, coder: YAML, type: Hash
+  has_paper_trail
+end
+
+class JsonColumnHistoryFile < ActiveRecord::Base
+  self.table_name = 'json_history_files'
+  serialize :meta, coder: YAML, type: Hash
   has_paper_trail versions: { class_name: 'JsonColumnVersion' }
 end
 
@@ -110,6 +129,86 @@ RSpec.describe 'History stored as JSON' do
     let(:model) { JsonColumnHistoryArticle }
 
     it_behaves_like 'a lossy time history'
+  end
+
+  describe 'values JSON gives back as other types' do
+    let(:meta) { { 'due' => Date.new(2026, 11, 3), 'state' => :draft } }
+
+    # PaperTrail must write the history and read it back itself: on
+    # PostgreSQL its reify raises TypeError on the stored binary value, and
+    # SQL Server's adapter has no json column, so PaperTrail writes YAML.
+    before do
+      JsonHistoryFile.delete_all
+      skip "#{model.paper_trail.version_class} keeps no JSON here" unless json_history?
+      skip_unless_readable
+    end
+
+    def skip_unless_readable
+      model.transaction do
+        model.create!(title: 'Probe', meta: meta, blob: 'bytes').update!(title: 'Read')
+        model.last.versions.last.reify
+        raise ActiveRecord::Rollback
+      end
+    rescue StandardError => e
+      skip "PaperTrail cannot record and read JSON history here: #{e.class}: #{e.message}"
+    end
+
+    def json_history?
+      model.paper_trail.version_class.object_col_is_json? ||
+        PaperTrail.serializer.equal?(PaperTrail::Serializers::JSON)
+    end
+
+    # Each version, and the current row, as the gem reads them.
+    def states(file)
+      steps = PaperTrailDiff.timeline(file, from: :first, to: file)
+      [changed_names(PaperTrailDiff.compare(file.versions.last, file)),
+       steps.map { |step| changed_names(step.diff) },
+       PaperTrailDiff.analyze(file, from: file.versions.last, to: file, activity: true,
+                                    snapshots: true)]
+    end
+
+    def edited(model)
+      file = model.create!(title: 'Draft', meta: meta, blob: 'bytes')
+      file.update!(title: 'Review')
+      file.update!(title: 'Published')
+      file.reload
+    end
+
+    context 'with a json object column' do
+      let(:model) { JsonColumnHistoryFile }
+
+      it 'reads a serialized value as JSON writes it, on every side' do
+        compared, steps, analysis = states(edited(model))
+
+        expect(compared).to eq(['title'])
+        expect(steps).to eq([[], ['title'], ['title']])
+        snapshots = [analysis.from_snapshot, analysis.to_snapshot]
+        expect(snapshots.map { |state| state.attributes['meta'] })
+          .to eq([{ 'due' => '2026-11-03', 'state' => 'draft' }] * 2)
+      end
+    end
+
+    context 'with the JSON serializer on a text column' do
+      let(:model) { JsonHistoryFile }
+
+      around do |example|
+        original = PaperTrail.serializer
+        PaperTrail.serializer = PaperTrail::Serializers::JSON
+        example.run
+      ensure
+        PaperTrail.serializer = original
+      end
+
+      it 'reads a binary value as its bytes' do
+        compared, steps, analysis = states(edited(model))
+
+        expect(compared).to eq(['title'])
+        expect(steps).to eq([[], ['title'], ['title']])
+        snapshots = [analysis.from_snapshot, analysis.to_snapshot]
+        expect(snapshots.map { |state| state.attributes['blob'] }).to eq(['bytes'.b] * 2)
+        expect(analysis.from_snapshot.attributes['meta']).to eq(meta)
+      end
+    end
   end
 
   it 'keeps full time precision for YAML history' do

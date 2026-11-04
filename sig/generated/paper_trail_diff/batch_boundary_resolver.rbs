@@ -1,9 +1,9 @@
 # Generated from lib/paper_trail_diff/batch_boundary_resolver.rb with RBS::Inline
 
 module PaperTrailDiff
-  # Resolves `:first` endpoints for a whole batch in a fixed number of queries per
-  # model class. Left to the caller this is a per-root lookup, which reintroduces
-  # exactly the queries a batched comparison exists to remove.
+  # Resolves `:first` endpoints for a whole batch in one query per 500 roots
+  # of a model class. Left to the caller this is a per-root lookup, which
+  # reintroduces exactly the queries a batched comparison exists to remove.
   class BatchBoundaryResolver
     BOUNDARIES: untyped
 
@@ -35,7 +35,7 @@ module PaperTrailDiff
     def anchor_identity: (untyped) -> Array[String]?
 
     # Each named record's earliest version, by the record's identity, in one
-    # statement for each model class.
+    # statement for each 500 records of a model class.
     # : () -> Hash[Array[String], untyped]
     def first_versions: () -> Hash[Array[String], untyped]
 
@@ -49,8 +49,8 @@ module PaperTrailDiff
     # : (untyped) -> [untyped, untyped]?
     def anchor: (untyped) -> [ untyped, untyped ]?
 
-    # Each root's earliest version by time, in one query whatever the size of
-    # the batch. The lowest id is not the earliest version when ids are not
+    # Each root's earliest version by time, in one query for every 500 roots.
+    # The lowest id is not the earliest version when ids are not
     # sequential, as with UUIDs, so time decides and the usual ordering breaks
     # a tie -- refusing one that ids cannot order.
     # : (untyped, Array[untyped]) -> Hash[Array[String], untyped]

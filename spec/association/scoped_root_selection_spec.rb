@@ -220,6 +220,55 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
       expect(sql.grep(/SELECT "string_item_posts"."id" FROM "string_item_posts" WHERE/).length)
         .to eq(2)
     end
+
+    # Each page lists every candidate, so the pages are as long as the list:
+    # at least PAGE_SIZE, and at most LISTED_PAGE_SIZE and one past the limit.
+    describe 'reading the candidates' do
+      before { stub_const('PaperTrailDiff::ScopedRootSelection::PAGE_SIZE', 2) }
+
+      def pages
+        pages = []
+        allow_any_instance_of(described_class).to receive(:record_page)
+          .and_wrap_original do |original, *args|
+            original.call(*args).tap { |page| pages << [page.offset_value, page.limit_value] }
+          end
+        pages
+      end
+
+      it 'reads them in pages as long as their list' do
+        posts = Array.new(5) { |index| StringItemPost.create!(title: "Post #{index}") }
+        read = pages
+
+        expect(select(StringItemPost).records).to eq(posts)
+        expect(read).to eq([[0, 5], [5, 5]])
+      end
+
+      it 'reads a short list in pages of PAGE_SIZE' do
+        post = StringItemPost.create!(title: 'Post')
+        read = pages
+
+        expect(select(StringItemPost).records).to eq([post])
+        expect(read).to eq([[0, 2]])
+      end
+
+      it 'reads at most LISTED_PAGE_SIZE records a page' do
+        stub_const('PaperTrailDiff::ScopedRootSelection::LISTED_PAGE_SIZE', 3)
+        posts = Array.new(5) { |index| StringItemPost.create!(title: "Post #{index}") }
+        read = pages
+
+        expect(select(StringItemPost).records).to eq(posts)
+        expect(read).to eq([[0, 3], [3, 3]])
+      end
+
+      it 'reads one past the limit before raising' do
+        5.times { |index| StringItemPost.create!(title: "Post #{index}") }
+        read = pages
+
+        expect { select(StringItemPost, limit: 3) }
+          .to raise_error(PaperTrailDiff::BatchLimitExceededError, /more than 3 roots/)
+        expect(read).to eq([[0, 4]])
+      end
+    end
   end
 
   # A plain document's versions share the base class's item_type, and its
@@ -330,6 +379,21 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
                                     historical_filter: { 'title' => 'Published' }).records)
         .to eq([kept])
       expect([empty.records, empty.unreachable]).to eq([[], []])
+    end
+
+    # Each author's latest article among those that were drafts: the
+    # relation groups the records that match, not the candidates.
+    it 'groups the records that match under a grouped relation' do
+      start = Time.now.utc
+      ann, bea = %w[Ann Bea].map { |name| TrackedAuthor.create!(name: name) }
+      ann_draft, = [['Draft', ann], ['Other', ann], ['Draft', bea], ['Draft', bea]]
+                   .map { |title, author| TrackedArticle.create!(title: title, author: author) }
+      latest = TrackedArticle.select('MAX(tracked_articles.id) AS id').group(:author_id)
+                             .order(:author_id)
+
+      result = select(latest, time_range: since(start), historical_filter: { 'title' => 'Draft' })
+
+      expect(result.records.map(&:id)).to eq([ann_draft.id, TrackedArticle.maximum(:id)])
     end
 
     it 'reads states from the window only' do

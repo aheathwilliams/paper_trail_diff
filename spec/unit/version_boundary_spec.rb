@@ -162,6 +162,31 @@ RSpec.describe PaperTrailDiff::VersionBoundary do
 
       expect(described_class.transaction_start([root], noon)).to eq(noon)
     end
+
+    # The earliest start is in the second of four slices, and the last slice
+    # reads nothing.
+    it 'reads the transactions in slices, taking the earliest start of any' do
+      stub_const('PaperTrailDiff::Support::IDS_PER_STATEMENT', 2)
+      first_root, = versions(2, transactions: [7])
+      second_root, = versions(3, transactions: [8])
+      gone, = versions(4, transactions: [6])
+      child, = versions(0, transactions: [9])
+      third_root, = versions(5, transactions: [9])
+      fourth_root, = versions(6, transactions: [10])
+      gone_alone, = versions(7, transactions: [5])
+      gone_too, = versions(8, transactions: [4])
+      [gone, gone_alone, gone_too].each(&:delete)
+      roots = [first_root, second_root, gone, third_root, fourth_root, gone_alone, gone_too]
+      statements = []
+      count = ->(*, payload) { statements << payload[:sql] if payload[:sql].include?('MIN(') }
+
+      start = ActiveSupport::Notifications.subscribed(count, 'sql.active_record') do
+        described_class.transaction_start(roots, noon + 120)
+      end
+
+      expect(start).to eq(child.created_at)
+      expect(statements.length).to eq(4)
+    end
   end
 
   describe '.transaction_id' do

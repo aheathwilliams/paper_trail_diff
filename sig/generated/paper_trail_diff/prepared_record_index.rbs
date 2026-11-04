@@ -240,7 +240,8 @@ module PaperTrailDiff
     # A PaperTrail version is a pre-change snapshot, so the state at the last
     # selected boundary can only live in the next version after it. One
     # trailing version per identity is retained, rather than every version
-    # recorded between the requested range and the present.
+    # recorded between the requested range and the present. Each record's
+    # versions are read in one statement, which takes 500 records.
     # : (untyped, Array[untyped]) -> Array[untyped]
     def versions_for: (untyped, Array[untyped]) -> Array[untyped]
 

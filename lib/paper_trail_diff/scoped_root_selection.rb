@@ -27,7 +27,8 @@ module PaperTrailDiff
   # not the same set as what was published while the window was open.
   class ScopedRootSelection
     PAGE_SIZE = 250
-    private_constant :PAGE_SIZE
+    LISTED_PAGE_SIZE = 2_000
+    private_constant :PAGE_SIZE, :LISTED_PAGE_SIZE
 
     # A plain class rather than Data.define, which arrived in Ruby 3.2 while this
     # gem supports 3.1.
@@ -120,11 +121,32 @@ module PaperTrailDiff
       live = ids_in(base_class.unscoped, candidates)
       missing = candidates - live
       if (filter = @historical_filter)
-        live = filter.call(ids_in(@scope.except(:order, :limit, :offset), live).uniq)
+        live = filter.call(relation_members(live))
         missing = filter.call(missing, counted: false)
       end
-      Result.new(records: selected_records([live]),
+      Result.new(records: listed_records(live),
                  unreachable: missing.sort.map { |id| identity(id) }.freeze)
+    end
+
+    # Every page repeats the ids the relation is read among, so pages as long
+    # as the list read it fewer times than pages of 250. A page holds at most
+    # 2,000 records: SQL Server compiles a statement with its ids written in,
+    # and one that listed 20,000 and returned them all outlasted the adapter's
+    # default timeout of 5 seconds. More roots than `limit:` raise however
+    # long the list, so a page never needs more than one past it.
+    #: (Array[String]) -> Array[untyped]
+    def listed_records(ids)
+      page_size = [ids.length, @limit + 1].min
+      selected_records([ids], page_size: page_size.clamp(PAGE_SIZE, LISTED_PAGE_SIZE))
+    end
+
+    # The candidates the relation's conditions accept. A grouped relation's
+    # rows are groups, which a condition on one record cannot decide, and its
+    # aggregates read every candidate at once, so it keeps them all: the
+    # filter reads each, and the relation groups those that match.
+    #: (Array[String]) -> Array[String]
+    def relation_members(ids)
+      @scope.group_values.empty? ? ids_in(@scope.except(:order, :limit, :offset), ids).uniq : ids
     end
 
     # Comparing the two columns in SQL needs them to share a type: PostgreSQL
@@ -211,16 +233,16 @@ module PaperTrailDiff
     # Read bounded pages until the relation ends or too many unique roots appear.
     # Each candidate source is an id list or a subquery; a record matching any
     # of them is selected.
-    #: (Array[untyped]) -> Array[untyped]
-    def selected_records(candidates)
+    #: (Array[untyped], ?page_size: Integer) -> Array[untyped]
+    def selected_records(candidates, page_size: PAGE_SIZE)
       relation = candidate_relation(candidates)
       records = {} #: Hash[untyped, untyped]
       consumed = 0
       loop do
-        page = record_page(relation, consumed)
+        page = record_page(relation, consumed, page_size)
         page.each { |record| records[record.id] ||= record }
         reject_oversized!(records.length)
-        break if page.length < PAGE_SIZE
+        break if page.length < page_size
 
         consumed += page.length
       end
@@ -236,18 +258,18 @@ module PaperTrailDiff
       end.reduce(:or)
     end
 
-    #: (untyped, Integer) -> Array[untyped]
-    def record_page(relation, consumed)
-      count = page_limit(consumed)
+    #: (untyped, Integer, Integer) -> Array[untyped]
+    def record_page(relation, consumed, page_size)
+      count = page_limit(consumed, page_size)
       return [] if count.zero?
 
       relation.offset(Support.offset(@scope) + consumed).limit(count)
     end
 
-    #: (Integer) -> Integer
-    def page_limit(consumed)
+    #: (Integer, Integer) -> Integer
+    def page_limit(consumed, page_size)
       remaining = Support.limit(@scope)
-      [remaining ? remaining - consumed : PAGE_SIZE, PAGE_SIZE].min
+      [remaining ? remaining - consumed : page_size, page_size].min
     end
 
     #: (Integer) -> void
@@ -263,11 +285,6 @@ module PaperTrailDiff
     #: (String) -> Array[String]
     def identity(id)
       Support.record_identity(model, id).freeze
-    end
-
-    #: () -> String
-    def item_type
-      base_class.name
     end
 
     # A relation delegates class methods to its model, so every mutation here,

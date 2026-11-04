@@ -13,9 +13,12 @@ module PaperTrailDiff
 
     @tree: AssociationTree
 
+    # Each statement reads 500 records.
     # : (untyped, Array[untyped]) -> Array[untyped]
     def load_group: (untyped, Array[untyped]) -> Array[untyped]
 
+    # Active Record preloads an association of all the records it is given in
+    # one statement, so they are given 500 at a time.
     # : (Array[untyped], AssociationTree) -> void
     def preload_tree: (Array[untyped], AssociationTree) -> void
 

@@ -35,13 +35,13 @@ module PaperTrailDiff
     # version, can be recorded before the start, so the start moves back to
     # the earliest version of each root's first transaction in the range.
     # History loaded from the start alone would read that child after its
-    # change.
+    # change. The transactions go 500 to a statement.
     #: (Array[untyped], untyped) -> untyped
     def self.transaction_start(root_versions, start_at)
-      opening = opening_transactions(root_versions, start_at)
-      return start_at if opening.empty?
-
-      earliest = root_versions.first.class.where(transaction_id: opening).minimum(:created_at)
+      earliest = opening_transactions(root_versions, start_at)
+                 .each_slice(Support::IDS_PER_STATEMENT).filter_map do |slice|
+        root_versions.first.class.where(transaction_id: slice).minimum(:created_at)
+      end.min
       earliest && earliest < start_at ? earliest : start_at
     end
 

@@ -25,20 +25,26 @@ module PaperTrailDiff
 
     # @rbs @tree: AssociationTree
 
+    # Each statement reads 500 records.
     #: (untyped, Array[untyped]) -> Array[untyped]
     def load_group(model_class, records)
-      relation = model_class.unscoped.where(model_class.primary_key => records.map(&:id).uniq)
-      loaded = relation.to_a
+      loaded = records.map(&:id).uniq.each_slice(Support::IDS_PER_STATEMENT).flat_map do |ids|
+        model_class.unscoped.where(model_class.primary_key => ids).to_a
+      end
       preload_tree(loaded, @tree)
       loaded
     end
 
+    # Active Record preloads an association of all the records it is given in
+    # one statement, so they are given 500 at a time.
     #: (Array[untyped], AssociationTree) -> void
     def preload_tree(records, tree)
       return if records.empty? || tree.empty?
 
-      records.group_by(&:class).each do |model_class, grouped_records|
-        preload_model_tree(model_class, grouped_records, tree)
+      records.each_slice(Support::IDS_PER_STATEMENT) do |slice|
+        slice.group_by(&:class).each do |model_class, grouped_records|
+          preload_model_tree(model_class, grouped_records, tree)
+        end
       end
     end
 

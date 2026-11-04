@@ -6,26 +6,15 @@ module PaperTrailDiff
     # : (?record_transition: untyped, ?prepared_record_after: untyped) -> void
     def initialize: (?record_transition: untyped, ?prepared_record_after: untyped) -> void
 
+    # The record as the version left it: the state recorded next, which holds
+    # any change saved after the version without one of its own. Prepared
+    # history answers without a query; without it, the next version or the
+    # live row does.
     # : (untyped, ?direct: bool) -> untyped
     def record_after: (untyped, ?direct: bool) -> untyped
 
-    # : (untyped) -> [bool, untyped]
-    def direct_after: (untyped) -> [ bool, untyped ]
-
-    # : (untyped) -> untyped
-    def fallback_record_after: (untyped) -> untyped
-
     # : (untyped) -> ActivitySnapshotDelta?
     def snapshot_delta: (untyped) -> ActivitySnapshotDelta?
-
-    # : (untyped) -> untyped
-    def changed_record_after: (untyped) -> untyped
-
-    # : (untyped) -> untyped
-    def created_record_after: (untyped) -> untyped
-
-    # : (untyped) -> untyped
-    def updated_record_after: (untyped) -> untyped
 
     # Mirrors PaperTrail's changeset deserialization without resolving
     # +version.item+, which would issue one live-record query per event.
@@ -34,30 +23,15 @@ module PaperTrailDiff
 
     private
 
-    @direct_loader: DirectRecordStateLoader
-
     @prepared_record_after: untyped
 
     @record_transition: untyped
 
-    # : (untyped) -> PreparedRecordState?
-    def direct_record_after: (untyped) -> PreparedRecordState?
-
-    # Without `item_subtype` a version names only the STI base class, and a
-    # change can move the row to another class, so the type the row holds
-    # after the change decides. A type that names no class has no direct
-    # state; the caller falls back to reifying the record.
-    # : (untyped, Hash[untyped, untyped]) -> untyped
-    def class_after: (untyped, Hash[untyped, untyped]) -> untyped
+    # : (untyped) -> untyped
+    def recorded_after: (untyped) -> untyped
 
     # : (untyped) -> untyped
     def prepared_changeset: (untyped) -> untyped
-
-    # : (untyped, untyped) -> Hash[untyped, untyped]
-    def after_attributes: (untyped, untyped) -> Hash[untyped, untyped]
-
-    # : (untyped, untyped) -> untyped
-    def apply_changes: (untyped, untyped) -> untyped
 
     # : (untyped, untyped, untyped) -> untyped
     def standard_changeset: (untyped, untyped, untyped) -> untyped

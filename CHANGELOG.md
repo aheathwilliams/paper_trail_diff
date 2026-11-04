@@ -58,6 +58,21 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- `analyze_many`, `analyze_scope`, `report`, and `compare_many` list at most
+  500 ids in a statement, as the rest of the gem does. Reading the batch's
+  versions, the transactions its first versions belong to, its associations'
+  candidates and rows, its deleted records' destroys, and its current rows
+  and their associations each listed every record of the batch at once. On
+  SQL Server, which writes such a list into the statement and compiles it
+  afresh, a `report` of 10,000 articles and their comments took 17.1 s and
+  now takes 11.4 s, and one of 20,000 took 38.9 s and now takes 23.0 s; a
+  statement listing 20,000 transactions alone failed with error 8623. With
+  `historical_filter:`, or a version table whose `item_id` does not share the
+  key's type, the records are read among a list of ids, which each page of
+  250 repeated: they are now read in pages as long as the list, up to 2,000.
+  On SQL Server, such a report of 10,000 articles took 47.4 s and now takes
+  14.4 s, and one of 20,000 took 280.5 s and now takes 51.1 s.
+
 - History on a `has_and_belongs_to_many` groups the members PT-AT recorded
   by transaction once. Each of the root's transactions looked through every
   member recorded for all of them, so the cost grew with the square of the
@@ -125,6 +140,30 @@ project follows [Semantic Versioning](https://semver.org/).
   read its row ten times rather than four.
 
 ### Fixed
+
+- With `historical_filter:`, `analyze_scope` and `report` accept a relation
+  grouped by anything but the ID, such as each author's latest article
+  (`select("MAX(id) AS id").group(:author_id)`), and select the records it
+  groups among those that match. Before filtering, they asked the relation
+  for the IDs among each 250 candidates, which reads a group's column
+  instead of its aggregate: PostgreSQL, MySQL, and SQL Server rejected the
+  query, and SQLite returned any record of each group.
+
+- History stored as JSON no longer reports two kinds of value as changed in
+  every comparison with the current record, though nothing changed them. A
+  `json` or `jsonb` `object` column stores a `serialize`d attribute as JSON
+  writes it, so a `Date` or `Symbol` inside it came back as a String: that
+  attribute is now read as JSON writes it on every side, the current
+  record's included. PaperTrail's JSON serializer stores a `binary` column
+  as `{ "value" => bytes }`, which is now read as the bytes.
+
+- Without associations, activity (`activity_timeline`, `activity: true`, and
+  `report`) reports a change saved without a version, such as one by
+  `update_columns` or with versioning off, in the step for the record's
+  previous recorded change, as `timeline` and activity on associations do.
+  It was reported in the step for the record's next version, and so credited
+  to that version's author: a title written by `update_columns` after
+  Alice's edit was reported as part of Mallory's next edit.
 
 - `analyze_scope` and `report` read every record a relation selects when its
   order has ties, such as `Article.order(:status)`, and more than 250 records

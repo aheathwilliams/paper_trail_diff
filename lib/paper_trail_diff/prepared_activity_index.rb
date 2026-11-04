@@ -220,12 +220,14 @@ module PaperTrailDiff
       !later || later.created_at >= range.start_time || range.opening?(later)
     end
 
+    # Each statement reads the rows of 500 transactions.
     #: (untyped, untyped) -> Hash[String, Array[untyped]]
     def load_habtm_rows(model, reflection)
-      model.paper_trail.version_association_class.where(
-        version_id: transaction_ids(versions(model, node_ids(model))),
-        foreign_key_name: reflection.name
-      ).group_by { |row| row.version_id.to_s }
+      rows = model.paper_trail.version_association_class.where(foreign_key_name: reflection.name)
+      transaction_ids(versions(model, node_ids(model)))
+        .each_slice(Support::IDS_PER_STATEMENT)
+        .flat_map { |slice| rows.where(version_id: slice) }
+        .group_by { |row| row.version_id.to_s }
     end
 
     # A version without a transaction id names no rows, so it can stay in.
