@@ -778,10 +778,13 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     end
   end
 
+  # The article's update moves `updated_at` a second on: JSON history keeps
+  # times to the millisecond, so two saves within one read as the same time.
   it 'applies ignore rules to exact association paths' do
     graph = article_with_graph
+    article = graph[:article]
     TrackedArticle.transaction do
-      graph[:article].update!(title: 'Structured after')
+      article.update!(title: 'Structured after', updated_at: article.updated_at + 1)
       graph[:reply].update!(body: 'Nested after')
     end
     after = boundary_for(graph[:article])
