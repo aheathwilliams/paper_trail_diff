@@ -34,8 +34,11 @@ module PaperTrailDiff
     # before its own sources, so a long transaction costs one list rather
     # than one for each step. A record's boundaries are found through an
     # index, built when rows are first read, once the history is complete.
+    # A step's own sources are kept the same way, so a transaction group's
+    # rows name each source's record once rather than once for each record.
     class Transaction
-      def initialize: () -> untyped
+      # : (?Array[ActivityBoundary]) -> void
+      def initialize: (?Array[ActivityBoundary]) -> void
 
       # : (ActivityBoundary) -> void
       def add: (ActivityBoundary) -> void
@@ -84,7 +87,7 @@ module PaperTrailDiff
 
     @root: RecordReference
 
-    @sources: Array[ActivityBoundary]
+    @sources: Transaction
 
     @transaction: Transaction
 
