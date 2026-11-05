@@ -2,6 +2,7 @@
 
 require_relative 'association_database'
 require_relative 'net_changes_check'
+require_relative 'oracle_reducer'
 
 # Checks rebuilt history against the truth rather than against another gem
 # method. A generated history applies random edits one transaction at a time
@@ -15,7 +16,8 @@ require_relative 'net_changes_check'
 # association's membership.
 #
 # Seeds and steps are fixed so a failure reproduces. `ORACLE_SEEDS=1..200` and
-# `ORACLE_STEPS=40` widen a run.
+# `ORACLE_STEPS=40` widen a run, and `ORACLE_SHRINK=1` reduces a failing
+# history to the steps that matter (spec/support/oracle_reducer.rb).
 module Oracle
   # Collections are compared in the order the gem returns them. The reference
   # promises record type, then ID.
@@ -164,11 +166,13 @@ module Oracle
   end
 
   # Collects mismatches so one example reports every disagreement at once.
+  # `recorder` describes the history, through `describe`.
   class Failures
     def initialize(seed, recorder)
       @seed = seed
       @recorder = recorder
       @list = []
+      Reducer.session&.failures&.push(self)
     end
 
     def check(label, expected, actual)
@@ -181,6 +185,10 @@ module Oracle
 
     def empty?
       @list.empty?
+    end
+
+    def labels
+      @list.map(&:first)
     end
 
     def message
@@ -268,7 +276,7 @@ module Oracle
     attr_reader :root, :recorder
 
     def initialize(seed, steps:)
-      @random = Random.new(seed)
+      @random = Oracle.random(seed)
       @steps = steps
       @counter = 0
       @recorder = Recorder.new { observe }
@@ -280,8 +288,8 @@ module Oracle
       @recorder.run(:create_root) do
         @root = TrackedArticle.create!(title: 'root 0', author: @authors.first)
       end
-      4.times { run(%i[create_comment create_reply].sample(random: @random)) }
-      @steps.times { run(OPERATIONS.sample(random: @random)) }
+      @random.steps(4) { run(%i[create_comment create_reply].sample(random: @random)) }
+      @random.steps(@steps) { run(OPERATIONS.sample(random: @random)) }
       @root.reload
       self
     end
@@ -296,7 +304,9 @@ module Oracle
     # Ends the history with association edits only, so a window before them
     # has no root version after it.
     def close_with_association_edits(count)
-      count.times { run(%i[edit_comment create_reply edit_profile].sample(random: @random)) }
+      @random.steps(count) do
+        run(%i[edit_comment create_reply edit_profile].sample(random: @random))
+      end
       @root.reload
       self
     end

@@ -116,7 +116,7 @@ class OracleShapeHistory
   attr_reader :recorder, :root_ids
 
   def initialize(seed, steps:)
-    @random = Random.new(seed)
+    @random = Oracle.random(seed)
     @steps = steps
     @counter = 0
     @root_ids = []
@@ -127,7 +127,7 @@ class OracleShapeHistory
 
   def build
     @recorder.run(:plant) { plant }
-    @steps.times do
+    @random.steps(@steps) do
       operation = OPERATIONS.sample(random: @random)
       @recorder.run(operation) { send(operation) }
     end
@@ -230,7 +230,7 @@ class OracleShapeHistory
   # Several versions in one transaction, at most one of them a board's.
   def combo
     board_versioned = false
-    3.times do
+    @random.steps(3) do
       operation = any(OPERATIONS - %i[combo destroy_user])
       next if BOARD_OPERATIONS.include?(operation) && board_versioned
 

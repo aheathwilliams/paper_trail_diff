@@ -155,6 +155,33 @@ RSpec.describe PaperTrailDiff::NestedComparator do
       expect(change.removed).to eq([])
     end
 
+    # A hash built in Ruby and one read back from JSON key the same field
+    # differently; inside an array, as anywhere, they are one key.
+    it 'matches elements with :a and "a" as one key, and reports them as given' do
+      expect(described_class.call({ 'k' => [{ name: 'x' }] }, { 'k' => [{ 'name' => 'x' }] }))
+        .to eq({})
+      expect(described_class.call([{ a: [{ b: 1 }] }], [{ 'a' => [{ 'b' => 1 }] }])).to eq({})
+
+      change = array_change([{ name: 'x' }, { name: 'y' }], [{ 'name' => 'y' }, { 'name' => 'z' }])
+
+      expect(change.removed).to eq([{ name: 'x' }])
+      expect(change.added).to eq([{ 'name' => 'z' }])
+      expect(change.from).to eq([{ name: 'x' }, { name: 'y' }])
+    end
+
+    it 'names a reordering of elements that differ only in key type' do
+      change = array_change([{ a: 1 }, { b: 2 }], [{ 'b' => 2 }, { 'a' => 1 }])
+
+      expect(change.reordered?).to be(true)
+      expect(change).not_to be_empty
+    end
+
+    it 'rejects ambiguous keys inside an element' do
+      expect { described_class.call({ 'k' => [{ a: 1, 'a' => 2 }] }, { 'k' => [] }) }
+        .to raise_error(PaperTrailDiff::AmbiguousNestedKeyError,
+                        'duplicate nested key after normalization: "a"')
+    end
+
     it 'falls back to a plain value change when only one side is an array' do
       expect(array_change(%w[a], 'a')).to be_a(PaperTrailDiff::ValueChange)
     end
@@ -169,6 +196,15 @@ RSpec.describe PaperTrailDiff::NestedComparator do
       expect(array_change(%w[a b], %w[b a])).to be_frozen
       expect(described_class.call({ 'k' => %w[a b] }, { 'k' => %w[a b] })).to eq({})
     end
+  end
+
+  it 'reads every key as a string for comparison, at any depth and inside arrays' do
+    expect(described_class.comparable({ a: [{ b: { c: 1 } }, [{ d: 2 }], 3], 'e' => nil }))
+      .to eq('a' => [{ 'b' => { 'c' => 1 } }, [{ 'd' => 2 }], 3], 'e' => nil)
+    expect(described_class.comparable([:a, 'b', 1.0])).to eql([:a, 'b', 1.0])
+    expect(described_class.comparable(:a)).to be(:a)
+    expect { described_class.comparable([{ x: { a: 1, 'a' => 2 } }]) }
+      .to raise_error(PaperTrailDiff::AmbiguousNestedKeyError, /"a"/)
   end
 
   it 'reports nothing when the two sides are not both readable structures' do

@@ -292,6 +292,13 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- `nested_changes` treats `:a` and `"a"` as one key inside arrays too, as it
+  already did in objects. An array whose objects differed only in key type,
+  such as a hash built in Ruby against one read back from JSON, was reported
+  as having lost one element and gained another. Elements are still reported
+  as they were given, and `{ a: 1, "a" => 2 }` inside an array now raises
+  `AmbiguousNestedKeyError`, as it does in an object.
+
 - With `historical_filter:`, `analyze_scope` and `report` test each record over
   the window its analysis covers. A transaction that crosses the window's
   start or end moves that window to where the transaction began, but the
@@ -464,6 +471,42 @@ project follows [Semantic Versioning](https://semver.org/).
   a destroy and re-creation that never happened.
 
 ### Development
+
+- `ORACLE_SHRINK=1` reduces a failing oracle example to the few steps that
+  matter. The generators draw through a random source that keeps each draw
+  by step, and the reducer runs the example again with steps left out and
+  choices set to the first one, while it still fails the same way. The example
+  then reports the reduced history's versions and mismatches, and a file that
+  replays it with `ORACLE_REPLAY`. An oracle failure prints the command. The
+  replay differential oracle reports each read that differs, with both
+  results, rather than only the transactions it made. The consistency checks'
+  histories reduce the same way.
+
+- `.github/workflows/oracle.yml` runs 200 more oracle seeds each night with
+  `ORACLE_STEPS=40`, in eight jobs, from a window that moves 200 seeds a day,
+  so each night tries histories no run has. A job reduces its first two
+  failing examples and keeps its log and their replay files as an artifact.
+
+- `spec/unit/engine_properties_spec.rb` and
+  `spec/unit/nested_comparator_properties_spec.rb` check the comparison
+  engine over generated snapshots and JSON values, without a database: an
+  equal copy compares as no change, a diff applied to the first snapshot gives
+  the second, comparing the other way gives the opposite diff, every change
+  is real and in order, a carried-forward collection reports what one built
+  whole does, and the result is frozen. The oracles compute the diffs they
+  expect with the engine, so they cannot catch a bug in it. Of six engine bugs
+  injected to try them, the properties caught all six in about a second; the
+  engine's own specs missed two, which only integration and association
+  examples caught.
+
+- `spec/unit/net_changes_properties_spec.rb` checks the fold behind
+  `net_changes` over generated histories in which each record has one state:
+  the rows of any run of steps fold into each record's change between the
+  run's first and last states, the root comes first and then each record by
+  its first kept change, the rows that move records in and out leave each, kept
+  alone, as its last move left it, and a record that stayed changes only in
+  fields a kept row set. Of six fold bugs injected to try them, they caught
+  all six, as the fold's own specs do.
 
 - `spec/oracle/unversioned_writes_spec.rb` builds seeded histories of saves
   and `update_columns` writes to an article, its comments and its author,

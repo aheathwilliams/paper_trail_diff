@@ -60,8 +60,10 @@ agrees: `analyze`, `analyze_many`, and `analyze_scope`; checkpoint and activity
 modes; `compare` and `timeline` against `analyze`; and that activity steps
 chain into the final state. They run over random windows as well as the whole
 history, with integer and string `versions.item_id`, YAML and JSON history, and
-a `has_paper_trail skip:` column. When one fails, its seed reproduces it. Add a
-variant here when a bug turns out to depend on a schema or configuration.
+a `has_paper_trail skip:` column. When one fails, its seed reproduces it, and
+`ORACLE_SHRINK=1` reduces it, as for the oracles (see
+[Reducing a failure](#reducing-a-failure)). Add a variant here when a bug
+turns out to depend on a schema or configuration.
 
 ## SQL work
 
@@ -151,7 +153,7 @@ mise exec -- bundle exec rake spec_oracle
 ORACLE_SEEDS=1..200 ORACLE_STEPS=40 mise exec -- bundle exec rake spec_oracle
 ```
 
-The 200-seed run is about 3,000 examples and takes about three hours in one
+The 200-seed run is about 4,000 examples and takes three hours or more in one
 process. Its database is in memory, so you can split it by seed range and run
 the parts side by side, each in its own shell: `ORACLE_SEEDS=1..25`, then
 `26..50`, and so on. Eight such parts took about 25 minutes. Check that each
@@ -161,15 +163,113 @@ still ends with "N examples, 0 failures" for the ones it ran. Adding
 
 The default seeds keep the run short; `rake spec` includes it, so
 the database jobs run it too. Mutant does not, because it would slow every
-mutation. A failure prints its seed, the transactions it made, and its first
-five mismatches; `ORACLE_SHOW=50` prints more. To fix one, reproduce it with
-that seed, reduce it to the few edits that matter, and add that as a named
-spec beside the code it covers, so the cause is readable without the
-generator.
+mutation. A failure prints its seed, the transactions it made, its first five
+mismatches (`ORACLE_SHOW=50` prints more), and the command that reduces it.
+
+A scheduled workflow, `.github/workflows/oracle.yml`, runs 200 more seeds each
+night with `ORACLE_STEPS=40`, in eight jobs of 25. The seeds move on 200 a day
+from seed 201, so each night tries histories no run has; run by hand, the
+workflow takes the first of its 200 seeds as `first_seed`. A job reduces the
+first two examples that fail and keeps its log and `tmp/oracle` as an
+artifact: copy that `tmp/oracle` into a checkout and run the `Replay it:`
+command from the log.
 
 When a bug turns out to depend on a schema, configuration, or kind of edit,
 add it to the generator or as a new context, so the whole class of bug stays
 covered.
+
+### Reducing a failure
+
+`ORACLE_SHRINK=1` cuts a failing history down to the few steps that matter, in
+the oracles and the consistency checks alike. A failure ends with the command,
+which runs that example alone with the settings that decide its history:
+
+```console
+ORACLE_SEEDS=103 ORACLE_SHRINK=1 mise exec -- bundle exec rspec 'spec/oracle/shapes_history_spec.rb[1:1]'
+```
+
+The generators draw their random choices through `Oracle.random(seed)`
+(`spec/support/oracle_choices.rb`). It hands out what `Random.new(seed)`
+would, so a seed builds the history it always has, and it keeps each draw,
+grouped by step. When an example fails, the reducer
+(`spec/support/oracle_reducer.rb`) runs it again with runs of steps left out,
+then with each remaining choice set to the first one, such as the first
+operation in a generator's list. An example that builds a history for each
+seed, such as the article oracle's windows that meet inside a transaction,
+first loses whole histories, half of them at a time, since every run builds
+them all. The reducer keeps each change that fails with the same first
+mismatch, numbers aside, and stops when no change helps or after
+`ORACLE_SHRINK_RUNS` runs (300 by default). Leaving a step out keeps the
+other steps' choices as they were, though they may then act on different
+records. `ORACLE_SHRINK_EXAMPLES` caps how many failing examples one run
+reduces; the others just print the command.
+
+The example then fails with the reduced history: how many steps were left,
+the versions it wrote if it built one history, its mismatches, and a command
+that replays it from a file in `tmp/oracle`, followed by the original
+failure. Tried against a bug injected into activity's carry-forward, it
+brought one example of each generator from 20 to 66 steps down to 2 to 5, in
+21 to 38 runs, taking from 4 seconds to 5 minutes; the shapes oracle's checks
+are the slowest. Write the reduced history as a named spec beside the code it
+covers, so the cause is readable without the generator.
+
+A generator runs each loop of random steps as `@random.steps(count) { ... }`
+rather than `count.times`, so the reducer can tell its steps apart. A new
+generator should too.
+
+## Comparison properties
+
+The oracles compute the change they expect with `PaperTrailDiff::Engine`, so a
+bug in the engine itself passes them. `spec/unit/engine_properties_spec.rb`
+checks the engine on its own, over a few hundred generated pairs of snapshots
+(`spec/support/snapshot_cases.rb`): attributes, to-one records and
+collections two levels deep, with mixed id types, and collections carried
+forward one record at a time, as activity builds them. For every pair:
+
+- an equal snapshot built separately, with its keys and records in another
+  order, compares as no change;
+- the diff, applied to the first snapshot, gives the second, so it misses no
+  change and reports none wrongly (`spec/support/diff_algebra.rb` applies a
+  diff from its hash alone, without the engine);
+- comparing the other way gives the opposite diff;
+- every change reported is a real one, in attribute name and record order;
+- a collection carried forward reports what the same collection built whole
+  does;
+- nothing in the diff can be changed.
+
+`spec/unit/nested_comparator_properties_spec.rb` does the same for the values
+inside a JSON column, including JSON text, symbol keys, and arrays, which are
+reported by membership.
+
+`spec/unit/net_changes_properties_spec.rb` checks the fold behind
+`net_changes`, over generated histories of a few records
+(`spec/support/snapshot_world.rb`) in which a record has one state wherever a
+snapshot reaches it: comments that come and go, replies that move between
+comments, an author who reviews several, and tags. For every history:
+
+- the rows of a run of steps fold into each record's change from the run's
+  first state to its last, whether the run is passed alone or picked out of
+  the whole history by the rows kept;
+- the root comes first, then each record in the order of its first kept
+  change, with each source once;
+- kept alone, the rows that move records in and out leave each record as its
+  last move left it;
+- a record that stayed changes only in fields a kept row set.
+
+They take about a second and run with the unit specs. Each is named after
+what it checks rather than its class, so mutant, which runs only the specs
+that name a mutated class, leaves them out: run with every mutation of
+`Engine`, `NestedComparator`, `NetChange`, and `NetChanges`, they nearly
+doubled its work, from 15 to 27 minutes of worker time, while the classes'
+own specs kill every mutation without them. Name a new property spec the
+same way.
+A failure names its case. The cases start small and grow, so the first one
+that fails is a small one. `PROPERTY_SEED` and `PROPERTY_CASES` choose other
+and more cases:
+
+```console
+PROPERTY_SEED=2 PROPERTY_CASES=5000 mise exec -- bundle exec rspec spec/unit/engine_properties_spec.rb
+```
 
 ## Mutation testing
 

@@ -115,7 +115,7 @@ class OracleTreeHistory
   attr_reader :recorder, :root_ids
 
   def initialize(seed, steps:)
-    @random = Random.new(seed)
+    @random = Oracle.random(seed)
     @steps = steps
     @root_ids = []
     @recorder = Oracle::Recorder.new { [nil, nil, OracleTreeTruth.states(@root_ids)] }
@@ -123,7 +123,7 @@ class OracleTreeHistory
 
   def build
     @recorder.run(:trees) { plant }
-    @steps.times do
+    @random.steps(@steps) do
       operation = OPERATIONS.sample(random: @random)
       @recorder.run(operation) { send(operation) }
     end

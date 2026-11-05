@@ -34,7 +34,10 @@ module PaperTrailDiff
   #
   # An element that is itself a Hash or Array is reported whole. Saying which
   # field of which object changed would require pairing before-elements with
-  # after-elements, and nothing in the value licenses that pairing.
+  # after-elements, and nothing in the value licenses that pairing. Elements
+  # match with their keys read as strings (NestedComparator.comparable), so
+  # `{a: 1}` and `{"a" => 1}` are one element; each is reported as it was
+  # given.
   class ArrayChange
     attr_reader :from #: Array[untyped]
     attr_reader :to #: Array[untyped]
@@ -55,9 +58,9 @@ module PaperTrailDiff
     # rather than none.
     #: (Array[untyped], Array[untyped]) -> Array[untyped]
     def self.surplus(left, right)
-      pool = right.dup
+      pool = right.map { |item| NestedComparator.comparable(item) }
       left.reject do |item|
-        index = pool.index(item)
+        index = pool.index(NestedComparator.comparable(item))
         index ? pool.delete_at(index) || true : false
       end
     end
@@ -69,9 +72,10 @@ module PaperTrailDiff
       added.empty? && removed.empty?
     end
 
+    # The same elements in the same order, with keys read as strings.
     #: () -> bool
     def empty?
-      from == to
+      NestedComparator.comparable(from) == NestedComparator.comparable(to)
     end
 
     #: () -> Hash[Symbol, untyped]

@@ -115,12 +115,12 @@ RSpec.describe 'Rebuilt scoped membership against the recorded states' do
   end
 
   def history(seed, steps)
-    random = Random.new(seed)
+    random = Oracle.random(seed)
     other = OraclePost.create!(title: 'other')
     post = nil
     recorder = Oracle::Recorder.new { [members(post), nil] }
     recorder.run(:create_post) { post = OraclePost.create!(title: 'post') }
-    steps.times { recorder.run(:edit) { edit(random, post, other) } }
+    random.steps(steps) { recorder.run(:edit) { edit(random, post, other) } }
     [post.reload, recorder]
   end
 

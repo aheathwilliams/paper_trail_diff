@@ -25,6 +25,10 @@ module PaperTrailDiff
   # An absent key is not a null one. `{"a": null}` and `{}` mean different
   # things in JSON and an audit trail that conflated them would be lying about
   # one of them, so absence is its own value rather than nil.
+  #
+  # A key is its name: `:a` and `"a"` are one key at any depth, inside arrays
+  # too, because a hash built in Ruby and one read back from JSON key the same
+  # field differently. Values are reported as they were given.
   class NestedComparator
     # Stands in for a key that was not there at all.
     class Absent
@@ -41,6 +45,33 @@ module PaperTrailDiff
     #: (untyped, untyped) -> nested_changes
     def self.call(from_value, to_value)
       new(from_value, to_value).call
+    end
+
+    # The value as it is compared: every Hash key read as a string, at any
+    # depth and inside arrays, and everything else as it is.
+    #: (untyped) -> untyped
+    def self.comparable(value)
+      case value
+      when Hash then string_keyed(value) { |item| comparable(item) }
+      when Array then value.map { |item| comparable(item) }
+      else value
+      end
+    end
+
+    # The hash keyed by name, each value as the block returns it. Two keys
+    # with one name, such as `:a` and `"a"`, cannot both be kept.
+    #: (Hash[untyped, untyped]) { (untyped) -> untyped } -> Hash[String, untyped]
+    def self.string_keyed(hash)
+      normalized = {} #: Hash[String, untyped]
+      hash.each do |key, value|
+        name = key.to_s
+        if normalized.key?(name)
+          raise AmbiguousNestedKeyError, "duplicate nested key after normalization: #{name.inspect}"
+        end
+
+        normalized[name] = yield(value)
+      end
+      normalized
     end
 
     #: (untyped, untyped) -> void
@@ -61,7 +92,8 @@ module PaperTrailDiff
         walk(from, to, [], changes)
       elsif from.is_a?(Array) && to.is_a?(Array)
         whole = [] #: Array[String]
-        changes[whole.freeze] = change_for(from, to) if from != to
+        change = change_for(from, to)
+        changes[whole.freeze] = change if change
       end
       changes.freeze
     end
@@ -103,34 +135,29 @@ module PaperTrailDiff
         if from_item.is_a?(Hash) && to_item.is_a?(Hash)
           walk(from_item, to_item, here, changes)
         else
-          changes[here] = change_for(from_item, to_item)
+          change = change_for(from_item, to_item)
+          changes[here] = change if change
         end
       end
     end
 
     #: (Hash[untyped, untyped]) -> Hash[String, untyped]
     def normalize_keys(hash)
-      normalized = {} #: Hash[String, untyped]
-      hash.each do |key, value|
-        name = key.to_s
-        if normalized.key?(name)
-          raise AmbiguousNestedKeyError, "duplicate nested key after normalization: #{name.inspect}"
-        end
-
-        normalized[name] = value
-      end
-      normalized
+      NestedComparator.string_keyed(hash, &:itself)
     end
 
-    # Two arrays are a membership change; anything else is a change to the
-    # value as a whole, including an array facing something that is not one.
-    #: (untyped, untyped) -> nested_change
+    # Two arrays are a membership change, or none when they hold the same
+    # elements in the same order once keys are read as strings; anything else
+    # is a change to the value as a whole, including an array facing something
+    # that is not one.
+    #: (untyped, untyped) -> nested_change?
     def change_for(from_item, to_item)
-      if from_item.is_a?(Array) && to_item.is_a?(Array)
-        ArrayChange.new(from: from_item, to: to_item)
-      else
-        ValueChange.new(from: from_item, to: to_item)
+      unless from_item.is_a?(Array) && to_item.is_a?(Array)
+        return ValueChange.new(from: from_item, to: to_item)
       end
+
+      change = ArrayChange.new(from: from_item, to: to_item)
+      change unless change.empty?
     end
 
     # Sorted so a report reads the same twice. Both hashes are already keyed by

@@ -189,7 +189,7 @@ class OracleThroughHistory
   attr_reader :recorder, :root_ids
 
   def initialize(seed, steps:)
-    @random = Random.new(seed)
+    @random = Oracle.random(seed)
     @steps = steps
     @counter = 0
     @root_ids = []
@@ -198,7 +198,7 @@ class OracleThroughHistory
 
   def build
     @recorder.run(:teams) { plant }
-    @steps.times do
+    @random.steps(@steps) do
       operation = OPERATIONS.sample(random: @random)
       @recorder.run(operation) { send(operation) }
     end
@@ -327,7 +327,7 @@ class OracleThroughHistory
   # oracle records, so a team is renamed at most once.
   def combo
     renamed = false
-    3.times do
+    @random.steps(3) do
       operation = any(%i[join leave change_lead move_task edit_person swap_person edit_team])
       next if operation == :edit_team && renamed
 

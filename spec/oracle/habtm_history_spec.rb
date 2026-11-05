@@ -55,7 +55,7 @@ class OracleHabtmHistory
   attr_reader :recorder, :root_id
 
   def initialize(seed, steps:)
-    @random = Random.new(seed)
+    @random = Oracle.random(seed)
     @steps = steps
     @counter = 0
     @recorder = Oracle::Recorder.new { [nil, nil, OracleHabtmTruth.states([@root_id].compact)] }
@@ -63,7 +63,7 @@ class OracleHabtmHistory
 
   def build
     @recorder.run(:setup) { setup }
-    @steps.times do
+    @random.steps(@steps) do
       operation = OPERATIONS.sample(random: @random)
       @recorder.run(operation) { send(operation) }
     end

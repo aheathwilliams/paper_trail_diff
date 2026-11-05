@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative 'oracle_reducer'
+
 # Checks that every route to the same answer agrees on seeded, generated
 # histories. The bugs these catch are the ones a hand-written example misses:
 # a schema or serializer variant one code path handles and another does not,
@@ -17,7 +19,7 @@ module ConsistencyChecks
                    attributes: {})
       @root_class = root_class
       @attributes = attributes
-      @random = Random.new(seed)
+      @random = Oracle.random(seed)
       @children = children
       @child_attribute = child_attribute
       @steps = steps
@@ -26,7 +28,7 @@ module ConsistencyChecks
 
     def build
       root = @root_class.create!(title: 'title 0', **@attributes)
-      @steps.times { |index| apply(root, index) }
+      @random.steps(@steps) { |index| apply(root, index) }
       root.reload
     end
 
