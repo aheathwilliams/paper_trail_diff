@@ -46,7 +46,9 @@ Flat query counts do not make a report's cost flat:
 - **Ruby work grows with the history you report on.** Every version in the
   window is decoded and compared: an `analyze_scope` of articles with five
   updates each took about 1.5 ms per article, and one article with 5,000
-  updates took 1.2 s.
+  updates took 1.2 s. A `report` of 1,000 articles with their comments, from
+  a table of 114,000 versions, took about 4 ms an article on SQLite,
+  PostgreSQL, and MySQL, and 5.5 ms on SQL Server, most of it in Ruby.
 - **Versions stored as JSON read about a third faster than YAML.** A `report`
   on 500 articles with 31 versions each took 6.8 s with PaperTrail's default
   YAML serializer and 4.5 s with its JSON one, or 9.8 s and 6.7 s with their
@@ -169,8 +171,11 @@ measured on 2026-11-03, the counts after `report`'s window lost its end; the
 serializers and the snapshot and net change costs on 2026-11-04; the other
 numbers on 2026-10-30 at revision `6c3d30b`. Both used Ruby 4.0.1, Active
 Record 8.1.3.1, PaperTrail 17.0.0, and SQLite 3.53.2, on WSL2 on an AMD
-Ryzen 7 7800X3D. The memory, wide-collection, serializer, snapshot, and index
-figures come from one-off scripts rather than these two. The benchmark's
+Ryzen 7 7800X3D. The per-database `report` costs were measured on 2026-11-04
+with Ruby 4.0.9 in Docker, on SQLite, PostgreSQL 17.11, MySQL 8.4.13, and SQL
+Server 2022, each holding the same rows. The memory, wide-collection,
+serializer, snapshot, per-database, and index figures come from one-off
+scripts rather than these two. The benchmark's
 raw samples are in
 [`benchmark/results/reporting-2026-10-30.json`](../benchmark/results/reporting-2026-10-30.json),
 next to earlier runs.
