@@ -6,9 +6,8 @@ module PaperTrailDiff
   class ActivityRootSnapshotRefresher
     # `root_state` gives the state a root endpoint's snapshot is built from,
     # where prepared history builds it.
-    #: (tree: AssociationTree, traversal: AssociationTraversal, normalizer: SnapshotNormalizer, record_after: untyped, changeset: untyped, partial_snapshotter: untyped, ?record_transition: untyped, ?root_state: untyped) -> void
+    #: (traversal: AssociationTraversal, normalizer: SnapshotNormalizer, record_after: untyped, changeset: untyped, partial_snapshotter: untyped, ?record_transition: untyped, ?root_state: untyped) -> void
     def initialize( # rubocop:disable Metrics/ParameterLists
-      tree:,
       traversal:,
       normalizer:,
       record_after:,
@@ -17,7 +16,7 @@ module PaperTrailDiff
       record_transition: nil,
       root_state: nil
     )
-      @tree = tree
+      @tree = traversal.tree
       @traversal = traversal
       @normalizer = normalizer
       @record_after = record_after

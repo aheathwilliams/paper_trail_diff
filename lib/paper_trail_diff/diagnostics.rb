@@ -78,8 +78,7 @@ module PaperTrailDiff
       @versions = validated_versions(from, to)
       @tree = AssociationTree.build(associations)
       @traversal = AssociationTraversal.new(@tree)
-      @preparer = TraversalPreparer.new(tree: @tree, traversal: @traversal,
-                                        allow_approximate: allow_approximate)
+      @preparer = TraversalPreparer.new(traversal: @traversal, allow_approximate: allow_approximate)
       @allow_approximate = allow_approximate
       @issues = [] #: Array[DiagnosticIssue]
     end

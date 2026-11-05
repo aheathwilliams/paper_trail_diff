@@ -15,7 +15,7 @@ module PaperTrailDiff
       @ignore_policy = IgnorePolicy.build(ignore, association_paths: @association_tree.paths)
       @recorded = (@ignore_policy if recorded_changes)
       @traversal = AssociationTraversal.new(@association_tree)
-      @traversal_preparer = TraversalPreparer.new(tree: @association_tree, traversal: @traversal,
+      @traversal_preparer = TraversalPreparer.new(traversal: @traversal,
                                                   allow_approximate: allow_approximate)
       @live_endpoints = LiveEndpointProvider.new(tree: @association_tree)
       @instrumentation_payload = { association_paths: @association_tree.paths }.freeze
@@ -344,7 +344,6 @@ module PaperTrailDiff
     #: () -> HistoricalSnapshotStore
     def build_historical_store
       HistoricalSnapshotStore.new(
-        tree: @association_tree,
         traversal: @traversal,
         normalizer: @normalizer,
         preparer: @traversal_preparer.method(:call)
@@ -355,8 +354,7 @@ module PaperTrailDiff
     #: (PreparedActivitySnapshots) -> BranchSnapshotRefresher
     def branch_refresher(snapshots)
       BranchSnapshotRefresher.new(
-        tree: @association_tree, ignore_policy: @ignore_policy,
-        traversal: @traversal, pool: @snapshot_pool,
+        ignore_policy: @ignore_policy, traversal: @traversal, pool: @snapshot_pool,
         normalizer: @normalizer,
         full_snapshotter: snapshots.method(:call),
         partial_snapshotter: snapshots.method(:custom),

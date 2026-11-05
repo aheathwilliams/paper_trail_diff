@@ -5,8 +5,8 @@ module PaperTrailDiff
   class ActivityRootSnapshotRefresher
     # `root_state` gives the state a root endpoint's snapshot is built from,
     # where prepared history builds it.
-    # : (tree: AssociationTree, traversal: AssociationTraversal, normalizer: SnapshotNormalizer, record_after: untyped, changeset: untyped, partial_snapshotter: untyped, ?record_transition: untyped, ?root_state: untyped) -> void
-    def initialize: (tree: AssociationTree, traversal: AssociationTraversal, normalizer: SnapshotNormalizer, record_after: untyped, changeset: untyped, partial_snapshotter: untyped, ?record_transition: untyped, ?root_state: untyped) -> void
+    # : (traversal: AssociationTraversal, normalizer: SnapshotNormalizer, record_after: untyped, changeset: untyped, partial_snapshotter: untyped, ?record_transition: untyped, ?root_state: untyped) -> void
+    def initialize: (traversal: AssociationTraversal, normalizer: SnapshotNormalizer, record_after: untyped, changeset: untyped, partial_snapshotter: untyped, ?record_transition: untyped, ?root_state: untyped) -> void
 
     # `previous` is the snapshot at the root's `event`, and the result the one
     # at the next event, whose root is read at `root_endpoint`.
