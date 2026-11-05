@@ -8,6 +8,8 @@ require_relative 'oracle'
 # transaction, and records every write.
 module UnversionedWrites
   Write = Struct.new(:key, :field, :before, :after, :version, :transaction, keyword_init: true)
+  # The models whose writes the checks follow.
+  CHECKED = %w[TrackedArticle TrackedComment].freeze
 
   # The article, its comments and three authors, edited at random.
   class History
@@ -36,6 +38,18 @@ module UnversionedWrites
 
     def self.key(record)
       [record.class.base_class.name, record.id.to_s]
+    end
+
+    # The key of the record a change or row is about, the article's for none.
+    def identity(item)
+      record = item.record
+      return self.class.key(article) unless record
+
+      [PaperTrailDiff::Support.constant(record.type).base_class.name, record.id.to_s]
+    end
+
+    def destroyed?(key)
+      writes.any? { |write| write.key == key && write.field.nil? }
     end
 
     private
@@ -158,7 +172,9 @@ module UnversionedWrites
     end
 
     def complete(rows)
-      shown = rows.select(&:unversioned?).map { |row| [identity(row), row.attribute, row.to] }
+      shown = rows.select(&:unversioned?).map do |row|
+        [@history.identity(row), row.attribute, row.to]
+      end
       read_writes.each do |write|
         next if shown.include?([write.key, write.field, write.after])
 
@@ -167,13 +183,6 @@ module UnversionedWrites
     end
 
     private
-
-    def identity(row)
-      record = row.record
-      return History.key(@history.article) unless record
-
-      [PaperTrailDiff::Support.constant(record.type).base_class.name, record.id.to_s]
-    end
 
     def chained(index, rows, whole)
       split = rows.group_by { |row| field(row) }
@@ -221,14 +230,19 @@ module UnversionedWrites
     # The fields of a record that joined an association other than by its own
     # create are its state, credited to the step's source.
     def joined?(row)
-      source = row.source
       row.change == :added && !row.unversioned? &&
-        (source.event != 'create' || [source.item_type, source.item_id.to_s] != identity(row))
+        (row.source.event != 'create' || !own_version?(row))
+    end
+
+    # Whether the row's source is a version of the row's own record.
+    def own_version?(row)
+      source = row.source
+      [source.item_type, source.item_id.to_s] == @history.identity(row)
     end
 
     def unversioned(index, row)
       return if @history.writes.any? do |write|
-        write.version.nil? && write.key == identity(row) && write.field == row.attribute &&
+        write.version.nil? && write.key == @history.identity(row) && write.field == row.attribute &&
         write.after == row.to
       end
 
@@ -236,9 +250,8 @@ module UnversionedWrites
     end
 
     def recorded(index, row)
-      source = row.source
-      change = source.recorded_changes&.fetch(row.attribute, nil)
-      return if [source.item_type, source.item_id.to_s] == identity(row) && change&.to == row.to
+      change = row.source.recorded_changes&.fetch(row.attribute, nil)
+      return if own_version?(row) && change&.to == row.to
 
       @failures.add("#{@label} step #{index}: row is not what its version recorded",
                     { row: row.to_h, recorded: change&.to_h })
@@ -254,13 +267,13 @@ module UnversionedWrites
         next unless candidate?(write) && !hidden(writes.first(index), write).include?(write.after)
 
         later = writes.drop(index + 1).find { |other| other.key == write.key }
-        write if later.nil? ? exists?(write.key) : read?(write, later)
+        write if later.nil? ? !@history.destroyed?(write.key) : read?(write, later)
       end
     end
 
     def candidate?(write)
       write.version.nil? && !@structural.include?(write.field) &&
-        %w[TrackedArticle TrackedComment].include?(write.key.first)
+        CHECKED.include?(write.key.first)
     end
 
     # The values a write back to shows nothing. Rows follow each step's
@@ -283,10 +296,6 @@ module UnversionedWrites
     def read?(write, later)
       later.version && later.field == write.field && later.after != write.after
     end
-
-    def exists?(key)
-      @history.writes.none? { |write| write.key == key && write.field.nil? }
-    end
   end
 
   # Checks the net changes of a timeline (see PaperTrailDiff::NetChanges):
@@ -300,8 +309,6 @@ module UnversionedWrites
   #    no row (see RowCheck), and a field no save recorded holds what its
   #    create left, which can be a later write (see RowCheck#default?).
   class NetCheck
-    CHECKED = %w[TrackedArticle TrackedComment].freeze
-
     def initialize(history, failures, label, strict:, structural: [])
       @history = history
       @failures = failures
@@ -319,7 +326,7 @@ module UnversionedWrites
 
     def recorded(steps)
       listed = PaperTrailDiff::NetChanges.call(steps, ->(row) { !row.unversioned? })
-                                         .to_h { |change| [identity(change), change] }
+                                         .to_h { |change| [@history.identity(change), change] }
       shown = shown_saves(steps)
       live.each do |key|
         after = listed[key]&.after
@@ -332,7 +339,7 @@ module UnversionedWrites
     # Each record, field, and version a row is credited to.
     def shown_saves(steps)
       steps.flat_map(&:change_rows).map do |row|
-        [identity(row), row.attribute, row.source.version_id]
+        [@history.identity(row), row.attribute, row.source.version_id]
       end
     end
 
@@ -351,20 +358,12 @@ module UnversionedWrites
     # The articles and comments the history created and did not destroy.
     def live
       keys = @history.writes.map(&:key).uniq.select { |key| CHECKED.include?(key.first) }
-      keys.reject { |key| @history.writes.any? { |write| write.key == key && write.field.nil? } }
+      keys.reject { |key| @history.destroyed?(key) }
     end
 
     def fields(key)
       written = @history.writes.select { |write| write.key == key }.map(&:field)
       written.compact.uniq - @structural
-    end
-
-    # The history's key for the record a change or row is about.
-    def identity(item)
-      record = item.record
-      return History.key(@history.article) unless record
-
-      [PaperTrailDiff::Support.constant(record.type).base_class.name, record.id.to_s]
     end
   end
 end
