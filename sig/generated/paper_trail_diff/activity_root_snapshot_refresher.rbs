@@ -29,8 +29,9 @@ module PaperTrailDiff
     # : (RecordSnapshot, untyped, PreparedRecordState, PreparedRecordState) -> [PreparedRecordState, Array[String]]?
     def state_target: (RecordSnapshot, untyped, PreparedRecordState, PreparedRecordState) -> [ PreparedRecordState, Array[String] ]?
 
-    # : (PreparedRecordState, PreparedRecordState) -> Array[String]
-    def changed_between: (PreparedRecordState, PreparedRecordState) -> Array[String]
+    # The names of the columns whose values differ between two sets of them.
+    # : (Hash[untyped, untyped], Hash[untyped, untyped]) -> Array[String]
+    def differing: (Hash[untyped, untyped], Hash[untyped, untyped]) -> Array[String]
 
     # The record after a root version and the branches its change reaches, or
     # nil when the version cannot be applied to the previous snapshot alone.

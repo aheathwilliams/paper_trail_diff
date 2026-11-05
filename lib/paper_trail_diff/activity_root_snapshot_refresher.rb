@@ -70,13 +70,12 @@ module PaperTrailDiff
       model_class = before.model_class
       return unless after.model_class == model_class && same_record?(previous, model_class, version)
 
-      [after, branches_to_refresh(model_class, changed_between(before, after))]
+      [after, branches_to_refresh(model_class, differing(before.attributes, after.attributes))]
     end
 
-    #: (PreparedRecordState, PreparedRecordState) -> Array[String]
-    def changed_between(before, after)
-      old = before.attributes
-      new = after.attributes
+    # The names of the columns whose values differ between two sets of them.
+    #: (Hash[untyped, untyped], Hash[untyped, untyped]) -> Array[String]
+    def differing(old, new)
       (old.keys | new.keys).filter_map { |name| name.to_s unless old[name] == new[name] }
     end
 
@@ -133,9 +132,7 @@ module PaperTrailDiff
       return names unless transition
 
       before, after = transition
-      names | (before.keys | after.keys).filter_map do |name|
-        name.to_s unless before[name] == after[name]
-      end
+      names | differing(before, after)
     end
 
     #: (untyped) -> untyped
