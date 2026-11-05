@@ -7,7 +7,7 @@ require_relative '../support/diff_algebra'
 # pairs (spec/support/snapshot_cases.rb) rather than chosen examples. A
 # failure names the case that reproduces it; the cases grow from the
 # smallest, so the first failure is a small one.
-RSpec.describe PaperTrailDiff::Engine do
+RSpec.describe 'Comparison engine properties' do
   def each_pair
     SnapshotCases.each do |random, size, label|
       generator = SnapshotCases::Generator.new(random, size)
@@ -18,7 +18,7 @@ RSpec.describe PaperTrailDiff::Engine do
   end
 
   def compare(from, to)
-    described_class.compare(from, to)
+    PaperTrailDiff::Engine.compare(from, to)
   end
 
   def describe_case(label, from, to)

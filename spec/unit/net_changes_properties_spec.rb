@@ -6,8 +6,7 @@ require_relative '../support/snapshot_world'
 # generated histories (SnapshotCases::World) rather than chosen ones. Each
 # step's rows name its own version, as spec/unit/net_changes_spec.rb builds
 # them.
-RSpec.describe PaperTrailDiff::NetChanges,
-               mutant_expression: %w[PaperTrailDiff::NetChanges PaperTrailDiff::NetChange] do
+RSpec.describe 'Net change properties' do
   def version(id, author)
     PaperTrailDiff::ActivityBoundary.new(
       kind: :version, version_id: id, item_type: 'Article', item_id: 1,
@@ -93,9 +92,9 @@ RSpec.describe PaperTrailDiff::NetChanges,
       each_history do |states, steps, random, label|
         first, last = Array.new(2) { random.rand(0..steps.length) }.sort
         expected = SnapshotCases::World.changes(states.fetch(first), states.fetch(last))
-        alone = described_class.call(steps[first...last], nil)
+        alone = PaperTrailDiff::NetChanges.call(steps[first...last], nil)
         in_run = ->(row) { row.source.version_id.between?(first + 1, last) }
-        picked = described_class.call(steps, in_run)
+        picked = PaperTrailDiff::NetChanges.call(steps, in_run)
         message = lambda do
           "#{label}\nsteps #{first}...#{last}\nexpected: #{expected}\nnet: #{table(alone)}"
         end
@@ -107,7 +106,7 @@ RSpec.describe PaperTrailDiff::NetChanges,
 
     it 'lists the root first, then each record by its first kept change, each source once' do
       each_history do |_states, steps, random, label|
-        changes = described_class.call(steps, some_versions(steps, random))
+        changes = PaperTrailDiff::NetChanges.call(steps, some_versions(steps, random))
         next if changes.empty?
 
         firsts = changes.drop(1).map { |change| change.sources.first.version_id }
@@ -123,7 +122,7 @@ RSpec.describe PaperTrailDiff::NetChanges,
     # and out leave each as its last move found it.
     it 'leaves a record kept only by its moves as its last move left it' do
       each_history do |states, steps, _random, label|
-        changes = described_class.call(steps, ->(row) { row.attribute.nil? })
+        changes = PaperTrailDiff::NetChanges.call(steps, ->(row) { row.attribute.nil? })
 
         expect(table(changes)).to eq(moved_records(states, steps)), label
       end
@@ -135,7 +134,7 @@ RSpec.describe PaperTrailDiff::NetChanges,
       each_history do |_states, steps, random, label|
         keep = some_versions(steps, random)
         rows = steps.flat_map(&:change_rows).select(&keep)
-        described_class.call(steps, keep).each do |change|
+        PaperTrailDiff::NetChanges.call(steps, keep).each do |change|
           own = rows.select { |row| row_key(row) == key(change) }
           next if change.added? || change.removed? || own.any? { |row| row.attribute.nil? }
 

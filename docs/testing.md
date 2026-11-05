@@ -256,10 +256,13 @@ comments, an author who reviews several, and tags. For every history:
   last move left it;
 - a record that stayed changes only in fields a kept row set.
 
-They take about a second and run with the unit specs, so mutant runs them
-for `Engine`, `NestedComparator`, `NetChange`, and `NetChanges` too. That
-about doubles mutant's work on those classes, from 15 to 27 minutes of worker
-time, though today the classes' own specs kill every mutation without them.
+They take about a second and run with the unit specs. Each is named after
+what it checks rather than its class, so mutant, which runs only the specs
+that name a mutated class, leaves them out: run with every mutation of
+`Engine`, `NestedComparator`, `NetChange`, and `NetChanges`, they nearly
+doubled its work, from 15 to 27 minutes of worker time, while the classes'
+own specs kill every mutation without them. Name a new property spec the
+same way.
 A failure names its case. The cases start small and grow, so the first one
 that fails is a small one. `PROPERTY_SEED` and `PROPERTY_CASES` choose other
 and more cases:

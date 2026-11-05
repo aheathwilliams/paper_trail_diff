@@ -5,7 +5,7 @@ require_relative '../support/snapshot_cases'
 
 # Properties every nested comparison must have, checked over generated JSON
 # values (SnapshotCases::Json) rather than chosen examples.
-RSpec.describe PaperTrailDiff::NestedComparator do
+RSpec.describe 'Nested comparison properties' do
   def each_pair
     SnapshotCases.each do |random, size, label|
       json = SnapshotCases::Json.new(random, size)
@@ -16,7 +16,7 @@ RSpec.describe PaperTrailDiff::NestedComparator do
   end
 
   def changes(from, to)
-    described_class.call(from, to).transform_values(&:to_h)
+    PaperTrailDiff::NestedComparator.call(from, to).transform_values(&:to_h)
   end
 
   # The value the changes lead to from `from`: each changed path set to its
@@ -27,7 +27,8 @@ RSpec.describe PaperTrailDiff::NestedComparator do
     changes.each_with_object(deep_copy(from)) do |(path, change), value|
       parent = path[0...-1].inject(value) { |hash, key| hash.fetch(key) }
       to = change.fetch(:to)
-      to.equal?(described_class::ABSENT) ? parent.delete(path.last) : parent[path.last] = to
+      absent = PaperTrailDiff::NestedComparator::ABSENT
+      to.equal?(absent) ? parent.delete(path.last) : parent[path.last] = to
     end
   end
 
@@ -106,7 +107,7 @@ RSpec.describe PaperTrailDiff::NestedComparator do
 
     it 'reports only real changes, frozen and in path order' do
       each_pair do |from, to, label|
-        result = described_class.call(from, to)
+        result = PaperTrailDiff::NestedComparator.call(from, to)
 
         expect(result.keys).to eq(result.keys.sort), -> { label }
         expect([result, *result.keys]).to all(be_frozen), -> { label }
@@ -118,7 +119,7 @@ RSpec.describe PaperTrailDiff::NestedComparator do
     # membership, counted with repeats.
     it 'reports an array change as the elements gained and lost' do
       each_pair do |from, to, label|
-        described_class.call(from, to).each_value do |change|
+        PaperTrailDiff::NestedComparator.call(from, to).each_value do |change|
           next unless change.is_a?(PaperTrailDiff::ArrayChange)
 
           gained = surplus(change.to, change.from)
