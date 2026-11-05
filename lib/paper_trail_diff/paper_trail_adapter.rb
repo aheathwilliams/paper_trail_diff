@@ -338,7 +338,7 @@ module PaperTrailDiff
         timeline_snapshotter: @timeline_snapshotter,
         activity_snapshotter: @activity_snapshotter,
         preparer: @traversal_preparer.method(:call),
-        activity: activity, view: view
+        activity: activity, view: view, traversal: @traversal
       )
     end
 
@@ -363,7 +363,8 @@ module PaperTrailDiff
         partial_snapshotter: snapshots.method(:custom),
         association_reader: snapshots.method(:association_reader),
         record_transition: snapshots.method(:record_transition),
-        prepared_record_after: snapshots.method(:record_after)
+        prepared_record_after: snapshots.method(:record_after),
+        root_state: snapshots.method(:root_state)
       )
     end
 
@@ -377,7 +378,7 @@ module PaperTrailDiff
         ),
         tree: @association_tree,
         snapshotter: @activity_snapshotter,
-        view: view
+        view: view, traversal: @traversal
       )
     end
 

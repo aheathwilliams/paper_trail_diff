@@ -221,4 +221,110 @@ RSpec.describe 'bounded event reconstruction' do
   it 'reads the current root once however many snapshots start from it' do
     expect(root_reads(4)).to eq(root_reads(1))
   end
+
+  # After the article's last edit, the snapshots start from its current row:
+  # the one at the comment edited in the same transaction, carried from the
+  # article's, and the one at the other comment's edit, rebuilt once that
+  # transaction ends. Both start from one state of the row, read from the
+  # record the call loaded.
+  it "reads the current article's state once for every snapshot that starts from it" do
+    article = TrackedArticle.create!(title: 'Draft')
+    comments = Array.new(2) { |index| article.comments.create!(body: "comment #{index}") }
+    start = Time.now.utc
+    TrackedArticle.transaction do
+      article.update!(title: 'Edited')
+      comments.first.update!(body: 'edited')
+    end
+    comments.last.update!(body: 'edited')
+    read = 0
+    allow(PaperTrailDiff::PreparedRecordState).to receive(:new).and_wrap_original do |new, record|
+      read += 1 if record.is_a?(TrackedArticle)
+      new.call(record)
+    end
+
+    analysis = PaperTrailDiff.analyze(TrackedArticle.find(article.id), within: start..Time.now.utc,
+                                                                       associations: [:comments],
+                                                                       activity: true)
+
+    expect(read).to eq(1)
+    expect(analysis.diff.attributes.fetch('title').to_h).to eq(from: 'Draft', to: 'Edited')
+    expect(analysis.diff.associations.fetch('comments').changed.map { |change| change.record.id })
+      .to match_array(comments.map(&:id))
+  end
+
+  # PT-AT reads what a transaction saved as it stood before the transaction
+  # began, so after a comment's event the next event of the same transaction
+  # reads the same state. The article's snapshot is built for its own event and
+  # the one after it, not again for each comment.
+  it 'builds the snapshot of a transaction once after its first comment' do
+    article = TrackedArticle.transaction do
+      TrackedArticle.create!(title: 'Draft').tap do |created|
+        3.times { |index| created.comments.create!(body: "Comment #{index}") }
+      end
+    end
+    comments = article.comments.order(:id).to_a
+    first = article.versions.reorder(:created_at, :id).first
+    expect_any_instance_of(PaperTrailDiff::PreparedActivitySnapshots)
+      .to receive(:call).twice.and_call_original
+
+    steps = PaperTrailDiff.activity_timeline(article, from: first, to: article,
+                                                      associations: [:comments])
+
+    reported = steps.reject(&:empty?)
+    expect(reported.map { |step| step.source_boundary.item_id })
+      .to eq([article.id, comments.last.id])
+    expect(reported.last.diff.associations.fetch('comments').added.map(&:id))
+      .to match_array(comments.map(&:id))
+  end
+
+  # The snapshot at the article's update reads the comments as they stood
+  # before its transaction, and so does the one at the comment's event after
+  # it, in the same transaction: only the article's own version lies between
+  # them, so its snapshot is carried forward, as after an update alone in its
+  # transaction. The create has none to carry.
+  it "carries the article's snapshot to the next event of its transaction" do
+    article = TrackedArticle.create!(title: 'Draft')
+    comment = article.comments.create!(body: 'First')
+    TrackedArticle.transaction do
+      article.update!(title: 'Edited')
+      comment.update!(body: 'Edited')
+    end
+    first = article.versions.reorder(:created_at, :id).first
+    carried = []
+    allow_any_instance_of(PaperTrailDiff::ActivityRootSnapshotRefresher)
+      .to receive(:call).and_wrap_original do |original, *arguments|
+        original.call(*arguments).tap { |result| carried << result.first }
+      end
+
+    steps = PaperTrailDiff.activity_timeline(article, from: first, to: article.reload,
+                                                      associations: [:comments])
+
+    expect(carried).to eq([false, true])
+    edit, comment_edit = steps.last(2)
+    expect(edit.diff.attributes.fetch('title').to_h).to eq(from: 'Draft', to: 'Edited')
+    expect(comment_edit.diff.associations.fetch('comments').changed
+      .map { |change| change.attributes.fetch('body').to_h })
+      .to eq([{ from: 'First', to: 'Edited' }])
+  end
+
+  # The snapshot at a root version starts from the state that version stored,
+  # and the next one from the state stored at the root's next version, which
+  # is decoded for it anyway. Comparing the two says which branches to read
+  # again, without decoding the version's recorded changes.
+  it "carries an article's edits forward without decoding their recorded changes" do
+    article = TrackedArticle.create!(title: 'Draft')
+    article.comments.create!(body: 'First')
+    3.times { |index| article.update!(title: "Edit #{index}") }
+    first = article.versions.reorder(:created_at, :id).first
+    expect_any_instance_of(PaperTrailDiff::ActivityEventRecordResolver)
+      .not_to receive(:deserialized_changeset)
+    expect_any_instance_of(PaperTrailDiff::PreparedRecordIndex).not_to receive(:transition)
+
+    steps = PaperTrailDiff.activity_timeline(article, from: first, to: article.reload,
+                                                      associations: [:comments])
+
+    titles = steps.filter_map { |step| step.diff.attributes['title']&.to_h }
+    expect(titles).to eq([{ from: 'Draft', to: 'Edit 0' }, { from: 'Edit 0', to: 'Edit 1' },
+                          { from: 'Edit 1', to: 'Edit 2' }])
+  end
 end

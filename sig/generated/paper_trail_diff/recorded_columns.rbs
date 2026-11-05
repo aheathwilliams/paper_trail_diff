@@ -1,0 +1,21 @@
+# Generated from lib/paper_trail_diff/recorded_columns.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Whether PaperTrail writes a column's changes to `object_changes` whenever
+  # a version saves them. Only then does a version that left a column out of
+  # its recorded changes show that the column changed without a version.
+  #
+  # `has_paper_trail ignore:` and `skip:` leave a column out, and `only:`
+  # leaves out every column it does not name. Each can also name a column
+  # with a condition, read when the version was saved; such a column might
+  # have been left out, so it is not counted as recorded either.
+  module RecordedColumns
+    # : (untyped, String?) -> bool
+    def self.recorded?: (untyped, String?) -> bool
+
+    # PaperTrail keeps each entry as a name, or as a hash of names to
+    # conditions, which may be a subclass such as HashWithIndifferentAccess.
+    # : (Array[untyped], String?) -> bool
+    def self.named?: (Array[untyped], String?) -> bool
+  end
+end

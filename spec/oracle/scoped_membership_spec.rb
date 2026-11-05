@@ -90,9 +90,12 @@ module OracleNoteEdits
 end
 
 RSpec.describe 'Rebuilt scoped membership against the recorded states' do
+  # JSON history keeps times to milliseconds by default, too few to bound
+  # `deleted_at` as the database does, so the gem refuses that scope there.
   let(:paths) do
-    OraclePost.reflect_on_all_associations.map { |reflection| reflection.name.to_s }
-              .grep_v('versions').sort
+    names = OraclePost.reflect_on_all_associations.map { |reflection| reflection.name.to_s }
+                      .grep_v('versions').sort
+    (HistorySerializer.time_digits || 9) >= 6 ? names : names - ['trashed_since_notes']
   end
 
   before do

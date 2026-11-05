@@ -71,13 +71,15 @@ module PaperTrailDiff
     def merge(group)
       first = group.first #: ActivityStep
       last = group.last #: ActivityStep
+      sources = group.flat_map(&:sources)
       ActivityStep.between(
         from_boundary: first.from_boundary,
         to_boundary: last.to_boundary,
         from_snapshot: first.from_snapshot,
         to_snapshot: last.to_snapshot,
         retain: @retain,
-        sources: group.flat_map(&:sources)
+        sources: sources,
+        attribution: first.attribution&.with_sources(sources)
       )
     end
   end

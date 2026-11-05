@@ -58,6 +58,11 @@ module PaperTrailDiff
     # : (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer) -> RecordSnapshot?
     def custom: (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer) -> RecordSnapshot?
 
+    # The state this root's snapshot at an endpoint is built from, where
+    # prepared history builds it.
+    # : (untyped) -> PreparedRecordState?
+    def root_state: (untyped) -> PreparedRecordState?
+
     # : (untyped, habtm_version: untyped) -> untyped
     def association_reader: (untyped, habtm_version: untyped) -> untyped
 
@@ -98,6 +103,17 @@ module PaperTrailDiff
 
     # : (ActivityEvent, ActivityEvent, RecordSnapshot?) -> RecordSnapshot?
     def transition_snapshot: (ActivityEvent, ActivityEvent, RecordSnapshot?) -> RecordSnapshot?
+
+    # A transaction with a root event is read whole once it ends. Until then,
+    # PT-AT reads the records it saved as they stood before it began, so from
+    # one descendant's event to the next in the same transaction the snapshot
+    # is the same, and from the root's event to a descendant's only the root's
+    # own version applies, as when it is alone in its transaction. A create
+    # leaves nothing to advance. The root's version can record what the
+    # transaction changed, such as HABTM membership, so a snapshot at a root
+    # event is rebuilt.
+    # : (ActivityEvent, ActivityEvent, RecordSnapshot?) -> RecordSnapshot?
+    def rebuilt_snapshot: (ActivityEvent, ActivityEvent, RecordSnapshot?) -> RecordSnapshot?
 
     # : (ActivityEvent) -> bool
     def incremental_root?: (ActivityEvent) -> bool

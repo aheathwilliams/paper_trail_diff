@@ -45,10 +45,7 @@ module PaperTrailDiff
     # change.
     #: (untyped, Hash[untyped, untyped]) -> Hash[untyped, untyped]
     def stored_attributes(model_class, attributes)
-      attributes = TimeOfDay.apply(model_class, attributes)
-      digits = StoredTimePrecision.digits(model_class)
-      stored = digits ? StoredJsonValues.apply(model_class, attributes) : attributes
-      Support.immutable_copy(StoredTimePrecision.apply(stored, digits))
+      Support.immutable_copy(StoredValues.apply(model_class, attributes))
     end
   end
 
@@ -113,8 +110,11 @@ module PaperTrailDiff
   class PreparedRecordSeries
     attr_reader :versions #: Array[untyped]
 
-    #: (versions: Array[untyped], live: PreparedRecordState?, ?state_loader: PreparedVersionStateLoader) -> void
-    def initialize(versions:, live:, state_loader: PreparedVersionStateLoader.new)
+    # The live fallback is a state, or a current record whose state is read
+    # the first time a read reaches past the last version. Most reads stop at
+    # a version, and reading a row's state casts every column it has.
+    #: (versions: Array[untyped], live: PreparedRecordState?, ?live_record: untyped, ?state_loader: PreparedVersionStateLoader) -> void
+    def initialize(versions:, live:, live_record: nil, state_loader: PreparedVersionStateLoader.new)
       @versions = Support.chronological_sort(versions).freeze
       @times = @versions.map(&:created_at).freeze
       @version_positions = @versions.each_with_index.to_h do |version, index|
@@ -122,6 +122,7 @@ module PaperTrailDiff
       end.freeze
       @transaction_positions = build_transaction_positions
       @live = live
+      @live_record = live_record
       @state_loader = state_loader
       @states = {} #: Hash[untyped, PreparedRecordState?]
     end
@@ -151,7 +152,7 @@ module PaperTrailDiff
       index = boundary_index(boundary)
       return state_for(versions.fetch(index)) if index
 
-      @live
+      live
     end
 
     # A handled nil is known absence, not permission to query the current row.
@@ -172,8 +173,8 @@ module PaperTrailDiff
     #: () -> Array[PreparedRecordState]
     def states
       recorded = versions.filter_map { |version| state_for(version) }
-      live = @live
-      live ? [*recorded, live] : recorded
+      current = live
+      current ? [*recorded, current] : recorded
     end
 
     # The classes the record had at any point, or either side of one version:
@@ -207,6 +208,7 @@ module PaperTrailDiff
 
     # @rbs @times: Array[untyped]
     # @rbs @live: PreparedRecordState?
+    # @rbs @live_record: untyped
     # @rbs @state_loader: PreparedVersionStateLoader
     # @rbs @states: Hash[untyped, PreparedRecordState?]
     # @rbs @version_positions: Hash[String, Integer]
@@ -215,7 +217,16 @@ module PaperTrailDiff
     #: (Integer) -> PreparedRecordState?
     def state_after(index)
       successor = versions[index + 1]
-      successor ? state_for(successor) : @live
+      successor ? state_for(successor) : live
+    end
+
+    #: () -> PreparedRecordState?
+    def live
+      record = @live_record
+      return @live unless record
+
+      @live_record = nil
+      @live = PreparedRecordState.new(record)
     end
 
     # A version is eligible when it is at or after the boundary, or shares the
@@ -463,8 +474,7 @@ module PaperTrailDiff
     def add_series(model_class, id, versions, live)
       record = live[id.to_s]
       @series[identity(model_class, id)] = PreparedRecordSeries.new(
-        versions: versions.fetch(id.to_s, []),
-        live: record && PreparedRecordState.new(record),
+        versions: versions.fetch(id.to_s, []), live: nil, live_record: record,
         state_loader: @state_loader
       )
     end

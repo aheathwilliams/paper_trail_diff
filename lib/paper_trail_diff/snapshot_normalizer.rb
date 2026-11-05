@@ -155,11 +155,7 @@ module PaperTrailDiff
     def normalized_attributes(record, reflections, path)
       attributes = record.attributes
       excluded_attributes(record, reflections, path).each { |name| attributes.delete(name) }
-      attributes = TimeOfDay.apply(record.class, attributes)
-      digits = StoredTimePrecision.digits(record.class)
-      return attributes unless digits
-
-      StoredTimePrecision.apply(StoredJsonValues.apply(record.class, attributes), digits)
+      StoredValues.apply(record.class, attributes)
     end
 
     # Every input is fixed for one model class at one selected path, and the

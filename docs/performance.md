@@ -47,10 +47,10 @@ Flat query counts do not make a report's cost flat:
   window is decoded and compared: an `analyze_scope` of articles with five
   updates each took about 1.5 ms per article, and one article with 5,000
   updates took 1.2 s.
-- **Versions stored as JSON read about 40% faster than YAML.** A `report` on
-  500 articles with 31 versions each took 7.9 s with PaperTrail's default
-  YAML serializer and 4.5 s with its JSON one, or 14.5 s and 8.6 s with their
-  comments, and peaked at a fifth to a quarter less memory. JSON keeps times
+- **Versions stored as JSON read about a third faster than YAML.** A `report`
+  on 500 articles with 31 versions each took 6.8 s with PaperTrail's default
+  YAML serializer and 4.5 s with its JSON one, or 9.8 s and 6.7 s with their
+  comments, and peaked at up to a fifth less memory. JSON keeps times
   to milliseconds and stores a few values differently (see
   [history stored as JSON](reference.md#history-stored-as-json)). PaperTrail
   reads every stored version with the one serializer, so switching means
@@ -63,9 +63,12 @@ Flat query counts do not make a report's cost flat:
 - **Work on a wide collection grows with its size times its history.** Each
   step of an activity timeline copies the collection's list of records, so
   an activity timeline over `n` comments that changed `m` times does about
-  `n × m` work: 800 comments edited 1,000 times took about 3 s. `timeline`
-  reads every member at each version of the root instead: 300 comments over
-  2,001 versions of their article took about 7.5 s.
+  `n × m` work: 800 comments edited 1,000 times took about 3 s. Members
+  saved in one transaction share one snapshot: a `report` on 100 articles,
+  each created with 100 comments in one transaction and edited with all of
+  them in another, took about 4.6 s. `timeline` reads every member at each
+  version of the root instead: 300 comments over 2,001 versions of their
+  article took about 7.5 s.
 - **`snapshots: true` and `recorded_changes: true` cost memory and time.** Ask
   for them only when you use them.
 - **Each edge of a window takes one statement per 250 records, and one or two
@@ -156,9 +159,10 @@ time from the [test clock](testing.md#test-clock), so a host clock that steps
 backwards cannot reorder the versions they seed. Compare counts as well as
 times, and run the correctness suites separately; no CI job checks timings.
 
-The query counts in the first table, the `timeline` of 300 comments, and the
-serializers were measured on 2026-11-03, the counts after `report`'s window
-lost its end; the other numbers on 2026-10-30 at revision `6c3d30b`. Both used
+The query counts in the first table and the `timeline` of 300 comments were
+measured on 2026-11-03, the counts after `report`'s window lost its end; the
+serializers on 2026-11-04; the other numbers on 2026-10-30 at revision
+`6c3d30b`. Both used
 Ruby 4.0.1, Active Record 8.1.3.1, PaperTrail 17.0.0, and SQLite 3.53.2, on
 WSL2 on an AMD Ryzen 7 7800X3D. The memory, wide-collection, serializer, and
 index figures come from one-off scripts rather than these two. The benchmark's

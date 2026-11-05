@@ -52,3 +52,4 @@ end
 
 require 'paper_trail_diff'
 require_relative 'support/paper_trail_transaction_reset'
+require_relative 'support/history_serializer'

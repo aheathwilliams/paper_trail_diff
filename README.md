@@ -166,7 +166,8 @@ report.deleted     # Reports for those records, or nil when destroy history is m
 
 `report.analyses` is a hash of reports for records that still exist. Each key is
 `[model_name, id_as_a_string]`. Each value has the net `diff` and an
-`activity_timeline`. `report.roots` returns the selected ActiveRecord objects.
+`activity_timeline`. `report.roots` returns the selected ActiveRecord objects,
+and `report.analysis_for(record)` the report for one of them.
 
 `include_deleted: true` also builds reports from PaperTrail's destroy versions.
 Read them from `report.deleted` using the same keys:
@@ -251,10 +252,44 @@ covers one of two things:
 
 `record` is the record the row is about, or `nil` for the article itself, and
 `association_path` is how it was reached, such as `["comments"]`. `to_h` adds
-the step's source version: `version_id`, `event`, `whodunnit`, `recorded_at`,
-and `transaction_id`. With `group: :transaction`, that is the transaction's
-first event; `step.sources` lists every event. `row.source` is the
+the version that made the change: `version_id`, `event`, `whodunnit`,
+`recorded_at`, and `transaction_id`. That is the version of the row's own
+record, even when another record's event opens the step, as in a transaction.
+A record that joined or left through another record's change, such as an
+article's new author, names the step's first event. `row.source` is the
 `ActivityBoundary` itself.
+
+A write made without a version, such as `update_columns`, shows up in the
+step of the record's previous change. Pass `recorded_changes: true` to
+`report` to tell it apart: the part of a change PaperTrail did not record
+gets a row of its own, with `row.unversioned?` true and no `version_id`,
+`event`, `whodunnit`, or `recorded_at`. To list only what versions recorded:
+
+```ruby
+recorded = report.change_rows.transform_values { |rows| rows.reject(&:unversioned?) }
+```
+
+Some writes cannot be told apart, such as one to a column `has_paper_trail`
+ignores; see [change rows](docs/reference.md#change-rows).
+
+For one entry per record instead, `net_changes` folds the rows a block keeps
+into each record's fields before and after them. This one keeps the changes
+people made, leaving out writes saved without a version, which have no
+author:
+
+<!-- executable:recipe-net-changes -->
+```ruby
+report = PaperTrailDiff.report(
+  Article.all, since: 1.day.ago, limit: 100, associations: [:comments],
+  snapshots: true, recorded_changes: true
+)
+
+changes = report.net_changes { |row| row.source.whodunnit }
+```
+
+Each value lists the article, then each comment that changed, was added, or
+was removed, with its `before` and `after` fields and the `diff` between
+them. See [net changes](docs/reference.md#net-changes).
 
 `change_rows` is also on an `Analysis` built with `activity: true` and on each
 activity step. Labels, grouping, and formatting are left to your application.

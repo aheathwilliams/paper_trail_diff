@@ -29,7 +29,8 @@ RSpec.describe PaperTrailDiff::HistoricalFilter do
 
   def record_version(article, event, object, **attributes)
     FilterVersion.create!(item_type: 'FilterArticle', item_id: article.id, event: event,
-                          object: object&.to_yaml, created_at: Time.now, **attributes)
+                          object: object && PaperTrail.serializer.dump(object),
+                          created_at: Time.now, **attributes)
   end
 
   # Selects run while the block runs, and versions loaded per query.

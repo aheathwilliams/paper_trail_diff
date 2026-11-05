@@ -34,7 +34,9 @@ module OracleHabtmTruth
   end
 
   def record(model, except: [], associations: {})
-    attributes = model.attributes.except(model.class.primary_key, 'updated_at', *except)
+    attributes = HistorySerializer.as_stored(
+      model, model.attributes.except(model.class.primary_key, 'updated_at', *except)
+    )
     PaperTrailDiff::RecordSnapshot.new(type: model.class.name, id: model.id,
                                        attributes: attributes, associations: associations)
   end

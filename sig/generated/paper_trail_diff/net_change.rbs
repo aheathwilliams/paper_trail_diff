@@ -1,0 +1,168 @@
+# Generated from lib/paper_trail_diff/net_change.rb with RBS::Inline
+
+module PaperTrailDiff
+  # One record's net change over the change rows a caller kept: its state
+  # before them, and that state with only the kept changes made. Built by
+  # Analysis#net_changes (see NetChanges).
+  class NetChange
+    attr_reader association_path: Array[String]
+
+    attr_reader association_kind: Symbol?
+
+    # The record, or nil for the root itself, as on a change row.
+    attr_reader record: RecordReference?
+
+    # The record's fields when the step holding its first kept change began,
+    # or nil where it was not there. The records it holds are left out: each
+    # has an entry of its own.
+    attr_reader before: RecordSnapshot?
+
+    # `before` with only the kept changes made, or nil where they removed the
+    # record.
+    attr_reader after: RecordSnapshot?
+
+    # `before` compared with `after`: the fields that differ, or the record's
+    # appearance or removal.
+    attr_reader diff: Diff
+
+    # The events that made the kept changes, in order, each once.
+    attr_reader sources: Array[ActivityBoundary]
+
+    # : (association_path: Array[String], association_kind: Symbol?, record: RecordReference?, before: RecordSnapshot?, after: RecordSnapshot?, sources: Array[ActivityBoundary]) -> void
+    def initialize: (association_path: Array[String], association_kind: Symbol?, record: RecordReference?, before: RecordSnapshot?, after: RecordSnapshot?, sources: Array[ActivityBoundary]) -> void
+
+    # : () -> bool
+    def root?: () -> bool
+
+    # Whether the record was not there before its first kept change.
+    # : () -> bool
+    def added?: () -> bool
+
+    # Whether the kept changes left the record gone.
+    # : () -> bool
+    def removed?: () -> bool
+
+    # : () -> Hash[Symbol, untyped]
+    def to_h: () -> Hash[Symbol, untyped]
+  end
+
+  # Folds an activity timeline's change rows into one NetChange for each
+  # record a kept row is about, known by its association path and identity as
+  # the row names it.
+  #
+  # A record's `before` is its state in the snapshot that the step of its
+  # first kept row starts from. Each kept row then makes its change in time
+  # order: a field takes the row's new value, and a row about the whole record
+  # moves it in or out as the step's closing snapshot has it. A record that
+  # appears takes that snapshot's fields, so a field no kept row sets keeps
+  # the value it has there; the kept rows of its fields then replace any value
+  # a dropped row left.
+  class NetChanges
+    # What one record's kept rows have made of it so far.
+    class RecordFold
+      # The rows that set a field; a removed record's rows leave them be.
+      SETTING: untyped
+
+      # : (ChangeRow, RecordSnapshot?) -> void
+      def initialize: (ChangeRow, RecordSnapshot?) -> void
+
+      # Makes one step's kept rows of the record. The block finds the record
+      # in the step's closing snapshot, which only a row about the whole
+      # record needs.
+      # : (Array[ChangeRow]) { () -> RecordSnapshot? } -> void
+      def apply: (Array[ChangeRow]) { () -> RecordSnapshot? } -> void
+
+      # : () -> NetChange
+      def net_change: () -> NetChange
+
+      private
+
+      @before: RecordSnapshot?
+
+      @present: bool
+
+      @read: RecordSnapshot?
+
+      @row: ChangeRow
+
+      @sources: Array[ActivityBoundary]
+
+      @values: Hash[String, untyped]
+
+      # A record that appears, or moves between the records holding it, takes
+      # its fields from where it ends up, which an added row's step holds.
+      # : (Array[ChangeRow], RecordSnapshot?) -> void
+      def move: (Array[ChangeRow], RecordSnapshot?) -> void
+
+      # A record is there only once its own state was read, before its first
+      # kept row or where it appeared.
+      # : () -> RecordSnapshot?
+      def after: () -> RecordSnapshot?
+    end
+
+    # `keep` picks the rows to make; without it, every row is made.
+    # : (Array[ActivityStep], (^(ChangeRow) -> boolish)?) -> Array[NetChange]
+    def self.call: (Array[ActivityStep], (^(ChangeRow) -> boolish)?) -> Array[NetChange]
+
+    # : (Array[ActivityStep], (^(ChangeRow) -> boolish)?) -> void
+    def initialize: (Array[ActivityStep], (^(ChangeRow) -> boolish)?) -> void
+
+    # : () -> Array[NetChange]
+    def call: () -> Array[NetChange]
+
+    private
+
+    @folds: Hash[Array[untyped], RecordFold]
+
+    @holders: Hash[[ RecordSnapshot, Array[String] ], Array[RecordSnapshot]]
+
+    @keep: (^(ChangeRow) -> boolish)?
+
+    @opening_root: RecordSnapshot?
+
+    @steps: Array[ActivityStep]
+
+    # A step with a change has a state on at least one side, which it keeps
+    # only when asked to.
+    # : () -> void
+    def check_snapshots!: () -> void
+
+    # : (ActivityStep) -> Array[ChangeRow]
+    def kept: (ActivityStep) -> Array[ChangeRow]
+
+    # : (ChangeRow) -> Array[untyped]
+    def key: (ChangeRow) -> Array[untyped]
+
+    # : (Array[untyped], ActivityStep, Array[ChangeRow]) -> void
+    def fold: (Array[untyped], ActivityStep, Array[ChangeRow]) -> void
+
+    # The root comes first whenever anything is listed, so a report has its
+    # fields when only the records it holds changed; then each record in the
+    # order of its first kept change. A record the kept changes left as it
+    # was is left out.
+    # : () -> Array[NetChange]
+    def listed: () -> Array[NetChange]
+
+    # The root, without a kept change of its own, as the first kept change
+    # found it.
+    # : () -> NetChange
+    def unchanged_root: () -> NetChange
+
+    # The record a row is about in one of its step's snapshots, under any of
+    # the records along its path; nil where it is not there.
+    # : (RecordSnapshot?, ChangeRow) -> RecordSnapshot?
+    def locate: (RecordSnapshot?, ChangeRow) -> RecordSnapshot?
+
+    # The records reached through `parents` from the root, read once for each
+    # snapshot.
+    # : (RecordSnapshot, Array[String]) -> Array[RecordSnapshot]
+    def holders: (RecordSnapshot, Array[String]) -> Array[RecordSnapshot]
+
+    # : (RecordSnapshot, Array[String]) -> Array[RecordSnapshot]
+    def reach: (RecordSnapshot, Array[String]) -> Array[RecordSnapshot]
+
+    # The record's own fields, without the records it holds.
+    # : (RecordSnapshot?) -> RecordSnapshot?
+    def flat: (RecordSnapshot?) -> RecordSnapshot?
+  end
+end

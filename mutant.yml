@@ -43,6 +43,7 @@ matcher:
     - PaperTrailDiff::StoredTimePrecision*
     - PaperTrailDiff::StoredJsonValues*
     - PaperTrailDiff::TimeOfDay*
+    - PaperTrailDiff::StoredValues*
     - PaperTrailDiff::Endpoint*
     - PaperTrailDiff::EndpointKind*
     - PaperTrailDiff::TimelineRange*
@@ -69,8 +70,13 @@ matcher:
     - PaperTrailDiff::RecordedChanges*
     - PaperTrailDiff::RecordedChangesReader*
     - PaperTrailDiff::RecordedClass*
+    - PaperTrailDiff::RecordedColumns*
     - PaperTrailDiff::ChangeRow*
     - PaperTrailDiff::ChangeRows*
+    - PaperTrailDiff::ChangeAttribution*
+    - PaperTrailDiff::NetChange*
+    - PaperTrailDiff::NetChanges*
+    - PaperTrailDiff::ScopedAnalysis*
     - PaperTrailDiff::AssociationActivitySelection*
     - PaperTrailDiff::AssociationActivityEdge*
     - PaperTrailDiff::ActivityChildCandidateLoader*

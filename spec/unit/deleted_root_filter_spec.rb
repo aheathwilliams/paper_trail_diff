@@ -34,7 +34,8 @@ RSpec.describe PaperTrailDiff::DeletedRootFilter do
 
   def record_destroy(item_type, id, object, created_at: Time.now)
     FilterVersion.create!(item_type: item_type, item_id: id, event: 'destroy',
-                          created_at: created_at, object: object&.to_yaml)
+                          created_at: created_at,
+                          object: object && PaperTrail.serializer.dump(object))
   end
 
   it "reads the default scope too, and the latest destroy of the root's own type" do

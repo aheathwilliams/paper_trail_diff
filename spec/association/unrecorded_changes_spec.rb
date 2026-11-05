@@ -171,6 +171,24 @@ RSpec.describe 'Changes saved without a version' do
               { 'body' => { from: 'Edited', to: 'Final' } }])
   end
 
+  it 'runs the reference example that leaves out what no version recorded' do
+    context = Object.new.instance_eval { binding }
+    context.local_variable_set(:article, history)
+
+    recorded = DocumentationExamples.evaluate(
+      File.expand_path('../../docs/reference.md', __dir__),
+      session: 'reference-unversioned-rows', context: context
+    ).last
+    rows = context.local_variable_get(:analysis).change_rows
+
+    expect(rows.select(&:unversioned?).map { |row| [row.attribute, row.from, row.to] })
+      .to eq([['body', 'First', 'Unrecorded body'], ['title', 'Published', 'Unrecorded title']])
+    expect(recorded.map(&:to_h)).to eq(rows.reject(&:unversioned?).map(&:to_h))
+    expect(recorded.select { |row| row.change == :changed }
+                   .map { |row| [row.attribute, row.to, row.source.whodunnit] })
+      .to eq([%w[title Published carol], %w[body Edited dave]])
+  end
+
   describe 'a key changed without appearing in object_changes' do
     before { TrackedAuthor.delete_all }
 

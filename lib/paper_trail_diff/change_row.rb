@@ -15,7 +15,11 @@ module PaperTrailDiff
     attr_reader :attribute #: String?
     attr_reader :from #: untyped
     attr_reader :to #: untyped
-    # The step's source boundary: for a transaction group, its first event.
+    # The event that made the change: the version of the row's record that
+    # recorded it, or a source of kind `:unversioned` for a change saved
+    # without a version. A row the step's own events do not account for, such
+    # as a record joining a collection through another record's change, names
+    # the step's source boundary.
     attr_reader :source #: ActivityBoundary
 
     #: (change: Symbol, association_path: Array[String], association_kind: Symbol?, record: RecordReference?, attribute: String?, from: untyped, to: untyped, source: ActivityBoundary) -> void
@@ -31,6 +35,14 @@ module PaperTrailDiff
       @to = to
       @source = source
       freeze
+    end
+
+    # Whether the change was saved without a version, such as with
+    # `update_columns`, which PaperTrail never recorded. Only told apart with
+    # `recorded_changes: true`.
+    #: () -> bool
+    def unversioned?
+      source.unversioned?
     end
 
     # The source's identifying fields sit beside the change rather than nested,
@@ -72,22 +84,29 @@ module PaperTrailDiff
     RECORD_ENTRIES = %i[record_added record_removed record_included].freeze
     private_constant :RECORD_ENTRIES
 
-    #: (Diff, source: ActivityBoundary) -> Array[ChangeRow]
-    def self.call(diff, source:)
-      new(source).call(diff)
+    # `attribution` credits each row to the event that made its change, and
+    # can split one in two (see ChangeAttribution); without it, every row is
+    # credited to `source`.
+    #: (Diff, source: ActivityBoundary, ?attribution: ChangeAttribution?) -> Array[ChangeRow]
+    def self.call(diff, source:, attribution: nil)
+      new(source, attribution).call(diff)
     end
 
-    #: (ActivityBoundary) -> void
-    def initialize(source)
+    #: (ActivityBoundary, ChangeAttribution?) -> void
+    def initialize(source, attribution)
       @source = source
+      @attribution = attribution
     end
 
     #: (Diff) -> Array[ChangeRow]
     def call(diff)
       rows = [] #: Array[ChangeRow]
+      attribution = @attribution
       diff.each_entry do |entry|
         row = row_for(entry)
-        rows << row if row
+        next unless row
+
+        attribution ? rows.concat(attribution.call(row)) : rows << row
       end
       rows.freeze
     end
@@ -95,6 +114,7 @@ module PaperTrailDiff
     private
 
     # @rbs @source: ActivityBoundary
+    # @rbs @attribution: ChangeAttribution?
 
     #: (TraversalEntry) -> ChangeRow?
     def row_for(entry)

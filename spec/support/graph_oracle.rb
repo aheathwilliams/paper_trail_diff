@@ -46,8 +46,9 @@ module Oracle
       keys = reflections.select(&:belongs_to?).flat_map do |reflection|
         [reflection.foreign_key.to_s, *(reflection.foreign_type.to_s if reflection.polymorphic?)]
       end
-      attributes = record.attributes.except(record.class.primary_key, 'updated_at', *incoming,
-                                            *keys)
+      attributes = HistorySerializer.as_stored(
+        record, record.attributes.except(record.class.primary_key, 'updated_at', *incoming, *keys)
+      )
       associations = reflections.to_h do |reflection|
         [reflection.name.to_s, association(record, reflection, tree.fetch(reflection.name.to_s))]
       end

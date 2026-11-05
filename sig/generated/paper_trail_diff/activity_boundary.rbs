@@ -48,6 +48,12 @@ module PaperTrailDiff
     # : (untyped, ?recorded: RecordedChangesReader?) -> ActivityBoundary
     def self.destroyed: (untyped, ?recorded: RecordedChangesReader?) -> ActivityBoundary
 
+    # Where a change saved without a version came from, such as an
+    # `update_columns` call: no version, event, author or time recorded it,
+    # so it has none to report. A change row names it as its source.
+    # : (item_type: String, item_id: untyped) -> ActivityBoundary
+    def self.unversioned: (item_type: String, item_id: untyped) -> ActivityBoundary
+
     # : (untyped, Symbol, RecordedChangesReader?) -> ActivityBoundary
     private def self.of_version: (untyped, Symbol, RecordedChangesReader?) -> ActivityBoundary
 
@@ -81,6 +87,9 @@ module PaperTrailDiff
     # : () -> bool
     def destroyed?: () -> bool
 
+    # : () -> bool
+    def unversioned?: () -> bool
+
     # : (?metadata: bool) -> Hash[Symbol, untyped]
     def to_h: (?metadata: bool) -> Hash[Symbol, untyped]
   end
@@ -108,14 +117,21 @@ module PaperTrailDiff
     # would credit the rest of the save to whoever opened it.
     attr_reader sources: Array[ActivityBoundary]
 
+    # @api private
+    # What credits this step's change rows, which a transaction group extends
+    # over the steps it merges.
+    attr_reader attribution: ChangeAttribution?
+
     # Compares two reconstructed states and keeps them only when asked, which is
     # every caller's shape: the diff always comes from the pair, the pair itself
     # is retained on request.
-    # : (from_boundary: ActivityBoundary, to_boundary: ActivityBoundary, from_snapshot: RecordSnapshot?, to_snapshot: RecordSnapshot?, retain: bool, ?sources: Array[ActivityBoundary]?) -> ActivityStep
-    def self.between: (from_boundary: ActivityBoundary, to_boundary: ActivityBoundary, from_snapshot: RecordSnapshot?, to_snapshot: RecordSnapshot?, retain: bool, ?sources: Array[ActivityBoundary]?) -> ActivityStep
+    # : (from_boundary: ActivityBoundary, to_boundary: ActivityBoundary, from_snapshot: RecordSnapshot?, to_snapshot: RecordSnapshot?, retain: bool, ?sources: Array[ActivityBoundary]?, ?attribution: ChangeAttribution?) -> ActivityStep
+    def self.between: (from_boundary: ActivityBoundary, to_boundary: ActivityBoundary, from_snapshot: RecordSnapshot?, to_snapshot: RecordSnapshot?, retain: bool, ?sources: Array[ActivityBoundary]?, ?attribution: ChangeAttribution?) -> ActivityStep
 
-    # : (from_boundary: ActivityBoundary, to_boundary: ActivityBoundary, diff: Diff, ?from_snapshot: RecordSnapshot?, ?to_snapshot: RecordSnapshot?, ?sources: Array[ActivityBoundary]?) -> void
-    def initialize: (from_boundary: ActivityBoundary, to_boundary: ActivityBoundary, diff: Diff, ?from_snapshot: RecordSnapshot?, ?to_snapshot: RecordSnapshot?, ?sources: Array[ActivityBoundary]?) -> void
+    # `attribution` credits each change row to the version that made it (see
+    # ChangeAttribution); without it, every row names `source_boundary`.
+    # : (from_boundary: ActivityBoundary, to_boundary: ActivityBoundary, diff: Diff, ?from_snapshot: RecordSnapshot?, ?to_snapshot: RecordSnapshot?, ?sources: Array[ActivityBoundary]?, ?attribution: ChangeAttribution?) -> void
+    def initialize: (from_boundary: ActivityBoundary, to_boundary: ActivityBoundary, diff: Diff, ?from_snapshot: RecordSnapshot?, ?to_snapshot: RecordSnapshot?, ?sources: Array[ActivityBoundary]?, ?attribution: ChangeAttribution?) -> void
 
     # : () -> bool
     def empty?: () -> bool
@@ -125,7 +141,9 @@ module PaperTrailDiff
     # : () -> ActivityBoundary
     def source_boundary: () -> ActivityBoundary
 
-    # The diff as flat rows, each attributed to `source_boundary`.
+    # The diff as flat rows, each credited to the event that made its change:
+    # the version of the row's record that recorded it, an unversioned source
+    # for a part saved without a version, or else `source_boundary`.
     # : () -> Array[ChangeRow]
     def change_rows: () -> Array[ChangeRow]
 

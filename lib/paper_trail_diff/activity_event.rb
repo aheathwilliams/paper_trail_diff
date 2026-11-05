@@ -126,6 +126,14 @@ module PaperTrailDiff
       !key || (@group_sizes[key] == 1 && !@opening.include?(key))
     end
 
+    # Whether two events were saved in one transaction that began inside the
+    # history.
+    #: (ActivityEvent, ActivityEvent) -> bool
+    def shared?(left, right)
+      key = transaction_key(left)
+      !key.nil? && key == transaction_key(right) && !@opening.include?(key)
+    end
+
     private
 
     # @rbs @branches: Hash[Array[untyped]?, Array[String]?]

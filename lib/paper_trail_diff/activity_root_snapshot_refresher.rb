@@ -4,7 +4,9 @@
 module PaperTrailDiff
   # Advances scalar-only root events while retaining already reconstructed associations.
   class ActivityRootSnapshotRefresher
-    #: (tree: AssociationTree, traversal: AssociationTraversal, normalizer: SnapshotNormalizer, record_after: untyped, changeset: untyped, partial_snapshotter: untyped, ?record_transition: untyped) -> void
+    # `root_state` gives the state a root endpoint's snapshot is built from,
+    # where prepared history builds it.
+    #: (tree: AssociationTree, traversal: AssociationTraversal, normalizer: SnapshotNormalizer, record_after: untyped, changeset: untyped, partial_snapshotter: untyped, ?record_transition: untyped, ?root_state: untyped) -> void
     def initialize( # rubocop:disable Metrics/ParameterLists
       tree:,
       traversal:,
@@ -12,7 +14,8 @@ module PaperTrailDiff
       record_after:,
       changeset:,
       partial_snapshotter:,
-      record_transition: nil
+      record_transition: nil,
+      root_state: nil
     )
       @tree = tree
       @traversal = traversal
@@ -21,15 +24,18 @@ module PaperTrailDiff
       @changeset = changeset
       @partial_snapshotter = partial_snapshotter
       @record_transition = record_transition
+      @root_state = root_state
       @unsupported_branches = {} #: Hash[String, Array[String]]
       @relationship_reflections = {} #: Hash[String, Array[untyped]]
     end
 
+    # `previous` is the snapshot at the root's `event`, and the result the one
+    # at the next event, whose root is read at `root_endpoint`.
     #: (untyped, untyped, RecordSnapshot?, ActivityEvent) -> [bool, RecordSnapshot?]
     def call(root_endpoint, context_endpoint, previous, event)
       return [false, nil] unless previous && event.root?
 
-      record, branches = advance_target(previous, event.version)
+      record, branches = target(previous, event.version, root_endpoint)
       return [false, nil] unless record && branches
 
       partial = nil #: RecordSnapshot?
@@ -41,6 +47,38 @@ module PaperTrailDiff
     end
 
     private
+
+    # The snapshot at a root version starts from the state stored in that
+    # version, and the next one from the state at its own root endpoint. Where
+    # prepared history built both from those states, the two are compared
+    # directly; nothing else needs to be decoded. Otherwise the version's
+    # recorded change and the record after it are read.
+    #: (RecordSnapshot, untyped, untyped) -> [untyped, Array[String]]?
+    def target(previous, version, root_endpoint)
+      before = @root_state&.call(version)
+      after = before && @root_state&.call(root_endpoint)
+      return advance_target(previous, version) unless before && after
+
+      state_target(previous, version, before, after)
+    end
+
+    # The state at the next event and the branches whose reads the root's
+    # change between the two states can alter. A change of STI class can
+    # change the associations themselves, so it is rebuilt in full.
+    #: (RecordSnapshot, untyped, PreparedRecordState, PreparedRecordState) -> [PreparedRecordState, Array[String]]?
+    def state_target(previous, version, before, after)
+      model_class = before.model_class
+      return unless after.model_class == model_class && same_record?(previous, model_class, version)
+
+      [after, branches_to_refresh(model_class, changed_between(before, after))]
+    end
+
+    #: (PreparedRecordState, PreparedRecordState) -> Array[String]
+    def changed_between(before, after)
+      old = before.attributes
+      new = after.attributes
+      (old.keys | new.keys).filter_map { |name| name.to_s unless old[name] == new[name] }
+    end
 
     # The record after a root version and the branches its change reaches, or
     # nil when the version cannot be applied to the previous snapshot alone.
@@ -79,6 +117,7 @@ module PaperTrailDiff
     # @rbs @changeset: untyped
     # @rbs @partial_snapshotter: untyped
     # @rbs @record_transition: untyped
+    # @rbs @root_state: untyped
     # @rbs @unsupported_branches: Hash[String, Array[String]]
     # @rbs @relationship_reflections: Hash[String, Array[untyped]]
 

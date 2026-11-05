@@ -84,6 +84,8 @@ Six things follow from this:
   leave it out.
   [`recorded_changes`](#what-a-version-recorded) reads what a version itself
   recorded, and activity steps can [include it](#what-each-event-recorded-recorded_changes-true).
+  With it, [change rows](#change-rows) give such a write a row of its own,
+  credited to no one.
 - **A record created without a version looks as if it always existed.** A
   row written with versioning off, or imported with `insert_all`, has no
   `create` version, so history never reports it as added: its earliest
@@ -497,7 +499,8 @@ PaperTrailDiff.activity_timeline(article, associations: [:comments], group: :tra
   kinds: those of records outside the tree before the transaction, after it,
   and at every version of the root it saved; and those saved before a window
   that starts inside a transaction of associated records only (see
-  [time windows](#time-windows)).
+  [time windows](#time-windows)). Its [change rows](#change-rows) each name
+  the event of their own record.
 - Versions without a `transaction_id` are never grouped.
 - A savepoint that rolls back can split one transaction into more than one
   group. PT-AT clears the transaction id when the savepoint rolls back, so the
@@ -536,6 +539,7 @@ step.from_snapshot.associations["comments"].records.first.attributes["author"]
   record did not exist yet.
 - Also accepted by `analyze`, `analyze_many`, and `analyze_scope` with
   `activity: true`, and by `report`.
+- [`net_changes`](#net-changes) reads them, so it needs this option.
 
 ### What each event recorded: `recorded_changes: true`
 
@@ -724,7 +728,11 @@ report.roots       # the selected records, in relation order
 report.unreachable # identities of selected records that no longer exist
 report.deleted     # { identity => Analysis or nil }, with include_deleted: true
 
-analyses, unreachable = report # destructures into the first two
+report.roots.each do |order|
+  report.analysis_for(order) # its Analysis, without building the identity
+end
+
+analyses, unreachable = report # destructures into analyses and unreachable
 ```
 
 It takes the same options as `analyze_many`, plus `limit:`, `historical_filter:`,
@@ -1192,6 +1200,7 @@ for numeric IDs).
 | `ActivityStep` | one `activity_timeline` step |
 | `ActivityBoundary` | one end of a step |
 | `ChangeRow` | one row from `change_rows` |
+| `NetChange` | one record's entry from `net_changes` |
 | `Analysis` | result of `analyze` |
 | `ScopedAnalysis` | result of `analyze_scope` and `report` |
 | `TraversalEntry`, `RecordReference` | entries from `each_change` and `each_entry` |
@@ -1244,7 +1253,7 @@ record reachable through two requested paths appears at both.
 ### Change rows
 
 For a table or an export, `change_rows` flattens activity into one row per
-change, each attributed to its step's source version:
+change, each credited to the version that made it:
 
 ```ruby
 steps.last.change_rows                    # one activity step
@@ -1258,7 +1267,8 @@ row.from             # nil for :added
 row.to               # nil for :removed
 row.record           # a RecordReference, or nil for the root
 row.association_path # ["comments"], or [] for the root
-row.source           # the step's source_boundary
+row.source           # the ActivityBoundary of the version that made the change
+row.unversioned?     # true for a change saved without a version
 row.to_h             # the above, plus version_id, event, whodunnit, recorded_at,
                      # and transaction_id
 ```
@@ -1272,6 +1282,112 @@ row.to_h             # the above, plus version_id, event, whodunnit, recorded_at
   in time order.
 - `Analysis#change_rows` raises `ConfigurationError` without `activity: true`.
   `report.change_rows` leaves out a deleted record without destroy history.
+
+Which version a row names:
+
+- A field's change names the version of the row's own record that made it,
+  among those its step's transaction saved. Inside a transaction, a record's
+  change can show up at a later event than its own, in a step another record's
+  version opens; the row still names its own record's version. With
+  `recorded_changes: true`, that is the version that recorded the field's new
+  value. Without it, the gem cannot tell which of a record's versions made
+  the change, so the row names the last of them.
+- A record created or destroyed names its `create` or `destroy`. Its fields
+  name the version that recorded each value: the `create`, or a later save in
+  the same step. A record that joined or left through another record's
+  change, such as a new `belongs_to` target or a `has_and_belongs_to_many`
+  member, names the step's `source_boundary`.
+
+With `recorded_changes: true`, a change PaperTrail did not record gets a row of
+its own: a write [saved without a version](#how-papertrail-stores-history),
+such as `update_columns`. Its source has kind `:unversioned` and names the
+record, with no version, event, author, or time, so `to_h` has `nil` for
+`version_id`, `event`, `whodunnit`, `recorded_at`, and `transaction_id`. A
+field a version recorded changing from `10` to `20`, and that a later
+`update_columns` set to `99`, gives two rows: `10` to `20`, credited to the
+version, then `20` to `99`, unversioned. To report only what versions
+recorded, leave such rows out:
+
+<!-- executable:reference-unversioned-rows -->
+```ruby
+analysis = PaperTrailDiff.analyze(
+  article, associations: [:comments], activity: true, recorded_changes: true
+)
+
+analysis.change_rows.reject(&:unversioned?)
+```
+
+The gem splits off only what the versions show was not recorded. A row stays
+whole, credited to a version, where they cannot:
+
+- the version recorded no changes, as a `touch` does, or the version table
+  has no `object_changes` column;
+- the column is one `has_paper_trail ignore:` or `skip:` names, or `only:`
+  leaves out;
+- the field is one a `create` left at its default, which no version records:
+  a later write to it reads as the value the record was created with;
+- the version is in a transaction that began before a window and saved no
+  version of the root (see [time windows](#time-windows)), whose earlier
+  versions the window does not read.
+
+Rows follow each step's diff, so a change a version recorded and a later write
+without a version undid, leaving the field as it was, has no row.
+
+### Net changes
+
+`net_changes` folds change rows into one entry per record: its fields before
+the rows a block keeps, and its fields with only their changes made. This
+example keeps the rows with an author. A write saved without a version has
+none, so with `recorded_changes: true` it is left out:
+
+<!-- executable:reference-net-changes -->
+```ruby
+analysis = PaperTrailDiff.analyze(
+  article, associations: [:comments], activity: true, snapshots: true,
+  recorded_changes: true
+)
+
+changes = analysis.net_changes { |row| row.source.whodunnit }
+```
+
+```ruby
+change = changes.first
+change.root?            # true for the article, which comes first
+change.record           # a RecordReference, or nil for the root
+change.association_path # ["comments"], or [] for the root
+change.before           # a RecordSnapshot of its fields, or nil if it was added
+change.after            # its fields after the kept changes, or nil if removed
+change.diff             # a Diff of before and after
+change.added?           # before is nil
+change.removed?         # after is nil
+change.sources          # the ActivityBoundary of each kept change, each once
+report.net_changes { |row| ... } # { identity => changes }, keyed as change_rows
+```
+
+Without a block, every row is kept, and `before` and `after` are the record's
+states around all of its changes.
+
+- `before` is the record's state when the step holding its first kept change
+  began, so it includes the changes dropped before then.
+- `after` is `before` with only the kept changes made: each field takes the
+  value of its last kept row. A record that appears takes the fields it
+  appeared with. A record appears or disappears only through its own row,
+  whose `attribute` is `nil`, so a block that keeps only some fields also
+  leaves out the records added and removed.
+- A record whose kept changes leave it as it was is left out, as is one added
+  and removed again.
+- The root comes first whenever anything is listed. When only the records it
+  holds changed, its `before` and `after` are the same and its `diff` is
+  empty.
+- `before` and `after` hold only the record's own fields; each record it holds
+  has an entry of its own. A record has one entry for each association path,
+  whichever records along the path hold it, so a reply moved from one comment
+  to another is one entry.
+- The states come from the steps' snapshots, so `net_changes` raises
+  `ConfigurationError` without `snapshots: true`, as it does without
+  `activity: true`.
+- To leave out only the writes saved without a version, keep the other rows:
+  `{ |row| !row.unversioned? }`.
 
 ## JSON columns
 
@@ -1334,6 +1450,10 @@ Other details:
 - Unlike PaperTrail's `version.changeset`, it never loads the record. That
   saves a query per version, and a deleted record's values keep their types,
   such as an enum's label rather than the integer PaperTrail stored.
+- Values read as a step's `diff` reads them, so a recorded value equals the
+  state it produced: a time of day falls on 2000-01-01, and with
+  [JSON history](#history-stored-as-json), times keep the digits history
+  stores and binary and `serialize`d values read as JSON stored them.
 
 For activity steps, pass `recorded_changes: true` instead of loading the
 versions again. Each step's sources then carry what their versions recorded,
@@ -1399,7 +1519,8 @@ warning instead. `ok?` does not prove the history is complete.
 
 - **Single-table inheritance.** Results are keyed by the base class, as
   PaperTrail stores it: a `Book < Publication` is `["Publication", "12"]`. Use
-  `PaperTrailDiff::Endpoint.identity(record)` to build keys.
+  `PaperTrailDiff::Endpoint.identity(record)` to build keys, or
+  `analysis_for(record)` on the result of `analyze_scope` or `report`.
 - **Non-integer primary keys**, such as UUIDs, are supported, and so is a string
   `versions.item_id` column.
 - **Custom version classes** (`has_paper_trail versions: { class_name: }`) are

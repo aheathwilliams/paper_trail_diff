@@ -9,8 +9,11 @@ module PaperTrailDiff
   # window reports only the events inside it, and closes on a final destroy,
   # or on the live row when nothing recorded follows it.
   class ActivityTimelineBuilder
-    # : (untyped, range: TimelineRange, tree: AssociationTree, snapshotter: untyped, view: ActivityView) -> void
-    def initialize: (untyped, range: TimelineRange, tree: AssociationTree, snapshotter: untyped, view: ActivityView) -> void
+    # `traversal` reads the tree's reflections; the adapter passes the one it
+    # reads every root with, so they are resolved once for a call rather than
+    # once for each root.
+    # : (untyped, range: TimelineRange, tree: AssociationTree, snapshotter: untyped, view: ActivityView, ?traversal: AssociationTraversal) -> void
+    def initialize: (untyped, range: TimelineRange, tree: AssociationTree, snapshotter: untyped, view: ActivityView, ?traversal: AssociationTraversal) -> void
 
     # : () -> Array[ActivityStep]
     def build: () -> Array[ActivityStep]
@@ -35,6 +38,8 @@ module PaperTrailDiff
     @snapshotter: untyped
 
     @to: untyped
+
+    @traversal: AssociationTraversal
 
     @tree: AssociationTree
 
@@ -177,6 +182,14 @@ module PaperTrailDiff
     # plan does, as their range includes every version.
     # : (RootVersionPlan, Array[ActivityEvent], untyped, current: untyped, closing: RecordSnapshot?) -> ActivityHistory
     def replay: (RootVersionPlan, Array[ActivityEvent], untyped, current: untyped, closing: RecordSnapshot?) -> ActivityHistory
+
+    # The root as a change row's `record` would name it. A root is a record,
+    # or a deleted one rebuilt from its destroy (see DeletedAnalysisBatch).
+    # A reference reads its type with `to_s`, so mutant cannot tell the class
+    # from its name here.
+    # mutant:disable
+    # : () -> RecordReference
+    def root_reference: () -> RecordReference
 
     # : (Array[ActivityStep]) -> Array[ActivityStep]
     def present: (Array[ActivityStep]) -> Array[ActivityStep]

@@ -81,4 +81,19 @@ RSpec.describe PaperTrailDiff::ActivityTransactionGroups do
         .to eq([false, false, true, true, false, false])
     end
   end
+
+  describe '#shared?' do
+    it 'tells two events of one transaction from those of another, of none, or of an opening one' do
+      groups = described_class.new([event(1, 7), event(2, 7), event(3, 8), event(4, 9)],
+                                   opening: [['GroupsVersion', 9]])
+
+      pairs = [
+        [event(1, 7), event(2, 7)], [event(2, 7), event(3, 8)], [event(5, nil), event(6, nil)],
+        [event(1, 7), event(7, 7, table: GroupsOtherVersion)], [event(4, 9), event(8, 9)]
+      ]
+
+      expect(pairs.map { |left, right| groups.shared?(left, right) })
+        .to eq([true, false, false, false, false])
+    end
+  end
 end

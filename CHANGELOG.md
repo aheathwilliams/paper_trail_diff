@@ -49,6 +49,40 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- With `recorded_changes: true`, change rows tell a write saved without a
+  version, such as `update_columns`, apart from the change it follows.
+  PaperTrail reads such a write into the record's next version, or its
+  current row, so it shows up in the step of the record's previous change,
+  and its row was credited to that change's author. The part of a change no
+  version recorded now has a row of its own, whose `source` has kind
+  `:unversioned`, names the record, and has no version, event, author, or
+  time; `ChangeRow#unversioned?` and `ActivityBoundary#unversioned?` tell
+  them apart. A field a version recorded changing from 10 to 20, which an
+  `update_columns` then set to 99, gives two rows: 10 to 20, credited to the
+  version, and 20 to 99, unversioned. A write between two of a record's
+  versions in one transaction, which no step shows on its own, is split off
+  the same way. A row stays whole, credited to a version, where history
+  cannot show the write was unrecorded: a version that recorded no changes,
+  such as a `touch`; a column `has_paper_trail` leaves out of
+  `object_changes`; a field a create left at its default; and the start of a
+  transaction that began before a window and saved no version of the root.
+  The [change rows](docs/reference.md#change-rows) reference lists them.
+
+- `Analysis#net_changes` and `ScopedAnalysis#net_changes` fold an activity's
+  change rows into one `NetChange` for each record: its fields before the
+  rows a block keeps, its fields with only those changes made, and the
+  difference. Keeping the rows that name an author reports what people
+  changed, and with `recorded_changes: true` leaves out writes saved without
+  a version: `report.net_changes { |row| row.source.whodunnit }`. The root
+  comes first whenever anything changed. The states come from the steps'
+  snapshots, so it needs `snapshots: true`. See
+  [net changes](docs/reference.md#net-changes).
+
+- `ScopedAnalysis#analysis_for(record)` returns the analysis of one of
+  `roots`, the records `analyze_scope` and `report` load, without building
+  its key: the base class's name and the ID as a string, which a subclass or
+  an integer ID gets wrong when built by hand.
+
 - `within:` accepts an endless range, such as `1.day.ago..`, which runs
   through the current saved state, as `report` does.
 
@@ -71,6 +105,24 @@ project follows [Semantic Versioning](https://semver.org/).
   first, in one statement; without it, nothing changes.
 
 ### Changed
+
+- A change row names the version of its own record that made the change.
+  It named its step's source boundary: for a transaction group, the
+  transaction's first event, whichever record that was; and without
+  grouping, a child's change that showed up at a later event of its
+  transaction, in a step another record's version opens, named that version.
+  A record created or destroyed names its create or destroy, and its fields
+  the version that recorded each value. A record that joined or left through
+  another record's change, such as a new `belongs_to` target, still names the
+  step's source boundary.
+  Without `recorded_changes: true` the gem cannot tell which of a record's
+  versions in a transaction made a change, and names the last of them.
+
+- `recorded_changes`, and each activity boundary's `recorded_changes`, read
+  values as a step's diff reads them, so a recorded value equals the state it
+  produced: a time of day on 2000-01-01, and with JSON history, times to the
+  digits history stores and binary and `serialize`d values as JSON stored
+  them.
 
 - `report` reads every version saved since `since:`, with no end. Its window
   ended at the time of the call, so a version a server whose clock ran ahead
@@ -202,8 +254,41 @@ project follows [Semantic Versioning](https://semver.org/).
   0.05 ms per id. On 10,000 roots, the lookup's SQL time fell from 1.4 s to
   0.7 s and a report from 5.1 s to 4.4 s, with the same windows. The lookup
   now names 250 ids a statement rather than 500, since each id appears twice
-  in it: 1,000 ids a statement was slower, and would exceed SQLite's old limit
-  of 1,000 bound parameters.
+  in it: 1,000 ids a statement was slower, and would exceed the 999 bound
+  parameters SQLite allowed before 3.32.
+
+- Activity reads the state of a transaction that saved its root together
+  with descendants once for that transaction's descendant events, not again
+  at each one. PT-AT reads what a transaction saved as it stood before the
+  transaction began, so from one descendant's event to the next in the same
+  transaction the snapshot is the same; it was rebuilt whole each time. A
+  `report` on 100 articles, each created with 100 comments in one transaction
+  and edited with all of them in another, took 20.1 s and now takes 4.6 s,
+  and allocated a quarter as many objects. On 10,000 articles at about 1.5
+  versions each with their comments, it took 14.6 s and now takes 13.9 s.
+  The results are the same.
+
+- Activity carries the snapshot at a root's version to the next event by
+  comparing the root's state at the two, which the snapshots decode anyway.
+  It decoded the version's recorded changes and the state after it a second
+  time instead, which took longer than rebuilding the snapshot whole. The
+  next descendant's event in the same transaction as a root's update is now
+  carried forward the same way, where it was rebuilt whole. A `report` on
+  2,000 articles with about 1.5 comments each, each article edited ten
+  times and about a fifth of those edits saved with a comment, took 19.9 s
+  and now takes 14.8 s, with a fifth fewer allocations. The results are the
+  same.
+
+- A batch reads its requested associations' reflections once for the whole
+  call, where each root's activity resolved and checked them again, and it
+  reads a current record's attributes for its history only when a read
+  reaches past that record's last version. Most do not: in a `report` on
+  10,000 articles with their comments, about a quarter of the 25,000 current
+  records were read that way. The snapshots that start from a root's current
+  row also share one reading of it, from the record the call loaded. That
+  report takes about 7% less time and allocates 8% fewer objects; one on
+  2,000 articles edited ten times each, and one on 100 articles with 100
+  comments each, about 3% less time. The results are the same.
 
 ### Fixed
 
@@ -380,6 +465,15 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Development
 
+- `spec/oracle/unversioned_writes_spec.rb` builds seeded histories of saves
+  and `update_columns` writes to an article, its comments and its author,
+  several to a transaction, and checks every change row against the writes:
+  a field's rows chain into the step's change, a row credited to a version
+  ends at a value that version recorded, an unversioned row ends at a value
+  an `update_columns` wrote, and a write a later version or the current row
+  reads has a row of its own. It runs over the whole history, grouped and
+  not, and over windows that start and end inside transactions.
+
 - `spec/oracle/shapes_history_spec.rb` compares rebuilt history with plain
   Active Record for shapes the other oracles leave out: polymorphic
   `belongs_to`, `has_many` and `has_one` with `as:`, children that use
@@ -403,6 +497,16 @@ project follows [Semantic Versioning](https://semver.org/).
   fourth method in scope (`script/mutant_shard.rb`). A pull request that
   changed 84 methods took 33 minutes on one runner, close to the job's
   45-minute limit.
+
+- `PAPER_TRAIL_DIFF_SERIALIZER=json` runs the suites with PaperTrail's JSON
+  serializer, and a new CI job runs them that way. Before, about 40 of some
+  1,800 examples wrote JSON history, and none on the PaperTrail 16 or SQL
+  Server jobs. Run with JSON, the suites found no fault in the gem: the specs
+  that failed wrote YAML fixtures by hand, were about YAML itself, or read
+  times more finely than JSON keeps them (milliseconds), which the gem
+  refuses or rounds as documented. Those specs now write fixtures with the
+  configured serializer, keep YAML where YAML is the subject, and compare
+  times as JSON history holds them.
 
 ## [0.16.0] - 2026-11-01
 

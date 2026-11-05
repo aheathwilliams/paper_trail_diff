@@ -49,7 +49,8 @@ RSpec.describe 'core documentation examples' do
     version
   end
 
-  it 'reads a new Rails app\'s history with the YAML classes the quickstart permits' do
+  it 'reads a new Rails app\'s history with the YAML classes the quickstart permits',
+     history: :yaml do
     version = rails_app_version
 
     with_permitted_classes([Symbol, Time, Date]) do

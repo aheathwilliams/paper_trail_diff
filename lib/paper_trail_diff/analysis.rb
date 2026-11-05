@@ -62,6 +62,20 @@ module PaperTrailDiff
       steps.flat_map(&:change_rows).freeze
     end
 
+    # One entry for each record the activity's change rows are about: its
+    # state before them, and that state with only the kept changes made (see
+    # NetChange). The block picks the rows to keep, such as those with an
+    # author; without one, every row is kept. The states come from the
+    # steps' snapshots, so this needs `snapshots: true` as well as
+    # `activity: true`.
+    #: () ?{ (ChangeRow) -> boolish } -> Array[NetChange]
+    def net_changes(&keep)
+      steps = activity_timeline
+      raise ConfigurationError, 'net_changes requires activity: true' unless steps
+
+      NetChanges.call(steps, keep)
+    end
+
     # Reconstructed endpoint states are opt-in, because they carry the whole
     # selected graph whether or not anything changed, which dwarfs the rest of
     # the payload for a wide graph.

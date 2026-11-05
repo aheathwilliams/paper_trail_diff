@@ -179,6 +179,7 @@ module PaperTrailDiff
     def initialize(tree)
       @tree = tree
       @reflection_cache = {}
+      @habtm_paths = {} #: Hash[untyped, Array[String]]
     end
 
     #: (untyped) -> void
@@ -213,11 +214,18 @@ module PaperTrailDiff
       raise IncompleteAssociationHistoryError, message
     end
 
+    # Every snapshot of a version asks, so each class's answer is kept; the
+    # tree and the class decide it. Reading it again each time answers the
+    # same, which is why mutant leaves the cache alone.
+    # mutant:disable
     #: (untyped) -> Array[String]
     def habtm_paths(model_class)
-      selected_reflections(model_class).filter_map do |path, reflection|
-        path if habtm_reflection?(reflection)
-      end.freeze
+      @habtm_paths.fetch(model_class) do
+        selected = selected_reflections(model_class)
+        @habtm_paths[model_class] = selected.filter_map do |path, reflection|
+          path if habtm_reflection?(reflection)
+        end.freeze
+      end
     end
 
     # HABTM join rows have no versions of their own, so membership changes
@@ -257,6 +265,7 @@ module PaperTrailDiff
 
     # @rbs @tree: AssociationTree
     # @rbs @reflection_cache: Hash[AssociationTree, Hash[untyped, Array[untyped]]]
+    # @rbs @habtm_paths: Hash[untyped, Array[String]]
 
     #: (untyped, AssociationTree, path: String) -> Array[Array[untyped]]
     def collect_reflections(model_class, tree, path:)

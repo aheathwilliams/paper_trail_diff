@@ -60,10 +60,15 @@ RSpec.describe 'A ranked association over time' do
     [RankItem, RankList].each(&:delete_all)
   end
 
+  # JSON history keeps times to milliseconds by default, too few to rank
+  # `seen_at` a microsecond apart, so the gem refuses `recent_items` there (see
+  # scope_ranking_spec.rb).
+  def timed = (HistorySerializer.time_digits || 9) >= 6 ? %i[recent_items] : []
+
   let(:paths) do
-    %i[top_items bottom_items later_items paged_items lead_item second_item recent_items due_item]
+    %i[top_items bottom_items later_items paged_items lead_item second_item due_item] + timed
   end
-  let(:collections) { %i[top_items bottom_items later_items paged_items recent_items] }
+  let(:collections) { %i[top_items bottom_items later_items paged_items] + timed }
   let(:at) { Time.utc(2026, 1, 1, 12) }
   let(:day) { Date.new(2026, 1, 1) }
   let(:checkpoints) { [] }
