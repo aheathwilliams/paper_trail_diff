@@ -9,11 +9,11 @@ module PaperTrailDiff
   # window reports only the events inside it, and closes on a final destroy,
   # or on the live row when nothing recorded follows it.
   class ActivityTimelineBuilder
-    # `traversal` reads the tree's reflections; the adapter passes the one it
-    # reads every root with, so they are resolved once for a call rather than
-    # once for each root.
-    # : (untyped, range: TimelineRange, tree: AssociationTree, snapshotter: untyped, view: ActivityView, ?traversal: AssociationTraversal) -> void
-    def initialize: (untyped, range: TimelineRange, tree: AssociationTree, snapshotter: untyped, view: ActivityView, ?traversal: AssociationTraversal) -> void
+    # `traversal` holds the tree and reads its reflections; the adapter passes
+    # the one it reads every root with, so they are resolved once for a call
+    # rather than once for each root.
+    # : (untyped, range: TimelineRange, snapshotter: untyped, view: ActivityView, traversal: AssociationTraversal) -> void
+    def initialize: (untyped, range: TimelineRange, snapshotter: untyped, view: ActivityView, traversal: AssociationTraversal) -> void
 
     # : () -> Array[ActivityStep]
     def build: () -> Array[ActivityStep]

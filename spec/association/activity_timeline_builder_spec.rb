@@ -322,8 +322,10 @@ RSpec.describe PaperTrailDiff::ActivityTimelineBuilder do
     def builder(record, from:, to:, snapshotter: provider, live: nil)
       range = PaperTrailDiff::TimelineRange.new(record, from: from, to: to, within: nil,
                                                         live_endpoint: live)
-      tree = PaperTrailDiff::AssociationTree.build([:comments])
-      described_class.new(record, range: range, tree: tree, snapshotter: snapshotter,
+      traversal = PaperTrailDiff::AssociationTraversal.new(
+        PaperTrailDiff::AssociationTree.build([:comments])
+      )
+      described_class.new(record, range: range, traversal: traversal, snapshotter: snapshotter,
                                   view: PaperTrailDiff::ActivityView.new)
     end
 
@@ -387,8 +389,8 @@ RSpec.describe PaperTrailDiff::ActivityTimelineBuilder do
       view = PaperTrailDiff::ActivityView.new(version_scope: none)
       allow(provider).to receive(:call).and_call_original
 
-      built = described_class.new(article, range: range, tree: tree, snapshotter: provider,
-                                           view: view)
+      built = described_class.new(article, range: range, snapshotter: provider, view: view,
+                                           traversal: PaperTrailDiff::AssociationTraversal.new(tree))
 
       expect([built.build, built.analyze.activity_timeline]).to eq([[], []])
       expect(provider).not_to have_received(:call)

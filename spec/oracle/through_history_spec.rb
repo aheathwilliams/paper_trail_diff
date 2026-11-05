@@ -410,6 +410,7 @@ RSpec.describe 'Rebuilt has_many :through history against the recorded states' d
     key = [root.id, paths]
     steps = PaperTrailDiff.activity_timeline(root, from: from, to: root, associations: paths,
                                                    group: :transaction, snapshots: true)
+    NetChangesCheck.check(failures, "activity #{key.inspect}", steps)
     steps.each_with_index do |step, index|
       label = "activity #{key.inspect} step #{index} (#{step.source_boundary.version_id})"
       before = recorder.before(step.source_boundary.version_id)

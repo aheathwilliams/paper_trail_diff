@@ -35,9 +35,12 @@ module PaperTrailDiff
     # before its own sources, so a long transaction costs one list rather
     # than one for each step. A record's boundaries are found through an
     # index, built when rows are first read, once the history is complete.
+    # A step's own sources are kept the same way, so a transaction group's
+    # rows name each source's record once rather than once for each record.
     class Transaction
-      def initialize
-        @boundaries = [] #: Array[ActivityBoundary]
+      #: (?Array[ActivityBoundary]) -> void
+      def initialize(boundaries = [])
+        @boundaries = boundaries.dup
       end
 
       #: (ActivityBoundary) -> void
@@ -78,7 +81,7 @@ module PaperTrailDiff
     #: (root: RecordReference, sources: Array[ActivityBoundary], complete: bool, transaction: Transaction, ?preceding: Integer) -> void
     def initialize(root:, sources:, complete:, transaction:, preceding: transaction.length)
       @root = root
-      @sources = sources.dup
+      @sources = Transaction.new(sources)
       @complete = complete
       @transaction = transaction
       @preceding = preceding
@@ -110,7 +113,7 @@ module PaperTrailDiff
     private
 
     # @rbs @root: RecordReference
-    # @rbs @sources: Array[ActivityBoundary]
+    # @rbs @sources: Transaction
     # @rbs @complete: bool
     # @rbs @transaction: Transaction
     # @rbs @preceding: Integer
@@ -268,9 +271,9 @@ module PaperTrailDiff
     def versions_of(reference)
       key = identity(reference)
       @versions.fetch(key) do
-        earlier = @transaction.of(key, @preceding) { |boundary| identity(boundary.record) }
-        own = @sources.select { |boundary| identity(boundary.record) == key }
-        @versions[key] = earlier + own
+        identify = ->(boundary) { identity(boundary.record) }
+        earlier = @transaction.of(key, @preceding, &identify)
+        @versions[key] = earlier + @sources.of(key, @sources.length, &identify)
       end
     end
 

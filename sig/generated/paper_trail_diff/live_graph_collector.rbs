@@ -3,8 +3,8 @@
 module PaperTrailDiff
   # Flattens an already-preloaded, explicitly bounded live association graph.
   class LiveGraphCollector
-    # : (tree: AssociationTree, traversal: AssociationTraversal) -> void
-    def initialize: (tree: AssociationTree, traversal: AssociationTraversal) -> void
+    # : (AssociationTraversal) -> void
+    def initialize: (AssociationTraversal) -> void
 
     # : (Array[untyped]) -> Array[untyped]
     def call: (Array[untyped]) -> Array[untyped]

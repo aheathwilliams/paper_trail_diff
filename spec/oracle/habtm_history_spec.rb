@@ -254,6 +254,15 @@ RSpec.describe 'Rebuilt HABTM history against the recorded states' do
     range = "#{paths.inspect} #{from.id}->#{to.id} (group: #{group.inspect})"
     steps = PaperTrailDiff.activity_timeline(root, from: from, to: to, associations: paths,
                                                    group: group, snapshots: true)
+    NetChangesCheck.check(failures, "activity #{range}", steps)
+    check_activity_steps(history, failures, paths, range, steps)
+    return if steps.empty?
+
+    failures.check("activity #{range} ends at its last version", {},
+                   mismatch(at_version(history, to, paths), steps.last.to_snapshot))
+  end
+
+  def check_activity_steps(history, failures, paths, range, steps)
     steps.each_with_index do |step, index|
       label = "activity #{range} step #{index} " \
               "(#{step.source_boundary.item_type} #{step.source_boundary.version_id})"
@@ -262,10 +271,6 @@ RSpec.describe 'Rebuilt HABTM history against the recorded states' do
       failures.check("#{label} to", {},
                      mismatch(at_boundary(history, step.to_boundary, paths), step.to_snapshot))
     end
-    return if steps.empty?
-
-    failures.check("activity #{range} ends at its last version", {},
-                   mismatch(at_version(history, to, paths), steps.last.to_snapshot))
   end
 
   # Windows between two transactions, each with a root version after it.
@@ -293,6 +298,7 @@ RSpec.describe 'Rebuilt HABTM history against the recorded states' do
 
     failures.check("#{label} from", {}, mismatch(expected.first, analysis.from_snapshot))
     failures.check("#{label} to", {}, mismatch(expected.last, analysis.to_snapshot))
+    NetChangesCheck.check(failures, label, analysis.activity_timeline)
     many = PaperTrailDiff.analyze_many([root], within: within, associations: paths, activity: true)
     failures.check("#{label} analyze_many", analysis.diff.to_h, many.values.first.diff.to_h)
   end

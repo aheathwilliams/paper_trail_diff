@@ -145,23 +145,27 @@ module PaperTrailDiff
     # Inside a transaction a record's change can surface at a later event
     # than its own, so the rows of a step its boundary opens are read with
     # the boundaries its transaction kept before it (see ChangeAttribution).
-    # A version saved outside a transaction is a transaction of its own.
     #: (ActivityEvent, ActivityBoundary) -> ChangeAttribution?
     def attribution(event, boundary)
       root = @root
       return unless root
 
-      transaction = ChangeAttribution::Transaction.new
-      complete = true
-      key = ActivityTransactionGroups.transaction_key(event.version)
-      if key
-        transaction = @transactions[key] ||= transaction
-        complete = !opening.include?(key)
-      end
+      transaction, complete = transaction_of(event)
       attribution = ChangeAttribution.new(root: root, sources: [boundary], transaction: transaction,
                                           complete: complete)
       transaction.add(boundary)
       attribution
+    end
+
+    # The boundaries kept so far of the event's transaction, and whether the
+    # history holds all of it. A version saved outside a transaction is a
+    # transaction of its own.
+    #: (ActivityEvent) -> [ChangeAttribution::Transaction, bool]
+    def transaction_of(event)
+      key = ActivityTransactionGroups.transaction_key(event.version)
+      return [ChangeAttribution::Transaction.new, true] unless key
+
+      [@transactions[key] ||= ChangeAttribution::Transaction.new, !opening.include?(key)]
     end
 
     # The transactions that began before the history did (see

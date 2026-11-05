@@ -6,8 +6,8 @@ module PaperTrailDiff
   # version; one prepared for a single root goes back to the caller, who
   # passes it to every read for that root.
   class HistoricalSnapshotStore
-    # : (tree: AssociationTree, traversal: AssociationTraversal, normalizer: SnapshotNormalizer, preparer: untyped) -> void
-    def initialize: (tree: AssociationTree, traversal: AssociationTraversal, normalizer: SnapshotNormalizer, preparer: untyped) -> void
+    # : (traversal: AssociationTraversal, normalizer: SnapshotNormalizer, preparer: untyped) -> void
+    def initialize: (traversal: AssociationTraversal, normalizer: SnapshotNormalizer, preparer: untyped) -> void
 
     # A `start_at` is a window's (see PreparedHistoryLoader); a range of
     # versions starts at its first.

@@ -46,7 +46,9 @@ Flat query counts do not make a report's cost flat:
 - **Ruby work grows with the history you report on.** Every version in the
   window is decoded and compared: an `analyze_scope` of articles with five
   updates each took about 1.5 ms per article, and one article with 5,000
-  updates took 1.2 s.
+  updates took 1.2 s. A `report` of 1,000 articles with their comments, from
+  a table of 114,000 versions, took about 4 ms an article on SQLite,
+  PostgreSQL, and MySQL, and 5.5 ms on SQL Server, most of it in Ruby.
 - **Versions stored as JSON read about a third faster than YAML.** A `report`
   on 500 articles with 31 versions each took 6.8 s with PaperTrail's default
   YAML serializer and 4.5 s with its JSON one, or 9.8 s and 6.7 s with their
@@ -70,7 +72,12 @@ Flat query counts do not make a report's cost flat:
   version of the root instead: 300 comments over 2,001 versions of their
   article took about 7.5 s.
 - **`snapshots: true` and `recorded_changes: true` cost memory and time.** Ask
-  for them only when you use them.
+  for them only when you use them. Records that did not change are shared
+  between steps, so the cost is modest: an activity `report` of 10,000
+  articles with their 57,000 comments (114,000 versions, 49,000 steps) took
+  about 40 s and held 372 MB, and 411 MB with snapshots, at the same
+  time within run-to-run noise. Folding its rows with `net_changes` took
+  another 17 s, and listing them with `change_rows` 13 s.
 - **Each edge of a window takes one statement per 250 records, and one or two
   per 500 transactions it finds.** A
   window from `within:` or `since:` looks for transactions that cross either
@@ -152,20 +159,26 @@ mise exec -- bundle exec ruby benchmark/reporting.rb --case many_roots --samples
 one `report` makes for a scenario and a number of records; the table above
 comes from its scenarios. `PTD_PROBE_ALLOW_APPROXIMATE=1` passes
 `allow_approximate: true`.
-`reporting.rb` times `analyze_scope` over articles with no associations, each
-in a fresh process, and records memory; `--output` keeps the raw samples.
-Both use an in-memory SQLite database, never your application's, and read
-time from the [test clock](testing.md#test-clock), so a host clock that steps
-backwards cannot reorder the versions they seed. Compare counts as well as
-times, and run the correctness suites separately; no CI job checks timings.
+`reporting.rb` times `analyze_scope` over articles with no associations and,
+as `association_window`, a `report` over articles with their comments read
+through PT-AT, each in a fresh process, and records memory; `--output` keeps
+the raw samples. Both use an in-memory SQLite database, never your
+application's, and read time from the [test clock](testing.md#test-clock), so
+a host clock that steps backwards cannot reorder the versions they seed.
+Compare counts as well as times, and run the correctness suites separately.
+No CI job checks timings, but one spec bounds how a report's SQL grows with
+its window (see [SQL work](testing.md#sql-work)).
 
 The query counts in the first table and the `timeline` of 300 comments were
 measured on 2026-11-03, the counts after `report`'s window lost its end; the
-serializers on 2026-11-04; the other numbers on 2026-10-30 at revision
-`6c3d30b`. Both used
-Ruby 4.0.1, Active Record 8.1.3.1, PaperTrail 17.0.0, and SQLite 3.53.2, on
-WSL2 on an AMD Ryzen 7 7800X3D. The memory, wide-collection, serializer, and
-index figures come from one-off scripts rather than these two. The benchmark's
+serializers and the snapshot and net change costs on 2026-11-04; the other
+numbers on 2026-10-30 at revision `6c3d30b`. Both used Ruby 4.0.1, Active
+Record 8.1.3.1, PaperTrail 17.0.0, and SQLite 3.53.2, on WSL2 on an AMD
+Ryzen 7 7800X3D. The per-database `report` costs were measured on 2026-11-04
+with Ruby 4.0.9 in Docker, on SQLite, PostgreSQL 17.11, MySQL 8.4.13, and SQL
+Server 2022, each holding the same rows. The memory, wide-collection,
+serializer, snapshot, per-database, and index figures come from one-off
+scripts rather than these two. The benchmark's
 raw samples are in
 [`benchmark/results/reporting-2026-10-30.json`](../benchmark/results/reporting-2026-10-30.json),
 next to earlier runs.

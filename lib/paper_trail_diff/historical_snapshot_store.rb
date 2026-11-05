@@ -7,14 +7,14 @@ module PaperTrailDiff
   # version; one prepared for a single root goes back to the caller, who
   # passes it to every read for that root.
   class HistoricalSnapshotStore
-    #: (tree: AssociationTree, traversal: AssociationTraversal, normalizer: SnapshotNormalizer, preparer: untyped) -> void
-    def initialize(tree:, traversal:, normalizer:, preparer:)
-      @tree = tree
+    #: (traversal: AssociationTraversal, normalizer: SnapshotNormalizer, preparer: untyped) -> void
+    def initialize(traversal:, normalizer:, preparer:)
+      @tree = traversal.tree
       @traversal = traversal
       @normalizer = normalizer
       @preparer = preparer
       @prepared_snapshotter = PreparedSnapshotBuilder.new(traversal)
-      @live_graph_collector = LiveGraphCollector.new(tree: tree, traversal: traversal)
+      @live_graph_collector = LiveGraphCollector.new(traversal)
       @snapshots = {} #: Hash[Array[untyped], RecordSnapshot?]
       @prepared_histories = {} #: Hash[Array[untyped], PreparedHistory]
       @batched_roots = {} #: Hash[identity, PreparedHistory]

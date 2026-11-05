@@ -34,8 +34,8 @@ module PaperTrailDiff
     # : (untyped) -> Array[untyped]
     def self.through_models: (untyped) -> Array[untyped]
 
-    # : (tree: AssociationTree, traversal: AssociationTraversal, ?allow_approximate: bool) -> void
-    def initialize: (tree: AssociationTree, traversal: AssociationTraversal, ?allow_approximate: bool) -> void
+    # : (traversal: AssociationTraversal, ?allow_approximate: bool) -> void
+    def initialize: (traversal: AssociationTraversal, ?allow_approximate: bool) -> void
 
     # : (untyped, historical: bool) -> void
     def call: (untyped, historical: bool) -> void

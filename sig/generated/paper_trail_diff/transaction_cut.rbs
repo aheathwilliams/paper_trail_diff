@@ -165,10 +165,19 @@ module PaperTrailDiff
     # : (untyped, Array[untyped], Edge, ?Array[String]?) -> Hash[untyped, Time]
     def self.crossing_starts: (untyped, Array[untyped], Edge, ?Array[String]?) -> Hash[untyped, Time]
 
-    # A version of the same transaction on the edge's later side, of a record
-    # of one of `types`.
-    # : (untyped, Edge, Array[String]) -> untyped
-    def self.later_version: (untyped, Edge, Array[String]) -> untyped
+    # Those of the transactions that saved a version of a record of one of
+    # `types` on the edge's later side. A subquery apart from the outer one,
+    # rather than an EXISTS correlated with it, so the database finds them
+    # once by transaction: SQLite answered the correlated form by scanning
+    # every later version of the types for each version before the edge, with
+    # the README's indexes 17 s for 450 transactions on 114,000 versions.
+    # Only the outer query's transactions are read, so the database can find
+    # them by transaction rather than read every later version of the types;
+    # the outer query keeps only those anyway, so no spec can tell the
+    # mutation that drops them apart.
+    # mutant:disable
+    # : (untyped, Array[untyped], Edge, Array[String]) -> untyped
+    def self.saved_later: (untyped, Array[untyped], Edge, Array[String]) -> untyped
 
     # : (TimeRange, Time?, Time?) -> TimeRange
     def self.moved: (TimeRange, Time?, Time?) -> TimeRange

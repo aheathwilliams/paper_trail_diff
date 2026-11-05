@@ -53,13 +53,13 @@ module PaperTrailDiff
     end
     private_class_method :through_models
 
-    #: (tree: AssociationTree, traversal: AssociationTraversal, ?allow_approximate: bool) -> void
-    def initialize(tree:, traversal:, allow_approximate: false)
+    #: (traversal: AssociationTraversal, ?allow_approximate: bool) -> void
+    def initialize(traversal:, allow_approximate: false)
       unless [true, false].include?(allow_approximate)
         raise ConfigurationError, 'allow_approximate: must be true or false'
       end
 
-      @tree = tree
+      @tree = traversal.tree
       @traversal = traversal
       @allow_approximate = allow_approximate
       @refusals = {} #: Hash[Array[untyped], Array[Refusal]]

@@ -257,6 +257,35 @@ RSpec.describe 'Activity replay against a full snapshot at every event' do
     end
   end
 
+  # Each activity read's net changes against its own steps (see
+  # NetChangesCheck), from the same starts and over the same windows.
+  def net_mismatches(history, seed)
+    net_reads(history, Random.new(seed)).filter_map do |label, steps|
+      problem = NetChangesCheck.mismatch(steps)
+      ["#{label} net changes", problem] if problem
+    end
+  end
+
+  def net_reads(history, random)
+    versions = PaperTrail::Version.order(:created_at, :id).to_a
+    options = { associations: ReplayDifferential::PATHS, snapshots: true }
+    history.roots.flat_map do |root|
+      starts = root.versions.reorder(:created_at, :id).first(4)
+      reads = starts.product(ReplayDifferential::GROUPS).map do |from, group|
+        ["#{root.id} from #{from.id} group #{group.inspect}",
+         PaperTrailDiff.activity_timeline(root, from: from, to: root, group: group, **options)]
+      end
+      reads + Array.new(3) { net_window(root, versions.sample(2, random: random), options) }
+    end
+  end
+
+  def net_window(root, versions, options)
+    first, last = versions.sort_by(&:id)
+    analysis = PaperTrailDiff.analyze(root, within: first.created_at..last.created_at,
+                                            activity: true, **options)
+    ["#{root.id} within #{first.id}..#{last.id}", analysis.activity_timeline]
+  end
+
   def root_steps(steps)
     steps.map do |step|
       [step.from_boundary.version_id, step.to_boundary.kind, step.to_boundary.version_id,
@@ -319,6 +348,8 @@ RSpec.describe 'Activity replay against a full snapshot at every event' do
         history = ReplayDifferential::History.new(models, seed, steps: Oracle.steps(24)).build
 
         expect(mismatches(history, seed)).to be_empty, -> { "transactions: #{history.log.inspect}" }
+        expect(net_mismatches(history, seed)).to be_empty,
+                                                 -> { "transactions: #{history.log.inspect}" }
       end
     end
   end

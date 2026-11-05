@@ -4,9 +4,10 @@ module PaperTrailDiff
   # Builds one root's Analysis inside a batch, from versions the batch already
   # selected and history it already prepared.
   class BatchedRootAnalyzer
-    # `traversal` reads `tree`'s reflections for every root of the batch.
-    # : (tree: AssociationTree, timeline_snapshotter: untyped, activity_snapshotter: untyped, preparer: untyped, activity: bool, view: ActivityView, ?traversal: AssociationTraversal) -> void
-    def initialize: (tree: AssociationTree, timeline_snapshotter: untyped, activity_snapshotter: untyped, preparer: untyped, activity: bool, view: ActivityView, ?traversal: AssociationTraversal) -> void
+    # `traversal` holds the tree and reads its reflections for every root of
+    # the batch.
+    # : (timeline_snapshotter: untyped, activity_snapshotter: untyped, preparer: untyped, activity: bool, view: ActivityView, traversal: AssociationTraversal) -> void
+    def initialize: (timeline_snapshotter: untyped, activity_snapshotter: untyped, preparer: untyped, activity: bool, view: ActivityView, traversal: AssociationTraversal) -> void
 
     # `window` is the root's window as the batch moved it to transaction edges,
     # or nil when the batch reads each root's whole history.
@@ -28,8 +29,6 @@ module PaperTrailDiff
     @timeline_snapshotter: untyped
 
     @traversal: AssociationTraversal
-
-    @tree: AssociationTree
 
     @view: ActivityView
 

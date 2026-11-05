@@ -16,7 +16,8 @@ correct.
 
 For reporting workloads, query counts, reconstruction cost, and memory readings,
 see [Reporting performance](performance.md). Those measurements run separately
-from the correctness suite and have no timing-based CI gate.
+from the correctness suite and have no timing-based CI gate; the
+[SQL work](#sql-work) spec checks how a report's SQL grows instead.
 
 CI keeps the Ruby 3.1–4.0 and PaperTrail 16/17 compatibility matrix on SQLite,
 including Windows runs. Separate Linux jobs run both core and association suites
@@ -61,6 +62,20 @@ chain into the final state. They run over random windows as well as the whole
 history, with integer and string `versions.item_id`, YAML and JSON history, and
 a `has_paper_trail skip:` column. When one fails, its seed reproduces it. Add a
 variant here when a bug turns out to depend on a schema or configuration.
+
+## SQL work
+
+A statement whose plan reads a report's window again for each of its roots'
+versions passes every correctness check and shows only at scale.
+`spec/association/report_sql_work_spec.rb` reports on articles with their
+comments, with the README's indexes, since plans depend on them. It then adds
+other records' history to the window and reports again. It runs each SELECT
+again on its own and reads the steps SQLite's virtual machine took, which are
+the same on every run for the same data and SQLite version. It fails when
+each added version costs the report more than 100 steps: about 27 when it was
+written, and about 380 with the correlated subquery that once took a report
+of 10,000 articles from 6 to 44 ms an article. The failure lists the
+statements that grew most. It runs on SQLite only.
 
 ## Oracle checks
 
@@ -116,6 +131,20 @@ and keys written by `update_columns` or with versioning off.
 Mutant cannot check that carrying forward: a mutation that turns it off
 falls back to a full snapshot, which gives the same answers, more slowly. This
 check is what catches one that gives a different answer.
+
+`unversioned_writes_spec.rb` mixes saves with `update_columns` writes,
+several to a transaction, and logs every write. Each change row must match
+the write that made it: one credited to a version ends at a value that
+version recorded, one credited to no version at a value an `update_columns`
+wrote, and such a write whose value is read again has a row of its own.
+With only the rows of versions kept, each article and comment must end at
+the value of its last recorded save.
+
+Every oracle that reads an activity timeline from end to end also checks its
+net changes (`spec/support/net_changes_check.rb`). With every row kept, each
+record's `before` and `after` must be its state where the step of its first
+row starts and where the timeline ends, read from the whole snapshot tree,
+and the record must be listed exactly when the two differ.
 
 ```console
 mise exec -- bundle exec rake spec_oracle

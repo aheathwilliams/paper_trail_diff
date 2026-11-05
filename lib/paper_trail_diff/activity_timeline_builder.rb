@@ -10,22 +10,20 @@ module PaperTrailDiff
   # window reports only the events inside it, and closes on a final destroy,
   # or on the live row when nothing recorded follows it.
   class ActivityTimelineBuilder # rubocop:disable Metrics/ClassLength
-    # `traversal` reads the tree's reflections; the adapter passes the one it
-    # reads every root with, so they are resolved once for a call rather than
-    # once for each root.
-    #: (untyped, range: TimelineRange, tree: AssociationTree, snapshotter: untyped, view: ActivityView, ?traversal: AssociationTraversal) -> void
-    def initialize( # rubocop:disable Metrics/ParameterLists
-      record, range:, tree:, snapshotter:, view:, traversal: AssociationTraversal.new(tree)
-    )
+    # `traversal` holds the tree and reads its reflections; the adapter passes
+    # the one it reads every root with, so they are resolved once for a call
+    # rather than once for each root.
+    #: (untyped, range: TimelineRange, snapshotter: untyped, view: ActivityView, traversal: AssociationTraversal) -> void
+    def initialize(record, range:, snapshotter:, view:, traversal:)
       @view = view
       @record = record
       @to = range.to
       @range = range
-      @tree = tree
+      @tree = traversal.tree
       @traversal = traversal
       @snapshotter = snapshotter
       # The root's own activity reads a version filter's answers from the plan.
-      @filter = (view.version_filter unless tree.empty?)
+      @filter = (view.version_filter unless @tree.empty?)
     end
 
     #: () -> Array[ActivityStep]
