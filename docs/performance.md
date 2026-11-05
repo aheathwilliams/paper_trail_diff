@@ -73,7 +73,7 @@ Flat query counts do not make a report's cost flat:
   for them only when you use them. Records that did not change are shared
   between steps, so the cost is modest: an activity `report` of 10,000
   articles with their 57,000 comments (114,000 versions, 49,000 steps) took
-  about 7 minutes and held 372 MB, and 411 MB with snapshots, at the same
+  about 40 s and held 372 MB, and 411 MB with snapshots, at the same
   time within run-to-run noise. Folding its rows with `net_changes` took
   another 17 s, and listing them with `change_rows` 13 s.
 - **Each edge of a window takes one statement per 250 records, and one or two
