@@ -7,12 +7,16 @@ require 'paper_trail_diff'
 # steps backwards, as WSL2's does, could date a destroy before the update it
 # follows; the specs' clock keeps every reading in this process increasing.
 require_relative '../../spec/support/monotonic_clock'
+require_relative 'association_window'
 
 module ReportingBenchmark
   # Seeds genuine PaperTrail history in a process-local database, never an app database.
   class Workload
+    include AssociationWindow
+
     CASES = %w[many_roots retained_activity long_history sparse_matches no_matches
-               limit_refusal attribute_no_matches attribute_sparse_matches deleted_roots].freeze
+               limit_refusal attribute_no_matches attribute_sparse_matches deleted_roots
+               association_window].freeze
 
     attr_reader :name, :size
 
@@ -27,6 +31,8 @@ module ReportingBenchmark
     def prepare
       ActiveRecord::Base.establish_connection(adapter: 'sqlite3', database: ':memory:')
       ActiveRecord::Schema.verbose = false
+      return prepare_association_window if name == 'association_window'
+
       create_schema
       Object.const_set(:BenchmarkArticle, Class.new(ActiveRecord::Base))
       BenchmarkArticle.has_paper_trail
@@ -34,6 +40,8 @@ module ReportingBenchmark
     end
 
     def call
+      return report_association_window if name == 'association_window'
+
       PaperTrailDiff.analyze_scope(BenchmarkArticle, **options)
     end
 

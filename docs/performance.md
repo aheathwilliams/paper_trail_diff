@@ -159,12 +159,15 @@ mise exec -- bundle exec ruby benchmark/reporting.rb --case many_roots --samples
 one `report` makes for a scenario and a number of records; the table above
 comes from its scenarios. `PTD_PROBE_ALLOW_APPROXIMATE=1` passes
 `allow_approximate: true`.
-`reporting.rb` times `analyze_scope` over articles with no associations, each
-in a fresh process, and records memory; `--output` keeps the raw samples.
-Both use an in-memory SQLite database, never your application's, and read
-time from the [test clock](testing.md#test-clock), so a host clock that steps
-backwards cannot reorder the versions they seed. Compare counts as well as
-times, and run the correctness suites separately; no CI job checks timings.
+`reporting.rb` times `analyze_scope` over articles with no associations and,
+as `association_window`, a `report` over articles with their comments read
+through PT-AT, each in a fresh process, and records memory; `--output` keeps
+the raw samples. Both use an in-memory SQLite database, never your
+application's, and read time from the [test clock](testing.md#test-clock), so
+a host clock that steps backwards cannot reorder the versions they seed.
+Compare counts as well as times, and run the correctness suites separately.
+No CI job checks timings, but one spec bounds how a report's SQL grows with
+its window (see [SQL work](testing.md#sql-work)).
 
 The query counts in the first table and the `timeline` of 300 comments were
 measured on 2026-11-03, the counts after `report`'s window lost its end; the

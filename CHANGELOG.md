@@ -482,6 +482,15 @@ project follows [Semantic Versioning](https://semver.org/).
   keeps only the rows of versions and checks that each article and comment
   ends at its last recorded save.
 
+- `spec/association/report_sql_work_spec.rb` bounds how a report's SQL grows
+  with other records' history in its window, counted in the steps SQLite's
+  virtual machine takes, which are the same on every run. A statement that
+  reads the window again for each of the roots' versions fails it; one such
+  statement, never released, took reports on SQLite from 6 to 44 ms an
+  article (see [SQL work](docs/testing.md#sql-work)). The reporting benchmark
+  has an `association_window` case: a `report` over articles with their
+  comments read through PT-AT, with the README's indexes.
+
 - `spec/oracle/shapes_history_spec.rb` compares rebuilt history with plain
   Active Record for shapes the other oracles leave out: polymorphic
   `belongs_to`, `has_many` and `has_one` with `as:`, children that use
