@@ -99,7 +99,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     PaperTrailDiff::ActivityTimelineBuilder.new(
       record,
       range: PaperTrailDiff::TimelineRange.new(record, from: from, to: to, within: nil),
-      tree: tree,
+      traversal: PaperTrailDiff::AssociationTraversal.new(tree),
       snapshotter: FullSnapshotter.new(adapter.method(:snapshot_at), provider),
       view: PaperTrailDiff::ActivityView.new
     ).build

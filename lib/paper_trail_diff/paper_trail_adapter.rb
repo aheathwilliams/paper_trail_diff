@@ -334,7 +334,6 @@ module PaperTrailDiff
     #: (bool, view: ActivityView) -> BatchedRootAnalyzer
     def batched_root_analyzer(activity, view:)
       BatchedRootAnalyzer.new(
-        tree: @association_tree,
         timeline_snapshotter: @timeline_snapshotter,
         activity_snapshotter: @activity_snapshotter,
         preparer: @traversal_preparer.method(:call),
@@ -376,7 +375,6 @@ module PaperTrailDiff
           record, from: from, to: to, within: within, version_scope: version_scope,
                   live_endpoint: live_endpoint, traversal: @traversal
         ),
-        tree: @association_tree,
         snapshotter: @activity_snapshotter,
         view: view, traversal: @traversal
       )
