@@ -79,6 +79,42 @@ RSpec.describe PaperTrailDiff::VersionAssociationCandidateScope do
     expect(unbounded).to contain_exactly(stable.id, removed.id, recent.id, later.id)
   end
 
+  # PT-AT stores the keys each version saved, so the comment's first version
+  # in the transaction already names the other article. A start inside that
+  # transaction reads the comment as it was before the transaction, on the
+  # first article. A start after the transaction does not.
+  it 'keeps the state before a transaction that crosses the start' do
+    article = TrackedArticle.create!(title: 'Left')
+    other = TrackedArticle.create!(title: 'Right')
+    moved = article.comments.create!(body: 'Moved across the start')
+    stayed = article.comments.create!(body: 'Moved before the start')
+    ActiveRecord::Base.transaction do
+      moved.update!(article_id: other.id)
+      moved.update!(body: 'Edited at the start')
+    end
+    ActiveRecord::Base.transaction { stayed.update!(article_id: other.id) }
+    ActiveRecord::Base.transaction { stayed.update!(body: 'Edited at the start') }
+    base = Time.utc(2026, 1, 1, 12)
+    moves = [moved, stayed].map { |comment| comment.versions.reorder(:id).to_a }
+    moves.each do |versions|
+      versions.each_with_index do |version, index|
+        PaperTrail::Version.where(id: version.id).update_all(created_at: base + index)
+      end
+    end
+    relation = PaperTrail::VersionAssociation.joins(:version).where(
+      foreign_key_name: 'article_id',
+      foreign_key_id: article.id,
+      versions: { item_type: 'TrackedComment' }
+    )
+    item_ids = lambda do |start|
+      described_class.new(PaperTrail::Version, start).call(relation)
+                     .distinct.pluck(PaperTrail::Version.arel_table[:item_id])
+    end
+
+    expect(item_ids.call(base + 2)).to contain_exactly(moved.id)
+    expect(item_ids.call(base + 3)).to be_empty
+  end
+
   # SQL Server quotes a bare time as `datetime`, rounded to 1/300 second: a
   # 2.0ms start reads as 3ms and a 5.0ms end as 7ms. Times compared as the
   # column stores them keep a version saved a fraction of a millisecond away
@@ -107,11 +143,16 @@ RSpec.describe PaperTrailDiff::VersionAssociationCandidateScope do
     relation = Object.new.tap { |where| where.define_singleton_method(:where) { |sql| sql } }
     outer = '[item versions]'
     later = '[paper_trail_diff_later_versions]'
+    crossing = '[paper_trail_diff_crossing_versions]'
     before_start = "( #{outer}.{created_at} < <stored cast 12:00> AND #{outer}.{event} != " \
                    "<destroy> AND NOT EXISTS ( SELECT 1 FROM #{outer} #{later} WHERE " \
                    "#{later}.{item_type} = #{outer}.{item_type} AND #{later}.{item_id} = " \
                    "#{outer}.{item_id} AND #{later}.{created_at} < <stored cast 12:00> AND " \
-                   "#{later}.{created_at} > #{outer}.{created_at} ) )"
+                   "#{later}.{created_at} > #{outer}.{created_at} AND NOT EXISTS ( SELECT 1 " \
+                   "FROM #{outer} #{crossing} WHERE #{crossing}.{item_type} = " \
+                   "#{later}.{item_type} AND #{crossing}.{item_id} = #{later}.{item_id} AND " \
+                   "#{crossing}.{transaction_id} = #{later}.{transaction_id} AND " \
+                   "#{crossing}.{created_at} >= <stored cast 12:00> ) ) )"
 
     %i[with_connection connection].each do |style|
       bounded = described_class.new(visible_version_class(style), noon, end_at: noon + 3600)

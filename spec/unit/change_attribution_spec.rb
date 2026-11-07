@@ -241,6 +241,42 @@ RSpec.describe PaperTrailDiff::ChangeAttribution do
         .to eq([[:changed, 'title', 'A', 'B', 1], [:changed, 'title', 'B', 'Z', :unversioned]])
     end
 
+    # A step starts from the state before its source, so a root field changed
+    # by an earlier version of the transaction, and then moved again without
+    # a version, is not part of the step's change at all.
+    it "does not credit a root's earlier version to a step that starts after it" do
+      earlier = version('AttributedArticle', 1, 1, changes: { 'title' => %w[A B] })
+      source = version('AttributedArticle', 1, 2, changes: { 'author_id' => [nil, 1] })
+      read = attribution([source], preceding: [earlier])
+
+      expect(credited(read, row(:changed, 'title', 'Z', 'W')))
+        .to eq([[:changed, 'title', 'Z', 'W', :unversioned]])
+      expect(credited(read, row(:changed, 'title', 'B', 'W')))
+        .to eq([[:changed, 'title', 'B', 'W', :unversioned]])
+    end
+
+    it 'starts from the last of the sources that left the starting value' do
+      read = attribution([version('AttributedArticle', 1, 1, changes: { 'title' => %w[Q R] }),
+                          version('AttributedComment', 7, 2, changes: { 'body' => %w[a b] }),
+                          version('AttributedArticle', 1, 3, changes: { 'title' => %w[A B] })])
+
+      expect(credited(read, row(:changed, 'title', 'A', 'B')))
+        .to eq([[:changed, 'title', 'A', 'B', 3]])
+      expect(credited(read, row(:changed, 'title', 'Z', 'B')))
+        .to eq([[:changed, 'title', 'Z', 'Q', :unversioned], [:changed, 'title', 'Q', 'R', 1],
+                [:changed, 'title', 'R', 'A', :unversioned], [:changed, 'title', 'A', 'B', 3]])
+    end
+
+    # A related record's fields are read as its transaction began, so its
+    # versions there before the step's sources are part of the change.
+    it "keeps a member's versions from before the step's sources" do
+      earlier = version('AttributedComment', 7, 1, changes: { 'body' => %w[m b] })
+      read = attribution([version('AttributedArticle', 1, 2, changes: {})], preceding: [earlier])
+
+      expect(credited(read, row(:changed, 'body', 'a', 'b', record: comment)))
+        .to eq([[:changed, 'body', 'a', 'm', :unversioned], [:changed, 'body', 'm', 'b', 1]])
+    end
+
     it 'splits off what changed between two recorded changes' do
       later = version('AttributedArticle', 1, 2, changes: { 'title' => %w[M C] })
 
