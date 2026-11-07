@@ -20,11 +20,19 @@ module PaperTrailDiff
     # : () -> String
     def candidate_condition: () -> String
 
+    # A version saved before the start names the state there unless a later
+    # one saved before the start replaced it. PT-AT stores the keys a version
+    # saved, and a start inside a transaction reads each record as it stood
+    # before the transaction, so a later version that the record's
+    # transaction across the start saved before it replaced nothing yet.
+    # Without the version before it, a record that this transaction moved
+    # away is not found, nor is the transaction (see
+    # PreparedHistoryLoader#reload).
     # : (untyped) -> String
     def condition_sql: (untyped) -> String
 
-    # : (untyped, String, String) -> Hash[Symbol, String]
-    def quoted_columns: (untyped, String, String) -> Hash[Symbol, String]
+    # : (untyped, String, String, String) -> Hash[Symbol, String]
+    def quoted_columns: (untyped, String, String, String) -> Hash[Symbol, String]
 
     # : (Hash[Symbol, String], String, untyped) -> String
     def activity_condition: (Hash[Symbol, String], String, untyped) -> String

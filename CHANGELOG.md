@@ -3,6 +3,21 @@
 All notable changes to this project will be documented in this file. The
 project follows [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Fixed
+
+- A change to a root's own field that was saved without a version, after an
+  earlier version of the same transaction changed that field, is no longer
+  split with that earlier version's change. The earlier change is already in
+  the state a step starts from, so the step's row for the field is the
+  unversioned change alone.
+- A window that starts inside a transaction now reports an associated
+  record that the transaction moved out of the root's tree before the
+  window's start, such as a comment moved to another parent and then saved
+  again or destroyed. The window before it leaves such a change to this
+  one, so a window split there no longer loses it from both halves.
+
 ## [0.17.0] - 2026-11-04
 
 ### Breaking changes

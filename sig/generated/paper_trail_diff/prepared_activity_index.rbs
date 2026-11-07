@@ -123,9 +123,20 @@ module PaperTrailDiff
     # survive a later pre-window reassignment just because that owner is absent.
     # A range starting at a version starts before that version's transaction,
     # as the scope's start does (see VersionBoundary.transaction_start), so a
-    # membership that ended earlier in that transaction still held there.
+    # membership that ended earlier in that transaction still held there. So
+    # did one that the record's own transaction across the start ended.
     # : (untyped, untyped, untyped, String?, ActivityRange) -> bool
     def eligible_version?: (untyped, untyped, untyped, String?, ActivityRange) -> bool
+
+    # Whether the record's next version, at `first`, replaced its state only
+    # from the range's start onward.
+    # : (Array[untyped], Integer, ActivityRange) -> bool
+    def replaced_after_start?: (Array[untyped], Integer, ActivityRange) -> bool
+
+    # Whether every version of a record from `first` up to the start is one
+    # of the transactions it saved a version in from the start onward.
+    # : (Array[untyped], Integer, untyped) -> bool
+    def crossed_start?: (Array[untyped], Integer, untyped) -> bool
 
     # Each statement reads the rows of 500 transactions.
     # : (untyped, untyped) -> Hash[String, Array[untyped]]

@@ -217,15 +217,39 @@ module PaperTrailDiff
     # survive a later pre-window reassignment just because that owner is absent.
     # A range starting at a version starts before that version's transaction,
     # as the scope's start does (see VersionBoundary.transaction_start), so a
-    # membership that ended earlier in that transaction still held there.
+    # membership that ended earlier in that transaction still held there. So
+    # did one that the record's own transaction across the start ended.
     #: (untyped, untyped, untyped, String?, ActivityRange) -> bool
     def eligible_version?(model, id, timestamp, event, range)
-      return true if timestamp >= range.start_time
+      start = range.start_time
+      return true if timestamp >= start
       return false if event == 'destroy'
 
-      later = @records.versions_for_id(model, id)
-                      .bsearch { |version| version.created_at > timestamp }
-      !later || later.created_at >= range.start_time || range.opening?(later)
+      versions = @records.versions_for_id(model, id)
+      first = versions.bsearch_index { |version| version.created_at > timestamp }
+      !first || replaced_after_start?(versions, first, range)
+    end
+
+    # Whether the record's next version, at `first`, replaced its state only
+    # from the range's start onward.
+    #: (Array[untyped], Integer, ActivityRange) -> bool
+    def replaced_after_start?(versions, first, range)
+      range.opening?(versions.fetch(first)) || crossed_start?(versions, first, range.start_time)
+    end
+
+    # Whether every version of a record from `first` up to the start is one
+    # of the transactions it saved a version in from the start onward.
+    #: (Array[untyped], Integer, untyped) -> bool
+    def crossed_start?(versions, first, start)
+      after = versions.bsearch_index { |version| version.created_at >= start }
+      return false unless after
+
+      versions.take(after).drop(first).all? do |version|
+        transaction_id = VersionBoundary.transaction_id(version)
+        transaction_id && versions.drop(after).any? do |other|
+          VersionBoundary.transaction_id(other) == transaction_id
+        end
+      end
     end
 
     # Each statement reads the rows of 500 transactions.

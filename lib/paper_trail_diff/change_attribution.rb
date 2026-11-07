@@ -52,6 +52,12 @@ module PaperTrailDiff
       #: () -> Integer
       def length = @boundaries.length
 
+      # Whether the boundary is one of these, not merely one like it.
+      #: (ActivityBoundary) -> bool
+      def holds?(boundary)
+        @boundaries.any? { |held| held.equal?(boundary) }
+      end
+
       # The record's boundaries among the first `count`, in order. The block
       # names a boundary's record. The index is built whole before it is
       # kept, so readers on two threads build the same one.
@@ -130,7 +136,7 @@ module PaperTrailDiff
       touched = recorded_changes(versions, row.attribute)
       return [credit(row, versions.last)] if touched.nil?
 
-      relevant = relevant(touched, row.from)
+      relevant = relevant(touched, row)
       return unrecorded(row, versions) if relevant.empty?
 
       trusted = @complete || relevant.length < touched.length
@@ -139,14 +145,23 @@ module PaperTrailDiff
 
     # The changes that make up the row's: from the last one that left the
     # row's starting value; or else those after the last that reached it,
-    # which an earlier step reported; or else all of them.
-    #: (Array[[ActivityBoundary, ValueChange]], untyped) -> Array[[ActivityBoundary, ValueChange]]
-    def relevant(touched, start)
+    # which an earlier step reported; or else all of them, which for a root's
+    # own field are only the ones its sources saved. A step starts from the
+    # state before its source, and a root's fields are read at each of its
+    # versions, so the root versions its transaction saved before the sources
+    # are already in that state. A related record's fields are read as the
+    # transaction began, so those versions still count.
+    #: (Array[[ActivityBoundary, ValueChange]], ChangeRow) -> Array[[ActivityBoundary, ValueChange]]
+    def relevant(touched, row)
+      start = row.from
       leaving = touched.rindex { |_version, change| change.from == start }
       return touched.drop(leaving) if leaving
 
       reaching = touched.rindex { |_version, change| change.to == start }
-      reaching ? touched.drop(reaching + 1) : touched
+      return touched.drop(reaching + 1) if reaching
+      return touched if row.record
+
+      touched.select { |version, _change| @sources.holds?(version) }
     end
 
     # A field none of the versions recorded changed without one, when they

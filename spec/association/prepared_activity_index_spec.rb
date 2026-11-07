@@ -671,20 +671,36 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
               [4, 5, 'create', true], [4, 5, 'update', true],
               [5, 10, 'create', true], [5, 20, 'destroy', true],
               [6, 21, 'create', true], [7, 5, 'create', true], [7, 12, 'update', true],
-              [8, 1, 'create', true], [8, 10, 'destroy', true]]
+              [8, 1, 'create', true], [8, 10, 'destroy', true],
+              # A move away in a transaction that saves the record again at
+              # or after a start, in the same transaction or another one.
+              [9, 1, 'create', true], [9, 8, 'update', false, 901], [9, 12, 'update', false, 901],
+              [10, 1, 'create', true], [10, 8, 'update', false, 902],
+              [10, 12, 'update', false, 903],
+              [11, 1, 'create', true], [11, 7, 'update', false, 904],
+              [11, 8, 'update', false, 905], [11, 12, 'update', false, 905],
+              # Saved again exactly at the start; then a version outside a
+              # transaction after it; then no transaction at all.
+              [12, 1, 'create', true], [12, 8, 'update', false, 906],
+              [12, 10, 'update', false, 906],
+              [13, 1, 'create', true], [13, 8, 'update', false, 907],
+              [13, 12, 'update', false, 907], [13, 14, 'update', false],
+              [14, 1, 'create', true], [14, 8, 'update', false], [14, 12, 'update', false]]
     # The spec clock moves a version saved out of order past the last one, so
     # each time is set after saving to keep these ties and boundaries.
-    candidates = events.filter_map do |id, offset, event, selected_owner|
+    candidates = events.filter_map do |id, offset, event, selected_owner, transaction_id|
       version = PaperTrail::Version.create!(item_type: 'TrackedComment', item_id: id,
-                                            event: event)
+                                            event: event, transaction_id: transaction_id)
       version.update_columns(created_at: origin + offset)
       version if selected_owner
     end
     records = PaperTrailDiff::PreparedRecordIndex.new(origin)
-    records.load(TrackedComment, (1..8).to_a)
+    records.load(TrackedComment, (1..14).to_a)
     index = described_class.new(records, [], start_at: origin)
     relation = PaperTrail::Version.where(id: candidates.map(&:id))
 
+    left_out = %w[2 10 11 14]
+    held_at_ten = %w[9 12 13]
     [10, 15].each do |start|
       range = PaperTrailDiff::ActivityRange.new(origin + start, origin + 20)
       expected = PaperTrailDiff::VersionAssociationCandidateScope.new(
@@ -695,8 +711,10 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
                    version.event, range)
       end.map(&:id)
 
+      created = ->(id) { candidates.find { |version| version.item_id.to_s == id }.id }
       expect(actual).to match_array(expected)
-      expect(actual).not_to include(candidates.find { |version| version.item_id.to_s == '2' }.id)
+      expect(actual).not_to include(*left_out.map(&created))
+      expect(held_at_ten.map { |id| actual.include?(created.call(id)) }).to all(eq(start == 10))
     end
   end
 end
