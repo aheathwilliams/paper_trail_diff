@@ -7,4 +7,6 @@ target :lib do
 
   # Reading inside a column that stores JSON needs the stdlib signatures for it.
   library 'json'
+  # A temporary table's name (see CandidateTable).
+  library 'securerandom'
 end
