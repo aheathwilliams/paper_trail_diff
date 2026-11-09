@@ -99,11 +99,10 @@ RSpec.describe PaperTrailDiff::ExactColumnType do
       aware = Class.new(ExactColumnItem) { self.time_zone_aware_attributes = true }
       stub_const('ExactColumnAware', aware)
       stored = ->(model, name) { described_class.stored_type(model.type_for_attribute(name)) }
+      own = ExactColumnItem.method(:type_for_attribute)
       expect(stored.call(ExactColumnItem, 'status')).to be_a(ActiveModel::Type::Integer)
-      expect(stored.call(aware,
-                         'seen_at').class).to eq(ExactColumnItem.type_for_attribute('seen_at').class)
-      expect(stored.call(ExactColumnItem,
-                         'label')).to equal(ExactColumnItem.type_for_attribute('label'))
+      expect(stored.call(aware, 'seen_at').class).to eq(own.call('seen_at').class)
+      expect(stored.call(ExactColumnItem, 'label')).to equal(own.call('label'))
     end
   end
 end
