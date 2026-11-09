@@ -89,7 +89,7 @@ RSpec.describe 'Transactions numbered alike from different version tables' do
   end
 
   it 'reads the history of a window from its start, not from the earlier one' do
-    expect(PaperTrailDiff::VersionBoundary.transaction_start(shelf.versions.to_a, june)).to eq(june)
+    expect(PaperTrailDiff::TransactionCut.range_start(shelf.versions.to_a, june)).to eq(june)
   end
 
   it 'selects no record for a window by the earlier one' do

@@ -1,9 +1,16 @@
 # Generated from lib/paper_trail_diff/transaction_cut.rb with RBS::Inline
 
 module PaperTrailDiff
-  # Moves each edge of a wall-clock window that falls inside one of a root's
-  # transactions back to where that transaction began, so the transaction is
-  # wholly in the later window.
+  # Answers where an edge of a history really starts: where the transactions
+  # that cross it began. Three edges ask it. A wall-clock window's edges move
+  # back to the start of a root's transaction that crosses them (`windows`),
+  # so the transaction is wholly in the later window; a range of versions
+  # starts before its roots' first transactions (`range_start`); and a
+  # history read from a window's start is read again from where the
+  # transactions that cross that start began (OpeningTransactions). A
+  # window's edges find where their transactions began with `starts`; the
+  # other two, which know a version each transaction saved after the edge,
+  # with `continued_starts`.
   #
   # PT-AT reads a root's associations at the start of the transaction of the
   # root version it reifies. A window starting just after a child saved its
@@ -31,6 +38,11 @@ module PaperTrailDiff
       # : (TimeRange) -> Edge
       def self.start_of: (TimeRange) -> Edge
 
+      # A history's start at an instant, which keeps versions recorded at it
+      # on the right.
+      # : (Time) -> Edge
+      def self.start_at: (Time) -> Edge
+
       # A window's end, strict when the window includes it; an endless window
       # has none.
       # : (TimeRange) -> Edge?
@@ -57,6 +69,20 @@ module PaperTrailDiff
     # Where history for a batch must be read from: the earliest moved start.
     # : (TimeRange?, Hash[Array[String], TimeRange]) -> Time?
     def self.earliest_start: (TimeRange?, Hash[Array[String], TimeRange]) -> Time?
+
+    # A range starting at a version starts before that version's transaction,
+    # as PT-AT reads associations there. A version saved earlier in the same
+    # transaction, such as the child update behind a `touch: true` parent
+    # version, can be recorded before the start, so the start moves back to
+    # where each root's first transaction in the range began. History loaded
+    # from the start alone would read that child after its change.
+    # : (Array[untyped], untyped) -> untyped
+    def self.range_start: (Array[untyped], untyped) -> untyped
+
+    # Each root's first version at or after the start, where a transaction
+    # saved it.
+    # : (Array[untyped], untyped) -> Array[untyped]
+    def self.opening_versions: (Array[untyped], untyped) -> Array[untyped]
 
     # The windows that move, keyed by root id. A root missing from the result
     # keeps the window as asked. `traversal` names the requested paths.
@@ -177,10 +203,23 @@ module PaperTrailDiff
     # : (untyped, untyped) -> untyped
     def self.at_either: (untyped, untyped) -> untyped
 
-    # Where each transaction that saved a version before the edge began; with
-    # `types`, only one that also saved a record of one of them after it.
+    # Where each of the transactions that saved a version before the edge
+    # began, by transaction; with `types`, only one that also saved a record
+    # of one of them after it. Of transactions that share a number, only one
+    # no anchor separates from the edge counts (see TransactionAnchors).
     # : (untyped, Array[untyped], Edge, ?Array[String]?) -> Hash[untyped, Time]
-    def self.crossing_starts: (untyped, Array[untyped], Edge, ?Array[String]?) -> Hash[untyped, Time]
+    def self.starts: (untyped, Array[untyped], Edge, ?Array[String]?) -> Hash[untyped, Time]
+
+    # Where the transactions of these versions, saved after the edge, began,
+    # for those that saved a version before it. Of transactions that share a
+    # number, only the one each version is in counts (see TransactionAnchors).
+    # : (untyped, Array[untyped], Edge) -> Hash[untyped, Time]
+    def self.continued_starts: (untyped, Array[untyped], Edge) -> Hash[untyped, Time]
+
+    # The earliest version before the edge of each transaction the block
+    # picks from these versions, one statement per 500 of them.
+    # : [T] (untyped, Array[T], Edge) { (Array[T], untyped) -> untyped } -> Hash[untyped, Time]
+    def self.began: [T] (untyped, Array[T], Edge) { (Array[T], untyped) -> untyped } -> Hash[untyped, Time]
 
     # Those of the transactions that saved a version of a record of one of
     # `types` on the edge's later side. A subquery apart from the outer one,

@@ -302,7 +302,7 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
   end
 
   # A range starting at a version starts before that version's transaction
-  # (see VersionBoundary.transaction_start), so a section that left the page
+  # (see TransactionCut.range_start), so a section that left the page
   # earlier in it was still one of the page's sections at the start.
   it 'reads the sections that left a page in the transaction a version start opens' do
     page, other = %w[Page Other].map { |title| IndexSpecPage.create!(title: title) }
@@ -313,7 +313,7 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
       page.update!(title: 'Renamed')
       page.versions.reorder(:created_at, :id).last
     end
-    origin = PaperTrailDiff::VersionBoundary.transaction_start([start], start.created_at)
+    origin = PaperTrailDiff::TransactionCut.range_start([start], start.created_at)
     index = index_for(origin, { IndexSpecSection => [moved.id, gone.id] })
     index.register(IndexSpecPage, [page.id, other.id])
 

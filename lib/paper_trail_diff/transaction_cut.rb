@@ -2,9 +2,16 @@
 # rbs_inline: enabled
 
 module PaperTrailDiff
-  # Moves each edge of a wall-clock window that falls inside one of a root's
-  # transactions back to where that transaction began, so the transaction is
-  # wholly in the later window.
+  # Answers where an edge of a history really starts: where the transactions
+  # that cross it began. Three edges ask it. A wall-clock window's edges move
+  # back to the start of a root's transaction that crosses them (`windows`),
+  # so the transaction is wholly in the later window; a range of versions
+  # starts before its roots' first transactions (`range_start`); and a
+  # history read from a window's start is read again from where the
+  # transactions that cross that start began (OpeningTransactions). A
+  # window's edges find where their transactions began with `starts`; the
+  # other two, which know a version each transaction saved after the edge,
+  # with `continued_starts`.
   #
   # PT-AT reads a root's associations at the start of the transaction of the
   # root version it reifies. A window starting just after a child saved its
@@ -30,7 +37,12 @@ module PaperTrailDiff
     class Edge
       # A window's start, which keeps versions recorded at it on the right.
       #: (TimeRange) -> Edge
-      def self.start_of(range) = new(range.begin_time, false)
+      def self.start_of(range) = start_at(range.begin_time)
+
+      # A history's start at an instant, which keeps versions recorded at it
+      # on the right.
+      #: (Time) -> Edge
+      def self.start_at(time) = new(time, false)
 
       # A window's end, strict when the window includes it; an endless window
       # has none.
@@ -82,6 +94,34 @@ module PaperTrailDiff
 
       [range.begin_time, *windows.each_value.map(&:begin_time)].min
     end
+
+    # A range starting at a version starts before that version's transaction,
+    # as PT-AT reads associations there. A version saved earlier in the same
+    # transaction, such as the child update behind a `touch: true` parent
+    # version, can be recorded before the start, so the start moves back to
+    # where each root's first transaction in the range began. History loaded
+    # from the start alone would read that child after its change.
+    #: (Array[untyped], untyped) -> untyped
+    def self.range_start(root_versions, start_at)
+      versions = opening_versions(root_versions, start_at)
+      return start_at if versions.empty?
+
+      began = continued_starts(root_versions.first.class, versions, Edge.start_at(start_at))
+      [start_at, *began.each_value].min
+    end
+
+    # Each root's first version at or after the start, where a transaction
+    # saved it.
+    #: (Array[untyped], untyped) -> Array[untyped]
+    def self.opening_versions(root_versions, start_at)
+      return [] unless start_at
+
+      root_versions.reject { |version| version.created_at < start_at }
+                   .sort_by { |version| Support.chronological_version_key(version) }
+                   .uniq { |version| Endpoint.identity(version) }
+                   .select { |version| VersionBoundary.transaction_id(version) }
+    end
+    private_class_method :opening_versions
 
     # The windows that move, keyed by root id. A root missing from the result
     # keeps the window as asked. `traversal` names the requested paths.
@@ -216,10 +256,10 @@ module PaperTrailDiff
     def self.crossing(versions, records, edge, types)
       later, earlier = nearest_roots(versions, records, edge)
       # @type var sides: Array[[Hash[untyped, Array[String]], Hash[untyped, Time]]]
-      sides = [[later, crossing_starts(versions.klass, later.keys, edge)]]
+      sides = [[later, starts(versions.klass, later.keys, edge)]]
       return sides if types.empty?
 
-      sides << [earlier, crossing_starts(versions.klass, earlier.keys, edge, types)]
+      sides << [earlier, starts(versions.klass, earlier.keys, edge, types)]
     end
     private_class_method :crossing
 
@@ -330,24 +370,44 @@ module PaperTrailDiff
     end
     private_class_method :at_either
 
-    # Where each transaction that saved a version before the edge began; with
-    # `types`, only one that also saved a record of one of them after it.
+    # Where each of the transactions that saved a version before the edge
+    # began, by transaction; with `types`, only one that also saved a record
+    # of one of them after it. Of transactions that share a number, only one
+    # no anchor separates from the edge counts (see TransactionAnchors).
     #: (untyped, Array[untyped], Edge, ?Array[String]?) -> Hash[untyped, Time]
-    def self.crossing_starts(version_class, transactions, edge, types = nil)
-      table = version_class.arel_table
-      earlier = edge.left(table[:created_at])
-      starts = {} #: Hash[untyped, Time]
-      transactions.each_slice(Support::IDS_PER_STATEMENT).with_object(starts) do |slice, found|
-        crossing = TransactionAnchors.scope(
-          version_class.where(transaction_id: slice).where(earlier), version_class, edge
-        )
-        if types
-          crossing = crossing.where(transaction_id: saved_later(version_class, slice, edge, types))
-        end
-        found.merge!(crossing.group(:transaction_id).minimum(:created_at))
+    def self.starts(version_class, transactions, edge, types = nil)
+      began(version_class, transactions, edge) do |slice, earlier|
+        crossing = TransactionAnchors.scope(earlier.where(transaction_id: slice), version_class,
+                                            edge)
+        next crossing unless types
+
+        crossing.where(transaction_id: saved_later(version_class, slice, edge, types))
       end
     end
-    private_class_method :crossing_starts
+
+    # Where the transactions of these versions, saved after the edge, began,
+    # for those that saved a version before it. Of transactions that share a
+    # number, only the one each version is in counts (see TransactionAnchors).
+    #: (untyped, Array[untyped], Edge) -> Hash[untyped, Time]
+    def self.continued_starts(version_class, versions, edge)
+      began(version_class, versions, edge) do |slice, earlier|
+        numbers = slice.map { |version| VersionBoundary.transaction_id(version) }
+        TransactionAnchors.continued(earlier.where(transaction_id: numbers), version_class, edge,
+                                     slice.map(&:id))
+      end
+    end
+
+    # The earliest version before the edge of each transaction the block
+    # picks from these versions, one statement per 500 of them.
+    #: [T] (untyped, Array[T], Edge) { (Array[T], untyped) -> untyped } -> Hash[untyped, Time]
+    def self.began(version_class, items, edge)
+      earlier = version_class.where(edge.left(version_class.arel_table[:created_at]))
+      found = {} #: Hash[untyped, Time]
+      items.each_slice(Support::IDS_PER_STATEMENT).with_object(found) do |slice, starts|
+        starts.merge!(yield(slice, earlier).group(:transaction_id).minimum(:created_at))
+      end
+    end
+    private_class_method :began
 
     # Those of the transactions that saved a version of a record of one of
     # `types` on the edge's later side. A subquery apart from the outer one,

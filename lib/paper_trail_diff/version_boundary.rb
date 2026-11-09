@@ -29,50 +29,6 @@ module PaperTrailDiff
       Support.compare_versions(candidate, boundary).positive?
     end
 
-    # A range starting at a version starts before that version's transaction,
-    # as PT-AT reads associations there. A version saved earlier in the same
-    # transaction, such as the child update behind a `touch: true` parent
-    # version, can be recorded before the start, so the start moves back to
-    # the earliest version of each root's first transaction in the range.
-    # History loaded from the start alone would read that child after its
-    # change. The transactions go 500 to a statement.
-    #: (Array[untyped], untyped) -> untyped
-    def self.transaction_start(root_versions, start_at)
-      earliest = opening_versions(root_versions, start_at)
-                 .each_slice(Support::IDS_PER_STATEMENT).filter_map do |slice|
-        began(slice, start_at)
-      end.min
-      earliest && earliest < start_at ? earliest : start_at
-    end
-
-    # When the earliest of these versions' transactions began. Another
-    # version table can number a transaction as this one numbered an earlier
-    # one, so only the versions of the transaction each of these is in are
-    # read (see TransactionAnchors).
-    #: (Array[untyped], untyped) -> untyped
-    def self.began(versions, start_at)
-      version_class = versions.first.class
-      saved = version_class.where(transaction_id: versions.map do |version|
-        transaction_id(version)
-      end)
-      TransactionAnchors.continued(saved, version_class, TransactionCut::Edge.new(start_at, false),
-                                   versions.map(&:id)).minimum(:created_at)
-    end
-    private_class_method :began
-
-    # Each root's first version at or after the start, where a transaction
-    # saved it.
-    #: (Array[untyped], untyped) -> Array[untyped]
-    def self.opening_versions(root_versions, start_at)
-      return [] unless start_at
-
-      root_versions.reject { |version| version.created_at < start_at }
-                   .sort_by { |version| Support.chronological_version_key(version) }
-                   .uniq { |version| Endpoint.identity(version) }
-                   .select { |version| transaction_id(version) }
-    end
-    private_class_method :opening_versions
-
     # A custom version class need not carry the column, and PaperTrail leaves
     # it nil outside a transaction. Both read as "no transaction here", which
     # groups with nothing.

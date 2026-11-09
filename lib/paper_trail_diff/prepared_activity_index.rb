@@ -220,7 +220,7 @@ module PaperTrailDiff
     # series includes changes to other owners too, so an old membership cannot
     # survive a later pre-window reassignment just because that owner is absent.
     # A range starting at a version starts before that version's transaction,
-    # as the scope's start does (see VersionBoundary.transaction_start), so a
+    # as the scope's start does (see TransactionCut.range_start), so a
     # membership that ended earlier in that transaction still held there. So
     # did one that the record's own transaction across the start ended.
     #: (untyped, untyped, untyped, String?, ActivityRange) -> bool

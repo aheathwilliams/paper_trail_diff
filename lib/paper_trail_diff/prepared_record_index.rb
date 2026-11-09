@@ -526,7 +526,7 @@ module PaperTrailDiff
 
   # Finds the transactions that crossed a history's start: those the versions
   # held from the start onward belong to that also saved versions before it,
-  # of any record. One statement per 500 transactions.
+  # of any record, and where they began (see TransactionCut.continued_starts).
   class OpeningTransactions
     #: (Hash[Array[String], PreparedRecordSeries], untyped) -> void
     def initialize(series, start)
@@ -549,21 +549,11 @@ module PaperTrailDiff
     private
 
     # When each of these transactions saved its first version before the
-    # start, for those that saved one there. Another version table can number
-    # a transaction as this one numbered an earlier one, so only the versions
-    # of the transaction the held version is in are read (see
-    # TransactionAnchors).
+    # start, for those that saved one there: the transactions of the first
+    # versions held of each (see TransactionCut.continued_starts).
     #: (untyped, Hash[untyped, untyped]) -> Array[[untyped, untyped]]
     def earliest(version_class, held)
-      before = version_class.arel_table[:created_at].lt(@start)
-      edge = TransactionCut::Edge.new(@start, false)
-      held.each_slice(Support::IDS_PER_STATEMENT).flat_map do |slice|
-        saved = version_class.where(transaction_id: slice.map(&:first)).where(before)
-        TransactionAnchors.continued(saved, version_class, edge, slice.map do |_, version|
-          version.id
-        end)
-                          .group(:transaction_id).minimum(:created_at).to_a
-      end
+      TransactionCut.continued_starts(version_class, held.values, TransactionCut::Edge.start_at(@start)).to_a
     end
 
     # @rbs @series: Hash[Array[String], PreparedRecordSeries]

@@ -29,7 +29,7 @@ module PaperTrailDiff
       @traversal = traversal
       @end_at = end_at
       @live_records = live_records
-      start_at = VersionBoundary.transaction_start(root_versions, start_at)
+      start_at = TransactionCut.range_start(root_versions, start_at)
       @records = PreparedRecordIndex.new(start_at, end_at: end_at, live_records: live_records)
       @activity = PreparedActivityIndex.new(@records, root_versions, start_at: start_at,
                                                                      opening: opening)
