@@ -178,6 +178,22 @@ module PaperTrailDiff
       rank(records.select { |record| matches?(record.attributes) })
     end
 
+    # The one record a has_one reads of several that meet its conditions:
+    # the first as ranked, or without an order of its own, the one with the
+    # lowest primary key. Active Record reads an unordered has_one with
+    # LIMIT 1, which SQLite, MySQL and SQL Server answer in key order for a
+    # clustered or indexed key; reading any other row would differ from the
+    # current record where nothing changed. PostgreSQL promises no order.
+    #: (Array[untyped]) -> Array[untyped]
+    def first(records)
+      return records.first(1) if @ranking
+
+      keys = Array(@model_class.primary_key)
+      records.min_by(1) do |record|
+        keys.map { |key| Support.sortable_identity('', record.attributes[key]).last }
+      end
+    end
+
     # Records that meet the conditions, as ranked; unchanged without a
     # ranking.
     #: (Array[untyped]) -> Array[untyped]

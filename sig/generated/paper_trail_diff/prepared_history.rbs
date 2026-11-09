@@ -71,6 +71,12 @@ module PaperTrailDiff
     # : (untyped, untyped, untyped, bool) -> Array[untyped]
     def child_records: (untyped, untyped, untyped, bool) -> Array[untyped]
 
+    # A ranked has_one keeps one of its records, as the state path reads it
+    # (see ScopeCondition#first). An unranked read is a part of a has_many
+    # through, whose join keeps every row.
+    # : (untyped, Array[untyped], bool) -> Array[untyped]
+    def one_if_has_one: (untyped, Array[untyped], bool) -> Array[untyped]
+
     # : (Hash[Symbol, untyped], untyped) -> Array[untyped]
     def child_ids_for: (Hash[Symbol, untyped], untyped) -> Array[untyped]
 

@@ -169,6 +169,9 @@ window = Time.zone.parse("2026-08-01")...Time.zone.parse("2026-09-01")
 steps = PaperTrailDiff.timeline(article, within: window)
 ```
 
+A bound is read to the microsecond, as adapters write it into SQL, so a
+version saved in the microsecond of a `Time.now` start is inside the window.
+
 A `Date` bound is a whole day in `Time.zone`, so `Date.today..Date.today` is
 all of today and `august...september` stops before September 1. A string is a
 time in `Time.zone` unless it names an offset. Without `Time.zone`, both are
@@ -987,6 +990,12 @@ Supported: `belongs_to`, `has_one`, `has_many` (including `:through`), and
 historical states need PT-AT installed and enabled
 (`PaperTrail.config.track_associations = true`). The gem never follows
 associations you did not ask for, so cyclic models are safe.
+
+When more than one record points at the owner of a `has_one` without an
+order, history reads the one with the lowest primary key, as Active Record's
+`LIMIT 1` does on SQLite, MySQL, and SQL Server. PostgreSQL promises no order
+there, so its current record can read another one: give such a `has_one` an
+order, or a unique index, to make the choice the same everywhere.
 
 How each kind is reported:
 

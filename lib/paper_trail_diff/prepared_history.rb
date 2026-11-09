@@ -131,7 +131,18 @@ module PaperTrailDiff
           child if child && member_of?(child, reflection, record)
         end
       end
-      @conditions.select(reflection, children, ranked: ranked)
+      one_if_has_one(reflection, @conditions.select(reflection, children, ranked: ranked), ranked)
+    end
+
+    # A ranked has_one keeps one of its records, as the state path reads it
+    # (see ScopeCondition#first). An unranked read is a part of a has_many
+    # through, whose join keeps every row.
+    #: (untyped, Array[untyped], bool) -> Array[untyped]
+    def one_if_has_one(reflection, records, ranked)
+      return records unless ranked && reflection.has_one?
+
+      condition = @conditions.call(reflection, ranked: ranked) #: ScopeCondition
+      condition.first(records)
     end
 
     #: (Hash[Symbol, untyped], untyped) -> Array[untyped]
@@ -181,7 +192,7 @@ module PaperTrailDiff
       return unless rows
 
       rows = @conditions.select(reflection, rows, ranked: ranked)
-      ranked ? unique_records(rows) : rows
+      ranked ? one_if_has_one(reflection, unique_records(rows), ranked) : rows
     end
 
     # The source records of each join record, once for each join.

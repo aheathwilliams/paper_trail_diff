@@ -10,6 +10,8 @@ module PaperTrailDiff
   # it runs through every version saved since it began, whatever the clock
   # that dated them read, as a report through the current state does.
   class TimeRange
+    MICROSECOND_DIGITS = 6
+
     attr_reader :begin_time #: Time
     attr_reader :end_time #: Time?
 
@@ -96,9 +98,13 @@ module PaperTrailDiff
       exclude_end? ? column.gteq(finish) : column.gt(finish)
     end
 
+    # Cut to the microsecond, as adapters write a time they bind: a finer
+    # edge would select versions in SQL by the cut time but in Ruby by the
+    # whole one, and a version in the edge's microsecond would be in one
+    # method's window and not another's.
     #: (untyped, boundary: Symbol) -> Time
     def coerce_time(value, boundary:)
-      time_value(value).getutc.freeze
+      time_value(value).getutc.floor(MICROSECOND_DIGITS).freeze
     rescue ArgumentError, NoMethodError, TypeError
       raise InvalidTimeRangeError, "`within` #{boundary} must be time-like"
     end

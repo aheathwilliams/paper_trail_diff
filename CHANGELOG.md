@@ -36,6 +36,18 @@ project follows [Semantic Versioning](https://semver.org/).
   grouped by anything but its primary key that has no order of its own,
   instead of sending a query the database rejects.
 
+### Fixed
+
+- A `has_one` that two records point at, with no order of its own, now reads
+  the one with the lowest primary key at every point in history, as Active
+  Record reads it on SQLite, MySQL and SQL Server. History read another one,
+  so comparing the last version with the current record reported the
+  relationship changing when nothing had.
+- A `within:` edge finer than a microsecond is cut to the microsecond, as
+  adapters write it into SQL. A version saved in the edge's microsecond was
+  in `timeline`'s window but not in `activity_timeline`'s or
+  `analyze_many`'s.
+
 ## [0.17.1] - 2026-11-07
 
 ### Fixed
