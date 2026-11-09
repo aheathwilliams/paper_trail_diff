@@ -79,6 +79,41 @@ RSpec.describe PaperTrailDiff::CandidateTable do
       expect(CoreArticle.connection.select_value("SELECT OBJECT_ID('tempdb..#{name}')")).to be_nil
     end
 
+    it 'drops the table when filling it fails' do
+      name = nil
+      connection = CoreArticle.connection
+      allow(connection).to receive(:execute).and_wrap_original do |original, sql, *rest|
+        name ||= sql[/#paper_trail_diff_candidates_\h+/]
+        raise ArgumentError, 'stop' if sql.start_with?('INSERT')
+
+        original.call(sql, *rest)
+      end
+
+      expect { described_class.with(CoreArticle, many) { :unreached } }
+        .to raise_error(ArgumentError, 'stop')
+      expect(connection.select_value("SELECT OBJECT_ID('tempdb..#{name}')")).to be_nil
+    end
+
+    # The adapter reads an INSERT's table into the schema cache, which a
+    # name used once would otherwise keep for the life of the pool.
+    it 'leaves no entry for the table in the schema cache' do
+      name = described_class.with(CoreArticle, many) do |source|
+        source.to_sql[/#paper_trail_diff_candidates_\h+/]
+      end
+
+      expect(CoreArticle.connection.schema_cache.cached?(name)).to be(false)
+    end
+
+    # Active Record counts the table's statements as writes, as Rails'
+    # automatic role switching prevents on a replica read.
+    it 'yields the list while writes are prevented' do
+      source = ActiveRecord::Base.while_preventing_writes do
+        described_class.with(CoreArticle, many) { |ids| ids }
+      end
+
+      expect(source).to equal(many)
+    end
+
     it 'gives the column a string key its type and collation' do
       column = Struct.new(:sql_type, :collation).new('nvarchar(255)', 'Latin1_General_CS_AS')
       allow(CoreArticle).to receive_messages(columns_hash: { 'id' => column },

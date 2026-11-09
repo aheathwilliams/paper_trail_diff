@@ -12,8 +12,13 @@ module PaperTrailDiff
   # take the list as before: they parse it quickly, and the table would cost
   # them statements of their own.
   #
+  # Active Record counts the table's statements as writes, so a read that
+  # prevents writes, as a replica read through Rails' automatic role switching
+  # does, takes the list instead.
+  #
   # A temporary table belongs to the connection that made it, so the block runs
-  # on one connection, and the table is dropped when it returns or raises. A
+  # on one connection, and the table is dropped when it returns or raises,
+  # even when filling it is what failed. A
   # reconnect inside the block, as Active Record makes to retry a read after
   # losing the connection, loses the table, and the read then fails naming it.
   module CandidateTable
@@ -31,7 +36,7 @@ module PaperTrailDiff
     def self.with: [T] (untyped, Array[String]) { (untyped) -> T } -> T
 
     # : (untyped) -> bool
-    def self.sql_server?: (untyped) -> bool
+    def self.table?: (untyped) -> bool
 
     # The column takes the key's type and collation, so that comparing the two
     # neither converts every row nor meets tempdb's collation.
@@ -42,6 +47,9 @@ module PaperTrailDiff
     # which Active Record then reconnected, takes it along. A failed drop is
     # not raised, so that the error that ended the block is the one the caller
     # sees; a table left behind goes when its connection closes.
+    #
+    # The adapter reads each INSERT's table into the schema cache, which would
+    # keep every table's name for the life of the pool, so its entry goes too.
     # : (untyped, String) -> void
     def self.drop: (untyped, String) -> void
 

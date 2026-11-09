@@ -12,7 +12,9 @@ project follows [Semantic Versioning](https://semver.org/).
   key's type does, writes more than 500 of them to a temporary table once and
   reads each page from it, instead of listing every id on every page. A
   selection of 10,000 records took 0.6 s instead of 5 s, and one of 20,000
-  took 1.1 s instead of 30 s.
+  took 1.1 s instead of 30 s. A read that prevents writes, such as a replica
+  read through Rails' automatic role switching, still lists the ids, since
+  Active Record counts the table's statements as writes.
 
 ### Fixed
 

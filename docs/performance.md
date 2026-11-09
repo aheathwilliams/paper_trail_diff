@@ -137,7 +137,9 @@ type selects records the same way. On SQL Server, more than 500 matching
 records are first written to a temporary table, in statements of 1,000 rows,
 and each page selects from it instead of listing them, since SQL Server
 compiles a statement with its ids written in afresh. The table is dropped
-when the selection ends. On a local SQL Server 2022 container, with the plan
+when the selection ends. A read that prevents writes, as a replica read
+through Rails' automatic role switching does, lists the ids instead, since
+Active Record counts the table's statements as writes. On a local SQL Server 2022 container, with the plan
 cache cleared before each run:
 
 | Matching records | Listing every id | Temporary table |

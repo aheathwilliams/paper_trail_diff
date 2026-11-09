@@ -15,8 +15,13 @@ module PaperTrailDiff
   # take the list as before: they parse it quickly, and the table would cost
   # them statements of their own.
   #
+  # Active Record counts the table's statements as writes, so a read that
+  # prevents writes, as a replica read through Rails' automatic role switching
+  # does, takes the list instead.
+  #
   # A temporary table belongs to the connection that made it, so the block runs
-  # on one connection, and the table is dropped when it returns or raises. A
+  # on one connection, and the table is dropped when it returns or raises,
+  # even when filling it is what failed. A
   # reconnect inside the block, as Active Record makes to retry a read after
   # losing the connection, loses the table, and the read then fails naming it.
   module CandidateTable
@@ -32,12 +37,14 @@ module PaperTrailDiff
     # condition such as `where(id: ...)` reads as a subquery.
     #: [T] (untyped, Array[String]) { (untyped) -> T } -> T
     def self.with(model, ids)
-      return yield(ids) unless ids.length > THRESHOLD && sql_server?(model)
+      return yield(ids) unless ids.length > THRESHOLD
 
-      model.connection_pool.with_connection do |connection|
+      Support.with_connection(model) do |connection|
+        next yield(ids) unless table?(connection)
+
         name = "#paper_trail_diff_candidates_#{SecureRandom.hex(8)}"
-        create(connection, model, name, ids)
         begin
+          create(connection, model, name, ids)
           yield model.unscoped.from("#{name} AS candidates").select('candidates.id')
         ensure
           drop(connection, name)
@@ -46,8 +53,8 @@ module PaperTrailDiff
     end
 
     #: (untyped) -> bool
-    def self.sql_server?(model)
-      model.connection_pool.with_connection { |connection| connection.adapter_name == 'SQLServer' }
+    def self.table?(connection)
+      connection.adapter_name == 'SQLServer' && !connection.preventing_writes?
     end
 
     # The column takes the key's type and collation, so that comparing the two
@@ -67,11 +74,16 @@ module PaperTrailDiff
     # which Active Record then reconnected, takes it along. A failed drop is
     # not raised, so that the error that ended the block is the one the caller
     # sees; a table left behind goes when its connection closes.
+    #
+    # The adapter reads each INSERT's table into the schema cache, which would
+    # keep every table's name for the life of the pool, so its entry goes too.
     #: (untyped, String) -> void
     def self.drop(connection, name)
       connection.execute("IF OBJECT_ID('tempdb..#{name}') IS NOT NULL DROP TABLE #{name}")
     rescue StandardError
       nil
+    ensure
+      connection.schema_cache.clear_data_source_cache!(name)
     end
 
     # The adapter writes an integer type with its size in bytes, as
@@ -83,6 +95,6 @@ module PaperTrailDiff
       collation ? "#{type} COLLATE #{collation}" : type
     end
 
-    private_class_method :sql_server?, :create, :drop, :column_type
+    private_class_method :table?, :create, :drop, :column_type
   end
 end
