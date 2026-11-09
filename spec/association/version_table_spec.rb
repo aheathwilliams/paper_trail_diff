@@ -72,6 +72,20 @@ RSpec.describe PaperTrailDiff::VersionTable do
                       'of version tables')
   end
 
+  # PaperTrail alone gives no version_association_class; TraversalPreparer
+  # refuses history without PT-AT, and this must not raise first.
+  it 'compares only the versions tables when PT-AT does not name its own' do
+    [SplitShelf, SplitShelfBook, Shelf, ShelfBook].each do |model|
+      config = Struct.new(:version_class).new(model.paper_trail.version_class)
+      allow(model).to receive(:paper_trail).and_return(config)
+    end
+
+    expect(described_class.unsupported_reason(SplitShelf.reflect_on_association(:books)))
+      .to eq('SplitShelf#books keeps versions in versions but SplitShelfBook in shelf_versions, ' \
+             'and association history is read from one set of version tables')
+    expect(described_class.unsupported_reason(Shelf.reflect_on_association(:books))).to be_nil
+  end
+
   it "refuses an association whose owner keeps versions in another table than its target's" do
     book = SplitShelfBook.create!(title: 'Loose')
 

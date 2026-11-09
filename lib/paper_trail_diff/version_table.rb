@@ -54,10 +54,17 @@ module PaperTrailDiff
       associations.joins(rows.join(table).on(table[:id].eq(rows[:version_id])).join_sources)
     end
 
+    # Without PT-AT loaded there are no version associations to name, and
+    # TraversalPreparer refuses history for that reason first, so only the
+    # versions' table is compared: a live comparison or association_paths
+    # still works.
     #: (untyped) -> String
     def self.tables(model)
       history = model.paper_trail
-      "#{history.version_class.table_name} and #{history.version_association_class.table_name}"
+      versions = history.version_class.table_name
+      return versions unless history.respond_to?(:version_association_class)
+
+      "#{versions} and #{history.version_association_class.table_name}"
     end
     private_class_method :tables
   end
