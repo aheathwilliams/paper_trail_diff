@@ -97,6 +97,10 @@ RSpec.describe PaperTrailDiff::ScopeRanking do
     %i[label kind starts_at amount].each do |key|
       expect(build(-> { order(key, :id).limit(1) })).to be_nil
     end
+    # Text is never ordered, whatever precision its type declares.
+    stub_const('ScopeRankingPrecise', Class.new(ScopeRankingItem))
+    ScopeRankingPrecise.attribute :label, ActiveModel::Type::String.new(precision: 6)
+    expect(described_class.orderable?(ScopeRankingPrecise, 'label')).to be(false)
     # MySQL gives a datetime declared without a precision precision 0, to which
     # Active Record truncates; elsewhere it has none and is not read.
     expect(build(-> { order(:loose_at, :id).limit(1) }).nil?)

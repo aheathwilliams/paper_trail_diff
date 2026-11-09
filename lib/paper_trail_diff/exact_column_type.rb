@@ -63,7 +63,7 @@ module PaperTrailDiff
       return unless column
 
       kind = sql_kind(model_class.connection_db_config.adapter, column.sql_type)
-      return unless kind && (kind != :text || column.collation.nil?)
+      return unless kind && (column.collation.nil? || !:text.equal?(kind))
 
       kinds = stored_type(model_class.type_for_attribute(name)).class.ancestors.map(&:name)
       kind if kinds.include?(RUBY_TYPES.fetch(kind))
@@ -85,7 +85,7 @@ module PaperTrailDiff
       return unless types
 
       sql_type = sql_type.downcase
-      types[sql_type] || types[sql_type.gsub(/\s*\([^)]*\)/, '')]
+      types[sql_type] || types[sql_type.sub(/\s*\([^)]+\)/, '')]
     end
     private_class_method :sql_kind
   end

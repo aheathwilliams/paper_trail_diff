@@ -114,10 +114,11 @@ module PaperTrailDiff
     # Active Record truncates a time to its column's precision before writing
     # it, so history holds the stored value when it keeps that many digits.
     # Times the type stores in UTC sort as the instants they name; local
-    # times repeat an hour when clocks go back.
+    # times repeat an hour when clocks go back. A time-zone-aware type passes
+    # both questions to the time it wraps.
     #: (untyped, String?) -> bool
     def self.exact_time?(model_class, name)
-      type = ExactColumnType.stored_type(model_class.type_for_attribute(name))
+      type = model_class.type_for_attribute(name)
       precision = type.precision
       digits = StoredTimePrecision.digits(model_class)
       !precision.nil? && (digits.nil? || digits >= precision) && type.default_timezone == :utc
