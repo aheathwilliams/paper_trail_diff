@@ -62,9 +62,10 @@ module PaperTrailDiff
       finish ? after(relation, finish) : relation.none
     end
 
-    # Each item's earliest version after the range, keyed by item id. One row
-    # per item comes back from a NOT EXISTS rather than a window function, so
-    # the query stays portable; a timestamp tie keeps the lower id.
+    # Each item's earliest version after the range, keyed by item id. The
+    # versions at each item's earliest instant come back from a NOT EXISTS
+    # rather than a window function, so the query stays portable. A timestamp
+    # tie keeps the lower id when ids order it, and raises when they cannot.
     #: (untyped) -> Hash[String, untyped]
     def first_trailing_versions(relation)
       finish = end_time
@@ -75,7 +76,9 @@ module PaperTrailDiff
         after_end(earlier[:created_at], finish)
       end
       versions = VersionQuery.chronological(after(relation, finish).where(first_after))
-      versions.each { |version| first[version.item_id.to_s] ||= version }
+      versions.group_by { |version| version.item_id.to_s }.each do |id, tied|
+        first[id] = Support.earliest_version(tied)
+      end
       first
     end
 

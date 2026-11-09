@@ -12,7 +12,8 @@ module PaperTrailDiff
     def self.widest: (TimeRange, Array[TimeRange]) -> TimeRange
 
     # The versions inside `window`, and the first of the rest past its end.
-    # They are read in no order, so the first is found by time and id.
+    # They are read in no order, so the first is found by time and id, and a
+    # tie for first that ids cannot order raises.
     # : (TimeRange, Array[untyped]) -> [Array[untyped], untyped]
     def self.split: (TimeRange, Array[untyped]) -> [ Array[untyped], untyped ]
 

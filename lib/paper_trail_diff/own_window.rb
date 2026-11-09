@@ -16,7 +16,8 @@ module PaperTrailDiff
     end
 
     # The versions inside `window`, and the first of the rest past its end.
-    # They are read in no order, so the first is found by time and id.
+    # They are read in no order, so the first is found by time and id, and a
+    # tie for first that ids cannot order raises.
     #: (TimeRange, Array[untyped]) -> [Array[untyped], untyped]
     def self.split(window, loaded)
       own, rest = loaded.partition { |version| window.include?(version.created_at) }
@@ -27,8 +28,7 @@ module PaperTrailDiff
     def self.first_past(versions, finish)
       return unless finish
 
-      versions.select { |version| version.created_at >= finish }
-              .min_by { |version| Support.chronological_version_key(version) }
+      Support.earliest_version(versions.select { |version| version.created_at >= finish })
     end
     private_class_method :first_past
   end

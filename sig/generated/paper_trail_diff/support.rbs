@@ -121,6 +121,13 @@ module PaperTrailDiff
     # : (Array[untyped]) -> Array[untyped]
     def self.chronological_sort: (Array[untyped]) -> Array[untyped]
 
+    # The earliest of some versions of one item, as chronological_sort orders
+    # them. Only the versions saved at the earliest instant are compared, so a
+    # tie that cannot be ordered raises there, as it does inside a range, and
+    # one among later versions does not.
+    # : (Array[untyped]) -> untyped
+    def self.earliest_version: (Array[untyped]) -> untyped
+
     # : (Array[untyped]) -> Array[untyped]?
     def self.ambiguous_pair: (Array[untyped]) -> Array[untyped]?
 

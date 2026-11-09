@@ -1548,6 +1548,8 @@ works when IDs increase with each insert, as autoincrement IDs do, in one
 table. UUID version IDs do not, and models with their own version tables count
 IDs separately, so two such versions with the same timestamp cannot be ordered;
 the gem raises `AmbiguousVersionOrderError` naming both instead of guessing.
+That includes a tie for the first version after a `within:` window, which
+holds the state the window ends in.
 Timestamps stored to the second, as on a MySQL `datetime` column, make ties
 common. `diagnose` reports this as an error.
 

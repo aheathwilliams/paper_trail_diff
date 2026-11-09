@@ -26,6 +26,10 @@ project follows [Semantic Versioning](https://semver.org/).
   and compares them without the padding, which Ruby does not, so a member
   could read as leaving and rejoining the association. It is now refused
   unless you pass `allow_approximate: true`, as a `citext` condition is.
+- A `within:` window whose first later version tied with another version
+  of the same record, with ids that cannot order them (such as UUIDs),
+  ended in whichever of the two had the lower id. Such a tie now raises
+  `AmbiguousVersionOrderError`, as one inside the window already did.
 - `analyze_scope` and `report` raise `ConfigurationError` for a relation
   grouped by anything but its primary key that has no order of its own,
   instead of sending a query the database rejects.
