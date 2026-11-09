@@ -54,6 +54,12 @@ module PaperTrailDiff
     # : (item_type: String, item_id: untyped) -> ActivityBoundary
     def self.unversioned: (item_type: String, item_id: untyped) -> ActivityBoundary
 
+    # The `from`/`to`/`diff` hash that `Step#to_h` and `ActivityStep#to_h`
+    # share, so a consumer reads both step types alike.
+    # @api private
+    # : (ActivityBoundary, ActivityBoundary, Diff, metadata: bool) -> Hash[Symbol, untyped]
+    def self.transition_h: (ActivityBoundary, ActivityBoundary, Diff, metadata: bool) -> Hash[Symbol, untyped]
+
     # : (untyped, Symbol, RecordedChangesReader?) -> ActivityBoundary
     private def self.of_version: (untyped, Symbol, RecordedChangesReader?) -> ActivityBoundary
 

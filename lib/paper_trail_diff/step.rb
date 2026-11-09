@@ -41,11 +41,7 @@ module PaperTrailDiff
     # types alike; each boundary carries its own `version_id`.
     #: (?metadata: bool) -> Hash[Symbol, untyped]
     def to_h(metadata: false)
-      {
-        from: from_boundary.to_h(metadata: metadata),
-        to: to_boundary.to_h(metadata: metadata),
-        diff: diff.to_h
-      }
+      ActivityBoundary.transition_h(from_boundary, to_boundary, diff, metadata: metadata)
     end
   end
 end
