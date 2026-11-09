@@ -242,6 +242,22 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
 
     it_behaves_like 'a selection'
 
+    # On SQL Server a long candidate list is held in a temporary table; here
+    # a subquery over the posts' own table stands in for it.
+    it 'reads each page from the subquery a CandidateTable yields' do
+      posts = Array.new(3) { |index| StringItemPost.create!(title: "Post #{index}") }
+      page_bounds(2)
+      allow(PaperTrailDiff::CandidateTable).to receive(:with) do |model, ids, &block|
+        expect([model, ids]).to eq([StringItemPost, posts.map { |post| post.id.to_s }])
+        block.call(StringItemPost.unscoped.where(id: posts).select(:id))
+      end
+
+      sql = queries { expect(select(StringItemPost).records).to eq(posts) }
+
+      pages = sql.grep(/FROM "string_item_posts" WHERE "string_item_posts"."id" IN \(SELECT /)
+      expect(pages.length).to eq(2)
+    end
+
     it 'checks which candidates still exist in pages' do
       posts = Array.new(3) { |index| StringItemPost.create!(title: "Post #{index}") }
       stub_const('PaperTrailDiff::Support::IDS_PER_STATEMENT', 2)

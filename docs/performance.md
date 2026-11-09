@@ -133,10 +133,22 @@ statement per 250 of them and one or two per 500 transactions, for each edge.
 The relation then reads the records that matched in pages of up to 2,000, and
 each page lists every matching id, so the relation keeps its own order,
 `limit`, and `offset`. A version table whose `item_id` does not share the key's
-type selects records the same way. SQL Server compiles each such statement
-afresh: with 10,000 matching records, each page took about 0.7 s, 5 s of a
-12 s report, and with about 20,000 a page can outlast the adapter's default
-timeout of 5 seconds. Narrow the window, or page with the relation.
+type selects records the same way. On SQL Server, more than 500 matching
+records are first written to a temporary table, in statements of 1,000 rows,
+and each page selects from it instead of listing them, since SQL Server
+compiles a statement with its ids written in afresh. The table is dropped
+when the selection ends. On a local SQL Server 2022 container, with the plan
+cache cleared before each run:
+
+| Matching records | Listing every id | Temporary table |
+| --- | --- | --- |
+| 10,000, selection only | 5.0 s | 0.6 s |
+| 20,000, selection only | 29.7 s | 1.1 s |
+| 40,000, selection only | not run | 2.2 s |
+| 10,000, `analyze_scope` with `historical_filter:` | 11.5 s, 4.3 s of it in pages | 7.4 s, 0.1 s in pages |
+
+The `analyze_scope` row is the mean of three runs; the rest are one run each.
+Other databases still list the ids on each page, which they parse quickly.
 
 ## Large reports
 

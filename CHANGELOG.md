@@ -3,6 +3,17 @@
 All notable changes to this project will be documented in this file. The
 project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- On SQL Server, a selection that reads its candidates in Ruby, as one with
+  `historical_filter:` or a version table whose `item_id` does not share the
+  key's type does, writes more than 500 of them to a temporary table once and
+  reads each page from it, instead of listing every id on every page. A
+  selection of 10,000 records took 0.6 s instead of 5 s, and one of 20,000
+  took 1.1 s instead of 30 s.
+
 ## [0.17.1] - 2026-11-07
 
 ### Fixed

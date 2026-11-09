@@ -123,7 +123,7 @@ module PaperTrailDiff
         live = filter.call(relation_members(live))
         missing = filter.call(missing, counted: false)
       end
-      Result.new(records: selected_records([live]),
+      Result.new(records: CandidateTable.with(base_class, live) { |ids| selected_records([ids]) },
                  unreachable: missing.sort.map { |id| identity(id) }.freeze)
     end
 
@@ -228,8 +228,8 @@ module PaperTrailDiff
     # Deduplicate records rather than adding SQL DISTINCT: an otherwise valid
     # relation may order by joined columns or select a PostgreSQL json column.
     # Read bounded pages until the relation ends or too many unique roots appear.
-    # Each candidate source is an id list or a subquery; a record matching any
-    # of them is selected.
+    # Each candidate source is an id list or a subquery, such as a
+    # CandidateTable's; a record matching any of them is selected.
     #: (Array[untyped]) -> Array[untyped]
     def selected_records(candidates)
       relation = candidate_relation(candidates)
@@ -276,7 +276,8 @@ module PaperTrailDiff
     # holds at least 250 rows, for a relation whose joins repeat a record,
     # and at most 2,000: SQL Server compiles a statement with its ids written
     # in, and one that listed 20,000 and returned them all outlasted the
-    # adapter's default timeout of 5 seconds.
+    # adapter's default timeout of 5 seconds. There a long list is now read
+    # from a CandidateTable, but other databases still repeat it.
     #: () -> Integer
     def page_size
       (@limit + 1).clamp(MIN_PAGE_SIZE, MAX_PAGE_SIZE)
