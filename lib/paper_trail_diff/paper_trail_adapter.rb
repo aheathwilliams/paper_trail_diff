@@ -170,13 +170,20 @@ module PaperTrailDiff
       Instrumentation.instrument('analyze_many', payload) do
         AnalysisBatch.new(
           records,
-          time_range: within.nil? ? nil : TimeRange.new(within), version_scope: version_scope,
+          time_range: time_range(within, records.is_a?(Array) ? records.map(&:class) : []),
+          version_scope: version_scope,
           context_required: activity && !@association_tree.empty?, traversal: @traversal,
           live_loader: method(:load_batch_endpoints),
           history_preparer: @historical_store.method(:prepare_batch),
           analyzer: batched_root_analyzer(activity, view: view)
         ).call
       end
+    end
+
+    # The window as the models' version tables keep times.
+    #: (untyped, Array[untyped]) -> TimeRange?
+    def time_range(within, models)
+      TimeRange.for(within, models.uniq) unless within.nil?
     end
 
     # Analysis reads association history, so a request it would refuse is
@@ -220,7 +227,7 @@ module PaperTrailDiff
       within = options.fetch(:within)
       analyzer = batched_root_analyzer(options.fetch(:activity), view: options.fetch(:view))
       DeletedAnalysisBatch.new(
-        model, identities: identities, time_range: within.nil? ? nil : TimeRange.new(within),
+        model, identities: identities, time_range: time_range(within, [model]),
                version_scope: options.fetch(:version_scope),
                history_preparer: @historical_store.method(:prepare_deleted_batch),
                analyzer: analyzer, traversal: @traversal,

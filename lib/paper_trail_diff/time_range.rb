@@ -15,11 +15,36 @@ module PaperTrailDiff
     attr_reader :begin_time #: Time
     attr_reader :end_time #: Time?
 
-    #: (untyped) -> void
-    def initialize(value)
+    # A window over the versions of `models`, its edges cut to the digits
+    # their version tables keep. Active Record cuts a time it binds to the
+    # precision of the column it is compared with, so an edge left finer than
+    # a table that keeps whole seconds would select versions in SQL by the
+    # cut time and in Ruby by the whole one. Tables that differ take the
+    # coarsest, so that every check of one window cuts it alike.
+    #: (untyped, Array[untyped]) -> TimeRange
+    def self.for(value, models)
+      new(value, digits: models.filter_map { |model| stored_digits(model) }.min || MICROSECOND_DIGITS)
+    end
+
+    # The fractional digits a model's version table keeps for `created_at`,
+    # or nil for a model without versions. A column without a precision
+    # keeps whatever the adapter writes, which is microseconds.
+    #: (untyped) -> Integer?
+    def self.stored_digits(model)
+      return unless Support.versioned?(model)
+
+      precision = model.paper_trail.version_class.type_for_attribute('created_at').precision
+      [precision || MICROSECOND_DIGITS, MICROSECOND_DIGITS].min
+    end
+    private_class_method :stored_digits
+
+    #: (untyped, ?digits: Integer) -> void
+    def initialize(value, digits: MICROSECOND_DIGITS)
       unless value.is_a?(Range) && value.begin
         raise InvalidTimeRangeError, '`within` must be a Range with a beginning'
       end
+
+      @digits = digits
 
       @begin_time = coerce_time(value.begin, boundary: :begin)
       last = value.end
@@ -87,6 +112,7 @@ module PaperTrailDiff
     private
 
     # @rbs @exclude_end: bool
+    # @rbs @digits: Integer
 
     #: (untyped, Time) -> untyped
     def after(relation, finish)
@@ -98,13 +124,14 @@ module PaperTrailDiff
       exclude_end? ? column.gteq(finish) : column.gt(finish)
     end
 
-    # Cut to the microsecond, as adapters write a time they bind: a finer
-    # edge would select versions in SQL by the cut time but in Ruby by the
-    # whole one, and a version in the edge's microsecond would be in one
-    # method's window and not another's.
+    # Cut to the microsecond, as adapters write a time they bind, or to the
+    # fewer digits the versions' column keeps: a finer edge would select
+    # versions in SQL by the cut time but in Ruby by the whole one, and a
+    # version in the edge's microsecond or second would be in one method's
+    # window and not another's.
     #: (untyped, boundary: Symbol) -> Time
     def coerce_time(value, boundary:)
-      time_value(value).getutc.floor(MICROSECOND_DIGITS).freeze
+      time_value(value).getutc.floor(@digits).freeze
     rescue ArgumentError, NoMethodError, TypeError
       raise InvalidTimeRangeError, "`within` #{boundary} must be time-like"
     end

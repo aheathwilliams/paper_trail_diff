@@ -134,7 +134,7 @@ module PaperTrailDiff
       return if within.nil?
       return within if within.instance_of?(TimeRange)
 
-      range = TimeRange.new(within)
+      range = TimeRange.for(within, [@record.class])
       return range unless Support.versioned?(@record.class)
 
       TransactionCut.windows(@record.class, [@record], range, traversal: @traversal)
