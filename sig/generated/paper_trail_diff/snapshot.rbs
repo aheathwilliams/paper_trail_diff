@@ -63,8 +63,12 @@ module PaperTrailDiff
 
     attr_reader serial: Integer
 
-    # : (kind: Symbol, records: Array[RecordSnapshot], ?identity_index_cache: untyped, ?transition: CollectionTransition?) -> void
-    def initialize: (kind: Symbol, records: Array[RecordSnapshot], ?identity_index_cache: untyped, ?transition: CollectionTransition?) -> void
+    # `ordered` says the records are already in documented order, as those of
+    # a transition that kept every identity in its place are: checking them
+    # again for each event made a replay's time grow with its events times
+    # the size of the collection they changed.
+    # : (kind: Symbol, records: Array[RecordSnapshot], ?identity_index_cache: untyped, ?transition: CollectionTransition?, ?ordered: bool) -> void
+    def initialize: (kind: Symbol, records: Array[RecordSnapshot], ?identity_index_cache: untyped, ?transition: CollectionTransition?, ?ordered: bool) -> void
 
     # Builds a structurally adjacent collection snapshot for internal activity carry-forward.
     # : (Array[RecordSnapshot], before: RecordSnapshot?, after: RecordSnapshot?, membership_preserved: bool) -> AssociationSnapshot
@@ -98,6 +102,9 @@ module PaperTrailDiff
     @identity_index_cache: untyped
 
     @transition: CollectionTransition?
+
+    # : (Array[RecordSnapshot]) -> Array[RecordSnapshot]
+    def in_order: (Array[RecordSnapshot]) -> Array[RecordSnapshot]
 
     # : () -> CollectionIdentityIndex
     def identity_index: () -> CollectionIdentityIndex

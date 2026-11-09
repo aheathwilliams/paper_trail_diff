@@ -9,7 +9,7 @@ module PaperTrailDiff
     # first version names. `opening` names the transactions that crossed the
     # window's start when this history is read again from where they began.
     #: (untyped, root_ids: Array[untyped], root_versions: Array[untyped], tree: AssociationTree, traversal: AssociationTraversal, start_at: untyped, end_at: untyped, live_records: Array[untyped], ?window: bool, ?opening: Array[Array[untyped]]) -> void
-    def initialize( # rubocop:disable Metrics/ParameterLists
+    def initialize( # rubocop:disable Metrics/ParameterLists, Metrics/MethodLength
       record,
       root_ids:,
       root_versions:,
@@ -32,7 +32,7 @@ module PaperTrailDiff
       start_at = VersionBoundary.transaction_start(root_versions, start_at)
       @records = PreparedRecordIndex.new(start_at, end_at: end_at, live_records: live_records)
       @activity = PreparedActivityIndex.new(@records, root_versions, start_at: start_at,
-                                                                    opening: opening)
+                                                                     opening: opening)
       @history = PreparedHistory.new(@records, activity_index: @activity,
                                                opening_transactions: opening)
       @edges = PreparedEdgeLoader.new(@records, root_versions, children: @activity.children)

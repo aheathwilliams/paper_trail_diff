@@ -176,7 +176,7 @@ RSpec.describe PaperTrailDiff::VersionAssociationCandidateScope do
                    "#{later}.{created_at} > #{outer}.{created_at} AND NOT EXISTS ( SELECT 1 " \
                    "FROM #{outer} #{crossing} WHERE #{crossing}.{transaction_id} = " \
                    "#{later}.{transaction_id} AND #{crossing}.{created_at} >= " \
-                   "<stored cast 12:00> ) ) )"
+                   '<stored cast 12:00> ) ) )'
 
     %i[with_connection connection].each do |style|
       bounded = described_class.new(visible_version_class(style), noon, end_at: noon + 3600)

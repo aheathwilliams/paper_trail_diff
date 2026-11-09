@@ -280,17 +280,25 @@ module PaperTrailDiff
     private
 
     # When each of these transactions saved its first version before the
-    # start, for those that saved one there.
-    # : (untyped, Array[untyped]) -> Array[[untyped, untyped]]
-    def earliest: (untyped, Array[untyped]) -> Array[[ untyped, untyped ]]
+    # start, for those that saved one there. Another version table can number
+    # a transaction as this one numbered an earlier one, so only the versions
+    # of the transaction the held version is in are read (see
+    # TransactionAnchors).
+    # : (untyped, Hash[untyped, untyped]) -> Array[[untyped, untyped]]
+    def earliest: (untyped, Hash[untyped, untyped]) -> Array[[ untyped, untyped ]]
 
     @series: Hash[Array[String], PreparedRecordSeries]
 
     @start: untyped
 
     # The transactions of the versions held from the start onward, by version
-    # class, since each version table numbers its own.
-    # : () -> Hash[untyped, Array[untyped]]
-    def transactions: () -> Hash[untyped, Array[untyped]]
+    # class, since each version table is read for its own, and the first
+    # version held of each.
+    # : () -> Hash[untyped, Hash[untyped, untyped]]
+    def transactions: () -> Hash[untyped, Hash[untyped, untyped]]
+
+    # The versions held from the start onward that a transaction saved.
+    # : () -> Array[untyped]
+    def held: () -> Array[untyped]
   end
 end

@@ -141,9 +141,13 @@ module PaperTrailDiff
 
     #: (untyped, untyped, TimeRange, Array[String]) -> untyped
     def self.crossing_versions(versions, version_class, range, types)
-      transactions = range.scope(version_class.where(item_type: types)).select(:transaction_id)
-      versions.where(version_class.arel_table[:created_at].lt(range.begin_time))
-              .where(transaction_id: transactions)
+      edge = Edge.start_of(range)
+      transactions = range.scope(version_class.where(item_type: types))
+      earlier = versions.where(version_class.arel_table[:created_at].lt(range.begin_time))
+      TransactionAnchors.scope(earlier, version_class, edge).where(
+        transaction_id: TransactionAnchors.scope(transactions, version_class, edge)
+                                          .select(:transaction_id)
+      )
     end
     private_class_method :crossing_versions
 
@@ -268,9 +272,11 @@ module PaperTrailDiff
       own = versions.where(item_id: records)
       table = own.arel_table
       instants = nearest_instants(own, edge)
-      own.joins(Support.arel::Nodes::InnerJoin.new(instants, at_either(table, instants)))
-         .where.not(transaction_id: nil)
-         .select(table[:item_id], table[:transaction_id], after_edge(table, instants)).arel
+      joined = own.joins(Support.arel::Nodes::InnerJoin.new(instants, at_either(table, instants)))
+      TransactionAnchors.scope(joined, versions.klass, edge)
+                        .where.not(transaction_id: nil)
+                        .select(table[:item_id], table[:transaction_id],
+                                after_edge(table, instants)).arel
     end
     private_class_method :nearest_query
 
@@ -332,7 +338,9 @@ module PaperTrailDiff
       earlier = edge.left(table[:created_at])
       starts = {} #: Hash[untyped, Time]
       transactions.each_slice(Support::IDS_PER_STATEMENT).with_object(starts) do |slice, found|
-        crossing = version_class.where(transaction_id: slice).where(earlier)
+        crossing = TransactionAnchors.scope(
+          version_class.where(transaction_id: slice).where(earlier), version_class, edge
+        )
         if types
           crossing = crossing.where(transaction_id: saved_later(version_class, slice, edge, types))
         end
@@ -354,9 +362,9 @@ module PaperTrailDiff
     # mutant:disable
     #: (untyped, Array[untyped], Edge, Array[String]) -> untyped
     def self.saved_later(version_class, transactions, edge, types)
-      version_class.where(transaction_id: transactions, item_type: types)
-                   .where(edge.right(version_class.arel_table[:created_at]))
-                   .select(:transaction_id)
+      later = version_class.where(transaction_id: transactions, item_type: types)
+                           .where(edge.right(version_class.arel_table[:created_at]))
+      TransactionAnchors.scope(later, version_class, edge).select(:transaction_id)
     end
     private_class_method :saved_later
 

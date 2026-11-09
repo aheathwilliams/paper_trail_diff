@@ -119,7 +119,8 @@ RSpec.describe PaperTrailDiff::TimelineRange do
       paths = instance_double(PaperTrailDiff::AssociationTraversal)
 
       expect(versioned_range(window, traversal: paths).time_range).to equal(moved)
-      expect(PaperTrailDiff::TimeRange).to have_received(:for).with(window, [versioned_record.class])
+      expect(PaperTrailDiff::TimeRange).to have_received(:for).with(window,
+                                                                    [versioned_record.class])
       expect(PaperTrailDiff::TransactionCut)
         .to have_received(:windows) do |model, records, asked, traversal:|
           expect([model, records, asked.begin_time, asked.end_time, asked.exclude_end?, traversal])

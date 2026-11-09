@@ -10,9 +10,11 @@ RSpec.describe PaperTrailDiff::OpeningTransactions do
     FilterJsonVersion.delete_all
   end
 
-  # A version saved `minutes` from the start, of any record.
+  # A version saved `minutes` from the start, of any record. Its id is above
+  # the transactions' numbers, so none is the first version of one.
   def version(minutes, transaction_id, table: FilterVersion, item_id: 1)
-    table.create!(item_type: 'FilterArticle', item_id: item_id, event: 'update',
+    id = [table.maximum(:id).to_i, 100].max + 1
+    table.create!(id: id, item_type: 'FilterArticle', item_id: item_id, event: 'update',
                   transaction_id: transaction_id, created_at: start + (minutes * 60))
   end
 
@@ -59,6 +61,38 @@ RSpec.describe PaperTrailDiff::OpeningTransactions do
     held = [version(0, 7), version(1, 7, table: FilterJsonVersion)]
 
     expect(opening(held)).to eq([[['FilterJsonVersion', 7]], start - 60])
+  end
+
+  # A transaction's first version carries its own id as its number, in
+  # whichever table saved it, so another table can number a transaction as
+  # this one numbered an earlier one (see TransactionAnchors).
+  context 'when another table numbered a transaction as this one had' do
+    def first_version(minutes, table)
+      table.create!(id: 70, item_type: 'FilterArticle', item_id: 3, event: 'update',
+                    transaction_id: 70, created_at: start + (minutes * 60))
+    end
+
+    before { first_version(-10, FilterVersion) }
+
+    it 'reads the versions of the one that crossed the start' do
+      first_version(-2, FilterJsonVersion)
+      version(-1, 70, item_id: 2)
+
+      expect(opening([version(1, 70)])).to eq([[['FilterVersion', 70]], start - 60])
+    end
+
+    it 'finds none when the later one began at the start' do
+      first_version(0, FilterJsonVersion)
+
+      expect(opening([version(2, 70), version(1, 70)])).to be_nil
+    end
+
+    it 'finds the earlier one when the first version held is in it' do
+      first_version(2, FilterJsonVersion)
+
+      expect(opening([version(3, 70), version(1, 70)]))
+        .to eq([[['FilterVersion', 70]], start - 600])
+    end
   end
 
   it 'ignores versions held from before the start' do

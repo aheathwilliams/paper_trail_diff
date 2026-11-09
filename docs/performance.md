@@ -81,7 +81,10 @@ Flat query counts do not make a report's cost flat:
   another 17 s, and listing them with `change_rows` 13 s.
 - **Each edge of a window takes one statement per 250 records, and one or two
   per 500 transactions it finds.** An edge that moves is read once more, for
-  the records it moved for. A
+  the records it moved for. With more than one version table, each of these
+  statements also looks up, by primary key in each table, the first version
+  of the transactions it reads; both edges for 20,000 records took the same
+  time with one version table as with two, within run-to-run noise. A
   window from `within:` or `since:` looks for transactions that cross either
   edge, and with associations also for those that saved a record before it
   and an associated record after it. A `report` window has no end, so only

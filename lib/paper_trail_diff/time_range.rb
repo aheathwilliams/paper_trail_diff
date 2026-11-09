@@ -23,7 +23,9 @@ module PaperTrailDiff
     # coarsest, so that every check of one window cuts it alike.
     #: (untyped, Array[untyped]) -> TimeRange
     def self.for(value, models)
-      new(value, digits: models.filter_map { |model| stored_digits(model) }.min || MICROSECOND_DIGITS)
+      new(value, digits: models.filter_map do |model|
+        stored_digits(model)
+      end.min || MICROSECOND_DIGITS)
     end
 
     # The fractional digits a model's version table keeps for `created_at`,

@@ -16,6 +16,10 @@ project follows [Semantic Versioning](https://semver.org/).
   read through Rails' automatic role switching, still lists the ids, since
   Active Record counts the table's statements as writes.
 
+- Replaying a `has_many` whose membership a version did not change no
+  longer sorts the collection again. A history of 3,200 comments edited
+  3,200 times took 1.8 s instead of 11 s.
+
 ### Fixed
 
 - Without `paper_trail-association_tracking` loaded, asking for an
@@ -35,9 +39,6 @@ project follows [Semantic Versioning](https://semver.org/).
 - `analyze_scope` and `report` raise `ConfigurationError` for a relation
   grouped by anything but its primary key that has no order of its own,
   instead of sending a query the database rejects.
-
-### Fixed
-
 - A `has_one` that two records point at, with no order of its own, now reads
   the one with the lowest primary key at every point in history, as Active
   Record reads it on SQLite, MySQL and SQL Server. History read another one,
@@ -47,6 +48,29 @@ project follows [Semantic Versioning](https://semver.org/).
   adapters write it into SQL. A version saved in the edge's microsecond was
   in `timeline`'s window but not in `activity_timeline`'s or
   `analyze_many`'s.
+- A `within:` edge is cut to the digits the version table's `created_at`
+  keeps, as the database compares it. On a column that keeps whole seconds,
+  as a MySQL `datetime` without a precision does, an edge with a fraction
+  put a version saved in that second inside the window for one method and
+  outside it for another.
+- With more than one version table, a `within:` edge no longer moves to
+  the start of an unrelated transaction. PaperTrail numbers a transaction
+  by the id of its first version in whichever table that was, so two
+  transactions can share a number in one table, and a window that started
+  or ended before the later one moved to where the earlier one began,
+  which could be years before: a window could take in changes from long
+  before it, or come back empty. `analyze_scope` selected records by the
+  earlier transaction too. Transactions of one number are now told apart
+  by the versions they began with.
+- A transaction of associated records that moved a record away from the
+  root before a window's start, and after it saved only records under the
+  one it moved, was reported in neither window: `activity_timeline` and an
+  `activity: true` analysis left its changes out.
+- A window edge moved to a transaction's start moves on when that instant
+  is inside another of the root's transactions, as it can be where
+  `created_at` keeps whole seconds or two versions share a time. The
+  earlier transaction was cut in two there, and part of its change
+  surfaced in the later transaction's step.
 
 ## [0.17.1] - 2026-11-07
 

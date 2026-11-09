@@ -24,9 +24,9 @@ RSpec.describe 'A window edge moved to an instant another transaction ends at' d
   end
 
   # Saves the versions of a block, in order, at `times`.
-  def saved(times)
+  def saved(times, &block)
     last = PaperTrail::Version.maximum(:id)
-    TrackedArticle.transaction { yield }
+    TrackedArticle.transaction(&block)
     stamp(PaperTrail::Version.where(id: (last + 1)..).order(:id).to_a, times)
   end
 
@@ -56,11 +56,17 @@ RSpec.describe 'A window edge moved to an instant another transaction ends at' d
   # What each step that changed something changed.
   def changes(within, method)
     timeline(within, method).reject(&:empty?).map do |step|
-      comments = step.diff.associations['comments']
-      [*step.diff.attributes.slice('title').map { |_, change| change.to_h.fetch(:to) },
-       *comments&.changed&.map { |change| change.attributes.fetch('body').to_h.fetch(:to) },
-       *comments&.added&.map { |record| record.attributes.fetch('body') }]
+      titles = step.diff.attributes.slice('title').map { |_, change| change.to_h.fetch(:to) }
+      titles + bodies(step.diff.associations['comments'])
     end
+  end
+
+  # The bodies comments changed to, then those of comments added.
+  def bodies(comments)
+    return [] unless comments
+
+    comments.changed.map { |change| change.attributes.fetch('body').to_h.fetch(:to) } +
+      comments.added.map { |record| record.attributes.fetch('body') }
   end
 
   def timeline(within, method)
@@ -71,7 +77,7 @@ RSpec.describe 'A window edge moved to an instant another transaction ends at' d
   end
 
   %i[single batch].each do |method|
-    context "read #{method}" do
+    context "when read #{method}" do
       # The edge is inside the second transaction, which began at 20 s, the
       # instant the first saved the article. Cut there, the first
       # transaction's comment edit would surface in the second's step.
@@ -84,8 +90,9 @@ RSpec.describe 'A window edge moved to an instant another transaction ends at' d
       end
 
       it 'moves the later window to where the earlier transaction began' do
-        analysis = PaperTrailDiff.analyze_many([article.reload], within: (base + 25).., activity: true,
-                                                                 associations: paths).values.first
+        analysis = PaperTrailDiff.analyze_many(
+          [article.reload], within: (base + 25).., activity: true, associations: paths
+        ).values.first
 
         expect(analysis.window.begin).to eq(base + 10)
       end

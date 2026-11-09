@@ -15,8 +15,23 @@ module PaperTrailDiff
 
     attr_reader end_time: Time?
 
-    # : (untyped) -> void
-    def initialize: (untyped) -> void
+    # A window over the versions of `models`, its edges cut to the digits
+    # their version tables keep. Active Record cuts a time it binds to the
+    # precision of the column it is compared with, so an edge left finer than
+    # a table that keeps whole seconds would select versions in SQL by the
+    # cut time and in Ruby by the whole one. Tables that differ take the
+    # coarsest, so that every check of one window cuts it alike.
+    # : (untyped, Array[untyped]) -> TimeRange
+    def self.for: (untyped, Array[untyped]) -> TimeRange
+
+    # The fractional digits a model's version table keeps for `created_at`,
+    # or nil for a model without versions. A column without a precision
+    # keeps whatever the adapter writes, which is microseconds.
+    # : (untyped) -> Integer?
+    def self.stored_digits: (untyped) -> Integer?
+
+    # : (untyped, ?digits: Integer) -> void
+    def initialize: (untyped, ?digits: Integer) -> void
 
     # : () -> bool
     def exclude_end?: () -> bool
@@ -45,6 +60,8 @@ module PaperTrailDiff
 
     private
 
+    @digits: Integer
+
     @exclude_end: bool
 
     # : (untyped, Time) -> untyped
@@ -53,10 +70,11 @@ module PaperTrailDiff
     # : (untyped, Time) -> untyped
     def after_end: (untyped, Time) -> untyped
 
-    # Cut to the microsecond, as adapters write a time they bind: a finer
-    # edge would select versions in SQL by the cut time but in Ruby by the
-    # whole one, and a version in the edge's microsecond would be in one
-    # method's window and not another's.
+    # Cut to the microsecond, as adapters write a time they bind, or to the
+    # fewer digits the versions' column keeps: a finer edge would select
+    # versions in SQL by the cut time but in Ruby by the whole one, and a
+    # version in the edge's microsecond or second would be in one method's
+    # window and not another's.
     # : (untyped, boundary: Symbol) -> Time
     def coerce_time: (untyped, boundary: Symbol) -> Time
 

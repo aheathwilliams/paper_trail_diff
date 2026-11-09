@@ -53,7 +53,7 @@ RSpec.describe 'A window edge inside a transaction that detached a record before
   end
 
   %i[single batch].each do |method|
-    context "read #{method}" do
+    context "when read #{method}" do
       it 'reports the move in the later window when the transaction then destroyed the reply' do
         crossing { reply.destroy! }
         start = article.versions.minimum(:created_at)

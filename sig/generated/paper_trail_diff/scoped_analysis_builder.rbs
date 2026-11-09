@@ -11,6 +11,11 @@ module PaperTrailDiff
 
     private
 
+    # The window as the relation's version table keeps times. Anything but a
+    # relation or a model is left for the selection to refuse.
+    # : (untyped, untyped) -> TimeRange?
+    def time_range: (untyped, untyped) -> TimeRange?
+
     # Without the option, the deleted roots are still tested when the
     # relation can be read, so that another selection's are not listed.
     # : (untyped, bool) -> DeletedRootFilter?

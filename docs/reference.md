@@ -1547,12 +1547,24 @@ warning instead. `ok?` does not prove the history is complete.
 - **Custom version classes** (`has_paper_trail versions: { class_name: }`) are
   supported. For association history, a model and each association you ask
   for must keep their versions, and their PT-AT version associations, in the
-  same tables. PT-AT reads an association's history from its owner's tables
-  and numbers transactions within one table, so it cannot follow an
-  association into a different version table. Such an association raises
-  `UnsupportedAssociationError` naming both tables, and `association_paths`
-  leaves it out. One custom table shared by the models works like
-  PaperTrail's own.
+  same tables. PT-AT reads an association's history from its owner's
+  tables, so it cannot follow an association into a different version
+  table. Such an association raises `UnsupportedAssociationError` naming
+  both tables, and `association_paths` leaves it out. One custom table
+  shared by the models works like PaperTrail's own.
+
+  PaperTrail numbers a transaction by the id of the first version it
+  saved, in whichever table that was, so with more than one version table
+  two transactions can share a number. Where a [time window](#time-windows)
+  looks for the start of a transaction, the gem tells them apart by the
+  version each began with, which carries its own id as its number. It
+  consults the version classes loaded at the time, in the model's
+  database: load them eagerly, as production does, or name them before
+  reading. It cannot tell two apart when the earlier one's first version
+  has been deleted, or when both ran at the same time. Within the history
+  of one record and its associations, versions are still grouped by number
+  alone, so where two transactions of one number both saved them, their
+  versions are read as one transaction's.
 - **A scoped versions association** (`has_paper_trail versions: { scope: }`)
   does not change what is read: every method reads all of a record's
   versions, because a history replayed without some of them would credit

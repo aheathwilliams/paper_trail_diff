@@ -252,7 +252,9 @@ module PaperTrailDiff
     #: (Array[untyped], Integer, untyped) -> bool
     def crossed_start?(versions, first, start)
       after = versions.bsearch_index { |version| version.created_at >= start } || versions.length
-      later = versions.drop(after).map { |version| ActivityTransactionGroups.transaction_key(version) }
+      later = versions.drop(after).map do |version|
+        ActivityTransactionGroups.transaction_key(version)
+      end
       versions.take(after).drop(first).all? do |version|
         key = ActivityTransactionGroups.transaction_key(version)
         !key.nil? && (@opening.include?(key) || later.include?(key))

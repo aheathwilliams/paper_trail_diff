@@ -14,8 +14,10 @@ module PaperTrailDiff
     # first for most of them.
     attr_reader children: PreparedChildCandidates
 
-    # : (PreparedRecordIndex, Array[untyped], start_at: untyped) -> void
-    def initialize: (PreparedRecordIndex, Array[untyped], start_at: untyped) -> void
+    # `opening` names the transactions that crossed the range's start, as
+    # ActivityTransactionGroups keys them.
+    # : (PreparedRecordIndex, Array[untyped], start_at: untyped, ?opening: Array[Array[untyped]]) -> void
+    def initialize: (PreparedRecordIndex, Array[untyped], start_at: untyped, ?opening: Array[Array[untyped]]) -> void
 
     # : (untyped, Array[untyped]) -> void
     def register: (untyped, Array[untyped]) -> void
@@ -71,6 +73,8 @@ module PaperTrailDiff
     @conditions: ScopeCondition::Cache
 
     @nodes: Hash[String, Array[untyped]]
+
+    @opening: Set[Array[untyped]]
 
     @records: PreparedRecordIndex
 
@@ -134,7 +138,13 @@ module PaperTrailDiff
     def replaced_after_start?: (Array[untyped], Integer, ActivityRange) -> bool
 
     # Whether every version of a record from `first` up to the start is one
-    # of the transactions it saved a version in from the start onward.
+    # of a transaction that crossed the start: one the record saved a version
+    # in from the start onward, or one the history found crossing it by
+    # another record's versions. Such a transaction may have saved this
+    # record only before the start, as when it moved a comment away there
+    # and saved the comment's reply after it. The window before the start
+    # leaves that move to this one, which finds the reply only under the
+    # comment where it stood before the transaction.
     # : (Array[untyped], Integer, untyped) -> bool
     def crossed_start?: (Array[untyped], Integer, untyped) -> bool
 

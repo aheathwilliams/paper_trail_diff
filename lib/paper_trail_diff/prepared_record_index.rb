@@ -538,8 +538,8 @@ module PaperTrailDiff
     # earliest began; nil when none crossed the start.
     #: () -> [Array[Array[untyped]], untyped]?
     def call
-      began = transactions.flat_map do |version_class, ids|
-        earliest(version_class, ids).map { |id, at| [[version_class.name, id], at] }
+      began = transactions.flat_map do |version_class, held|
+        earliest(version_class, held).map { |id, at| [[version_class.name, id], at] }
       end
       return if began.empty?
 
@@ -549,13 +549,20 @@ module PaperTrailDiff
     private
 
     # When each of these transactions saved its first version before the
-    # start, for those that saved one there.
-    #: (untyped, Array[untyped]) -> Array[[untyped, untyped]]
-    def earliest(version_class, transaction_ids)
+    # start, for those that saved one there. Another version table can number
+    # a transaction as this one numbered an earlier one, so only the versions
+    # of the transaction the held version is in are read (see
+    # TransactionAnchors).
+    #: (untyped, Hash[untyped, untyped]) -> Array[[untyped, untyped]]
+    def earliest(version_class, held)
       before = version_class.arel_table[:created_at].lt(@start)
-      transaction_ids.each_slice(Support::IDS_PER_STATEMENT).flat_map do |slice|
-        version_class.where(transaction_id: slice).where(before).group(:transaction_id)
-                     .minimum(:created_at).to_a
+      edge = TransactionCut::Edge.new(@start, false)
+      held.each_slice(Support::IDS_PER_STATEMENT).flat_map do |slice|
+        saved = version_class.where(transaction_id: slice.map(&:first)).where(before)
+        TransactionAnchors.continued(saved, version_class, edge, slice.map do |_, version|
+          version.id
+        end)
+                          .group(:transaction_id).minimum(:created_at).to_a
       end
     end
 
@@ -563,19 +570,24 @@ module PaperTrailDiff
     # @rbs @start: untyped
 
     # The transactions of the versions held from the start onward, by version
-    # class, since each version table numbers its own.
-    #: () -> Hash[untyped, Array[untyped]]
+    # class, since each version table is read for its own, and the first
+    # version held of each.
+    #: () -> Hash[untyped, Hash[untyped, untyped]]
     def transactions
-      found = {} #: Hash[untyped, Array[untyped]]
-      @series.each_value do |series|
-        series.versions.each do |version|
-          transaction_id = VersionBoundary.transaction_id(version)
-          next unless transaction_id && version.created_at >= @start
+      found = {} #: Hash[untyped, Hash[untyped, untyped]]
+      held.sort_by(&:created_at).each_with_object(found) do |version, by_class|
+        (by_class[version.class] ||= {})[VersionBoundary.transaction_id(version)] ||= version
+      end
+    end
 
-          (found[version.class] ||= []) << transaction_id
+    # The versions held from the start onward that a transaction saved.
+    #: () -> Array[untyped]
+    def held
+      @series.each_value.flat_map do |series|
+        series.versions.select do |version|
+          VersionBoundary.transaction_id(version) && version.created_at >= @start
         end
       end
-      found.transform_values(&:uniq)
     end
   end
 end
