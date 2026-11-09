@@ -14,6 +14,22 @@ project follows [Semantic Versioning](https://semver.org/).
   selection of 10,000 records took 0.6 s instead of 5 s, and one of 20,000
   took 1.1 s instead of 30 s.
 
+### Fixed
+
+- Without `paper_trail-association_tracking` loaded, asking for an
+  association between two versioned models raised `NoMethodError`. Reading
+  its history now raises `AssociationTrackingUnavailableError`, as
+  documented, and `association_paths` and a comparison of two current
+  records work again.
+- On PostgreSQL, an association scope with a condition on a `character(n)`
+  column is no longer read as plain conditions. PostgreSQL pads such values
+  and compares them without the padding, which Ruby does not, so a member
+  could read as leaving and rejoining the association. It is now refused
+  unless you pass `allow_approximate: true`, as a `citext` condition is.
+- `analyze_scope` and `report` raise `ConfigurationError` for a relation
+  grouped by anything but its primary key that has no order of its own,
+  instead of sending a query the database rejects.
+
 ## [0.17.1] - 2026-11-07
 
 ### Fixed

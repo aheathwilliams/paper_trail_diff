@@ -785,7 +785,8 @@ and `allow_approximate:`.
   once, in order of first appearance. A relation grouped by anything but the
   ID, such as `select("MAX(id) AS id").group(:author_id)`, keeps its own
   order, since a database sorts groups only by what they group or aggregate.
-  It needs one that tells its groups apart, such as `order(:author_id)`.
+  It needs one that tells its groups apart, such as `order(:author_id)`;
+  without any order it raises `ConfigurationError`.
 - Selection still scans the versions in the window, so keep windows reasonable
   for large tables. Each requested association adds one query per level, however
   many records it selects. Changes to associations are found from PT-AT's
@@ -896,7 +897,7 @@ scope such as `where(deleted_at: nil)` is read too. String and text columns
 are read only on SQLite and PostgreSQL, and only without a column collation:
 MySQL and SQL Server compare strings without regard to case or trailing spaces
 by default, which the gem cannot repeat, and neither is PostgreSQL's
-`citext`.
+`citext`, nor its `character(n)`, which ignores trailing spaces.
 
 Ranges, such as `where(position: 2..)` or `where(created_at: 1.day.ago...)`,
 and Arel's `gt`, `gteq`, `lt`, and `lteq`, are read on the columns an order
