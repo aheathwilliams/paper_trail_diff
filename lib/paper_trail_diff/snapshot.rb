@@ -92,8 +92,12 @@ module PaperTrailDiff
     attr_reader :records #: Array[RecordSnapshot]
     attr_reader :serial #: Integer
 
-    #: (kind: Symbol, records: Array[RecordSnapshot], ?identity_index_cache: untyped, ?transition: CollectionTransition?) -> void
-    def initialize(kind:, records:, identity_index_cache: nil, transition: nil)
+    # `ordered` says the records are already in documented order, as those of
+    # a transition that kept every identity in its place are: checking them
+    # again for each event made a replay's time grow with its events times
+    # the size of the collection they changed.
+    #: (kind: Symbol, records: Array[RecordSnapshot], ?identity_index_cache: untyped, ?transition: CollectionTransition?, ?ordered: bool) -> void
+    def initialize(kind:, records:, identity_index_cache: nil, transition: nil, ordered: false)
       unless SUPPORTED_KINDS.include?(kind)
         raise ArgumentError, "unsupported association kind: #{kind.inspect}"
       end
@@ -102,7 +106,7 @@ module PaperTrailDiff
       end
 
       @kind = kind
-      @records = ordered(records)
+      @records = ordered ? in_order(records) : ordered(records)
       @identity_index_cache = identity_index_cache || IdentityIndexCache.new
       @transition = transition
       @serial = SERIALS.next_serial
@@ -120,7 +124,8 @@ module PaperTrailDiff
         kind: kind,
         records: records,
         identity_index_cache: cache,
-        transition: transition
+        transition: transition,
+        ordered: membership_preserved
       )
     end
 
@@ -131,7 +136,7 @@ module PaperTrailDiff
       keys = records.map { |record| Support.sortable_identity(record.type, record.id) }
       return records.sort_by.with_index { |_, index| keys.fetch(index) }.freeze unless sorted?(keys)
 
-      records.frozen? ? records : records.dup.freeze
+      in_order(records)
     end
 
     #: (Array[Array[untyped]]) -> bool
@@ -169,6 +174,11 @@ module PaperTrailDiff
 
     # @rbs @identity_index_cache: untyped
     # @rbs @transition: CollectionTransition?
+
+    #: (Array[RecordSnapshot]) -> Array[RecordSnapshot]
+    def in_order(records)
+      records.frozen? ? records : records.dup.freeze
+    end
 
     #: () -> CollectionIdentityIndex
     def identity_index

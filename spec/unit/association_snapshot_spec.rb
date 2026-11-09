@@ -24,4 +24,31 @@ RSpec.describe PaperTrailDiff::AssociationSnapshot do
 
     expect(described_class.new(kind: :has_many, records: records).records).to equal(records)
   end
+
+  describe '#transition_to' do
+    let(:from) { described_class.new(kind: :has_many, records: [record(1), record(2)]) }
+
+    # A replay makes one transition per event, so checking the order of a
+    # collection that kept every identity in its place would cost its events
+    # times its size.
+    it 'takes a collection that kept its membership as in order already' do
+      edited = [from.records.first, record(2)]
+      allow(PaperTrailDiff::Support).to receive(:sortable_identity).and_call_original
+
+      to = from.transition_to(edited, before: from.records.last, after: edited.last,
+                                      membership_preserved: true)
+
+      expect(PaperTrailDiff::Support).not_to have_received(:sortable_identity)
+      expect(to.records).to eq(edited).and be_frozen
+    end
+
+    it 'orders a collection whose membership changed' do
+      added = record(0)
+
+      to = from.transition_to(from.records + [added], before: nil, after: added,
+                                                      membership_preserved: false)
+
+      expect(identities(to)).to eq([['Comment', 0], ['Comment', 1], ['Comment', 2]])
+    end
+  end
 end
