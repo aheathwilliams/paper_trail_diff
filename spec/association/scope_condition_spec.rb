@@ -184,6 +184,26 @@ RSpec.describe PaperTrailDiff::ScopeCondition do
         .to eq([true, false])
     end
 
+    # PostgreSQL pads a character(n) value with spaces and compares it
+    # without them, so `where(label: 'a')` matches a stored "a   ".
+    it 'leaves a PostgreSQL fixed-length character column unread' do
+      config = ScopeConditionItem.connection_db_config
+      allow(config).to receive(:adapter).and_return('postgresql')
+      ['character(6)', 'CHAR(3)', 'bpchar', 'character'].each do |sql_type|
+        collation(nil, sql_type: sql_type)
+        expect(build(-> { where(label: 'a') })).to be_nil
+      end
+      ['character varying(255)', 'varchar(255)', 'text', 'char_code'].each do |sql_type|
+        collation(nil, sql_type: sql_type)
+        expect(build(-> { where(label: 'a') })).not_to be_nil
+      end
+      allow(config).to receive(:adapter).and_return('sqlite3')
+      %w[character(6) citext].each do |sql_type|
+        collation(nil, sql_type: sql_type)
+        expect(build(-> { where(label: 'a') })).not_to be_nil
+      end
+    end
+
     # Active Record before 7.2 wraps each bound value in a BindParam node.
     it 'reads a value wrapped in a bind parameter' do
       bound = lambda do

@@ -26,6 +26,10 @@ module PaperTrailDiff
     # Adapters that compare strings exactly by default. MySQL and SQL Server
     # ignore case and trailing spaces by default, which Ruby cannot follow.
     EXACT_TEXT_ADAPTERS = %w[sqlite3 postgresql].freeze
+    # PostgreSQL text types that compare otherwise than Ruby does: citext
+    # ignores case, and character(n), also spelled char(n) or bpchar,
+    # ignores trailing spaces. SQLite neither pads nor folds them.
+    INEXACT_TEXT_TYPE = /\A(?:citext|bpchar|char(?:acter)?)(?:\(|\z)/i
 
     # Raised while reading a node that has no exact plain-Ruby reading.
     class Unreadable < StandardError; end
@@ -405,11 +409,14 @@ module PaperTrailDiff
         !kinds.include?(TEXT_TYPE) || exact_text?(column)
       end
 
-      # PostgreSQL's citext is text that compares without regard to case.
+      # PostgreSQL's citext is text that compares without regard to case, and
+      # its fixed-length character(n) compares without trailing spaces, which
+      # it pads every value it returns with.
       #: (untyped) -> bool
       def exact_text?(column)
-        EXACT_TEXT_ADAPTERS.include?(@model_class.connection_db_config.adapter) &&
-          column.collation.nil? && !column.sql_type.casecmp?('citext')
+        adapter = @model_class.connection_db_config.adapter
+        EXACT_TEXT_ADAPTERS.include?(adapter) && column.collation.nil? &&
+          !(adapter == 'postgresql' && INEXACT_TEXT_TYPE.match?(column.sql_type))
       end
 
       # An enum compares the values it stores, which its subtype describes. A
