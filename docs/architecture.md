@@ -62,6 +62,17 @@ previous snapshot forward and replace only the parts an event changed, so an
 edit to one comment does not copy the whole article again. Events in one
 PT-AT transaction are applied together.
 
+Two transactions that save in one tree at the same time interleave their
+versions. Before a root's timeline is replayed, `InterleavedTransactions`
+names, at each event, the other transactions that have an event before it
+and another after it, or began before the history and have one after it.
+The record index reads a record those transactions saved as it stood before
+them, as it reads one the event's own transaction saved. A transaction thus
+changes no snapshot while it is open, and its changes appear at the step
+after its last event, the one its own refresh already rebuilds, so carrying
+snapshots forward stays exact. A snapshot read with open transactions is
+cached apart from one read without.
+
 ## When the gem falls back to PT-AT
 
 These association shapes cannot be read from the loaded history. The gem asks

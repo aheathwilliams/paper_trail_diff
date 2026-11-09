@@ -26,6 +26,17 @@ module PaperTrailDiff
     #: () -> Array[untyped]
     def versions = @records.versions
 
+    # See PreparedRecordIndex#reading.
+    #: (Hash[Array[untyped], Array[untyped]]) { () -> void } -> void
+    def reading(open, &block)
+      @records.reading(open, &block)
+    end
+
+    #: (untyped) -> Array[untyped]?
+    def open_at(boundary)
+      @records.open_at(boundary)
+    end
+
     # Returns every group the edge now holds.
     #: (untyped, untyped, Hash[String, Hash[Symbol, untyped]]) -> Hash[String, Hash[Symbol, untyped]]
     def merge_edge(owner_class, reflection, groups)

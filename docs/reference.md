@@ -518,9 +518,10 @@ PaperTrailDiff.activity_timeline(article, associations: [:comments], group: :tra
   the savepoint keeps one group.
 - A step joins only the group of the step just before it. Two transactions
   that save in the same tree at the same time, so that their versions
-  interleave, each form a group for every run of their own versions: the
-  state between two runs holds the other transaction's change, so no single
-  step could show either one alone.
+  interleave, each form a group for every run of their own versions. A
+  transaction's changes to associated records are read once it has ended
+  (see [version order](#version-order)), so they appear in the group of its
+  last run; the changes its root versions record appear in their own runs.
 - Also accepted by `analyze`, `analyze_many`, and `analyze_scope` with
   `activity: true`, and by `report`.
 
@@ -1613,6 +1614,19 @@ can therefore show a state the database never held, and a result for an earlier
 version or a closed window can change once that transaction commits.
 [Time windows](#time-windows) explains how to settle a report.
 
+Two transactions that save in one record's tree at the same time interleave
+their versions. Each version was saved while the other transaction's changes
+were not yet committed, so at a version of one, a record the other saved
+reads as it stood before the other began, as a record the version's own
+transaction saved does. The other's changes appear from the event after its
+last version, in a step it opens, so a record it changed and changed back,
+such as a comment it created and deleted again, appears in no step and in no
+window's starting state or diff. A transaction is open from its first
+version to its last on the requested paths in the range, or from the range's
+start when it began before it. Row locks keep the two from saving the same
+record. The association shapes below that fall back to PT-AT's own reifier
+still read by time.
+
 Association changes between versions with the same timestamp are placed using
 the same order. A few association shapes fall back to PT-AT's own reifier, which
 uses timestamps only: a path history reads only approximately, which takes
@@ -1770,16 +1784,10 @@ Results can only be as complete as the history PaperTrail and PT-AT recorded.
 - A savepoint that rolls back, or another transaction saving in the same tree
   at the same time, can split one transaction into several transaction groups;
   see [one step per transaction group](#one-step-per-transaction-group-transaction).
-- Two transactions that save in one record's tree at the same time, so that
-  their versions interleave, are read in the order of their versions. A
-  version reads the records its own transaction saved as they stood before
-  the transaction, but a version of the other transaction reads them as they
-  stood after the change saved before it. So a record that one transaction
-  changed and changed back, such as a comment it created and deleted again,
-  can appear in the other's steps, crediting that transaction with adding
-  or removing it, and a window's starting state and diff can hold it too.
-  Row locks keep the two from saving the same record, so this needs both to
-  save different records of one tree within moments of each other. See
+- A range that ends while a transaction saving in the tree is still open,
+  with another transaction's version between its last version in the range
+  and the range's end, reads the records it saved as it had left them at the
+  end: the range cannot see that the transaction saved again after it. See
   [version order](#version-order).
 - HABTM membership history exists only where PT-AT recorded it in a
   transaction, and only for the root record without a scope: a scoped HABTM,

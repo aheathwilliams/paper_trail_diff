@@ -94,6 +94,7 @@ matcher:
     - PaperTrailDiff::ActivityTreeFilter*
     - PaperTrailDiff::ActivityTransactionGrouper*
     - PaperTrailDiff::ActivityTransactionGroups*
+    - PaperTrailDiff::InterleavedTransactions*
     - PaperTrailDiff::ActivityView*
     - PaperTrailDiff::ActivityScopeFilter*
     - PaperTrailDiff::ActivitySnapshotDelta*

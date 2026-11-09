@@ -45,6 +45,11 @@ module PaperTrailDiff
     # : () -> Array[Array[untyped]]
     def opening_transactions: () -> Array[Array[untyped]]
 
+    # Reads with the transactions open at each event of a root's timeline
+    # (see InterleavedTransactions).
+    # : (Hash[Array[untyped], Array[untyped]]) { () -> void } -> void
+    def reading: (Hash[Array[untyped], Array[untyped]]) { () -> void } -> void
+
     # : (untyped, untyped) -> RecordSnapshot?
     def call: (untyped, untyped) -> RecordSnapshot?
 
@@ -88,6 +93,9 @@ module PaperTrailDiff
     def each: () { (ActivityEvent, RecordSnapshot?) -> void } -> void
 
     private
+
+    # : (ActivityEvent) { (ActivityEvent, RecordSnapshot?) -> void } -> void
+    def replay: (ActivityEvent) { (ActivityEvent, RecordSnapshot?) -> void } -> void
 
     @current: untyped
 

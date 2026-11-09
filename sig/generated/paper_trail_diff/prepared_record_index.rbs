@@ -65,8 +65,12 @@ module PaperTrailDiff
     # : (versions: Array[untyped], live: PreparedRecordState?, ?live_record: untyped, ?state_loader: PreparedVersionStateLoader) -> void
     def initialize: (versions: Array[untyped], live: PreparedRecordState?, ?live_record: untyped, ?state_loader: PreparedVersionStateLoader) -> void
 
-    # : (untyped) -> untyped
-    def record_before: (untyped) -> untyped
+    # `open` names the transactions still open at the boundary, which saved
+    # a version before it and another at or after it. A record one of them
+    # saved reads as it stood before that transaction, as a record the
+    # boundary's own transaction saved does (see PreparedRecordIndex#reading).
+    # : (untyped, ?Array[untyped]?) -> untyped
+    def record_before: (untyped, ?Array[untyped]?) -> untyped
 
     # A record created in the boundary's own transaction has no state before
     # it, yet a HABTM checkpoint saved later in that transaction records it as
@@ -75,8 +79,8 @@ module PaperTrailDiff
     # : (untyped) -> untyped
     def record_created_in: (untyped) -> untyped
 
-    # : (untyped) -> PreparedRecordState?
-    def state_before: (untyped) -> PreparedRecordState?
+    # : (untyped, ?Array[untyped]?) -> PreparedRecordState?
+    def state_before: (untyped, ?Array[untyped]?) -> PreparedRecordState?
 
     # A handled nil is known absence, not permission to query the current row.
     # : (untyped, ?direct: bool) -> [bool, untyped]
@@ -123,17 +127,21 @@ module PaperTrailDiff
     def live: () -> PreparedRecordState?
 
     # A version is eligible when it is at or after the boundary, or shares the
-    # boundary's transaction. The first is monotonic over the chronological
-    # list and the second is indexed, so neither rescans a long history once
-    # per boundary.
+    # boundary's transaction or one still open there. The first is monotonic
+    # over the chronological list and the others are indexed, so none rescans
+    # a long history once per boundary.
     #
     # "At or after" is decided by the version order rather than the timestamp
     # alone. A version written in the same instant as the boundary but before
     # it already took effect there; reading its pre-change state would put the
     # boundary on the wrong side of a change it follows. Each time is read
     # once, since every record is placed against every boundary.
-    # : (untyped) -> Integer?
-    def boundary_index: (untyped) -> Integer?
+    # : (untyped, Array[untyped]?) -> Integer?
+    def boundary_index: (untyped, Array[untyped]?) -> Integer?
+
+    # Where each open transaction saved this record first, if it did.
+    # : (Array[untyped]?) -> Array[Integer]
+    def open_indexes: (Array[untyped]?) -> Array[Integer]
 
     # : (untyped) -> Integer?
     def transaction_index: (untyped) -> Integer?
@@ -164,6 +172,16 @@ module PaperTrailDiff
 
     # : (untyped, untyped, untyped) -> untyped
     def record_before: (untyped, untyped, untyped) -> untyped
+
+    # Reads at the events of a root's timeline with the transactions open at
+    # each, by the row key of its version (see InterleavedTransactions). A
+    # read at any other boundary has none.
+    # : (Hash[Array[untyped], Array[untyped]]) { () -> void } -> void
+    def reading: (Hash[Array[untyped], Array[untyped]]) { () -> void } -> void
+
+    # The ids of the transactions open at a boundary.
+    # : (untyped) -> Array[untyped]?
+    def open_at: (untyped) -> Array[untyped]?
 
     # : (untyped, untyped, untyped) -> untyped
     def record_created_in: (untyped, untyped, untyped) -> untyped
@@ -223,6 +241,8 @@ module PaperTrailDiff
     @direct_states: Hash[PreparedRecordState, PreparedRecordState?]
 
     @end_time: untyped
+
+    @open: Hash[Array[untyped], Array[untyped]]?
 
     @seeded_live_records: Hash[Array[String], untyped]
 

@@ -65,9 +65,14 @@ module PaperTrailDiff
     end
 
     # `history` is the one `prepare` returned for this root, if any.
+    # A snapshot read while a timeline names the transactions open at its
+    # context reads their records as they stood before them (see
+    # PreparedRecordIndex#reading), so it is kept apart from one read without.
     #: (untyped, untyped, ?history: PreparedHistory?) -> RecordSnapshot?
     def call(root_endpoint, context_endpoint, history: nil)
       key = snapshot_key(root_endpoint, context_endpoint)
+      open = history_for(context_endpoint, history)&.open_at(context_endpoint)
+      key += [open] if open
       return @snapshots[key] if @snapshots.key?(key)
 
       @snapshots[key] = uncached(root_endpoint, context_endpoint, history: history)

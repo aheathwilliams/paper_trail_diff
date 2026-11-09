@@ -65,6 +65,14 @@ module PaperTrailDiff
       @history&.opening_transactions || []
     end
 
+    # Reads with the transactions open at each event of a root's timeline
+    # (see InterleavedTransactions).
+    #: (Hash[Array[untyped], Array[untyped]]) { () -> void } -> void
+    def reading(open, &block)
+      history = @history
+      history ? history.reading(open, &block) : yield
+    end
+
     #: (untyped, untyped) -> RecordSnapshot?
     def call(root_endpoint, context_endpoint)
       @snapshotter.call(root_endpoint, context_endpoint, history: @history)
@@ -131,10 +139,20 @@ module PaperTrailDiff
     end
 
     #: () { (ActivityEvent, RecordSnapshot?) -> void } -> void
-    def each
+    def each(&block)
       first = @events.first
       return unless first
 
+      open = InterleavedTransactions.call(@events, opening: @snapshotter.opening_transactions)
+      return replay(first, &block) if open.empty?
+
+      @snapshotter.reading(open) { replay(first, &block) }
+    end
+
+    private
+
+    #: (ActivityEvent) { (ActivityEvent, RecordSnapshot?) -> void } -> void
+    def replay(first)
       previous_snapshot = full_snapshot(first)
       yield first, previous_snapshot
       @events.each_cons(2) do |pair|
@@ -144,8 +162,6 @@ module PaperTrailDiff
         yield event, previous_snapshot
       end
     end
-
-    private
 
     # @rbs @root_versions: Array[untyped]
     # @rbs @events: Array[ActivityEvent]

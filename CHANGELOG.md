@@ -80,6 +80,17 @@ project follows [Semantic Versioning](https://semver.org/).
   earlier transaction was cut in two there, and part of its change
   surfaced in the later transaction's step.
 
+### Fixed
+
+- Two transactions that save in one record's tree at the same time, so that
+  their versions interleave, no longer credit one with the other's changes.
+  At a version of one, a record the other saved reads as it stood before the
+  other began, until the other ends, as the version's own transaction's
+  records already did. A comment one transaction created and deleted again
+  while the other saved is no longer reported as added or removed in the
+  other's steps, nor held in a window's starting state or diff, and a change
+  that outlives its transaction is reported in a step that transaction opens.
+
 ## [0.17.1] - 2026-11-07
 
 ### Fixed
