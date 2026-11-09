@@ -22,8 +22,33 @@ RSpec.describe PaperTrailDiff::CandidateTable do
     expect(described_class.with(CoreArticle, many) { |source| source }).to equal(many)
   end
 
+  # A drop that fails, as on a connection that lost the table, must not hide
+  # the error that ended the block.
+  it 'keeps the error that ended the block when the drop fails' do
+    connection = CoreArticle.connection
+    allow(described_class).to receive(:sql_server?).and_return(true)
+    allow(described_class).to receive(:create)
+    allow(connection).to receive(:execute).and_call_original
+    allow(connection).to receive(:execute).with(/DROP TABLE/)
+                                          .and_raise(ActiveRecord::StatementInvalid, 'gone')
+
+    expect { described_class.with(CoreArticle, many) { raise ArgumentError, 'timeout' } }
+      .to raise_error(ArgumentError, 'timeout')
+    expect(described_class.with(CoreArticle, many) { :done }).to eq(:done)
+  end
+
   context 'with SQL Server' do
     before { skip 'needs SQL Server' unless sql_server }
+
+    it 'drops quietly when the table is already gone' do
+      result = described_class.with(CoreArticle, many) do |source|
+        name = source.to_sql[/#paper_trail_diff_candidates_\h+/]
+        CoreArticle.connection.execute("DROP TABLE #{name}")
+        :done
+      end
+
+      expect(result).to eq(:done)
+    end
 
     it 'yields a subquery that selects each id once' do
       ids = many + many.first(3)

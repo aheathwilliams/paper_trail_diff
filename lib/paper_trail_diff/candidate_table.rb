@@ -16,7 +16,9 @@ module PaperTrailDiff
   # them statements of their own.
   #
   # A temporary table belongs to the connection that made it, so the block runs
-  # on one connection, and the table is dropped when it returns or raises.
+  # on one connection, and the table is dropped when it returns or raises. A
+  # reconnect inside the block, as Active Record makes to retry a read after
+  # losing the connection, loses the table, and the read then fails naming it.
   module CandidateTable
     # More ids than this go to a table: one statement's worth, as the gem
     # lists elsewhere, compiles quickly.
@@ -38,7 +40,7 @@ module PaperTrailDiff
         begin
           yield model.unscoped.from("#{name} AS candidates").select('candidates.id')
         ensure
-          connection.execute("DROP TABLE #{name}")
+          drop(connection, name)
         end
       end
     end
@@ -61,6 +63,17 @@ module PaperTrailDiff
       end
     end
 
+    # The table can be gone already: a timeout that cost the connection,
+    # which Active Record then reconnected, takes it along. A failed drop is
+    # not raised, so that the error that ended the block is the one the caller
+    # sees; a table left behind goes when its connection closes.
+    #: (untyped, String) -> void
+    def self.drop(connection, name)
+      connection.execute("IF OBJECT_ID('tempdb..#{name}') IS NOT NULL DROP TABLE #{name}")
+    rescue StandardError
+      nil
+    end
+
     # The adapter writes an integer type with its size in bytes, as
     # `bigint(8)`, which SQL Server does not accept back.
     #: (untyped) -> String
@@ -70,6 +83,6 @@ module PaperTrailDiff
       collation ? "#{type} COLLATE #{collation}" : type
     end
 
-    private_class_method :sql_server?, :create, :column_type
+    private_class_method :sql_server?, :create, :drop, :column_type
   end
 end

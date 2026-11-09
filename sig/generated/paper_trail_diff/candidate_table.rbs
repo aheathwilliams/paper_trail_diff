@@ -13,7 +13,9 @@ module PaperTrailDiff
   # them statements of their own.
   #
   # A temporary table belongs to the connection that made it, so the block runs
-  # on one connection, and the table is dropped when it returns or raises.
+  # on one connection, and the table is dropped when it returns or raises. A
+  # reconnect inside the block, as Active Record makes to retry a read after
+  # losing the connection, loses the table, and the read then fails naming it.
   module CandidateTable
     # More ids than this go to a table: one statement's worth, as the gem
     # lists elsewhere, compiles quickly.
@@ -35,6 +37,13 @@ module PaperTrailDiff
     # neither converts every row nor meets tempdb's collation.
     # : (untyped, untyped, String, Array[String]) -> void
     def self.create: (untyped, untyped, String, Array[String]) -> void
+
+    # The table can be gone already: a timeout that cost the connection,
+    # which Active Record then reconnected, takes it along. A failed drop is
+    # not raised, so that the error that ended the block is the one the caller
+    # sees; a table left behind goes when its connection closes.
+    # : (untyped, String) -> void
+    def self.drop: (untyped, String) -> void
 
     # The adapter writes an integer type with its size in bytes, as
     # `bigint(8)`, which SQL Server does not accept back.
