@@ -163,8 +163,40 @@ module PaperTrailDiff
     # the one that saved its first version after the edge, which crosses when
     # it began before it, and the one that saved its last version before it,
     # which crosses when it saved a record of one of `types` after it.
+    #
+    # An edge is an instant, and a transaction can begin at the instant
+    # another saved its last versions, where the column keeps whole seconds
+    # or the clock that dated them did not move. An edge moved to where the
+    # first began would then fall inside the second, so the roots whose edge
+    # moved are read again from where it moved to, until none moves. Each
+    # root still moves from where its edge was asked for, by the same steps
+    # whichever window asks, so adjacent windows move their shared edge alike.
     #: (untyped, Array[untyped], Edge, Array[String]) -> Hash[String, Time]
     def self.moved_edges(versions, records, edge, types)
+      moved = crossed_edges(versions, records, edge, types)
+      settling = moved
+      until settling.empty?
+        settling = settled(versions, settling, types).select { |id, start| start < moved.fetch(id) }
+        moved.merge!(settling)
+      end
+      moved
+    end
+    private_class_method :moved_edges
+
+    # Where the edges that moved move again, read from where each moved to. A
+    # moved edge starts the later window, so it keeps the versions saved at
+    # its instant on the right.
+    #: (untyped, Hash[String, Time], Array[String]) -> Hash[String, Time]
+    def self.settled(versions, moved, types)
+      again = {} #: Hash[String, Time]
+      moved.group_by(&:last).each_with_object(again) do |(start, group), found|
+        found.merge!(crossed_edges(versions, group.map(&:first), Edge.new(start, false), types))
+      end
+    end
+    private_class_method :settled
+
+    #: (untyped, Array[untyped], Edge, Array[String]) -> Hash[String, Time]
+    def self.crossed_edges(versions, records, edge, types)
       moved = {} #: Hash[String, Time]
       crossing(versions, records, edge, types).each_with_object(moved) do |(roots, starts), found|
         starts.each do |transaction, start|
@@ -172,7 +204,7 @@ module PaperTrailDiff
         end
       end
     end
-    private_class_method :moved_edges
+    private_class_method :crossed_edges
 
     # For each side of the edge, the roots its transactions hold next to the
     # edge, and where those that cross it began.

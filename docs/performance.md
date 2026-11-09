@@ -65,7 +65,8 @@ Flat query counts do not make a report's cost flat:
 - **Work on a wide collection grows with its size times its history.** Each
   step of an activity timeline copies the collection's list of records, so
   an activity timeline over `n` comments that changed `m` times does about
-  `n × m` work: 800 comments edited 1,000 times took about 3 s. Members
+  `n × m` work: 800 comments edited 1,000 times took about 0.4 s, and 3,200
+  edited 3,200 times about 1.8 s. Members
   saved in one transaction share one snapshot: a `report` on 100 articles,
   each created with 100 comments in one transaction and edited with all of
   them in another, took about 4.6 s. `timeline` reads every member at each
@@ -79,7 +80,8 @@ Flat query counts do not make a report's cost flat:
   time within run-to-run noise. Folding its rows with `net_changes` took
   another 17 s, and listing them with `change_rows` 13 s.
 - **Each edge of a window takes one statement per 250 records, and one or two
-  per 500 transactions it finds.** A
+  per 500 transactions it finds.** An edge that moves is read once more, for
+  the records it moved for. A
   window from `within:` or `since:` looks for transactions that cross either
   edge, and with associations also for those that saved a record before it
   and an associated record after it. A `report` window has no end, so only

@@ -171,6 +171,10 @@ steps = PaperTrailDiff.timeline(article, within: window)
 
 A bound is read to the microsecond, as adapters write it into SQL, so a
 version saved in the microsecond of a `Time.now` start is inside the window.
+Where the versions table's `created_at` keeps fewer digits, as a MySQL
+`datetime` column without a precision keeps whole seconds, a bound is read to
+those: a window from 12:00:00.7 starts at 12:00:00, with the versions saved in
+that second.
 
 A `Date` bound is a whole day in `Time.zone`, so `Date.today..Date.today` is
 all of today and `august...september` stops before September 1. A string is a
@@ -201,7 +205,10 @@ is then in the earlier window and the target's in the later one. A
 `sources` only the versions inside its window. So back-to-back windows, or a
 `report` with `since:` after an earlier report, show each change exactly
 once, credited to the transaction that made it. Each root moves its own
-edges, so in a batch two roots can start a few moments apart.
+edges, so in a batch two roots can start a few moments apart. Where a
+transaction began at the very instant another saved its last versions, as two
+can in a table that keeps whole seconds, an edge that moves to the later one's
+start moves on to the earlier one's, so that neither is cut in two.
 
 `analysis.window` is the window an `Analysis` covers after any such move, as a
 Ruby range, endless for `report` and any other endless window. It is `nil` when
@@ -794,7 +801,9 @@ and `allow_approximate:`.
   for large tables. Each requested association adds one query per level, however
   many records it selects. Changes to associations are found from PT-AT's
   `version_associations`, so history recorded before PT-AT was installed selects
-  nothing.
+  nothing, and neither does a `belongs_to` target's change for a record that
+  has no version of its own, such as one created with PaperTrail turned off:
+  `analyze` on that record reports the change, but no selection finds it.
 
 ### Deleted records
 

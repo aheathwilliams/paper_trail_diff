@@ -314,6 +314,28 @@ RSpec.describe PaperTrailDiff::TransactionCut do
         .to eq(article.id.to_s => [at(0), at(2), true])
     end
 
+    # The transaction that crosses the start began at minute 1, the instant
+    # another saved the root, having begun before it.
+    it 'moves a start again when where it moved to is inside another transaction' do
+      article, = history(transactions: { 1 => 7, 2 => 8 })
+      other(0.5, 7)
+      other(1, 8)
+
+      expect(windows([article], at(1.5)..at(3)))
+        .to eq(article.id.to_s => [at(0.5), at(3), false])
+    end
+
+    it 'moves an end again when where it moved to is inside another transaction' do
+      article, = history(transactions: { 1 => 7, 2 => 8 })
+      other(0.5, 7)
+      other(1, 8)
+
+      expect(windows([article], at(0)..at(1.5)))
+        .to eq(article.id.to_s => [at(0), at(0.5), true])
+    end
+
+    # A start that moved is read once more, from where it moved to, which
+    # finds it settled.
     it 'moves only the start of an endless window, and reads for no end' do
       article, = history(transactions: { 0 => 6, 2 => 8 })
       other(0.5, 6)
@@ -325,7 +347,7 @@ RSpec.describe PaperTrailDiff::TransactionCut do
         windows([article], at(0.25)..)
       end
 
-      expect([moved, statements.length]).to eq([{ article.id.to_s => [at(0), nil, false] }, 2])
+      expect([moved, statements.length]).to eq([{ article.id.to_s => [at(0), nil, false] }, 4])
     end
 
     it 'leaves a window inside a transaction empty' do
