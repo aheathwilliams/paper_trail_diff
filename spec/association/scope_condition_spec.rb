@@ -147,61 +147,67 @@ RSpec.describe PaperTrailDiff::ScopeCondition do
     end
 
     # Column objects are frozen, so the columns are replaced through the model.
-    def collation(value, sql_type: 'varchar')
-      column = Struct.new(:collation, :sql_type).new(value, sql_type)
-      columns = ScopeConditionItem.columns_hash.merge('label' => column, 'note' => column)
-      allow(ScopeConditionItem).to receive(:columns_hash).and_return(columns)
+    def columns(adapter, **sql_types)
+      allow(ScopeConditionItem.connection_db_config).to receive(:adapter).and_return(adapter)
+      collation = sql_types.delete(:collation)
+      replaced = sql_types.to_h do |name, sql_type|
+        [name.to_s, Struct.new(:collation, :sql_type).new(collation, sql_type)]
+      end
+      allow(ScopeConditionItem).to receive(:columns_hash)
+        .and_return(ScopeConditionItem.columns_hash.merge(replaced))
+    end
+
+    def label_read?
+      matches(build(-> { where(label: 'a') }), { label: 'a' }, { label: 'A' }) == [true, false]
     end
 
     it 'reads string columns only where the database compares strings exactly' do
-      config = ScopeConditionItem.connection_db_config
-      collation(nil)
-      %w[sqlite3 postgresql].each do |adapter|
-        allow(config).to receive(:adapter).and_return(adapter)
-        expect(matches(build(-> { where(label: 'a') }), { label: 'a' }, { label: 'A' }))
-          .to eq([true, false])
-        expect(build(-> { where(note: 'a') })).not_to be_nil
-      end
-      %w[mysql2 trilogy sqlserver].each do |adapter|
-        allow(config).to receive(:adapter).and_return(adapter)
+      columns('sqlite3', label: 'varchar', note: 'TEXT', rank: 'integer')
+      expect([label_read?, build(-> { where(note: 'a') }).nil?]).to eq([true, false])
+      columns('postgresql', label: 'character varying(255)', note: 'text', rank: 'integer')
+      expect([label_read?, build(-> { where(note: 'a') }).nil?]).to eq([true, false])
+      { 'mysql2' => %w[varchar(255) int], 'trilogy' => %w[varchar(255) int(11)],
+        'sqlserver' => %w[nvarchar(4000) int] }.each do |adapter, (label, rank)|
+        columns(adapter, label: label, rank: rank)
         expect(build(-> { where(label: 'a') })).to be_nil
         expect(matches(build(-> { where(rank: 1) }), { rank: 1 })).to eq([true])
       end
-      allow(config).to receive(:adapter).and_return('sqlite3')
-      collation('NOCASE')
+      columns('sqlite3', label: 'varchar', collation: 'NOCASE')
       expect(build(-> { where(label: 'a') })).to be_nil
       expect(build(-> { where(rank: 1) })).not_to be_nil
     end
 
-    # citext compares without regard to case, and Active Record reads it as a
-    # plain string.
-    it 'leaves a PostgreSQL citext column unread' do
-      allow(ScopeConditionItem.connection_db_config).to receive(:adapter).and_return('postgresql')
-      collation(nil, sql_type: 'citext')
-
-      expect(build(-> { where(label: 'a') })).to be_nil
-      expect(matches(build(-> { where(label: nil) }), { label: nil }, { label: 'a' }))
-        .to eq([true, false])
+    # citext compares without regard to case, and character(n) pads, while
+    # Active Record reads both as a plain string. An adapter it does not know
+    # reads no column.
+    it 'leaves unlisted column types and adapters unread, but tests them for NULL' do
+      ['citext', 'character(6)', 'bpchar'].each do |sql_type|
+        columns('postgresql', label: sql_type)
+        expect(build(-> { where(label: 'a') })).to be_nil
+        expect(matches(build(-> { where(label: nil) }), { label: nil }, { label: 'a' }))
+          .to eq([true, false])
+      end
+      columns('oracle', label: 'varchar', rank: 'integer')
+      expect([build(-> { where(label: 'a') }), build(-> { where(rank: 1) })]).to eq([nil, nil])
+      columns('mysql2', flag: 'tinyint(1)', rank: 'bigint(20) unsigned')
+      expect(matches(build(-> { where(flag: true, rank: 2) }), { flag: true, rank: 2 }))
+        .to eq([true])
     end
 
     # PostgreSQL pads a character(n) value with spaces and compares it
     # without them, so `where(label: 'a')` matches a stored "a   ".
     it 'leaves a PostgreSQL fixed-length character column unread' do
-      config = ScopeConditionItem.connection_db_config
-      allow(config).to receive(:adapter).and_return('postgresql')
       ['character(6)', 'CHAR(3)', 'bpchar', 'character'].each do |sql_type|
-        collation(nil, sql_type: sql_type)
+        columns('postgresql', label: sql_type)
         expect(build(-> { where(label: 'a') })).to be_nil
       end
-      ['character varying(255)', 'varchar(255)', 'text', 'char_code'].each do |sql_type|
-        collation(nil, sql_type: sql_type)
+      ['character varying(255)', 'CHARACTER VARYING', 'text'].each do |sql_type|
+        columns('postgresql', label: sql_type)
         expect(build(-> { where(label: 'a') })).not_to be_nil
       end
-      allow(config).to receive(:adapter).and_return('sqlite3')
-      %w[character(6) citext].each do |sql_type|
-        collation(nil, sql_type: sql_type)
-        expect(build(-> { where(label: 'a') })).not_to be_nil
-      end
+      # A type the adapter does not list, such as a domain, is not trusted.
+      columns('postgresql', label: 'char_code')
+      expect(build(-> { where(label: 'a') })).to be_nil
     end
 
     # Active Record before 7.2 wraps each bound value in a BindParam node.

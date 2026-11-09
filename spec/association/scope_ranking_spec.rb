@@ -58,8 +58,13 @@ RSpec.describe PaperTrailDiff::ScopeRanking do
     build(scope, **options).call(rows).map { |ranked_row| ranked_row.attributes.fetch('id') }
   end
 
+  # The named adapter reads the test database's column types, so that only
+  # its NULL placement changes.
   def with_adapter(name)
     config = ScopeRankingItem.connection_db_config
+    types = PaperTrailDiff::ExactColumnType::SQL_TYPES
+    stub_const('PaperTrailDiff::ExactColumnType::SQL_TYPES',
+               types.merge(name => types.fetch(config.adapter)))
     allow(config).to receive(:adapter).and_return(name)
     yield
   end

@@ -16,24 +16,11 @@ module PaperTrailDiff
     # Relation parts that load or shape rows without choosing them.
     LOADING_VALUES: untyped
 
-    # Types whose stored values compare in Ruby as the database compares them,
-    # named rather than referenced so that loading needs no Active Model.
-    VALUE_TYPES: untyped
-
-    TEXT_TYPE: ::String
-
-    ENUM_TYPE: ::String
-
     BIND_PARAM: ::String
 
-    # Adapters that compare strings exactly by default. MySQL and SQL Server
-    # ignore case and trailing spaces by default, which Ruby cannot follow.
-    EXACT_TEXT_ADAPTERS: untyped
-
-    # PostgreSQL text types that compare otherwise than Ruby does: citext
-    # ignores case, and character(n), also spelled char(n) or bpchar,
-    # ignores trailing spaces. SQLite neither pads nor folds them.
-    INEXACT_TEXT_TYPE: ::Regexp
+    # Column kinds (ExactColumnType) whose values compare for equality in
+    # Ruby as the database compares them.
+    COMPARABLE_KINDS: untyped
 
     # Raised while reading a node that has no exact plain-Ruby reading.
     class Unreadable < StandardError
@@ -231,24 +218,13 @@ module PaperTrailDiff
       def list: (Symbol, untyped, Array[untyped]) -> Array[untyped]
 
       # Ruby comparison stands in for SQL only on the record's own column of
-      # a type both compare alike. Whether a value is NULL, any column's
-      # type compares alike.
+      # a type both compare alike (ExactColumnType). Whether a value is NULL,
+      # any column's type compares alike.
       # : (untyped, ?null_test: bool) -> String
       def column: (untyped, ?null_test: bool) -> String
 
-      # : (String, untyped) -> bool
-      def comparable?: (String, untyped) -> bool
-
-      # PostgreSQL's citext is text that compares without regard to case, and
-      # its fixed-length character(n) compares without trailing spaces, which
-      # it pads every value it returns with.
-      # : (untyped) -> bool
-      def exact_text?: (untyped) -> bool
-
-      # An enum compares the values it stores, which its subtype describes. A
-      # wrapper such as a serialized or encrypted type is none of these.
-      # : (untyped) -> untyped
-      def value_type: (untyped) -> untyped
+      # : (String) -> bool
+      def comparable?: (String) -> bool
 
       # A list that is not plain values, such as a subquery, is unreadable.
       # : (untyped) -> Array[untyped]

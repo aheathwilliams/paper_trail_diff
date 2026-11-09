@@ -101,6 +101,7 @@ matcher:
     - PaperTrailDiff::FallbackPaths*
     - PaperTrailDiff::ScopeCondition*
     - PaperTrailDiff::ScopeRanking*
+    - PaperTrailDiff::ExactColumnType*
     - PaperTrailDiff::AssociationTraversal*
     - PaperTrailDiff::AssociationKey*
     - PaperTrailDiff::HabtmTransactionOwners*

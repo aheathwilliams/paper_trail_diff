@@ -20,6 +20,14 @@ project follows [Semantic Versioning](https://semver.org/).
   longer sorts the collection again. A history of 3,200 comments edited
   3,200 times took 1.8 s instead of 11 s.
 
+- Association scopes, and ranges and orders in them, are read in Ruby only on
+  the SQL column types the gem lists for each of SQLite, PostgreSQL, MySQL, and
+  SQL Server, instead of on any column Active Record casts as an integer,
+  boolean, string, date, or time. A column of another type, or on another
+  adapter, is now refused unless you pass `allow_approximate: true`, like any
+  scope the gem cannot read. On SQL Server this leaves out a legacy `datetime` or `smalldatetime` key, which
+  rounds the times it stores.
+
 ### Fixed
 
 - Without `paper_trail-association_tracking` loaded, asking for an

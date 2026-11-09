@@ -1,0 +1,50 @@
+# Generated from lib/paper_trail_diff/exact_column_type.rb with RBS::Inline
+
+module PaperTrailDiff
+  # The kind of value a column holds when its database compares it exactly
+  # as Ruby compares the attribute's values, which is what lets ScopeCondition
+  # and ScopeRanking decide a scope in Ruby. Each adapter lists the SQL types
+  # it compares that way, so a type it does not list, such as PostgreSQL's
+  # character(n) or citext, and an adapter it does not know, fall back to the
+  # caller's slower path rather than being trusted.
+  module ExactColumnType
+    # Kinds by SQL type, without its size, precision or scale. Integers,
+    # booleans and dates compare alike everywhere listed. Text compares
+    # exactly only where the database compares strings byte by byte by
+    # default: MySQL and SQL Server ignore case and trailing spaces, and
+    # PostgreSQL pads character(n). A datetime is listed where it keeps the
+    # value Active Record writes; SQL Server's datetime rounds it to 1/300 s.
+    # A time of day is not listed: in memory it keeps the date it was given,
+    # which the database drops.
+    MYSQL_TYPES: untyped
+
+    SQL_TYPES: untyped
+
+    # The Active Model type that casts each kind's values in Ruby, named so
+    # that loading needs no Active Model. An attribute type of another class,
+    # such as one that serializes or encrypts the column, reads no kind.
+    RUBY_TYPES: untyped
+
+    ENUM_TYPE: ::String
+
+    # Rails wraps a time-zone-aware attribute's type, by default every
+    # datetime's, in this delegator; the time it stores is the wrapped type's.
+    TIME_ZONE_TYPE: ::String
+
+    # nil for anything but a column of the model's own table whose SQL type
+    # its adapter lists and whose attribute type reads that kind. Text with
+    # its own collation compares as that collation says, so it reads none.
+    # : (untyped, String?) -> Symbol?
+    def self.kind: (untyped, String?) -> Symbol?
+
+    # The type of the value a column stores, under an enum or time zone
+    # wrapper. An enum stores what its subtype casts.
+    # : (untyped) -> untyped
+    def self.stored_type: (untyped) -> untyped
+
+    # A type is listed with its size where that changes its kind, as MySQL's
+    # tinyint(1) holds a boolean.
+    # : (String, String) -> Symbol?
+    def self.sql_kind: (String, String) -> Symbol?
+  end
+end

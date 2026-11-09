@@ -908,8 +908,14 @@ boolean, and enum columns, with SQL's rules for NULL. A `nil` test
 scope such as `where(deleted_at: nil)` is read too. String and text columns
 are read only on SQLite and PostgreSQL, and only without a column collation:
 MySQL and SQL Server compare strings without regard to case or trailing spaces
-by default, which the gem cannot repeat, and neither is PostgreSQL's
-`citext`, nor its `character(n)`, which ignores trailing spaces.
+by default, which the gem cannot repeat. Neither is PostgreSQL's `citext`,
+which ignores case, nor its `character(n)`, which pads with spaces.
+
+The gem lists the SQL column types it reads this way for each of SQLite,
+PostgreSQL, MySQL (`mysql2` and `trilogy`), and SQL Server. A condition or
+order on a column of any other type, or on another adapter, is not read,
+like the scopes described below. On SQL Server a `datetime2` is read but not
+a legacy `datetime` or `smalldatetime`, which round the times they store.
 
 Ranges, such as `where(position: 2..)` or `where(created_at: 1.day.ago...)`,
 and Arel's `gt`, `gteq`, `lt`, and `lteq`, are read on the columns an order

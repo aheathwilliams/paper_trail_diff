@@ -16,20 +16,10 @@ module PaperTrailDiff
                          extending].freeze
     # Relation parts that load or shape rows without choosing them.
     LOADING_VALUES = %i[includes preload select distinct].freeze
-    # Types whose stored values compare in Ruby as the database compares them,
-    # named rather than referenced so that loading needs no Active Model.
-    VALUE_TYPES = %w[ActiveModel::Type::Integer ActiveModel::Type::Boolean
-                     ActiveModel::Type::ImmutableString].freeze
-    TEXT_TYPE = 'ActiveModel::Type::ImmutableString'
-    ENUM_TYPE = 'ActiveRecord::Enum::EnumType'
     BIND_PARAM = 'Arel::Nodes::BindParam'
-    # Adapters that compare strings exactly by default. MySQL and SQL Server
-    # ignore case and trailing spaces by default, which Ruby cannot follow.
-    EXACT_TEXT_ADAPTERS = %w[sqlite3 postgresql].freeze
-    # PostgreSQL text types that compare otherwise than Ruby does: citext
-    # ignores case, and character(n), also spelled char(n) or bpchar,
-    # ignores trailing spaces. SQLite neither pads nor folds them.
-    INEXACT_TEXT_TYPE = /\A(?:citext|bpchar|char(?:acter)?)(?:\(|\z)/i
+    # Column kinds (ExactColumnType) whose values compare for equality in
+    # Ruby as the database compares them.
+    COMPARABLE_KINDS = %i[integer boolean text].freeze
 
     # Raised while reading a node that has no exact plain-Ruby reading.
     class Unreadable < StandardError; end
@@ -363,7 +353,7 @@ module PaperTrailDiff
       #: (Symbol, untyped, untyped) -> Array[untyped]
       def bound(operator, attribute, node)
         name = column(attribute, null_test: true)
-        boolean = :boolean.equal?(@model_class.type_for_attribute(name).type)
+        boolean = :boolean.equal?(ExactColumnType.kind(@model_class, name))
         raise Unreadable unless ScopeRanking.orderable?(@model_class, name) && !boolean
 
         expected = value(node)
@@ -404,42 +394,22 @@ module PaperTrailDiff
       end
 
       # Ruby comparison stands in for SQL only on the record's own column of
-      # a type both compare alike. Whether a value is NULL, any column's
-      # type compares alike.
+      # a type both compare alike (ExactColumnType). Whether a value is NULL,
+      # any column's type compares alike.
       #: (untyped, ?null_test: bool) -> String
       def column(attribute, null_test: false)
         # Nil for anything but a column of the model's own table, which finds
         # no column below.
         name = ScopeRanking.own_column(attribute, @model_class) #: String
-        column = @model_class.columns_hash[name]
-        raise Unreadable unless column && (null_test || comparable?(name, column))
+        exists = @model_class.columns_hash.key?(name)
+        raise Unreadable unless exists && (null_test || comparable?(name))
 
         name
       end
 
-      #: (String, untyped) -> bool
-      def comparable?(name, column)
-        kinds = value_type(@model_class.type_for_attribute(name)).class.ancestors.map(&:name)
-        return false unless VALUE_TYPES.intersect?(kinds)
-
-        !kinds.include?(TEXT_TYPE) || exact_text?(column)
-      end
-
-      # PostgreSQL's citext is text that compares without regard to case, and
-      # its fixed-length character(n) compares without trailing spaces, which
-      # it pads every value it returns with.
-      #: (untyped) -> bool
-      def exact_text?(column)
-        adapter = @model_class.connection_db_config.adapter
-        EXACT_TEXT_ADAPTERS.include?(adapter) && column.collation.nil? &&
-          !(adapter == 'postgresql' && INEXACT_TEXT_TYPE.match?(column.sql_type))
-      end
-
-      # An enum compares the values it stores, which its subtype describes. A
-      # wrapper such as a serialized or encrypted type is none of these.
-      #: (untyped) -> untyped
-      def value_type(type)
-        ENUM_TYPE.eql?(type.class.name) ? type.subtype : type
+      #: (String) -> bool
+      def comparable?(name)
+        COMPARABLE_KINDS.include?(ExactColumnType.kind(@model_class, name))
       end
 
       # A list that is not plain values, such as a subquery, is unreadable.
