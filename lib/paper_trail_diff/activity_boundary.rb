@@ -64,6 +64,18 @@ module PaperTrailDiff
             recorded_at: nil, recorded_changes: nil)
       end
 
+      # The `from`/`to`/`diff` hash that `Step#to_h` and `ActivityStep#to_h`
+      # share, so a consumer reads both step types alike.
+      # @api private
+      #: (ActivityBoundary, ActivityBoundary, Diff, metadata: bool) -> Hash[Symbol, untyped]
+      def transition_h(from, to, diff, metadata:)
+        {
+          from: from.to_h(metadata: metadata),
+          to: to.to_h(metadata: metadata),
+          diff: diff.to_h
+        }
+      end
+
       private
 
       #: (untyped, Symbol, RecordedChangesReader?) -> ActivityBoundary
@@ -249,11 +261,7 @@ module PaperTrailDiff
     # metadata as much as the source boundary's own author is.
     #: (?metadata: bool, ?snapshots: bool) -> Hash[Symbol, untyped]
     def to_h(metadata: false, snapshots: false)
-      value = {
-        from: from_boundary.to_h(metadata: metadata),
-        to: to_boundary.to_h(metadata: metadata),
-        diff: diff.to_h
-      } #: Hash[Symbol, untyped]
+      value = ActivityBoundary.transition_h(from_boundary, to_boundary, diff, metadata: metadata)
       value[:sources] = sources.map { |source| source.to_h(metadata: true) } if metadata
       return value unless snapshots
 
