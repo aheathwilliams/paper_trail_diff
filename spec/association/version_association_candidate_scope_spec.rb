@@ -115,6 +115,31 @@ RSpec.describe PaperTrailDiff::VersionAssociationCandidateScope do
     expect(item_ids.call(base + 3)).to be_empty
   end
 
+  # The transaction saved the comment only before the start, and another
+  # record after it.
+  it 'keeps the state before a transaction that crosses the start by another record' do
+    article = TrackedArticle.create!(title: 'Left')
+    other = TrackedArticle.create!(title: 'Right')
+    moved = article.comments.create!(body: 'Moved before the start')
+    reply = moved.replies.create!(body: 'Saved after it')
+    ActiveRecord::Base.transaction do
+      moved.update!(article_id: other.id)
+      reply.update!(body: 'Edited after the start')
+    end
+    start = reply.versions.reorder(:id).last.created_at
+    relation = PaperTrail::VersionAssociation.joins(:version).where(
+      foreign_key_name: 'article_id', foreign_key_id: article.id,
+      versions: { item_type: 'TrackedComment' }
+    )
+    item_ids = lambda do |at|
+      described_class.new(PaperTrail::Version, at).call(relation)
+                     .distinct.pluck(PaperTrail::Version.arel_table[:item_id])
+    end
+
+    expect(item_ids.call(start)).to contain_exactly(moved.id)
+    expect(item_ids.call(start + 1)).to be_empty
+  end
+
   # SQL Server quotes a bare time as `datetime`, rounded to 1/300 second: a
   # 2.0ms start reads as 3ms and a 5.0ms end as 7ms. Times compared as the
   # column stores them keep a version saved a fraction of a millisecond away
@@ -149,10 +174,9 @@ RSpec.describe PaperTrailDiff::VersionAssociationCandidateScope do
                    "#{later}.{item_type} = #{outer}.{item_type} AND #{later}.{item_id} = " \
                    "#{outer}.{item_id} AND #{later}.{created_at} < <stored cast 12:00> AND " \
                    "#{later}.{created_at} > #{outer}.{created_at} AND NOT EXISTS ( SELECT 1 " \
-                   "FROM #{outer} #{crossing} WHERE #{crossing}.{item_type} = " \
-                   "#{later}.{item_type} AND #{crossing}.{item_id} = #{later}.{item_id} AND " \
-                   "#{crossing}.{transaction_id} = #{later}.{transaction_id} AND " \
-                   "#{crossing}.{created_at} >= <stored cast 12:00> ) ) )"
+                   "FROM #{outer} #{crossing} WHERE #{crossing}.{transaction_id} = " \
+                   "#{later}.{transaction_id} AND #{crossing}.{created_at} >= " \
+                   "<stored cast 12:00> ) ) )"
 
     %i[with_connection connection].each do |style|
       bounded = described_class.new(visible_version_class(style), noon, end_at: noon + 3600)

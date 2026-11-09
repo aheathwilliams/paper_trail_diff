@@ -15,10 +15,13 @@ module PaperTrailDiff
     # first for most of them.
     attr_reader :children #: PreparedChildCandidates
 
-    #: (PreparedRecordIndex, Array[untyped], start_at: untyped) -> void
-    def initialize(records, root_versions, start_at:)
+    # `opening` names the transactions that crossed the range's start, as
+    # ActivityTransactionGroups keys them.
+    #: (PreparedRecordIndex, Array[untyped], start_at: untyped, ?opening: Array[Array[untyped]]) -> void
+    def initialize(records, root_versions, start_at:, opening: [])
       @records = records
       @start_at = start_at
+      @opening = opening.to_set
       @children = PreparedChildCandidates.new(start_at)
       @roots = root_versions.group_by { |version| Endpoint.identity(version) }
       @nodes = {} #: Hash[String, Array[untyped]]
@@ -123,6 +126,7 @@ module PaperTrailDiff
 
     # @rbs @records: PreparedRecordIndex
     # @rbs @start_at: untyped
+    # @rbs @opening: Set[Array[untyped]]
     # @rbs @roots: Hash[Array[String], Array[untyped]]
     # @rbs @nodes: Hash[String, Array[untyped]]
     # @rbs @targets: Hash[untyped, untyped]
@@ -238,17 +242,20 @@ module PaperTrailDiff
     end
 
     # Whether every version of a record from `first` up to the start is one
-    # of the transactions it saved a version in from the start onward.
+    # of a transaction that crossed the start: one the record saved a version
+    # in from the start onward, or one the history found crossing it by
+    # another record's versions. Such a transaction may have saved this
+    # record only before the start, as when it moved a comment away there
+    # and saved the comment's reply after it. The window before the start
+    # leaves that move to this one, which finds the reply only under the
+    # comment where it stood before the transaction.
     #: (Array[untyped], Integer, untyped) -> bool
     def crossed_start?(versions, first, start)
-      after = versions.bsearch_index { |version| version.created_at >= start }
-      return false unless after
-
+      after = versions.bsearch_index { |version| version.created_at >= start } || versions.length
+      later = versions.drop(after).map { |version| ActivityTransactionGroups.transaction_key(version) }
       versions.take(after).drop(first).all? do |version|
-        transaction_id = VersionBoundary.transaction_id(version)
-        transaction_id && versions.drop(after).any? do |other|
-          VersionBoundary.transaction_id(other) == transaction_id
-        end
+        key = ActivityTransactionGroups.transaction_key(version)
+        !key.nil? && (@opening.include?(key) || later.include?(key))
       end
     end
 

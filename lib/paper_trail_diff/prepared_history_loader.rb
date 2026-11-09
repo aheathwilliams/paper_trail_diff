@@ -31,7 +31,8 @@ module PaperTrailDiff
       @live_records = live_records
       start_at = VersionBoundary.transaction_start(root_versions, start_at)
       @records = PreparedRecordIndex.new(start_at, end_at: end_at, live_records: live_records)
-      @activity = PreparedActivityIndex.new(@records, root_versions, start_at: start_at)
+      @activity = PreparedActivityIndex.new(@records, root_versions, start_at: start_at,
+                                                                    opening: opening)
       @history = PreparedHistory.new(@records, activity_index: @activity,
                                                opening_transactions: opening)
       @edges = PreparedEdgeLoader.new(@records, root_versions, children: @activity.children)

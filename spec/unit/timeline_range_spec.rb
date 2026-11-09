@@ -102,7 +102,10 @@ RSpec.describe PaperTrailDiff::TimelineRange do
       Class.new(self.class.record_class) { def self.paper_trail_options = {} }.new
     end
 
+    # The window is read as the record's version table keeps times, which
+    # this record has none of.
     def versioned(windows)
+      allow(PaperTrailDiff::TimeRange).to receive(:for) { |within, _| PaperTrailDiff::TimeRange.new(within) }
       allow(PaperTrailDiff::TransactionCut).to receive(:windows).and_return(windows)
     end
 
@@ -116,6 +119,7 @@ RSpec.describe PaperTrailDiff::TimelineRange do
       paths = instance_double(PaperTrailDiff::AssociationTraversal)
 
       expect(versioned_range(window, traversal: paths).time_range).to equal(moved)
+      expect(PaperTrailDiff::TimeRange).to have_received(:for).with(window, [versioned_record.class])
       expect(PaperTrailDiff::TransactionCut)
         .to have_received(:windows) do |model, records, asked, traversal:|
           expect([model, records, asked.begin_time, asked.end_time, asked.exclude_end?, traversal])
