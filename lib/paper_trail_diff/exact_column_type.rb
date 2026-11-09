@@ -65,9 +65,14 @@ module PaperTrailDiff
       kind = sql_kind(model_class.connection_db_config.adapter, column.sql_type)
       return unless kind && (column.collation.nil? || !:text.equal?(kind))
 
-      kinds = stored_type(model_class.type_for_attribute(name)).class.ancestors.map(&:name)
-      kind if kinds.include?(RUBY_TYPES.fetch(kind))
+      kind if casts?(model_class.type_for_attribute(name), kind)
     end
+
+    #: (untyped, Symbol) -> bool
+    def self.casts?(type, kind)
+      stored_type(type).class.ancestors.map(&:name).include?(RUBY_TYPES.fetch(kind))
+    end
+    private_class_method :casts?
 
     # The type of the value a column stores, under an enum or time zone
     # wrapper. An enum stores what its subtype casts.
