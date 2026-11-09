@@ -55,9 +55,10 @@ RSpec.describe PaperTrailDiff::TotalOrder do
 
       expect(order_of(latest.group(:title).order(:title))).to eq('"filter_articles"."title" ASC')
       expect(order_of(latest.group(:title).order(Arel.sql('MAX(id) DESC')))).to eq('MAX(id) DESC')
-      # Without an order of its own it is sorted by the key, which a database
-      # rejects; it needs one.
-      expect(order_of(latest.group(:title))).to eq(key)
+      # Without an order of its own it would be sorted by the key, which a
+      # database rejects, so it is refused before any query.
+      expect { described_class.apply(latest.group(:title)) }
+        .to raise_error(PaperTrailDiff::ConfigurationError, /needs an order of its own/)
       [:id, 'filter_articles.id', FilterArticle.arel_table[:id]].each do |group|
         expect(order_of(FilterArticle.group(group, :title).order(:title)))
           .to eq(%("filter_articles"."title" ASC, #{key}))
