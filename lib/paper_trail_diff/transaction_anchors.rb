@@ -9,8 +9,8 @@ module PaperTrailDiff
   # version the transaction saves, in any table. Two tables count their ids
   # apart, so a transaction that began in one can take the number of another
   # that began elsewhere, and a table then holds versions of both under one
-  # number. Read by number alone, a window's edge inside the later one moved
-  # back to where the earlier one began, which can be years before.
+  # number. Read by number alone, a window that starts inside the later one
+  # is read from where the earlier one began, which can be years before.
   #
   # The version a transaction saved first carries its own id as its number:
   # its anchor, saved when the transaction began. Two versions of one number
@@ -55,6 +55,27 @@ module PaperTrailDiff
       later = version_class.where(version_class.primary_key => ids).where(condition)
       relation.where(condition).where(transaction_id: later.select(:transaction_id))
     end
+
+    # Those of the numbers that more than one transaction took: each the id
+    # of the first version of a transaction in more than one version table.
+    # None when the model's version table is the only one.
+    #: (untyped, Array[untyped]) -> Array[untyped]
+    def self.shared(version_class, numbers)
+      classes = version_classes(version_class)
+      return [] if classes.length < 2
+
+      firsts = classes.flat_map { |anchors| first_ids(anchors, numbers) }
+      firsts.tally.select { |_number, count| count > 1 }.keys
+    end
+
+    # The ids among these of the versions that began a transaction.
+    #: (untyped, Array[untyped]) -> Array[untyped]
+    def self.first_ids(anchors, numbers)
+      key = anchors.primary_key
+      table = anchors.arel_table
+      anchors.where(key => numbers).where(table[key].eq(table[:transaction_id])).pluck(key)
+    end
+    private_class_method :first_ids
 
     # The version classes whose ids can number a transaction of this one's
     # versions, one for each table, in the order of their tables' names.

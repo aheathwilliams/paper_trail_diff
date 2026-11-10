@@ -1180,6 +1180,9 @@ RSpec.describe 'PaperTrailDiff association tracking' do
   end
 
   it 'advances isolated root changes without rebuilding direct versioned branches' do
+    # Each version table the suite defines would be asked which transaction
+    # numbers it shares with this one, in a statement of its own.
+    allow(ActiveRecord::Base).to receive(:descendants).and_return([PaperTrail::Version])
     article = TrackedArticle.create!(title: 'Root sequence')
     article.comments.create!(body: 'Stable child')
     before = boundary_for(article)

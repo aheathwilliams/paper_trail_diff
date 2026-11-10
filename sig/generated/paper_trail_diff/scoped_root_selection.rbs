@@ -43,10 +43,16 @@ module PaperTrailDiff
     # `activity_tree` names the association paths whose changes also select a
     # root, as an activity analysis reports them. Without one, only a root's
     # own versions select it. `version_scope` narrows which of either count,
-    # as it narrows which are reported. `traversal` names the requested paths,
-    # which decide where a window's edges move (see TransactionCut).
-    # : (untyped, time_range: TimeRange?, limit: Integer, ?historical_filter: untyped, ?max_filter_versions: Integer, ?activity_tree: AssociationTree?, ?version_scope: untyped, ?traversal: AssociationTraversal?) -> void
-    def initialize: (untyped, time_range: TimeRange?, limit: Integer, ?historical_filter: untyped, ?max_filter_versions: Integer, ?activity_tree: AssociationTree?, ?version_scope: untyped, ?traversal: AssociationTraversal?) -> void
+    # as it narrows which are reported.
+    #
+    # A window selects by the versions saved in it. A transaction that saves
+    # there and ends after it is reported in a later window (see
+    # TransactionEnds), so a root can be selected with nothing to report. One
+    # open at the window's start is reported in it, though it may have saved
+    # the root's tree only before it, so with associations the roots are
+    # selected from where the earliest such transaction began.
+    # : (untyped, time_range: TimeRange?, limit: Integer, ?historical_filter: untyped, ?max_filter_versions: Integer, ?activity_tree: AssociationTree?, ?version_scope: untyped) -> void
+    def initialize: (untyped, time_range: TimeRange?, limit: Integer, ?historical_filter: untyped, ?max_filter_versions: Integer, ?activity_tree: AssociationTree?, ?version_scope: untyped) -> void
 
     # : () -> Result
     def call: () -> Result
@@ -57,11 +63,11 @@ module PaperTrailDiff
 
     @limit: Integer
 
-    @path_types: Array[String]
-
     @related: AssociationActivitySelection?
 
     @scope: untyped
+
+    @selecting: TimeRange?
 
     @time_range: TimeRange?
 
@@ -113,15 +119,12 @@ module PaperTrailDiff
     def missing_ids: () -> Array[String]
 
     # Only the versions `version_scope` keeps select a root: one whose versions
-    # in the window it drops would have nothing to report. A version saved
-    # just before the window selects its root when TransactionCut moves the
-    # root's window back to take it in.
+    # in the window it drops would have nothing to report.
     # : () -> untyped
     def window_versions: () -> untyped
 
-    # The filter reads each candidate over the window its analysis will.
-    # : (untyped, Integer, AssociationTraversal?) -> HistoricalFilter?
-    def historical_filter_for: (untyped, Integer, AssociationTraversal?) -> HistoricalFilter?
+    # : (untyped, Integer) -> HistoricalFilter?
+    def historical_filter_for: (untyped, Integer) -> HistoricalFilter?
 
     # Accepts a model class as readily as a relation: `Article` and
     # `Article.where(...)` both name a population, and `all` is what makes them

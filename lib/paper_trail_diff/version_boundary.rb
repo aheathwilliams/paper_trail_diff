@@ -54,7 +54,6 @@ module PaperTrailDiff
           candidate.class.respond_to?(:table_name)
       end
     end
-    private_class_method :version_record?
 
     # The same row of the same version table. A record or instant is never a
     # version.

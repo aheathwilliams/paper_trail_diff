@@ -20,9 +20,11 @@ module PaperTrailDiff
     # nothing but the history.
     #
     # A `start_at` is a window's; a range of versions starts at its first.
-    #: (untyped, Array[untyped], ?start_at: untyped, ?end_at: untyped) -> PreparedActivitySnapshots
-    def prepare(record, root_versions, start_at: nil, end_at: root_versions.last.created_at)
-      history = @store.prepare(record, root_versions, start_at: start_at, end_at: end_at)
+    #: (untyped, Array[untyped], ?start_at: untyped, ?end_at: untyped, ?reach: bool) -> PreparedActivitySnapshots
+    def prepare(record, root_versions, start_at: nil, end_at: root_versions.last.created_at,
+                reach: true)
+      history = @store.prepare(record, root_versions, start_at: start_at, end_at: end_at,
+                                                      reach: reach)
       last = @last
       return last if last && last.history.equal?(history)
 
@@ -60,17 +62,20 @@ module PaperTrailDiff
       @history&.activity_index
     end
 
-    #: () -> Array[Array[untyped]]
-    def opening_transactions
-      @history&.opening_transactions || []
+    # Reads with where each transaction of a root's timeline takes effect
+    # (see TransactionEnds).
+    #: (TransactionEnds) { () -> void } -> void
+    def reading(ends, &block)
+      history = @history
+      history ? history.reading(ends, &block) : yield
     end
 
-    # Reads with the transactions open at each event of a root's timeline
-    # (see InterleavedTransactions).
-    #: (Hash[Array[untyped], Array[untyped]]) { () -> void } -> void
-    def reading(open, &block)
+    # Where the transactions of these versions take effect: as recorded,
+    # with a history to read it from.
+    #: (Array[untyped]) -> TransactionEnds
+    def transaction_ends(versions)
       history = @history
-      history ? history.reading(open, &block) : yield
+      history ? history.transaction_ends(versions) : TransactionEnds.new(versions)
     end
 
     #: (untyped, untyped) -> RecordSnapshot?
@@ -132,9 +137,8 @@ module PaperTrailDiff
       @events = events
       @snapshotter = snapshotter
       @current = current
-      @transaction_groups = ActivityTransactionGroups.new(
-        events, opening: snapshotter.opening_transactions
-      )
+      @ends = snapshotter.transaction_ends(events.map(&:version))
+      @transaction_groups = ActivityTransactionGroups.new(events)
       @root_endpoints = build_root_endpoints
     end
 
@@ -143,10 +147,9 @@ module PaperTrailDiff
       first = @events.first
       return unless first
 
-      open = InterleavedTransactions.call(@events, opening: @snapshotter.opening_transactions)
-      return replay(first, &block) if open.empty?
+      return replay(first, &block) unless @ends.interleaved?
 
-      @snapshotter.reading(open) { replay(first, &block) }
+      @snapshotter.reading(@ends) { replay(first, &block) }
     end
 
     private
@@ -167,6 +170,7 @@ module PaperTrailDiff
     # @rbs @events: Array[ActivityEvent]
     # @rbs @snapshotter: untyped
     # @rbs @current: untyped
+    # @rbs @ends: TransactionEnds
     # @rbs @transaction_groups: ActivityTransactionGroups
     # @rbs @root_endpoints: Hash[untyped, untyped]
 
@@ -237,8 +241,9 @@ module PaperTrailDiff
       endpoints = {} #: Hash[untyped, untyped]
       endpoints.compare_by_identity
       @events.each do |event|
+        placed = @ends.sort_key(event.version)
         while @root_versions[root_index] &&
-              Support.compare_versions(@root_versions[root_index], event.version).negative?
+              (@ends.sort_key(@root_versions[root_index]) <=> placed) == -1
           root_index += 1
         end
         endpoint = @root_versions[root_index] || @current || @root_versions.last

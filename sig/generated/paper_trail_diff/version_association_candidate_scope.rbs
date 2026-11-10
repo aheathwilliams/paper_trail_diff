@@ -26,7 +26,7 @@ module PaperTrailDiff
     # before the transaction, so a later version that a transaction across
     # the start saved before it replaced nothing yet. Without the version
     # before it, a record that this transaction moved away is not found, nor
-    # is the transaction (see PreparedHistoryLoader#reload).
+    # is the transaction (see CrossingTransactions).
     #
     # The transaction crosses the start by a version of any record, not only
     # of this one: one that moved a comment away before the start and saved

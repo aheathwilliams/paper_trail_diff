@@ -6,15 +6,9 @@ module PaperTrailDiff
   class PreparedHistory
     attr_reader :activity_index #: PreparedActivityIndex?
 
-    # The transactions that crossed the history's start, keyed as
-    # ActivityTransactionGroups keys a version's; see
-    # PreparedHistoryLoader#reload.
-    attr_reader :opening_transactions #: Array[Array[untyped]]
-
-    #: (PreparedRecordIndex, ?activity_index: PreparedActivityIndex?, ?opening_transactions: Array[Array[untyped]]) -> void
-    def initialize(records, activity_index: nil, opening_transactions: [])
+    #: (PreparedRecordIndex, ?activity_index: PreparedActivityIndex?) -> void
+    def initialize(records, activity_index: nil)
       @records = records
-      @opening_transactions = opening_transactions
       @conditions = ScopeCondition::Cache.new
       @state_reader = PreparedStateAssociationReader.new(records, method(:edge), @conditions)
       @activity_index = activity_index
@@ -23,19 +17,35 @@ module PaperTrailDiff
       @habtm = {} #: Hash[Array[String], Hash[String, Array[untyped]]]
     end
 
+    # How far the transactions of a window's history reach outside it; see
+    # PreparedHistoryLoader. Nil for a history that was not asked, or where
+    # none does.
+    attr_reader :reach #: [untyped, untyped]?
+
+    #: ([untyped, untyped]) -> void
+    def reach=(reach)
+      @reach = reach.compact.empty? ? nil : reach
+    end
+
+    # When the history was read from.
+    #: () -> untyped
+    def start_time = @records.start_time
+
     #: () -> Array[untyped]
     def versions = @records.versions
 
     # See PreparedRecordIndex#reading.
-    #: (Hash[Array[untyped], Array[untyped]]) { () -> void } -> void
-    def reading(open, &block)
-      @records.reading(open, &block)
+    #: (TransactionEnds) { () -> void } -> void
+    def reading(ends, &block)
+      @records.reading(ends, &block)
     end
 
-    #: (untyped) -> Array[untyped]?
-    def open_at(boundary)
-      @records.open_at(boundary)
-    end
+    # See PreparedRecordIndex#transaction_ends.
+    #: (Array[untyped]) -> TransactionEnds
+    def transaction_ends(versions) = @records.transaction_ends(versions)
+
+    #: () -> TransactionEnds?
+    def reading_ends = @records.reading_ends
 
     # Returns every group the edge now holds.
     #: (untyped, untyped, Hash[String, Hash[Symbol, untyped]]) -> Hash[String, Hash[Symbol, untyped]]

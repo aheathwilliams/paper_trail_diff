@@ -185,50 +185,41 @@ An endless range, such as `1.day.ago..`, runs through the current saved state:
 it holds every version saved since it began, whatever time its server's clock
 gave it, and it ends at the current record. `report` uses one.
 
-A window edge that falls inside a transaction moves back to where that
-transaction began, so the whole transaction is in the later window, as it is
-when a range [starts or ends at a version](#choosing-a-range). It moves when
-the transaction saved the root record after the edge, such as a comment edit
-and the `touch: true` article version saved with it, or saved the root before
-the edge and a record of a class on the requested paths after it. A
-transaction that saved the root only before the edge, and nothing on its paths
-after it, moves no edge: the root's change is in the earlier window, with its
-version, even when the transaction went on to save another article. A
-transaction that saved only associated records moves no edge either. When it
-saved some of them before the edge and some after, its changes are still all
-in one window: in the later one when a version it saved after the edge is of a
-record on the requested paths before or after the transaction, and otherwise
-in the earlier one. A polymorphic `belongs_to` names its target's class only in
-each record, so a target saved after the edge moves nothing: the root's change
-is then in the earlier window and the target's in the later one. A
-[transaction group](#one-step-per-transaction-group-transaction) lists in
-`sources` only the versions inside its window. So back-to-back windows, or a
-`report` with `since:` after an earlier report, show each change exactly
-once, credited to the transaction that made it. Each root moves its own
-edges, so in a batch two roots can start a few moments apart. Where a
-transaction began at the very instant another saved its last versions, as two
-can in a table that keeps whole seconds, an edge that moves to the later one's
-start moves on to the earlier one's, so that neither is cut in two.
+A transaction takes effect where it saved its last version, so a window
+reports the transactions that end inside it, each of them whole. One that
+began before the window and ends inside it is reported there, with what it
+saved before the window: a comment edit, say, and the `touch: true` article
+version saved with it after the window's start. One that begins inside the
+window and ends after it is left to the window its last version is in. So
+back-to-back windows, or a `report` with `since:` after an earlier report,
+show each change exactly once, credited to the transaction that made it and to
+its own version, and a
+[transaction group](#one-step-per-transaction-group-transaction) lists every
+version its transaction saved, wherever they fall.
 
-`analysis.window` is the window an `Analysis` covers after any such move, as a
-Ruby range, endless for `report` and any other endless window. It is `nil` when
-`within:` or `since:` was not given. Every step of the analysis is inside it,
-so to check a step against the window, use `analysis.window` rather than the
-range you passed: a step at the start of a moved window begins before the time
-you asked for.
+Where a transaction ends is read from its version table: the last version it
+saved there, of any record, on the requested paths or not. So every window
+places a transaction alike, whichever of its records the window reads. A
+version table whose ids do not count up, such as one keyed by UUID, names the
+last version by when it was saved. Without associations, each version of the
+record is reported where it was saved, since nothing else of its transaction
+is read. `timeline` compares the record's own versions, and reports each
+where it was saved too.
+
+Two transactions that save in one record's tree at the same time interleave
+their versions. Each is reported as if it ran alone, in the order they end: a
+record reads as it stood before every transaction that had not ended yet.
+
+The window itself does not move. `analysis.window` is the window you asked
+for, as a Ruby range, endless for `report` and any other endless window, and
+`nil` when `within:` or `since:` was not given. A step of a transaction that
+began before the window can hold a version saved before `analysis.window`
+begins.
 
 ```ruby
 analysis = PaperTrailDiff.analyze_many(articles, within: window, activity: true).values.first
-analysis.window # => window, or one that starts earlier
+analysis.window # => window
 ```
-
-Each move emits a `moved_window.paper_trail_diff` notification whose payload
-has `item_type`, `item_id`, the `requested` range, and the moved `window`. In
-history saved by your application, an edge moves back by the time one
-transaction took, usually well under a second. A move of minutes or days
-means a transaction ran that long, or that the versions' times were changed
-after they were saved, as a test might do; see
-[writing history in tests](#writing-history-in-tests).
 
 A closed window can still change. PaperTrail stamps a version's `created_at`
 when it builds the version, inside its transaction, and the transaction commits
@@ -855,10 +846,11 @@ report = PaperTrailDiff.report(
 )
 ```
 
-The filter checks the record as it was when its window started and after each
-change made inside it. That window is the one its analysis covers
-(`analysis.window`): a transaction that crosses an edge moves the edge to where
-the transaction began (see [time windows](#time-windows)). A record matches if
+The filter checks the record as it was when the window started and after each
+change saved inside it. It reads each version where it was saved, not where
+its transaction ended (see [time windows](#time-windows)), so a record whose
+transaction began before the window and ends inside it is checked from the
+state its versions before the window left. A record matches if
 any of those states match. With a
 hash, every key must be equal (`==`) once both sides are cast to the
 attribute's type, as `where` casts its values: `{ status: :published }` matches
@@ -1622,8 +1614,9 @@ transaction saved does. The other's changes appear from the event after its
 last version, in a step it opens, so a record it changed and changed back,
 such as a comment it created and deleted again, appears in no step and in no
 window's starting state or diff. A transaction is open from its first
-version to its last on the requested paths in the range, or from the range's
-start when it began before it. Row locks keep the two from saving the same
+version on the requested paths in the range, or from the range's start when
+it began before it, to the last version it saved of any record in the same
+version table. Row locks keep the two from saving the same
 record. The association shapes below that fall back to PT-AT's own reifier
 still read by time.
 
@@ -1703,7 +1696,6 @@ subscribe to:
 - `load_live_endpoints.paper_trail_diff`
 - `prepare_history.paper_trail_diff`
 - `ambiguous_association_boundary.paper_trail_diff`
-- `moved_window.paper_trail_diff`, when a [window edge moves](#time-windows)
 
 ```ruby
 ActiveSupport::Notifications.subscribe(/\.paper_trail_diff\z/) do |name, start, finish, _id, payload|
@@ -1784,11 +1776,8 @@ Results can only be as complete as the history PaperTrail and PT-AT recorded.
 - A savepoint that rolls back, or another transaction saving in the same tree
   at the same time, can split one transaction into several transaction groups;
   see [one step per transaction group](#one-step-per-transaction-group-transaction).
-- A range that ends while a transaction saving in the tree is still open,
-  with another transaction's version between its last version in the range
-  and the range's end, reads the records it saved as it had left them at the
-  end: the range cannot see that the transaction saved again after it. See
-  [version order](#version-order).
+- A transaction that saves in two version tables is read in each as far as
+  its versions there: where it ends is read from one version table at a time.
 - HABTM membership history exists only where PT-AT recorded it in a
   transaction, and only for the root record without a scope: a scoped HABTM,
   or one below the root, raises `UnsupportedAssociationError`, and a transaction that another record with

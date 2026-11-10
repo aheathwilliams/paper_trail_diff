@@ -15,13 +15,10 @@ module PaperTrailDiff
     # first for most of them.
     attr_reader :children #: PreparedChildCandidates
 
-    # `opening` names the transactions that crossed the range's start, as
-    # ActivityTransactionGroups keys them.
-    #: (PreparedRecordIndex, Array[untyped], start_at: untyped, ?opening: Array[Array[untyped]]) -> void
-    def initialize(records, root_versions, start_at:, opening: [])
+    #: (PreparedRecordIndex, Array[untyped], start_at: untyped) -> void
+    def initialize(records, root_versions, start_at:)
       @records = records
       @start_at = start_at
-      @opening = opening.to_set
       @children = PreparedChildCandidates.new(start_at)
       @roots = root_versions.group_by { |version| Endpoint.identity(version) }
       @nodes = {} #: Hash[String, Array[untyped]]
@@ -30,6 +27,10 @@ module PaperTrailDiff
       @rows = {} #: Hash[untyped, Hash[String, Array[untyped]]]
       @conditions = ScopeCondition::Cache.new
     end
+
+    # See PreparedRecordIndex#transaction_ends.
+    #: (Array[untyped]) -> TransactionEnds
+    def transaction_ends(versions) = @records.transaction_ends(versions)
 
     #: (untyped, Array[untyped]) -> void
     def register(model, ids)
@@ -126,7 +127,6 @@ module PaperTrailDiff
 
     # @rbs @records: PreparedRecordIndex
     # @rbs @start_at: untyped
-    # @rbs @opening: Set[Array[untyped]]
     # @rbs @roots: Hash[Array[String], Array[untyped]]
     # @rbs @nodes: Hash[String, Array[untyped]]
     # @rbs @targets: Hash[untyped, untyped]
@@ -257,7 +257,7 @@ module PaperTrailDiff
       end
       versions.take(after).drop(first).all? do |version|
         key = ActivityTransactionGroups.transaction_key(version)
-        !key.nil? && (@opening.include?(key) || later.include?(key))
+        !key.nil? && later.include?(key)
       end
     end
 

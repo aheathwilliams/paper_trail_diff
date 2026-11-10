@@ -95,58 +95,14 @@ RSpec.describe PaperTrailDiff::TimelineRange do
   end
 
   describe 'a window' do
-    let(:moved) { PaperTrailDiff::TimeRange.new((start_time - 60)...(start_time + 3600)) }
+    it "reads it as the record's version table keeps times, and keeps one a batch read" do
+      read = PaperTrailDiff::TimeRange.new(window)
+      allow(PaperTrailDiff::TimeRange).to receive(:for).and_return(read)
 
-    # As Support.versioned? tells a model PaperTrail tracks.
-    let(:versioned_record) do
-      Class.new(self.class.record_class) { def self.paper_trail_options = {} }.new
-    end
-
-    # The window is read as the record's version table keeps times, which
-    # this record has none of.
-    def versioned(windows)
-      allow(PaperTrailDiff::TimeRange).to receive(:for) { |within, _| PaperTrailDiff::TimeRange.new(within) }
-      allow(PaperTrailDiff::TransactionCut).to receive(:windows).and_return(windows)
-    end
-
-    def versioned_range(within, **options)
-      described_class.new(versioned_record, from: nil, to: nil, within: within, **options)
-    end
-
-    # The requested paths decide which transactions move an edge.
-    it 'moves its edges to transaction edges for a versioned record' do
-      versioned('5' => moved)
-      paths = instance_double(PaperTrailDiff::AssociationTraversal)
-
-      expect(versioned_range(window, traversal: paths).time_range).to equal(moved)
-      expect(PaperTrailDiff::TimeRange).to have_received(:for).with(window,
-                                                                    [versioned_record.class])
-      expect(PaperTrailDiff::TransactionCut)
-        .to have_received(:windows) do |model, records, asked, traversal:|
-          expect([model, records, asked.begin_time, asked.end_time, asked.exclude_end?, traversal])
-            .to eq([versioned_record.class, [versioned_record], start_time, start_time + 3600,
-                    true, paths])
-        end
-    end
-
-    it 'keeps the window when no transaction crosses an edge' do
-      versioned('6' => moved)
-
-      expect(versioned_range(window).time_range.begin_time).to eq(start_time)
-    end
-
-    it 'keeps a window a batch already moved' do
-      versioned('5' => PaperTrailDiff::TimeRange.new(window))
-
-      expect(versioned_range(moved, plan: plan).time_range).to equal(moved)
-      expect(PaperTrailDiff::TransactionCut).not_to have_received(:windows)
-    end
-
-    it 'does not look for transactions of an unversioned record' do
-      allow(PaperTrailDiff::TransactionCut).to receive(:windows)
-
-      expect(range(within: window).time_range.begin_time).to eq(start_time)
-      expect(PaperTrailDiff::TransactionCut).not_to have_received(:windows)
+      expect(range(within: window).time_range).to equal(read)
+      expect(PaperTrailDiff::TimeRange).to have_received(:for).with(window, [record.class]).once
+      expect(range(within: read, plan: plan).time_range).to equal(read)
+      expect(PaperTrailDiff::TimeRange).to have_received(:for).once
     end
 
     it 'keeps versions created inside it' do

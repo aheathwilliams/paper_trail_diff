@@ -2,12 +2,12 @@
 
 require_relative '../support/association_database'
 
-# A window edge inside a transaction moves back to where it began (see
-# TransactionCut). An edge is an instant, though, and where the versions
-# column keeps whole seconds, or the clock that dated them stood still, a
+# A window reports the transactions that end inside it (see TransactionEnds),
+# and reads the one across its start from where it began. Where the versions
+# column keeps whole seconds, or the clock that dated them stood still, that
 # transaction can begin at the instant the one before it saved its last
-# versions. The edge moved there would cut that earlier transaction in two.
-RSpec.describe 'A window edge moved to an instant another transaction ends at' do
+# versions. The earlier one ended before the window, which leaves it out.
+RSpec.describe 'A window read from an instant another transaction ends at' do
   let(:base) { Time.utc(2026, 3, 1, 12) }
   let(:article) { TrackedArticle.create!(title: 'First') }
   let(:comment) { article.comments.create!(body: 'before') }
@@ -79,22 +79,22 @@ RSpec.describe 'A window edge moved to an instant another transaction ends at' d
   %i[single batch].each do |method|
     context "when read #{method}" do
       # The edge is inside the second transaction, which began at 20 s, the
-      # instant the first saved the article. Cut there, the first
-      # transaction's comment edit would surface in the second's step.
-      it 'reports each transaction whole, in the later window' do
+      # instant the first saved the article and ended.
+      it 'reports each transaction whole, in the window it ends in' do
         edge = base + 25
         whole = changes((base + 5).., method)
 
         expect(changes((base + 5)...edge, method) + changes(edge.., method)).to eq(whole)
-        expect(changes(edge.., method)).to eq(whole)
+        expect(changes((base + 5)...edge, method)).to eq([%w[Second after]])
+        expect(changes(edge.., method)).to eq([['Third'], ['new']])
       end
 
-      it 'moves the later window to where the earlier transaction began' do
+      it 'leaves the later window where it was asked for' do
         analysis = PaperTrailDiff.analyze_many(
           [article.reload], within: (base + 25).., activity: true, associations: paths
         ).values.first
 
-        expect(analysis.window.begin).to eq(base + 10)
+        expect(analysis.window.begin).to eq(base + 25)
       end
     end
   end

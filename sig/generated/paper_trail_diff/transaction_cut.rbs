@@ -1,52 +1,23 @@
 # Generated from lib/paper_trail_diff/transaction_cut.rb with RBS::Inline
 
 module PaperTrailDiff
-  # Answers where an edge of a history really starts: where the transactions
-  # that cross it began. Three edges ask it. A wall-clock window's edges move
-  # back to the start of a root's transaction that crosses them (`windows`),
-  # so the transaction is wholly in the later window; a range of versions
-  # starts before its roots' first transactions (`range_start`); and a
-  # history read from a window's start is read again from where the
-  # transactions that cross that start began (OpeningTransactions). A
-  # window's edges find where their transactions began with `starts`; the
-  # other two, which know a version each transaction saved after the edge,
-  # with `continued_starts`.
+  # Answers where a range of versions really starts: where the transactions
+  # of its roots' first versions began (`range_start`).
   #
   # PT-AT reads a root's associations at the start of the transaction of the
-  # root version it reifies. A window starting just after a child saved its
-  # part of such a transaction therefore starts from the state before that
-  # child's change, and one ending there ends at it too, so the change belonged
-  # to no window and surfaced at the next transaction, under its author.
-  #
-  # Only the root's own versions on either side of an edge are consulted:
-  # rows locked by an update keep two transactions of one root from
-  # interleaving, so a transaction holding a root version and crossing the edge
-  # holds the root's nearest version on one side of it. One that saved the root
-  # after the edge moves it. One that saved the root only before the edge moves
-  # it only when it saved a record of a type on the requested paths after it,
-  # which the root's history reads: without one, the root's change is in the
-  # earlier window, where its version is, as selecting by a window's versions
-  # finds it, and ScopedRootSelection selects the roots such a move brings into
-  # a window. Each edge is moved from where it was asked for, never from where
-  # another edge moved, so adjacent windows move their shared edge alike.
+  # root version it reifies, so a range that starts at a version starts
+  # before whatever that version's transaction saved earlier. A wall-clock
+  # window does not move: it reports the transactions that end inside it
+  # (see TransactionEnds and CrossingTransactions).
   module TransactionCut
-    # One edge of a window. A strict edge keeps versions recorded at its
+    # An instant that a transaction can cross. A strict edge keeps versions recorded at its
     # instant on the left, as an inclusive end does. A plain class rather than
     # Data.define, which arrived in Ruby 3.2 while this gem supports 3.1.
     class Edge
-      # A window's start, which keeps versions recorded at it on the right.
-      # : (TimeRange) -> Edge
-      def self.start_of: (TimeRange) -> Edge
-
       # A history's start at an instant, which keeps versions recorded at it
       # on the right.
       # : (Time) -> Edge
       def self.start_at: (Time) -> Edge
-
-      # A window's end, strict when the window includes it; an endless window
-      # has none.
-      # : (TimeRange) -> Edge?
-      def self.end_of: (TimeRange) -> Edge?
 
       # : (Time, bool) -> void
       def initialize: (Time, bool) -> void
@@ -62,14 +33,6 @@ module PaperTrailDiff
       @time: Time
     end
 
-    # The same as `windows` for a batch of roots, keyed by identity.
-    # : (Array[untyped], TimeRange?, ?traversal: AssociationTraversal?) -> Hash[Array[String], TimeRange]
-    def self.batch_windows: (Array[untyped], TimeRange?, ?traversal: AssociationTraversal?) -> Hash[Array[String], TimeRange]
-
-    # Where history for a batch must be read from: the earliest moved start.
-    # : (TimeRange?, Hash[Array[String], TimeRange]) -> Time?
-    def self.earliest_start: (TimeRange?, Hash[Array[String], TimeRange]) -> Time?
-
     # A range starting at a version starts before that version's transaction,
     # as PT-AT reads associations there. A version saved earlier in the same
     # transaction, such as the child update behind a `touch: true` parent
@@ -84,132 +47,6 @@ module PaperTrailDiff
     # : (Array[untyped], untyped) -> Array[untyped]
     def self.opening_versions: (Array[untyped], untyped) -> Array[untyped]
 
-    # The windows that move, keyed by root id. A root missing from the result
-    # keeps the window as asked. `traversal` names the requested paths.
-    # `records` may be ids. Each move is reported unless `report` is false,
-    # for a reader that looks before the analysis that reports them.
-    # : (untyped, Array[untyped], TimeRange, ?traversal: AssociationTraversal?, ?report: bool) -> Hash[String, TimeRange]
-    def self.windows: (untyped, Array[untyped], TimeRange, ?traversal: AssociationTraversal?, ?report: bool) -> Hash[String, TimeRange]
-
-    # Reads the windows of `model_class` ids for a range, unreported.
-    # : (untyped, AssociationTraversal?) -> ^(Array[String], TimeRange) -> Hash[String, TimeRange]
-    def self.reader: (untyped, AssociationTraversal?) -> ^(Array[String], TimeRange) -> Hash[String, TimeRange]
-
-    # A transaction holds its rows only while it runs, so in history as an
-    # application saves it an edge moves by moments. A longer move means a
-    # long transaction or rewritten times, which only the application can
-    # judge, so each move is reported rather than logged or refused.
-    # : (untyped, String, TimeRange, TimeRange) -> void
-    def self.report_move: (untyped, String, TimeRange, TimeRange) -> void
-
-    # The model's versions in a window, and those saved before it in a
-    # transaction that saved a record of one of `types` inside it, which
-    # moves their root's window back to take them in: the versions that
-    # select a root for the window. Without a window, every version does.
-    # : (untyped, TimeRange?, Array[String]) -> untyped
-    def self.window_versions: (untyped, TimeRange?, Array[String]) -> untyped
-
-    # : (untyped, untyped, TimeRange, Array[String]) -> untyped
-    def self.crossing_versions: (untyped, untyped, TimeRange, Array[String]) -> untyped
-
-    # : (untyped) -> untyped
-    def self.transaction_versions: (untyped) -> untyped
-
-    # : (untyped) -> bool
-    def self.transactional?: (untyped) -> bool
-
-    # Each root's earliest start among its transactions that cross the edge:
-    # the one that saved its first version after the edge, which crosses when
-    # it began before it, and the one that saved its last version before it,
-    # which crosses when it saved a record of one of `types` after it.
-    #
-    # An edge is an instant, and a transaction can begin at the instant
-    # another saved its last versions, where the column keeps whole seconds
-    # or the clock that dated them did not move. An edge moved to where the
-    # first began would then fall inside the second, so the roots whose edge
-    # moved are read again from where it moved to, until none moves. Each
-    # root still moves from where its edge was asked for, by the same steps
-    # whichever window asks, so adjacent windows move their shared edge alike.
-    # : (untyped, Array[untyped], Edge, Array[String]) -> Hash[String, Time]
-    def self.moved_edges: (untyped, Array[untyped], Edge, Array[String]) -> Hash[String, Time]
-
-    # Where the edges that moved move again, read from where each moved to. A
-    # moved edge starts the later window, so it keeps the versions saved at
-    # its instant on the right.
-    # : (untyped, Hash[String, Time], Array[String]) -> Hash[String, Time]
-    def self.settled: (untyped, Hash[String, Time], Array[String]) -> Hash[String, Time]
-
-    # : (untyped, Array[untyped], Edge, Array[String]) -> Hash[String, Time]
-    def self.crossed_edges: (untyped, Array[untyped], Edge, Array[String]) -> Hash[String, Time]
-
-    # For each side of the edge, the roots its transactions hold next to the
-    # edge, and where those that cross it began.
-    # : (untyped, Array[untyped], Edge, Array[String]) -> Array[[Hash[untyped, Array[String]], Hash[untyped, Time]]]
-    def self.crossing: (untyped, Array[untyped], Edge, Array[String]) -> Array[[ Hash[untyped, Array[String]], Hash[untyped, Time] ]]
-
-    # The roots whose versions next to the edge each transaction holds, those
-    # after the edge and those before it.
-    # : (untyped, Array[untyped], Edge) -> [Hash[untyped, Array[String]], Hash[untyped, Array[String]]]
-    def self.nearest_roots: (untyped, Array[untyped], Edge) -> [ Hash[untyped, Array[String]], Hash[untyped, Array[String]] ]
-
-    # The roots of the rows, by the transaction each row names.
-    # : (Array[[String, untyped, bool]]) -> Hash[untyped, Array[String]]
-    def self.by_transaction: (Array[[ String, untyped, bool ]]) -> Hash[untyped, Array[String]]
-
-    # Each root's nearest versions on either side of an edge, as [id,
-    # transaction, after the edge] rows; versions tied at the nearest instant
-    # are all kept. One statement per slice: a grouped pass over the roots'
-    # versions finds both instants, and a join reads the versions saved at
-    # either. A lookup per root, joined by UNION ALL, took SQL Server about a
-    # second per 200 roots to compile. Rows read without a model come back as
-    # the adapter returns them, so the transaction is cast as the grouped
-    # query's keys are.
-    #
-    # The ids go to the adapter as bound parameters. Written into the
-    # statement, they made each slice's text new to SQL Server, which compiled
-    # it again, at about 0.05 ms per id.
-    # : (untyped, Array[untyped], Edge) -> Array[[String, untyped, bool]]
-    def self.nearest: (untyped, Array[untyped], Edge) -> Array[[ String, untyped, bool ]]
-
-    # The roots' versions saved in a transaction at either nearest instant,
-    # each with whether it is the one after the edge.
-    # : (untyped, Array[untyped], Edge) -> untyped
-    def self.nearest_query: (untyped, Array[untyped], Edge) -> untyped
-
-    # 1 for a version saved at the instant after the edge, 0 for one before.
-    # Only the 1 is read (see after_edge?), so another value or alias, or none,
-    # answers the same.
-    # mutant:disable
-    # : (untyped, untyped) -> untyped
-    def self.after_edge: (untyped, untyped) -> untyped
-
-    # Whether after_edge flagged a row as saved after the edge. Adapters
-    # return the flag as an Integer or a String, so any spelling that reads
-    # only 1 as after answers the same.
-    # mutant:disable
-    # : (untyped) -> bool
-    def self.after_edge?: (untyped) -> bool
-
-    # Each root's latest instant before the edge and earliest after it, from
-    # every version, saved in a transaction or not.
-    # : (untyped, Edge) -> untyped
-    def self.nearest_instants: (untyped, Edge) -> untyped
-
-    # The latest or earliest of the times on one side of the edge.
-    # : (untyped, untyped, untyped) -> untyped
-    def self.side_instant: (untyped, untyped, untyped) -> untyped
-
-    # The same root's versions saved at either of its instants.
-    # : (untyped, untyped) -> untyped
-    def self.at_either: (untyped, untyped) -> untyped
-
-    # Where each of the transactions that saved a version before the edge
-    # began, by transaction; with `types`, only one that also saved a record
-    # of one of them after it. Of transactions that share a number, only one
-    # no anchor separates from the edge counts (see TransactionAnchors).
-    # : (untyped, Array[untyped], Edge, ?Array[String]?) -> Hash[untyped, Time]
-    def self.starts: (untyped, Array[untyped], Edge, ?Array[String]?) -> Hash[untyped, Time]
-
     # Where the transactions of these versions, saved after the edge, began,
     # for those that saved a version before it. Of transactions that share a
     # number, only the one each version is in counts (see TransactionAnchors).
@@ -218,24 +55,7 @@ module PaperTrailDiff
 
     # The earliest version before the edge of each transaction the block
     # picks from these versions, one statement per 500 of them.
-    # : [T] (untyped, Array[T], Edge) { (Array[T], untyped) -> untyped } -> Hash[untyped, Time]
-    def self.began: [T] (untyped, Array[T], Edge) { (Array[T], untyped) -> untyped } -> Hash[untyped, Time]
-
-    # Those of the transactions that saved a version of a record of one of
-    # `types` on the edge's later side. A subquery apart from the outer one,
-    # rather than an EXISTS correlated with it, so the database finds them
-    # once by transaction: SQLite answered the correlated form by scanning
-    # every later version of the types for each version before the edge, with
-    # the README's indexes 17 s for 450 transactions on 114,000 versions.
-    # Only the outer query's transactions are read, so the database can find
-    # them by transaction rather than read every later version of the types;
-    # the outer query keeps only those anyway, so no spec can tell the
-    # mutation that drops them apart.
-    # mutant:disable
-    # : (untyped, Array[untyped], Edge, Array[String]) -> untyped
-    def self.saved_later: (untyped, Array[untyped], Edge, Array[String]) -> untyped
-
-    # : (TimeRange, Time?, Time?) -> TimeRange
-    def self.moved: (TimeRange, Time?, Time?) -> TimeRange
+    # : (untyped, Array[untyped], Edge) { (Array[untyped], untyped) -> untyped } -> Hash[untyped, Time]
+    def self.began: (untyped, Array[untyped], Edge) { (Array[untyped], untyped) -> untyped } -> Hash[untyped, Time]
   end
 end

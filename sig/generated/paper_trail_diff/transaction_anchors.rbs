@@ -8,8 +8,8 @@ module PaperTrailDiff
   # version the transaction saves, in any table. Two tables count their ids
   # apart, so a transaction that began in one can take the number of another
   # that began elsewhere, and a table then holds versions of both under one
-  # number. Read by number alone, a window's edge inside the later one moved
-  # back to where the earlier one began, which can be years before.
+  # number. Read by number alone, a window that starts inside the later one
+  # is read from where the earlier one began, which can be years before.
   #
   # The version a transaction saved first carries its own id as its number:
   # its anchor, saved when the transaction began. Two versions of one number
@@ -38,6 +38,16 @@ module PaperTrailDiff
     # one of these.
     # : (untyped, untyped, TransactionCut::Edge, Array[untyped]) -> untyped
     def self.continued: (untyped, untyped, TransactionCut::Edge, Array[untyped]) -> untyped
+
+    # Those of the numbers that more than one transaction took: each the id
+    # of the first version of a transaction in more than one version table.
+    # None when the model's version table is the only one.
+    # : (untyped, Array[untyped]) -> Array[untyped]
+    def self.shared: (untyped, Array[untyped]) -> Array[untyped]
+
+    # The ids among these of the versions that began a transaction.
+    # : (untyped, Array[untyped]) -> Array[untyped]
+    def self.first_ids: (untyped, Array[untyped]) -> Array[untyped]
 
     # The version classes whose ids can number a transaction of this one's
     # versions, one for each table, in the order of their tables' names.

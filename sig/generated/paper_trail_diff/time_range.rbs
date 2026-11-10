@@ -47,6 +47,12 @@ module PaperTrailDiff
     # : () -> Range[Time?]
     def to_range: () -> Range[Time?]
 
+    # The window widened to start at `earliest` and to run through `latest`,
+    # each where it is given and lies outside the window: what a window reads
+    # when transactions cross its edges (see PreparedHistoryLoader).
+    # : (untyped, untyped) -> TimeRange
+    def widened: (untyped, untyped) -> TimeRange
+
     # The versions after the window; none follows an endless one.
     # : (untyped) -> untyped
     def trailing_scope: (untyped) -> untyped

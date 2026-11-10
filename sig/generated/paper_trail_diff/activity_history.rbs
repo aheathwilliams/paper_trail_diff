@@ -56,8 +56,6 @@ module PaperTrailDiff
 
     @include_step: untyped
 
-    @opening: Array[Array[untyped]]?
-
     @passed_reported: bool?
 
     @previous_attribution: ChangeAttribution?
@@ -108,16 +106,10 @@ module PaperTrailDiff
     # : (ActivityEvent, ActivityBoundary) -> ChangeAttribution?
     def attribution: (ActivityEvent, ActivityBoundary) -> ChangeAttribution?
 
-    # The boundaries kept so far of the event's transaction, and whether the
-    # history holds all of it. A version saved outside a transaction is a
-    # transaction of its own.
-    # : (ActivityEvent) -> [ChangeAttribution::Transaction, bool]
-    def transaction_of: (ActivityEvent) -> [ ChangeAttribution::Transaction, bool ]
-
-    # The transactions that began before the history did (see
-    # PreparedHistoryLoader#reload).
-    # : () -> Array[Array[untyped]]
-    def opening: () -> Array[Array[untyped]]
+    # The boundaries kept so far of the event's transaction. A version saved
+    # outside a transaction is a transaction of its own.
+    # : (ActivityEvent) -> ChangeAttribution::Transaction
+    def transaction_of: (ActivityEvent) -> ChangeAttribution::Transaction
 
     # : (ActivityEvent) -> void
     def pass: (ActivityEvent) -> void

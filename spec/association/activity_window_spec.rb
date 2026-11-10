@@ -115,8 +115,9 @@ RSpec.describe 'Activity over a window',
 
     expect(PaperTrailDiff::RootVersionSelection).to have_received(:new)
       .with(hash_including(context_required: false)).once
+    # Once to read the window, and once for what it reports.
     expect(PaperTrailDiff::RootVersionSelection).to have_received(:new)
-      .with(hash_including(context_required: true)).once
+      .with(hash_including(context_required: true)).twice
   end
 
   it 'closes on the live row when nothing recorded follows it, read when it was built' do

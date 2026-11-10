@@ -18,7 +18,7 @@ module PaperTrailDiff
     # : () -> Array[ActivityStep]
     def build: () -> Array[ActivityStep]
 
-    # The window the range covers once its edges have moved to transactions.
+    # The window the range covers, as it was asked for.
     # : () -> TimeRange?
     def window: () -> TimeRange?
 
@@ -28,6 +28,8 @@ module PaperTrailDiff
     def analyze: () -> Analysis
 
     private
+
+    @ends: TransactionEnds?
 
     @filter: ActivityScopeFilter?
 
@@ -83,10 +85,12 @@ module PaperTrailDiff
     def select_plan: () -> RootVersionPlan
 
     # Whether the event's step is reported: it is inside the range, and a
-    # version filter keeps it. With associations the filter keeps whole
-    # transactions (see ActivityScopeFilter). On the root alone it keeps the
-    # root's versions, as `timeline` does, and so does a plan without one, but
-    # for the version it holds only to reveal the last change in it.
+    # version filter keeps it. A window holds an event when it holds the last
+    # version of the event's transaction (see TransactionEnds). With
+    # associations the filter keeps whole transactions (see
+    # ActivityScopeFilter). On the root alone it keeps the root's versions, as
+    # `timeline` does, and so does a plan without one, but for the version it
+    # holds only to reveal the last change in it.
     # : (ActivityEvent, RootVersionPlan) -> bool
     def reported?: (ActivityEvent, RootVersionPlan) -> bool
 
@@ -107,8 +111,10 @@ module PaperTrailDiff
 
     # The range's events up to its last root version, or to the instant the
     # live record it closes on was read, with the history they are read from.
-    # : (RootVersionPlan, untyped) -> [Array[ActivityEvent], untyped]
-    def range_events: (RootVersionPlan, untyped) -> [ Array[ActivityEvent], untyped ]
+    # A window's history says how far its transactions reach outside it;
+    # `reach` says not to ask, of a history read for that reach.
+    # : (RootVersionPlan, untyped, ?start_at: untyped, ?reach: bool) -> [Array[ActivityEvent], untyped]
+    def range_events: (RootVersionPlan, untyped, ?start_at: untyped, ?reach: bool) -> [ Array[ActivityEvent], untyped ]
 
     # : () -> [RecordSnapshot?, untyped]
     def capture_current: () -> [ RecordSnapshot?, untyped ]
@@ -125,12 +131,26 @@ module PaperTrailDiff
     # A window closing on current state runs to the instant it is captured,
     # not to the last root version, or descendants that moved after that
     # version would be missing from a report that claims to reach now.
+    #
+    # The events are read from the window widened to where the transactions
+    # across its edges began and ended, and replayed whole; the window reports
+    # those whose transactions end inside it. The live record is read only
+    # once something in the window is reported.
     # : () -> [RootVersionPlan, ActivityHistory, Array[ActivityStep], RecordSnapshot?, RecordSnapshot?, untyped]?
     def window_replay: () -> [ RootVersionPlan, ActivityHistory, Array[ActivityStep], RecordSnapshot?, RecordSnapshot?, untyped ]?
 
-    # The live record is read only once something in the window is reported.
-    # : (RootVersionPlan, untyped, untyped) -> [RootVersionPlan, ActivityHistory, Array[ActivityStep], RecordSnapshot?, RecordSnapshot?, untyped]?
-    def window_activity: (RootVersionPlan, untyped, untyped) -> [ RootVersionPlan, ActivityHistory, Array[ActivityStep], RecordSnapshot?, RecordSnapshot?, untyped ]?
+    # The plan of every root version the window's transactions reach, its
+    # events, their history, and when the live record it closes on was read.
+    # : () -> [RootVersionPlan?, Array[ActivityEvent]?, untyped, untyped]
+    def window_events: () -> [ RootVersionPlan?, Array[ActivityEvent]?, untyped, untyped ]
+
+    # : (RootVersionPlan, **untyped) -> [Array[ActivityEvent], untyped, untyped]
+    def events_through: (RootVersionPlan, **untyped) -> [ Array[ActivityEvent], untyped, untyped ]
+
+    # On the root alone a version is reported where it was saved, and the
+    # plan is the one that selected it.
+    # : (RootVersionPlan, Array[ActivityEvent], untyped) -> RootVersionPlan
+    def reporting_plan: (RootVersionPlan, Array[ActivityEvent], untyped) -> RootVersionPlan
 
     # The step that closes the range after its last event, which is reported
     # as that event's step would be. It runs from the last boundary the
@@ -162,15 +182,19 @@ module PaperTrailDiff
 
     # A window prepares from its start, explicit endpoints from their first
     # version.
-    # : (Array[untyped], end_at: untyped) -> untyped
-    def prepare_history: (Array[untyped], end_at: untyped) -> untyped
+    # : (Array[untyped], start_at: untyped, end_at: untyped, reach: bool) -> untyped
+    def prepare_history: (Array[untyped], start_at: untyped, end_at: untyped, reach: bool) -> untyped
 
-    # A window collects from its start, explicit endpoints from their first
+    # A window collects from where its history starts, which is where the
+    # transactions across its start began; explicit endpoints from their first
     # version. Explicit endpoints also stop before the rest of the closing
     # version's transaction (see ActivityTransactionGroups.before_closing); a
     # window keeps every event it collected and reports only those inside it.
     # : (Array[untyped], untyped, range_end: untyped) -> Array[ActivityEvent]
     def collect_events: (Array[untyped], untyped, range_end: untyped) -> Array[ActivityEvent]
+
+    # : (untyped) -> untyped
+    def range_start: (untyped) -> untyped
 
     # A version filter reads its answers for a batch's history once, for the
     # first root that history serves.
@@ -180,8 +204,10 @@ module PaperTrailDiff
     # Events after the last root version read the root from the live record
     # when the range closes on it. Explicit endpoints report every step their
     # plan does, as their range includes every version.
-    # : (RootVersionPlan, Array[ActivityEvent], untyped, current: untyped, closing: RecordSnapshot?) -> ActivityHistory
-    def replay: (RootVersionPlan, Array[ActivityEvent], untyped, current: untyped, closing: RecordSnapshot?) -> ActivityHistory
+    # `wide` holds every root version among the events, which a window's plan
+    # need not.
+    # : (RootVersionPlan, RootVersionPlan, Array[ActivityEvent], untyped, current: untyped, closing: RecordSnapshot?) -> ActivityHistory
+    def replay: (RootVersionPlan, RootVersionPlan, Array[ActivityEvent], untyped, current: untyped, closing: RecordSnapshot?) -> ActivityHistory
 
     # The root as a change row's `record` would name it. A root is a record,
     # or a deleted one rebuilt from its destroy (see DeletedAnalysisBatch).

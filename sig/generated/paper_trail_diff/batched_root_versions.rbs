@@ -6,8 +6,8 @@ module PaperTrailDiff
   # every root are supported: a shared wall-clock window, or each root's own
   # whole history.
   class BatchedRootVersions
-    # : (Array[untyped], time_range: TimeRange?, version_scope: untyped, live_endpoints: Hash[Array[String], untyped]?, context_required: bool, whole: bool, windows: Hash[Array[String], TimeRange]) -> void
-    def initialize: (Array[untyped], time_range: TimeRange?, version_scope: untyped, live_endpoints: Hash[Array[String], untyped]?, context_required: bool, whole: bool, windows: Hash[Array[String], TimeRange]) -> void
+    # : (Array[untyped], time_range: TimeRange?, version_scope: untyped, live_endpoints: Hash[Array[String], untyped]?, context_required: bool, whole: bool) -> void
+    def initialize: (Array[untyped], time_range: TimeRange?, version_scope: untyped, live_endpoints: Hash[Array[String], untyped]?, context_required: bool, whole: bool) -> void
 
     # Returns a plan per record identity.
     # : () -> Hash[Array[String], RootVersionPlan]
@@ -27,21 +27,12 @@ module PaperTrailDiff
 
     @whole: bool
 
-    @windows: Hash[Array[String], TimeRange]
-
     # Each statement reads the versions of 500 roots.
     # : (untyped, Array[untyped], Hash[Array[String], RootVersionPlan]) -> void
     def select_model: (untyped, Array[untyped], Hash[Array[String], RootVersionPlan]) -> void
 
-    # Each root's own versions, and the first after its window (see OwnWindow).
-    # : (Array[String], String, Hash[String, Array[untyped]], Hash[String, untyped]) -> [Array[untyped], untyped]
-    def own_window: (Array[String], String, Hash[String, Array[untyped]], Hash[String, untyped]) -> [ Array[untyped], untyped ]
-
     # : (untyped, Array[untyped]) -> [Hash[String, Array[untyped]], Set[untyped]?, Hash[String, untyped]]
     def model_versions: (untyped, Array[untyped]) -> [ Hash[String, Array[untyped]], Set[untyped]?, Hash[String, untyped] ]
-
-    # : (Array[untyped]) -> TimeRange?
-    def widest_range: (Array[untyped]) -> TimeRange?
 
     # : (Array[untyped], untyped, Set[untyped]?, untyped) -> RootVersionPlan
     def versions_for: (Array[untyped], untyped, Set[untyped]?, untyped) -> RootVersionPlan

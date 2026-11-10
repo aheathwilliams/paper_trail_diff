@@ -158,8 +158,7 @@ module PaperTrailDiff
     def timeline_builder(record, from:, to:, within:, version_scope:, live_endpoint:) # rubocop:disable Metrics/ParameterLists
       TimelineBuilder.new(
         record, from: from, to: to, within: within, version_scope: version_scope,
-                live_endpoint: live_endpoint, snapshotter: @timeline_snapshotter,
-                traversal: @traversal
+                live_endpoint: live_endpoint, snapshotter: @timeline_snapshotter
       )
     end
 
@@ -172,7 +171,7 @@ module PaperTrailDiff
           records,
           time_range: time_range(within, records.is_a?(Array) ? records.map(&:class) : []),
           version_scope: version_scope,
-          context_required: activity && !@association_tree.empty?, traversal: @traversal,
+          context_required: activity && !@association_tree.empty?,
           live_loader: method(:load_batch_endpoints),
           history_preparer: @historical_store.method(:prepare_batch),
           analyzer: batched_root_analyzer(activity, view: view)
@@ -230,7 +229,7 @@ module PaperTrailDiff
         model, identities: identities, time_range: time_range(within, [model]),
                version_scope: options.fetch(:version_scope),
                history_preparer: @historical_store.method(:prepare_deleted_batch),
-               analyzer: analyzer, traversal: @traversal,
+               analyzer: analyzer,
                context_required: options.fetch(:activity) && !@association_tree.empty?
       ).call
     end
@@ -251,8 +250,7 @@ module PaperTrailDiff
                },
                # Checkpoints compare a root's own versions, so only activity can
                # report a window in which just its associations changed.
-               activity_tree: (@association_tree if activity), version_scope: version_scope,
-               traversal: @traversal
+               activity_tree: (@association_tree if activity), version_scope: version_scope
       )
     end
 
@@ -378,7 +376,7 @@ module PaperTrailDiff
         record,
         range: TimelineRange.new(
           record, from: from, to: to, within: within, version_scope: version_scope,
-                  live_endpoint: live_endpoint, traversal: @traversal
+                  live_endpoint: live_endpoint
         ),
         snapshotter: @activity_snapshotter,
         view: view, traversal: @traversal

@@ -31,9 +31,9 @@ class FullSnapshotter
 
   def activity_index = @prepared.activity_index
 
-  def opening_transactions = @prepared.opening_transactions
-
   def history = @prepared.history
 
   def reading(open, &block) = @prepared.reading(open, &block)
+
+  def transaction_ends(versions) = @prepared.transaction_ends(versions)
 end

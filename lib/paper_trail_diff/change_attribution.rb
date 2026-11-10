@@ -26,9 +26,7 @@ module PaperTrailDiff
   # - a version that recorded nothing, such as a `touch`, or a table without
   #   `object_changes`;
   # - a column PaperTrail is told not to record (see RecordedColumns);
-  # - a field a create left out, which held its default when created;
-  # - the start of a transaction that began before the history's start (see
-  #   PreparedHistoryLoader#reload), whose earlier versions were not read.
+  # - a field a create left out, which held its default when created.
   class ChangeAttribution
     # A transaction's boundaries, in the order the history kept them. Every
     # step the transaction opens shares the one list and reads the boundaries
@@ -81,14 +79,11 @@ module PaperTrailDiff
 
     # `root` is the record the timeline is about, which rows name by leaving
     # `record` nil. `transaction` holds the boundaries of the step's
-    # transaction, of which the first `preceding` came before its sources;
-    # `complete` says whether the history holds every version that
-    # transaction saved before them.
-    #: (root: RecordReference, sources: Array[ActivityBoundary], complete: bool, transaction: Transaction, ?preceding: Integer) -> void
-    def initialize(root:, sources:, complete:, transaction:, preceding: transaction.length)
+    # transaction, of which the first `preceding` came before its sources.
+    #: (root: RecordReference, sources: Array[ActivityBoundary], transaction: Transaction, ?preceding: Integer) -> void
+    def initialize(root:, sources:, transaction:, preceding: transaction.length)
       @root = root
       @sources = Transaction.new(sources)
-      @complete = complete
       @transaction = transaction
       @preceding = preceding
       @versions = {} #: Hash[Array[String], Array[ActivityBoundary]]
@@ -98,8 +93,8 @@ module PaperTrailDiff
     # The same transaction, read through a transaction group's sources.
     #: (Array[ActivityBoundary]) -> ChangeAttribution
     def with_sources(sources)
-      self.class.new(root: @root, sources: sources, complete: @complete,
-                     transaction: @transaction, preceding: @preceding)
+      self.class.new(root: @root, sources: sources, transaction: @transaction,
+                     preceding: @preceding)
     end
 
     # The row as the rows it splits into, each credited to its change's
@@ -120,7 +115,6 @@ module PaperTrailDiff
 
     # @rbs @root: RecordReference
     # @rbs @sources: Transaction
-    # @rbs @complete: bool
     # @rbs @transaction: Transaction
     # @rbs @preceding: Integer
     # @rbs @versions: Hash[Array[String], Array[ActivityBoundary]]
@@ -128,9 +122,7 @@ module PaperTrailDiff
     # A field's change follows what the record's versions recorded of it,
     # from the value the row starts at (see #relevant): each run of recorded
     # changes is one row, credited to the version that ended it, and a value
-    # that moved where they do not meet was saved without a version. Where
-    # the row's start leads to no version, the move to the first of them is
-    # told apart only when the history holds the whole transaction.
+    # that moved where they do not meet was saved without a version.
     #: (ChangeRow, Array[ActivityBoundary]) -> Array[ChangeRow]
     def changed(row, versions)
       touched = recorded_changes(versions, row.attribute)
@@ -139,8 +131,7 @@ module PaperTrailDiff
       relevant = relevant(touched, row)
       return unrecorded(row, versions) if relevant.empty?
 
-      trusted = @complete || relevant.length < touched.length
-      rows_for(row, chain(row.from, row.to, relevant, trusted), :changed)
+      rows_for(row, chain(row.from, row.to, relevant, true), :changed)
     end
 
     # The changes that make up the row's: from the last one that left the
@@ -168,7 +159,7 @@ module PaperTrailDiff
     # record every change of it they make.
     #: (ChangeRow, Array[ActivityBoundary]) -> Array[ChangeRow]
     def unrecorded(row, versions)
-      return [credit(row, versions.last)] unless @complete && recorded_column?(row)
+      return [credit(row, versions.last)] unless recorded_column?(row)
 
       [credit(row, unversioned(row))]
     end

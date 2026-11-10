@@ -98,7 +98,6 @@ module PaperTrailDiff
     # @rbs @passed_reported: bool?
     # @rbs @root: RecordReference?
     # @rbs @transactions: Hash[Array[untyped], ChangeAttribution::Transaction]
-    # @rbs @opening: Array[Array[untyped]]?
 
     #: () -> ActivityTreeFilter
     def filter
@@ -150,29 +149,20 @@ module PaperTrailDiff
       root = @root
       return unless root
 
-      transaction, complete = transaction_of(event)
-      attribution = ChangeAttribution.new(root: root, sources: [boundary], transaction: transaction,
-                                          complete: complete)
+      transaction = transaction_of(event)
+      attribution = ChangeAttribution.new(root: root, sources: [boundary], transaction: transaction)
       transaction.add(boundary)
       attribution
     end
 
-    # The boundaries kept so far of the event's transaction, and whether the
-    # history holds all of it. A version saved outside a transaction is a
-    # transaction of its own.
-    #: (ActivityEvent) -> [ChangeAttribution::Transaction, bool]
+    # The boundaries kept so far of the event's transaction. A version saved
+    # outside a transaction is a transaction of its own.
+    #: (ActivityEvent) -> ChangeAttribution::Transaction
     def transaction_of(event)
       key = ActivityTransactionGroups.transaction_key(event.version)
-      return [ChangeAttribution::Transaction.new, true] unless key
+      return ChangeAttribution::Transaction.new unless key
 
-      [@transactions[key] ||= ChangeAttribution::Transaction.new, !opening.include?(key)]
-    end
-
-    # The transactions that began before the history did (see
-    # PreparedHistoryLoader#reload).
-    #: () -> Array[Array[untyped]]
-    def opening
-      @opening ||= @snapshotter.opening_transactions
+      @transactions[key] ||= ChangeAttribution::Transaction.new
     end
 
     #: (ActivityEvent) -> void

@@ -14,12 +14,9 @@ module PaperTrailDiff
     attr_reader :to #: untyped
     attr_reader :time_range #: TimeRange?
 
-    # `traversal` names the requested paths, which decide where a window's
-    # edges move (see TransactionCut).
-    #: (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped, ?plan: RootVersionPlan?, ?live_endpoint: untyped, ?traversal: AssociationTraversal?) -> void
-    def initialize(record, from:, to:, within:, version_scope: nil, plan: nil, live_endpoint: nil, traversal: nil) # rubocop:disable Metrics/ParameterLists, Layout/LineLength
+    #: (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped, ?plan: RootVersionPlan?, ?live_endpoint: untyped) -> void
+    def initialize(record, from:, to:, within:, version_scope: nil, plan: nil, live_endpoint: nil) # rubocop:disable Metrics/ParameterLists
       @record = record
-      @traversal = traversal
       @plan = plan
       @live_endpoint = live_endpoint
       @version_scope = version_scope
@@ -60,6 +57,38 @@ module PaperTrailDiff
       explicit_plan(whole)
     end
 
+    # The plan over the window widened to how far its transactions `reach`
+    # outside it: from where the earliest across its start began, to where the
+    # latest across its end saved its last version (see PreparedHistoryLoader).
+    #: ([untyped, untyped], context_required: bool) -> RootVersionPlan
+    def reach_plan(reach, context_required:)
+      range = time_range #: TimeRange
+      TimeVersionRange.new(
+        @record, time_range: range.widened(*reach), version_scope: nil,
+                 live_endpoint: @live_endpoint
+      ).select_plan(context_required: context_required, whole: true)
+    end
+
+    # The plan of what the window reports, from the root versions a `wide`
+    # plan replays: those whose transactions end inside the window, bounded
+    # by the first that ends after it (see TransactionEnds). A filter names
+    # which of them are the root's own mutations.
+    #: (RootVersionPlan, TransactionEnds, context_required: bool) -> RootVersionPlan
+    def reporting_plan(wide, ends, context_required:)
+      versions = wide.reconstruction_versions
+      inside, after = placed(versions, ends)
+      live = wide.closing_record || @live_endpoint
+      # Every root version ended before the window, and nothing follows them:
+      # the root was gone when the window began.
+      return RootVersionPlan.empty if versions.any? && inside.empty? && !after && !live
+
+      RootVersionSelection.new(
+        in_range: inside, selected: kept(inside), after_range: after, windowed: true,
+        context_required: context_required,
+        live_endpoint: live, whole: true
+      ).call
+    end
+
     #: () -> bool
     def time?
       !time_range.nil?
@@ -79,7 +108,6 @@ module PaperTrailDiff
     private
 
     # @rbs @record: untyped
-    # @rbs @traversal: AssociationTraversal?
     # @rbs @plan: RootVersionPlan?
     # @rbs @version_scope: untyped
     # @rbs @live_endpoint: untyped
@@ -87,6 +115,26 @@ module PaperTrailDiff
     # @rbs @requested_to: untyped
     # @rbs @from: untyped
     # @rbs @to: untyped
+
+    # The versions whose transactions end inside the window, and the first
+    # whose transaction ends after it.
+    #: (Array[untyped], TransactionEnds) -> [Array[untyped], untyped]
+    def placed(versions, ends)
+      range = time_range #: TimeRange
+      inside, outside = versions.partition do |version|
+        range.include?(ends.last(version).created_at)
+      end
+      [inside, outside.find { |version| ends.last(version).created_at >= range.begin_time }]
+    end
+
+    # Those of the versions a version filter keeps: all of them without one.
+    #: (Array[untyped]) -> Array[untyped]
+    def kept(versions)
+      relation = Endpoint.versions(@record)
+      VersionScopeFilter.new(@version_scope)
+                        .call(relation.where(relation.klass.primary_key => versions.map(&:id)),
+                              versions)
+    end
 
     #: (bool) -> RootVersionPlan
     def explicit_plan(whole)
@@ -127,18 +175,13 @@ module PaperTrailDiff
       VersionQuery.chronological(Endpoint.versions(@record))
     end
 
-    # A batch passes each root the window it already moved to transaction
-    # edges; a single record's window is moved here.
+    # A batch passes each root its window as it read it.
     #: (untyped) -> TimeRange?
     def build_time_range(within)
       return if within.nil?
       return within if within.instance_of?(TimeRange)
 
-      range = TimeRange.for(within, [@record.class])
-      return range unless Support.versioned?(@record.class)
-
-      TransactionCut.windows(@record.class, [@record], range, traversal: @traversal)
-                    .fetch(@record.id.to_s, range)
+      TimeRange.for(within, [@record.class])
     end
 
     #: () -> void

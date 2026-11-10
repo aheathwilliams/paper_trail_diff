@@ -5,10 +5,8 @@ module PaperTrailDiff
   class DeletedAnalysisBatch
     # `context_required` reads a root that did not change in the window from
     # the version after it, so its associations' activity can be reported.
-    # `traversal` names the requested paths, which decide where a window's
-    # edges move (see TransactionCut).
-    # : (untyped, identities: Array[Array[String]], time_range: TimeRange?, analyzer: untyped, history_preparer: untyped, version_scope: untyped, context_required: bool, traversal: AssociationTraversal?) -> void
-    def initialize: (untyped, identities: Array[Array[String]], time_range: TimeRange?, analyzer: untyped, history_preparer: untyped, version_scope: untyped, context_required: bool, traversal: AssociationTraversal?) -> void
+    # : (untyped, identities: Array[Array[String]], time_range: TimeRange?, analyzer: untyped, history_preparer: untyped, version_scope: untyped, context_required: bool) -> void
+    def initialize: (untyped, identities: Array[Array[String]], time_range: TimeRange?, analyzer: untyped, history_preparer: untyped, version_scope: untyped, context_required: bool) -> void
 
     # : () -> Hash[Array[String], Analysis?]
     def call: () -> Hash[Array[String], Analysis?]
@@ -30,20 +28,26 @@ module PaperTrailDiff
 
     @time_range: TimeRange?
 
-    @traversal: AssociationTraversal?
-
     @version_scope: untyped
 
-    # A root destroyed before the window had no state inside it to read, so
-    # only the others take the version after the window as context. Every
-    # root replays the whole of its window for activity on associations: one
-    # whose destroy saved in a transaction that crossed the window's start
-    # has the destroy inside its moved window.
-    # : (Array[untyped], Array[untyped], Hash[Array[String], TimeRange]) -> Hash[Array[String], RootVersionPlan]
-    def plans: (Array[untyped], Array[untyped], Hash[Array[String], TimeRange]) -> Hash[Array[String], RootVersionPlan]
+    # A root destroyed before the range had no state inside it to read, so
+    # only the others take the version after the range as context. Every
+    # root replays the whole of its range for activity on associations. The
+    # range is the window, or the window widened to how far its transactions
+    # reach, which can hold a destroy that one of them saved.
+    # : (Array[untyped], Array[untyped], TimeRange?) -> Hash[Array[String], RootVersionPlan]
+    def plans: (Array[untyped], Array[untyped], TimeRange?) -> Hash[Array[String], RootVersionPlan]
 
-    # : (Array[untyped], bool, Hash[Array[String], TimeRange]) -> Hash[Array[String], RootVersionPlan]
-    def plans_for: (Array[untyped], bool, Hash[Array[String], TimeRange]) -> Hash[Array[String], RootVersionPlan]
+    # The range for roots destroyed before it: widened to where the
+    # transactions open at its start began, when activity on associations is
+    # asked for, since one of them may have saved the destroy and gone on to
+    # save the root's tree inside the range, which then reports both. No
+    # version of such a root is in the range to find the transaction by.
+    # : (Array[untyped], TimeRange?) -> TimeRange?
+    def reaching: (Array[untyped], TimeRange?) -> TimeRange?
+
+    # : (Array[untyped], bool, TimeRange?) -> Hash[Array[String], RootVersionPlan]
+    def plans_for: (Array[untyped], bool, TimeRange?) -> Hash[Array[String], RootVersionPlan]
 
     # These records supply identity and model metadata only. Every reported
     # value comes from the batched historical plan; no per-root reify or live

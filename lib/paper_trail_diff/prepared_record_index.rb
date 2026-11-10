@@ -127,13 +127,13 @@ module PaperTrailDiff
       @states = {} #: Hash[untyped, PreparedRecordState?]
     end
 
-    # `open` names the transactions still open at the boundary, which saved
-    # a version before it and another at or after it. A record one of them
-    # saved reads as it stood before that transaction, as a record the
-    # boundary's own transaction saved does (see PreparedRecordIndex#reading).
-    #: (untyped, ?Array[untyped]?) -> untyped
-    def record_before(boundary, open = nil)
-      state_before(boundary, open)&.instantiate
+    # `ends` says where each transaction of the timeline being read takes
+    # effect. A record then reads as it stood before every transaction that
+    # ends at or after the boundary's own (see TransactionEnds); without it,
+    # as it stood before the boundary's transaction.
+    #: (untyped, ?TransactionEnds?) -> untyped
+    def record_before(boundary, ends = nil)
+      state_before(boundary, ends)&.instantiate
     end
 
     # A record created in the boundary's own transaction has no state before
@@ -151,9 +151,9 @@ module PaperTrailDiff
       state_after(index)&.instantiate
     end
 
-    #: (untyped, ?Array[untyped]?) -> PreparedRecordState?
-    def state_before(boundary, open = nil)
-      index = boundary_index(boundary, open)
+    #: (untyped, ?TransactionEnds?) -> PreparedRecordState?
+    def state_before(boundary, ends = nil)
+      index = ends ? effective_index(boundary, ends) : boundary_index(boundary)
       return state_for(versions.fetch(index)) if index
 
       live
@@ -217,6 +217,7 @@ module PaperTrailDiff
     # @rbs @states: Hash[untyped, PreparedRecordState?]
     # @rbs @version_positions: Hash[String, Integer]
     # @rbs @transaction_positions: Hash[untyped, Integer]
+    # @rbs @effective: [TransactionEnds, Array[untyped]]?
 
     #: (Integer) -> PreparedRecordState?
     def state_after(index)
@@ -234,31 +235,54 @@ module PaperTrailDiff
     end
 
     # A version is eligible when it is at or after the boundary, or shares the
-    # boundary's transaction or one still open there. The first is monotonic
-    # over the chronological list and the others are indexed, so none rescans
-    # a long history once per boundary.
+    # boundary's transaction. The first is monotonic over the chronological
+    # list and the other is indexed, so neither rescans a long history once
+    # per boundary.
     #
     # "At or after" is decided by the version order rather than the timestamp
     # alone. A version written in the same instant as the boundary but before
     # it already took effect there; reading its pre-change state would put the
     # boundary on the wrong side of a change it follows. Each time is read
     # once, since every record is placed against every boundary.
-    #: (untyped, Array[untyped]?) -> Integer?
-    def boundary_index(boundary, open)
+    #: (untyped) -> Integer?
+    def boundary_index(boundary)
       boundary_time = boundary.created_at
       chronological = (0...versions.length).bsearch do |index|
         VersionBoundary.at_or_after?(versions.fetch(index), boundary,
                                      time: @times.fetch(index), boundary_time: boundary_time)
       end
-      [chronological, transaction_index(boundary), *open_indexes(open)].compact.min
+      [chronological, transaction_index(boundary)].compact.min
     end
 
-    # Where each open transaction saved this record first, if it did.
-    #: (Array[untyped]?) -> Array[Integer]
-    def open_indexes(open)
-      return [] unless open
+    # The first version whose transaction ends at or after the boundary's.
+    # One record's versions end in the order they were saved, since a
+    # transaction holds a record it saved until it ends; where history says
+    # otherwise, a version counts as ending no earlier than those before it.
+    #: (untyped, TransactionEnds) -> Integer?
+    def effective_index(boundary, ends)
+      target = VersionBoundary.version_record?(boundary) ? ends.last(boundary) : boundary
+      target_time = target.created_at
+      effective = effective_versions(ends)
+      (0...effective.length).bsearch do |index|
+        VersionBoundary.at_or_after?(effective.fetch(index), target, boundary_time: target_time)
+      end
+    end
 
-      open.filter_map { |transaction_id| @transaction_positions[transaction_id] }
+    # Where each version takes effect: the last version of its transaction,
+    # or of an earlier version's when that one ends later.
+    #: (TransactionEnds) -> Array[untyped]
+    def effective_versions(ends)
+      held = @effective
+      return held.last if held && held.first.equal?(ends)
+
+      latest = nil
+      effective = versions.map do |version|
+        last = ends.last(version)
+        latest = last if latest.nil? || Support.compare_versions(last, latest).positive?
+        latest
+      end
+      @effective = [ends, effective]
+      effective
     end
 
     #: (untyped) -> Integer?
@@ -305,63 +329,72 @@ module PaperTrailDiff
     def initialize(start_at, end_at: nil, live_records: [])
       @start_time = boundary_time(start_at)
       @end_time = boundary_time(end_at)
-      @seeded_live_records = live_records.to_h do |record|
-        [identity(record.class, record.id), record]
-      end
+      @seeded_live_records = live_records.to_h { |row| [identity(row.class, row.id), row] }
       @state_loader = PreparedVersionStateLoader.new
       @series = {} #: Hash[Array[String], PreparedRecordSeries]
+      @version_classes = Set.new #: Set[untyped]
+      @recorded_ends = RecordedTransactionEnds.new
       @direct_loader = DirectRecordStateLoader.new
       @direct_states = {} #: Hash[PreparedRecordState, PreparedRecordState?]
     end
 
     #: (untyped, Array[untyped]) -> void
     def load(model_class, ids)
+      @version_classes << model_class.paper_trail.version_class
       missing = missing_ids(model_class, ids)
       return if missing.empty?
 
       versions = versions_for(model_class, missing).group_by { |version| version.item_id.to_s }
-      live = available_live_records(model_class, missing).to_h do |record|
-        [record.id.to_s, record]
-      end
+      live = available_live_records(model_class, missing).to_h { |record| [record.id.to_s, record] }
       missing.each { |id| add_series(model_class, id, versions, live) }
     end
 
     #: (untyped, Array[untyped], Array[untyped]) -> void
     def seed(model_class, ids, versions)
+      @version_classes << model_class.paper_trail.version_class
       grouped = versions.group_by { |version| version.item_id.to_s }
       live = available_live_records(model_class, ids).to_h { |record| [record.id.to_s, record] }
       ids.each { |id| add_series(model_class, id, grouped, live) }
     end
 
-    # The transactions the versions held from the start onward belong to that
-    # began before it, and where the earliest of them began; see
-    # PreparedHistoryLoader. Nothing when none did.
-    #: () -> [Array[Array[untyped]], untyped]?
-    def opening
-      start = @start_time
-      start && OpeningTransactions.new(@series, start).call
+    # How far the transactions of the versions held in the range reach
+    # outside it: where the earliest of those that began before the start
+    # began, and where the latest of those that went on after the end saved
+    # its last version. Either is nil when none did; see PreparedHistoryLoader.
+    #: () -> [untyped, untyped]
+    def reach = CrossingTransactions.reach(@series, @version_classes, @start_time, @end_time)
+
+    # When the history was read from.
+    #: () -> untyped
+    attr_reader :start_time
+
+    # Where the transactions of these versions take effect, as their version
+    # tables record it (see RecordedTransactionEnds).
+    #: (Array[untyped]) -> TransactionEnds
+    def transaction_ends(versions)
+      TransactionEnds.new(versions, @recorded_ends.call(versions) { self.versions })
     end
 
     #: (untyped, untyped, untyped) -> untyped
     def record_before(model_class, id, boundary)
-      @series.fetch(identity(model_class, id)).record_before(boundary, open_at(boundary))
+      @series.fetch(identity(model_class, id)).record_before(boundary, @ends)
     end
 
-    # Reads at the events of a root's timeline with the transactions open at
-    # each, by the row key of its version (see InterleavedTransactions). A
-    # read at any other boundary has none.
-    #: (Hash[Array[untyped], Array[untyped]]) { () -> void } -> void
-    def reading(open)
-      previous = @open
-      @open = open
+    # Reads for a root's timeline, each record as it stood before every
+    # transaction that had not ended at the boundary it is read at (see
+    # TransactionEnds).
+    #: (TransactionEnds) { () -> void } -> void
+    def reading(ends)
+      previous = @ends
+      @ends = ends
       yield
     ensure
-      @open = previous
+      @ends = previous
     end
 
-    # The ids of the transactions open at a boundary.
-    #: (untyped) -> Array[untyped]?
-    def open_at(boundary) = @open&.[](Support.row_key(boundary))
+    # What a read is made with now, if a timeline is being read.
+    #: () -> TransactionEnds?
+    def reading_ends = @ends
 
     #: (untyped, untyped, untyped) -> untyped
     def record_created_in(model_class, id, boundary)
@@ -373,7 +406,7 @@ module PaperTrailDiff
       series = @series[identity(model_class, id)]
       return [false, nil] unless series
 
-      state = series.state_before(boundary, open_at(boundary))
+      state = series.state_before(boundary, @ends)
       return [true, nil] unless state
 
       prepared = direct_state(state)
@@ -477,7 +510,9 @@ module PaperTrailDiff
     # @rbs @series: Hash[Array[String], PreparedRecordSeries]
     # @rbs @direct_loader: DirectRecordStateLoader
     # @rbs @direct_states: Hash[PreparedRecordState, PreparedRecordState?]
-    # @rbs @open: Hash[Array[untyped], Array[untyped]]?
+    # @rbs @ends: TransactionEnds?
+    # @rbs @version_classes: Set[untyped]
+    # @rbs @recorded_ends: RecordedTransactionEnds
 
     # Callers bound the range with either a version or a bare timestamp.
     #: (untyped) -> untyped
@@ -549,60 +584,164 @@ module PaperTrailDiff
     end
   end
 
-  # Finds the transactions that crossed a history's start: those the versions
-  # held from the start onward belong to that also saved versions before it,
-  # of any record, and where they began (see TransactionCut.continued_starts).
-  class OpeningTransactions
-    #: (Hash[Array[String], PreparedRecordSeries], untyped) -> void
-    def initialize(series, start)
+  # Finds how far the transactions around a window reach outside it: where
+  # the earliest of those open at its start began, and where the latest of
+  # those that cross either edge saved its last version.
+  #
+  # A transaction open at the start saved a version before it and another
+  # from it onward. Either can be of a record the history does not hold, such
+  # as one the transaction moved out of the tree before the window and never
+  # saved again, so every such transaction of the tree's version tables is
+  # read, not only those of the versions held: one statement per table when
+  # none is open, which is the usual case, and one more per 500 that are. A
+  # transaction's first version in a table cannot follow another of its own
+  # there, so only the others are looked up.
+  #
+  # A transaction across the end saved a version held up to it and another
+  # after it; one statement per 500 of them.
+  #
+  # Another version table can number a transaction as this one numbered an
+  # earlier one, so versions an anchor separates from the edge are not read
+  # as one transaction's (see TransactionAnchors).
+  class CrossingTransactions
+    #: (Hash[Array[String], PreparedRecordSeries], Array[untyped], untyped, untyped) -> void
+    def initialize(series, version_classes, start, finish)
       @series = series
+      @version_classes = version_classes
       @start = start
+      @finish = finish
     end
 
-    # Their keys, as ActivityTransactionGroups keys a version's, and when the
-    # earliest began; nil when none crossed the start.
-    #: () -> [Array[Array[untyped]], untyped]?
-    def call
-      began = transactions.flat_map do |version_class, held|
-        earliest(version_class, held).map { |id, at| [[version_class.name, id], at] }
-      end
-      return if began.empty?
+    # The reach of a history read from `start`; none without one.
+    #: (Hash[Array[String], PreparedRecordSeries], Enumerable[untyped], untyped, untyped) -> [untyped, untyped]
+    def self.reach(series, version_classes, start, finish)
+      start ? new(series, version_classes.to_a, start, finish).call : [nil, nil]
+    end
 
-      [began.map(&:first), began.map(&:last).min]
+    # How far the transactions open at `start` reach, in the version tables
+    # of the models of these names that PaperTrail tracks; nil when none is
+    # open, or without a start.
+    #: (Array[String], untyped, untyped) -> [untyped, untyped]?
+    def self.open_among(types, start, finish)
+      models = types.map { |type| Support.constant(type) }
+                    .select { |model| Support.versioned?(model) }
+      found = reach({}, models.map { |model| model.paper_trail.version_class }.uniq, start, finish)
+      found unless found.compact.empty?
+    end
+
+    # When the earliest transaction open at the start began, and when the
+    # latest across an edge saved its last version; nil where none crossed.
+    #: () -> [untyped, untyped]
+    def call
+      open = @version_classes.map { |version_class| open_at_start(version_class) }
+      [open.filter_map(&:first).min, [*open.filter_map(&:last), *across_end].select do |at|
+        past?(at)
+      end.max]
     end
 
     private
 
-    # When each of these transactions saved its first version before the
-    # start, for those that saved one there: the transactions of the first
-    # versions held of each (see TransactionCut.continued_starts).
-    #: (untyped, Hash[untyped, untyped]) -> Array[[untyped, untyped]]
-    def earliest(version_class, held)
-      TransactionCut.continued_starts(version_class, held.values, TransactionCut::Edge.start_at(@start)).to_a
+    # @rbs @series: Hash[Array[String], PreparedRecordSeries]
+    # @rbs @version_classes: Array[untyped]
+    # @rbs @start: untyped
+    # @rbs @finish: untyped
+
+    #: (untyped) -> bool
+    def past?(time)
+      finish = @finish
+      !finish.nil? && time > finish
     end
 
-    # @rbs @series: Hash[Array[String], PreparedRecordSeries]
-    # @rbs @start: untyped
+    # When the transactions open at the start began in this table, and when
+    # the latest of them saved its last version there.
+    #: (untyped) -> [untyped, untyped]
+    def open_at_start(version_class)
+      return [nil, nil] unless version_class.column_names.include?('transaction_id')
 
-    # The transactions of the versions held from the start onward, by version
-    # class, since each version table is read for its own, and the first
-    # version held of each.
-    #: () -> Hash[untyped, Hash[untyped, untyped]]
-    def transactions
+      edge = TransactionCut::Edge.start_at(@start)
+      began = earlier(version_class, edge).group(:transaction_id).minimum(:created_at)
+      return [nil, nil] if began.empty?
+
+      ended = began.keys.each_slice(Support::IDS_PER_STATEMENT).filter_map do |numbers|
+        later(version_class, edge).where(transaction_id: numbers).maximum(:created_at)
+      end
+      [began.values.min, ended.max]
+    end
+
+    # The versions saved before the start by a transaction that saved one
+    # from it onward.
+    #: (untyped, TransactionCut::Edge) -> untyped
+    def earlier(version_class, edge)
+      saved = version_class.where(version_class.arel_table[:created_at].lt(@start))
+      TransactionAnchors.scope(saved, version_class, edge)
+                        .where(transaction_id: later(version_class, edge).select(:transaction_id))
+    end
+
+    # The versions saved from the start onward that were not the first of
+    # their transaction, of the transactions no anchor separates from it.
+    #: (untyped, TransactionCut::Edge) -> untyped
+    def later(version_class, edge)
+      table = version_class.arel_table
+      saved = version_class.where(table[:created_at].gteq(@start)).where.not(transaction_id: nil)
+      if own_numbers?(version_class)
+        saved = saved.where(table[version_class.primary_key].not_eq(table[:transaction_id]))
+      end
+      TransactionAnchors.scope(saved, version_class, edge)
+    end
+
+    # Whether the table's ids can number its transactions, as they do unless
+    # the two columns differ in type.
+    #: (untyped) -> bool
+    def own_numbers?(version_class)
+      key = version_class.primary_key
+      number = version_class.type_for_attribute('transaction_id').type
+      key.is_a?(String) && version_class.type_for_attribute(key).type == number
+    end
+
+    # When each transaction of the versions held up to the end saved its last
+    # version after it.
+    #: () -> Array[untyped]
+    def across_end
+      finish = @finish
+      return [] unless finish
+
+      held = versions.select { |version| version.created_at.between?(@start, finish) }
+      transactions(held).flat_map do |version_class, by_number|
+        by_number.each_slice(Support::IDS_PER_STATEMENT).flat_map do |slice|
+          last_after(version_class, slice.to_h, finish)
+        end
+      end
+    end
+
+    # When each of these transactions saved its last version after the end,
+    # by the version held of each.
+    #: (untyped, Hash[untyped, untyped], untyped) -> Array[untyped]
+    def last_after(version_class, held, finish)
+      saved = version_class.where(transaction_id: held.keys)
+                           .where(version_class.arel_table[:created_at].gt(finish))
+      edge = TransactionCut::Edge.new(finish, true)
+      TransactionAnchors.continued(saved, version_class, edge, held.values.map(&:id))
+                        .group(:transaction_id).maximum(:created_at).values
+    end
+
+    # The transactions of the versions, by version class, since each version
+    # table is read for its own, with one version held of each.
+    #: (Array[untyped]) -> Hash[untyped, Hash[untyped, untyped]]
+    def transactions(held)
       found = {} #: Hash[untyped, Hash[untyped, untyped]]
-      held.sort_by(&:created_at).each_with_object(found) do |version, by_class|
+      held.each_with_object(found) do |version, by_class|
         (by_class[version.class] ||= {})[VersionBoundary.transaction_id(version)] ||= version
       end
     end
 
-    # The versions held from the start onward that a transaction saved.
+    # The versions held that a transaction saved.
     #: () -> Array[untyped]
-    def held
-      @series.each_value.flat_map do |series|
-        series.versions.select do |version|
-          VersionBoundary.transaction_id(version) && version.created_at >= @start
-        end
+    def versions
+      @versions ||= @series.each_value.flat_map do |series|
+        series.versions.select { |version| VersionBoundary.transaction_id(version) }
       end
     end
+
+    # @rbs @versions: Array[untyped]?
   end
 end

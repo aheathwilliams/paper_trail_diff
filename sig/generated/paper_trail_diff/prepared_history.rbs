@@ -5,23 +5,34 @@ module PaperTrailDiff
   class PreparedHistory
     attr_reader activity_index: PreparedActivityIndex?
 
-    # The transactions that crossed the history's start, keyed as
-    # ActivityTransactionGroups keys a version's; see
-    # PreparedHistoryLoader#reload.
-    attr_reader opening_transactions: Array[Array[untyped]]
+    # : (PreparedRecordIndex, ?activity_index: PreparedActivityIndex?) -> void
+    def initialize: (PreparedRecordIndex, ?activity_index: PreparedActivityIndex?) -> void
 
-    # : (PreparedRecordIndex, ?activity_index: PreparedActivityIndex?, ?opening_transactions: Array[Array[untyped]]) -> void
-    def initialize: (PreparedRecordIndex, ?activity_index: PreparedActivityIndex?, ?opening_transactions: Array[Array[untyped]]) -> void
+    # How far the transactions of a window's history reach outside it; see
+    # PreparedHistoryLoader. Nil for a history that was not asked, or where
+    # none does.
+    attr_reader reach: [ untyped, untyped ]?
+
+    # : ([untyped, untyped]) -> void
+    def reach=: ([ untyped, untyped ]) -> void
+
+    # When the history was read from.
+    # : () -> untyped
+    def start_time: () -> untyped
 
     # : () -> Array[untyped]
     def versions: () -> Array[untyped]
 
     # See PreparedRecordIndex#reading.
-    # : (Hash[Array[untyped], Array[untyped]]) { () -> void } -> void
-    def reading: (Hash[Array[untyped], Array[untyped]]) { () -> void } -> void
+    # : (TransactionEnds) { () -> void } -> void
+    def reading: (TransactionEnds) { () -> void } -> void
 
-    # : (untyped) -> Array[untyped]?
-    def open_at: (untyped) -> Array[untyped]?
+    # See PreparedRecordIndex#transaction_ends.
+    # : (Array[untyped]) -> TransactionEnds
+    def transaction_ends: (Array[untyped]) -> TransactionEnds
+
+    # : () -> TransactionEnds?
+    def reading_ends: () -> TransactionEnds?
 
     # Returns every group the edge now holds.
     # : (untyped, untyped, Hash[String, Hash[Symbol, untyped]]) -> Hash[String, Hash[Symbol, untyped]]

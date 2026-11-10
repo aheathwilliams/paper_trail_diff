@@ -285,8 +285,9 @@ passes is behavior nothing checks. `mutant.yml` lists the classes it mutates:
   `Endpoint` and `EndpointKind`;
 - which versions a range reads: `TimeRange`, `TimelineRange`, `VersionRange`,
   `TimeVersionRange`, `RootVersionSelection`, `RootVersionPlan`,
-  `TransactionCut`, `OpeningTransactions`, `VersionBoundary`, and
-  `VersionQuery`;
+  `TransactionCut`, `CrossingTransactions`, `TransactionEnds`,
+  `RecordedTransactionEnds`,
+  `VersionBoundary`, and `VersionQuery`;
 - which versions a batch or filter reads: `AnalysisBatch`,
   `BatchedRootVersions`, `BatchedRootAnalyses`, `BatchBoundaryResolver`,
   `DeletedAnalysisBatch`, `HistoricalFilter`, and `VersionScopeFilter`;

@@ -79,21 +79,35 @@ Flat query counts do not make a report's cost flat:
   about 40 s and held 372 MB, and 411 MB with snapshots, at the same
   time within run-to-run noise. Folding its rows with `net_changes` took
   another 17 s, and listing them with `change_rows` 13 s.
-- **Each edge of a window takes one statement per 250 records, and one or two
-  per 500 transactions it finds.** An edge that moves is read once more, for
-  the records it moved for. With more than one version table, each of these
-  statements also looks up, by primary key in each table, the first version
-  of the transactions it reads; both edges for 20,000 records took the same
-  time with one version table as with two, within run-to-run noise. A
-  window from `within:` or `since:` looks for transactions that cross either
-  edge, and with associations also for those that saved a record before it
-  and an associated record after it. A `report` window has no end, so only
-  its start is read. With associations, it also takes one statement per 500
-  of the transactions its history reads, to find one that saved associated
-  records on both sides of its start; when it finds one, it reads the
-  window's history again from where that transaction began. On 1.4 million
-  versions, both edges of a window over 10,800 records took about 6 s on SQL
-  Server and 1.5 s on PostgreSQL and MySQL.
+- **A window with associations looks for the transactions that cross its
+  edges.** A window reports the transactions that end inside it, so its
+  history is asked which transactions were open at its start, whatever
+  records they saved, and which of those it holds went on after its end. That
+  takes one statement per version table when none was open at the start, the
+  usual case, one more per 500 that were, and one per 500 transactions its
+  history holds. When one crosses an edge, the window's history is read once
+  more, from where the earliest began to where the latest ended. The
+  statement for the start reads the versions saved since the window began
+  that were not the first of their transaction, and no index of the README
+  serves that. On SQLite, in a table of a million versions with the README's
+  indexes and PT-AT's on `transaction_id`, it took 0.06 s for a window that
+  began 1% of the table ago, 0.18 s for one that began half of it ago, and
+  0.27 s for one that began near its start. An index on `created_at` alone
+  took the first to 0.006 s and left the others as they were. `analyze_scope`
+  and `report` run it once more, to select the records such a transaction
+  saved before the window. A `report` window has no end, so only its start
+  is read. A
+  window without associations, and `timeline`, run none of these statements.
+- **Activity with associations reads where its transactions end.** A
+  transaction takes effect at the last version it saved, of any record, so a
+  history asks its version table for the last version of each transaction it
+  holds: one statement per 500 transactions, and one more when some of those
+  versions are of records it does not hold. Each reads by `transaction_id`,
+  which PT-AT indexes: in the same table, the ends of 10,000 transactions
+  took 0.11 s in 20 statements, and 0.19 s in 40 when none of their last
+  versions was held. With several version tables, one more
+  statement per table per 500 finds the numbers two tables both gave a
+  transaction.
 - **`version_scope:` on activity reads every version in the range**, as
   activity without one does. With associations, it takes one more statement
   per 500 of the transactions its history reads, to find those the filter
@@ -132,8 +146,7 @@ queries. `max_filter_versions:` (10,000 by default) caps the versions it loads.
 Either way, every version of every candidate in the window is decoded: with
 1,000 candidates and no match, a hash and a callable each took about 0.8 s.
 Finding the relation's records among the candidates takes up to two queries
-per 500 of them, and with PT-AT, finding where their windows move takes one
-statement per 250 of them and one or two per 500 transactions, for each edge.
+per 500 of them.
 
 The relation then reads the records that matched in pages of up to 2,000, and
 each page lists every matching id, so the relation keeps its own order,

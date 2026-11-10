@@ -43,11 +43,12 @@ RSpec.describe 'Interleaved transactions',
 
   # Saves the block's versions as part of transaction `id`, as if they were
   # saved while other transactions were open. A test saves them one after
-  # another, so the order of the versions is the order of the blocks.
+  # another, so the order of the versions is the order of the blocks. The
+  # number is one no version of the suite takes as its id.
   def in_transaction(id, whodunnit, &)
     saved = PaperTrail::Version.maximum(:id) || 0
     PaperTrail.request(whodunnit: whodunnit, &)
-    PaperTrail::Version.where('id > ?', saved).update_all(transaction_id: id)
+    PaperTrail::Version.where('id > ?', saved).update_all(transaction_id: 1_000_000 + id)
   end
 
   # Each reported change row as its kind, comment body or field, and who

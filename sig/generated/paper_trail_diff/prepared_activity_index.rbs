@@ -14,10 +14,12 @@ module PaperTrailDiff
     # first for most of them.
     attr_reader children: PreparedChildCandidates
 
-    # `opening` names the transactions that crossed the range's start, as
-    # ActivityTransactionGroups keys them.
-    # : (PreparedRecordIndex, Array[untyped], start_at: untyped, ?opening: Array[Array[untyped]]) -> void
-    def initialize: (PreparedRecordIndex, Array[untyped], start_at: untyped, ?opening: Array[Array[untyped]]) -> void
+    # : (PreparedRecordIndex, Array[untyped], start_at: untyped) -> void
+    def initialize: (PreparedRecordIndex, Array[untyped], start_at: untyped) -> void
+
+    # See PreparedRecordIndex#transaction_ends.
+    # : (Array[untyped]) -> TransactionEnds
+    def transaction_ends: (Array[untyped]) -> TransactionEnds
 
     # : (untyped, Array[untyped]) -> void
     def register: (untyped, Array[untyped]) -> void
@@ -73,8 +75,6 @@ module PaperTrailDiff
     @conditions: ScopeCondition::Cache
 
     @nodes: Hash[String, Array[untyped]]
-
-    @opening: Set[Array[untyped]]
 
     @records: PreparedRecordIndex
 

@@ -15,8 +15,8 @@ module PaperTrailDiff
     # nothing but the history.
     #
     # A `start_at` is a window's; a range of versions starts at its first.
-    # : (untyped, Array[untyped], ?start_at: untyped, ?end_at: untyped) -> PreparedActivitySnapshots
-    def prepare: (untyped, Array[untyped], ?start_at: untyped, ?end_at: untyped) -> PreparedActivitySnapshots
+    # : (untyped, Array[untyped], ?start_at: untyped, ?end_at: untyped, ?reach: bool) -> PreparedActivitySnapshots
+    def prepare: (untyped, Array[untyped], ?start_at: untyped, ?end_at: untyped, ?reach: bool) -> PreparedActivitySnapshots
 
     # : (untyped, untyped) -> RecordSnapshot?
     def call: (untyped, untyped) -> RecordSnapshot?
@@ -42,13 +42,15 @@ module PaperTrailDiff
     # : () -> PreparedActivityIndex?
     def activity_index: () -> PreparedActivityIndex?
 
-    # : () -> Array[Array[untyped]]
-    def opening_transactions: () -> Array[Array[untyped]]
+    # Reads with where each transaction of a root's timeline takes effect
+    # (see TransactionEnds).
+    # : (TransactionEnds) { () -> void } -> void
+    def reading: (TransactionEnds) { () -> void } -> void
 
-    # Reads with the transactions open at each event of a root's timeline
-    # (see InterleavedTransactions).
-    # : (Hash[Array[untyped], Array[untyped]]) { () -> void } -> void
-    def reading: (Hash[Array[untyped], Array[untyped]]) { () -> void } -> void
+    # Where the transactions of these versions take effect: as recorded,
+    # with a history to read it from.
+    # : (Array[untyped]) -> TransactionEnds
+    def transaction_ends: (Array[untyped]) -> TransactionEnds
 
     # : (untyped, untyped) -> RecordSnapshot?
     def call: (untyped, untyped) -> RecordSnapshot?
@@ -98,6 +100,8 @@ module PaperTrailDiff
     def replay: (ActivityEvent) { (ActivityEvent, RecordSnapshot?) -> void } -> void
 
     @current: untyped
+
+    @ends: TransactionEnds
 
     @events: Array[ActivityEvent]
 

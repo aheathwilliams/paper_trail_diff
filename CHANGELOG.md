@@ -7,6 +7,34 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- A transaction now takes effect where it saved its last version, in every
+  activity timeline. A window from `within:` or `since:` reports the
+  transactions that end inside it, each whole and under its own versions,
+  instead of moving its edges to where a transaction began. `analysis.window`
+  is therefore always the window you asked for, a step of a transaction that
+  began before the window can hold a version saved before it, and a
+  transaction group lists every version its transaction saved. The
+  `moved_window.paper_trail_diff` notification is gone, since no window
+  moves. Three things follow that you may notice:
+  - `timeline`, and a window without associations, report each version of the
+    record where it was saved, as before, but no longer move a window for a
+    transaction that also saved an associated record.
+  - `analyze_scope` and `report` select a record for a window by the versions
+    saved in it. A record whose transaction saves in the window and ends after
+    it is selected with nothing to report, and reported in the later window.
+    With associations, a window also selects by the versions that
+    transactions open at its start saved before it, since it reports those
+    transactions.
+  - `historical_filter:` reads each version where it was saved, so a record
+    whose transaction began before the window is checked from the state its
+    versions before the window left.
+- A window with associations runs one more statement per version table, to
+  find the transactions open at its start, and no longer one per 250 records
+  for each edge, and `analyze_scope` and `report` run it once more to select
+  their records. Activity with associations runs one more statement per 500
+  transactions its history holds, to read where each ends. See
+  [performance](docs/performance.md#what-still-grows).
+
 - On SQL Server, a selection that reads its candidates in Ruby, as one with
   `historical_filter:` or a version table whose `item_id` does not share the
   key's type does, writes more than 500 of them to a temporary table once and
@@ -30,6 +58,31 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Two transactions that saved in one record's tree at the same time
+  interleave their versions, and activity timelines read them wrongly in four
+  ways, all fixed by reading each transaction where it ends:
+  - A change could be credited to the other transaction's author, such as a
+    comment one transaction removed reported under the one that saved
+    meanwhile.
+  - Back-to-back windows that met inside such a transaction could report one
+    of its changes in neither window.
+  - Back-to-back windows could report a change in both, when a transaction
+    saved an associated record before the record itself, around another
+    transaction.
+  - A window that started inside a transaction credited an edit the
+    transaction saved before the window to the version of another record.
+- A transaction that went on to save a record outside the requested paths,
+  such as a comment moved to another article, was placed at its last version
+  on them, which depends on where a window starts. Back-to-back windows could
+  then report one of its changes in neither. Where a transaction ends is now
+  read from its version table, whatever records it saved.
+- A range that ended while a transaction saving in the tree was still open
+  read the records it had saved as changed. They now read as they stood
+  before it, since it had not ended.
+- A window that started while a transaction was open read a record that
+  transaction had already saved as changed, when the transaction saved
+  nothing else of the tree inside the window. Its snapshot then disagreed
+  with the one the window before it ended on.
 - Without `paper_trail-association_tracking` loaded, asking for an
   association between two versioned models raised `NoMethodError`. Reading
   its history now raises `AssociationTrackingUnavailableError`, as
@@ -61,10 +114,10 @@ project follows [Semantic Versioning](https://semver.org/).
   as a MySQL `datetime` without a precision does, an edge with a fraction
   put a version saved in that second inside the window for one method and
   outside it for another.
-- With more than one version table, a `within:` edge no longer moves to
-  the start of an unrelated transaction. PaperTrail numbers a transaction
-  by the id of its first version in whichever table that was, so two
-  transactions can share a number in one table, and a window that started
+- With more than one version table, a `within:` window no longer reads an
+  unrelated transaction as one that crosses its edge. PaperTrail numbers a
+  transaction by the id of its first version in whichever table that was, so
+  two transactions can share a number in one table, and a window that started
   or ended before the later one moved to where the earlier one began,
   which could be years before: a window could take in changes from long
   before it, or come back empty. `analyze_scope` selected records by the
@@ -74,19 +127,13 @@ project follows [Semantic Versioning](https://semver.org/).
   root before a window's start, and after it saved only records under the
   one it moved, was reported in neither window: `activity_timeline` and an
   `activity: true` analysis left its changes out.
-- A window edge moved to a transaction's start moves on when that instant
-  is inside another of the root's transactions, as it can be where
-  `created_at` keeps whole seconds or two versions share a time. The
-  earlier transaction was cut in two there, and part of its change
-  surfaced in the later transaction's step.
-- Two transactions that save in one record's tree at the same time, so that
-  their versions interleave, no longer credit one with the other's changes.
-  At a version of one, a record the other saved reads as it stood before the
-  other began, until the other ends, as the version's own transaction's
-  records already did. A comment one transaction created and deleted again
-  while the other saved is no longer reported as added or removed in the
-  other's steps, nor held in a window's starting state or diff, and a change
-  that outlives its transaction is reported in a step that transaction opens.
+- A window that started inside a transaction which began at the instant
+  another saved its last versions, as it can where `created_at` keeps whole
+  seconds or two versions share a time, cut the earlier transaction in two,
+  and part of its change surfaced in the later transaction's step.
+- A comment one transaction created and deleted again while another saved in
+  the same tree is no longer reported as added or removed in the other's
+  steps, nor held in a window's starting state or diff.
 
 ## [0.17.1] - 2026-11-07
 

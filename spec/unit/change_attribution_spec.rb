@@ -50,10 +50,10 @@ RSpec.describe PaperTrailDiff::ChangeAttribution do
     )
   end
 
-  def attribution(sources, preceding: [], complete: true)
+  def attribution(sources, preceding: [])
     transaction = described_class::Transaction.new
     preceding.each { |boundary| transaction.add(boundary) }
-    described_class.new(root: root, sources: sources, complete: complete, transaction: transaction)
+    described_class.new(root: root, sources: sources, transaction: transaction)
   end
 
   # Each row as its change, field, values, and the version it is credited to.
@@ -114,18 +114,15 @@ RSpec.describe PaperTrailDiff::ChangeAttribution do
         .to eq([[:changed, 'body', 'a', 'b', 2]])
     end
 
-    it 'keeps its root, completeness and earlier boundaries with a group sources' do
+    it 'keeps its root and earlier boundaries with a group sources' do
       earlier = version('AttributedComment', 7, 2, changes: { 'body' => %w[a b] })
       later = version('AttributedArticle', 1, 3, changes: { 'title' => %w[A B] })
       group = attribution([later], preceding: [earlier]).with_sources([later])
-      partial = attribution([later], complete: false).with_sources([later])
 
       expect(credited(group,
                       row(:changed, 'title', 'A', 'B'))).to eq([[:changed, 'title', 'A', 'B', 3]])
       expect(credited(group, row(:changed, 'summary', nil, 'x')))
         .to eq([[:changed, 'summary', nil, 'x', :unversioned]])
-      expect(credited(partial, row(:changed, 'summary', nil, 'x')))
-        .to eq([[:changed, 'summary', nil, 'x', 3]])
       expect(credited(group, row(:changed, 'body', 'a', 'b', record: comment)))
         .to eq([[:changed, 'body', 'a', 'b', 2]])
     end
@@ -138,8 +135,7 @@ RSpec.describe PaperTrailDiff::ChangeAttribution do
       first = version('AttributedArticle', 1, 2, changes: { 'title' => %w[B C] })
       second = version('AttributedArticle', 1, 3, changes: { 'title' => %w[C D] })
       transaction.add(earlier)
-      opening = described_class.new(root: root, sources: [first], complete: true,
-                                    transaction: transaction)
+      opening = described_class.new(root: root, sources: [first], transaction: transaction)
       [first, second].each { |boundary| transaction.add(boundary) }
 
       expect(credited(opening.with_sources([first, second]), row(:changed, 'title', 'B', 'D')))
@@ -149,8 +145,7 @@ RSpec.describe PaperTrailDiff::ChangeAttribution do
       create = version('AttributedComment', 7, 4, event: 'create',
                                                   changes: { 'body' => [nil, 'a'] })
       edit = version('AttributedComment', 7, 5, changes: { 'body' => %w[a b] })
-      opened = described_class.new(root: root, sources: [create], complete: true,
-                                   transaction: created)
+      opened = described_class.new(root: root, sources: [create], transaction: created)
       [create, edit].each { |boundary| created.add(boundary) }
 
       expect(credited(opened.with_sources([create, edit]),
@@ -175,8 +170,7 @@ RSpec.describe PaperTrailDiff::ChangeAttribution do
       first = version('AttributedComment', 7, 1, changes: { 'body' => %w[a b] })
       later = version('AttributedComment', 7, 2, changes: { 'body' => %w[b c] })
       transaction.add(first)
-      read = described_class.new(root: root, sources: [step_source], complete: true,
-                                 transaction: transaction)
+      read = described_class.new(root: root, sources: [step_source], transaction: transaction)
       transaction.add(later)
       allow(transaction).to receive(:of).and_call_original
       named = ->(boundary) { [boundary.item_type, boundary.item_id.to_s] }
@@ -232,13 +226,11 @@ RSpec.describe PaperTrailDiff::ChangeAttribution do
         .to eq([[:changed, 'title', 'A', 'B', 1], [:changed, 'title', 'B', 'Z', :unversioned]])
     end
 
-    it 'splits off what changed before the recorded value, when the transaction is whole' do
+    it 'splits off what changed before the recorded value' do
       moved = version('AttributedArticle', 1, 1, changes: { 'title' => %w[M B] })
 
       expect(credited(attribution([moved]), row(:changed, 'title', 'A', 'B')))
         .to eq([[:changed, 'title', 'A', 'M', :unversioned], [:changed, 'title', 'M', 'B', 1]])
-      expect(credited(attribution([moved], complete: false), row(:changed, 'title', 'A', 'Z')))
-        .to eq([[:changed, 'title', 'A', 'B', 1], [:changed, 'title', 'B', 'Z', :unversioned]])
     end
 
     # A step starts from the state before its source, so a root field changed
@@ -293,14 +285,7 @@ RSpec.describe PaperTrailDiff::ChangeAttribution do
 
       expect(credited(read, row(:changed, 'title', 'X', 'C')))
         .to eq([[:changed, 'title', 'X', 'C', 3]])
-      expect(credited(attribution([version('AttributedArticle', 1, 3, changes: {})],
-                                  preceding: [recorded_title], complete: false),
-                      row(:changed, 'title', 'B', 'X')))
-        .to eq([[:changed, 'title', 'B', 'X', 3]])
       expect(credited(read, row(:changed, 'title', 'B', 'C')))
-        .to eq([[:changed, 'title', 'B', 'X', :unversioned], [:changed, 'title', 'X', 'C', 3]])
-      partial = attribution([later], preceding: [recorded_title], complete: false)
-      expect(credited(partial, row(:changed, 'title', 'B', 'C')))
         .to eq([[:changed, 'title', 'B', 'X', :unversioned], [:changed, 'title', 'X', 'C', 3]])
     end
 
@@ -357,9 +342,6 @@ RSpec.describe PaperTrailDiff::ChangeAttribution do
         .to eq([[:changed, 'summary', nil, 'x', :unversioned]])
       expect(credited(attribution([edit]), row(:changed, 'rank', 1, 2, record: comment)))
         .to eq([[:changed, 'rank', 1, 2, 2]])
-      expect(credited(attribution([recorded_title], complete: false),
-                      row(:changed, 'summary', nil, 'x')))
-        .to eq([[:changed, 'summary', nil, 'x', 1]])
     end
 
     it 'names the record and no version, author, event or time' do

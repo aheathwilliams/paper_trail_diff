@@ -153,7 +153,7 @@ RSpec.describe 'Change row sources',
       expect(ignored).not_to include(be_unversioned)
     end
 
-    it 'keeps a change before a window whole when its transaction began before the window' do
+    it 'credits a change before a window to its own version when its transaction ends inside' do
       article = TrackedArticle.create!(title: 'A')
       comment = article.comments.create!(body: 'one')
       start = nil
@@ -168,7 +168,7 @@ RSpec.describe 'Change row sources',
       ).flat_map(&:change_rows)
 
       expect(table(edits(rows)).map { |row| row.values_at(2, 3, 4, 5) })
-        .to eq([['body', 'one', 'two', version_of(comment)],
+        .to eq([['body', 'one', 'two', comment.versions.reorder(:created_at, :id)[-2].id],
                 ['reviewer_id', nil, 3, version_of(comment)]])
     end
 

@@ -60,8 +60,8 @@ RSpec.describe PaperTrailDiff::ActivityTransactionGroups do
       expect(groups.branches_for(event(3, 9, branches: ['author']))).to eq(['author'])
     end
 
-    it 'reads an opening transaction whole' do
-      groups = described_class.new([event(1, 7)], opening: [['GroupsVersion', 7]])
+    it 'tells transactions numbered alike in two version tables apart' do
+      groups = described_class.new([event(1, 7, branches: nil)])
 
       expect(groups.branches_for(event(1, 7))).to be_nil
       expect(groups.branches_for(event(1, 7, table: GroupsOtherVersion))).to eq(['comments'])
@@ -72,28 +72,26 @@ RSpec.describe PaperTrailDiff::ActivityTransactionGroups do
     it 'tells an event alone in its transaction, or outside one, from one that shares it' do
       shared = [event(1, 7), event(2, 7)]
       alone = event(3, 8)
-      opening = event(4, 9)
-      groups = described_class.new([*shared, alone, opening], opening: [['GroupsVersion', 9]])
+      groups = described_class.new([*shared, alone])
 
-      asked = [*shared, alone, event(5, nil), opening, event(6, 10)]
+      asked = [*shared, alone, event(5, nil), event(6, 10)]
 
       expect(asked.map { |each| groups.isolated?(each) })
-        .to eq([false, false, true, true, false, false])
+        .to eq([false, false, true, true, false])
     end
   end
 
   describe '#shared?' do
-    it 'tells two events of one transaction from those of another, of none, or of an opening one' do
-      groups = described_class.new([event(1, 7), event(2, 7), event(3, 8), event(4, 9)],
-                                   opening: [['GroupsVersion', 9]])
+    it 'tells two events of one transaction from those of another or of none' do
+      groups = described_class.new([event(1, 7), event(2, 7), event(3, 8)])
 
       pairs = [
         [event(1, 7), event(2, 7)], [event(2, 7), event(3, 8)], [event(5, nil), event(6, nil)],
-        [event(1, 7), event(7, 7, table: GroupsOtherVersion)], [event(4, 9), event(8, 9)]
+        [event(1, 7), event(7, 7, table: GroupsOtherVersion)]
       ]
 
       expect(pairs.map { |left, right| groups.shared?(left, right) })
-        .to eq([true, false, false, false, false])
+        .to eq([true, false, false, false])
     end
   end
 end

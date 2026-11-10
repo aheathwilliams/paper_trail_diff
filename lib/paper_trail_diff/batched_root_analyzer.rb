@@ -19,8 +19,8 @@ module PaperTrailDiff
       @view = view
     end
 
-    # `window` is the root's window as the batch moved it to transaction edges,
-    # or nil when the batch reads each root's whole history.
+    # `window` is the batch's window, or nil when it reads each root's whole
+    # history.
     #: (untyped, RootVersionPlan, TimeRange?) -> Analysis
     def call(record, plan, window)
       @preparer.call(record.class, historical: true)

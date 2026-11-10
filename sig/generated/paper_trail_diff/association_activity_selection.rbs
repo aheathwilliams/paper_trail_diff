@@ -42,6 +42,13 @@ module PaperTrailDiff
     # : (Array[source]) -> Array[untyped]
     def self.values: (Array[source]) -> Array[untyped]
 
+    # The window roots are selected over: the one asked for, and with a tree,
+    # from where the earliest transaction open at its start began (see
+    # CrossingTransactions). A window reports such a transaction, which may
+    # have saved a root's tree only before it.
+    # : (untyped, AssociationTree?, TimeRange?) -> TimeRange?
+    def self.window: (untyped, AssociationTree?, TimeRange?) -> TimeRange?
+
     # Only the versions `version_scope` keeps select a root, on its
     # associations as on its own versions.
     # : (untyped, tree: AssociationTree, time_range: TimeRange?, ?version_scope: untyped) -> void

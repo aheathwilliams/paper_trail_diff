@@ -102,6 +102,29 @@ RSpec.describe PaperTrailDiff::TransactionAnchors do
     end
   end
 
+  describe '.shared' do
+    it 'names the numbers that first versions of more than one table carry' do
+      version(70, 0, 70)
+      version(70, 5, 70, table: FilterJsonVersion)
+      version(71, 1, 71)
+      version(72, 2, 71, table: FilterJsonVersion)
+      version(73, 3, 73, table: FilterJsonVersion)
+      version(74, 4, 70)
+
+      expect(described_class.shared(FilterVersion, [70, 71, 72, 73, 74])).to eq([70])
+      expect(described_class.shared(FilterVersion, [71])).to eq([])
+    end
+
+    it 'names none, and reads nothing, when the version table is the only one' do
+      known(FilterVersion)
+      version(70, 0, 70)
+
+      allow(FilterVersion).to receive(:where)
+      expect(described_class.shared(FilterVersion, [70])).to eq([])
+      expect(FilterVersion).not_to have_received(:where)
+    end
+  end
+
   describe '.continued' do
     def continued(ids)
       saved = FilterVersion.where(FilterVersion.arel_table[:created_at].lt(noon))

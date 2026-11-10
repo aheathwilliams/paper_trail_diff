@@ -53,6 +53,19 @@ module PaperTrailDiff
       sources.flat_map { |ids| ids.is_a?(Query) ? ids.values : ids }.uniq
     end
 
+    # The window roots are selected over: the one asked for, and with a tree,
+    # from where the earliest transaction open at its start began (see
+    # CrossingTransactions). A window reports such a transaction, which may
+    # have saved a root's tree only before it.
+    #: (untyped, AssociationTree?, TimeRange?) -> TimeRange?
+    def self.window(model, tree, range)
+      return range unless range && tree && !tree.empty?
+
+      types = [model.base_class.name, *AssociationTraversal.new(tree).path_types(model)]
+      reach = CrossingTransactions.open_among(types, range.begin_time, range.end_time)
+      reach ? range.widened(reach.first, nil) : range
+    end
+
     # Only the versions `version_scope` keeps select a root, on its
     # associations as on its own versions.
     #: (untyped, tree: AssociationTree, time_range: TimeRange?, ?version_scope: untyped) -> void

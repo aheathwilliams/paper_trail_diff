@@ -142,21 +142,6 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
       expect(select(model, time_range: since(start)).records).to eq([live])
     end
 
-    # Such a transaction moves the root's window back to take its version in
-    # (see TransactionCut).
-    it 'selects a root saved before the window in a transaction that saved its paths inside it' do
-      root, other = %w[Root Other].map { |title| model.create!(title: title) }
-      start = model.transaction do
-        root.update!(title: 'Root edited')
-        Time.now.utc.tap { other.update!(title: 'Other edited') }
-      end
-      paths = instance_double(PaperTrailDiff::AssociationTraversal)
-      allow(paths).to receive(:path_types).with(model).and_return([model.name])
-
-      expect(select(model, time_range: since(start), traversal: paths).records).to eq([root, other])
-      expect(select(model, time_range: since(start)).records).to eq([other])
-    end
-
     it 'selects nothing from an empty window' do
       model.create!(title: 'Before')
 
@@ -440,24 +425,6 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
       result = select(latest, time_range: since(start), historical_filter: { 'title' => 'Draft' })
 
       expect(result.records.map(&:id)).to eq([ann_draft.id, TrackedArticle.maximum(:id)])
-    end
-
-    # Such a transaction moves the root's window back to where it began, so
-    # the filter reads it from there (see TransactionCut).
-    it 'reads a root over the window a transaction crossing its start moved it to' do
-      root, other = %w[Root Other].map { |title| TrackedArticle.create!(title: title) }
-      start = TrackedArticle.transaction do
-        root.update!(title: 'Root edited')
-        Time.now.utc.tap { other.update!(title: 'Other edited') }
-      end
-      paths = instance_double(PaperTrailDiff::AssociationTraversal)
-      allow(paths).to receive(:path_types).with(TrackedArticle).and_return(['TrackedArticle'])
-      filtered = lambda do |traversal|
-        select(TrackedArticle, time_range: since(start), historical_filter: { 'title' => 'Root' },
-                               traversal: traversal).records
-      end
-
-      expect([filtered.call(paths), filtered.call(nil)]).to eq([[root], []])
     end
 
     it 'reads states from the window only' do

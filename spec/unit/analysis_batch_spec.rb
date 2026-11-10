@@ -14,9 +14,14 @@ RSpec.describe PaperTrailDiff::AnalysisBatch do
     analyze.tap { |call| call.define_singleton_method(:empty) { AnalysisStandIn.new(nil) } }
   end
   let(:history_preparer) do
-    ->(records, versions, **range) { prepared << [records, versions, range] }
+    lambda do |records, versions, reach: true, **range|
+      prepared << [records, versions, range]
+      reaches.shift if reach
+    end
   end
 
+  # How far the history of each read says its transactions reach, in turn.
+  def reaches = (@reaches ||= [])
   before do
     FilterVersion.delete_all
     FilterArticle.unscoped.delete_all
@@ -59,14 +64,11 @@ RSpec.describe PaperTrailDiff::AnalysisBatch do
     end
   end
 
-  # The requested paths reach the notes a transaction saves with a root.
   def batch(records, within: nil, version_scope: nil, context: false)
     described_class.new(
       records, time_range: within && PaperTrailDiff::TimeRange.new(within),
                live_loader: live_loader, history_preparer: history_preparer,
-               analyzer: analyzer, version_scope: version_scope, context_required: context,
-               traversal: instance_double(PaperTrailDiff::AssociationTraversal,
-                                          path_types: ['FilterNote'])
+               analyzer: analyzer, version_scope: version_scope, context_required: context
     )
   end
 
@@ -138,18 +140,17 @@ RSpec.describe PaperTrailDiff::AnalysisBatch do
     expect(analyzed.sole[1].mutations).to eq([updated])
   end
 
-  it 'passes each root its window, moved to the start of a transaction crossing its edge' do
-    moved, _created, updated = article
-    unmoved, = article(minutes: [0, 2])
-    updated.update_columns(transaction_id: 7)
-    FilterVersion.insert({ item_type: 'FilterNote', item_id: 1, event: 'update',
-                           created_at: at(1.5), transaction_id: 7 })
+  it 'plans a window again over how far its transactions reach, and passes the window as asked' do
+    record, _created, updated = article
+    other, = article(minutes: [0, 2])
+    reaches << [at(1), nil]
 
-    result = analyze([moved, unmoved], within: at(1.25)..at(3))
+    result = analyze([record, other], within: at(1.25)..at(3))
 
-    expect(analyzed.map { |record, _plan, window| [record, window.to_range] })
-      .to eq([[moved, at(1)..at(3)], [unmoved, at(1.25)..at(3)]])
-    expect(result.fetch(key(moved)).window).to eq(at(1)..at(3))
+    expect(analyzed.map { |root, plan, window| [root, plan.versions.first, window.to_range] })
+      .to eq([[record, updated, at(1.25)..at(3)],
+              [other, FilterVersion.where(item_id: other.id).order(:id).last, at(1.25)..at(3)]])
+    expect(result.fetch(key(record)).window).to eq(at(1.25)..at(3))
   end
 
   # An activity view reports association changes in such a window, so it

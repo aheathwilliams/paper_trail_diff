@@ -47,22 +47,28 @@ module PaperTrailDiff
     # `activity_tree` names the association paths whose changes also select a
     # root, as an activity analysis reports them. Without one, only a root's
     # own versions select it. `version_scope` narrows which of either count,
-    # as it narrows which are reported. `traversal` names the requested paths,
-    # which decide where a window's edges move (see TransactionCut).
-    #: (untyped, time_range: TimeRange?, limit: Integer, ?historical_filter: untyped, ?max_filter_versions: Integer, ?activity_tree: AssociationTree?, ?version_scope: untyped, ?traversal: AssociationTraversal?) -> void
+    # as it narrows which are reported.
+    #
+    # A window selects by the versions saved in it. A transaction that saves
+    # there and ends after it is reported in a later window (see
+    # TransactionEnds), so a root can be selected with nothing to report. One
+    # open at the window's start is reported in it, though it may have saved
+    # the root's tree only before it, so with associations the roots are
+    # selected from where the earliest such transaction began.
+    #: (untyped, time_range: TimeRange?, limit: Integer, ?historical_filter: untyped, ?max_filter_versions: Integer, ?activity_tree: AssociationTree?, ?version_scope: untyped) -> void
     def initialize(scope, time_range:, limit:, historical_filter: nil, # rubocop:disable Metrics/ParameterLists
                    max_filter_versions: HistoricalFilter::DEFAULT_VERSION_LIMIT, activity_tree: nil,
-                   version_scope: nil, traversal: nil)
+                   version_scope: nil)
       @scope = normalize_scope(scope)
       reject_unversioned!
       @time_range = time_range
-      @path_types = traversal ? traversal.path_types(model) : [] #: Array[String]
       @version_scope = VersionScopeFilter.validated(version_scope)
       @limit = validate_limit(limit)
+      @selecting = AssociationActivitySelection.window(model, activity_tree, time_range)
       @related = activity_tree && AssociationActivitySelection.new(
-        model, tree: activity_tree, time_range: time_range, version_scope: @version_scope
+        model, tree: activity_tree, time_range: @selecting, version_scope: @version_scope
       )
-      @historical_filter = historical_filter_for(historical_filter, max_filter_versions, traversal)
+      @historical_filter = historical_filter_for(historical_filter, max_filter_versions)
     end
 
     #: () -> Result
@@ -78,11 +84,11 @@ module PaperTrailDiff
 
     # @rbs @scope: untyped
     # @rbs @time_range: TimeRange?
+    # @rbs @selecting: TimeRange?
     # @rbs @limit: Integer
     # @rbs @historical_filter: untyped
     # @rbs @related: AssociationActivitySelection?
     # @rbs @version_scope: untyped
-    # @rbs @path_types: Array[String]
 
     # Leaves the candidate set in the database. Plucking every root changed in
     # the window would cost memory and a statement proportional to all activity
@@ -163,23 +169,21 @@ module PaperTrailDiff
     end
 
     # Only the versions `version_scope` keeps select a root: one whose versions
-    # in the window it drops would have nothing to report. A version saved
-    # just before the window selects its root when TransactionCut moves the
-    # root's window back to take it in.
+    # in the window it drops would have nothing to report.
     #: () -> untyped
     def window_versions
-      relation = TransactionCut.window_versions(model, @time_range, @path_types)
+      range = @selecting
+      relation = VersionQuery.for_model(model)
+      relation = range.scope(relation) if range
       @version_scope ? @version_scope.call(relation) : relation
     end
 
-    # The filter reads each candidate over the window its analysis will.
-    #: (untyped, Integer, AssociationTraversal?) -> HistoricalFilter?
-    def historical_filter_for(predicate, max_versions, traversal)
+    #: (untyped, Integer) -> HistoricalFilter?
+    def historical_filter_for(predicate, max_versions)
       return if predicate.nil?
 
       HistoricalFilter.new(base_class, predicate: predicate, time_range: @time_range,
-                                       limit: @limit, max_versions: max_versions,
-                                       windows: TransactionCut.reader(model, traversal))
+                                       limit: @limit, max_versions: max_versions)
     end
 
     # Accepts a model class as readily as a relation: `Article` and
@@ -307,9 +311,7 @@ module PaperTrailDiff
     end
 
     #: () -> untyped
-    def base_class
-      model.base_class
-    end
+    def base_class = model.base_class
 
     #: () -> untyped
     def primary_key

@@ -19,7 +19,8 @@ module PaperTrailDiff
     end
 
     # A tie between version tables, or between ids that do not count up,
-    # raises rather than building a timeline in an arbitrary order.
+    # raises rather than building a timeline in an arbitrary order. The events
+    # are in the order their transactions end (see TransactionEnds).
     #: () -> Array[ActivityEvent]
     def call
       @registry.add(@root_versions)
@@ -27,9 +28,7 @@ module PaperTrailDiff
       unless tree.empty?
         collect_tree(group(@record.class, [@record.id]), tree, path: '', branch: nil)
       end
-      events = @registry.to_a.sort_by { |event| Support.chronological_version_key(event.version) }
-      pair = Support.ambiguous_pair(events.map(&:version))
-      pair ? raise(AmbiguousVersionOrderError, Support.ambiguous_message(pair)) : events.freeze
+      ordered(@registry.to_a)
     end
 
     private
@@ -40,6 +39,18 @@ module PaperTrailDiff
     # @rbs @traversal: AssociationTraversal
     # @rbs @range: ActivityRange
     # @rbs @registry: ActivityEventRegistry
+
+    #: (Array[ActivityEvent]) -> Array[ActivityEvent]
+    def ordered(events)
+      events = events.sort_by { |event| Support.chronological_version_key(event.version) }
+      pair = Support.ambiguous_pair(events.map(&:version))
+      raise(AmbiguousVersionOrderError, Support.ambiguous_message(pair)) if pair
+
+      prepared = @prepared #: PreparedActivityIndex?
+      versions = events.map(&:version)
+      ends = prepared ? prepared.transaction_ends(versions) : TransactionEnds.new(versions)
+      events.sort_by { |event| ends.sort_key(event.version) }.freeze
+    end
 
     # Each event is credited to the top-level association it was reached
     # through.
