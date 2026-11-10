@@ -203,8 +203,11 @@ places a transaction alike, whichever of its records the window reads. A
 version table whose ids do not count up, such as one keyed by UUID, names the
 last version by when it was saved. Without associations, each version of the
 record is reported where it was saved, since nothing else of its transaction
-is read. `timeline` compares the record's own versions, and reports each
-where it was saved too.
+is read. `timeline`, and `analyze` without `activity:`, compare the record's
+own versions, and report each where it was saved too. With associations, the
+records around each of those versions still read as they stood before every
+transaction that had not ended yet, so an associated record's change is
+reported once, in the step where its transaction ends.
 
 Two transactions that save in one record's tree at the same time interleave
 their versions. Each is reported as if it ran alone, in the order they end: a

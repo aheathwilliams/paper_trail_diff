@@ -33,10 +33,11 @@ project follows [Semantic Versioning](https://semver.org/).
     transaction that destroyed the record ends inside the window, as
     `analyze_scope` with `include_deleted: true` does. `analyze` and
     `activity_timeline` raised `IncompleteTimeRangeError` there.
-- A window with associations runs one more statement per version table, to
-  find the transactions open at its start, and no longer one per 250 records
+- A window with associations, with `activity: true` or without, runs one
+  more statement per version table, to find the transactions open at its
+  start, and no longer one per 250 records
   for each edge, and `analyze_scope` and `report` run it once more to select
-  their records. Activity with associations runs one more statement per 500
+  their records. A read with associations runs one more statement per 500
   transactions its history holds, to read where each ends. See
   [performance](docs/performance.md#what-still-grows).
 
@@ -120,6 +121,18 @@ project follows [Semantic Versioning](https://semver.org/).
   Arrays of objects took time proportional to its square: 16,000 objects
   took 53 s and now take 0.2 s. Results are unchanged.
 
+- Without `activity:`, `analyze`, `analyze_many`, `analyze_scope` and
+  `timeline` with associations could report an associated record's change
+  backwards, and then again forwards, when two transactions interleaved: one
+  edited a comment, another saved the article, and the first then saved the
+  article too. The comment read as edited at the other transaction's version
+  and as not yet edited at its own. Whether it did depended on how far back
+  the history read went, so `analyze_many` could disagree with `analyze` for
+  the same record. These reads now place each associated record's change
+  where its transaction ends, as activity does, and report it once. They
+  run the statements activity runs for that: one per version table for a
+  window, to find the transactions open at its start, and one per 500
+  transactions the history holds.
 - Two transactions that saved in one record's tree at the same time
   interleave their versions, and activity timelines read them wrongly in four
   ways, all fixed by reading each transaction where it ends:

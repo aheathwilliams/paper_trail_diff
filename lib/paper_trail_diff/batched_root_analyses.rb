@@ -7,11 +7,12 @@ module PaperTrailDiff
   # plan over the batch's window. AnalysisBatch and DeletedAnalysisBatch
   # differ only in how they find their roots and plans.
   class BatchedRootAnalyses
-    # `planner` selects the roots' plans over a window. With `activity`, on
-    # associations, a window's roots are read from where the earliest
-    # transaction open at its start began, and each reports those that end
-    # inside it (see TransactionEnds). Without it each version is reported
-    # where it was saved, so the window is read as it is.
+    # `planner` selects the roots' plans over a window. On associations, a
+    # window's history is read from where the earliest transaction open at
+    # its start began. With `activity`, the roots are planned from there too,
+    # and each reports the transactions that end inside the window (see
+    # TransactionEnds). Without it each root version is reported where it
+    # was saved, so the roots are planned over the window as it is.
     #: (time_range: TimeRange?, planner: untyped, history_preparer: untyped, analyzer: untyped, activity: bool) -> void
     def initialize(time_range:, planner:, history_preparer:, analyzer:, activity:)
       @time_range = time_range
@@ -42,18 +43,18 @@ module PaperTrailDiff
     # @rbs @history_preparer: untyped
     # @rbs @analyzer: untyped
 
-    # The plans the roots are read with: over the window, or from where the
-    # earliest transaction open at its start began, when the history read for
-    # it says one was.
+    # The plans the roots are read with: over the window, or with activity
+    # from where the earliest transaction open at its start began, when the
+    # history read for it says one was.
     #: (Array[untyped], Hash[Array[String], untyped]) -> Hash[Array[String], RootVersionPlan]
     def prepare(records, loaded)
       range = @time_range
       plans = @planner.call(records, range)
-      reach = prepare_history(records, plans, loaded, range, reach: @activity && !range.nil?)
+      reach = prepare_history(records, plans, loaded, range, reach: !range.nil?)
       return plans unless reach && range
 
       range = range.widened(reach)
-      plans = @planner.call(records, range)
+      plans = @planner.call(records, range) if @activity
       prepare_history(records, plans, loaded, range, reach: false)
       plans
     end
@@ -65,13 +66,17 @@ module PaperTrailDiff
       selected = records.map { |record| plans.fetch(Endpoint.identity(record)) }
       versions = selected.flat_map(&:reconstruction_versions)
       live = selected.any?(&:closing_record)
-      # Roots gone before a window are still asked how far the transactions
-      # open at its start reach, since one of them may have destroyed them.
-      return if versions.empty? && !live && !reach
+      return if versions.empty? && !live && !gone_asked?(reach)
 
       @history_preparer.call(current(records, loaded), versions,
                              reach: reach, **preparation_range(versions, range, live: live))
     end
+
+    # Roots gone before a window are still asked how far the transactions
+    # open at its start reach, since one of them may have destroyed them and
+    # ended inside it. Without activity nothing of theirs is reported there.
+    #: (bool) -> bool
+    def gone_asked?(reach) = reach && @activity
 
     # Each root as the batch loaded it, where it did.
     #: (Array[untyped], Hash[Array[String], untyped]) -> Array[untyped]

@@ -152,7 +152,7 @@ Keep PT-AT's own index on `version_associations` (`foreign_key_name`,
 - Repeated events in one very wide collection still copy that collection's
   list of records for each step. The comparison work stays small, but memory
   traffic grows with *events × collection size*.
-- Activity with associations asks its version table where each transaction
+- A read with associations asks its version table where each transaction
   it holds ends, and a `within:` or `since:` window asks which transactions
   were open at its start (see [time windows](reference.md#time-windows)).
   The first takes one statement per 500 transactions; the second reads the

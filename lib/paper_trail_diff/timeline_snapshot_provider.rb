@@ -10,14 +10,18 @@ module PaperTrailDiff
       @live_snapshotter = live_snapshotter
     end
 
-    # A window's history is read from its start, as a batch reads it, so that
-    # a record reads the same at a root version whose transaction saved it
-    # earlier in the window. Each version is reported where it was saved, so
-    # how far the window's transactions reach is not asked.
+    # Each root version is reported where it was saved, and the records
+    # around it read as they stood before every transaction that had not
+    # ended yet (see TransactionEnds). So a window's history is read from
+    # where the earliest transaction open at its start began, as a batch
+    # reads it: one of them may have saved a record before the window.
     #: (untyped, Array[untyped], ?start_at: untyped) -> PreparedTimelineSnapshots
     def prepare(record, versions, start_at: nil)
-      history = @store.prepare(record, versions, start_at: start_at, reach: false)
-      PreparedTimelineSnapshots.new(history, store: @store, live_snapshotter: @live_snapshotter)
+      history = @store.prepare(record, versions, start_at: start_at)
+      reach = history&.reach
+      history = @store.prepare(record, versions, start_at: reach, reach: false) if reach
+      PreparedTimelineSnapshots.new(history, versions, store: @store,
+                                                       live_snapshotter: @live_snapshotter)
     end
 
     # @rbs @store: HistoricalSnapshotStore
@@ -29,9 +33,10 @@ module PaperTrailDiff
   # nil create state, is kept for this root only and released with it, and
   # batch memory does not retain every reconstructed graph.
   class PreparedTimelineSnapshots
-    #: (PreparedHistory?, store: HistoricalSnapshotStore, live_snapshotter: untyped) -> void
-    def initialize(history, store:, live_snapshotter:)
+    #: (PreparedHistory?, Array[untyped], store: HistoricalSnapshotStore, live_snapshotter: untyped) -> void
+    def initialize(history, versions, store:, live_snapshotter:)
       @history = history
+      @ends = history&.transaction_ends(versions)
       @store = store
       @live_snapshotter = live_snapshotter
       @snapshots = {} #: Hash[Array[untyped], RecordSnapshot?]
@@ -47,11 +52,25 @@ module PaperTrailDiff
       @snapshots[key] = if Endpoint.record?(endpoint)
                           @live_snapshotter.call(endpoint)
                         else
-                          @store.uncached(endpoint, endpoint, history: @history)
+                          at_version(endpoint)
                         end
     end
 
+    private
+
+    #: (untyped) -> RecordSnapshot?
+    def at_version(version)
+      history = @history
+      ends = @ends
+      return @store.uncached(version, version) unless history && ends
+
+      snapshot = nil #: RecordSnapshot?
+      history.reading(ends) { snapshot = @store.uncached(version, version, history: history) }
+      snapshot
+    end
+
     # @rbs @history: PreparedHistory?
+    # @rbs @ends: TransactionEnds?
     # @rbs @store: HistoricalSnapshotStore
     # @rbs @live_snapshotter: untyped
     # @rbs @snapshots: Hash[Array[untyped], RecordSnapshot?]

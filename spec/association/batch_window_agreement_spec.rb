@@ -35,6 +35,13 @@ RSpec.describe 'A window read for one record and in a batch' do
     analysis.timeline.map { |step| step.diff.to_h.fetch(:attributes).fetch('title').values }
   end
 
+  # The change each step reports to the body of the article's comment.
+  def bodies(analysis)
+    analysis.timeline.map do |step|
+      step.diff.to_h.dig(:associations, 'comments', :changed, 0, :attributes, 'body')&.values
+    end
+  end
+
   # Each step as its boundaries' versions and its diff. A boundary at the
   # current record carries when it was read, which differs between reads.
   def steps(timeline)
@@ -121,8 +128,10 @@ RSpec.describe 'A window read for one record and in a batch' do
     end
   end
 
-  # Each version is reported where it was saved, so a window is read as it
-  # is, however its transactions cross its edges.
+  # Each root version is reported where it was saved, so a window is read as
+  # it is, however its transactions cross its edges. The records around a
+  # root version read as they stood before every transaction that had not
+  # ended yet.
   describe 'without activity' do
     let(:options) { { associations: [:comments] } }
 
@@ -172,6 +181,29 @@ RSpec.describe 'A window read for one record and in a batch' do
       single, batch = both(article, within: start.., **options)
 
       expect(steps(batch.timeline)).to eq(steps(single.timeline))
+    end
+
+    # S edits the comment before the window; R saves the article inside it,
+    # then S does. P, of another article, began before S, so a batch's
+    # history starts before S's edit, and a single read's is read again from
+    # there.
+    it 'reports a change once, where its transaction ends, whatever else a batch reads' do
+      article = TrackedArticle.create!(title: 'one')
+      comment = article.comments.create!(body: 'comment')
+      other = TrackedArticle.create!(title: 'other')
+      other_comment = other.comments.create!(body: 'other comment')
+      in_transaction(3, 'P') { other_comment.update!(body: 'P begins') }
+      in_transaction(1, 'S') { comment.update!(body: 'edited by S') }
+      start = Time.now
+      in_transaction(3, 'P') { other.update!(title: 'other two') }
+      in_transaction(2, 'R') { article.update!(title: 'two') }
+      in_transaction(1, 'S') { article.update!(title: 'three') }
+      article.update!(title: 'four')
+
+      single, batch = both(article, [other], within: start.., **options)
+
+      expect([bodies(single), bodies(batch)])
+        .to eq([[nil, ['comment', 'edited by S'], nil]] * 2)
     end
   end
 end

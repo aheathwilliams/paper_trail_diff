@@ -98,9 +98,10 @@ Flat query counts do not make a report's cost flat:
   0.27 s for one that began near its start. An index on `created_at` alone
   took the first to 0.006 s and left the others as they were. `analyze_scope`
   and `report` run it once more, to select the records such a transaction
-  saved before the window. A
-  window without associations, and `timeline`, run none of these statements.
-- **Activity with associations reads where its transactions end.** A
+  saved before the window. A read without associations runs none of these
+  statements, with a window or not.
+- **A read with associations reads where its transactions end**, with
+  `activity: true` or without. A
   transaction takes effect at the last version it saved, of any record, so a
   history asks its version table for the last version of each transaction it
   holds: one statement per 500 transactions, and one more when some of those

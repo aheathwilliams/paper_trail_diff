@@ -202,15 +202,18 @@ RSpec.describe PaperTrailDiff::BatchedRootAnalyses do
       expect(asked).to eq([true, false])
     end
 
-    # Each version is reported where it was saved, so the window is read as
-    # it is.
-    it 'reads a window once without activity, and does not ask how far it reaches' do
+    # Each root version is reported where it was saved, so the roots are
+    # planned once; the records around them are read from where the open
+    # transactions began.
+    it 'plans a window once without activity, and prepares it again from the reach' do
       article, plan = root(minutes: [1, 2])
       reaches << at(0.5)
 
       analyze([[article, plan]], within: at(1)...at(3), activity: false)
 
-      expect([planned, asked]).to eq([[at(1)...at(3)], [false]])
+      expect([planned, asked]).to eq([[at(1)...at(3)], [true, false]])
+      expect(prepared.map(&:last)).to eq([{ start_at: at(1), end_at: at(3) },
+                                          { start_at: at(0.5), end_at: at(3) }])
     end
 
     it 'reads a window once when no transaction reaches outside it, and a history once' do
