@@ -3,11 +3,14 @@
 require_relative '../support/association_database'
 
 # Only reflections are read, apart from one comparison that is refused before
-# any history is, so these reuse the fixture tables.
+# any history is, so these reuse the fixture tables. Each target declares a
+# belongs_to back, so the key rule alone decides.
 class KeyedSpecComment < ActiveRecord::Base
   self.table_name = 'tracked_comments'
   belongs_to :keyed_reviewer, class_name: 'TrackedAuthor', foreign_key: :body,
                               primary_key: :name, optional: true
+  belongs_to :identity_article, class_name: 'KeyedSpecArticle', foreign_key: :article_id,
+                                optional: true
   has_paper_trail
 end
 
@@ -37,6 +40,7 @@ end
 class KeyedSpecNamedAuthor < ActiveRecord::Base
   self.table_name = 'tracked_authors'
   self.primary_key = 'name'
+  belongs_to :id_keyed_article, class_name: 'KeyedSpecArticle', foreign_key: :name, optional: true
   has_paper_trail
 end
 

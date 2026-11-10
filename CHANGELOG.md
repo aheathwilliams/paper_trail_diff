@@ -71,6 +71,18 @@ project follows [Semantic Versioning](https://semver.org/).
   scope the gem cannot read. On SQL Server this leaves out a legacy `datetime` or `smalldatetime` key, which
   rounds the times it stores.
 
+- A `has_many` or `has_one` whose target declares no `belongs_to` on its
+  foreign key, and a `has_many :through` with such a part, now raises
+  `UnsupportedAssociationError` up front in every method. `diagnose` reports
+  it as `:unsupported_association` and `association_paths` leaves it out.
+  PT-AT records a record's owner on the record's own versions, once for each
+  `belongs_to` it declares, so with none nothing said a record that was
+  destroyed or moved away had been in the association: `compare`, timelines,
+  analyses and `report` showed the records the association holds now and
+  silently left out the ones that left. Declare the `belongs_to` on the
+  target to request the path. Versions saved before then recorded no owner,
+  so a record that left before then is still not reported.
+
 ### Fixed
 
 - An activity timeline no longer reads a whole collection again for each event

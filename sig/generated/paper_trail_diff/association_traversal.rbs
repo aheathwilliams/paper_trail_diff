@@ -49,7 +49,8 @@ module PaperTrailDiff
     # : (untyped, untyped, root: bool) -> String?
     def self.unsupported_reason: (untyped, untyped, root: bool) -> String?
 
-    # History matches records by primary key, within one set of version tables.
+    # History matches records by primary key, within one set of version
+    # tables, and finds a child's owner where the child's versions recorded it.
     # : (untyped) -> String?
     def self.storage_reason: (untyped) -> String?
 

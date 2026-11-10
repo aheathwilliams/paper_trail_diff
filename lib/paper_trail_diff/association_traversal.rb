@@ -97,10 +97,12 @@ module PaperTrailDiff
         'whose hidden join model has no history to compare'
     end
 
-    # History matches records by primary key, within one set of version tables.
+    # History matches records by primary key, within one set of version
+    # tables, and finds a child's owner where the child's versions recorded it.
     #: (untyped) -> String?
     def self.storage_reason(reflection)
-      AssociationKey.unsupported_reason(reflection) || VersionTable.unsupported_reason(reflection)
+      AssociationKey.unsupported_reason(reflection) ||
+        VersionTable.unsupported_reason(reflection) || RecordedOwner.unsupported_reason(reflection)
     end
     private_class_method :storage_reason
 

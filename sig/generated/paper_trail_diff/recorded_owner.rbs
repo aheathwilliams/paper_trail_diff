@@ -14,10 +14,28 @@ module PaperTrailDiff
     # : (untyped, untyped) -> Array[String?]
     def self.types: (untyped, untyped) -> Array[String?]
 
+    # Why history cannot say which records left a has_many or has_one, or a
+    # part of a through: its target declares no belongs_to on the foreign
+    # key, so no version of a target names an owner. Such a path would show
+    # the records it holds now, and none that was destroyed or moved away.
+    # : (untyped) -> String?
+    def self.unsupported_reason: (untyped) -> String?
+
+    # A belongs_to and a HABTM are recorded on the owner's own versions, and
+    # a through by its parts. PT-AT cannot record a composite key, which is
+    # read another way (see FallbackPaths), and a target without versions is
+    # refused for that.
+    # : (untyped) -> bool
+    def self.unrecorded?: (untyped) -> bool
+
     # The classes named by the belongs_to associations on the reflection's
     # foreign key, as its target declares them or a subclass of its target
     # does.
     # : (untyped) -> Array[String]
     def self.declared_types: (untyped) -> Array[String]
+
+    # The model's belongs_to associations on the reflection's foreign key.
+    # : (untyped, untyped) -> Array[untyped]
+    def self.inverses: (untyped, untyped) -> Array[untyped]
   end
 end

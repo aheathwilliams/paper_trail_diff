@@ -1023,7 +1023,8 @@ diff = PaperTrailDiff.compare(from, to, associations: [:author, "comments.replie
 (`associations: [:author, { comments: :replies }]`).
 
 Supported: `belongs_to`, `has_one`, `has_many` (including `:through`), and
-`has_and_belongs_to_many`. Associated models must use `has_paper_trail`, and
+`has_and_belongs_to_many`. Associated models must use `has_paper_trail`, the
+target of a `has_one` or `has_many` must declare the `belongs_to` back, and
 historical states need PT-AT installed and enabled
 (`PaperTrail.config.track_associations = true`). The gem never follows
 associations you did not ask for, so cyclic models are safe.
@@ -1108,6 +1109,15 @@ comments.changed.first.associations["replies"].added
   pointed at by that record's ID, so history read that way would show other
   records' children. `association_paths` leaves it out. Naming the primary key
   itself, `primary_key: :id`, is accepted.
+- A `has_many` or `has_one` whose target declares no `belongs_to` on its
+  foreign key, such as `has_many :comments` when `Comment` has no
+  `belongs_to :article`, raises `UnsupportedAssociationError` up front in
+  every method, and so does a `has_many :through` with such a part. PT-AT
+  records a record's owner on the record's own versions, once for each
+  `belongs_to` it declares, so with none nothing says a comment that was
+  destroyed or moved away was ever the article's. `association_paths` leaves
+  it out. Declare the `belongs_to` to request the path; versions saved before
+  then recorded no owner, so a record that left before then is not reported.
 - A root that uses single-table inheritance gets the associations of the
   class it had at each version, so you can request one that only a subclass
   declares. Without an `item_subtype` column, PaperTrail stores only the base
@@ -1762,7 +1772,7 @@ All errors inherit from `PaperTrailDiff::Error`.
 | `FilterLimitExceededError` | `historical_filter:` needs more than `max_filter_versions:` |
 | `AssociationTrackingUnavailableError` | Association history is requested without PT-AT |
 | `UnknownAssociationError` | An association name does not exist |
-| `UnsupportedAssociationError` | An association's macro is not supported, a path continues past a polymorphic `belongs_to`, a `has_many :through` goes through a HABTM, a HABTM is scoped or below the root, an association is keyed on a column other than a primary key, or history cannot read a [costly association](#costly-associations) and `allow_approximate: true` was not passed |
+| `UnsupportedAssociationError` | An association's macro is not supported, a path continues past a polymorphic `belongs_to`, a `has_many :through` goes through a HABTM, a HABTM is scoped or below the root, an association is keyed on a column other than a primary key, the target of a `has_one` or `has_many` declares no `belongs_to` on its foreign key, or history cannot read a [costly association](#costly-associations) and `allow_approximate: true` was not passed |
 | `UnversionedAssociationError` | An association's target model, or a model a `has_many :through` goes through, has no `has_paper_trail`, including the class a polymorphic `belongs_to` names |
 | `IncompleteAssociationHistoryError` | PT-AT did not record enough to rebuild an association, such as HABTM without a transaction or in a transaction another record with that HABTM also saved a version in, or a polymorphic type names no class |
 | `UnsupportedLiveActivityError` | A HABTM activity range ends at the current record |
