@@ -133,6 +133,14 @@ project follows [Semantic Versioning](https://semver.org/).
   run the statements activity runs for that: one per version table for a
   window, to find the transactions open at its start, and one per 500
   transactions the history holds.
+- `analyze_many`, `analyze_scope` and `report` without a window could read
+  a record's history differently from `analyze`, when a transaction changed
+  an associated record before the record's first version and ended after it,
+  such as one that renamed an author and later saved an article created in
+  between. The batch reported the rename as a change in the article's
+  history, once backwards and once forwards, because its history also held
+  an older record's versions. A history without a window now
+  begins at the record's first version, however it is read.
 - Two transactions that saved in one record's tree at the same time
   interleave their versions, and activity timelines read them wrongly in four
   ways, all fixed by reading each transaction where it ends:

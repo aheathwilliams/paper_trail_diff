@@ -14,14 +14,16 @@ module PaperTrailDiff
     # around it read as they stood before every transaction that had not
     # ended yet (see TransactionEnds). So a window's history is read from
     # where the earliest transaction open at its start began, as a batch
-    # reads it: one of them may have saved a record before the window.
+    # reads it: one of them may have saved a record before the window. A
+    # whole history begins at the root's first version instead.
     #: (untyped, Array[untyped], ?start_at: untyped) -> PreparedTimelineSnapshots
     def prepare(record, versions, start_at: nil)
       history = @store.prepare(record, versions, start_at: start_at)
       reach = history&.reach
       history = @store.prepare(record, versions, start_at: reach, reach: false) if reach
-      PreparedTimelineSnapshots.new(history, versions, store: @store,
-                                                       live_snapshotter: @live_snapshotter)
+      ends = history&.transaction_ends(versions, floor: (versions.first unless start_at))
+      PreparedTimelineSnapshots.new(history, ends, store: @store,
+                                                   live_snapshotter: @live_snapshotter)
     end
 
     # @rbs @store: HistoricalSnapshotStore
@@ -33,10 +35,10 @@ module PaperTrailDiff
   # nil create state, is kept for this root only and released with it, and
   # batch memory does not retain every reconstructed graph.
   class PreparedTimelineSnapshots
-    #: (PreparedHistory?, Array[untyped], store: HistoricalSnapshotStore, live_snapshotter: untyped) -> void
-    def initialize(history, versions, store:, live_snapshotter:)
+    #: (PreparedHistory?, TransactionEnds?, store: HistoricalSnapshotStore, live_snapshotter: untyped) -> void
+    def initialize(history, ends, store:, live_snapshotter:)
       @history = history
-      @ends = history&.transaction_ends(versions)
+      @ends = ends
       @store = store
       @live_snapshotter = live_snapshotter
       @snapshots = {} #: Hash[Array[untyped], RecordSnapshot?]

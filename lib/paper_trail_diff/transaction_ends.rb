@@ -20,9 +20,20 @@ module PaperTrailDiff
   #
   # A version saved outside a transaction takes effect where it was saved.
   class TransactionEnds
-    #: (Array[untyped], ?Hash[Array[untyped], untyped]) -> void
-    def initialize(versions, recorded = {})
+    #
+    # A whole history, read without a window, begins at its root's first
+    # version, its `floor`. A version saved before it took effect before the
+    # history began, whenever its transaction ended, unless that transaction
+    # is the floor's own: a history can hold such a version, as a batch's
+    # does when another of its roots is older, and what a root reports does
+    # not depend on what was read with it. A window has no floor: it is read
+    # from where the transactions open at its start began, since it reports
+    # them.
+    #: (Array[untyped], ?Hash[Array[untyped], untyped], ?floor: untyped) -> void
+    def initialize(versions, recorded = {}, floor: nil)
       @recorded = recorded
+      @floor = floor && Support.chronological_version_key(floor)
+      @floor_transaction = floor && ActivityTransactionGroups.transaction_key(floor)
       @last = {} #: Hash[Array[untyped], untyped]
       @keys = {} #: Hash[Array[untyped], Array[untyped]]
       versions.each { |version| note(version) }
@@ -40,7 +51,9 @@ module PaperTrailDiff
     #: (untyped) -> untyped
     def last(version)
       key = ActivityTransactionGroups.transaction_key(version)
-      (key && (@recorded[key] || @last[key])) || version
+      return version if key.nil? || settled?(version, key)
+
+      @recorded[key] || @last[key] || version
     end
 
     # Whether the version was saved after every version of the timeline. A
@@ -65,10 +78,22 @@ module PaperTrailDiff
     private
 
     # @rbs @recorded: Hash[Array[untyped], untyped]
+    # @rbs @floor: Array[untyped]?
+    # @rbs @floor_transaction: Array[untyped]?
     # @rbs @last: Hash[Array[untyped], untyped]
     # @rbs @keys: Hash[Array[untyped], Array[untyped]]
     # @rbs @horizon: Array[untyped]?
     # @rbs @reordered: bool
+
+    # Whether the version was saved before the floor, by another transaction
+    # than the floor's.
+    #: (untyped, Array[untyped]) -> bool
+    def settled?(version, key)
+      floor = @floor
+      return false if floor.nil? || key == @floor_transaction
+
+      (Support.chronological_version_key(version) <=> floor) == -1
+    end
 
     #: (untyped) -> void
     def note(version)

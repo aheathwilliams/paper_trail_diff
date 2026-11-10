@@ -39,5 +39,5 @@ class FullSnapshotter
 
   def reading(open, &block) = @prepared.reading(open, &block)
 
-  def transaction_ends(versions) = @prepared.transaction_ends(versions)
+  def transaction_ends(versions, floor: nil) = @prepared.transaction_ends(versions, floor: floor)
 end

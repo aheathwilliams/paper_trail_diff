@@ -25,8 +25,8 @@ module PaperTrailDiff
     def reading: (TransactionEnds) { () -> void } -> void
 
     # See PreparedRecordIndex#transaction_ends.
-    # : (Array[untyped]) -> TransactionEnds
-    def transaction_ends: (Array[untyped]) -> TransactionEnds
+    # : (Array[untyped], ?floor: untyped) -> TransactionEnds
+    def transaction_ends: (Array[untyped], ?floor: untyped) -> TransactionEnds
 
     # : () -> TransactionEnds?
     def reading_ends: () -> TransactionEnds?

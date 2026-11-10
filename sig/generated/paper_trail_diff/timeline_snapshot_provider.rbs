@@ -10,7 +10,8 @@ module PaperTrailDiff
     # around it read as they stood before every transaction that had not
     # ended yet (see TransactionEnds). So a window's history is read from
     # where the earliest transaction open at its start began, as a batch
-    # reads it: one of them may have saved a record before the window.
+    # reads it: one of them may have saved a record before the window. A
+    # whole history begins at the root's first version instead.
     # : (untyped, Array[untyped], ?start_at: untyped) -> PreparedTimelineSnapshots
     def prepare: (untyped, Array[untyped], ?start_at: untyped) -> PreparedTimelineSnapshots
 
@@ -24,8 +25,8 @@ module PaperTrailDiff
   # nil create state, is kept for this root only and released with it, and
   # batch memory does not retain every reconstructed graph.
   class PreparedTimelineSnapshots
-    # : (PreparedHistory?, Array[untyped], store: HistoricalSnapshotStore, live_snapshotter: untyped) -> void
-    def initialize: (PreparedHistory?, Array[untyped], store: HistoricalSnapshotStore, live_snapshotter: untyped) -> void
+    # : (PreparedHistory?, TransactionEnds?, store: HistoricalSnapshotStore, live_snapshotter: untyped) -> void
+    def initialize: (PreparedHistory?, TransactionEnds?, store: HistoricalSnapshotStore, live_snapshotter: untyped) -> void
 
     # A window closing on current state ends at the live record rather than at a
     # version, which is the one endpoint no version history can reconstruct.

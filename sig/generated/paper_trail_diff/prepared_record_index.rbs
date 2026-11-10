@@ -192,8 +192,8 @@ module PaperTrailDiff
 
     # Where the transactions of these versions take effect, as their version
     # tables record it (see RecordedTransactionEnds).
-    # : (Array[untyped]) -> TransactionEnds
-    def transaction_ends: (Array[untyped]) -> TransactionEnds
+    # : (Array[untyped], ?floor: untyped) -> TransactionEnds
+    def transaction_ends: (Array[untyped], ?floor: untyped) -> TransactionEnds
 
     # : (untyped, untyped, untyped) -> untyped
     def record_before: (untyped, untyped, untyped) -> untyped

@@ -19,8 +19,17 @@ module PaperTrailDiff
   #
   # A version saved outside a transaction takes effect where it was saved.
   class TransactionEnds
-    # : (Array[untyped], ?Hash[Array[untyped], untyped]) -> void
-    def initialize: (Array[untyped], ?Hash[Array[untyped], untyped]) -> void
+    #
+    #  A whole history, read without a window, begins at its root's first
+    #  version, its `floor`. A version saved before it took effect before the
+    #  history began, whenever its transaction ended, unless that transaction
+    #  is the floor's own: a history can hold such a version, as a batch's
+    #  does when another of its roots is older, and what a root reports does
+    #  not depend on what was read with it. A window has no floor: it is read
+    #  from where the transactions open at its start began, since it reports
+    #  them.
+    # : (Array[untyped], ?Hash[Array[untyped], untyped], ?floor: untyped) -> void
+    def initialize: (Array[untyped], ?Hash[Array[untyped], untyped], ?floor: untyped) -> void
 
     # Whether placing the versions at their transactions' ends changes their
     # order: some transaction saved a version between two of another's.
@@ -46,6 +55,10 @@ module PaperTrailDiff
 
     private
 
+    @floor: Array[untyped]?
+
+    @floor_transaction: Array[untyped]?
+
     @horizon: Array[untyped]?
 
     @keys: Hash[Array[untyped], Array[untyped]]
@@ -55,6 +68,11 @@ module PaperTrailDiff
     @recorded: Hash[Array[untyped], untyped]
 
     @reordered: bool
+
+    # Whether the version was saved before the floor, by another transaction
+    # than the floor's.
+    # : (untyped, Array[untyped]) -> bool
+    def settled?: (untyped, Array[untyped]) -> bool
 
     # : (untyped) -> void
     def note: (untyped) -> void

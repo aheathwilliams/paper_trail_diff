@@ -125,12 +125,13 @@ RSpec.describe PaperTrailDiff::ActivityHistoryBuilder do
     events, = history
     stream
 
-    result = build(events, current: :current, closing: :closing)
+    result = build(events, current: :current, closing: :closing, floor: :floor)
 
     expect(PaperTrailDiff::ActivityTreeFilter)
       .to have_received(:new).with(events, closing: :closing)
     expect(PaperTrailDiff::ActivitySnapshotSequence)
-      .to have_received(:new).with(events.map(&:version), events, :snapshotter, current: :current)
+      .to have_received(:new).with(events.map(&:version), events, :snapshotter,
+                                   current: :current, floor: :floor)
     expect([result.steps, result.first_snapshot, result.last_boundary]).to eq([[], nil, nil])
   end
 end

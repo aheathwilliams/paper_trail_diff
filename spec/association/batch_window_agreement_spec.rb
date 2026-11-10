@@ -2,11 +2,11 @@
 
 require_relative '../support/association_database'
 
-# `analyze` and `analyze_many` read one record's window the same way: a batch
-# shares one history between its roots, which runs on past the versions one
-# root replays, and neither that nor what else a batch reads changes what a
-# root reports.
-RSpec.describe 'A window read for one record and in a batch' do
+# `analyze` and `analyze_many` read one record's window, or its whole
+# history, the same way: a batch shares one history between its roots, which
+# starts before and runs on past the versions one root replays, and neither
+# that nor what else a batch reads changes what a root reports.
+RSpec.describe 'A record read alone and in a batch' do
   before do
     PaperTrail::VersionAssociation.delete_all
     PaperTrail::Version.delete_all
@@ -204,6 +204,47 @@ RSpec.describe 'A window read for one record and in a batch' do
 
       expect([bodies(single), bodies(batch)])
         .to eq([[nil, ['comment', 'edited by S'], nil]] * 2)
+    end
+  end
+
+  # S renames the author before the article exists, R edits the comment, S
+  # saves the article and R saves it too. An older article starts the batch's
+  # history before S's rename, which began before the article's own history:
+  # the article was created with the author as S had named it.
+  describe 'a whole history, without a window' do
+    def history_of_an_article_created_inside_a_transaction
+      author = TrackedAuthor.create!(name: 'old')
+      older = TrackedArticle.create!(title: 'older', author: author)
+      in_transaction(1, 'S') { author.update!(name: 'new') }
+      article = TrackedArticle.create!(title: 'one', author: author)
+      comment = article.comments.create!(body: 'comment')
+      in_transaction(2, 'R') { comment.update!(body: 'edited by R') }
+      in_transaction(1, 'S') { article.update!(title: 'two') }
+      in_transaction(2, 'R') { article.update!(title: 'three') }
+      [article, older]
+    end
+
+    def renames(rows)
+      rows.select { |_change, path, attribute, *| [path, attribute] == %w[author name] }
+    end
+
+    it 'reads the same with activity' do
+      article, older = history_of_an_article_created_inside_a_transaction
+
+      single, batch = both(article, [older], associations: %i[author comments], activity: true)
+
+      expect(rows(batch)).to eq(rows(single))
+      expect(renames(rows(batch)).map { |row| row.values_at(0, 3, 4) })
+        .to eq([[:added, nil, 'new']])
+    end
+
+    it 'reads the same without activity' do
+      article, older = history_of_an_article_created_inside_a_transaction
+
+      single, batch = both(article, [older], associations: %i[author comments])
+
+      expect(steps(batch.timeline)).to eq(steps(single.timeline))
+      expect(batch.diff.to_h.dig(:associations, 'author')).to be_nil
     end
   end
 end

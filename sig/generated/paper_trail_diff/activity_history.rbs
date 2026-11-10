@@ -35,9 +35,10 @@ module PaperTrailDiff
     # after a window whose steps are not reported, so nothing reads it.
     # `include_step` says whether an event's step is reported. `root` names
     # the root, whose steps then credit each change row to the version that
-    # made it (see ChangeAttribution).
-    # : (Array[untyped], Array[ActivityEvent], untyped, view: ActivityView, include_step: untyped, ?current: untyped, ?closing: RecordSnapshot?, ?root: RecordReference?) -> void
-    def initialize: (Array[untyped], Array[ActivityEvent], untyped, view: ActivityView, include_step: untyped, ?current: untyped, ?closing: RecordSnapshot?, ?root: RecordReference?) -> void
+    # made it (see ChangeAttribution). `floor` is the first version of a
+    # history read without a window (see TransactionEnds).
+    # : (Array[untyped], Array[ActivityEvent], untyped, view: ActivityView, include_step: untyped, ?current: untyped, ?closing: RecordSnapshot?, ?root: RecordReference?, ?floor: untyped) -> void
+    def initialize: (Array[untyped], Array[ActivityEvent], untyped, view: ActivityView, include_step: untyped, ?current: untyped, ?closing: RecordSnapshot?, ?root: RecordReference?, ?floor: untyped) -> void
 
     # : () -> ActivityHistory
     def call: () -> ActivityHistory
@@ -53,6 +54,8 @@ module PaperTrailDiff
     @first_pending: bool
 
     @first_snapshot: RecordSnapshot?
+
+    @floor: untyped
 
     @include_step: untyped
 

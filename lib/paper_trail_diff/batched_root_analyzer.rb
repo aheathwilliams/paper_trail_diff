@@ -28,9 +28,9 @@ module PaperTrailDiff
 
       TimelineBuilder.new(
         record,
-        from: plan.versions.first,
-        to: plan.final_endpoint,
-        within: nil,
+        from: (plan.versions.first unless window),
+        to: (plan.final_endpoint unless window),
+        within: window,
         plan: plan,
         snapshotter: @timeline_snapshotter
       ).analyze

@@ -87,7 +87,11 @@ after its own last one, wherever that version's transaction ended
 (`TransactionEnds#beyond?`): a history holds such versions, as the next one
 of each record after the range, or as part of a batch's history that runs on
 for another root. A range of versions starts before its first version's
-transaction instead (`TransactionCut.range_start`).
+transaction instead (`TransactionCut.range_start`), and so does a whole
+history, read without a window: a version saved before that by another
+transaction took effect before the history began, whenever its transaction
+ended, though a batch's history holds it when another of its roots is older
+(the `floor` of `TransactionEnds`).
 
 ## When the gem falls back to PT-AT
 

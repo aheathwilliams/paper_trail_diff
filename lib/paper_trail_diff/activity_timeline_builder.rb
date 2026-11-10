@@ -387,7 +387,8 @@ module PaperTrailDiff
         include_step: ->(event) { reported?(event, plan) },
         view: @view,
         closing: closing,
-        root: root_reference
+        root: root_reference,
+        floor: (wide.reconstruction_versions.first unless @range.time_range)
       ).call
     end
 

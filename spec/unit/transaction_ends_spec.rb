@@ -75,6 +75,36 @@ RSpec.describe PaperTrailDiff::TransactionEnds do
     expect([last, other, first].sort_by { |each| ends.sort_key(each) }).to eq([other, first, last])
   end
 
+  # A whole history begins at its floor, whatever else a history holds.
+  describe 'with a floor' do
+    it 'keeps a version saved before the floor by another transaction where it is' do
+      before = version(1, 7)
+      floor = version(2, 8)
+      ends = described_class.new([floor, version(4, 8)], { ['EndsVersion', 7] => version(9, 7) },
+                                 floor: floor)
+
+      expect(ends.last(before)).to eq(before)
+      expect(ends.last(version(3, 7)).id).to eq(9)
+      expect(ends.last(version(2, 7, at: 2)).id).to eq(9)
+    end
+
+    it "places a version saved before the floor by the floor's transaction at its end" do
+      child = version(1, 8)
+      floor = version(2, 8)
+      last = version(4, 8)
+
+      expect(described_class.new([floor, last], floor: floor).last(child)).to eq(last)
+    end
+
+    it 'keeps a version before a floor saved outside a transaction where it is' do
+      before = version(1, 7)
+      floor = version(2, nil)
+      ends = described_class.new([floor, version(3, 7)], floor: floor)
+
+      expect([ends.last(before), ends.last(version(1, nil))].map(&:id)).to eq([1, 1])
+    end
+  end
+
   describe '#beyond?' do
     it 'is true only for a version saved after every version given' do
       ends = described_class.new([version(4, 7), version(2, 8)])

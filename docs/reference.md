@@ -209,6 +209,11 @@ records around each of those versions still read as they stood before every
 transaction that had not ended yet, so an associated record's change is
 reported once, in the step where its transaction ends.
 
+A history read without a window begins at the record's first version, or at
+`from:`. What a transaction saved before that, such as an author it renamed
+before it created the article, is part of the state the history begins in,
+even when the transaction ended later.
+
 Two transactions that save in one record's tree at the same time interleave
 their versions. Each is reported as if it ran alone, in the order they end: a
 record reads as it stood before every transaction that had not ended yet.

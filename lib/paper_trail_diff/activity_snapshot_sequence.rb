@@ -75,11 +75,14 @@ module PaperTrailDiff
     end
 
     # Where the transactions of these versions take effect: as recorded,
-    # with a history to read it from.
-    #: (Array[untyped]) -> TransactionEnds
-    def transaction_ends(versions)
+    # with a history to read it from. A whole history begins at its `floor`
+    # (see TransactionEnds).
+    #: (Array[untyped], ?floor: untyped) -> TransactionEnds
+    def transaction_ends(versions, floor: nil)
       history = @history
-      history ? history.transaction_ends(versions) : TransactionEnds.new(versions)
+      return TransactionEnds.new(versions, floor: floor) unless history
+
+      history.transaction_ends(versions, floor: floor)
     end
 
     #: (untyped, untyped) -> RecordSnapshot?
@@ -141,13 +144,13 @@ module PaperTrailDiff
 
   # Builds chronological snapshots, refreshing only branches affected by prior events.
   class ActivitySnapshotSequence
-    #: (Array[untyped], Array[ActivityEvent], untyped, ?current: untyped) -> void
-    def initialize(root_versions, events, snapshotter, current: nil)
+    #: (Array[untyped], Array[ActivityEvent], untyped, ?current: untyped, ?floor: untyped) -> void
+    def initialize(root_versions, events, snapshotter, current: nil, floor: nil)
       @root_versions = root_versions
       @events = events
       @snapshotter = snapshotter
       @current = current
-      @ends = snapshotter.transaction_ends(events.map(&:version))
+      @ends = snapshotter.transaction_ends(events.map(&:version), floor: floor)
       @transaction_groups = ActivityTransactionGroups.new(events)
       @root_endpoints = build_root_endpoints
     end

@@ -382,9 +382,9 @@ module PaperTrailDiff
 
     # Where the transactions of these versions take effect, as their version
     # tables record it (see RecordedTransactionEnds).
-    #: (Array[untyped]) -> TransactionEnds
-    def transaction_ends(versions)
-      TransactionEnds.new(versions, @recorded_ends.call(versions) { self.versions })
+    #: (Array[untyped], ?floor: untyped) -> TransactionEnds
+    def transaction_ends(versions, floor: nil)
+      TransactionEnds.new(versions, @recorded_ends.call(versions) { self.versions }, floor: floor)
     end
 
     #: (untyped, untyped, untyped) -> untyped

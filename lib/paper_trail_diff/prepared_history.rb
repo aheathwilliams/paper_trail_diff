@@ -36,8 +36,8 @@ module PaperTrailDiff
     end
 
     # See PreparedRecordIndex#transaction_ends.
-    #: (Array[untyped]) -> TransactionEnds
-    def transaction_ends(versions) = @records.transaction_ends(versions)
+    #: (Array[untyped], ?floor: untyped) -> TransactionEnds
+    def transaction_ends(versions, floor: nil) = @records.transaction_ends(versions, floor: floor)
 
     #: () -> TransactionEnds?
     def reading_ends = @records.reading_ends
