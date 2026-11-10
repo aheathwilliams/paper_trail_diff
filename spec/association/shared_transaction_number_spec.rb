@@ -48,7 +48,14 @@ RSpec.describe 'Transactions numbered alike from different version tables' do
   # the two tables' ids happen to meet.
   def renumber(versions, number)
     versions.update_all(transaction_id: number, created_at: june)
-    ShelfVersion.update_all(id: number, transaction_id: number, created_at: june - 1)
+    # SQL Server cannot update an identity column, so the row is saved
+    # again under the number.
+    ShelfVersion.find_each do |version|
+      row = version.attributes.merge('id' => number, 'transaction_id' => number,
+                                     'created_at' => june - 1)
+      version.delete
+      ShelfVersion.insert_all!([row])
+    end
   end
 
   def titles(analysis)
