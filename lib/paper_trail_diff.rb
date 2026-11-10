@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 # rbs_inline: enabled
 
+require 'set' # Ruby 3.1 does not load it by itself
 require 'paper_trail'
 
 require_relative 'paper_trail_diff/version'
