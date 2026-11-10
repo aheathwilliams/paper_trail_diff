@@ -71,9 +71,10 @@ Flat query counts do not make a report's cost flat:
   saved at the event after its last, so 1,000 comments edited two at a time
   in 1,000 transactions took 1.9 s, and edited one at a time along with
   their article, 1.0 s. A record that joins a collection or leaves it costs
-  a little more than an edit, because each such event also looks through the
-  collection for the record as it stood before: 1,000 comments created one
-  at a time on one article took about 0.7 s, and 3,000 about 3.6 s. Members
+  a little more than an edit: 1,000 comments created one at a time on one
+  article took about 0.8 s, and 3,000 about 1.8 s. Records nested under a
+  wide collection cost no more: 2,000 replies created one at a time under
+  2,000 comments took about 1.4 s. Members
   saved in one transaction share one snapshot: a `report` on 100 articles,
   each created with 100 comments in one transaction and edited with all of
   them in another, took about 4.6 s. `timeline` reads every member at each
@@ -86,7 +87,8 @@ Flat query counts do not make a report's cost flat:
   window that a later version of the article ends each took 10 to 13 ms, as
   with none. A window with `activity: true` on a record that has not been
   saved since is the exception: it closes on the record as it is now, so it
-  replays everything up to now and reports what fell inside the window.
+  replays everything up to now and reports what fell inside the window, which
+  took about 0.8 s with those 2,000 comments.
 - **`snapshots: true` and `recorded_changes: true` cost memory and time.** Ask
   for them only when you use them. Records that did not change are shared
   between steps, so the cost is modest: an activity `report` of 10,000

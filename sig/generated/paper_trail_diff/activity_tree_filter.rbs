@@ -53,13 +53,24 @@ module PaperTrailDiff
 
     @types: Hash[String, Array[String?]]
 
-    # : (ActivityEvent, Integer, Array[[ActivityEvent, RecordSnapshot?]]) -> bool
-    def keep?: (ActivityEvent, Integer, Array[[ ActivityEvent, RecordSnapshot? ]]) -> bool
+    # Whether to keep each event. The snapshots are gone through once, in
+    # order, each answering for the events it judges (see SnapshotMembers):
+    # looking through a snapshot for each event made a replay's time grow
+    # with its events times the records of the tree.
+    # : (Array[[ActivityEvent, RecordSnapshot?]]) -> Array[bool]
+    def kept: (Array[[ ActivityEvent, RecordSnapshot? ]]) -> Array[bool]
 
-    # The snapshots at the first event and the root events of the event's
-    # transaction, and the one after its last event.
-    # : (Integer, Array[untyped] | Integer, Array[[ActivityEvent, RecordSnapshot?]]) -> Array[RecordSnapshot?]
-    def judged_by: (Integer, Array[untyped] | Integer, Array[[ ActivityEvent, RecordSnapshot? ]]) -> Array[RecordSnapshot?]
+    # The root's own events are kept, and a through's join rows were judged
+    # when they were collected.
+    # : (ActivityEvent) -> bool
+    def unjudged?: (ActivityEvent) -> bool
+
+    # The events each snapshot judges, by the snapshot's position, the one
+    # after the last event being what the range closes on: an event is judged
+    # by the snapshots at the first event and the root events of its
+    # transaction, and by the one after its last event.
+    # : (Array[[ActivityEvent, RecordSnapshot?]], Array[bool]) -> Array[Array[Integer]]
+    def judged: (Array[[ ActivityEvent, RecordSnapshot? ]], Array[bool]) -> Array[Array[Integer]]
 
     # Where each event's transaction starts, and the position just past its
     # last event. Two transactions can interleave, so a transaction's events
@@ -76,11 +87,8 @@ module PaperTrailDiff
     # : (Array[ActivityEvent]) -> Array[Array[untyped] | Integer]
     def transaction_keys: (Array[ActivityEvent]) -> Array[Array[untyped] | Integer]
 
-    # : (RecordSnapshot?, ActivityEvent) -> bool
-    def holds?: (RecordSnapshot?, ActivityEvent) -> bool
-
-    # : (AssociationSnapshot, Array[String?], untyped) -> bool
-    def contains?: (AssociationSnapshot, Array[String?], untyped) -> bool
+    # : (SnapshotMembers, ActivityEvent) -> bool
+    def holds?: (SnapshotMembers, ActivityEvent) -> bool
 
     # A version names its record's base class, and a snapshot the record's
     # own class, which may be any subclass of it.

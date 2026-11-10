@@ -46,9 +46,8 @@ module PaperTrailDiff
     #: (untyped) { (ActivityEvent, RecordSnapshot?, bool) -> void } -> void
     def call(sequence)
       pairs = sequence.to_enum.to_a #: Array[[ActivityEvent, RecordSnapshot?]]
-      pairs.each_with_index do |(event, snapshot), index|
-        yield event, snapshot, keep?(event, index, pairs)
-      end
+      kept = kept(pairs)
+      pairs.each_with_index { |(event, snapshot), index| yield event, snapshot, kept.fetch(index) }
     end
 
     private
@@ -60,21 +59,41 @@ module PaperTrailDiff
     # @rbs @roots: Hash[Array[untyped] | Integer, Array[Integer]]
     # @rbs @types: Hash[String, Array[String?]]
 
-    #: (ActivityEvent, Integer, Array[[ActivityEvent, RecordSnapshot?]]) -> bool
-    def keep?(event, index, pairs)
-      key = @keys.fetch(index)
-      return true if event.root? || event.join?
-
-      judged_by(index, key, pairs).any? { |snapshot| holds?(snapshot, event) }
+    # Whether to keep each event. The snapshots are gone through once, in
+    # order, each answering for the events it judges (see SnapshotMembers):
+    # looking through a snapshot for each event made a replay's time grow
+    # with its events times the records of the tree.
+    #: (Array[[ActivityEvent, RecordSnapshot?]]) -> Array[bool]
+    def kept(pairs)
+      kept = pairs.map { |event, _snapshot| unjudged?(event) }
+      members = SnapshotMembers.new
+      judged(pairs, kept).zip(pairs.map(&:last) << @closing) do |indexes, snapshot|
+        members.move_to(snapshot)
+        indexes.each { |index| kept[index] ||= holds?(members, pairs.fetch(index).first) }
+      end
+      kept
     end
 
-    # The snapshots at the first event and the root events of the event's
-    # transaction, and the one after its last event.
-    #: (Integer, Array[untyped] | Integer, Array[[ActivityEvent, RecordSnapshot?]]) -> Array[RecordSnapshot?]
-    def judged_by(index, key, pairs)
-      position = @ends.fetch(index)
-      after = position < pairs.length ? pairs.fetch(position).last : @closing
-      ([@starts.fetch(index)] + @roots.fetch(key, [])).map { |at| pairs.fetch(at).last } << after
+    # The root's own events are kept, and a through's join rows were judged
+    # when they were collected.
+    #: (ActivityEvent) -> bool
+    def unjudged?(event) = event.root? || event.join?
+
+    # The events each snapshot judges, by the snapshot's position, the one
+    # after the last event being what the range closes on: an event is judged
+    # by the snapshots at the first event and the root events of its
+    # transaction, and by the one after its last event.
+    #: (Array[[ActivityEvent, RecordSnapshot?]], Array[bool]) -> Array[Array[Integer]]
+    def judged(pairs, kept)
+      asked = Array.new(pairs.length + 1) { [] } #: Array[Array[Integer]]
+      kept.each_with_index do |known, index|
+        next if known
+
+        positions = [@starts.fetch(index), *@roots.fetch(@keys.fetch(index), []),
+                     @ends.fetch(index)]
+        positions.uniq.each { |position| asked.fetch(position) << index }
+      end
+      asked
     end
 
     # Where each event's transaction starts, and the position just past its
@@ -107,21 +126,11 @@ module PaperTrailDiff
       end
     end
 
-    #: (RecordSnapshot?, ActivityEvent) -> bool
-    def holds?(snapshot, event)
-      return false unless snapshot
-
+    #: (SnapshotMembers, ActivityEvent) -> bool
+    def holds?(members, event)
       version = event.version
-      types = types(version.item_type)
       branches = event.branches #: Array[String]
-      branches.any? { |name| contains?(snapshot.associations.fetch(name), types, version.item_id) }
-    end
-
-    #: (AssociationSnapshot, Array[String?], untyped) -> bool
-    def contains?(association, types, id)
-      types.any? { |type| association.position(type, id) } || association.records.any? do |record|
-        record.associations.each_value.any? { |nested| contains?(nested, types, id) }
-      end
+      members.holds?(branches, types(version.item_type), version.item_id)
     end
 
     # A version names its record's base class, and a snapshot the record's

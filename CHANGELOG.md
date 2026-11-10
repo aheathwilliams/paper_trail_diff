@@ -116,6 +116,18 @@ project follows [Semantic Versioning](https://semver.org/).
   selected by their associations, now asks with `NOT EXISTS`. Results are
   unchanged. See [performance](docs/performance.md#database-indexes).
 
+- An activity timeline over a tree no longer slows down with the tree's size
+  times its events. Each event of an associated record is checked against the
+  snapshots around its transaction, to leave out a record that was outside
+  the tree, and each check looked through every collection of the snapshot.
+  The records each snapshot holds are now kept up from one snapshot to the
+  next, by what its event changed. 2,000 replies created one at a time under
+  2,000 comments of one article took 10.4 s to replay and now take 1.4 s, and
+  3,000 comments created one at a time took 3.6 s and now take 1.8 s. A window
+  with `activity: true` on a record not saved since the window, with 2,000
+  comments created after it, took 1.8 s and now takes 0.8 s. Results are
+  unchanged.
+
 - A range that ended in the past no longer slows down with the children its
   records have gained since. A `has_many` or `has_one` read every child that
   was ever its owner's from the range's start onward, with each child's row
