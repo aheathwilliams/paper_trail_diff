@@ -66,7 +66,11 @@ Flat query counts do not make a report's cost flat:
   step of an activity timeline copies the collection's list of records, so
   an activity timeline over `n` comments that changed `m` times does about
   `n × m` work: 800 comments edited 1,000 times took about 0.4 s, and 3,200
-  edited 3,200 times about 1.8 s. Members
+  edited 3,200 times about 1.8 s. A transaction that saves several records
+  costs the same for each: its versions are applied to the records they
+  saved at the event after its last, so 1,000 comments edited two at a time
+  in 1,000 transactions took 1.9 s, and edited one at a time along with
+  their article, 1.0 s. Members
   saved in one transaction share one snapshot: a `report` on 100 articles,
   each created with 100 comments in one transaction and edited with all of
   them in another, took about 4.6 s. `timeline` reads every member at each

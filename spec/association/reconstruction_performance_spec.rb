@@ -277,6 +277,85 @@ RSpec.describe 'bounded event reconstruction' do
       .to match_array(comments.map(&:id))
   end
 
+  # Counts the snapshots read from history while a timeline is built: whole
+  # ones, which the first event and the closing state each take, and
+  # branches read again for a snapshot carried forward.
+  def snapshot_reads
+    reads = { whole: 0, branches: 0 }
+    allow_any_instance_of(PaperTrailDiff::PreparedActivitySnapshots)
+      .to receive(:call).and_wrap_original do |original, *arguments|
+        reads[:whole] += 1
+        original.call(*arguments)
+      end
+    allow_any_instance_of(PaperTrailDiff::PreparedActivitySnapshots)
+      .to receive(:custom).and_wrap_original do |original, *arguments, **options|
+        reads[:branches] += 1
+        original.call(*arguments, **options)
+      end
+    reads
+  end
+
+  def edited_bodies(step)
+    step.diff.associations.fetch('comments').changed
+        .to_h { |change| [change.record.id, change.attributes.fetch('body').to_h] }
+  end
+
+  # A transaction's changes appear at the event after its last. Each of its
+  # versions is applied there to the comment it saved, as a version alone in
+  # its transaction is, so no snapshot reads every comment again.
+  it 'applies each version of a transaction that saved several comments' do
+    article = TrackedArticle.create!(title: 'Draft')
+    one, two, three = Array.new(3) { |index| article.comments.create!(body: "Comment #{index}") }
+    start = article.versions.reorder(:created_at, :id).last
+    TrackedComment.transaction do
+      one.update!(body: 'One')
+      two.update!(body: 'Two')
+    end
+    three.update!(body: 'Three')
+    reads = snapshot_reads
+
+    steps = PaperTrailDiff.activity_timeline(article, from: start, to: article.reload,
+                                                      associations: [:comments])
+
+    expect(reads).to eq(whole: 2, branches: 0)
+    expect(steps.reject(&:empty?).last(2).map { |step| edited_bodies(step) }).to eq(
+      [{ one.id => { from: 'Comment 0', to: 'One' }, two.id => { from: 'Comment 1', to: 'Two' } },
+       { three.id => { from: 'Comment 2', to: 'Three' } }]
+    )
+  end
+
+  # The same holds when the article is among the records the transaction
+  # saved, before its comment or after it, as `touch: true` saves it.
+  it 'applies each version of a transaction that saved the article and a comment' do
+    article = TrackedArticle.create!(title: 'Draft')
+    comment = article.comments.create!(body: 'First')
+    start = article.versions.reorder(:created_at, :id).last
+    TrackedArticle.transaction do
+      comment.update!(body: 'Second')
+      article.update!(title: 'Edited')
+    end
+    TrackedArticle.transaction do
+      article.update!(title: 'Final')
+      comment.update!(body: 'Third')
+    end
+    comment.update!(body: 'Fourth')
+    reads = snapshot_reads
+
+    steps = PaperTrailDiff.activity_timeline(article, from: start, to: article.reload,
+                                                      associations: [:comments])
+
+    expect(reads).to eq(whole: 2, branches: 0)
+    reported = steps.reject(&:empty?).last(4)
+    expect(reported.map { |step| step.diff.attributes['title']&.to })
+      .to eq(['Edited', 'Final', nil, nil])
+    expect(reported.map { |step| step.diff.associations.key?('comments') })
+      .to eq([true, false, true, true])
+    expect(reported.values_at(0, 2, 3).map { |step| edited_bodies(step).fetch(comment.id) }).to eq(
+      [{ from: 'First', to: 'Second' }, { from: 'Second', to: 'Third' },
+       { from: 'Third', to: 'Fourth' }]
+    )
+  end
+
   # The snapshot at the article's update reads the comments as they stood
   # before its transaction, and so does the one at the comment's event after
   # it, in the same transaction: only the article's own version lies between

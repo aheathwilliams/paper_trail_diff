@@ -44,6 +44,15 @@ project follows [Semantic Versioning](https://semver.org/).
   read through Rails' automatic role switching, still lists the ids, since
   Active Record counts the table's statements as writes.
 
+- An activity timeline no longer reads a whole association again for each
+  event of a transaction that saved more than one record in the tree, such
+  as two comments, or a comment and the article it touches. Each of the
+  transaction's versions is applied to the record it saved, as a version
+  alone in its transaction already was. One article with 1,000 comments and
+  1,000 transactions that each edited two of them took 1.9 s instead of
+  20.6 s, and 1.0 s instead of 18.8 s when each edited one comment and the
+  article. Results are unchanged.
+
 - Replaying a `has_many` whose membership a version did not change no
   longer sorts the collection again. A history of 3,200 comments edited
   3,200 times took 1.8 s instead of 11 s.

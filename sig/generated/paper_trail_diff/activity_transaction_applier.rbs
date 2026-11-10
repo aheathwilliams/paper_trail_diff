@@ -1,0 +1,28 @@
+# Generated from lib/paper_trail_diff/activity_transaction_applier.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Applies the versions of one transaction to a snapshot, each to the record
+  # it saved, as a version alone in its transaction is applied. A transaction's
+  # changes appear together at the event after its last, so the snapshot there
+  # is the one before it with every one of its versions applied; reading the
+  # branches again instead costs every record in them.
+  class ActivityTransactionApplier
+    # : (ActivityEventSnapshotRefresher, ActivityRootSnapshotRefresher) -> void
+    def initialize: (ActivityEventSnapshotRefresher, ActivityRootSnapshotRefresher) -> void
+
+    # nil when any event cannot be applied to the snapshot alone. Applying
+    # only some would leave a record as no version left it.
+    # : (untyped, untyped, RecordSnapshot, Array[ActivityEvent]) -> RecordSnapshot?
+    def call: (untyped, untyped, RecordSnapshot, Array[ActivityEvent]) -> RecordSnapshot?
+
+    private
+
+    @event_refresher: ActivityEventSnapshotRefresher
+
+    @root_refresher: ActivityRootSnapshotRefresher
+
+    # A record on several branches is applied on each.
+    # : (untyped, untyped, RecordSnapshot, ActivityEvent) -> [bool, RecordSnapshot?]
+    def apply: (untyped, untyped, RecordSnapshot, ActivityEvent) -> [ bool, RecordSnapshot? ]
+  end
+end

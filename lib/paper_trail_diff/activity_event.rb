@@ -100,9 +100,15 @@ module PaperTrailDiff
 
     #: (Array[ActivityEvent]) -> void
     def initialize(events)
-      groups = grouped_events(events)
-      @branches = build_groups(groups)
-      @group_sizes = groups.transform_values(&:length)
+      @groups = grouped_events(events)
+      @branches = build_groups(@groups)
+      @group_sizes = @groups.transform_values(&:length)
+    end
+
+    # The events of the event's transaction, in the order they are replayed.
+    #: (ActivityEvent) -> Array[ActivityEvent]
+    def events_for(event)
+      @groups.fetch(transaction_key(event)) { [event] }
     end
 
     # An event outside a transaction, or in one it was not given, keeps its
@@ -127,6 +133,7 @@ module PaperTrailDiff
 
     private
 
+    # @rbs @groups: Hash[Array[untyped]?, Array[ActivityEvent]]
     # @rbs @branches: Hash[Array[untyped]?, Array[String]?]
     # @rbs @group_sizes: Hash[Array[untyped]?, Integer]
 

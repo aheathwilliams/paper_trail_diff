@@ -94,6 +94,12 @@ module PaperTrailDiff
       @refresher.advance_root(root_endpoint, context_endpoint, previous_snapshot, event: event)
     end
 
+    #: (untyped, untyped, RecordSnapshot, Array[String]?, Array[ActivityEvent]) -> RecordSnapshot?
+    def apply_transaction(root_endpoint, context_endpoint, previous_snapshot, branches, events)
+      @refresher.apply_transaction(root_endpoint, context_endpoint, previous_snapshot, branches,
+                                   events)
+    end
+
     # The branches a refresh rebuilds, with this root's history.
     #: (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer) -> RecordSnapshot?
     def custom(root_endpoint, context_endpoint, tree:, normalizer:)
@@ -181,6 +187,8 @@ module PaperTrailDiff
 
       branches = @transaction_groups.branches_for(previous_event)
       return rebuilt_snapshot(previous_event, event, previous_snapshot) unless branches
+      return transaction_snapshot(previous_event, event, previous_snapshot, branches) if
+        previous_snapshot && !@transaction_groups.isolated?(previous_event)
 
       @snapshotter.refresh(
         root_endpoint(event.version),
@@ -192,22 +200,59 @@ module PaperTrailDiff
       )
     end
 
+    # A transaction that saved several records is read whole once it ends:
+    # until then the records it saved read as they stood before it began, so
+    # the snapshot is the same from one of its events to the next. At the
+    # event after its last, each of its versions is applied to the record it
+    # saved, rather than reading their branches again, which costs every
+    # record in them. `branches` are those of a transaction without a root
+    # event, and nil for one with.
+    #: (ActivityEvent, ActivityEvent, RecordSnapshot, Array[String]?) -> RecordSnapshot?
+    def transaction_snapshot(previous_event, event, previous_snapshot, branches)
+      return previous_snapshot if branches && @transaction_groups.shared?(previous_event, event)
+
+      @snapshotter.apply_transaction(
+        root_endpoint(event.version), event.version, previous_snapshot, branches,
+        @transaction_groups.events_for(previous_event)
+      )
+    end
+
     # A transaction with a root event is read whole once it ends. Until then,
     # PT-AT reads the records it saved as they stood before it began, so from
     # one descendant's event to the next in the same transaction the snapshot
     # is the same, and from the root's event to a descendant's only the root's
     # own version applies, as when it is alone in its transaction. A create
     # leaves nothing to advance. The root's version can record what the
-    # transaction changed, such as HABTM membership, so a snapshot at a root
-    # event is rebuilt.
+    # transaction changed, such as HABTM membership, so at a root event those
+    # branches are read again. At the event after the transaction's last,
+    # each of its versions is applied to the record it saved.
     #: (ActivityEvent, ActivityEvent, RecordSnapshot?) -> RecordSnapshot?
     def rebuilt_snapshot(previous_event, event, previous_snapshot)
-      return full_snapshot(event) if event.root?
-      return full_snapshot(event) unless @transaction_groups.shared?(previous_event, event)
-      return previous_snapshot unless previous_event.root?
       return full_snapshot(event) unless previous_snapshot
+      return transaction_snapshot(previous_event, event, previous_snapshot, nil) unless
+        @transaction_groups.shared?(previous_event, event)
+      return within_transaction(previous_event, event, previous_snapshot) if previous_event.root?
+
+      event.root? ? carried_snapshot(event, previous_snapshot) : previous_snapshot
+    end
+
+    # From the root's event to the next in its transaction: a second version
+    # of the root is read again, and a descendant's event takes only the
+    # root's own version.
+    #: (ActivityEvent, ActivityEvent, RecordSnapshot) -> RecordSnapshot?
+    def within_transaction(previous_event, event, previous_snapshot)
+      return full_snapshot(event) if event.root?
 
       advance_root(previous_event, event, previous_snapshot)
+    end
+
+    # The snapshot at a root's event, from the one at a descendant's event
+    # before it in its transaction: the same, but for the branches the
+    # root's version itself records.
+    #: (ActivityEvent, RecordSnapshot) -> RecordSnapshot?
+    def carried_snapshot(event, previous_snapshot)
+      @snapshotter.apply_transaction(root_endpoint(event.version), event.version,
+                                     previous_snapshot, [], [])
     end
 
     #: (ActivityEvent) -> bool

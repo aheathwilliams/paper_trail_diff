@@ -58,6 +58,10 @@ module PaperTrailDiff
     # : (Array[ActivityEvent]) -> void
     def initialize: (Array[ActivityEvent]) -> void
 
+    # The events of the event's transaction, in the order they are replayed.
+    # : (ActivityEvent) -> Array[ActivityEvent]
+    def events_for: (ActivityEvent) -> Array[ActivityEvent]
+
     # An event outside a transaction, or in one it was not given, keeps its
     # own.
     # : (ActivityEvent) -> Array[String]?
@@ -75,6 +79,8 @@ module PaperTrailDiff
     @branches: Hash[Array[untyped]?, Array[String]?]
 
     @group_sizes: Hash[Array[untyped]?, Integer]
+
+    @groups: Hash[Array[untyped]?, Array[ActivityEvent]]
 
     # : (Hash[Array[untyped]?, Array[ActivityEvent]]) -> Hash[Array[untyped]?, Array[String]?]
     def build_groups: (Hash[Array[untyped]?, Array[ActivityEvent]]) -> Hash[Array[untyped]?, Array[String]?]
