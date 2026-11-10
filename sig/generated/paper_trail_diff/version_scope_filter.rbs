@@ -10,6 +10,15 @@ module PaperTrailDiff
     # : (untyped) -> untyped
     def self.validated: (untyped) -> untyped
 
+    # The filter, with what it returns checked wherever it is called. A
+    # relation on another table would be read for its ids all the same, and
+    # choose the versions that happen to share them.
+    # : (untyped) -> untyped
+    def self.checked: (untyped) -> untyped
+
+    # : (untyped, untyped) -> untyped
+    def self.narrowed: (untyped, untyped) -> untyped
+
     # : (untyped) -> void
     def initialize: (untyped) -> void
 

@@ -11,6 +11,9 @@ module PaperTrailDiff
   # the window, or in the live row when nothing follows; a destroy leaves none.
   class HistoricalFilter
     DEFAULT_VERSION_LIMIT = 10_000
+    # Values `where` reads as several.
+    SEVERAL = [Array, Range, Set].freeze
+    private_constant :SEVERAL
 
     #: (untyped, predicate: untyped, time_range: TimeRange?, limit: Integer, max_versions: Integer) -> void
     def initialize(model, predicate:, time_range:, limit:, max_versions:)
@@ -78,7 +81,20 @@ module PaperTrailDiff
               "unknown historical attributes: #{unknown.join(', ')}"
       end
 
-      attributes.to_h { |name, value| [name, cast(name, value)] }
+      attributes.to_h { |name, value| [name, expected(name, value)] }
+    end
+
+    # `where` reads a list or a range as any of its values, which an
+    # equality with one cast value cannot mean, so it is refused unless the
+    # attribute itself holds one, as a serialized or an array column does.
+    #: (String, untyped) -> untyped
+    def expected(name, value)
+      cast = cast(name, value)
+      return cast unless SEVERAL.any? { |kind| value.is_a?(kind) } && !cast.is_a?(value.class)
+
+      raise ConfigurationError,
+            "historical_filter: #{name} takes one value, not #{value.class.name.downcase}; " \
+            'use a callable to match any of several'
     end
 
     # Expected and recorded values compare as the attribute casts them, as
@@ -171,20 +187,36 @@ module PaperTrailDiff
 
     #: (untyped) -> bool
     def attributes_match?(version)
-      state = @state_loader.call(version)
-      unless state
-        raise ConfigurationError,
-              'historical_filter: cannot read recorded attributes directly; use a bounded callable'
-      end
-
+      recorded = recorded_attributes(version)
       @predicate.all? do |name, expected|
-        unless state.attributes.key?(name)
+        unless recorded.key?(name)
           raise ConfigurationError,
                 "historical_filter: #{name} was not recorded in version #{version.id}"
         end
 
-        cast(name, state.attributes.fetch(name)) == expected
+        cast(name, recorded.fetch(name)) == expected
       end
+    end
+
+    # The attributes the version recorded, read as stored where they can be.
+    #: (untyped) -> Hash[String, untyped]
+    def recorded_attributes(version)
+      state = @state_loader.call(version)
+      state ? state.attributes : rebuilt_attributes(version)
+    end
+
+    # A model whose stored values only a record can read, such as one with an
+    # encrypted attribute, or whose version names a column since removed, is
+    # rebuilt as PaperTrail rebuilds it. The record also holds attributes the
+    # version did not record, which are left out.
+    #: (untyped) -> Hash[String, untyped]
+    def rebuilt_attributes(version)
+      recorded = version.object_deserialized
+      record = Support.reify(version, dup: true) if recorded.is_a?(Hash)
+      return record.attributes.slice(*recorded.keys) if record
+
+      raise ConfigurationError,
+            'historical_filter: cannot read recorded attributes directly; use a bounded callable'
     end
 
     #: () -> void

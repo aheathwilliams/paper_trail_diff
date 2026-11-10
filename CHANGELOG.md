@@ -83,6 +83,38 @@ project follows [Semantic Versioning](https://semver.org/).
   `BatchLimitExceededError` whenever more than 20 records matched, and the
   history of every match was read to return one page.
 
+- A hash `historical_filter:` now works on a model with an encrypted
+  attribute, and on a version that names a column since dropped. It raised
+  "cannot read recorded attributes directly"; such a version is now rebuilt
+  as PaperTrail rebuilds it and compared by its decrypted, cast values.
+
+- A hash `historical_filter:` with a list or a range as a value, such as
+  `{ status: %i[published archived] }`, raises `ConfigurationError` instead
+  of matching nothing. `where` would match any of the values; a filter
+  compares one, so use a callable for several. A list is still the value of
+  an attribute that holds one, such as a serialized or an array column.
+
+- `include_deleted: true`, and a readable association scope, accept an
+  equality or a list on a date or a time column, such as `where(due: date)`,
+  wherever they already accepted a range on it. Before, the relation was
+  refused, or the scope read by its slower path.
+
+- `version_scope:` raises `ConfigurationError` when the callable returns
+  anything but a relation on the version class it was given. A callable that
+  returned another model's relation, such as `Document.all`, silently
+  selected the versions whose ids equalled that model's ids.
+
+- A relation ordered by another table's key written in quotes, such as
+  `order('accounts."id"')`, is no longer read as ordered by the model's own
+  key, so its pages get the tie-breaker they need.
+
+- `recorded_changes(version)` leaves out a name the model no longer has,
+  such as a column dropped since, as diffs, timelines, and change rows do.
+
+- `nested_changes` compares two arrays in time proportional to their length.
+  Arrays of objects took time proportional to its square: 16,000 objects
+  took 53 s and now take 0.2 s. Results are unchanged.
+
 - Two transactions that saved in one record's tree at the same time
   interleave their versions, and activity timelines read them wrongly in four
   ways, all fixed by reading each transaction where it ends:

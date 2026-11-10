@@ -412,6 +412,86 @@ RSpec.describe PaperTrailDiff::HistoricalFilter do
     end
   end
 
+  # A plain model's recorded state is read as stored. One whose values only a
+  # record can read is rebuilt as PaperTrail rebuilds it.
+  describe 'a model whose recorded state only a record can read' do
+    def model(name, &body)
+      stub_const(name, Class.new(ActiveRecord::Base) do
+        self.table_name = 'filter_articles'
+        self.inheritance_column = nil
+        has_paper_trail versions: { class_name: 'FilterVersion' }
+        class_eval(&body)
+      end)
+    end
+
+    def held(model, predicate)
+      record, = history(model)
+      filter(predicate, model: model).call([record.id.to_s])
+    end
+
+    it 'matches a model with an attribute that has no column' do
+      plain = model('FilterVirtual') { attribute :note, :string }
+
+      expect(held(plain, { title: 'Draft' }).length).to eq(1)
+      expect(held(plain, { title: 'Other' })).to eq([])
+    end
+
+    it 'matches a model with an attribute type of its own' do
+      upcased = Class.new(ActiveRecord::Type::String) do
+        def deserialize(value) = super&.upcase
+      end
+      typed = model('FilterTyped') { attribute :title, upcased.new }
+
+      expect(held(typed, { title: 'DRAFT' }).length).to eq(1)
+      expect(held(typed, { title: 'Draft' })).to eq([])
+    end
+
+    it 'matches a model that sets values as it is initialized' do
+      initialized = model('FilterInitialized') { after_initialize { self.views ||= 0 } }
+
+      expect(held(initialized, { title: 'Draft' }).length).to eq(1)
+    end
+
+    it 'matches a model with an encrypted attribute by its decrypted value' do
+      ActiveRecord::Encryption.configure(primary_key: 'p' * 32, deterministic_key: 'd' * 32,
+                                         key_derivation_salt: 's' * 32)
+      encrypted = model('FilterEncrypted') { encrypts :title }
+
+      expect(held(encrypted, { title: 'Draft' }).length).to eq(1)
+      expect(held(encrypted, { views: 0 }).length).to eq(1)
+      expect(held(encrypted, { title: 'Other' })).to eq([])
+    end
+
+    it 'still rejects an attribute its versions did not record' do
+      skipping = model('FilterSkipping') do
+        attribute :note, :string
+        paper_trail_options[:skip] = ['hidden']
+      end
+      record, = history(skipping)
+
+      expect { filter({ hidden: 0 }, model: skipping).call([record.id.to_s]) }
+        .to raise_error(PaperTrailDiff::ConfigurationError, /hidden was not recorded in version/)
+    end
+  end
+
+  describe 'a value that names several' do
+    it 'refuses a list or a range, which no single state equals' do
+      [{ title: %w[Draft Review] }, { views: 1..3 }, { title: Set['Draft'] }].each do |predicate|
+        expect { filter(predicate) }.to raise_error(
+          PaperTrailDiff::ConfigurationError,
+          /historical_filter: #{predicate.keys.first} takes one value.*use a callable/
+        )
+      end
+    end
+
+    it 'keeps a list as the value of an attribute that holds one' do
+      event = FilterEvent.create!(labels: %w[a b])
+      event.update!(labels: %w[c])
+
+      expect(filter({ labels: %w[a b] }, model: FilterEvent).call([event.id.to_s]).length).to eq(1)
+    end
+  end
+
   describe 'unreadable history' do
     it 'rejects an attribute the version did not record' do
       article, = history

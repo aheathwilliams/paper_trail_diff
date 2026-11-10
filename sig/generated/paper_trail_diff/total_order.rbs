@@ -24,9 +24,14 @@ module PaperTrailDiff
     # : (untyped, untyped) -> bool
     def self.key?: (untyped, untyped) -> bool
 
+    # A name alone or after a table's, each as it is or in the quotes of any
+    # adapter here: "name", `name` or [name].
+    QUALIFIED_NAME: ::Regexp
+
     # Whether SQL text names the key, alone or after its table's name. That
     # also finds a key the text only uses, as in `LENGTH(id)`, which then goes
-    # without the tie-breaker, but it misses no sort by the key.
+    # without the tie-breaker, but it misses no sort by the key. Another
+    # table's key, quoted or not, is not this one.
     # : (String, untyped) -> bool
     def self.key_in_sql?: (String, untyped) -> bool
   end

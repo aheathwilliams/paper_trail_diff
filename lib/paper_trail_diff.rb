@@ -213,7 +213,7 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
         from: from,
         to: to,
         within: within,
-        version_scope: version_scope
+        version_scope: VersionScopeFilter.checked(version_scope)
       )
     end
 
@@ -240,7 +240,7 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
         from: from,
         to: to,
         within: within,
-        version_scope: version_scope,
+        version_scope: VersionScopeFilter.checked(version_scope),
         group: group,
         snapshots: snapshots
       )
@@ -271,7 +271,7 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
         to: to,
         within: within,
         activity: activity,
-        version_scope: version_scope,
+        version_scope: VersionScopeFilter.checked(version_scope),
         snapshots: snapshots,
         group: group
       )
@@ -298,8 +298,9 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
       PaperTrailAdapter.new(
         associations: associations, ignore: ignore,
         recorded_changes: recorded_changes, allow_approximate: allow_approximate
-      ).analyze_many(records, within: within, activity: activity, version_scope: version_scope,
-                              snapshots: snapshots, group: group)
+      ).analyze_many(records, within: within, activity: activity, snapshots: snapshots,
+                              group: group,
+                              version_scope: VersionScopeFilter.checked(version_scope))
     end
 
     # Analyzes every root the relation reaches whose history moved inside the
@@ -350,7 +351,8 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
                                       allow_approximate: allow_approximate)
       adapter.analyze_scope(
         scope, limit: limit, within: within, activity: activity,
-               version_scope: version_scope, snapshots: snapshots, group: group,
+               version_scope: VersionScopeFilter.checked(version_scope),
+               snapshots: snapshots, group: group,
                historical_filter: historical_filter, max_filter_versions: max_filter_versions,
                include_deleted: include_deleted
       )

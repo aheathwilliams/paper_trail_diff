@@ -15,6 +15,29 @@ module PaperTrailDiff
       raise ConfigurationError, 'version_scope: must respond to call'
     end
 
+    # The filter, with what it returns checked wherever it is called. A
+    # relation on another table would be read for its ids all the same, and
+    # choose the versions that happen to share them.
+    #: (untyped) -> untyped
+    def self.checked(scope)
+      return scope unless scope.respond_to?(:call)
+
+      ->(relation) { narrowed(scope.call(relation), relation) }
+    end
+
+    #: (untyped, untyped) -> untyped
+    def self.narrowed(result, relation)
+      return result unless result.respond_to?(:klass)
+
+      given = relation.klass.table_name
+      returned = result.klass.table_name
+      return result if returned == given
+
+      raise ConfigurationError, 'version_scope: must return the relation it is given, ' \
+                                "narrowed; it returned one on #{returned}, not #{given}"
+    end
+    private_class_method :narrowed
+
     #: (untyped) -> void
     def initialize(scope)
       @scope = self.class.validated(scope)

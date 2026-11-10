@@ -11,6 +11,7 @@ ActiveRecord::Schema.define do
     table.string :label
     table.text :note
     table.datetime :seen_at
+    table.date :due
     table.decimal :amount, precision: 10, scale: 2
   end
 end
@@ -250,10 +251,8 @@ RSpec.describe PaperTrailDiff::ScopeCondition do
     end
 
     it 'declines column types whose values Ruby cannot compare as SQL does' do
-      expect(build(-> { where(seen_at: Time.utc(2026)) })).to be_nil
-      expect(build(-> { where.not(seen_at: Time.utc(2026)) })).to be_nil
-      expect(build(-> { where(seen_at: [Time.utc(2026), Time.utc(2027)]) })).to be_nil
       expect(build(-> { where(amount: 1) })).to be_nil
+      expect(build(-> { where(amount: [1, 2]) })).to be_nil
       stub_const('ScopeConditionSerialized', Class.new(ScopeConditionItem))
       ScopeConditionSerialized.serialize :note, coder: YAML
       expect(build(-> { where(note: 'a') }, target: 'ScopeConditionSerialized')).to be_nil
@@ -283,6 +282,33 @@ RSpec.describe PaperTrailDiff::ScopeCondition do
       cutoff = Time.utc(2026)
       expect(matches(build(-> { where(seen_at: cutoff..) }), { seen_at: cutoff },
                      { seen_at: cutoff - 1 }, { seen_at: nil })).to eq([true, false, false])
+    end
+
+    # History holds a date or a time as text, or as the adapter wraps it, so
+    # each is compared as the value it sorts by, as a range's bounds are.
+    it 'reads equality and lists on a date or a time that sorts in Ruby as in SQL' do
+      day = Date.new(2026, 3, 1)
+      expect(matches(build(-> { where(due: day) }), { due: day }, { due: '2026-03-01' },
+                     { due: day + 1 }, { due: nil })).to eq([true, true, false, false])
+      expect(matches(build(-> { where.not(due: day) }), { due: day + 1 }, { due: '2026-03-01' },
+                     { due: nil })).to eq([true, false, false])
+      expect(matches(build(-> { where(due: [day, day + 2]) }), { due: '2026-03-03' },
+                     { due: day + 1 }, { due: nil })).to eq([true, false, false])
+      expect(matches(build(-> { where.not(due: [day, day + 2]) }), { due: '2026-03-02' },
+                     { due: day }, { due: nil })).to eq([true, false, false])
+      seen = Time.utc(2026, 3, 1, 12)
+      expect(matches(build(-> { where(seen_at: seen) }), { seen_at: seen },
+                     { seen_at: '2026-03-01 12:00:00.000000' }, { seen_at: seen + 1 },
+                     { seen_at: nil })).to eq([true, true, false, false])
+      expect(matches(build(-> { where(seen_at: [seen, seen + 5]) }), { seen_at: seen + 5 },
+                     { seen_at: seen + 1 })).to eq([true, false])
+    end
+
+    it 'declines equality on a time that history may not hold as it was stored' do
+      stub_const('ScopeConditionLocal', Class.new(ScopeConditionItem))
+      ScopeConditionLocal.attribute :seen_at, ActiveRecord::Type::DateTime.new
+      expect(build(-> { where(seen_at: Time.utc(2026)) }, target: 'ScopeConditionLocal')).to be_nil
+      expect(build(-> { where(seen_at: nil) }, target: 'ScopeConditionLocal')).not_to be_nil
     end
 
     # SQL Server stores a time or a date in a wrapper that compares only for
@@ -579,7 +605,7 @@ RSpec.describe PaperTrailDiff::ScopeCondition do
 
     it 'declines a relation that joins, groups, or that it cannot read' do
       [ScopeConditionItem.joins('JOIN tracked_articles ON 1 = 1'), ScopeConditionItem.group(:rank),
-       ScopeConditionItem.where('rank = 1'), ScopeConditionItem.where(seen_at: Time.utc(2026)),
+       ScopeConditionItem.where('rank = 1'), ScopeConditionItem.where(amount: 1),
        ScopeConditionItem.having('COUNT(*) > 1'), ScopeConditionItem.from('scope_condition_items'),
        ScopeConditionItem.lock]
         .each do |relation|

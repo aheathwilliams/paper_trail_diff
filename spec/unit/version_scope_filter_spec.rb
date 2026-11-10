@@ -49,4 +49,30 @@ RSpec.describe PaperTrailDiff::VersionScopeFilter do
 
     expect(filter.call(FilterVersion.all, [created, updated])).to eq([updated])
   end
+
+  describe '.checked' do
+    it 'leaves a missing or uncallable filter for validation' do
+      expect(described_class.checked(nil)).to be_nil
+      expect(described_class.checked(:updates)).to eq(:updates)
+    end
+
+    it 'passes on what the filter returns of the relation it is given' do
+      created, = versions
+      checked = described_class.checked(->(relation) { relation.where(event: 'create') })
+      listed = described_class.checked(lambda(&:to_a))
+
+      expect(checked.call(FilterVersion.where(id: created.id)).to_a).to eq([created])
+      expect(listed.call(FilterVersion.where(id: created.id))).to eq([created])
+    end
+
+    it "refuses a relation on another table, whose ids are not versions'" do
+      checked = described_class.checked(->(_relation) { FilterArticle.all })
+
+      expect { checked.call(FilterVersion.all) }.to raise_error(
+        PaperTrailDiff::ConfigurationError,
+        'version_scope: must return the relation it is given, narrowed; it returned one on ' \
+        'filter_articles, not filter_versions'
+      )
+    end
+  end
 end

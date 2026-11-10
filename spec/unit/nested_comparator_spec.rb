@@ -196,6 +196,25 @@ RSpec.describe PaperTrailDiff::NestedComparator do
       expect(array_change(%w[a b], %w[b a])).to be_frozen
       expect(described_class.call({ 'k' => %w[a b] }, { 'k' => %w[a b] })).to eq({})
     end
+
+    it 'matches a whole number with its float, alone or inside an element, as == does' do
+      change = array_change([1, { 'n' => 2, 'tags' => [3.0] }, 4], [{ n: 2.0, tags: [3] }, 1.0, 5])
+
+      expect(change.to_h).to include(added: [5], removed: [4], reordered: false)
+    end
+
+    # Each element is counted once, rather than searched for among the
+    # others, which took a minute for two arrays of 16,000 objects.
+    it 'compares long arrays of objects in time that grows with their length' do
+      from_value = Array.new(20_000) { |index| { 'k' => index, 'tags' => [index.to_s] } }
+      started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+
+      change = array_change(from_value, from_value.reverse + [{ 'k' => -1 }])
+
+      expect(change.added).to eq([{ 'k' => -1 }])
+      expect(change.removed).to eq([])
+      expect(Process.clock_gettime(Process::CLOCK_MONOTONIC) - started).to be < 10
+    end
   end
 
   it 'reads every key as a string for comparison, at any depth and inside arrays' do

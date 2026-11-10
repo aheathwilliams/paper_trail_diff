@@ -268,7 +268,8 @@ PaperTrailDiff.timeline(article, within: window, version_scope: user_edits)
 ```
 
 It is accepted by `timeline`, `activity_timeline`, `analyze`, `analyze_many`,
-`analyze_scope`, and `report`.
+`analyze_scope`, and `report`. A callable that returns anything but a relation
+on the version class it was given raises `ConfigurationError`.
 
 - Each reported change is compared with the version right after it, even if
   that version is filtered out. So each step shows exactly what that one change
@@ -813,7 +814,8 @@ as it stood when it was destroyed, and keeps only those that match. So a report
 on `Article.where(account_id: account.id)` returns that account's deletions,
 not every account's. The relation's conditions must be plain conditions on the
 model's own columns, as a [readable association scope's](#costly-associations)
-must, ranges included; anything else, such as a join or SQL text, raises
+must, ranges and equality on a date or a time included; anything else, such
+as a join or SQL text, raises
 `ConfigurationError`. `Article.none` keeps none. Its order, limit, and offset
 are ignored here, since they choose a page of existing rows. A record whose
 destroy PaperTrail did not record has no state to test and stays listed.
@@ -856,8 +858,13 @@ hash, every key must be equal (`==`) once both sides are cast to the
 attribute's type, as `where` casts its values: `{ status: :published }` matches
 an enum, and a date or time matches whether the history stored it as YAML or
 as a string in a `json` column. Values are read from the stored history
-without calling `reify`, and unknown or unrecorded attributes raise an error
-instead of matching `nil`. For other checks, pass a callable such as
+without calling `reify`, except for a model whose stored values only a record
+can read, such as one with an encrypted attribute, whose versions are rebuilt
+with `reify` and compared by their decrypted values. Unknown or unrecorded
+attributes raise an error instead of matching `nil`. So does a list or a
+range as a value, such as `{ status: %i[published archived] }`, which `where`
+would read as any of them, unless the attribute itself holds one. For other
+checks, pass a callable such as
 `->(article) { article.title.start_with?("Pub") }`; it receives each state as a
 model instance and may run queries of its own.
 
@@ -919,7 +926,9 @@ a legacy `datetime` or `smalldatetime`, which round the times they store.
 Ranges, such as `where(position: 2..)` or `where(created_at: 1.day.ago...)`,
 and Arel's `gt`, `gteq`, `lt`, and `lteq`, are read on the columns an order
 can sort by, below: integer, integer enum, date, and datetime columns, with
-the same conditions on a datetime's precision.
+the same conditions on a datetime's precision. Equality and `IN` on a date or a
+datetime column, such as `where(due_on: Date.current)`, are read under those
+conditions too.
 
 A `limit` or `offset`, and the order of a `has_one`, are read the same way
 when the order is total and the gem can repeat it:
@@ -1472,7 +1481,8 @@ Other details:
   `{}`.
 - `ignore:` takes an array of attribute names and defaults to `updated_at`, as
   elsewhere. It does not take `paths:`, because a version does not say which
-  association path it was reached through. Primary keys are left out.
+  association path it was reached through. Primary keys are left out, and so
+  is a name the model no longer has, such as a column dropped since.
 - Unlike PaperTrail's `version.changeset`, it never loads the record. That
   saves a query per version, and a deleted record's values keep their types,
   such as an enum's label rather than the integer PaperTrail stored.

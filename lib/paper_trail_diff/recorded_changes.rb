@@ -67,12 +67,20 @@ module PaperTrailDiff
       @version.class.column_names.include?('object_changes') && !@version.object_changes.nil?
     end
 
+    # An adapter may name its changes with symbols.
+    #: (untyped) -> Hash[String, untyped]
+    def named(changes)
+      changes.to_h { |name, values| [name.to_s, values] }
+    end
+
     # Primary keys identify the record rather than describe it, as in a diff.
     # Each side is read as a step's diff reads it (see StoredValues), so a
-    # value compares equal to the state the change produced.
+    # value compares equal to the state the change produced. A name the model
+    # no longer has, such as a column since dropped, is left out, as a diff
+    # leaves it out.
     #: (untyped, untyped, Array[String]) -> Hash[String, ValueChange]
     def value_changes(model_class, changes, excluded)
-      kept = changes.to_h { |name, values| [name.to_s, values] }.except(*excluded)
+      kept = named(changes).slice(*model_class.attribute_names).except(*excluded)
       from = StoredValues.apply(model_class, kept.transform_values(&:first))
       to = StoredValues.apply(model_class, kept.transform_values(&:last))
       kept.keys.sort.to_h { |key| [key, ValueChange.new(from: from.fetch(key), to: to.fetch(key))] }

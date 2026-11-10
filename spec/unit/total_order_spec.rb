@@ -32,6 +32,15 @@ RSpec.describe PaperTrailDiff::TotalOrder do
         .to eq("filter_events.id DESC, #{key}")
     end
 
+    it "sorts by the key after another table's key written in quotes" do
+      key = '"filter_articles"."id" ASC'
+
+      expect(order_of(FilterArticle.order(Arel.sql(quoted('filter_events', 'id')))))
+        .to eq(%("filter_events"."id", #{key}))
+      expect(order_of(FilterArticle.order(Arel.sql(%(filter_events."id" DESC)))))
+        .to eq(%(filter_events."id" DESC, #{key}))
+    end
+
     # SQL Server rejects a column listed twice in an order, in any spelling.
     it 'keeps an order that sorts by the key' do
       key = '"filter_articles"."id"'

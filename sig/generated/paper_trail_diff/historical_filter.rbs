@@ -11,6 +11,9 @@ module PaperTrailDiff
   class HistoricalFilter
     DEFAULT_VERSION_LIMIT: ::Integer
 
+    # Values `where` reads as several.
+    SEVERAL: untyped
+
     # : (untyped, predicate: untyped, time_range: TimeRange?, limit: Integer, max_versions: Integer) -> void
     def initialize: (untyped, predicate: untyped, time_range: TimeRange?, limit: Integer, max_versions: Integer) -> void
 
@@ -47,6 +50,12 @@ module PaperTrailDiff
 
     # : (untyped) -> untyped
     def validate_predicate: (untyped) -> untyped
+
+    # `where` reads a list or a range as any of its values, which an
+    # equality with one cast value cannot mean, so it is refused unless the
+    # attribute itself holds one, as a serialized or an array column does.
+    # : (String, untyped) -> untyped
+    def expected: (String, untyped) -> untyped
 
     # Expected and recorded values compare as the attribute casts them, as
     # `where` reads its values: an enum's symbol names its stored value, and a
@@ -87,6 +96,17 @@ module PaperTrailDiff
 
     # : (untyped) -> bool
     def attributes_match?: (untyped) -> bool
+
+    # The attributes the version recorded, read as stored where they can be.
+    # : (untyped) -> Hash[String, untyped]
+    def recorded_attributes: (untyped) -> Hash[String, untyped]
+
+    # A model whose stored values only a record can read, such as one with an
+    # encrypted attribute, or whose version names a column since removed, is
+    # rebuilt as PaperTrail rebuilds it. The record also holds attributes the
+    # version did not record, which are left out.
+    # : (untyped) -> Hash[String, untyped]
+    def rebuilt_attributes: (untyped) -> Hash[String, untyped]
 
     # : () -> void
     def reject_root_limit!: () -> void
