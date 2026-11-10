@@ -141,17 +141,23 @@ module PaperTrailDiff
     # : (untyped) -> Integer?
     def boundary_index: (untyped) -> Integer?
 
-    # The first version whose transaction ends at or after the boundary's.
-    # One record's versions end in the order they were saved, since a
-    # transaction holds a record it saved until it ends; where history says
-    # otherwise, a version counts as ending no earlier than those before it.
+    # The first version whose transaction ends at or after the boundary's, or
+    # that was saved after the timeline's last version (see
+    # TransactionEnds#beyond?). One record's versions end in the order they
+    # were saved, since a transaction holds a record it saved until it ends;
+    # where history says otherwise, a version counts as ending no earlier
+    # than those before it.
     # : (untyped, TransactionEnds) -> Integer?
     def effective_index: (untyped, TransactionEnds) -> Integer?
 
     # Where each version takes effect: the last version of its transaction,
-    # or of an earlier version's when that one ends later.
+    # or of an earlier version's when that one ends later; nil for a version
+    # saved after the timeline's last, and so for those after it.
     # : (TransactionEnds) -> Array[untyped]
     def effective_versions: (TransactionEnds) -> Array[untyped]
+
+    # : (TransactionEnds) -> Array[untyped]
+    def placed: (TransactionEnds) -> Array[untyped]
 
     # : (untyped) -> Integer?
     def transaction_index: (untyped) -> Integer?
@@ -174,12 +180,11 @@ module PaperTrailDiff
     # : (untyped, Array[untyped], Array[untyped]) -> void
     def seed: (untyped, Array[untyped], Array[untyped]) -> void
 
-    # How far the transactions of the versions held in the range reach
-    # outside it: where the earliest of those that began before the start
-    # began, and where the latest of those that went on after the end saved
-    # its last version. Either is nil when none did; see PreparedHistoryLoader.
-    # : () -> [untyped, untyped]
-    def reach: () -> [ untyped, untyped ]
+    # Where the earliest transaction open at the range's start began, in the
+    # version tables of the records held; nil when none was open. See
+    # PreparedHistoryLoader.
+    # : () -> untyped
+    def reach: () -> untyped
 
     # When the history was read from.
     # : () -> untyped
@@ -309,61 +314,55 @@ module PaperTrailDiff
     def live_records_for: (untyped, Array[untyped]) -> Array[untyped]
   end
 
-  # Finds how far the transactions around a window reach outside it: where
-  # the earliest of those open at its start began, and where the latest of
-  # those that cross either edge saved its last version.
+  # Finds where the earliest transaction open at a window's start began.
   #
   # A transaction open at the start saved a version before it and another
   # from it onward. Either can be of a record the history does not hold, such
   # as one the transaction moved out of the tree before the window and never
   # saved again, so every such transaction of the tree's version tables is
-  # read, not only those of the versions held: one statement per table when
-  # none is open, which is the usual case, and one more per 500 that are. A
+  # read, not only those of the versions held: one statement per table. A
   # transaction's first version in a table cannot follow another of its own
   # there, so only the others are looked up.
   #
-  # A transaction across the end saved a version held up to it and another
-  # after it; one statement per 500 of them.
-  #
   # Another version table can number a transaction as this one numbered an
-  # earlier one, so versions an anchor separates from the edge are not read
+  # earlier one, so versions an anchor separates from the start are not read
   # as one transaction's (see TransactionAnchors).
+  #
+  # Nothing is read past a window's end. A transaction that crosses it is
+  # placed by its last version, which its version table names (see
+  # RecordedTransactionEnds), and a timeline reads no version saved after its
+  # own last one (see TransactionEnds#beyond?).
   class CrossingTransactions
-    # : (Hash[Array[String], PreparedRecordSeries], Array[untyped], untyped, untyped) -> void
-    def initialize: (Hash[Array[String], PreparedRecordSeries], Array[untyped], untyped, untyped) -> void
+    # : (Array[untyped], untyped) -> void
+    def initialize: (Array[untyped], untyped) -> void
 
-    # The reach of a history read from `start`; none without one.
-    # : (Hash[Array[String], PreparedRecordSeries], Enumerable[untyped], untyped, untyped) -> [untyped, untyped]
-    def self.reach: (Hash[Array[String], PreparedRecordSeries], Enumerable[untyped], untyped, untyped) -> [ untyped, untyped ]
+    # Where the transactions open at `start` began, in these version tables;
+    # nil when none is open, or without a start.
+    # : (Enumerable[untyped], untyped) -> untyped
+    def self.reach: (Enumerable[untyped], untyped) -> untyped
 
-    # How far the transactions open at `start` reach, in the version tables
-    # of the models of these names that PaperTrail tracks; nil when none is
-    # open, or without a start.
-    # : (Array[String], untyped, untyped) -> [untyped, untyped]?
-    def self.open_among: (Array[String], untyped, untyped) -> [ untyped, untyped ]?
+    # The same, in the version tables of the models of these names that
+    # PaperTrail tracks.
+    # : (Array[String], untyped) -> untyped
+    def self.open_among: (Array[String], untyped) -> untyped
 
-    # When the earliest transaction open at the start began, and when the
-    # latest across an edge saved its last version; nil where none crossed.
-    # : () -> [untyped, untyped]
-    def call: () -> [ untyped, untyped ]
+    # The same, in the version tables of a root and of the first record on
+    # each requested path.
+    # : (untyped, AssociationTraversal, untyped) -> untyped
+    def self.open_around: (untyped, AssociationTraversal, untyped) -> untyped
+
+    # : () -> untyped
+    def call: () -> untyped
 
     private
-
-    @finish: untyped
-
-    @series: Hash[Array[String], PreparedRecordSeries]
 
     @start: untyped
 
     @version_classes: Array[untyped]
 
-    # : (untyped) -> bool
-    def past?: (untyped) -> bool
-
-    # When the transactions open at the start began in this table, and when
-    # the latest of them saved its last version there.
-    # : (untyped) -> [untyped, untyped]
-    def open_at_start: (untyped) -> [ untyped, untyped ]
+    # When the earliest transaction open at the start began in this table.
+    # : (untyped) -> untyped
+    def open_at_start: (untyped) -> untyped
 
     # The versions saved before the start by a transaction that saved one
     # from it onward.
@@ -379,26 +378,5 @@ module PaperTrailDiff
     # the two columns differ in type.
     # : (untyped) -> bool
     def own_numbers?: (untyped) -> bool
-
-    # When each transaction of the versions held up to the end saved its last
-    # version after it.
-    # : () -> Array[untyped]
-    def across_end: () -> Array[untyped]
-
-    # When each of these transactions saved its last version after the end,
-    # by the version held of each.
-    # : (untyped, Hash[untyped, untyped], untyped) -> Array[untyped]
-    def last_after: (untyped, Hash[untyped, untyped], untyped) -> Array[untyped]
-
-    # The transactions of the versions, by version class, since each version
-    # table is read for its own, with one version held of each.
-    # : (Array[untyped]) -> Hash[untyped, Hash[untyped, untyped]]
-    def transactions: (Array[untyped]) -> Hash[untyped, Hash[untyped, untyped]]
-
-    # The versions held that a transaction saved.
-    # : () -> Array[untyped]
-    def versions: () -> Array[untyped]
-
-    @versions: Array[untyped]?
   end
 end

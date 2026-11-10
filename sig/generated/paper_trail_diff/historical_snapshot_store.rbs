@@ -10,29 +10,33 @@ module PaperTrailDiff
     def initialize: (traversal: AssociationTraversal, normalizer: SnapshotNormalizer, preparer: untyped) -> void
 
     # A `start_at` is a window's (see PreparedHistoryLoader); a range of
-    # versions starts at its first. A window's history says how far its
-    # transactions `reach` outside it, unless it was read for that reach.
+    # versions starts at its first. A window's history says how far back the
+    # transactions open at its start `reach`, unless it was read from there.
     # : (untyped, Array[untyped], ?start_at: untyped, ?end_at: untyped, ?reach: bool) -> PreparedHistory?
     def prepare: (untyped, Array[untyped], ?start_at: untyped, ?end_at: untyped, ?reach: bool) -> PreparedHistory?
 
     # A `start_at` is a window's, as for `prepare`. A window's roots may have
     # no version in it, when only their descendants changed there. Returns
-    # how far the window's transactions reach outside it, if they do, for the
-    # batch to read it again from and to there, with `reach` false.
-    # : (Array[untyped], Array[untyped], ?start_at: untyped, ?end_at: untyped, ?reach: bool) -> [untyped, untyped]?
-    def prepare_batch: (Array[untyped], Array[untyped], ?start_at: untyped, ?end_at: untyped, ?reach: bool) -> [ untyped, untyped ]?
+    # where the earliest transaction open at the window's start began, if one
+    # was, for the batch to read it again from there, with `reach` false.
+    # : (Array[untyped], Array[untyped], ?start_at: untyped, ?end_at: untyped, ?reach: bool) -> untyped
+    def prepare_batch: (Array[untyped], Array[untyped], ?start_at: untyped, ?end_at: untyped, ?reach: bool) -> untyped
 
     # Missing roots, and roots compared only between versions, have no live
     # graph to collect. Reading their associations here would issue a query
     # per root and seed nonexistent rows as live state.
     #
     # Roots with no version in a window are asked only how far the
-    # transactions open at its start reach: one destroyed just before it, by
-    # a transaction that went on to save its tree inside, is reported in the
-    # window (see CrossingTransactions). That is read from the version tables
-    # of the root and of the first record on each requested path.
-    # : (Array[untyped], Array[untyped], ?start_at: untyped, ?end_at: untyped, ?reach: bool) -> [untyped, untyped]?
-    def prepare_deleted_batch: (Array[untyped], Array[untyped], ?start_at: untyped, ?end_at: untyped, ?reach: bool) -> [ untyped, untyped ]?
+    # transactions open at its start reach (see #reach_before).
+    # : (Array[untyped], Array[untyped], ?start_at: untyped, ?end_at: untyped, ?reach: bool) -> untyped
+    def prepare_deleted_batch: (Array[untyped], Array[untyped], ?start_at: untyped, ?end_at: untyped, ?reach: bool) -> untyped
+
+    # Where the earliest transaction open at a window's start began, for a
+    # root with no version in the window and no row: one destroyed just
+    # before it, by a transaction that went on to save its tree inside, is
+    # reported in the window.
+    # : (untyped, untyped) -> untyped
+    def reach_before: (untyped, untyped) -> untyped
 
     # `history` is the one `prepare` returned for this root, if any.
     # A snapshot read for a timeline whose transactions overlapped reads each

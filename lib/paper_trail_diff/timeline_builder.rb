@@ -52,7 +52,7 @@ module PaperTrailDiff
       return empty_history if plan.empty?
 
       versions = plan.versions
-      snapshots = @snapshotter.prepare(@record, versions)
+      snapshots = @snapshotter.prepare(@record, versions, start_at: @range.begin_time)
       steps = build_steps(plan, snapshots)
       final = plan.closes_on_destroy ? nil : snapshots.call(plan.final_endpoint)
       [steps, snapshots.call(versions.first), final]

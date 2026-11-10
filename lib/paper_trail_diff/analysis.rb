@@ -42,8 +42,9 @@ module PaperTrailDiff
       freeze
     end
 
-    # The same result for the window it was read in, which the caller knows
-    # once it has moved the window's edges to transactions.
+    # The same result for the window it was asked in. A batch reads a root
+    # over a wider range when a transaction was open at the window's start,
+    # and reports the window as asked.
     #: (TimeRange?) -> Analysis
     def with_window(range)
       self.class.new(

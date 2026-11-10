@@ -140,12 +140,13 @@ RSpec.describe PaperTrailDiff::AnalysisBatch do
     expect(analyzed.sole[1].mutations).to eq([updated])
   end
 
-  it 'plans a window again over how far its transactions reach, and passes the window as asked' do
+  it 'plans a window again from where its open transactions began, and passes the window ' \
+     'as asked' do
     record, _created, updated = article
     other, = article(minutes: [0, 2])
-    reaches << [at(1), nil]
+    reaches << at(1)
 
-    result = analyze([record, other], within: at(1.25)..at(3))
+    result = analyze([record, other], within: at(1.25)..at(3), context: true)
 
     expect(analyzed.map { |root, plan, window| [root, plan.versions.first, window.to_range] })
       .to eq([[record, updated, at(1.25)..at(3)],
@@ -155,6 +156,16 @@ RSpec.describe PaperTrailDiff::AnalysisBatch do
 
   # An activity view reports association changes in such a window, so it
   # needs the root's state there: the version after the window holds it.
+  it 'reads a window as it is without activity on associations' do
+    record, = article
+    reaches << at(1)
+
+    analyze([record], within: at(1.25)..at(3))
+
+    expect(analyzed).to eq([])
+    expect(reaches).to eq([at(1)])
+  end
+
   it 'reads a root with nothing in the window from the version after it when asked' do
     record, _created, _updated, after = article(minutes: [0, 1, 4])
 

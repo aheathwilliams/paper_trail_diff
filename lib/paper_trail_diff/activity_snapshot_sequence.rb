@@ -37,6 +37,10 @@ module PaperTrailDiff
       @snapshotter.call(root_endpoint, context_endpoint)
     end
 
+    # See HistoricalSnapshotStore#reach_before.
+    #: (untyped, untyped) -> untyped
+    def reach_before(record, start_at) = @store.reach_before(record, start_at)
+
     # @rbs @store: HistoricalSnapshotStore
     # @rbs @snapshotter: untyped
     # @rbs @refresher: untyped

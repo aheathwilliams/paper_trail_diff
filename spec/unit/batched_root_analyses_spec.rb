@@ -14,14 +14,17 @@ RSpec.describe PaperTrailDiff::BatchedRootAnalyses do
     analyze.tap { |call| call.define_singleton_method(:empty) { AnalysisStandIn.new(nil) } }
   end
   let(:history_preparer) do
-    lambda do |records, versions, reach: true, **range|
+    lambda do |records, versions, reach:, **range|
       prepared << [records, versions, range]
+      asked << reach
       reaches.shift if reach
     end
   end
 
-  # How far the history of each read says its transactions reach, in turn.
+  # Where the history of each read says the earliest transaction open at its
+  # start began, in turn, and whether each read was asked.
   def reaches = (@reaches ||= [])
+  def asked = (@asked ||= [])
   def planned = (@planned ||= [])
   before do
     FilterVersion.delete_all
@@ -53,7 +56,7 @@ RSpec.describe PaperTrailDiff::BatchedRootAnalyses do
   end
 
   # A batch that has not loaded its roots passes no `loaded`.
-  def analyze(roots, within: nil, loaded: nil)
+  def analyze(roots, within: nil, loaded: nil, activity: true)
     plans = roots.to_h { |record, plan| [key(record), plan] }
     planner = lambda do |records, range|
       planned << range&.to_range
@@ -61,7 +64,7 @@ RSpec.describe PaperTrailDiff::BatchedRootAnalyses do
     end
     analyses = described_class.new(
       time_range: within && PaperTrailDiff::TimeRange.new(within), planner: planner,
-      history_preparer: history_preparer, analyzer: analyzer
+      history_preparer: history_preparer, analyzer: analyzer, activity: activity
     )
     records = roots.map(&:first)
     loaded ? analyses.call(records, loaded: loaded) : analyses.call(records)
@@ -82,7 +85,7 @@ RSpec.describe PaperTrailDiff::BatchedRootAnalyses do
   it 'passes each root the window as asked, though its history is read further' do
     article, plan = root
     other, other_plan = root
-    reaches << [at(0.5), at(4)]
+    reaches << at(0.5)
 
     result = analyze([[article, plan], [other, other_plan]], within: at(1)..at(3))
 
@@ -94,10 +97,38 @@ RSpec.describe PaperTrailDiff::BatchedRootAnalyses do
   it 'gives a root with nothing to replay an empty analysis, without analyzing it' do
     article, = root
 
-    result = analyze([[article, PaperTrailDiff::RootVersionPlan.empty]], within: at(5)..at(6))
+    result = analyze([[article, PaperTrailDiff::RootVersionPlan.empty]], within: at(5)..at(6),
+                                                                         activity: false)
 
     expect(result.fetch(key(article))).to eq(AnalysisStandIn.new(nil, at(5)..at(6)))
     expect([analyzed, prepared]).to eq([[], []])
+  end
+
+  # A transaction open at the window's start may have destroyed the root
+  # before it, and ended inside.
+  it 'asks how far a window reaches for roots with nothing to replay, with activity' do
+    article, plan = root(minutes: [1, 2])
+    plans = [PaperTrailDiff::RootVersionPlan.empty, plan]
+    planner = ->(_records, _range) { { key(article) => plans.shift } }
+    reaches << at(4)
+    batch = described_class.new(
+      time_range: PaperTrailDiff::TimeRange.new(at(5)..at(6)), planner: planner,
+      history_preparer: history_preparer, analyzer: analyzer, activity: true
+    )
+
+    batch.call([article])
+
+    expect(prepared.map(&:last)).to eq([{ start_at: at(5), end_at: at(6) },
+                                        { start_at: at(4), end_at: at(6) }])
+    expect(analyzed.map { |record, given, _window| [record, given] }).to eq([[article, plan]])
+  end
+
+  it 'does not ask for a history read without a window' do
+    article, = root
+
+    analyze([[article, PaperTrailDiff::RootVersionPlan.empty]])
+
+    expect(prepared).to eq([])
   end
 
   # Its descendants may have moved in the window, though the root did not.
@@ -159,31 +190,34 @@ RSpec.describe PaperTrailDiff::BatchedRootAnalyses do
                                           { start_at: at(0), end_at: at(9) }])
     end
 
-    it 'plans and prepares a window again over how far its transactions reach' do
+    it 'plans and prepares a window again from where its open transactions began' do
       article, plan = root(minutes: [1, 2])
-      reaches << [at(0.5), at(4)]
-
-      analyze([[article, plan]], within: at(1)...at(3))
-
-      expect(planned).to eq([at(1)...at(3), at(0.5)..at(4)])
-      expect(prepared.map(&:last)).to eq([{ start_at: at(1), end_at: at(3) },
-                                          { start_at: at(0.5), end_at: at(4) }])
-    end
-
-    it 'keeps the end of a window whose transactions reach only before it' do
-      article, plan = root(minutes: [1, 2])
-      reaches << [at(0.5), nil]
+      reaches << at(0.5)
 
       analyze([[article, plan]], within: at(1)...at(3))
 
       expect(planned).to eq([at(1)...at(3), at(0.5)...at(3)])
+      expect(prepared.map(&:last)).to eq([{ start_at: at(1), end_at: at(3) },
+                                          { start_at: at(0.5), end_at: at(3) }])
+      expect(asked).to eq([true, false])
+    end
+
+    # Each version is reported where it was saved, so the window is read as
+    # it is.
+    it 'reads a window once without activity, and does not ask how far it reaches' do
+      article, plan = root(minutes: [1, 2])
+      reaches << at(0.5)
+
+      analyze([[article, plan]], within: at(1)...at(3), activity: false)
+
+      expect([planned, asked]).to eq([[at(1)...at(3)], [false]])
     end
 
     it 'reads a window once when no transaction reaches outside it, and a history once' do
       article, plan = root(minutes: [1, 2])
 
       analyze([[article, plan]], within: at(1)...at(3))
-      reaches << [at(0), nil]
+      reaches << at(0)
       analyze([[article, plan]])
 
       expect(planned).to eq([at(1)...at(3), nil])

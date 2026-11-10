@@ -84,14 +84,13 @@ module PaperTrailDiff
       exclude_end? ? (begin_time...end_time) : (begin_time..end_time)
     end
 
-    # The window widened to start at `earliest` and to run through `latest`,
-    # each where it is given and lies outside the window: what a window reads
-    # when transactions cross its edges (see PreparedHistoryLoader).
-    #: (untyped, untyped) -> TimeRange
-    def widened(earliest, latest)
-      start = [earliest, begin_time].compact.min
+    # The window widened to start at `earliest`, where that is before it:
+    # what a window reads when a transaction crosses its start (see
+    # PreparedHistoryLoader).
+    #: (untyped) -> TimeRange
+    def widened(earliest)
+      start = [earliest, begin_time].min
       finish = end_time
-      return self.class.new(start..latest, digits: @digits) if latest && finish && latest > finish
       return self.class.new(start.., digits: @digits) unless finish
 
       self.class.new(exclude_end? ? start...finish : start..finish, digits: @digits)

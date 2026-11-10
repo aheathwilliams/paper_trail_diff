@@ -42,6 +42,9 @@ module PaperTrailDiff
     # The plan says which pairs of versions become steps, which a filter can
     # make different from adjacent pairs of the selected versions. A `whole`
     # plan replays every version in the range; see RootVersionSelection.
+    #: () -> bool
+    def preselected? = !@plan.nil?
+
     #: (?context_required: bool, ?whole: bool) -> RootVersionPlan
     def select_plan(context_required: false, whole: false)
       preselected = @plan
@@ -57,22 +60,22 @@ module PaperTrailDiff
       explicit_plan(whole)
     end
 
-    # The plan over the window widened to how far its transactions `reach`
-    # outside it: from where the earliest across its start began, to where the
-    # latest across its end saved its last version (see PreparedHistoryLoader).
-    #: ([untyped, untyped], context_required: bool) -> RootVersionPlan
+    # The plan over the window widened to start at its `reach`: where the
+    # earliest transaction across its start began (see PreparedHistoryLoader).
+    #: (untyped, context_required: bool) -> RootVersionPlan
     def reach_plan(reach, context_required:)
       range = time_range #: TimeRange
       TimeVersionRange.new(
-        @record, time_range: range.widened(*reach), version_scope: nil,
+        @record, time_range: range.widened(reach), version_scope: @version_scope,
                  live_endpoint: @live_endpoint
       ).select_plan(context_required: context_required, whole: true)
     end
 
     # The plan of what the window reports, from the root versions a `wide`
     # plan replays: those whose transactions end inside the window, bounded
-    # by the first that ends after it (see TransactionEnds). A filter names
-    # which of them are the root's own mutations.
+    # by the first that ends after it (see TransactionEnds). The root's own
+    # mutations among them are those the wide plan names, which a filter
+    # chose.
     #: (RootVersionPlan, TransactionEnds, context_required: bool) -> RootVersionPlan
     def reporting_plan(wide, ends, context_required:)
       versions = wide.reconstruction_versions
@@ -83,7 +86,8 @@ module PaperTrailDiff
       return RootVersionPlan.empty if versions.any? && inside.empty? && !after && !live
 
       RootVersionSelection.new(
-        in_range: inside, selected: kept(inside), after_range: after, windowed: true,
+        in_range: inside, selected: inside.select { |version| wide.mutation?(version) },
+        after_range: after, windowed: true,
         context_required: context_required,
         live_endpoint: live, whole: true
       ).call
@@ -125,15 +129,6 @@ module PaperTrailDiff
         range.include?(ends.last(version).created_at)
       end
       [inside, outside.find { |version| ends.last(version).created_at >= range.begin_time }]
-    end
-
-    # Those of the versions a version filter keeps: all of them without one.
-    #: (Array[untyped]) -> Array[untyped]
-    def kept(versions)
-      relation = Endpoint.versions(@record)
-      VersionScopeFilter.new(@version_scope)
-                        .call(relation.where(relation.klass.primary_key => versions.map(&:id)),
-                              versions)
     end
 
     #: (bool) -> RootVersionPlan

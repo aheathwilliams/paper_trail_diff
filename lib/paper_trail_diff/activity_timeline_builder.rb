@@ -172,8 +172,8 @@ module PaperTrailDiff
 
     # The range's events up to its last root version, or to the instant the
     # live record it closes on was read, with the history they are read from.
-    # A window's history says how far its transactions reach outside it;
-    # `reach` says not to ask, of a history read for that reach.
+    # A window's history says where the earliest transaction open at its
+    # start began; `reach` says not to ask, of a history read from there.
     #: (RootVersionPlan, untyped, ?start_at: untyped, ?reach: bool) -> [Array[ActivityEvent], untyped]
     def range_events(plan, captured_at, start_at: @range.begin_time, reach: true)
       versions = plan.reconstruction_versions
@@ -206,10 +206,10 @@ module PaperTrailDiff
     # not to the last root version, or descendants that moved after that
     # version would be missing from a report that claims to reach now.
     #
-    # The events are read from the window widened to where the transactions
-    # across its edges began and ended, and replayed whole; the window reports
-    # those whose transactions end inside it. The live record is read only
-    # once something in the window is reported.
+    # The events are read from where the transactions across the window's
+    # start began, and replayed whole; the window reports those whose
+    # transactions end inside it. The live record is read only once something
+    # in the window is reported.
     #: () -> [RootVersionPlan, ActivityHistory, Array[ActivityStep], RecordSnapshot?, RecordSnapshot?, untyped]?
     def window_replay
       wide, events, snapshots, captured_at = window_events
@@ -224,21 +224,42 @@ module PaperTrailDiff
       live_replay(plan, history, live, captured_at, snapshot)
     end
 
-    # The plan of every root version the window's transactions reach, its
+    # The plan of every root version the window's transactions saved, its
     # events, their history, and when the live record it closes on was read.
     #: () -> [RootVersionPlan?, Array[ActivityEvent]?, untyped, untyped]
     def window_events
       wide = select_plan
-      return [nil, nil, nil, nil] if wide.empty? && !wide.closing_record
+      return gone_events if nothing?(wide)
 
       events, snapshots, captured_at = events_through(wide)
       reach = snapshots.history&.reach
       return [wide, events, snapshots, captured_at] unless reach
 
+      reached_events(reach)
+    end
+
+    # A plan with no version to replay and no live record to close on.
+    #: (RootVersionPlan) -> bool
+    def nothing?(plan) = plan.empty? && !plan.closing_record
+
+    # The window read again from where the earliest transaction open at its
+    # start began.
+    #: (untyped) -> [RootVersionPlan?, Array[ActivityEvent]?, untyped, untyped]
+    def reached_events(reach)
       wide = @range.reach_plan(reach, context_required: true)
-      start_at = reach.first || @range.begin_time
-      events, snapshots, captured_at = events_through(wide, start_at: start_at, reach: false)
+      return [nil, nil, nil, nil] if nothing?(wide)
+
+      events, snapshots, captured_at = events_through(wide, start_at: reach, reach: false)
       [wide, events, snapshots, captured_at]
+    end
+
+    # A root with no version in the window and no row was gone before it,
+    # unless a transaction open at its start destroyed it and ended inside:
+    # the window reports that one. A batch has asked for its roots already.
+    #: () -> [RootVersionPlan?, Array[ActivityEvent]?, untyped, untyped]
+    def gone_events
+      reach = (@snapshotter.reach_before(@record, @range.begin_time) unless @range.preselected?)
+      reach ? reached_events(reach) : [nil, nil, nil, nil]
     end
 
     #: (RootVersionPlan, **untyped) -> [Array[ActivityEvent], untyped, untyped]

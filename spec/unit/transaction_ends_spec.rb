@@ -75,6 +75,23 @@ RSpec.describe PaperTrailDiff::TransactionEnds do
     expect([last, other, first].sort_by { |each| ends.sort_key(each) }).to eq([other, first, last])
   end
 
+  describe '#beyond?' do
+    it 'is true only for a version saved after every version given' do
+      ends = described_class.new([version(4, 7), version(2, 8)])
+
+      expect([1, 2, 4].map { |id| ends.beyond?(version(id, nil)) }).to eq([false, false, false])
+      expect(ends.beyond?(version(5, 7))).to be(true)
+      expect(ends.beyond?(version(5, nil, at: 4))).to be(true)
+    end
+
+    it 'does not move with where a transaction is recorded as ending, and is false of none' do
+      ends = described_class.new([version(1, 7)], { ['EndsVersion', 7] => version(9, 7) })
+
+      expect(ends.beyond?(version(2, 8))).to be(true)
+      expect(described_class.new([]).beyond?(version(1, nil))).to be(false)
+    end
+  end
+
   describe '#interleaved?' do
     it 'is true when a transaction saved between two versions of another' do
       expect(described_class.new([version(1, 7), version(2, 8), version(3, 7)])).to be_interleaved

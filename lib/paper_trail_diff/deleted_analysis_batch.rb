@@ -26,7 +26,8 @@ module PaperTrailDiff
       records = historical_roots(destroys)
       analyses = BatchedRootAnalyses.new(
         time_range: @time_range, planner: ->(roots, range) { plans(roots, destroys, range) },
-        history_preparer: @history_preparer, analyzer: @analyzer
+        history_preparer: @history_preparer, analyzer: @analyzer,
+        activity: @context_required
       ).call(records)
       with_unavailable(analyses)
     end
@@ -49,8 +50,8 @@ module PaperTrailDiff
     # A root destroyed before the range had no state inside it to read, so
     # only the others take the version after the range as context. Every
     # root replays the whole of its range for activity on associations. The
-    # range is the window, or the window widened to how far its transactions
-    # reach, which can hold a destroy that one of them saved.
+    # range is the window, or the window widened to where the transactions
+    # open at its start began, which can hold a destroy that one of them saved.
     #: (Array[untyped], Array[untyped], TimeRange?) -> Hash[Array[String], RootVersionPlan]
     def plans(records, destroys, range)
       start = range&.begin_time
@@ -58,22 +59,7 @@ module PaperTrailDiff
                       .map { |version| version.item_id.to_s }
       before, during = records.partition { |record| early.include?(record.id.to_s) }
       plans_for(during, @context_required, range)
-        .merge(plans_for(before, false, reaching(before, range)))
-    end
-
-    # The range for roots destroyed before it: widened to where the
-    # transactions open at its start began, when activity on associations is
-    # asked for, since one of them may have saved the destroy and gone on to
-    # save the root's tree inside the range, which then reports both. No
-    # version of such a root is in the range to find the transaction by.
-    #: (Array[untyped], TimeRange?) -> TimeRange?
-    def reaching(records, range)
-      return range unless range && @context_required && records.any?
-
-      none = [] #: Array[untyped]
-      reach = @history_preparer.call(records, none, start_at: range.begin_time,
-                                                    end_at: range.end_time)
-      reach ? range.widened(reach.first, nil) : range
+        .merge(plans_for(before, false, range))
     end
 
     #: (Array[untyped], bool, TimeRange?) -> Hash[Array[String], RootVersionPlan]

@@ -26,6 +26,7 @@ module PaperTrailDiff
       @last = {} #: Hash[Array[untyped], untyped]
       @keys = {} #: Hash[Array[untyped], Array[untyped]]
       versions.each { |version| note(version) }
+      @horizon = versions.map { |version| Support.chronological_version_key(version) }.max
       @reordered = reordered?(versions)
       freeze
     end
@@ -42,6 +43,17 @@ module PaperTrailDiff
       (key && (@recorded[key] || @last[key])) || version
     end
 
+    # Whether the version was saved after every version of the timeline. A
+    # history can hold such a version, as the next one of a record after the
+    # range it was read for, or as part of a batch's history that runs on for
+    # another root. The timeline ends before it, so it takes effect after
+    # everything the timeline holds, whenever its transaction ended.
+    #: (untyped) -> bool
+    def beyond?(version)
+      horizon = @horizon
+      !horizon.nil? && (Support.chronological_version_key(version) <=> horizon) == 1
+    end
+
     # Orders versions by where their transactions end, then as they were
     # saved.
     #: (untyped) -> Array[untyped]
@@ -55,6 +67,7 @@ module PaperTrailDiff
     # @rbs @recorded: Hash[Array[untyped], untyped]
     # @rbs @last: Hash[Array[untyped], untyped]
     # @rbs @keys: Hash[Array[untyped], Array[untyped]]
+    # @rbs @horizon: Array[untyped]?
     # @rbs @reordered: bool
 
     #: (untyped) -> void

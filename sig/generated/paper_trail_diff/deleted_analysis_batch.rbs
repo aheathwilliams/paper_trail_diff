@@ -33,18 +33,10 @@ module PaperTrailDiff
     # A root destroyed before the range had no state inside it to read, so
     # only the others take the version after the range as context. Every
     # root replays the whole of its range for activity on associations. The
-    # range is the window, or the window widened to how far its transactions
-    # reach, which can hold a destroy that one of them saved.
+    # range is the window, or the window widened to where the transactions
+    # open at its start began, which can hold a destroy that one of them saved.
     # : (Array[untyped], Array[untyped], TimeRange?) -> Hash[Array[String], RootVersionPlan]
     def plans: (Array[untyped], Array[untyped], TimeRange?) -> Hash[Array[String], RootVersionPlan]
-
-    # The range for roots destroyed before it: widened to where the
-    # transactions open at its start began, when activity on associations is
-    # asked for, since one of them may have saved the destroy and gone on to
-    # save the root's tree inside the range, which then reports both. No
-    # version of such a root is in the range to find the transaction by.
-    # : (Array[untyped], TimeRange?) -> TimeRange?
-    def reaching: (Array[untyped], TimeRange?) -> TimeRange?
 
     # : (Array[untyped], bool, TimeRange?) -> Hash[Array[String], RootVersionPlan]
     def plans_for: (Array[untyped], bool, TimeRange?) -> Hash[Array[String], RootVersionPlan]

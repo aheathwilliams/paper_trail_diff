@@ -605,6 +605,12 @@ A `within:` window whose last change is the deletion ends the same way, and the
 `diff` of an `analyze` over that window ends at "no record". Removing a chosen
 child is reported as `removed` in its parent's association.
 
+With `activity: true` and associations, the deletion is reported in the
+window its transaction ends in, like any other change. So a window after the
+`destroy` version can still report it, when the transaction went on saving
+other records, and a window after that transaction's end reports nothing: an
+empty timeline and an empty diff.
+
 ### HABTM limitation
 
 `has_and_belongs_to_many` join rows have no versions, so the gem cannot split

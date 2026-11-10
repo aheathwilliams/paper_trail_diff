@@ -124,14 +124,11 @@ RSpec.describe PaperTrailDiff::ActivityHistoryBuilder do
   it 'filters the sequence of what it was given, closing as it was told' do
     events, = history
     stream
-    reported = ->(_event) { true }
 
-    result = build(events, reported: reported, current: :current, closing: :closing)
+    result = build(events, current: :current, closing: :closing)
 
-    # A proc given to `with` would be called as a matcher, so it is matched
-    # as itself.
     expect(PaperTrailDiff::ActivityTreeFilter)
-      .to have_received(:new).with(events, reported: be(reported), closing: :closing)
+      .to have_received(:new).with(events, closing: :closing)
     expect(PaperTrailDiff::ActivitySnapshotSequence)
       .to have_received(:new).with(events.map(&:version), events, :snapshotter, current: :current)
     expect([result.steps, result.first_snapshot, result.last_boundary]).to eq([[], nil, nil])

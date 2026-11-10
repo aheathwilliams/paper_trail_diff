@@ -285,8 +285,8 @@ RSpec.describe PaperTrailDiff::ActivityTreeFilter do
       record('TrackedArticle', 1, comments: collection(*comments))
     end
 
-    def decisions(pairs, reported: ->(_event) { true }, closing: nil)
-      filter = described_class.new(pairs.map(&:first), reported: reported, closing: closing)
+    def decisions(pairs, closing: nil)
+      filter = described_class.new(pairs.map(&:first), closing: closing)
       kept = []
       filter.call(pairs) { |event, snapshot, keep| kept << [event.version.id, snapshot, keep] }
       kept
@@ -312,21 +312,11 @@ RSpec.describe PaperTrailDiff::ActivityTreeFilter do
       expect(kept(pairs)).to eq([1, 2, 3, 5])
     end
 
-    it 'keeps the root\'s events, join rows, and events whose steps are not reported' do
+    it 'keeps the root\'s events and join rows, and judges every other' do
       pairs = [[root_event(1, 1), holding], [event(2, 5, 2, join: true), holding],
-               [event(3, 6, 3), holding], [event(4, 7, 4), holding], [root_event(5, 5), holding]]
+               [event(3, 6, 3), holding], [event(4, 7, 4), holding(7)], [root_event(5, 5), holding]]
 
-      expect(kept(pairs, reported: ->(event) { event.version.id != 3 })).to eq([1, 2, 3, 5])
-    end
-
-    # Versions 2, 3 and 5 are one transaction, which the reported range ends
-    # inside, with 4 saved in another meanwhile.
-    it 'judges an event whose step is not reported when its transaction has one that is' do
-      pairs = [[root_event(1, 1), holding(5)], [event(2, 5, 2), holding(5)],
-               [event(3, 6, 2), holding(5)], [event(4, 7, 4), holding(5)],
-               [event(5, 8, 2), holding(5)], [root_event(6, 6), holding(5, 8)]]
-
-      expect(kept(pairs, reported: ->(event) { event.version.id <= 2 })).to eq([1, 2, 4, 5, 6])
+      expect(kept(pairs)).to eq([1, 2, 4, 5])
     end
 
     it 'judges the last transaction by what the range closes on' do

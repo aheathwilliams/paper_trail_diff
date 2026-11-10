@@ -62,8 +62,8 @@ module PaperTrailDiff
       return range unless range && tree && !tree.empty?
 
       types = [model.base_class.name, *AssociationTraversal.new(tree).path_types(model)]
-      reach = CrossingTransactions.open_among(types, range.begin_time, range.end_time)
-      reach ? range.widened(reach.first, nil) : range
+      reach = CrossingTransactions.open_among(types, range.begin_time)
+      reach ? range.widened(reach) : range
     end
 
     # Only the versions `version_scope` keeps select a root, on its

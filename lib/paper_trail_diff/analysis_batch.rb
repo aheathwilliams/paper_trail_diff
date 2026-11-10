@@ -27,7 +27,8 @@ module PaperTrailDiff
       loaded = @live_loader.call(records)
       BatchedRootAnalyses.new(
         time_range: @time_range, planner: planner(loaded),
-        history_preparer: @history_preparer, analyzer: @analyzer
+        history_preparer: @history_preparer, analyzer: @analyzer,
+        activity: @context_required
       ).call(records, loaded: loaded).freeze
     end
 

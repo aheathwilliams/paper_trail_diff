@@ -15,7 +15,7 @@ project follows [Semantic Versioning](https://semver.org/).
   began before the window can hold a version saved before it, and a
   transaction group lists every version its transaction saved. The
   `moved_window.paper_trail_diff` notification is gone, since no window
-  moves. Three things follow that you may notice:
+  moves. Four things follow that you may notice:
   - `timeline`, and a window without associations, report each version of the
     record where it was saved, as before, but no longer move a window for a
     transaction that also saved an associated record.
@@ -28,6 +28,11 @@ project follows [Semantic Versioning](https://semver.org/).
   - `historical_filter:` reads each version where it was saved, so a record
     whose transaction began before the window is checked from the state its
     versions before the window left.
+  - With associations and `activity: true`, a window after a destroyed
+    record's last version reports nothing, or the deletion when the
+    transaction that destroyed the record ends inside the window, as
+    `analyze_scope` with `include_deleted: true` does. `analyze` and
+    `activity_timeline` raised `IncompleteTimeRangeError` there.
 - A window with associations runs one more statement per version table, to
   find the transactions open at its start, and no longer one per 250 records
   for each edge, and `analyze_scope` and `report` run it once more to select

@@ -23,8 +23,8 @@ module PaperTrailDiff
     end
 
     # A `start_at` is a window's (see PreparedHistoryLoader); a range of
-    # versions starts at its first. A window's history says how far its
-    # transactions `reach` outside it, unless it was read for that reach.
+    # versions starts at its first. A window's history says how far back the
+    # transactions open at its start `reach`, unless it was read from there.
     #: (untyped, Array[untyped], ?start_at: untyped, ?end_at: untyped, ?reach: bool) -> PreparedHistory?
     def prepare(record, root_versions, start_at: nil, end_at: root_versions.last.created_at,
                 reach: true)
@@ -44,9 +44,9 @@ module PaperTrailDiff
 
     # A `start_at` is a window's, as for `prepare`. A window's roots may have
     # no version in it, when only their descendants changed there. Returns
-    # how far the window's transactions reach outside it, if they do, for the
-    # batch to read it again from and to there, with `reach` false.
-    #: (Array[untyped], Array[untyped], ?start_at: untyped, ?end_at: untyped, ?reach: bool) -> [untyped, untyped]?
+    # where the earliest transaction open at the window's start began, if one
+    # was, for the batch to read it again from there, with `reach` false.
+    #: (Array[untyped], Array[untyped], ?start_at: untyped, ?end_at: untyped, ?reach: bool) -> untyped
     def prepare_batch(records, root_versions, start_at: nil, end_at: nil, reach: true)
       return if @tree.empty? || records.empty? || (root_versions.empty? && start_at.nil?)
 
@@ -65,21 +65,24 @@ module PaperTrailDiff
     # per root and seed nonexistent rows as live state.
     #
     # Roots with no version in a window are asked only how far the
-    # transactions open at its start reach: one destroyed just before it, by
-    # a transaction that went on to save its tree inside, is reported in the
-    # window (see CrossingTransactions). That is read from the version tables
-    # of the root and of the first record on each requested path.
-    #: (Array[untyped], Array[untyped], ?start_at: untyped, ?end_at: untyped, ?reach: bool) -> [untyped, untyped]?
+    # transactions open at its start reach (see #reach_before).
+    #: (Array[untyped], Array[untyped], ?start_at: untyped, ?end_at: untyped, ?reach: bool) -> untyped
     def prepare_deleted_batch(records, root_versions, start_at: nil, end_at: nil, reach: true)
       return if @tree.empty? || records.empty?
 
-      if root_versions.empty?
-        types = [records.first.class.base_class.name, *@traversal.path_types(records.first.class)]
-        return (CrossingTransactions.open_among(types, start_at, end_at) if reach)
-      end
+      return (reach_before(records.first, start_at) if reach) if root_versions.empty?
 
       register_batch(records, root_versions, live_records: [], start_at: start_at, end_at: end_at,
                                              reach: reach).reach
+    end
+
+    # Where the earliest transaction open at a window's start began, for a
+    # root with no version in the window and no row: one destroyed just
+    # before it, by a transaction that went on to save its tree inside, is
+    # reported in the window.
+    #: (untyped, untyped) -> untyped
+    def reach_before(record, start_at)
+      CrossingTransactions.open_around(record, @traversal, start_at) unless @tree.empty?
     end
 
     # `history` is the one `prepare` returned for this root, if any.

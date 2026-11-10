@@ -7,12 +7,15 @@ module PaperTrailDiff
   # plan over the batch's window. AnalysisBatch and DeletedAnalysisBatch
   # differ only in how they find their roots and plans.
   class BatchedRootAnalyses
-    # `planner` selects the roots' plans over a window. A window's roots are
-    # read over the window widened to how far its transactions reach outside
-    # it, and each reports those that end inside it (see TransactionEnds).
-    #: (time_range: TimeRange?, planner: untyped, history_preparer: untyped, analyzer: untyped) -> void
-    def initialize(time_range:, planner:, history_preparer:, analyzer:)
+    # `planner` selects the roots' plans over a window. With `activity`, on
+    # associations, a window's roots are read from where the earliest
+    # transaction open at its start began, and each reports those that end
+    # inside it (see TransactionEnds). Without it each version is reported
+    # where it was saved, so the window is read as it is.
+    #: (time_range: TimeRange?, planner: untyped, history_preparer: untyped, analyzer: untyped, activity: bool) -> void
+    def initialize(time_range:, planner:, history_preparer:, analyzer:, activity:)
       @time_range = time_range
+      @activity = activity
       @planner = planner
       @history_preparer = history_preparer
       @analyzer = analyzer
@@ -34,20 +37,22 @@ module PaperTrailDiff
     private
 
     # @rbs @time_range: TimeRange?
+    # @rbs @activity: bool
     # @rbs @planner: untyped
     # @rbs @history_preparer: untyped
     # @rbs @analyzer: untyped
 
-    # The plans the roots are read with: over the window, or over as far as
-    # its transactions reach when the history read for it says they do.
+    # The plans the roots are read with: over the window, or from where the
+    # earliest transaction open at its start began, when the history read for
+    # it says one was.
     #: (Array[untyped], Hash[Array[String], untyped]) -> Hash[Array[String], RootVersionPlan]
     def prepare(records, loaded)
       range = @time_range
       plans = @planner.call(records, range)
-      reach = prepare_history(records, plans, loaded, range)
+      reach = prepare_history(records, plans, loaded, range, reach: @activity && !range.nil?)
       return plans unless reach && range
 
-      range = range.widened(*reach)
+      range = range.widened(reach)
       plans = @planner.call(records, range)
       prepare_history(records, plans, loaded, range, reach: false)
       plans
@@ -55,16 +60,23 @@ module PaperTrailDiff
 
     # Roots that close on their current state are prepared even without a
     # version in the window, since their descendants may have changed there.
-    #: (Array[untyped], Hash[Array[String], RootVersionPlan], Hash[Array[String], untyped], TimeRange?, ?reach: bool) -> [untyped, untyped]?
-    def prepare_history(records, plans, loaded, range, reach: true)
+    #: (Array[untyped], Hash[Array[String], RootVersionPlan], Hash[Array[String], untyped], TimeRange?, reach: bool) -> untyped
+    def prepare_history(records, plans, loaded, range, reach:)
       selected = records.map { |record| plans.fetch(Endpoint.identity(record)) }
       versions = selected.flat_map(&:reconstruction_versions)
       live = selected.any?(&:closing_record)
-      return if versions.empty? && !live
+      # Roots gone before a window are still asked how far the transactions
+      # open at its start reach, since one of them may have destroyed them.
+      return if versions.empty? && !live && !reach
 
-      roots = records.map { |record| loaded.fetch(Endpoint.identity(record), record) }
-      @history_preparer.call(roots, versions, reach: reach,
-                                              **preparation_range(versions, range, live: live))
+      @history_preparer.call(current(records, loaded), versions,
+                             reach: reach, **preparation_range(versions, range, live: live))
+    end
+
+    # Each root as the batch loaded it, where it did.
+    #: (Array[untyped], Hash[Array[String], untyped]) -> Array[untyped]
+    def current(records, loaded)
+      records.map { |record| loaded.fetch(Endpoint.identity(record), record) }
     end
 
     # A plan closing on the live record reads history up to now; the others

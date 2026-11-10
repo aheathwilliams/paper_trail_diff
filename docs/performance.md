@@ -83,14 +83,13 @@ Flat query counts do not make a report's cost flat:
   about 40 s and held 372 MB, and 411 MB with snapshots, at the same
   time within run-to-run noise. Folding its rows with `net_changes` took
   another 17 s, and listing them with `change_rows` 13 s.
-- **A window with associations looks for the transactions that cross its
-  edges.** A window reports the transactions that end inside it, so its
-  history is asked which transactions were open at its start, whatever
-  records they saved, and which of those it holds went on after its end. That
-  takes one statement per version table when none was open at the start, the
-  usual case, one more per 500 that were, and one per 500 transactions its
-  history holds. When one crosses an edge, the window's history is read once
-  more, from where the earliest began to where the latest ended. The
+- **A window with associations looks for the transactions open at its
+  start.** A window reports the transactions that end inside it, so its
+  history is asked where the earliest transaction open at its start began,
+  whatever records it saved. That takes one statement per version table, and
+  one per 500 transactions its history holds, to read where each ends. When
+  one was open, the window's history is read once more, from where the
+  earliest began. The
   statement for the start reads the versions saved since the window began
   that were not the first of their transaction, and no index of the README
   serves that. On SQLite, in a table of a million versions with the README's
@@ -99,8 +98,7 @@ Flat query counts do not make a report's cost flat:
   0.27 s for one that began near its start. An index on `created_at` alone
   took the first to 0.006 s and left the others as they were. `analyze_scope`
   and `report` run it once more, to select the records such a transaction
-  saved before the window. A `report` window has no end, so only its start
-  is read. A
+  saved before the window. A
   window without associations, and `timeline`, run none of these statements.
 - **Activity with associations reads where its transactions end.** A
   transaction takes effect at the last version it saved, of any record, so a

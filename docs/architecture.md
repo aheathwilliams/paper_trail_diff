@@ -76,14 +76,18 @@ snapshot read for a timeline whose transactions interleaved is cached apart
 from one read without.
 
 A window reports the transactions that end inside it. Its history is first
-read over the window itself. `CrossingTransactions` then says how far its
-transactions reach outside it: where the earliest transaction open at its
-start began, whatever records it saved, and where the latest that crosses an
-edge saved its last version. When one does, the root's versions and the
-history are read once more over that reach, the whole of it is replayed, and
+read over the window itself. `CrossingTransactions` then says how far back
+its transactions reach: where the earliest transaction open at its start
+began, whatever records it saved. When one was open, the root's versions and
+the history are read once more from there, the whole of it is replayed, and
 the steps of the transactions that end inside the window are reported. A
-range of versions starts before its first version's transaction instead
-(`TransactionCut.range_start`).
+window is not read past its end. A transaction that saves inside it and ends
+later is left to the later window, and a timeline reads no version saved
+after its own last one, wherever that version's transaction ended
+(`TransactionEnds#beyond?`): a history holds such versions, as the next one
+of each record after the range, or as part of a batch's history that runs on
+for another root. A range of versions starts before its first version's
+transaction instead (`TransactionCut.range_start`).
 
 ## When the gem falls back to PT-AT
 

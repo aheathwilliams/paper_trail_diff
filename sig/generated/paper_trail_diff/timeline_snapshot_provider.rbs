@@ -6,8 +6,12 @@ module PaperTrailDiff
     # : (HistoricalSnapshotStore, live_snapshotter: untyped) -> void
     def initialize: (HistoricalSnapshotStore, live_snapshotter: untyped) -> void
 
-    # : (untyped, Array[untyped]) -> PreparedTimelineSnapshots
-    def prepare: (untyped, Array[untyped]) -> PreparedTimelineSnapshots
+    # A window's history is read from its start, as a batch reads it, so that
+    # a record reads the same at a root version whose transaction saved it
+    # earlier in the window. Each version is reported where it was saved, so
+    # how far the window's transactions reach is not asked.
+    # : (untyped, Array[untyped], ?start_at: untyped) -> PreparedTimelineSnapshots
+    def prepare: (untyped, Array[untyped], ?start_at: untyped) -> PreparedTimelineSnapshots
 
     @live_snapshotter: untyped
 

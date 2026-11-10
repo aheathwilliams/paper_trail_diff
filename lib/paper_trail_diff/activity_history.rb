@@ -101,7 +101,7 @@ module PaperTrailDiff
 
     #: () -> ActivityTreeFilter
     def filter
-      ActivityTreeFilter.new(@events, reported: @include_step, closing: @closing)
+      ActivityTreeFilter.new(@events, closing: @closing)
     end
 
     #: () -> ActivitySnapshotSequence
@@ -118,11 +118,9 @@ module PaperTrailDiff
     # still moves the reported range's end past it, to the next boundary.
     #
     # The history starts at the first kept event whose step is reported. The
-    # events left out before it change nothing the root shows, unless they are
-    # of a transaction that crossed the window's start and has no event kept
-    # here: the snapshot at them is the state before that transaction, whose
-    # changes the window before this one reports (see ActivityTreeFilter). And
-    # a version filter starts it at the first change it keeps.
+    # events left out before it are of records outside the root's tree, and
+    # change nothing the root shows (see ActivityTreeFilter). And a version
+    # filter starts it at the first change it keeps.
     #: (ActivityEvent, RecordSnapshot?, bool) -> void
     def consume(event, snapshot, kept)
       return pass(event) unless kept

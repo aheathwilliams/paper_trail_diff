@@ -31,12 +31,22 @@ module PaperTrailDiff
     # : (untyped) -> untyped
     def last: (untyped) -> untyped
 
+    # Whether the version was saved after every version of the timeline. A
+    # history can hold such a version, as the next one of a record after the
+    # range it was read for, or as part of a batch's history that runs on for
+    # another root. The timeline ends before it, so it takes effect after
+    # everything the timeline holds, whenever its transaction ended.
+    # : (untyped) -> bool
+    def beyond?: (untyped) -> bool
+
     # Orders versions by where their transactions end, then as they were
     # saved.
     # : (untyped) -> Array[untyped]
     def sort_key: (untyped) -> Array[untyped]
 
     private
+
+    @horizon: Array[untyped]?
 
     @keys: Hash[Array[untyped], Array[untyped]]
 

@@ -17,15 +17,10 @@ module PaperTrailDiff
       @habtm = {} #: Hash[Array[String], Hash[String, Array[untyped]]]
     end
 
-    # How far the transactions of a window's history reach outside it; see
+    # Where the earliest transaction open at a window's start began; see
     # PreparedHistoryLoader. Nil for a history that was not asked, or where
-    # none does.
-    attr_reader :reach #: [untyped, untyped]?
-
-    #: ([untyped, untyped]) -> void
-    def reach=(reach)
-      @reach = reach.compact.empty? ? nil : reach
-    end
+    # none was open.
+    attr_accessor :reach #: untyped
 
     # When the history was read from.
     #: () -> untyped

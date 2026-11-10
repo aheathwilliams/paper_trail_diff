@@ -96,11 +96,12 @@ RSpec.describe PaperTrailDiff::DeletedAnalysisBatch do
     expect(statements.length).to eq(2)
   end
 
-  it 'plans a window again over how far its transactions reach, and passes the window as asked' do
+  it 'plans a window again from where its open transactions began, and passes the window ' \
+     'as asked' do
     article, _created, updated, = deleted
-    reaches << [at(1), nil]
+    reaches << at(1)
 
-    result = analyze([key(article)], within: at(1.25)..at(3))
+    result = analyze([key(article)], within: at(1.25)..at(3), context: true)
 
     _record, plan, window = analyzed.sole
     expect([window.begin_time, window.end_time]).to eq([at(1.25), at(3)])
@@ -205,7 +206,7 @@ RSpec.describe PaperTrailDiff::DeletedAnalysisBatch do
   # associations replays the destroy, however little of it the scope keeps.
   it 'replays a root destroyed just before the start by a transaction open there' do
     article, _created, _updated, destroyed = deleted
-    reaches << [at(2), nil]
+    reaches << at(2)
 
     analyze([key(article)], within: at(2.25)..at(3), version_scope: :none.to_proc, context: true)
 
