@@ -73,7 +73,7 @@ module PaperTrailDiff
     end
 
     # The number as a rational, or as it is when it has none.
-    #: (Numeric) -> Numeric
+    #: (untyped) -> untyped
     def self.rational(number)
       return number unless number.real?
       return number if number.is_a?(Float) && !number.finite?

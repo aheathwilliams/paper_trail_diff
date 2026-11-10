@@ -251,8 +251,10 @@ module PaperTrailDiff
     # root's version itself records.
     #: (ActivityEvent, RecordSnapshot) -> RecordSnapshot?
     def carried_snapshot(event, previous_snapshot)
+      branches = [] #: Array[String]
+      events = [] #: Array[ActivityEvent]
       @snapshotter.apply_transaction(root_endpoint(event.version), event.version,
-                                     previous_snapshot, [], [])
+                                     previous_snapshot, branches, events)
     end
 
     #: (ActivityEvent) -> bool
