@@ -89,6 +89,18 @@ Flat query counts do not make a report's cost flat:
   saved since is the exception: it closes on the record as it is now, so it
   replays everything up to now and reports what fell inside the window, which
   took about 0.8 s with those 2,000 comments.
+- **A record that a path reaches twice has its branch read again at each
+  of its events.** An article read with `associations: ["author.articles"]`
+  is the root and one of its author's articles, and under
+  `articles.comments.article` an article is a member of a collection and the
+  target of a `belongs_to` below it. An event on a record of such a model,
+  or on any record when the tree holds a polymorphic `belongs_to`, which can
+  point at a record of any model, is not applied to the previous snapshot in
+  place: the branches that hold the record are read again, or the whole
+  snapshot for the root, so the event costs the size of what is read. An
+  article with `author.articles` and 400 events on the author's articles
+  took 0.3 s when the author had 10 articles, 0.5 s with 100, and 3.4 s with
+  1,000; with `associations: ["author"]`, 0.1 s for each.
 - **`snapshots: true` and `recorded_changes: true` cost memory and time.** Ask
   for them only when you use them. Records that did not change are shared
   between steps, so the cost is modest: an activity `report` of 10,000

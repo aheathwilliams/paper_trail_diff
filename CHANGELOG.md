@@ -85,6 +85,21 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- An activity timeline no longer leaves a record as it was at one of two
+  places a path reaches it. An article read with
+  `associations: ["author.articles"]` is the root and one of its author's
+  articles; a comment read with `["article.comments"]` is one of its
+  article's comments; under `["articles.comments.article"]` an article is a
+  member of a collection and the target of a `belongs_to` below it; and a
+  polymorphic `belongs_to` can point back at any record in the tree. An
+  event on such a record changed it at one place only. The step and any
+  window around it then missed the change at the other, and the next event
+  in that branch reported it, credited to its own author in `change_rows`.
+  Such an event now has the branches that hold the record read again, or
+  the whole snapshot for the root, which costs the size of what is read. See
+  [performance](docs/performance.md#what-still-grows). `compare` and
+  `timeline` were not affected.
+
 - `activity_timeline`, `analyze` with `activity: true`, `analyze_many`, and
   `report` no longer raise `ConfigurationError` ("prepared activity graph is
   missing ...") for a path that continues past a `belongs_to` when no record

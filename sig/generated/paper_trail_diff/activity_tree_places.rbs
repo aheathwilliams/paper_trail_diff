@@ -1,0 +1,45 @@
+# Generated from lib/paper_trail_diff/activity_tree_places.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Says whether an event on a record of some model can be applied to the
+  # one place the record has in a snapshot.
+  #
+  # A path can lead to a record twice: an article read with `author.articles`
+  # is the root and one of its author's articles, and under
+  # `articles.comments.article` an article is a member of a collection and
+  # the target of a `belongs_to` below it. An event is applied to a snapshot
+  # in one way, as the root's, a collection member's, or a target's, so it
+  # reaches the places of that one kind and would leave the others as they
+  # were. Such an event has its branches, or for the root the whole snapshot,
+  # read again instead.
+  class ActivityTreePlaces
+    # : (AssociationTraversal) -> void
+    def initialize: (AssociationTraversal) -> void
+
+    # Whether every place the tree gives records of the type is of one kind.
+    # A polymorphic `belongs_to` can point at a record of any model, so a
+    # tree with one gives every model a place there too.
+    # : (untyped, String) -> bool
+    def one_kind?: (untyped, String) -> bool
+
+    private
+
+    @kinds: Hash[untyped, Hash[String, Array[Symbol]]]
+
+    @polymorphic: Hash[untyped, bool]
+
+    @traversal: AssociationTraversal
+
+    # The kinds of place each model has under this root, by base class name.
+    # : (untyped) -> Hash[String, Array[Symbol]]
+    def kinds_for: (untyped) -> Hash[String, Array[Symbol]]
+
+    # : (untyped, untyped, AssociationTree, String, Hash[String, Array[Symbol]]) -> void
+    def collect: (untyped, untyped, AssociationTree, String, Hash[String, Array[Symbol]]) -> void
+
+    # A through holds its target, and the records it joins through decide
+    # what it holds, so each of them has a place of its own kind there.
+    # : (untyped, Hash[String, Array[Symbol]]) -> void
+    def place: (untyped, Hash[String, Array[Symbol]]) -> void
+  end
+end

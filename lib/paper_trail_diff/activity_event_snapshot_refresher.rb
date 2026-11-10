@@ -11,6 +11,7 @@ module PaperTrailDiff
         record_transition: record_transition, prepared_record_after: prepared_record_after
       )
       @route_finder = ActivityEventRouteFinder.new(traversal)
+      @places = ActivityTreePlaces.new(traversal)
       @relationship = ActivityRelationship.new
       configure_appliers(pool, association_reader)
     end
@@ -49,47 +50,41 @@ module PaperTrailDiff
       )
     end
 
+    # Nothing is applied for a record with places of two kinds in the tree,
+    # since an event is applied at those of one kind only (see
+    # ActivityTreePlaces).
     #: (untyped, untyped, RecordSnapshot, Array[String], ActivityEvent?) -> [bool, RecordSnapshot?]
-    def call( # rubocop:disable Metrics/MethodLength
-      root_endpoint,
-      context_endpoint,
-      previous,
-      branches,
-      event
-    )
+    def call(root_endpoint, context_endpoint, previous, branches, event)
       return [false, nil] unless event && branches.one?
 
+      root_class = RecordedClass.of_endpoint(root_endpoint)
+      return [false, nil] unless @places.one_kind?(root_class, event.version.item_type.to_s)
+
+      apply(root_class, [root_endpoint, context_endpoint], previous, branches, event)
+    end
+
+    private
+
+    #: (untyped, Array[untyped], RecordSnapshot, Array[String], ActivityEvent) -> [bool, RecordSnapshot?]
+    def apply(root_class, endpoints, previous, branches, event)
+      root_endpoint, context_endpoint = endpoints
       tree, normalizer = @components.call(branches)
-      routes = @route_finder.collection_routes(
-        RecordedClass.of_endpoint(root_endpoint), tree, event.version.item_type.to_s
-      )
+      routes = @route_finder.collection_routes(root_class, tree, event.version.item_type.to_s)
       unless routes.empty?
         delta = @record_resolver.snapshot_delta(event.version)
         return [false, nil] unless collection_safe?(root_endpoint, tree, routes, event, delta)
 
         return @collection_applier.call(
-          root_endpoint,
-          context_endpoint,
-          previous,
-          normalizer,
-          routes,
-          event.version,
-          delta
+          root_endpoint, context_endpoint, previous, normalizer, routes, event.version, delta
         )
       end
 
       @belongs_to_applier.call(
-        root_endpoint,
-        context_endpoint,
-        previous,
-        tree,
-        normalizer,
-        event.version
+        root_endpoint, context_endpoint, previous, tree, normalizer, event.version
       )
     end
 
-    private
-
+    # @rbs @places: ActivityTreePlaces
     # @rbs @components: untyped
     # @rbs @record_resolver: ActivityEventRecordResolver
     # @rbs @route_finder: ActivityEventRouteFinder
