@@ -1114,7 +1114,9 @@ comments.changed.first.associations["replies"].added
   class; the gem reads the subclass from the type column the version stored.
   A version where the record was a class without that association raises
   `UnknownAssociationError`, as a current record of that class would. A
-  stored type that names no class raises `InvalidEndpointError`.
+  stored type that names no class raises `InvalidEndpointError`. A child's
+  `belongs_to` may name any class of the owner's table: PT-AT records the
+  class it names, and the gem looks for each one the target declares.
 - Requesting associations for a historical state without PT-AT raises
   `AssociationTrackingUnavailableError`. Unknown names raise
   `UnknownAssociationError`; unsupported macros raise

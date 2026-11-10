@@ -14,9 +14,17 @@ ActiveRecord::Schema.define do
     table.integer :folder_id
     table.timestamps null: false
   end
+
+  create_table :sti_root_labels, force: true do |table|
+    table.string :name, null: false
+    table.integer :folder_id
+    table.timestamps null: false
+  end
 end
 
+# Its labels answer with a belongs_to that names a subclass.
 class StiRootFolder < ActiveRecord::Base
+  has_many :labels, class_name: 'StiRootLabel', foreign_key: :folder_id
   has_paper_trail
 end
 
@@ -33,6 +41,11 @@ class StiRootFile < ActiveRecord::Base
   has_paper_trail
 end
 
+class StiRootLabel < ActiveRecord::Base
+  belongs_to :folder, class_name: 'StiRootSharedFolder', optional: true
+  has_paper_trail
+end
+
 # The versions table has no `item_subtype` column, so PaperTrail stores only
 # the base class. The subclass, and the associations it declares, must come
 # from the type each version stored.
@@ -40,7 +53,7 @@ RSpec.describe 'An association declared by an STI root subclass' do
   before do
     PaperTrail::VersionAssociation.delete_all
     PaperTrail::Version.delete_all
-    [StiRootFile, StiRootFolder].each(&:delete_all)
+    [StiRootFile, StiRootLabel, StiRootFolder].each(&:delete_all)
   end
 
   def checkpoint(folder)
@@ -185,6 +198,39 @@ RSpec.describe 'An association declared by an STI root subclass' do
 
     expect { PaperTrailDiff.compare(version, folder, **paths) }
       .to raise_error(PaperTrailDiff::InvalidEndpointError, /StiRootRemovedFolder/)
+  end
+
+  # PT-AT records the class a child's belongs_to names, StiRootSharedFolder
+  # here, whichever class of the table the owner is.
+  describe 'an owner of another class than the belongs_to names' do
+    it 'reports the files that left a subclass of it' do
+      archive = StiRootArchiveFolder.create!(name: 'Archive')
+      destroyed = archive.files.create!(name: 'old')
+      moved = archive.files.create!(name: 'notes')
+      from = checkpoint(archive)
+      destroyed.destroy!
+      moved.update!(folder: other)
+      expected = { added: [], removed: %w[old notes], changed: [] }
+
+      activity = PaperTrailDiff.analyze(archive, from: from, activity: true, **paths)
+
+      expect(files(PaperTrailDiff.compare(from, archive, **paths))).to eq(expected)
+      expect(files(activity.diff)).to eq(expected)
+    end
+
+    it 'selects a base-class owner by a label that left it' do
+      plain = StiRootFolder.create!(name: 'Plain')
+      label = StiRootLabel.create!(name: 'draft', folder_id: plain.id)
+      since = Time.now.utc
+      label.destroy!
+
+      report = PaperTrailDiff.report(StiRootFolder, since: since, limit: 10,
+                                                    associations: [:labels])
+
+      expect(report.roots).to eq([plain])
+      expect(names(report.analyses.values.first.diff.associations.fetch('labels').removed))
+        .to eq(['draft'])
+    end
   end
 
   describe 'PaperTrailDiff::RecordedClass.for' do

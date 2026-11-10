@@ -86,7 +86,7 @@ module PaperTrailDiff
 
     #: () -> Array[String?]
     def parent_types
-      [nil, '', @parent_class.name, @parent_class.base_class.name]
+      RecordedOwner.types(@reflection, @parent_class)
     end
   end
 end

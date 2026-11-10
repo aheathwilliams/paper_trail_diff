@@ -83,6 +83,16 @@ project follows [Semantic Versioning](https://semver.org/).
   the order a snapshot holds its records in. See
   [performance](docs/performance.md#what-still-grows).
 
+- A `has_many` or `has_one` whose owners use single-table inheritance no
+  longer loses the records that left it when the target's `belongs_to` names
+  another class of the owners' table than the owner's own or its base class.
+  With `Doc`, `Report < Doc` and `AnnualReport < Report`, and notes that
+  `belongs_to :report`, a note destroyed or moved away from an annual report
+  was missing from `compare`, timelines and analyses, and when `Doc` declared
+  the association, `analyze_scope` and `report` did not select a record whose
+  only change was such a note. PT-AT records the class the `belongs_to` names,
+  and the gem looked for the owner's class and its base class only.
+
 - `recorded_changes`, and change rows with `recorded_changes: true`, now cast
   the values a `json` or `jsonb` `object_changes` column stores. PaperTrail
   leaves such a column's dates, times, and decimals as the strings JSON gives
