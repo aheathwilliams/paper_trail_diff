@@ -84,6 +84,10 @@ RSpec.describe PaperTrailDiff::ScopeCondition do
         where(rank: [])
       }), { rank: 1 }, { rank: nil })).to eq([false, false])
       expect(matches(build(-> { where(table[:rank].in([])) }), { rank: 1 })).to eq([false])
+      # An empty IN is the constant `1=0`: false for a NULL too, so true under NOT.
+      expect(matches(build(-> { where.not(rank: [], status: 1) }), { rank: nil, status: 1 }))
+        .to eq([true])
+      expect(matches(build(-> { where.not(table[:rank].in([])) }), { rank: nil })).to eq([true])
       expect(matches(build(-> { where.not(rank: []) }), { rank: 1 }, { rank: nil }))
         .to eq([true, true])
       expect(matches(build(-> { where(table[:rank].not_in([])) }), { rank: 1 }, { rank: nil }))

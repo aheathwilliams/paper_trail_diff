@@ -384,15 +384,17 @@ module PaperTrailDiff
         list(node.type == :in ? :in : :not_in, node.attribute, node.casted_values)
       end
 
-      # Active Record writes an empty NOT IN as a condition that is always
-      # true, and a NOT IN list holding NULL matches no row.
+      # Active Record writes an empty IN as a condition that is always false
+      # and an empty NOT IN as one that is always true, for a NULL as for any
+      # value, so neither is unknown under NOT. A NOT IN list holding NULL
+      # matches no row.
       #: (Symbol, untyped, Array[untyped]) -> Array[untyped]
       def list(operator, attribute, expected)
         comparison = compared(operator, attribute, expected) do |name|
           expected.map { |item| sort_value(name, item) }
         end
+        return [operator == :in ? :or : :and, []] if expected.empty?
         return comparison if operator == :in
-        return [:and, []] if expected.empty?
 
         expected.include?(nil) ? [:or, []] : comparison
       end

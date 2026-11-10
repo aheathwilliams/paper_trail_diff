@@ -214,8 +214,10 @@ module PaperTrailDiff
       # : (untyped) -> Array[untyped]
       def homogeneous_in: (untyped) -> Array[untyped]
 
-      # Active Record writes an empty NOT IN as a condition that is always
-      # true, and a NOT IN list holding NULL matches no row.
+      # Active Record writes an empty IN as a condition that is always false
+      # and an empty NOT IN as one that is always true, for a NULL as for any
+      # value, so neither is unknown under NOT. A NOT IN list holding NULL
+      # matches no row.
       # : (Symbol, untyped, Array[untyped]) -> Array[untyped]
       def list: (Symbol, untyped, Array[untyped]) -> Array[untyped]
 

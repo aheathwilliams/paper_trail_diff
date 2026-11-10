@@ -116,6 +116,13 @@ project follows [Semantic Versioning](https://semver.org/).
   selected by their associations, now asks with `NOT EXISTS`. Results are
   unchanged. See [performance](docs/performance.md#database-indexes).
 
+- An association scope that negates an empty list along with another
+  condition, such as `where.not(status: [], score: 1)`, now reads a record
+  whose `status` is NULL as the database does. Active Record writes the empty
+  list as a condition that is always false, so the negation is true for every
+  record, but history read it against a NULL as unknown and left the record
+  out, reporting a current member as added.
+
 - `recorded_changes`, and change rows with `recorded_changes: true`, now cast
   the values a `json` or `jsonb` `object_changes` column stores. PaperTrail
   leaves such a column's dates, times, and decimals as the strings JSON gives
