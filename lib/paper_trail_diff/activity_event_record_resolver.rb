@@ -4,6 +4,9 @@
 module PaperTrailDiff
   # Reconstructs an event's post-change record or immutable scalar delta.
   class ActivityEventRecordResolver
+    SERIALIZED_TYPE = 'ActiveRecord::Type::Serialized'
+    private_constant :SERIALIZED_TYPE
+
     #: (?record_transition: untyped, ?prepared_record_after: untyped) -> void
     def initialize(record_transition: nil, prepared_record_after: nil)
       @record_transition = record_transition
@@ -93,7 +96,28 @@ module PaperTrailDiff
       changes = active_support.const_get(:HashWithIndifferentAccess).new(raw_changes)
       serializers = paper_trail.const_get(:AttributeSerializers)
       serializers.const_get(:ObjectChangesAttribute).new(model_class).deserialize(changes)
-      changes
+      json_column?(version) ? cast(model_class, changes) : changes
+    end
+
+    #: (untyped) -> bool
+    def json_column?(version)
+      StoredTimePrecision.json_column?(version.class, 'object_changes')
+    end
+
+    # PaperTrail writes a `json` or `jsonb` column without its attribute
+    # serializer and reads it back the same way, so a decimal, a date and a
+    # time are still the strings JSON gave. Each is cast as assigning it to
+    # the record would, which is how a version's stored state is read. A
+    # `serialize`d value stays as JSON wrote it, which is the form every
+    # account of it is read in (StoredJsonValues).
+    #: (untyped, untyped) -> untyped
+    def cast(model_class, changes)
+      changes.to_h do |name, values|
+        type = model_class.type_for_attribute(name)
+        serialized = type.is_a?(Support.constant(SERIALIZED_TYPE))
+        cast = serialized || !values.instance_of?(Array) ? values : values.map { |v| type.cast(v) }
+        [name, cast]
+      end
     end
   end
 end
