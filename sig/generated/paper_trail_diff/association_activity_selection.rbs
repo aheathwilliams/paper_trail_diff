@@ -31,7 +31,11 @@ module PaperTrailDiff
       # : () -> Array[untyped]
       def values: () -> Array[untyped]
 
-      # The ids with no match in `keys`, a subquery of the keys that exist.
+      # The ids no row of the model has for its key, whatever scope the model
+      # has by default. They are asked for with NOT EXISTS: PostgreSQL does
+      # not plan `NOT IN (SELECT ...)` as an anti-join, so it reads every key
+      # of the table for the statement, and again for each id once the keys
+      # outgrow its working memory. An empty key names no record.
       # : (untyped) -> Array[untyped]
       def missing: (untyped) -> Array[untyped]
     end

@@ -37,10 +37,16 @@ module PaperTrailDiff
         @relation.distinct.pluck(@column).compact
       end
 
-      # The ids with no match in `keys`, a subquery of the keys that exist.
+      # The ids no row of the model has for its key, whatever scope the model
+      # has by default. They are asked for with NOT EXISTS: PostgreSQL does
+      # not plan `NOT IN (SELECT ...)` as an anti-join, so it reads every key
+      # of the table for the statement, and again for each id once the keys
+      # outgrow its working memory. An empty key names no record.
       #: (untyped) -> Array[untyped]
-      def missing(keys)
-        @relation.where(@column.not_in(keys)).distinct.pluck(@column)
+      def missing(model)
+        key = model.arel_table[model.primary_key]
+        rows = model.unscoped.where(key.eq(@column)).arel.exists
+        @relation.where(rows.not).distinct.pluck(@column).compact
       end
     end
 

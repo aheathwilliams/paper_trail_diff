@@ -205,7 +205,7 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
       plucked = sql.grep(/SELECT DISTINCT "versions"."item_id" FROM "versions"/)
 
       expect(plucked.length).to eq(1)
-      expect(plucked.first).to include('NOT IN (SELECT "tracked_articles"."id"')
+      expect(plucked.first).to include('NOT (EXISTS (SELECT "tracked_articles".* ')
       expect(sql.grep(/IN \(SELECT "versions"."item_id"/).length).to eq(1)
     end
   end
@@ -381,7 +381,8 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
         expect(select(TrackedArticle.offset(1).limit(4)).records).to eq(articles[1, 4])
       end
 
-      expect(sql.grep(/FROM "tracked_articles" WHERE/).length).to eq(2)
+      expect(sql.grep(/\ASELECT "tracked_articles"\.\* FROM "tracked_articles" WHERE/).length)
+        .to eq(2)
     end
 
     it 'rejects too many roots as soon as a page holds them' do
@@ -677,7 +678,7 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
       expect(sql.grep(/FROM "tracked_articles" WHERE .*IN \(SELECT "version_associations"/).length)
         .to eq(1)
       plucked = sql.grep(/\ASELECT DISTINCT "version_associations"/)
-      expect(plucked.reject { |query| query.include?('NOT IN') }).to eq([])
+      expect(plucked.reject { |query| query.include?('NOT (EXISTS (SELECT') }).to eq([])
     end
 
     it 'plucks every source when one source cannot stay a subquery' do

@@ -97,11 +97,21 @@ module PaperTrailDiff
     # bounded by what the relation and the deletions actually contain.
     #: (Array[AssociationActivitySelection::Query]) -> Result
     def database_selection(related)
-      candidates = [window_versions.select(:item_id)] + related.map(&:relation)
-      missing = (missing_ids + related_missing_ids(related)).uniq.sort
+      sources = [changed_roots, *related]
+      missing = sources.flat_map { |ids| ids.missing(base_class) }.map(&:to_s).uniq.sort
       Result.new(
-        records: selected_records(candidates),
+        records: selected_records(sources.map(&:relation)),
         unreachable: missing.map { |id| identity(id) }.freeze
+      )
+    end
+
+    # The roots with a version of their own in the window. Those without a
+    # row are found in the database too (see Query#missing), not by comparing
+    # two plucked lists.
+    #: () -> AssociationActivitySelection::Query
+    def changed_roots
+      AssociationActivitySelection::Query.new(
+        window_versions, version_class.arel_table[:item_id], key_type
       )
     end
 
@@ -139,19 +149,6 @@ module PaperTrailDiff
     #: () -> Symbol?
     def key_type
       base_class.type_for_attribute(primary_key).type
-    end
-
-    #: (Array[AssociationActivitySelection::Query]) -> Array[String]
-    def related_missing_ids(related)
-      live = base_class.unscoped.select(primary_key).arel
-      related.flat_map { |ids| ids.missing(live) }.map(&:to_s)
-    end
-
-    # Changed in the window but without a row, found with an anti-join instead
-    # of comparing two plucked lists.
-    #: () -> Array[String]
-    def missing_ids
-      window_versions.where.not(item_id: base_class.unscoped).distinct.pluck(:item_id).map(&:to_s)
     end
 
     # Only the versions `version_scope` keeps select a root: one whose versions

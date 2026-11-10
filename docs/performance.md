@@ -128,6 +128,14 @@ records that changed: with 5 million versions on PostgreSQL, about 230 ms per
 report instead of 2 ms. [Database indexes](architecture.md#database-indexes)
 explains why.
 
+Selecting a report's records does not grow with the model's own table. The
+records changed in the window and deleted since are found with `NOT EXISTS`,
+which every database plans as an anti-join. With 2 million articles on
+PostgreSQL 17 and 2,000 of them edited in the window, that statement took 3 ms
+and the `report` 1.4 s. Asked with `NOT IN`, which PostgreSQL reads the whole
+table for, it took 14.8 s of a 16 s report, and 9.7 s of 11 s with 500,000
+articles.
+
 ## What costs a query per record
 
 - **A path PT-AT reads.** History cannot read a few scopes, such as one that

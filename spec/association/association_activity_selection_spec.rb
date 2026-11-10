@@ -628,8 +628,40 @@ RSpec.describe PaperTrailDiff::AssociationActivitySelection do
       gone.update!(body: 'edited')
       TrackedComment.where(id: gone.id).delete_all
 
-      expect(query.missing(TrackedComment.select(:id).arel)).to eq([gone.id])
+      expect(query.missing(TrackedComment)).to eq([gone.id])
       expect(kept.id).not_to eq(gone.id)
+    end
+
+    # PostgreSQL does not plan `NOT IN (SELECT ...)` as an anti-join: it reads
+    # every key for the statement, and again for each row once they outgrow
+    # its working memory.
+    it 'asks for them with NOT EXISTS' do
+      sql = []
+      callback = ->(*, payload) { sql << payload[:sql].tr('`[]', '"""') }
+
+      ActiveSupport::Notifications.subscribed(callback, 'sql.active_record') do
+        query.missing(TrackedComment)
+      end
+
+      expect(sql.length).to eq(1)
+      expect(sql.first).to include(
+        'NOT (EXISTS (SELECT "tracked_comments".* FROM "tracked_comments" ' \
+        'WHERE "tracked_comments"."id" = "versions"."item_id"))'
+      )
+      expect(sql.first).not_to include('NOT IN')
+    end
+
+    it 'leaves out a key recorded as empty, which names no record' do
+      article = TrackedArticle.create!(title: 'Article')
+      article.comments.create!(body: 'one')
+      rows = PaperTrail::VersionAssociation.where(foreign_key_name: 'article_id')
+      keys = described_class.new(rows, PaperTrail::VersionAssociation.arel_table[:foreign_key_id],
+                                 :integer)
+      TrackedArticle.where(id: article.id).delete_all
+      PaperTrail::VersionAssociation.create!(version_id: rows.first.version_id,
+                                             foreign_key_name: 'article_id', foreign_key_id: nil)
+
+      expect(keys.missing(TrackedArticle)).to eq([article.id])
     end
   end
 

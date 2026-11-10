@@ -105,6 +105,17 @@ project follows [Semantic Versioning](https://semver.org/).
   only change was such a note. PT-AT records the class the `belongs_to` names,
   and the gem looked for the owner's class and its base class only.
 
+- `analyze_scope` and `report` over a window no longer slow down with the size
+  of the model's table on PostgreSQL. The statement that finds the records
+  changed in the window and deleted since asked with `NOT IN (SELECT id ...)`,
+  which PostgreSQL does not plan as an anti-join: it reads every id of the
+  table, and reads them again for each version in the window once they
+  outgrow `work_mem`. With 2 million articles and 2,000 of them edited in the
+  window, a `report` took 16 s and now takes 1.4 s, and with 500,000 it took
+  11 s and now takes 1.5 s. That statement, and the one like it for records
+  selected by their associations, now asks with `NOT EXISTS`. Results are
+  unchanged. See [performance](docs/performance.md#database-indexes).
+
 - `recorded_changes`, and change rows with `recorded_changes: true`, now cast
   the values a `json` or `jsonb` `object_changes` column stores. PaperTrail
   leaves such a column's dates, times, and decimals as the strings JSON gives
