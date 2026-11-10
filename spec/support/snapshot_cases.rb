@@ -197,22 +197,23 @@ module SnapshotCases
       before = records.sample(random: @random)
       return add(from, types, depth) if before.nil? || chance?(0.3)
 
-      if chance?(0.5)
-        return from.transition_to(records - [before], before: before, after: nil,
-                                                      membership_preserved: false)
-      end
+      return from.transition_to(records - [before], before: before, after: nil) if chance?(0.5)
 
       after = edit_record(before, depth + 1)
       from.transition_to(records.map { |record| record.equal?(before) ? after : record },
-                         before: before, after: after, membership_preserved: true)
+                         before: before, after: after)
     end
 
     def add(from, types, depth)
       after = members(:has_many, types, depth, taken: from.records.map(&:identity)).first
       return from unless after
 
-      from.transition_to(from.records + [after], before: nil, after: after,
-                                                 membership_preserved: false)
+      from.transition_to(in_order(from.records + [after]), before: nil, after: after)
+    end
+
+    # A transition's records come in the order a snapshot holds them in.
+    def in_order(records)
+      records.sort_by { |record| PaperTrailDiff::Support.sortable_identity(record.type, record.id) }
     end
   end
 

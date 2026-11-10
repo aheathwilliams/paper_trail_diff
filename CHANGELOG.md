@@ -73,6 +73,16 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- An activity timeline no longer reads a whole collection again for each event
+  that put a record into it or took one out. A snapshot kept a table of its
+  records' positions, and built it again and checked their order again
+  whenever its members changed, so a replay's time grew with its events times
+  the size of the collection: 3,000 comments created one at a time on one
+  article took 19.2 s to replay and now take 3.6 s, and 1,000 took 2.1 s and
+  now take 0.7 s. Edits were not affected. A record is now found by searching
+  the order a snapshot holds its records in. See
+  [performance](docs/performance.md#what-still-grows).
+
 - `recorded_changes`, and change rows with `recorded_changes: true`, now cast
   the values a `json` or `jsonb` `object_changes` column stores. PaperTrail
   leaves such a column's dates, times, and decimals as the strings JSON gives

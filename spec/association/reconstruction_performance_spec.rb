@@ -324,6 +324,37 @@ RSpec.describe 'bounded event reconstruction' do
     )
   end
 
+  # A comment created, or destroyed, changes who is in the collection. Reading
+  # the whole collection again for each such event made a replay's time grow
+  # with its events times the comments they left: 3,000 comments created one
+  # at a time took 19 s. Each record's sort key is read once per record a
+  # step examines, so the count of keys read says how much of the collection
+  # each event touched.
+  it 'replays comments created one at a time without reading the collection for each' do
+    keys_read = lambda do |comments|
+      article = TrackedArticle.create!(title: 'Draft')
+      start = article.versions.last
+      comments.times { |index| article.comments.create!(body: "Comment #{index}") }
+      article.comments.first.destroy!
+      count = 0
+      allow(PaperTrailDiff::Support).to receive(:sortable_identity).and_wrap_original do |key, *id|
+        count += 1
+        key.call(*id)
+      end
+      steps = PaperTrailDiff.activity_timeline(article, from: start, to: article.reload,
+                                                        associations: [:comments])
+      expect(steps.size).to eq(comments + 2)
+      count
+    end
+
+    few = keys_read.call(40)
+    many = keys_read.call(160)
+
+    # Four times the events may read four times the keys, and a search of a
+    # longer collection a few more for each; not sixteen times.
+    expect(many).to be < few * 8
+  end
+
   # The same holds when the article is among the records the transaction
   # saved, before its comment or after it, as `touch: true` saves it.
   it 'applies each version of a transaction that saved the article and a comment' do

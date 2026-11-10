@@ -9,8 +9,10 @@ module PaperTrailDiff
     # : (AssociationSnapshot, ActivityCollectionRouteChange, untyped, RecordSnapshot) -> RecordSnapshot?
     def event_child: (AssociationSnapshot, ActivityCollectionRouteChange, untyped, RecordSnapshot) -> RecordSnapshot?
 
-    # : (AssociationSnapshot, untyped, RecordSnapshot?) -> [Array[RecordSnapshot], RecordSnapshot?, RecordSnapshot?, bool]
-    def call: (AssociationSnapshot, untyped, RecordSnapshot?) -> [ Array[RecordSnapshot], RecordSnapshot?, RecordSnapshot?, bool ]
+    # The collection's records after the event, with the record it took out
+    # and the one it put in.
+    # : (AssociationSnapshot, untyped, RecordSnapshot?) -> [Array[RecordSnapshot], RecordSnapshot?, RecordSnapshot?]
+    def call: (AssociationSnapshot, untyped, RecordSnapshot?) -> [ Array[RecordSnapshot], RecordSnapshot?, RecordSnapshot? ]
 
     # : (untyped, RecordSnapshot?) -> String
     def replacement_type: (untyped, RecordSnapshot?) -> String
@@ -24,7 +26,14 @@ module PaperTrailDiff
     # : (AssociationSnapshot, untyped) -> Integer?
     def retyped_position: (AssociationSnapshot, untyped) -> Integer?
 
+    # A record that keeps its identity keeps its place. Any other, one that
+    # joined or a row whose type changed, goes where its identity sorts, so
+    # the records stay in the order a snapshot holds them in without being
+    # sorted again for each event.
     # : (Array[RecordSnapshot], Integer?, RecordSnapshot?) -> Array[RecordSnapshot]
     def replacement_records: (Array[RecordSnapshot], Integer?, RecordSnapshot?) -> Array[RecordSnapshot]
+
+    # : (Array[RecordSnapshot], RecordSnapshot) -> void
+    def insert: (Array[RecordSnapshot], RecordSnapshot) -> void
   end
 end

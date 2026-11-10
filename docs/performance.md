@@ -70,7 +70,10 @@ Flat query counts do not make a report's cost flat:
   costs the same for each: its versions are applied to the records they
   saved at the event after its last, so 1,000 comments edited two at a time
   in 1,000 transactions took 1.9 s, and edited one at a time along with
-  their article, 1.0 s. Members
+  their article, 1.0 s. A record that joins a collection or leaves it costs
+  a little more than an edit, because each such event also looks through the
+  collection for the record as it stood before: 1,000 comments created one
+  at a time on one article took about 0.7 s, and 3,000 about 3.6 s. Members
   saved in one transaction share one snapshot: a `report` on 100 articles,
   each created with 100 comments in one transaction and edited with all of
   them in another, took about 4.6 s. `timeline` reads every member at each

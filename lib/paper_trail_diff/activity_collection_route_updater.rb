@@ -12,21 +12,14 @@ module PaperTrailDiff
     end
 
     #: (RecordSnapshot, ActivityCollectionRouteChange, ?depth: Integer) -> [RecordSnapshot, bool]
-    def call(snapshot, change, depth: 0) # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
+    def call(snapshot, change, depth: 0) # rubocop:disable Metrics/AbcSize
       name, _reflection, _subtree, path = change.route.fetch(depth)
       association = snapshot.associations.fetch(name)
-      transition = updated_records(association, snapshot, change, depth)
-      records, before, after, membership_preserved, changed = transition
+      records, before, after, changed = updated_records(association, snapshot, change, depth)
       return [snapshot, false] unless changed
 
       updated_association = @pool.association(
-        path,
-        association.transition_to(
-          records,
-          before: before,
-          after: after,
-          membership_preserved: membership_preserved
-        )
+        path, association.transition_to(records, before: before, after: after)
       )
       updated_snapshot = snapshot.with_association(name, updated_association)
       parent_path = depth.zero? ? '' : change.route.fetch(depth - 1).fetch(3)
@@ -40,27 +33,21 @@ module PaperTrailDiff
     # @rbs @relationship: ActivityRelationship
     # @rbs @record_updater: ActivityCollectionRecordUpdater
 
-    #: (AssociationSnapshot, RecordSnapshot, ActivityCollectionRouteChange, Integer) -> [Array[RecordSnapshot], RecordSnapshot?, RecordSnapshot?, bool, bool]
+    # The association's records after the change, the record it took out and
+    # the one it put in, and whether anything changed.
+    #: (AssociationSnapshot, RecordSnapshot, ActivityCollectionRouteChange, Integer) -> [Array[RecordSnapshot], RecordSnapshot?, RecordSnapshot?, bool]
     def updated_records(association, owner, change, depth)
       return leaf_records(association, owner, change) if depth == change.route.length - 1
 
-      targeted = targeted_parent(association, change, depth)
-      if targeted
-        records, before, after, changed = targeted
-        return [records, before, after, true, changed]
-      end
-
-      recursive_records(association, change, depth)
+      targeted_parent(association, change, depth) || recursive_records(association, change, depth)
     end
 
-    #: (AssociationSnapshot, RecordSnapshot, ActivityCollectionRouteChange) -> [Array[RecordSnapshot], RecordSnapshot?, RecordSnapshot?, bool, bool]
+    #: (AssociationSnapshot, RecordSnapshot, ActivityCollectionRouteChange) -> [Array[RecordSnapshot], RecordSnapshot?, RecordSnapshot?, bool]
     def leaf_records(association, owner, change)
       reflection = change.route.last.fetch(1)
       child = @record_updater.event_child(association, change, reflection, owner)
-      records, before, after, preserved = @record_updater.call(
-        association, change.version, child
-      )
-      [records, before, after, preserved, !records.equal?(association.records)]
+      records, before, after = @record_updater.call(association, change.version, child)
+      [records, before, after, !records.equal?(association.records)]
     end
 
     #: (AssociationSnapshot, ActivityCollectionRouteChange, Integer) -> [Array[RecordSnapshot], RecordSnapshot?, RecordSnapshot?, bool]?
@@ -76,7 +63,7 @@ module PaperTrailDiff
       targeted_parent_replacement(association.records, position, before, after, changed)
     end
 
-    #: (AssociationSnapshot, ActivityCollectionRouteChange, Integer) -> [Array[RecordSnapshot], RecordSnapshot?, RecordSnapshot?, bool, bool]
+    #: (AssociationSnapshot, ActivityCollectionRouteChange, Integer) -> [Array[RecordSnapshot], RecordSnapshot?, RecordSnapshot?, bool]
     def recursive_records(association, change, depth)
       state = [nil, nil, false] #: [RecordSnapshot?, RecordSnapshot?, bool]
       records = association.records.map do |child|
@@ -84,7 +71,7 @@ module PaperTrailDiff
         state = recursive_transition(state, child, updated, child_changed)
         updated
       end.freeze
-      [records, state.fetch(0), state.fetch(1), true, state.fetch(2)]
+      [records, state.fetch(0), state.fetch(1), state.fetch(2)]
     end
 
     #: ([RecordSnapshot?, RecordSnapshot?, bool], RecordSnapshot, RecordSnapshot, bool) -> [RecordSnapshot?, RecordSnapshot?, bool]

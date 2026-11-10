@@ -17,17 +17,19 @@ module PaperTrailDiff
 
     @relationship: ActivityRelationship
 
-    # : (AssociationSnapshot, RecordSnapshot, ActivityCollectionRouteChange, Integer) -> [Array[RecordSnapshot], RecordSnapshot?, RecordSnapshot?, bool, bool]
-    def updated_records: (AssociationSnapshot, RecordSnapshot, ActivityCollectionRouteChange, Integer) -> [ Array[RecordSnapshot], RecordSnapshot?, RecordSnapshot?, bool, bool ]
+    # The association's records after the change, the record it took out and
+    # the one it put in, and whether anything changed.
+    # : (AssociationSnapshot, RecordSnapshot, ActivityCollectionRouteChange, Integer) -> [Array[RecordSnapshot], RecordSnapshot?, RecordSnapshot?, bool]
+    def updated_records: (AssociationSnapshot, RecordSnapshot, ActivityCollectionRouteChange, Integer) -> [ Array[RecordSnapshot], RecordSnapshot?, RecordSnapshot?, bool ]
 
-    # : (AssociationSnapshot, RecordSnapshot, ActivityCollectionRouteChange) -> [Array[RecordSnapshot], RecordSnapshot?, RecordSnapshot?, bool, bool]
-    def leaf_records: (AssociationSnapshot, RecordSnapshot, ActivityCollectionRouteChange) -> [ Array[RecordSnapshot], RecordSnapshot?, RecordSnapshot?, bool, bool ]
+    # : (AssociationSnapshot, RecordSnapshot, ActivityCollectionRouteChange) -> [Array[RecordSnapshot], RecordSnapshot?, RecordSnapshot?, bool]
+    def leaf_records: (AssociationSnapshot, RecordSnapshot, ActivityCollectionRouteChange) -> [ Array[RecordSnapshot], RecordSnapshot?, RecordSnapshot?, bool ]
 
     # : (AssociationSnapshot, ActivityCollectionRouteChange, Integer) -> [Array[RecordSnapshot], RecordSnapshot?, RecordSnapshot?, bool]?
     def targeted_parent: (AssociationSnapshot, ActivityCollectionRouteChange, Integer) -> [ Array[RecordSnapshot], RecordSnapshot?, RecordSnapshot?, bool ]?
 
-    # : (AssociationSnapshot, ActivityCollectionRouteChange, Integer) -> [Array[RecordSnapshot], RecordSnapshot?, RecordSnapshot?, bool, bool]
-    def recursive_records: (AssociationSnapshot, ActivityCollectionRouteChange, Integer) -> [ Array[RecordSnapshot], RecordSnapshot?, RecordSnapshot?, bool, bool ]
+    # : (AssociationSnapshot, ActivityCollectionRouteChange, Integer) -> [Array[RecordSnapshot], RecordSnapshot?, RecordSnapshot?, bool]
+    def recursive_records: (AssociationSnapshot, ActivityCollectionRouteChange, Integer) -> [ Array[RecordSnapshot], RecordSnapshot?, RecordSnapshot?, bool ]
 
     # : ([RecordSnapshot?, RecordSnapshot?, bool], RecordSnapshot, RecordSnapshot, bool) -> [RecordSnapshot?, RecordSnapshot?, bool]
     def recursive_transition: ([ RecordSnapshot?, RecordSnapshot?, bool ], RecordSnapshot, RecordSnapshot, bool) -> [ RecordSnapshot?, RecordSnapshot?, bool ]
