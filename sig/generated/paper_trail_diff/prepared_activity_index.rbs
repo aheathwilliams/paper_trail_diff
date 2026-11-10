@@ -110,6 +110,9 @@ module PaperTrailDiff
     # : (untyped, Array[untyped], untyped, ActivityRange) -> Array[untyped]
     def historical_ids: (untyped, Array[untyped], untyped, ActivityRange) -> Array[untyped]
 
+    # The records of a model the history holds. None is an answer too: a
+    # path past a belongs_to that named no record, as `post.owner` under
+    # notes without a post, reaches a model no record of which was loaded.
     # : (untyped) -> Array[untyped]
     def node_ids: (untyped) -> Array[untyped]
 

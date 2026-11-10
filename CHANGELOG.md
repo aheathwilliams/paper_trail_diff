@@ -85,6 +85,12 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- `activity_timeline`, `analyze` with `activity: true`, `analyze_many`, and
+  `report` no longer raise `ConfigurationError` ("prepared activity graph is
+  missing ...") for a path that continues past a `belongs_to` when no record
+  read had one, such as `associations: ["article.author"]` on a comment
+  created without an article. They read the record with nothing on that path.
+
 - An activity timeline no longer reads a whole collection again for each event
   that put a record into it or took one out. A snapshot kept a table of its
   records' positions, and built it again and checked their order again

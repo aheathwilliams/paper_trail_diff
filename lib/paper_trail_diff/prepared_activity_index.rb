@@ -187,14 +187,12 @@ module PaperTrailDiff
       end
     end
 
+    # The records of a model the history holds. None is an answer too: a
+    # path past a belongs_to that named no record, as `post.owner` under
+    # notes without a post, reaches a model no record of which was loaded.
     #: (untyped) -> Array[untyped]
     def node_ids(model)
-      name = model.base_class.name
-      @nodes.fetch(name) do
-        raise ConfigurationError,
-              "prepared activity graph is missing #{name}; " \
-              'register the model before collecting activity'
-      end
+      @nodes.fetch(model.base_class.name) { [] }
     end
 
     #: (Hash[String, Array[ActivityTargetCandidateLoader::Row]], Array[untyped]) -> Array[ActivityTargetCandidateLoader::Row]

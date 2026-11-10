@@ -668,14 +668,18 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
     end
   end
 
-  it 'explains missing graph registration instead of leaking a hash lookup error' do
+  # A path past a belongs_to that named no record reaches a model the
+  # history holds no record of (see empty_belongs_to_path_spec.rb).
+  it 'finds no children for a model none of whose records were registered' do
     records = PaperTrailDiff::PreparedRecordIndex.new(Time.now.utc - 60)
     index = described_class.new(records, [], start_at: Time.now.utc - 60)
 
-    expect do
-      index.child_ids(TrackedArticle, [1], TrackedArticle.reflect_on_association(:comments),
-                      PaperTrailDiff::ActivityRange.new(Time.now.utc - 60, Time.now.utc))
-    end.to raise_error(PaperTrailDiff::ConfigurationError, /missing TrackedArticle.*register/)
+    children = index.child_ids(
+      TrackedArticle, [], TrackedArticle.reflect_on_association(:comments),
+      PaperTrailDiff::ActivityRange.new(Time.now.utc - 60, Time.now.utc)
+    )
+
+    expect(children).to eq([])
   end
 
   it 'matches SQL candidate selection for pre-window moves, destroys, ties and boundaries' do
