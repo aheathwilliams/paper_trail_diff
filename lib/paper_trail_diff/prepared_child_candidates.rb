@@ -33,9 +33,11 @@ module PaperTrailDiff
       end
     end
 
-    #: (untyped) -> void
-    def initialize(start_at)
+    # `end_at` is where the history ends, if it does.
+    #: (untyped, ?untyped) -> void
+    def initialize(start_at, end_at = nil)
       @start_at = start_at
+      @end_at = end_at
       @read = {} #: Hash[Array[untyped], Read]
     end
 
@@ -47,12 +49,20 @@ module PaperTrailDiff
       read = @read[[model, reflection]] ||= Read.new
       unless read.unread(ids).empty?
         owners = read.unread(block_given? ? yield | ids : ids)
-        read.add(owners, ActivityChildCandidateLoader.new(model, owners, reflection, @start_at))
+        read.add(owners, loader(model, owners, reflection))
       end
       [read.historical, read.live]
     end
 
+    private
+
+    #: (untyped, Array[untyped], untyped) -> ActivityChildCandidateLoader
+    def loader(model, owners, reflection)
+      ActivityChildCandidateLoader.new(model, owners, reflection, @start_at, @end_at)
+    end
+
     # @rbs @start_at: untyped
+    # @rbs @end_at: untyped
     # @rbs @read: Hash[Array[untyped], Read]
   end
 end

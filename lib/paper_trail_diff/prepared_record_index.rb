@@ -380,6 +380,10 @@ module PaperTrailDiff
     #: () -> untyped
     attr_reader :start_time
 
+    # When it was read to, if it ends.
+    #: () -> untyped
+    attr_reader :end_time
+
     # Where the transactions of these versions take effect, as their version
     # tables record it (see RecordedTransactionEnds).
     #: (Array[untyped], ?floor: untyped) -> TransactionEnds

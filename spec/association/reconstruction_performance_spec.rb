@@ -59,9 +59,11 @@ RSpec.describe 'bounded event reconstruction' do
 
   # Active Record adds `limit(1)` to every has_one's association scope; only a
   # declared limit or offset needs loading per record.
+  # From two records on: a batch ends at its last root version, and a lone
+  # article's profile, created after that, is not read from history at all.
   it 'loads a plain has_one of every current record together' do
     articles = []
-    counts = [1, 4].map do |added|
+    counts = [2, 4].map do |added|
       added.times do
         article = TrackedArticle.create!(title: 'Profiled')
         TrackedProfile.create!(article: article, bio: 'bio')

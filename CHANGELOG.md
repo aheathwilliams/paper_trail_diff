@@ -116,6 +116,19 @@ project follows [Semantic Versioning](https://semver.org/).
   selected by their associations, now asks with `NOT EXISTS`. Results are
   unchanged. See [performance](docs/performance.md#database-indexes).
 
+- A range that ended in the past no longer slows down with the children its
+  records have gained since. A `has_many` or `has_one` read every child that
+  was ever its owner's from the range's start onward, with each child's row
+  and versions, and only then left out those created after the range. With
+  2,000 comments added to an article after the range, a `compare` of two of
+  its versions took 132 ms and now takes 10 ms, as with none, and `timeline`
+  between them, or `analyze` over a window that a later version of the article
+  ends, went from about 160 ms to about 12 ms. A child is left out when its
+  first version is a `create` saved after the range's end, so one whose
+  creation was never recorded is still read. Where `item_id` is not stored as
+  the child's key is, as with a string `item_id` and integer keys, the child's
+  current row is still read, though not its versions. Results are unchanged.
+
 - An association scope that negates an empty list along with another
   condition, such as `where.not(status: [], score: 1)`, now reads a record
   whose `status` is NULL as the database does. Active Record writes the empty

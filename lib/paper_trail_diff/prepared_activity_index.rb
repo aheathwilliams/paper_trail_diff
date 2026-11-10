@@ -19,7 +19,7 @@ module PaperTrailDiff
     def initialize(records, root_versions, start_at:)
       @records = records
       @start_at = start_at
-      @children = PreparedChildCandidates.new(start_at)
+      @children = PreparedChildCandidates.new(start_at, records.end_time)
       @roots = root_versions.group_by { |version| Endpoint.identity(version) }
       @nodes = {} #: Hash[String, Array[untyped]]
       # Rows are cached by reflection, which a subclass shares with its base.

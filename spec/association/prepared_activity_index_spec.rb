@@ -165,6 +165,22 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
     IndexSpecPage.reflect_on_association(:sections)
   end
 
+  # A child created after the history ends is in none of its states.
+  it "reads the children its owners had by the record index's end" do
+    origin = Time.now.utc
+    page = IndexSpecPage.create!(title: 'Page')
+    before = page.sections.create!(title: 'Before')
+    finish = before.versions.last.created_at
+    page.sections.create!(title: 'After')
+    records = PaperTrailDiff::PreparedRecordIndex.new(origin, end_at: finish)
+    index = described_class.new(records, [], start_at: origin)
+
+    historical, live = index.children.call(IndexSpecPage, [page.id], sections)
+
+    expect(historical.fetch(page.id.to_s).map { |row| row.fetch(1) }).to eq([before.id])
+    expect(live).to eq(page.id.to_s => [before.id])
+  end
+
   it 'reads root versions as given and every other record from the record index' do
     origin = Time.now.utc
     root, other = %w[Root Other].map { |title| IndexSpecLandingPage.create!(title: title) }

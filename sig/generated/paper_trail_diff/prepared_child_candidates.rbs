@@ -23,14 +23,22 @@ module PaperTrailDiff
       def add: (Array[untyped], ActivityChildCandidateLoader) -> void
     end
 
-    # : (untyped) -> void
-    def initialize: (untyped) -> void
+    # `end_at` is where the history ends, if it does.
+    # : (untyped, ?untyped) -> void
+    def initialize: (untyped, ?untyped) -> void
 
     # The owners not read yet are read together, with the others the block
     # names, so that owners asked about later need none. Each owner class
     # reads its own, as a polymorphic row can store the class's name.
     # : (untyped, Array[untyped], untyped) ?{ () -> Array[untyped] } -> [Hash[String, Array[Array[untyped]]], Hash[String, Array[untyped]]]
     def call: (untyped, Array[untyped], untyped) ?{ () -> Array[untyped] } -> [ Hash[String, Array[Array[untyped]]], Hash[String, Array[untyped]] ]
+
+    private
+
+    # : (untyped, Array[untyped], untyped) -> ActivityChildCandidateLoader
+    def loader: (untyped, Array[untyped], untyped) -> ActivityChildCandidateLoader
+
+    @end_at: untyped
 
     @read: Hash[Array[untyped], Read]
 

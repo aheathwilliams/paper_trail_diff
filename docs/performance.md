@@ -79,6 +79,14 @@ Flat query counts do not make a report's cost flat:
   them in another, took about 4.6 s. `timeline` reads every member at each
   version of the root instead: 300 comments over 2,001 versions of their
   article took about 7.5 s.
+- **A range that ended in the past does not read what was created since.**
+  A child whose first version is a `create` saved after the range's end is
+  left out when the children are found, with its row and versions: with 2,000
+  comments added to an article after the range, `compare`, `timeline`, and a
+  window that a later version of the article ends each took 10 to 13 ms, as
+  with none. A window with `activity: true` on a record that has not been
+  saved since is the exception: it closes on the record as it is now, so it
+  replays everything up to now and reports what fell inside the window.
 - **`snapshots: true` and `recorded_changes: true` cost memory and time.** Ask
   for them only when you use them. Records that did not change are shared
   between steps, so the cost is modest: an activity `report` of 10,000

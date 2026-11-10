@@ -40,8 +40,32 @@ module PaperTrailDiff
     #: (untyped) { (untyped) -> untyped } -> untyped
     def self.exists(table)
       other = other_versions(table)
-      Support.arel::SelectManager.new.from(other).project('1').where(yield(other)).exists
+      any(other, yield(other))
     end
+
+    # Whether the item's versions say it was created after `time`: a create
+    # saved after it that no version of the item precedes. An item with an
+    # earlier version was there before, whatever created it again, and one
+    # with no create may have been.
+    #: (untyped, untyped, untyped, untyped) -> untyped
+    def self.created_after(table, item_type, item_id, time)
+      created = table.alias('paper_trail_diff_created_versions')
+      item = created[:item_type].eq(item_type).and(created[:item_id].eq(item_id))
+      any(created, item.and(first_create_after(table, created, time)))
+    end
+
+    #: (untyped, untyped, untyped) -> untyped
+    def self.first_create_after(table, created, time)
+      created[:event].eq('create').and(created[:created_at].gt(time))
+                     .and(exists(table) { |other| earlier_version(created, other) }.not)
+    end
+    private_class_method :first_create_after
+
+    #: (untyped, untyped) -> untyped
+    def self.any(source, condition)
+      Support.arel::SelectManager.new.from(source).project('1').where(condition).exists
+    end
+    private_class_method :any
 
     #: (untyped, untyped) ?{ (untyped) -> untyped } -> untyped
     def self.earlier_version(table, other)
