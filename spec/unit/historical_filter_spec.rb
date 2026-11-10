@@ -316,6 +316,27 @@ RSpec.describe PaperTrailDiff::HistoricalFilter do
       )
     end
 
+    it 'stops when a page of matches is full, counting only the page' do
+      ids = Array.new(4) { history.first.id.to_s }
+      paged = filter({ title: 'Draft' }, limit: 1)
+
+      expect(paged.call(ids, page: [0, 1])).to eq(ids.first(1))
+      expect(paged.call(ids, page: [2, 1])).to eq(ids.first(3))
+      expect(paged.call(ids, page: [3, 5])).to eq(ids)
+      expect { paged.call(ids, page: [1, 2]) }
+        .to raise_error(PaperTrailDiff::BatchLimitExceededError)
+    end
+
+    it 'reads no batch of candidates past a full page' do
+      stub_const('PaperTrailDiff::Support::IDS_PER_STATEMENT', 1)
+      ids = Array.new(3) { history.first.id.to_s }
+
+      selects, = queries { filter({ title: 'Draft' }).call(ids, page: [0, 1]) }
+      every, = queries { filter({ title: 'Draft' }).call(ids) }
+
+      expect(selects.length * 3).to eq(every.length)
+    end
+
     it 'does not count matches the caller does not count' do
       ids = Array.new(2) { history.first.id.to_s }
 

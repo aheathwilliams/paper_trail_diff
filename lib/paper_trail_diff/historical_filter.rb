@@ -25,18 +25,20 @@ module PaperTrailDiff
 
     # More matches than the limit raise, unless the caller does not count
     # them: candidates it only lists, such as deleted roots.
-    #: (Array[String], ?counted: bool) -> Array[String]
-    def call(candidates, counted: true)
+    #
+    # A `page` is the relation's own, as the matches to skip and to take
+    # among candidates given in its order. Matching stops when the page is
+    # full, so no history is read past it, and only the page counts toward
+    # the limit.
+    #: (Array[String], ?counted: bool, ?page: [Integer, Integer]?) -> Array[String]
+    def call(candidates, counted: true, page: nil)
+      skipped, taken = page || [0, nil]
+      full = skipped + taken if taken
       matched = [] #: Array[String]
-      candidates.each_slice(Support::IDS_PER_STATEMENT) do |slice|
-        versions = candidate_versions(slice, @time_range)
-        closing = closing_states(slice, versions)
-        slice.each do |id|
-          next unless held?(versions.fetch(id, []), closing[id])
-
-          matched << id
-          reject_root_limit! if counted && matched.length > @limit
-        end
+      each_match(candidates) do |id|
+        matched << id
+        reject_root_limit! if counted && matched.length - skipped > @limit
+        break if matched.length == full
       end
       matched
     end
@@ -50,6 +52,17 @@ module PaperTrailDiff
     # @rbs @max_versions: Integer
     # @rbs @loaded: Integer
     # @rbs @state_loader: PreparedVersionStateLoader
+
+    # Each candidate that held a matching state, in the order given, read a
+    # batch at a time.
+    #: (Array[String]) { (String) -> void } -> void
+    def each_match(candidates)
+      candidates.each_slice(Support::IDS_PER_STATEMENT) do |slice|
+        versions = candidate_versions(slice, @time_range)
+        closing = closing_states(slice, versions)
+        slice.each { |id| yield id if held?(versions.fetch(id, []), closing[id]) }
+      end
+    end
 
     #: (untyped) -> untyped
     def validate_predicate(predicate)

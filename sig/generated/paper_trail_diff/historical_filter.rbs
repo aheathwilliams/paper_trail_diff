@@ -16,8 +16,13 @@ module PaperTrailDiff
 
     # More matches than the limit raise, unless the caller does not count
     # them: candidates it only lists, such as deleted roots.
-    # : (Array[String], ?counted: bool) -> Array[String]
-    def call: (Array[String], ?counted: bool) -> Array[String]
+    #
+    # A `page` is the relation's own, as the matches to skip and to take
+    # among candidates given in its order. Matching stops when the page is
+    # full, so no history is read past it, and only the page counts toward
+    # the limit.
+    # : (Array[String], ?counted: bool, ?page: [Integer, Integer]?) -> Array[String]
+    def call: (Array[String], ?counted: bool, ?page: [ Integer, Integer ]?) -> Array[String]
 
     private
 
@@ -34,6 +39,11 @@ module PaperTrailDiff
     @state_loader: PreparedVersionStateLoader
 
     @time_range: TimeRange?
+
+    # Each candidate that held a matching state, in the order given, read a
+    # batch at a time.
+    # : (Array[String]) { (String) -> void } -> void
+    def each_match: (Array[String]) { (String) -> void } -> void
 
     # : (untyped) -> untyped
     def validate_predicate: (untyped) -> untyped

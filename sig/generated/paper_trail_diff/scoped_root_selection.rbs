@@ -59,7 +59,7 @@ module PaperTrailDiff
 
     private
 
-    @historical_filter: untyped
+    @historical_filter: FilteredCandidates?
 
     @limit: Integer
 
@@ -87,19 +87,9 @@ module PaperTrailDiff
 
     # Which candidates still have a row is asked without the relation's
     # conditions, so that "filtered out" and "no longer exists" stay
-    # separable. A filter then reads the history of the relation's records
-    # only, whose order and page choose among those that match, and of the
-    # deleted ones, which no relation can test. Those it lists, as without a
-    # filter, but does not count toward `limit:`.
+    # separable. A filter then keeps those it matches (FilteredCandidates).
     # : (Array[String]) -> Result
     def plucked_selection: (Array[String]) -> Result
-
-    # The candidates the relation's conditions accept. A grouped relation's
-    # rows are groups, which a condition on one record cannot decide, and its
-    # aggregates read every candidate at once, so it keeps them all: the
-    # filter reads each, and the relation groups those that match.
-    # : (Array[String]) -> Array[String]
-    def relation_members: (Array[String]) -> Array[String]
 
     # Comparing the two columns in SQL needs them to share a type: PostgreSQL
     # rejects an integer key against a string item_id outright. A composite
@@ -123,8 +113,8 @@ module PaperTrailDiff
     # : () -> untyped
     def window_versions: () -> untyped
 
-    # : (untyped, Integer) -> HistoricalFilter?
-    def historical_filter_for: (untyped, Integer) -> HistoricalFilter?
+    # : (untyped, Integer) -> FilteredCandidates?
+    def historical_filter_for: (untyped, Integer) -> FilteredCandidates?
 
     # Accepts a model class as readily as a relation: `Article` and
     # `Article.where(...)` both name a population, and `all` is what makes them

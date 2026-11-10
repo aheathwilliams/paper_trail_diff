@@ -145,6 +145,10 @@ instance for each state, so it costs a `reify` per version, plus its own
 queries. `max_filter_versions:` (10,000 by default) caps the versions it loads.
 Either way, every version of every candidate in the window is decoded: with
 1,000 candidates and no match, a hash and a callable each took about 0.8 s.
+A relation with a `limit` reads candidates in its own order and stops when
+its page is full: of 5,000 matching records with three versions each, the
+first page of 20 took 0.09 s and the page at offset 2,000 took 0.4 s, where
+reading every match took 1.0 s.
 Finding the relation's records among the candidates takes up to two queries
 per 500 of them.
 

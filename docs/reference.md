@@ -870,6 +870,12 @@ model instance and may run queries of its own.
 - Matching records the relation selects count toward `limit:`, and matching
   stops as soon as the limit is exceeded. Matching deleted records count only
   with `include_deleted: true`, as without a filter.
+- A relation with a `limit` pages the matches: records are read in the
+  relation's order, matching stops when the page is full, and only the page
+  counts toward `limit:`. So `Article.order(:id).limit(20).offset(40)` with
+  `limit: 20` returns the third page however many records match, and reads
+  history only as far as that page. A grouped relation, and one without a
+  `limit`, still read every match.
 - `max_filter_versions:` limits how many versions the filter loads, including
   the one version after the window it reads for each record, and the versions
   of deleted records. The default is 10,000. Going over raises

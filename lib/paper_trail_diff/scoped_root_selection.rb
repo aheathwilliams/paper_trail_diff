@@ -86,7 +86,7 @@ module PaperTrailDiff
     # @rbs @time_range: TimeRange?
     # @rbs @selecting: TimeRange?
     # @rbs @limit: Integer
-    # @rbs @historical_filter: untyped
+    # @rbs @historical_filter: FilteredCandidates?
     # @rbs @related: AssociationActivitySelection?
     # @rbs @version_scope: untyped
 
@@ -117,29 +117,15 @@ module PaperTrailDiff
 
     # Which candidates still have a row is asked without the relation's
     # conditions, so that "filtered out" and "no longer exists" stay
-    # separable. A filter then reads the history of the relation's records
-    # only, whose order and page choose among those that match, and of the
-    # deleted ones, which no relation can test. Those it lists, as without a
-    # filter, but does not count toward `limit:`.
+    # separable. A filter then keeps those it matches (FilteredCandidates).
     #: (Array[String]) -> Result
     def plucked_selection(candidates)
       live = ids_in(base_class.unscoped, candidates)
       missing = candidates - live
-      if (filter = @historical_filter)
-        live = filter.call(relation_members(live))
-        missing = filter.call(missing, counted: false)
-      end
+      filter = @historical_filter
+      live, missing = filter.call(live, missing) if filter
       Result.new(records: CandidateTable.with(base_class, live) { |ids| selected_records([ids]) },
                  unreachable: missing.sort.map { |id| identity(id) }.freeze)
-    end
-
-    # The candidates the relation's conditions accept. A grouped relation's
-    # rows are groups, which a condition on one record cannot decide, and its
-    # aggregates read every candidate at once, so it keeps them all: the
-    # filter reads each, and the relation groups those that match.
-    #: (Array[String]) -> Array[String]
-    def relation_members(ids)
-      @scope.group_values.empty? ? ids_in(@scope.except(:order, :limit, :offset), ids).uniq : ids
     end
 
     # Comparing the two columns in SQL needs them to share a type: PostgreSQL
@@ -178,12 +164,13 @@ module PaperTrailDiff
       @version_scope ? @version_scope.call(relation) : relation
     end
 
-    #: (untyped, Integer) -> HistoricalFilter?
+    #: (untyped, Integer) -> FilteredCandidates?
     def historical_filter_for(predicate, max_versions)
       return if predicate.nil?
 
-      HistoricalFilter.new(base_class, predicate: predicate, time_range: @time_range,
-                                       limit: @limit, max_versions: max_versions)
+      filter = HistoricalFilter.new(base_class, predicate: predicate, time_range: @time_range,
+                                                limit: @limit, max_versions: max_versions)
+      FilteredCandidates.new(@scope, filter, ordered: ->(ids) { candidate_relation([ids]) })
     end
 
     # Accepts a model class as readily as a relation: `Article` and

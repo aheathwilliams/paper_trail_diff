@@ -58,6 +58,22 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- `recorded_changes`, and change rows with `recorded_changes: true`, now cast
+  the values a `json` or `jsonb` `object_changes` column stores. PaperTrail
+  leaves such a column's dates, times, and decimals as the strings JSON gives
+  back, and the gem returned them that way: a recorded change no longer
+  equalled the state it produced, so one change became three change rows, two
+  of them credited to writes without a version, and a model with a `time`
+  column raised `NoMethodError`.
+
+- A report with `historical_filter:` can be paged with the relation, as the
+  reference says. A relation with a `limit` now reads its candidates in its
+  own order and stops matching when the page is full, and only the page
+  counts toward `limit:`. Before, every match counted, so
+  `Article.order(:id).limit(20)` with `limit: 20` raised
+  `BatchLimitExceededError` whenever more than 20 records matched, and the
+  history of every match was read to return one page.
+
 - Two transactions that saved in one record's tree at the same time
   interleave their versions, and activity timelines read them wrongly in four
   ways, all fixed by reading each transaction where it ends:
