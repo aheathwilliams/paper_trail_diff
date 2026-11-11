@@ -139,9 +139,27 @@ module PaperTrailDiff
     # holds them.
     #: (untyped, Array[untyped], ThroughPath) -> bool
     def on_path?(model, run, path)
-      first = run.fetch(0)
-      @records.typed_states_across(model, first.item_id, first, run.fetch(-1))
+      first, last = transaction_span(model, run)
+      @records.typed_states_across(model, first.item_id, first, last)
               .any? { |attributes| path.include?(attributes) }
+    end
+
+    # A run is judged by the row's whole transaction, not only the part inside
+    # the range. A window whose edge falls inside the transaction holds only
+    # some of the row's versions in it. Judged by its destroy alone, a row
+    # moved here and destroyed in one transaction was on the path, so the
+    # window after the edge reported the transaction, which the window before
+    # it, judging the row by both versions, reported too. The row's series
+    # holds the whole transaction: history crossed by one is read from where
+    # it began (see PreparedHistoryLoader#reload). A version saved outside a
+    # transaction is a run of its own.
+    #: (untyped, Array[untyped]) -> [untyped, untyped]
+    def transaction_span(model, run)
+      first, = run
+      key = ActivityTransactionGroups.transaction_key(first)
+      saved = key ? @records.versions_for_id(model, first.item_id) : run
+      saved = saved.select { |version| ActivityTransactionGroups.transaction_key(version) == key }
+      [saved.fetch(0), saved.fetch(-1)]
     end
 
     # The targets the owners' recorded states point at. PT-AT names a target
