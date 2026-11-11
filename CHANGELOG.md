@@ -3,6 +3,18 @@
 All notable changes to this project will be documented in this file. The
 project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- Two activity windows that meet inside a transaction no longer both report
+  it when the transaction moved a `has_many :through` join row onto the
+  root and destroyed it after the edge, such as a card moved to a board and
+  destroyed while its assignee was renamed. The window after the edge judged
+  the join row by its destroy alone, where it was on the root, so the change
+  appeared in both halves. A join row's versions in one transaction are now
+  judged by the whole transaction, wherever a window's edge falls in it.
+
 ## [0.17.1] - 2026-11-07
 
 ### Fixed

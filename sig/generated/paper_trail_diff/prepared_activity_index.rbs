@@ -91,6 +91,18 @@ module PaperTrailDiff
     # : (untyped, Array[untyped], ThroughPath) -> bool
     def on_path?: (untyped, Array[untyped], ThroughPath) -> bool
 
+    # A run is judged by the row's whole transaction, not only the part inside
+    # the range. A window whose edge falls inside the transaction holds only
+    # some of the row's versions in it. Judged by its destroy alone, a row
+    # moved here and destroyed in one transaction was on the path, so the
+    # window after the edge reported the transaction, which the window before
+    # it, judging the row by both versions, reported too. The row's series
+    # holds the whole transaction: history crossed by one is read from where
+    # it began (see PreparedHistoryLoader#reload). A version saved outside a
+    # transaction is a run of its own.
+    # : (untyped, Array[untyped]) -> [untyped, untyped]
+    def transaction_span: (untyped, Array[untyped]) -> [ untyped, untyped ]
+
     # The targets the owners' recorded states point at. PT-AT names a target
     # only in the rows its owner's versions wrote, so a key changed without a
     # version, such as one `has_paper_trail only:` leaves out, names its target
