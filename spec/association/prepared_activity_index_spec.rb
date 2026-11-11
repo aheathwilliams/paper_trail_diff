@@ -566,6 +566,26 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
       expect(kept).to match_array(versions.last(3))
     end
 
+    # A range whose edge falls inside the transaction holds only part of
+    # it, which is judged by the whole: a row moved here and destroyed there
+    # joined nobody, on either side of the edge.
+    it 'judges the part of a transaction a range holds by the whole transaction' do
+      link = IndexSpecLink.create!(board_id: IndexSpecBoard.create!.id)
+      IndexSpecLink.transaction do
+        link.update!(board_id: board.id)
+        link.destroy!
+      end
+      versions = link.versions.reorder(:id).to_a
+      index = index_for(origin, { IndexSpecLink => [link.id] })
+
+      kept = [versions.last(1), versions[1, 1]].map do |part|
+        index.join_versions(owners, { model: IndexSpecLink, versions: part }, through(:targets))
+      end
+
+      expect(versions.length).to eq(3)
+      expect(kept).to eq([[], []])
+    end
+
     # PaperTrail leaves the transaction blank outside one.
     it 'judges each version saved outside a transaction alone' do
       link = IndexSpecLink.create!(board_id: board.id)

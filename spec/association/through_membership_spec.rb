@@ -194,6 +194,42 @@ RSpec.describe 'A has_many :through whose source is a has_many' do
     end
   end
 
+  # Found by the nightly oracle (seed 53679). A post moved to the author and
+  # destroyed in the transaction that edited a note was never the author's,
+  # so its versions are judged together and left out. The transaction ends
+  # after the edge, so the later window reports it, once.
+  it 'reports a transaction once in windows that meet at a post it moved in and destroyed' do
+    note = MembershipPost.create!(title: 'A', author: ada).notes.create!(body: 'note')
+    other = MembershipPost.create!(title: 'B', author: bea)
+    MembershipAuthor.transaction do
+      note.update!(body: 'edited')
+      other.update!(author: ada)
+      other.destroy!
+    end
+    ada.update!(name: 'Ada edited')
+    edge = other.versions.find_by!(event: 'destroy').created_at
+    whole = PaperTrail::Version.minimum(:created_at)..Time.now.utc
+    edits = lambda do |within, method, group|
+      options = { within: within, associations: [:notes], group: group }
+      steps = if method == :analyze_many
+                PaperTrailDiff.analyze_many([ada], activity: true, **options)
+                              .values.first.activity_timeline
+              else
+                PaperTrailDiff.activity_timeline(ada, **options)
+              end
+      steps.reject(&:empty?).map { |step| notes_change(step.diff)[:changed] }
+    end
+
+    %i[activity_timeline analyze_many].product([nil, :transaction]).each do |method, group|
+      earlier = edits.call(whole.begin...edge, method, group)
+      later = edits.call(edge..whole.end, method, group)
+
+      expect(earlier + later).to eq(edits.call(whole, method, group))
+      expect(earlier.flatten).to be_empty
+      expect(later.first).to eq([{ 'body' => { from: 'note', to: 'edited' } }])
+    end
+  end
+
   it 'follows a through whose own through is a through' do
     post = MembershipPost.create!(title: 'A', author: ada)
     note = post.notes.create!(body: 'note', reviewer: bea)
