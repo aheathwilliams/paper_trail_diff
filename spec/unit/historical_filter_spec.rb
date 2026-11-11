@@ -53,6 +53,22 @@ RSpec.describe PaperTrailDiff::HistoricalFilter do
     [article, created, edited, published]
   end
 
+  # See spec/integration/json_history_spec.rb: some PaperTrail, Ruby, and
+  # adapter combinations cannot write JSON history at all.
+  def json_event
+    FilterJsonEvent.create!(due_on: Date.new(2026, 1, 2), starts_at: Time.utc(2026, 1, 2, 3))
+  rescue StandardError => e
+    skip "PaperTrail cannot record json history here: #{e.class}: #{e.message}"
+  end
+
+  # Some JSON and Active Support versions cannot encode a json column, as
+  # json_event above cannot.
+  def structured_event(details: { 'size' => 1 }, labels: ['a'])
+    FilterEvent.create!(details: details, labels: labels)
+  rescue StandardError => e
+    skip "Active Record cannot write json columns here: #{e.class}: #{e.message}"
+  end
+
   describe 'with an attribute hash' do
     it 'matches the state at the start of the window' do
       article, created, edited, = history
@@ -164,22 +180,6 @@ RSpec.describe PaperTrailDiff::HistoricalFilter do
       expect(cast.call({ due_on: Date.new(2026, 1, 2) })).to eq(ids)
       expect(cast.call({ starts_at: Time.utc(2026, 1, 2, 3) })).to eq(ids)
       expect(cast.call({ due_on: Date.new(2026, 1, 3) })).to eq([])
-    end
-
-    # See spec/integration/json_history_spec.rb: some PaperTrail, Ruby, and
-    # adapter combinations cannot write JSON history at all.
-    def json_event
-      FilterJsonEvent.create!(due_on: Date.new(2026, 1, 2), starts_at: Time.utc(2026, 1, 2, 3))
-    rescue StandardError => e
-      skip "PaperTrail cannot record json history here: #{e.class}: #{e.message}"
-    end
-
-    # Some JSON and Active Support versions cannot encode a json column, as
-    # json_event above cannot.
-    def structured_event
-      FilterEvent.create!(details: { 'size' => 1 }, labels: ['a'])
-    rescue StandardError => e
-      skip "Active Record cannot write json columns here: #{e.class}: #{e.message}"
     end
 
     it 'keeps its own copy of a structured expected value' do
@@ -485,7 +485,7 @@ RSpec.describe PaperTrailDiff::HistoricalFilter do
     end
 
     it 'keeps a list as the value of an attribute that holds one' do
-      event = FilterEvent.create!(labels: %w[a b])
+      event = structured_event(labels: %w[a b])
       event.update!(labels: %w[c])
 
       expect(filter({ labels: %w[a b] }, model: FilterEvent).call([event.id.to_s]).length).to eq(1)
@@ -503,7 +503,7 @@ RSpec.describe PaperTrailDiff::HistoricalFilter do
       )
     end
 
-    it 'rejects a version whose state cannot be read directly' do
+    it 'rejects a version whose state cannot be read directly', history: :yaml do
       article = FilterArticle.create!(title: 'Draft')
       FilterVersion.create!(item_type: 'FilterArticle', item_id: article.id, event: 'update',
                             object: 'just text'.to_yaml, created_at: Time.now)
