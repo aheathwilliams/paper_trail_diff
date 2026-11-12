@@ -24,7 +24,8 @@ module PaperTrailDiff
     # The versions of `relation` that activity on associations reports under
     # the filter (see ActivityScopeFilter): those of a transaction the filter
     # keeps a version of, of any record in their table, and those saved
-    # outside one that it keeps.
+    # outside one that it keeps. A table without transactions keeps each
+    # version alone.
     # : (untyped, untyped) -> untyped
     def self.whole_transactions: (untyped, untyped) -> untyped
 

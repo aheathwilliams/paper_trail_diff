@@ -41,6 +41,39 @@ RSpec.describe PaperTrailDiff::VersionScopeFilter do
     expect(filter.call(FilterVersion.all, [created, updated])).to eq([updated])
   end
 
+  # Activity on associations keeps a transaction whole when the filter keeps
+  # any version of it.
+  describe '.whole_transactions' do
+    def saved(transaction_id, whodunnit)
+      FilterVersion.create!(item_type: 'FilterArticle', item_id: 1, event: 'update',
+                            whodunnit: whodunnit, transaction_id: transaction_id)
+    end
+
+    it 'keeps every version of a transaction the filter keeps one of, and loose ones it keeps' do
+      kept = [saved(7, 'bob'), saved(7, 'alice')]
+      dropped = saved(8, 'bob')
+      loose = [saved(nil, 'alice'), saved(nil, 'bob')]
+      in_range = FilterVersion.where(id: [kept.first, dropped, *loose].map(&:id))
+      by_alice = ->(relation) { relation.where(whodunnit: 'alice') }
+      listed = ->(relation) { relation.to_a.select { |version| version.whodunnit == 'alice' } }
+
+      [by_alice, listed].each do |scope|
+        chosen = described_class.whole_transactions(scope, in_range)
+        expect(chosen.order(:id).to_a).to eq([kept.first, loose.first])
+      end
+    end
+
+    it 'keeps each version alone in a table without transactions' do
+      relation = FilterVersion.all
+      columns = FilterVersion.column_names - ['transaction_id']
+      allow(FilterVersion).to receive(:column_names).and_return(columns)
+      scope = ->(given) { given.where(whodunnit: 'alice') }
+
+      expect(described_class.whole_transactions(scope, relation).to_sql)
+        .to eq(relation.where(whodunnit: 'alice').to_sql)
+    end
+  end
+
   describe '.checked' do
     it 'takes no filter, or one that can be called with the relation, and refuses anything else' do
       expect(described_class.checked(nil)).to be_nil

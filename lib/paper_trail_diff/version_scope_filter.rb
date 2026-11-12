@@ -58,9 +58,12 @@ module PaperTrailDiff
     # The versions of `relation` that activity on associations reports under
     # the filter (see ActivityScopeFilter): those of a transaction the filter
     # keeps a version of, of any record in their table, and those saved
-    # outside one that it keeps.
+    # outside one that it keeps. A table without transactions keeps each
+    # version alone.
     #: (untyped, untyped) -> untyped
     def self.whole_transactions(scope, relation)
+      return scope.call(relation) unless relation.klass.column_names.include?('transaction_id')
+
       saved = relation.klass.where(transaction_id: relation.select(:transaction_id))
       kept = values(scope.call(saved), :transaction_id)
       loose = values(scope.call(relation.where(transaction_id: nil)), :id)
