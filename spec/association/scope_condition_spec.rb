@@ -78,6 +78,8 @@ RSpec.describe PaperTrailDiff::ScopeCondition do
                      { rank: nil })).to eq([true, false, false])
       expect(matches(build(-> { where(table[:rank].not_in([1, 2])) }), { rank: 3 }, { rank: 2 },
                      { rank: nil })).to eq([true, false, false])
+      # As SQLite holds text without a collation, which compares it exactly.
+      columns('sqlite3', label: 'varchar')
       expect(matches(build(-> { where(label: %w[a b]) }), { label: 'b' }, { label: 'c' }))
         .to eq([true, false])
     end
