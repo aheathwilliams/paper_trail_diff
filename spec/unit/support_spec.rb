@@ -257,6 +257,7 @@ RSpec.describe PaperTrailDiff::Support do
     end
 
     it 'decodes nothing again for a model without a time of day, or without JSON history' do
+      allow(PaperTrail).to receive(:serializer).and_return(PaperTrail::Serializers::YAML)
       [json_record({ 'rings_at' => written }, times: []),
        json_record({ 'rings_at' => written }, column: :text)].each do |record|
         expect(described_class.with_recorded_times(record)).to equal(record)
