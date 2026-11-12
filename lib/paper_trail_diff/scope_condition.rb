@@ -10,12 +10,12 @@ module PaperTrailDiff
   # per record. A scope it cannot read exactly builds no condition, and the
   # caller keeps its slower path.
   class ScopeCondition
-    # Relation parts that leave membership to the where clause and the
-    # ranking alone.
-    RELATION_VALUES = %i[where order reordering limit offset readonly strict_loading
-                         extending].freeze
-    # Relation parts that load or shape rows without choosing them.
-    LOADING_VALUES = %i[includes preload select distinct].freeze
+    # Relation parts that choose rows, or order them, other than by the where
+    # clause and the ranking the reader follows. Any other part, such as a
+    # lock, a comment, a table named for a string order, or what to load,
+    # leaves membership alone.
+    ROW_CHOOSING_VALUES = %i[joins left_outer_joins from group having with
+                             reverse_order].freeze
     BIND_PARAM = 'Arel::Nodes::BindParam'
     # Column kinds (ExactColumnType) whose values compare for equality in
     # Ruby as the database compares them.
@@ -47,7 +47,7 @@ module PaperTrailDiff
       return if ranked && ranked_through?(reflection)
 
       relation = scoped_relation(reflection, model_class)
-      return unless relation && plain_relation?(relation, RELATION_VALUES)
+      return unless relation && plain_relation?(relation)
 
       clause = relation.where_clause - model_class.unscoped.where_clause
       predicate = Reader.new(model_class).call(clause.ast)
@@ -66,13 +66,26 @@ module PaperTrailDiff
     def self.for_relation(relation, model_class)
       return nothing if relation.null_relation?
 
-      return unless plain_relation?(relation, [*RELATION_VALUES, *LOADING_VALUES])
+      return unless plain_relation?(relation)
 
       clause = relation.where_clause - model_class.unscoped.where_clause
+      check_recorded!(clause - model_class.default_scoped.where_clause, model_class)
       new(model_class, Reader.new(model_class).call(clause.ast))
     rescue Unreadable
       nil
     end
+
+    # A destroyed record's state holds a column `has_paper_trail skip:`
+    # leaves out of history only as its default. A default scope is read
+    # with it so; a condition the caller wrote is refused.
+    #: (untyped, untyped) -> void
+    def self.check_recorded!(clause, model_class)
+      return if clause.empty? || !model_class.respond_to?(:paper_trail_options)
+
+      skipped = Array(model_class.paper_trail_options[:skip]).map(&:to_s)
+      Reader.new(model_class, refused: skipped).call(clause.ast)
+    end
+    private_class_method :check_recorded!
 
     # A relation `none` built, whose where clause is SQL text. A condition
     # that matches nothing reads no attribute, so it names no model.
@@ -131,11 +144,12 @@ module PaperTrailDiff
     private_class_method :scoped_relation
 
     # Some parts, such as the having clause `or` sets, may be present but
-    # empty. `allowed` names the parts that may hold values.
-    #: (untyped, Array[Symbol]) -> bool
-    def self.plain_relation?(relation, allowed)
-      extra = relation.values.except(*allowed).values
-      extra.all? { |value| value.respond_to?(:empty?) && value.empty? }
+    # empty.
+    #: (untyped) -> bool
+    def self.plain_relation?(relation)
+      relation.values.slice(*ROW_CHOOSING_VALUES).values.all? do |value|
+        value.respond_to?(:empty?) ? value.empty? : !value
+      end
     end
     private_class_method :plain_relation?
 
@@ -285,9 +299,10 @@ module PaperTrailDiff
 
     # Compiles a where clause into nested arrays of plain comparisons.
     class Reader
-      #: (untyped) -> void
-      def initialize(model_class)
+      #: (untyped, ?refused: Array[String]) -> void
+      def initialize(model_class, refused: [])
         @model_class = model_class
+        @refused = refused
       end
 
       #: (untyped) -> Array[untyped]
@@ -358,10 +373,20 @@ module PaperTrailDiff
 
       # A bound in the form the database holds, read back as the value the
       # database sorts by. Reading it back unwraps what an adapter wraps.
+      # SQLite keeps a time as text and compares a date with it as text, so
+      # a date there is no midnight, and is left unread.
       #: (String, untyped) -> untyped
       def sort_value(name, stored)
+        raise Unreadable if text_date?(name, stored)
+
         read = @model_class.type_for_attribute(name).deserialize(stored)
         ScopeRanking.sort_value(@model_class, name, read)
+      end
+
+      #: (String, untyped) -> bool
+      def text_date?(name, stored)
+        stored.instance_of?(Date) && :datetime.equal?(ExactColumnType.kind(@model_class, name)) &&
+          @model_class.connection_db_config.adapter.to_s == 'sqlite3'
       end
 
       # Whether a value is NULL compares alike on every type.
@@ -399,6 +424,8 @@ module PaperTrailDiff
       #: (Symbol, untyped, untyped) { (String) -> untyped } -> Array[untyped]
       def compared(operator, attribute, expected)
         name = ScopeRanking.own_column(attribute, @model_class)
+        raise Unreadable if @refused.include?(name)
+
         if ScopeRanking.orderable?(@model_class, name)
           orderable = name #: String
           [operator, orderable, yield(orderable)]
@@ -417,6 +444,7 @@ module PaperTrailDiff
         name = ScopeRanking.own_column(attribute, @model_class) #: String
         exists = @model_class.columns_hash.key?(name)
         raise Unreadable unless exists && (null_test || comparable?(name))
+        raise Unreadable if @refused.include?(name)
 
         name
       end

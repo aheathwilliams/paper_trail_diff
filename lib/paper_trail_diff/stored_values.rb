@@ -17,5 +17,18 @@ module PaperTrailDiff
 
       StoredTimePrecision.apply(StoredJsonValues.apply(model_class, attributes), digits)
     end
+
+    # A copy of the record holding `stored`, its attributes as `apply` read
+    # them, or the record itself where it already holds them.
+    #: (untyped, Hash[String, untyped]) -> untyped
+    def self.record(record, stored)
+      held = record.attributes
+      kept = stored.reject { |name, value| Support.same?(value, held.fetch(name)) }
+      return record if kept.empty?
+
+      copy = record.class.instantiate(record.attributes_before_type_cast)
+      kept.each { |name, value| copy[name] = value }
+      copy.tap(&:clear_changes_information)
+    end
   end
 end

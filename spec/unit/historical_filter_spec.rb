@@ -70,6 +70,21 @@ RSpec.describe PaperTrailDiff::HistoricalFilter do
   end
 
   describe 'with an attribute hash' do
+    # where compares such a value with NULL, which matches no row.
+    it 'matches nothing for a value its type cannot write, as where does' do
+      article, = history
+      event = FilterEvent.create!(due_on: nil)
+      event.update!(status: :published)
+
+      [{ views: 'abc' }, { views: '' }, { views: 2**70 }].each do |predicate|
+        expect(matches(predicate, [article])).to be_empty
+      end
+      expect(filter({ due_on: '' }, model: FilterEvent).call([event.id.to_s])).to be_empty
+      expect(filter({ due_on: nil },
+                    model: FilterEvent).call([event.id.to_s])).to eq([event.id.to_s])
+      expect(matches({ views: '0' }, [article])).to eq([article.id.to_s])
+    end
+
     it 'matches the state at the start of the window' do
       article, created, edited, = history
 
@@ -191,6 +206,10 @@ RSpec.describe PaperTrailDiff::HistoricalFilter do
       ids = [event.id.to_s]
 
       expect(filter({ starts_at: precise }, model: FilterJsonEvent).call(ids)).to eq(ids)
+      seen = []
+      callable = ->(record) { seen << [record.starts_at, record.changed?, record.persisted?] }
+      filter(callable, model: FilterJsonEvent).call(ids)
+      expect(seen).to eq([[precise.floor(3), false, true]])
     end
 
     it 'keeps its own copy of a structured expected value' do

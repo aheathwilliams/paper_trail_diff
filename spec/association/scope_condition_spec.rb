@@ -385,17 +385,29 @@ RSpec.describe PaperTrailDiff::ScopeCondition do
       end
     end
 
-    it 'declines relation parts other than conditions, and a scope that takes the owner' do
-      [-> { where(rank: 1).limit(1) }, -> { offset(1) }, -> { joins(:items) }, -> { distinct },
-       -> { select(:id) }, -> { group(:rank) }, lambda { |owner|
-                                                  where(rank: owner.rank)
-                                                }].each do |scope|
+    it 'declines parts that choose rows beyond conditions, and a scope that takes the owner' do
+      [-> { where(rank: 1).limit(1) }, -> { offset(1) }, -> { joins(:items) },
+       -> { group(:rank) }, lambda { |owner|
+                              where(rank: owner.rank)
+                            }].each do |scope|
         expect(build(scope)).to be_nil
       end
-      expect(build(lambda {
+    end
+
+    # A string order on a qualified column names its table, which chooses no
+    # rows, and so do the parts that lock, comment, or say what to load.
+    it 'reads the conditions beside parts that choose no rows' do
+      [lambda {
         where(rank: 1).order(:id).readonly.strict_loading.extending
-      })).not_to be_nil
-      expect(build(-> { reorder(:id) })).not_to be_nil
+      }, -> { reorder(:id) }, -> { distinct }, -> { select(:id) },
+       -> { where(rank: 1).order('scope_condition_items.rank') },
+       -> { where(rank: 1).unscope(:order) }, -> { where(rank: 2).rewhere(rank: 1) },
+       -> { where(rank: 1).lock.annotate('note').optimizer_hints('hint') },
+       -> { where(rank: 1).create_with(rank: 3).preload(:items) }].each do |scope|
+        expect(build(scope)).not_to be_nil
+      end
+      expect(matches(build(-> { where(rank: 2).rewhere(rank: 1) }), { rank: 1 }, { rank: 2 }))
+        .to eq([true, false])
     end
 
     # The ranking itself is ScopeRanking's; here only whether one applies.
@@ -647,11 +659,26 @@ RSpec.describe PaperTrailDiff::ScopeCondition do
       expect(relation_matches(ScopeConditionItem.where(id: []), { id: 1 })).to eq([false])
     end
 
+    # SQLite compares the date with the stored text, which no time equals.
+    it 'reads a date bound on a datetime column as midnight, except on SQLite' do
+      relation = ScopeConditionItem.where(seen_at: Date.new(2026, 1, 1)..)
+      condition = described_class.for_relation(relation, ScopeConditionItem)
+      if ScopeConditionItem.connection_db_config.adapter.to_s == 'sqlite3'
+        expect(condition).to be_nil
+      else
+        expect(matches(condition, { seen_at: Time.utc(2026, 1, 1) },
+                       { seen_at: Time.utc(2025, 12, 31) }))
+          .to eq([true, false])
+      end
+      expect(described_class.for_relation(ScopeConditionItem.where(seen_at: Time.utc(2026)..),
+                                          ScopeConditionItem)).not_to be_nil
+    end
+
     it 'declines a relation that joins, groups, or that it cannot read' do
       [ScopeConditionItem.joins('JOIN tracked_articles ON 1 = 1'), ScopeConditionItem.group(:rank),
        ScopeConditionItem.where('rank = 1'), ScopeConditionItem.where(amount: 1),
        ScopeConditionItem.having('COUNT(*) > 1'), ScopeConditionItem.from('scope_condition_items'),
-       ScopeConditionItem.lock]
+       ScopeConditionItem.with(kept: ScopeConditionItem.all), ScopeConditionItem.left_joins(:items)]
         .each do |relation|
           expect(described_class.for_relation(relation, relation.model)).to be_nil
         end

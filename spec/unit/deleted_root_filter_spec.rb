@@ -50,7 +50,17 @@ RSpec.describe PaperTrailDiff::DeletedRootFilter do
     expect(kept(FilterArticle.where(views: 2), [article])).to eq([identity(article)])
     expect([1, 3, 4].map { |views| kept(FilterArticle.where(views: views), [article]) })
       .to eq([[], [], []])
-    expect(kept(FilterArticle.unscoped.where(hidden: 1), [article])).to eq([])
+  end
+
+  # History leaves out a skipped column, so a destroyed record's state holds
+  # only its default: a default scope is read with it, a condition is refused.
+  it 'refuses a condition on a column history skips' do
+    article = destroyed(views: 1)
+
+    expect(kept(FilterArticle.where(views: 1), [article])).to eq([identity(article)])
+    expect { kept(FilterArticle.unscoped.where(hidden: 1), [article]) }
+      .to raise_error(PaperTrailDiff::ConfigurationError, /columns that its history records/)
+    expect(described_class.readable(FilterArticle.where(hidden: 1))).to be_nil
   end
 
   it 'reads a destroy naming a removed column, and leaves out one with no state' do

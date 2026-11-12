@@ -13,7 +13,10 @@ module PaperTrailDiff
     DEFAULT_VERSION_LIMIT = 10_000
     # Values `where` reads as several.
     SEVERAL = [Array, Range, Set].freeze
-    private_constant :SEVERAL
+    # The expected value of an attribute `where` would compare with NULL,
+    # which no stored value equals.
+    NOTHING = Object.new.freeze
+    private_constant :SEVERAL, :NOTHING
 
     #: (untyped, predicate: untyped, time_range: TimeRange?, limit: Integer, max_versions: Integer) -> void
     def initialize(model, predicate:, time_range:, limit:, max_versions:)
@@ -99,11 +102,25 @@ module PaperTrailDiff
     #: (String, untyped) -> untyped
     def expected(name, value)
       cast = stored(name, value)
-      return cast unless SEVERAL.any? { |kind| value.is_a?(kind) } && !cast.is_a?(value.class)
+      if SEVERAL.any? { |kind| value.is_a?(kind) } && !cast.is_a?(value.class)
+        raise ConfigurationError,
+              "historical_filter: #{name} takes one value, not #{value.class.name.downcase}; " \
+              'use a callable to match any of several'
+      end
 
-      raise ConfigurationError,
-            "historical_filter: #{name} takes one value, not #{value.class.name.downcase}; " \
-            'use a callable to match any of several'
+      unbound?(name, value) ? NOTHING : cast
+    end
+
+    # `where` writes IS NULL for nil, but `= NULL`, which matches no row, for
+    # a value its type cannot write, such as '' or 'abc' for an integer, and
+    # a constant false condition for one out of the column's range.
+    #: (String, untyped) -> bool
+    def unbound?(name, value)
+      return false if value.nil?
+
+      bound = Support.constant('ActiveRecord::Relation::QueryAttribute')
+                     .new(name, value, @model.type_for_attribute(name)) #: untyped
+      bound.unboundable? || bound.value_for_database.nil?
     end
 
     # Expected and recorded values compare as the attribute casts them, as
@@ -174,11 +191,13 @@ module PaperTrailDiff
       @model.unscoped.where(@model.primary_key => ids).to_h { |record| [record.id.to_s, record] }
     end
 
+    # The live row is read as history keeps it, as a version's state is, so
+    # an unchanged value matches alike whichever closes the window.
     #: (untyped) -> boolish
     def record_matches?(record)
-      return @predicate.call(record) unless @predicate.instance_of?(Hash)
-
       live = StoredValues.apply(@model, record.attributes)
+      return @predicate.call(StoredValues.record(record, live)) unless @predicate.instance_of?(Hash)
+
       @predicate.all? { |name, expected| live.fetch(name) == expected }
     end
 
