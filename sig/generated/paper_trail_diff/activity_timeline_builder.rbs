@@ -33,6 +33,8 @@ module PaperTrailDiff
 
     @filter: ActivityScopeFilter?
 
+    @opening: Array[untyped]?
+
     @range: TimelineRange
 
     @record: untyped
@@ -95,6 +97,11 @@ module PaperTrailDiff
     # : (ActivityEvent, RootVersionPlan) -> bool
     def reported?: (ActivityEvent, RootVersionPlan) -> bool
 
+    # A window holds the transactions that end inside it; an explicit range
+    # those that end where its first version's does, or later.
+    # : (untyped) -> bool
+    def in_range?: (untyped) -> bool
+
     # The explicit live endpoint and a batch's live closing endpoint use the
     # same selected plan, which replays every version through to the current
     # record, a version filter or not.
@@ -109,6 +116,14 @@ module PaperTrailDiff
 
     # : (RootVersionPlan, ?RecordSnapshot?, ?untyped) -> ActivityHistory
     def history_until: (RootVersionPlan, ?RecordSnapshot?, ?untyped) -> ActivityHistory
+
+    # The range starts before its first version's transaction took effect:
+    # what another transaction saved before it is part of the starting state
+    # if that transaction ended first, and is reported if it ended later. A
+    # range that ends at a version ends before that version's transaction
+    # took effect, so what took effect after it is left out.
+    # : (untyped, Array[ActivityEvent], RootVersionPlan, closes: bool) -> Array[ActivityEvent]
+    def by_transaction_end: (untyped, Array[ActivityEvent], RootVersionPlan, closes: bool) -> Array[ActivityEvent]
 
     # The range's events up to its last root version, or to the instant the
     # live record it closes on was read, with the history they are read from.
@@ -205,19 +220,14 @@ module PaperTrailDiff
     # : (Array[untyped], start_at: untyped, end_at: untyped, reach: bool) -> untyped
     def prepare_history: (Array[untyped], start_at: untyped, end_at: untyped, reach: bool) -> untyped
 
-    # A window collects from where its history starts, which is where the
-    # transactions across its start began; explicit endpoints from their first
-    # version. Explicit endpoints also stop before the rest of the closing
-    # version's transaction (see ActivityTransactionGroups.before_closing); a
-    # window keeps every event it collected and reports only those inside it.
-    # : (Array[untyped], untyped, range_end: untyped) -> Array[ActivityEvent]
-    def collect_events: (Array[untyped], untyped, range_end: untyped) -> Array[ActivityEvent]
-
-    # A window's history starts where the transactions across its start
-    # began. Without one, only root versions are collected, all of them in
-    # the window, so the first of them starts it.
-    # : (untyped) -> untyped
-    def range_start: (untyped) -> untyped
+    # Events are collected from where the history starts, which is where the
+    # transactions across the range's start began. Without a history only
+    # root versions are collected, all of them in the range. Explicit
+    # endpoints also stop before the rest of the closing version's
+    # transaction (see ActivityTransactionGroups.before_closing); a window
+    # keeps every event it collected and reports only those inside it.
+    # : (Array[untyped], untyped, range_end: untyped, closing: untyped) -> Array[ActivityEvent]
+    def collect_events: (Array[untyped], untyped, range_end: untyped, closing: untyped) -> Array[ActivityEvent]
 
     # A version filter reads its answers for a batch's history once, for the
     # first root that history serves.

@@ -56,7 +56,8 @@ module PaperTrailDiff
     # : () -> bool
     def reordered?: () -> bool
 
-    # The same elements in the same order, with keys read as strings.
+    # The same elements in the same order, with keys read as strings and
+    # every NaN alike.
     # : () -> bool
     def empty?: () -> bool
 

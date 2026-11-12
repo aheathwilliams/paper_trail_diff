@@ -11,6 +11,8 @@ module PaperTrailDiff
     # Options only an activity view uses are refused without one.
     #: (activity: bool, snapshots: bool, group: Symbol?, recorded: IgnorePolicy?, ?version_scope: untyped) -> ActivityView
     def self.build(activity:, snapshots:, group:, recorded:, version_scope: nil)
+      Support.boolean!(:activity, activity)
+      Support.boolean!(:snapshots, snapshots)
       view = new(snapshots: snapshots, group: group, recorded: recorded,
                  version_scope: version_scope)
       return view if activity

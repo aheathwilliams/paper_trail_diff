@@ -6,7 +6,9 @@ rebuilds history and what that costs. You do not need it to use the gem.
 ## Two ways to rebuild a timeline
 
 `timeline` and `analyze(activity: true)` return the same root-record steps for
-the same range. They build them differently:
+the same range, except where a transaction crosses a window's edge: `timeline`
+reports each root version where it was saved, and activity on associations
+reports a transaction in the window it ends in. They build them differently:
 
 - `timeline` rebuilds the root record and every chosen association separately
   at each root version. Its cost grows with *root versions × size of the chosen
@@ -82,16 +84,24 @@ began, whatever records it saved. When one was open, the root's versions and
 the history are read once more from there, the whole of it is replayed, and
 the steps of the transactions that end inside the window are reported. A
 window is not read past its end. A transaction that saves inside it and ends
-later is left to the later window, and a timeline reads no version saved
-after its own last one, wherever that version's transaction ended
-(`TransactionEnds#beyond?`): a history holds such versions, as the next one
-of each record after the range, or as part of a batch's history that runs on
-for another root. A range of versions starts before its first version's
-transaction instead (`TransactionCut.range_start`), and so does a whole
-history, read without a window: a version saved before that by another
-transaction took effect before the history began, whenever its transaction
-ended, though a batch's history holds it when another of its roots is older
-(the `floor` of `TransactionEnds`).
+later is left to the later window.
+
+A range of versions, and a whole history read without a window, is read the
+same way. It starts before its first version's transaction
+(`TransactionCut.range_start`), and its history is read from where a
+transaction open there began (`TransactionCut.crossing_start`): what another
+transaction saved before the start is part of the starting state if that
+transaction ended first, and is reported in its own step if it ended later.
+It ends where its last version's transaction takes effect
+(`TransactionCut.range_end`), so what another transaction committed before
+then is read, and the steps of transactions that end after it are left out.
+`compare` reads each version the same way, so one version reads alike as the
+end of one range, the start of the next, and an endpoint of `compare`. A
+destroyed root's tree is read up to where its destruction takes effect, and
+nothing saved there by a transaction that ended later is the root's. Without
+associations no other record is read, so each of the record's versions takes
+effect where it was saved: row locks keep two transactions from interleaving
+one record's versions.
 
 ## When the gem falls back to PT-AT
 

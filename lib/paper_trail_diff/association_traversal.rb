@@ -62,6 +62,15 @@ module PaperTrailDiff
       named_class(type.to_s)
     end
 
+    # The type an `as:` child stores for its owner. Active Record reads only
+    # this one, its owner's polymorphic name, which an STI subclass shares
+    # with its base class; a child typed with a subclass's name is no member.
+    # The declaring class shares the owner's base class, so it names it.
+    #: (untyped) -> String
+    def self.owner_type(reflection)
+      reflection.active_record.polymorphic_name
+    end
+
     # A type left by a renamed or removed model names no class. Active Record
     # and PT-AT raise a bare NameError for it, which does not say where it is.
     #: (untyped, untyped, String) -> untyped

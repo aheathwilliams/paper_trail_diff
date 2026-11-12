@@ -125,6 +125,11 @@ module PaperTrailDiff
     # : (untyped, untyped, untyped, untyped) -> [untyped, untyped]
     def default_range: (untyped, untyped, untyped, untyped) -> [ untyped, untyped ]
 
+    # The current record, or a destroyed one's last version, which a window
+    # also ends at: its history stops at the destroy.
+    # : (untyped) -> untyped
+    def default_end: (untyped) -> untyped
+
     # A window with nothing recorded after its last change ends at the live
     # record, which holds the state that change produced -- whether the window
     # ended a moment ago or long before. Explicit endpoints name their own end.

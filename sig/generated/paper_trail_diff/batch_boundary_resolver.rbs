@@ -5,8 +5,6 @@ module PaperTrailDiff
   # of a model class. Left to the caller this is a per-root lookup, which
   # reintroduces exactly the queries a batched comparison exists to remove.
   class BatchBoundaryResolver
-    BOUNDARIES: untyped
-
     # : (untyped) -> bool
     def self.symbolic?: (untyped) -> bool
 

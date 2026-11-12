@@ -19,6 +19,25 @@ module PaperTrailDiff
     # : (Array[untyped], untyped) -> untyped
     def self.range_start: (Array[untyped], untyped) -> untyped
 
+    # The range then reads as a window from there would (see TransactionEnds):
+    # a transaction open where it starts takes effect where it ends, so what
+    # it saved before is read from where it began, in the version tables of
+    # the model and its paths.
+    # : (untyped, AssociationTraversal, untyped) -> untyped
+    def self.crossing_start: (untyped, AssociationTraversal, untyped) -> untyped
+
+    # A range that ends at a version ends where that version's transaction
+    # takes effect, at the last version it saved (see TransactionEnds), so
+    # what another transaction saved and committed before then is read, and
+    # a destroyed root's tree is read up to its destruction.
+    # : (untyped) -> untyped
+    def self.range_end: (untyped) -> untyped
+
+    # When ranges ending at these versions all end (see range_end): the
+    # latest time any of their transactions takes effect; nil for none.
+    # : (Array[untyped]) -> untyped
+    def self.ends_at: (Array[untyped]) -> untyped
+
     # Each root's first version at or after the start, where a transaction
     # saved it.
     # : (Array[untyped], untyped) -> Array[untyped]

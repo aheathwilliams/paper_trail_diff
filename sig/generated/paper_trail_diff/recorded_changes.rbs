@@ -36,7 +36,8 @@ module PaperTrailDiff
     def ignored_names: () -> Array[String]
 
     # Without the column, or with it left empty for this version, nothing was
-    # recorded. That is not the same answer as a recorded empty changeset.
+    # recorded. That is not the same answer as a recorded empty changeset. A
+    # version need not be an Active Record model, as for compare.
     # : () -> bool
     def recorded?: () -> bool
 
@@ -48,7 +49,14 @@ module PaperTrailDiff
     # Each side is read as a step's diff reads it (see StoredValues), so a
     # value compares equal to the state the change produced. A name the model
     # no longer has, such as a column since dropped, is left out, as a diff
-    # leaves it out.
+    # leaves it out. So is a change whose sides read alike, as a diff compares
+    # them: Rails records a value assigned in another form than the column
+    # keeps, such as a time of day with another date, though the row holds
+    # what it held.
+    # Each side of the changes in the form the database stores it.
+    # : (untyped, Hash[String, untyped]) -> [Hash[String, untyped], Hash[String, untyped]]
+    def stored_sides: (untyped, Hash[String, untyped]) -> [ Hash[String, untyped], Hash[String, untyped] ]
+
     # : (untyped, untyped, Array[String]) -> Hash[String, ValueChange]
     def value_changes: (untyped, untyped, Array[String]) -> Hash[String, ValueChange]
   end

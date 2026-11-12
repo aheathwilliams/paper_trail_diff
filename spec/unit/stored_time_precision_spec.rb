@@ -38,6 +38,13 @@ RSpec.describe PaperTrailDiff::StoredTimePrecision do
     expect(described_class.apply(attributes, nil)).to equal(attributes)
   end
 
+  it 'reads a version class without a table as keeping no JSON column' do
+    columns = model_with_history(object_type: :json).paper_trail.version_class
+
+    expect(described_class.json_column?(columns, 'object')).to be(true)
+    expect(described_class.json_column?(Object.new, 'object')).to be(false)
+  end
+
   it 'reads JSON precision from the version columns or the serializer' do
     original = PaperTrail.serializer
     PaperTrail.serializer = PaperTrail::Serializers::YAML

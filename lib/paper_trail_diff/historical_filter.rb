@@ -74,14 +74,23 @@ module PaperTrailDiff
         raise ConfigurationError, 'historical_filter: must respond to call or be an attribute hash'
       end
 
+      attributes = named_attributes(predicate)
+      attributes.to_h { |name, value| [name, expected(name, value)] }
+    end
+
+    # The attribute hash by name, each named once and on the model.
+    #: (Hash[untyped, untyped]) -> Hash[String, untyped]
+    def named_attributes(predicate)
       attributes = predicate.transform_keys(&:to_s)
-      unknown = attributes.keys - @model.attribute_names
-      if unknown.any?
+      if attributes.length < predicate.length
         raise ConfigurationError,
-              "unknown historical attributes: #{unknown.join(', ')}"
+              'historical_filter: names an attribute twice, as a string and a symbol'
       end
 
-      attributes.to_h { |name, value| [name, expected(name, value)] }
+      unknown = attributes.keys - @model.attribute_names
+      return attributes if unknown.empty?
+
+      raise ConfigurationError, "unknown historical attributes: #{unknown.join(', ')}"
     end
 
     # `where` reads a list or a range as any of its values, which an
@@ -89,7 +98,7 @@ module PaperTrailDiff
     # attribute itself holds one, as a serialized or an array column does.
     #: (String, untyped) -> untyped
     def expected(name, value)
-      cast = cast(name, value)
+      cast = stored(name, value)
       return cast unless SEVERAL.any? { |kind| value.is_a?(kind) } && !cast.is_a?(value.class)
 
       raise ConfigurationError,
@@ -105,6 +114,15 @@ module PaperTrailDiff
     #: (String, untyped) -> untyped
     def cast(name, value)
       @model.type_for_attribute(name).cast(value)
+    end
+
+    # A value cast, then read as history can hold it (see StoredValues), so
+    # that one filter value means the same in a version and in the live row:
+    # JSON history keeps a time to the millisecond, and a column can keep a
+    # value less exactly than Ruby does.
+    #: (String, untyped) -> untyped
+    def stored(name, value)
+      StoredValues.apply(@model, { name => cast(name, value) }).fetch(name)
     end
 
     #: (untyped) -> Integer
@@ -160,7 +178,8 @@ module PaperTrailDiff
     def record_matches?(record)
       return @predicate.call(record) unless @predicate.instance_of?(Hash)
 
-      @predicate.all? { |name, expected| record.attributes.fetch(name) == expected }
+      live = StoredValues.apply(@model, record.attributes)
+      @predicate.all? { |name, expected| live.fetch(name) == expected }
     end
 
     #: (Integer) -> void
@@ -194,7 +213,7 @@ module PaperTrailDiff
                 "historical_filter: #{name} was not recorded in version #{version.id}"
         end
 
-        cast(name, recorded.fetch(name)) == expected
+        stored(name, recorded.fetch(name)) == expected
       end
     end
 

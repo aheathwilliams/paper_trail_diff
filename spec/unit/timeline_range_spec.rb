@@ -225,7 +225,7 @@ RSpec.describe PaperTrailDiff::TimelineRange do
       versions = [saved(1, -2), saved(2, -1, 9), saved(3, 0), saved(4, 1, 9), saved(5, 30, 8),
                   saved(6, 61), saved(7, 62, 8), saved(8, 63)]
       wide = PaperTrailDiff::RootVersionPlan.contiguous(versions)
-      ends = PaperTrailDiff::TransactionEnds.new(versions)
+      ends = PaperTrailDiff::TransactionEnds.new(versions, {})
 
       reported = range(within: window).reporting_plan(wide, ends, context_required: true)
 

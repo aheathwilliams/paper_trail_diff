@@ -33,7 +33,8 @@ module PaperTrailDiff
     def self.json_history?: (untyped) -> bool
 
     # Whether the version table keeps this column as `json` or `jsonb`, which
-    # PaperTrail writes without its serializer.
+    # PaperTrail writes without its serializer. A version that is not an
+    # Active Record model has no table.
     # : (untyped, String) -> bool
     def self.json_column?: (untyped, String) -> bool
 

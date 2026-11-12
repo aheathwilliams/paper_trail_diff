@@ -214,7 +214,8 @@ RSpec.describe 'A record read alone and in a batch',
   # S renames the author before the article exists, R edits the comment, S
   # saves the article and R saves it too. An older article starts the batch's
   # history before S's rename, which began before the article's own history:
-  # the article was created with the author as S had named it.
+  # the article was created with the author as it stood before S, which
+  # renamed it in its own step.
   describe 'a whole history, without a window' do
     def history_of_an_article_created_inside_a_transaction
       author = TrackedAuthor.create!(name: 'old')
@@ -239,7 +240,7 @@ RSpec.describe 'A record read alone and in a batch',
 
       expect(rows(batch)).to eq(rows(single))
       expect(renames(rows(batch)).map { |row| row.values_at(0, 3, 4) })
-        .to eq([[:added, nil, 'new']])
+        .to eq([[:added, nil, 'old'], [:changed, 'old', 'new']])
     end
 
     it 'reads the same without activity' do

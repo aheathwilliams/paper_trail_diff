@@ -598,7 +598,8 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
       expect(kept).to eq(versions.first(2))
     end
 
-    it "reads an `as:` join row's type for each name an owner's rows may hold" do
+    # Active Record asks for the owner's polymorphic name, its base class's.
+    it "keeps an `as:` join row only while its type is the owner's polymorphic name" do
       squad = IndexSpecSquadBoard.create!
       links = %w[IndexSpecSquadBoard IndexSpecBoard IndexSpecTeamBoard IndexSpecPage].map do |type|
         IndexSpecLink.create!(board_id: squad.id, board_type: type)
@@ -607,7 +608,7 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
 
       kept, versions = join_versions(owners, links, through(:held_targets, IndexSpecTeamBoard))
 
-      expect(kept).to eq(versions.first(3))
+      expect(kept).to eq([versions[1]])
     end
 
     it 'keeps a join row of an association to a subclass only while it was of that class' do

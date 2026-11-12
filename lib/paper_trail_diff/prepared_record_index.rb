@@ -64,8 +64,8 @@ module PaperTrailDiff
       attributes = version.object_deserialized
       return unless attributes.is_a?(Hash)
 
-      attributes = Support.decodable(attributes)
-      model_class = reification_class(version, attributes)
+      model_class = reification_class(version, attributes.transform_keys(&:to_s))
+      attributes = Support.decodable(attributes, model_class)
       return unless direct_attributes?(model_class, attributes)
 
       object_attribute_serializer(model_class).deserialize(attributes)
@@ -254,9 +254,8 @@ module PaperTrailDiff
       [chronological, transaction_index(boundary)].compact.min
     end
 
-    # The first version whose transaction ends at or after the boundary's, or
-    # that was saved after the timeline's last version (see
-    # TransactionEnds#beyond?). One record's versions end in the order they
+    # The first version whose transaction ends at or after the boundary's.
+    # One record's versions end in the order they
     # were saved, since a transaction holds a record it saved until it ends;
     # where history says otherwise, a version counts as ending no earlier
     # than those before it.
@@ -266,14 +265,12 @@ module PaperTrailDiff
       target_time = target.created_at
       effective = effective_versions(ends)
       (0...effective.length).bsearch do |index|
-        last = effective.fetch(index)
-        last.nil? || VersionBoundary.at_or_after?(last, target, boundary_time: target_time)
+        VersionBoundary.at_or_after?(effective.fetch(index), target, boundary_time: target_time)
       end
     end
 
     # Where each version takes effect: the last version of its transaction,
-    # or of an earlier version's when that one ends later; nil for a version
-    # saved after the timeline's last, and so for those after it.
+    # or of an earlier version's when that one ends later.
     #: (TransactionEnds) -> Array[untyped]
     def effective_versions(ends)
       held = @effective
@@ -287,11 +284,7 @@ module PaperTrailDiff
     #: (TransactionEnds) -> Array[untyped]
     def placed(ends)
       latest = nil
-      beyond = false
       versions.map do |version|
-        beyond ||= ends.beyond?(version)
-        next if beyond
-
         last = ends.last(version)
         latest = last if latest.nil? || Support.compare_versions(last, latest).positive?
         latest
@@ -362,14 +355,6 @@ module PaperTrailDiff
       missing.each { |id| add_series(model_class, id, versions, live) }
     end
 
-    #: (untyped, Array[untyped], Array[untyped]) -> void
-    def seed(model_class, ids, versions)
-      @version_classes << model_class.paper_trail.version_class
-      grouped = versions.group_by { |version| version.item_id.to_s }
-      live = available_live_records(model_class, ids).to_h { |record| [record.id.to_s, record] }
-      ids.each { |id| add_series(model_class, id, grouped, live) }
-    end
-
     # Where the earliest transaction open at the range's start began, in the
     # version tables of the records held; nil when none was open. See
     # PreparedHistoryLoader.
@@ -386,9 +371,9 @@ module PaperTrailDiff
 
     # Where the transactions of these versions take effect, as their version
     # tables record it (see RecordedTransactionEnds).
-    #: (Array[untyped], ?floor: untyped) -> TransactionEnds
-    def transaction_ends(versions, floor: nil)
-      TransactionEnds.new(versions, @recorded_ends.call(versions) { self.versions }, floor: floor)
+    #: (Array[untyped]) -> TransactionEnds
+    def transaction_ends(versions)
+      TransactionEnds.new(versions, @recorded_ends.call(versions) { self.versions })
     end
 
     #: (untyped, untyped, untyped) -> untyped
@@ -616,8 +601,7 @@ module PaperTrailDiff
   #
   # Nothing is read past a window's end. A transaction that crosses it is
   # placed by its last version, which its version table names (see
-  # RecordedTransactionEnds), and a timeline reads no version saved after its
-  # own last one (see TransactionEnds#beyond?).
+  # RecordedTransactionEnds), so after the window.
   class CrossingTransactions
     #: (Enumerable[untyped], untyped) -> void
     def initialize(version_classes, start)

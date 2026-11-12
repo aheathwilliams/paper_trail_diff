@@ -213,6 +213,14 @@ RSpec.describe PaperTrailDiff::NestedComparator do
         .to include(added: [nil], removed: [Float::INFINITY])
     end
 
+    # Ruby has NaN unequal to itself, but a database stores every NaN as one.
+    it 'counts every NaN as one value, of whatever class' do
+      change = array_change([Float::NAN, 1, BigDecimal('NaN')], [1, BigDecimal('NaN'), 0.0 / 0.0])
+
+      expect(change.to_h).to include(added: [], removed: [], reordered: true)
+      expect(array_change([Float::NAN], [nil]).to_h).to include(added: [nil])
+    end
+
     # Each element is counted once, rather than searched for among the
     # others, which took a minute for two arrays of 16,000 objects.
     it 'compares long arrays of objects in time that grows with their length' do

@@ -83,6 +83,55 @@ project follows [Semantic Versioning](https://semver.org/).
   target to request the path. Versions saved before then recorded no owner,
   so a record that left before then is still not reported.
 
+- A version now reads alike wherever it is used: as an endpoint of
+  `compare`, and as the start or the end of a range. Each reads the records
+  around it as they stood before every transaction that had not ended where
+  the version's own took effect, as windows already did. A range starts
+  before its first version's transaction took effect and ends where its last
+  version's took effect: what another transaction saved before the start is
+  in the starting state if that transaction ended first, and reported in its
+  own step if it ended later. `compare` used to read a version by when the
+  records around it were saved, and `from:` used to count everything saved
+  before it as settled. So two ranges that meet at a version now report each
+  change once, as the range over both does, and a range from a version
+  inside a transaction no longer reports another transaction's finished
+  change as its own. A read with associations of a range of versions runs one
+  more statement per version table, to find a transaction open at its start,
+  and one more to find where its last version's transaction ended.
+- A destroyed record's history ends where its destruction took effect. A
+  window holding the destruction reports it even when another transaction
+  that saved in the tree before it ends later, and a change another
+  transaction committed in the tree before the destroying one ended is
+  reported in the window it ended in.
+- Activity on the record alone, without associations, reports each version
+  where it was saved, as `timeline` does and as the reference said. A window
+  edge between two saves of one transaction no longer loses the first.
+- With associations, `version_scope:` selects a record in `analyze_scope`
+  and `report` whenever its activity reports something: a version selects it
+  when the filter keeps any version of its transaction, as activity keeps
+  whole transactions.
+- Values are compared in the form the database stores them, as the history
+  stores them: times to the column's precision (to 1/300 s on a SQL Server
+  `datetime`), MySQL `float` to single precision, SQLite decimals as the
+  numbers SQLite returns, and fixed-width `char` columns padded or stripped as
+  the database does. A record saved with a value the database rounds no
+  longer shows a change against its own version. `historical_filter:`
+  compares its expected values in the same form.
+- A time of day reads in `ActiveRecord.default_timezone`, as Active Record
+  stores it, including one stored as JSON text with a date and an offset.
+- Errors are raised up front with the gem's own classes: `analyze_scope` and
+  `report` on a model without PaperTrail raise `InvalidEndpointError`, and a
+  version class without an `object` column `ConfigurationError`;
+  `compare_many` with an unknown boundary symbol raises
+  `InvalidTimelineRangeError`; `version_scope:` is checked where it is given,
+  and must take the relation as its one argument and return it narrowed, or
+  an array of its versions; `report(since:)` must be a time, date or string;
+  boolean options must be `true` or `false`; a root with unsaved changes is
+  refused; a version loaded without `object` is refused; and a relation that
+  selects columns without the primary key raises `ConfigurationError`.
+- `historical_filter:` refuses an attribute named twice, as a string and a
+  symbol.
+
 ### Fixed
 
 - Comparing a JSON array that holds a BigDecimal NaN or infinity no longer
@@ -322,6 +371,27 @@ project follows [Semantic Versioning](https://semver.org/).
   the join row by its destroy alone, where it was on the root, so the change
   appeared in both halves. A join row's versions in one transaction are now
   judged by the whole transaction, wherever a window's edge falls in it.
+- A destroyed record read without `within:` ends at its last version,
+  instead of raising.
+- A NaN stored on both sides no longer reads as a change, in attributes,
+  nested JSON, arrays and recorded changes.
+- `recorded_changes: true` keeps a serialized hash's symbol keys, reads
+  versions of a custom class without `object_changes`, and leaves out a
+  change whose two sides are the same.
+- `analyze_many` and `analyze_scope` read a root that stands in another
+  root's tree as `analyze` does when the roots are of two STI classes of one
+  table, and a windowed batch reads such a root at its state in the window,
+  not from its current row.
+- A `belongs_to` naming an STI subclass reads no row of a sibling class, and
+  an `as:` child is a member only while its type is its owner's polymorphic
+  name, as Active Record reads them.
+- A `has_many :through` with `source_type:` and a path below it descends only
+  into targets of that type, instead of raising for another type's.
+- A `has_many :through` join row created and destroyed in one transaction is
+  no longer read as present, in another transaction's step or at the end of
+  a window.
+- The end boundary of a window's last step no longer depends on which other
+  roots are in a batch.
 
 ## [0.17.1] - 2026-11-07
 

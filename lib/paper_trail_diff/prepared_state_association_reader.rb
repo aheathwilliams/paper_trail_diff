@@ -58,7 +58,15 @@ module PaperTrailDiff
                                 @conditions.call(reflection, model_class, ranked: ranked)
 
       handled, state = @records.snapshot_state_before(model_class, id, boundary)
-      [handled, state && in_scope?(state, reflection, ranked, model_class) ? [state] : []]
+      [handled, state && target?(state, reflection, ranked, model_class) ? [state] : []]
+    end
+
+    # A target class that is an STI subclass reads no sibling's row, as Active
+    # Record's type condition reads none.
+    #: (PreparedRecordState, untyped, bool, untyped) -> bool
+    def target?(state, reflection, ranked, model_class)
+      AssociationTraversal.sti_member?(model_class, state.attributes) &&
+        in_scope?(state, reflection, ranked, model_class)
     end
 
     # The members of each join record the owner had at the boundary, as
@@ -124,7 +132,7 @@ module PaperTrailDiff
           handled, child = @records.snapshot_state_before(group.fetch(:model), id, boundary)
           return [false, []] unless handled
 
-          selected << child if child && member?(child, owner, owner_id, reflection, condition)
+          selected << child if child && member?(child, owner_id, reflection, condition)
         end
       end
       return [true, selected] unless ranked
@@ -139,27 +147,24 @@ module PaperTrailDiff
       owners ? owners.fetch(owner_id, empty) : group.fetch(:ids)
     end
 
-    #: (PreparedRecordState, PreparedRecordState, String, untyped, ScopeCondition) -> bool
-    def member?(child, owner, owner_id, reflection, condition)
+    #: (PreparedRecordState, String, untyped, ScopeCondition) -> bool
+    def member?(child, owner_id, reflection, condition)
       attributes = child.attributes
-      return false unless attributes[reflection.foreign_key.to_s].to_s == owner_id
-      return false unless AssociationTraversal.sti_member?(reflection.klass, attributes)
-      return false unless condition.matches?(attributes)
-      return true unless reflection.options[:as]
+      attributes[reflection.foreign_key.to_s].to_s == owner_id &&
+        AssociationTraversal.sti_member?(reflection.klass, attributes) &&
+        condition.matches?(attributes) && owner_typed?(attributes, reflection)
+    end
 
-      matching_type?(child, owner.model_class, reflection)
+    # An `as:` child names its owner by type as well.
+    #: (Hash[String, untyped], untyped) -> bool
+    def owner_typed?(attributes, reflection)
+      !reflection.options[:as] ||
+        AssociationTraversal.owner_type(reflection) == attributes[reflection.type.to_s].to_s
     end
 
     #: (PreparedRecordState) -> String
     def owner_id(owner)
       owner.attributes[owner.model_class.primary_key].to_s
-    end
-
-    #: (PreparedRecordState, untyped, untyped) -> bool
-    def matching_type?(child, model, reflection)
-      types = [model.name, model.base_class.name,
-               reflection.active_record.name]
-      types.include?(child.attributes[reflection.type.to_s].to_s)
     end
   end
 end

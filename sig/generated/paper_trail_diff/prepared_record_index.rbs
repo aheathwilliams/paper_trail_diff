@@ -141,9 +141,8 @@ module PaperTrailDiff
     # : (untyped) -> Integer?
     def boundary_index: (untyped) -> Integer?
 
-    # The first version whose transaction ends at or after the boundary's, or
-    # that was saved after the timeline's last version (see
-    # TransactionEnds#beyond?). One record's versions end in the order they
+    # The first version whose transaction ends at or after the boundary's.
+    # One record's versions end in the order they
     # were saved, since a transaction holds a record it saved until it ends;
     # where history says otherwise, a version counts as ending no earlier
     # than those before it.
@@ -151,8 +150,7 @@ module PaperTrailDiff
     def effective_index: (untyped, TransactionEnds) -> Integer?
 
     # Where each version takes effect: the last version of its transaction,
-    # or of an earlier version's when that one ends later; nil for a version
-    # saved after the timeline's last, and so for those after it.
+    # or of an earlier version's when that one ends later.
     # : (TransactionEnds) -> Array[untyped]
     def effective_versions: (TransactionEnds) -> Array[untyped]
 
@@ -177,9 +175,6 @@ module PaperTrailDiff
     # : (untyped, Array[untyped]) -> void
     def load: (untyped, Array[untyped]) -> void
 
-    # : (untyped, Array[untyped], Array[untyped]) -> void
-    def seed: (untyped, Array[untyped], Array[untyped]) -> void
-
     # Where the earliest transaction open at the range's start began, in the
     # version tables of the records held; nil when none was open. See
     # PreparedHistoryLoader.
@@ -196,8 +191,8 @@ module PaperTrailDiff
 
     # Where the transactions of these versions take effect, as their version
     # tables record it (see RecordedTransactionEnds).
-    # : (Array[untyped], ?floor: untyped) -> TransactionEnds
-    def transaction_ends: (Array[untyped], ?floor: untyped) -> TransactionEnds
+    # : (Array[untyped]) -> TransactionEnds
+    def transaction_ends: (Array[untyped]) -> TransactionEnds
 
     # : (untyped, untyped, untyped) -> untyped
     def record_before: (untyped, untyped, untyped) -> untyped
@@ -334,8 +329,7 @@ module PaperTrailDiff
   #
   # Nothing is read past a window's end. A transaction that crosses it is
   # placed by its last version, which its version table names (see
-  # RecordedTransactionEnds), and a timeline reads no version saved after its
-  # own last one (see TransactionEnds#beyond?).
+  # RecordedTransactionEnds), so after the window.
   class CrossingTransactions
     # : (Enumerable[untyped], untyped) -> void
     def initialize: (Enumerable[untyped], untyped) -> void

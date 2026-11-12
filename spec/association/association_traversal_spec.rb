@@ -210,6 +210,15 @@ RSpec.describe PaperTrailDiff::AssociationTraversal do
     end
   end
 
+  describe '.owner_type' do
+    # An STI subclass shares its base class's polymorphic name.
+    it "is the polymorphic name of the association's owner" do
+      owner = class_double(TrackedArticle, polymorphic_name: 'TrackedArticle', name: 'Featured')
+
+      expect(described_class.owner_type(double(active_record: owner))).to eq('TrackedArticle')
+    end
+  end
+
   describe '.sti_member?' do
     it 'takes every row for a base class' do
       expect(described_class.sti_member?(PreparedDocument, 'type' => 'PreparedSpecialDocument'))
