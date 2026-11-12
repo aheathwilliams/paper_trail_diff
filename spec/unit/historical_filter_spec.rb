@@ -415,11 +415,11 @@ RSpec.describe PaperTrailDiff::HistoricalFilter do
   # A plain model's recorded state is read as stored. One whose values only a
   # record can read is rebuilt as PaperTrail rebuilds it.
   describe 'a model whose recorded state only a record can read' do
-    def model(name, &body)
+    def model(name, versions: 'FilterVersion', &body)
       stub_const(name, Class.new(ActiveRecord::Base) do
         self.table_name = 'filter_articles'
         self.inheritance_column = nil
-        has_paper_trail versions: { class_name: 'FilterVersion' }
+        has_paper_trail versions: { class_name: versions }
         class_eval(&body)
       end)
     end
@@ -453,13 +453,59 @@ RSpec.describe PaperTrailDiff::HistoricalFilter do
     end
 
     it 'matches a model with an encrypted attribute by its decrypted value' do
-      ActiveRecord::Encryption.configure(primary_key: 'p' * 32, deterministic_key: 'd' * 32,
-                                         key_derivation_salt: 's' * 32)
-      encrypted = model('FilterEncrypted') { encrypts :title }
-
       expect(held(encrypted, { title: 'Draft' }).length).to eq(1)
       expect(held(encrypted, { views: 0 }).length).to eq(1)
       expect(held(encrypted, { title: 'Other' })).to eq([])
+    end
+
+    def encrypted(name = 'FilterEncrypted', **options, &body)
+      ActiveRecord::Encryption.configure(primary_key: 'p' * 32, deterministic_key: 'd' * 32,
+                                         key_derivation_salt: 's' * 32)
+      model(name, **options) do
+        encrypts :title
+        class_eval(&body) if body
+      end
+    end
+
+    # Rebuilt apart from the live record, which is read once, not per version.
+    it 'rebuilds each state without reading the live record for it' do
+      record, = history(encrypted)
+      selects, = queries do
+        filter({ title: 'Draft' }, model: record.class).call([record.id.to_s])
+      end
+
+      expect(selects.grep(/FROM .filter_articles/).length).to eq(1)
+    end
+
+    it 'reads a rebuilt attribute as stored, not through its reader' do
+      shouted = encrypted('FilterShouted') { define_method(:title) { super().upcase } }
+
+      expect(held(shouted, { title: 'Draft' }).length).to eq(1)
+    end
+
+    # PaperTrail's YAML may read a recorded state back as any kind of Hash.
+    it 'rebuilds a state read back as a kind of Hash' do
+      stub_const('FilterIndifferentVersion', Class.new(FilterVersion) do
+        def object_deserialized = super&.with_indifferent_access
+      end)
+      indifferent = encrypted('FilterIndifferent', versions: 'FilterIndifferentVersion')
+
+      expect(held(indifferent, { title: 'Draft' }).length).to eq(1)
+    end
+
+    it 'reads a plain model as stored, without rebuilding it' do
+      allow(PaperTrailDiff::Support).to receive(:reify).and_call_original
+
+      expect(held(model('FilterPlain') { nil }, { title: 'Draft' }).length).to eq(1)
+      expect(PaperTrailDiff::Support).not_to have_received(:reify)
+    end
+
+    it 'rejects an attribute a rebuilt record holds that its versions did not record' do
+      skipping = encrypted('FilterEncryptedSkipping') { paper_trail_options[:skip] = ['views'] }
+      record, = history(skipping)
+
+      expect { filter({ views: 0 }, model: skipping).call([record.id.to_s]) }
+        .to raise_error(PaperTrailDiff::ConfigurationError, /views was not recorded in version/)
     end
 
     it 'still rejects an attribute its versions did not record' do
@@ -482,6 +528,24 @@ RSpec.describe PaperTrailDiff::HistoricalFilter do
           /historical_filter: #{predicate.keys.first} takes one value.*use a callable/
         )
       end
+    end
+
+    it 'refuses a kind of list as a list' do
+      titles = stub_const('FilterTitles', Class.new(Array))
+
+      expect { filter({ title: titles.new(['Draft']) }) }
+        .to raise_error(PaperTrailDiff::ConfigurationError, /takes one value, not filtertitles/)
+    end
+
+    it 'keeps a list where the attribute casts it to a kind of list' do
+      tags = stub_const('FilterTags', Class.new(Array))
+      type = Class.new(ActiveModel::Type::Value) { define_method(:cast) { |value| tags.new(value) } }
+      tagged = Class.new(ActiveRecord::Base) do
+        self.table_name = 'filter_events'
+        attribute :labels, type.new
+      end
+
+      expect { filter({ labels: %w[a] }, model: tagged) }.not_to raise_error
     end
 
     it 'keeps a list as the value of an attribute that holds one' do

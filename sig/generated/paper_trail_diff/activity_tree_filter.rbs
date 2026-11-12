@@ -68,9 +68,10 @@ module PaperTrailDiff
     # The events each snapshot judges, by the snapshot's position, the one
     # after the last event being what the range closes on: an event is judged
     # by the snapshots at the first event and the root events of its
-    # transaction, and by the one after its last event.
-    # : (Array[[ActivityEvent, RecordSnapshot?]], Array[bool]) -> Array[Array[Integer]]
-    def judged: (Array[[ ActivityEvent, RecordSnapshot? ]], Array[bool]) -> Array[Array[Integer]]
+    # transaction, and by the one after its last event. An event kept
+    # already is not asked about again (see #kept).
+    # : (Array[[ActivityEvent, RecordSnapshot?]]) -> Array[Array[Integer]]
+    def judged: (Array[[ ActivityEvent, RecordSnapshot? ]]) -> Array[Array[Integer]]
 
     # Where each event's transaction starts, and the position just past its
     # last event. Two transactions can interleave, so a transaction's events

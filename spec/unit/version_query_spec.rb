@@ -67,4 +67,20 @@ RSpec.describe PaperTrailDiff::VersionQuery do
     expect(articles.where(described_class.no_earlier_version(table, &updates)))
       .to contain_exactly(created, reviewed, other_created, other_reviewed)
   end
+
+  # An item created after the time, by the first of its versions.
+  it 'tells which items were created after a time, with no version before their create' do
+    rows = [['FilterArticle', 1, 'create', 2], ['FilterArticle', 2, 'create', 1],
+            ['FilterArticle', 3, 'update', 1], ['FilterArticle', 3, 'create', 2],
+            ['FilterArticle', 4, 'update', 2], ['FilterNote', 2, 'create', 2]]
+    FilterVersion.insert_all(rows.map do |type, id, event, minute|
+      { item_type: type, item_id: id, event: event, created_at: start_time + (minute * 60) }
+    end)
+    table = FilterVersion.arel_table
+    created = described_class.created_after(table, table[:item_type], table[:item_id],
+                                            start_time + 90)
+
+    expect(FilterVersion.where(created).distinct.pluck(:item_type, :item_id))
+      .to contain_exactly(['FilterArticle', 1], ['FilterNote', 2])
+  end
 end

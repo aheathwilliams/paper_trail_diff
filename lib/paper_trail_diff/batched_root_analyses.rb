@@ -51,9 +51,11 @@ module PaperTrailDiff
       range = @time_range
       plans = @planner.call(records, range)
       reach = prepare_history(records, plans, loaded, range, reach: !range.nil?)
-      return plans unless reach && range
+      return plans unless reach
 
-      range = range.widened(reach)
+      # Only a window is asked how far back it reaches.
+      window = range #: TimeRange
+      range = window.widened(reach)
       plans = @planner.call(records, range) if @activity
       prepare_history(records, plans, loaded, range, reach: false)
       plans

@@ -106,9 +106,10 @@ module PaperTrailDiff
     end
 
     # The events of the event's transaction, in the order they are replayed.
+    # The event is in a transaction with others.
     #: (ActivityEvent) -> Array[ActivityEvent]
     def events_for(event)
-      @groups.fetch(transaction_key(event)) { [event] }
+      @groups.fetch(transaction_key(event))
     end
 
     # An event outside a transaction, or in one it was not given, keeps its

@@ -337,8 +337,8 @@ module PaperTrailDiff
   # RecordedTransactionEnds), and a timeline reads no version saved after its
   # own last one (see TransactionEnds#beyond?).
   class CrossingTransactions
-    # : (Array[untyped], untyped) -> void
-    def initialize: (Array[untyped], untyped) -> void
+    # : (Enumerable[untyped], untyped) -> void
+    def initialize: (Enumerable[untyped], untyped) -> void
 
     # Where the transactions open at `start` began, in these version tables;
     # nil when none is open, or without a start.
@@ -350,8 +350,8 @@ module PaperTrailDiff
     # : (Array[String], untyped) -> untyped
     def self.open_among: (Array[String], untyped) -> untyped
 
-    # The same, in the version tables of a root and of the first record on
-    # each requested path.
+    # The same, in the version tables of a root model and of the records on
+    # its requested paths.
     # : (untyped, AssociationTraversal, untyped) -> untyped
     def self.open_around: (untyped, AssociationTraversal, untyped) -> untyped
 
@@ -362,7 +362,7 @@ module PaperTrailDiff
 
     @start: untyped
 
-    @version_classes: Array[untyped]
+    @version_classes: Enumerable[untyped]
 
     # When the earliest transaction open at the start began in this table.
     # : (untyped) -> untyped
@@ -370,13 +370,13 @@ module PaperTrailDiff
 
     # The versions saved before the start by a transaction that saved one
     # from it onward.
-    # : (untyped, TransactionCut::Edge) -> untyped
-    def earlier: (untyped, TransactionCut::Edge) -> untyped
+    # : (untyped) -> untyped
+    def earlier: (untyped) -> untyped
 
     # The versions saved from the start onward that were not the first of
     # their transaction, of the transactions no anchor separates from it.
-    # : (untyped, TransactionCut::Edge) -> untyped
-    def later: (untyped, TransactionCut::Edge) -> untyped
+    # : (untyped) -> untyped
+    def later: (untyped) -> untyped
 
     # Whether the table's ids can number its transactions, as they do unless
     # the two columns differ in type.

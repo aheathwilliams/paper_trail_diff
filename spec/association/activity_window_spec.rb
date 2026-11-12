@@ -6,7 +6,8 @@ require_relative '../support/association_database'
 # it, it closes on a final destroy or on the live row, and its analysis ends
 # where it closes.
 RSpec.describe 'Activity over a window',
-               mutant_expression: 'PaperTrailDiff::ActivityTimelineBuilder' do
+               mutant_expression: %w[PaperTrailDiff::ActivityTimelineBuilder
+                                     PaperTrailDiff::TimelineRange] do
   before do
     PaperTrail::VersionAssociation.delete_all
     PaperTrail::Version.delete_all

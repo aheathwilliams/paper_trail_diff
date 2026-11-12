@@ -20,9 +20,6 @@ module PaperTrailDiff
     # Column kinds (ExactColumnType) whose values compare for equality in
     # Ruby as the database compares them.
     COMPARABLE_KINDS = %i[integer boolean text].freeze
-    # Kinds compared, where they sort in Ruby as in SQL (ScopeRanking), as the
-    # values they sort by.
-    TEMPORAL_KINDS = %i[date datetime].freeze
 
     # Raised while reading a node that has no exact plain-Ruby reading.
     class Unreadable < StandardError; end
@@ -183,7 +180,7 @@ module PaperTrailDiff
 
       keys = Array(@model_class.primary_key)
       records.min_by(1) do |record|
-        keys.map { |key| Support.sortable_identity('', record.attributes[key]).last }
+        keys.map { |key| record.attributes.fetch(key) }
       end
     end
 
@@ -220,12 +217,12 @@ module PaperTrailDiff
     # true, false, or nil for unknown.
     #: (Array[untyped], Hash[String, untyped]) -> bool?
     def evaluate(predicate, attributes)
-      operator, first, second, sorted = predicate
+      operator, first, second = predicate
       case operator
       when :and then all(first.map { |part| evaluate(part, attributes) })
       when :or then any(first.map { |part| evaluate(part, attributes) })
       when :not then negate(evaluate(first, attributes))
-      else COMPARISONS.fetch(operator).call(stored(first, attributes, sorted), second)
+      else COMPARISONS.fetch(operator).call(stored(first, attributes), second)
       end
     end
 
@@ -250,16 +247,13 @@ module PaperTrailDiff
       !value unless value.nil?
     end
 
-    # The form the database holds, as the scope's own values were cast. An
-    # order, and any comparison of a date or a time, reads the value the
-    # database sorts by instead: SQL Server holds a time or date in a wrapper
-    # that only compares for equality, and history may hold either as text.
-    #: (String, Hash[String, untyped], bool?) -> untyped
-    def stored(name, attributes, sorted)
-      value = attributes[name]
-      return ScopeRanking.sort_value(@model_class, name, value) if sorted
-
-      @model_class.type_for_attribute(name).serialize(value)
+    # The value the database compares and sorts by, as the scope's own
+    # values were read (see ScopeRanking.sort_value): SQL Server holds a time
+    # or date in a wrapper that only compares for equality, and history may
+    # hold either as text.
+    #: (String, Hash[String, untyped]) -> untyped
+    def stored(name, attributes)
+      ScopeRanking.sort_value(@model_class, name, attributes[name])
     end
 
     # Builds each reflection's condition once per target class.
@@ -359,7 +353,7 @@ module PaperTrailDiff
         expected = value(node)
         raise Unreadable if expected.nil?
 
-        [operator, name, sort_value(name, expected), true]
+        [operator, name, sort_value(name, expected)]
       end
 
       # A bound in the form the database holds, read back as the value the
@@ -374,7 +368,7 @@ module PaperTrailDiff
       #: (Symbol, untyped) -> Array[untyped]
       def binary(operator, node)
         expected = value(node.right)
-        return [operator, column(node.left, null_test: true), nil] if expected.nil?
+        return [operator, column(node.left, null_test: true)] if expected.nil?
 
         compared(operator, node.left, expected) { |name| sort_value(name, expected) }
       end
@@ -399,21 +393,18 @@ module PaperTrailDiff
         expected.include?(nil) ? [:or, []] : comparison
       end
 
-      # A date, or a time history holds as it was stored, is compared as the
-      # value it sorts by, which the block reads from the expected one.
+      # A column that sorts in Ruby as in SQL (ScopeRanking) is compared as
+      # the value it sorts by, which the block reads from the expected one: a
+      # date, or a time history holds as it was stored, can be held as text.
       #: (Symbol, untyped, untyped) { (String) -> untyped } -> Array[untyped]
       def compared(operator, attribute, expected)
-        return [operator, column(attribute), expected] unless temporal?(attribute)
-
-        name = attribute.name
-        [operator, name, yield(name), true]
-      end
-
-      #: (untyped) -> bool
-      def temporal?(attribute)
         name = ScopeRanking.own_column(attribute, @model_class)
-        TEMPORAL_KINDS.include?(ExactColumnType.kind(@model_class, name)) &&
-          ScopeRanking.orderable?(@model_class, name)
+        if ScopeRanking.orderable?(@model_class, name)
+          orderable = name #: String
+          [operator, orderable, yield(orderable)]
+        else
+          [operator, column(attribute), expected]
+        end
       end
 
       # Ruby comparison stands in for SQL only on the record's own column of

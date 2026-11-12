@@ -83,7 +83,8 @@ module PaperTrailDiff
 
     # The roots with a version of their own in the window. Those without a
     # row are found in the database too (see Query#missing), not by comparing
-    # two plucked lists.
+    # two plucked lists. Only the related queries' types are compared, so
+    # this one names none.
     # : () -> AssociationActivitySelection::Query
     def changed_roots: () -> AssociationActivitySelection::Query
 
@@ -145,8 +146,8 @@ module PaperTrailDiff
     def selected_records: (Array[untyped]) -> Array[untyped]
 
     # Pages are read by offset, so under a total order.
-    # : (Array[untyped]) -> untyped
-    def candidate_relation: (Array[untyped]) -> untyped
+    # : (*untyped) -> untyped
+    def candidate_relation: (*untyped) -> untyped
 
     # : (untyped, Integer) -> Array[untyped]
     def record_page: (untyped, Integer) -> Array[untyped]

@@ -10,29 +10,6 @@ module PaperTrailDiff
   # window does not move: it reports the transactions that end inside it
   # (see TransactionEnds and CrossingTransactions).
   module TransactionCut
-    # An instant that a transaction can cross. A strict edge keeps versions recorded at its
-    # instant on the left, as an inclusive end does. A plain class rather than
-    # Data.define, which arrived in Ruby 3.2 while this gem supports 3.1.
-    class Edge
-      # A history's start at an instant, which keeps versions recorded at it
-      # on the right.
-      # : (Time) -> Edge
-      def self.start_at: (Time) -> Edge
-
-      # : (Time, bool) -> void
-      def initialize: (Time, bool) -> void
-
-      # : (untyped) -> untyped
-      def left: (untyped) -> untyped
-
-      # : (untyped) -> untyped
-      def right: (untyped) -> untyped
-
-      @strict: bool
-
-      @time: Time
-    end
-
     # A range starting at a version starts before that version's transaction,
     # as PT-AT reads associations there. A version saved earlier in the same
     # transaction, such as the child update behind a `touch: true` parent
@@ -47,15 +24,10 @@ module PaperTrailDiff
     # : (Array[untyped], untyped) -> Array[untyped]
     def self.opening_versions: (Array[untyped], untyped) -> Array[untyped]
 
-    # Where the transactions of these versions, saved after the edge, began,
-    # for those that saved a version before it. Of transactions that share a
-    # number, only the one each version is in counts (see TransactionAnchors).
-    # : (untyped, Array[untyped], Edge) -> Hash[untyped, Time]
-    def self.continued_starts: (untyped, Array[untyped], Edge) -> Hash[untyped, Time]
-
-    # The earliest version before the edge of each transaction the block
-    # picks from these versions, one statement per 500 of them.
-    # : (untyped, Array[untyped], Edge) { (Array[untyped], untyped) -> untyped } -> Hash[untyped, Time]
-    def self.began: (untyped, Array[untyped], Edge) { (Array[untyped], untyped) -> untyped } -> Hash[untyped, Time]
+    # When the earliest of the transactions of these versions began. Of
+    # transactions that share a number, only the one each version is in
+    # counts (see TransactionAnchors).
+    # : (Array[untyped], untyped) -> untyped
+    def self.transaction_start: (Array[untyped], untyped) -> untyped
   end
 end

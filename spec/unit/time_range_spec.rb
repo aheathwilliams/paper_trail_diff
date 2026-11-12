@@ -95,6 +95,54 @@ RSpec.describe PaperTrailDiff::TimeRange do
 
   # Read in the server's own zone, the same window covered different hours
   # on different servers.
+  # Active Record cuts a bound time to the precision of the column it is
+  # compared with, so a window cuts its edges as its version tables keep
+  # times: the coarsest of them, and microseconds at the finest.
+  describe '.for' do
+    let(:fine) { start_time + Rational(123_456_789, 1_000_000_000) }
+
+    def stored(version_class, precision)
+      type = ActiveModel::Type::DateTime.new(precision: precision)
+      allow(version_class).to receive(:type_for_attribute).and_call_original
+      allow(version_class).to receive(:type_for_attribute).with('created_at').and_return(type)
+    end
+
+    def cut(*models) = described_class.for(fine.., models).begin_time
+
+    it 'keeps microseconds for a table that keeps them, or names no precision, or more' do
+      [6, nil, 9].each do |precision|
+        stored(FilterVersion, precision)
+        expect(cut(FilterArticle)).to eq(start_time + Rational(123_456, 1_000_000))
+      end
+    end
+
+    it 'cuts to the coarsest table of versioned models, leaving out the others' do
+      stored(FilterVersion, 0)
+      stored(FilterJsonVersion, 3)
+
+      expect(cut(FilterArticle, FilterJsonEvent, String)).to eq(start_time)
+      expect(cut(FilterJsonEvent, FilterArticle)).to eq(start_time)
+      expect(cut(FilterJsonEvent, String)).to eq(start_time + Rational(123, 1000))
+      expect(cut(String)).to eq(start_time + Rational(123_456, 1_000_000))
+    end
+  end
+
+  describe '#widened' do
+    it 'starts at an earlier start, keeping its end, how it ends, and its digits' do
+      earlier = start_time - 60
+      exclusive = described_class.new(start_time...end_time, digits: 3)
+      widened = exclusive.widened(earlier + Rational(1_234, 10_000))
+
+      expect(widened.to_range).to eq((earlier + Rational(123, 1_000))...end_time)
+      expect(described_class.new(start_time..end_time).widened(earlier).to_range)
+        .to eq(earlier..end_time)
+      expect(described_class.new(start_time..,
+                                 digits: 3).widened(earlier + Rational(1_234, 10_000)).to_range)
+        .to eq((earlier + Rational(123, 1_000))..)
+      expect(exclusive.widened(start_time + 1).to_range).to eq(start_time...end_time)
+    end
+  end
+
   describe 'dates and text' do
     def in_zone(name, &)
       Time.use_zone(name, &)

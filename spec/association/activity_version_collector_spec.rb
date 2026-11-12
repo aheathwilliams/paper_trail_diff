@@ -284,14 +284,17 @@ RSpec.describe PaperTrailDiff::ActivityVersionCollector do
   # order versions saved at one time.
   it 'refuses events it cannot order' do
     article = TrackedArticle.create!(title: 'Tied')
-    tied = %w[versions comments].each_with_index.map do |table, index|
+    version = lambda do |table, id, seconds|
       Struct.new(:id, :created_at, :item_type, :item_id) do
         define_singleton_method(:table_name) { table }
-      end.new(index + 1, Time.utc(2026, 1, 1), 'TrackedArticle', article.id)
+      end.new(id, Time.utc(2026, 1, 1) + seconds, 'TrackedArticle', article.id)
     end
-    collector = described_class.new(article, root_versions: tied,
+    tied = [version.call('versions', 1, 0), version.call('comments', 2, 0)]
+    later = version.call('versions', 3, 1)
+    # Given out of order, the tie is found once they are in order.
+    collector = described_class.new(article, root_versions: [tied.first, later, tied.last],
                                              traversal: traversal([]),
-                                             range_start: tied.first, range_end: tied.last,
+                                             range_start: tied.first, range_end: later,
                                              prepared: nil)
 
     expect { collector.call }.to raise_error(

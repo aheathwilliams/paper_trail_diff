@@ -28,6 +28,10 @@ RSpec.describe PaperTrailDiff::CrossingTransactions do
 
   def reach(tables: [FilterVersion]) = described_class.reach(tables, start)
 
+  def quoted(column) = FilterVersion.connection.quote_table_name("filter_versions.#{column}")
+
+  def own_number = "#{quoted(:id)} != #{quoted(:transaction_id)}"
+
   def statements(&)
     queries = []
     counter = ->(*, payload) { queries << payload[:sql] unless payload[:name] == 'SCHEMA' }
@@ -55,7 +59,8 @@ RSpec.describe PaperTrailDiff::CrossingTransactions do
     it 'finds none when no transaction saved on both sides of the start, or without a start' do
       expect(reach).to be_nil
       version(0, 8, item_id: 2)
-      expect(described_class.reach([FilterVersion], nil)).to be_nil
+      expect(statements { expect(described_class.reach([FilterVersion], nil)).to be_nil })
+        .to eq([])
     end
 
     it 'reads each version table for its own transactions' do
@@ -65,6 +70,9 @@ RSpec.describe PaperTrailDiff::CrossingTransactions do
 
       expect(reach(tables: [FilterVersion, FilterJsonVersion])).to eq(at(-3))
       expect(reach(tables: [])).to be_nil
+      version(0, 8, item_id: 2)
+      expect(reach(tables: [FilterJsonVersion, FilterVersion])).to eq(at(-4))
+      expect(reach(tables: [FilterVersion, FilterJsonVersion])).to eq(at(-4))
     end
 
     it 'reads each table in one statement, however many transactions are open' do
@@ -80,13 +88,50 @@ RSpec.describe PaperTrailDiff::CrossingTransactions do
                             transaction_id: 7, created_at: at(1))
 
       expect(reach).to be_nil
+      expect(statements { reach }.first).to include(own_number)
+    end
+
+    # Ids of another type, or none, cannot number a transaction.
+    it 'looks up every version when the ids cannot number transactions' do
+      [nil, 'item_type'].each do |key|
+        keyed = Class.new(FilterVersion) { self.primary_key = key }
+        version(1, 7, item_id: 2)
+
+        expect(reach(tables: [keyed])).to eq(at(-2))
+        expect(statements { reach(tables: [keyed]) }.first)
+          .not_to include("!= #{quoted(:transaction_id)}")
+      end
     end
 
     it 'reads the models that PaperTrail tracks, by name' do
       version(0, 8, item_id: 2)
 
       expect(described_class.open_among(%w[FilterArticle String], start)).to eq(at(-4))
+      expect(statements { described_class.open_among(%w[FilterArticle FilterArticle], start) }
+        .length).to eq(1)
     end
+
+    it 'reads nothing of a version table without transactions' do
+      untracked = Class.new(FilterVersion) { def self.column_names = super - ['transaction_id'] }
+      version(0, 8, item_id: 2)
+
+      expect(reach(tables: [untracked])).to be_nil
+    end
+  end
+
+  it 'reads the version tables of a record and of the records on its paths' do
+    traversal = instance_double(PaperTrailDiff::AssociationTraversal)
+    allow(traversal).to receive(:path_types).with(FilterFeature).and_return(['FilterJsonEvent'])
+    open_around = -> { described_class.open_around(FilterFeature, traversal, start) }
+    version(-3, 9, table: FilterJsonVersion)
+    version(1, 9, table: FilterJsonVersion)
+
+    expect(open_around.call).to eq(at(-3))
+    allow(traversal).to receive(:path_types).with(FilterFeature).and_return([])
+    expect(open_around.call).to be_nil
+    version(-2, 7)
+    version(1, 7)
+    expect(open_around.call).to eq(at(-2))
   end
 
   # A transaction's first version carries its own id as its number, in

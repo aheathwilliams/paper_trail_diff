@@ -34,6 +34,18 @@ RSpec.describe PaperTrailDiff::ActivityTransactionGroups do
     end
   end
 
+  describe '#events_for' do
+    it "gives the events of an event's transaction, in the order given" do
+      first = event(1, 7)
+      apart = event(2, 8)
+      last = event(3, 7)
+      groups = described_class.new([first, apart, last, event(4, 7, table: GroupsOtherVersion)])
+
+      expect(groups.events_for(last)).to eq([first, last])
+      expect(groups.events_for(apart)).to eq([apart])
+    end
+  end
+
   describe '#branches_for' do
     it 'gives each event of a transaction the branches of all its events' do
       comment = event(1, 7, branches: ['comments'])

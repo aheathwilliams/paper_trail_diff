@@ -40,7 +40,7 @@ module PaperTrailDiff
     # the range ends in.
     #: (untyped) -> untyped
     def trailing_version(relation)
-      candidates = VersionQuery.chronological(@time_range.trailing_scope(relation)).limit(2).to_a
+      candidates = VersionQuery.chronological(@time_range.trailing_scope(relation)).limit(2)
       Support.earliest_version(candidates)
     end
   end

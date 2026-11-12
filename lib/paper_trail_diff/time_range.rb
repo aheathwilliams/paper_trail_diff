@@ -90,10 +90,7 @@ module PaperTrailDiff
     #: (untyped) -> TimeRange
     def widened(earliest)
       start = [earliest, begin_time].min
-      finish = end_time
-      return self.class.new(start.., digits: @digits) unless finish
-
-      self.class.new(exclude_end? ? start...finish : start..finish, digits: @digits)
+      self.class.new(Range.new(start, end_time, exclude_end?), digits: @digits)
     end
 
     # The versions after the window; none follows an endless one.
@@ -110,17 +107,13 @@ module PaperTrailDiff
     #: (untyped) -> Hash[String, untyped]
     def first_trailing_versions(relation)
       finish = end_time
-      first = {} #: Hash[String, untyped]
-      return first unless finish
+      return {} unless finish
 
       first_after = VersionQuery.no_earlier_version(relation.arel_table) do |earlier|
         after_end(earlier[:created_at], finish)
       end
-      versions = VersionQuery.chronological(after(relation, finish).where(first_after))
-      versions.group_by { |version| version.item_id.to_s }.each do |id, tied|
-        first[id] = Support.earliest_version(tied)
-      end
-      first
+      after(relation, finish).where(first_after).group_by { |version| version.item_id.to_s }
+                             .transform_values { |tied| Support.earliest_version(tied) }
     end
 
     private

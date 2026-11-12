@@ -29,7 +29,18 @@ end
 # TransactionEnds), so one with a window edge inside it is wholly in the later
 # window, which reads it from where it began.
 RSpec.describe 'Windows that meet inside a transaction',
-               mutant_expression: 'PaperTrailDiff::ActivityTimelineBuilder' do
+               mutant_expression: %w[PaperTrailDiff::ActivityTimelineBuilder
+                                     PaperTrailDiff::TimelineRange
+                                     PaperTrailDiff::TransactionEnds
+                                     PaperTrailDiff::RecordedTransactionEnds
+                                     PaperTrailDiff::CrossingTransactions
+                                     PaperTrailDiff::TransactionCut
+                                     PaperTrailDiff::TimeVersionRange
+                                     PaperTrailDiff::ActivityVersionCollector
+                                     PaperTrailDiff::ActivityTreeFilter
+                                     PaperTrailDiff::BatchedRootAnalyses
+                                     PaperTrailDiff::PreparedHistoryLoader
+                                     PaperTrailDiff::RootVersionSelection] do
   before do
     PaperTrail::VersionAssociation.delete_all
     PaperTrail::Version.delete_all
@@ -244,6 +255,26 @@ RSpec.describe 'Windows that meet inside a transaction',
     steps = steps(article, whole.begin..child.created_at)
 
     expect(steps.flatten).not_to include(child.id, root.id)
+  end
+
+  it 'closes a window read again from where such a transaction began when it read the row' do
+    article, _child, root = comment_then_article
+
+    closing = PaperTrailDiff.activity_timeline(article, within: root.created_at..,
+                                                        associations: paths).last.to_boundary
+
+    expect(closing.kind).to eq(:current)
+    expect(closing.recorded_at).to be_within(60).of(Time.now.utc)
+  end
+
+  # Read again from where it began, the history does not ask again.
+  it 'asks once how far back a transaction open at the start reaches' do
+    article, _child, root = comment_then_article
+    allow(PaperTrailDiff::CrossingTransactions).to receive(:reach).and_call_original
+
+    steps(article, root.created_at..Time.now.utc)
+
+    expect(PaperTrailDiff::CrossingTransactions).to have_received(:reach).once
   end
 
   it 'reports nothing of a transaction that a window lies inside' do

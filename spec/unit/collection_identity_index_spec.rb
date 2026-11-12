@@ -56,6 +56,7 @@ RSpec.describe PaperTrailDiff::CollectionIdentityIndex do
 
       expect(last.position_for_id(3)).to eq(2)
       expect(last.position_for_id(2)).to eq(1)
+      expect(last.position_for_id(1)).to eq(0)
     end
 
     it 'keeps an id ambiguous once a third record shares it' do
@@ -90,8 +91,11 @@ RSpec.describe PaperTrailDiff::CollectionIdentityIndex do
 
   it 'reads through up to eight records, and searches more' do
     allow(PaperTrailDiff::Support).to receive(:sortable_identity).and_call_original
-    few, more = [8, 9].map { |count| described_class.new(Array.new(count) { |id| record(id) }) }
+    fewer, few, more = [7, 8, 9].map do |count|
+      described_class.new(Array.new(count) { |id| record(id) })
+    end
 
+    expect(fewer.position('Comment', 6)).to eq(6)
     expect(few.position('Comment', 7)).to eq(7)
     expect(PaperTrailDiff::Support).not_to have_received(:sortable_identity)
     expect(more.position('Comment', 8)).to eq(8)

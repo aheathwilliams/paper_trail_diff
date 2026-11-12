@@ -130,14 +130,14 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
     it 'names roots destroyed in the window instead of filtering them' do
       start = Time.now.utc
       live = model.create!(title: 'Live')
-      gone = Array.new(2) { |index| model.create!(title: "Gone #{index}") }
-      gone.reverse_each(&:destroy!)
+      gone = [999_999, 1_000_000].map { |id| model.create!(id: id, title: "Gone #{id}") }
+      gone.each(&:destroy!)
 
       result = select(model.where(title: 'Nothing matches'), time_range: since(start))
 
       expect(result.records).to eq([])
-      # Ids sort as strings, so "10" comes before "9".
-      expect(result.unreachable).to eq(gone.map { |record| [model.name, record.id.to_s] }.sort)
+      # Ids sort as strings, so "1000000" comes before "999999".
+      expect(result.unreachable).to eq(gone.reverse.map { |record| [model.name, record.id.to_s] })
       expect(result.unreachable).to all(be_frozen)
       expect(select(model, time_range: since(start)).records).to eq([live])
     end

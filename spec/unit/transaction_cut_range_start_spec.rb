@@ -4,23 +4,28 @@ require_relative '../support/filter_database'
 
 RSpec.describe PaperTrailDiff::TransactionCut, '.range_start' do
   let(:noon) { Time.utc(2032, 1, 1, 12) }
+  # Past any version id, however many versions earlier examples saved: a
+  # version whose id is its number is where that transaction began (see
+  # TransactionAnchors).
+  let(:offset) { 1_000_000_000 }
 
+  # The other version table too: a version there whose id is a number used
+  # here would begin a second transaction under it.
   before do
     FilterVersion.delete_all
+    FilterJsonVersion.delete_all
     FilterArticle.unscoped.delete_all
   end
 
   # One article's versions at the given minutes past noon, in the given
-  # transactions. The numbers are offset past any version id, since a
-  # version whose id is its number is where that transaction began (see
-  # TransactionAnchors).
+  # transactions, their numbers offset.
   def versions(*minutes, transactions: [])
     article = FilterArticle.create!(title: 'Draft')
     minutes.drop(1).each_with_index { |_, index| article.update!(title: "Edit #{index}") }
     rows = FilterVersion.where(item_id: article.id).order(:id).to_a
     rows.zip(minutes, transactions).map do |version, minute, transaction|
       version.update_columns(created_at: noon + (minute * 60),
-                             transaction_id: transaction&.+(10_000))
+                             transaction_id: transaction&.+(offset))
       version
     end
   end
@@ -68,6 +73,32 @@ RSpec.describe PaperTrailDiff::TransactionCut, '.range_start' do
     expect(described_class.range_start([root], noon + 90)).to eq(noon + 90)
     expect(described_class.range_start([], noon)).to eq(noon)
     expect(described_class.range_start([early, late], nil)).to be_nil
+  end
+
+  # Another version table's first version of the number began a second
+  # transaction under it, before the start.
+  it 'leaves out a version of a number that a transaction begun before the start took again' do
+    allow(ActiveRecord::Base).to receive(:descendants).and_return([FilterVersion,
+                                                                   FilterJsonVersion])
+    versions(0, transactions: [7])
+    FilterJsonVersion.create!(id: offset + 7, item_type: 'FilterArticle', item_id: 1,
+                              event: 'update', transaction_id: offset + 7, created_at: noon + 60)
+    root, = versions(2, transactions: [7])
+
+    expect(described_class.range_start([root], noon + 120)).to eq(noon + 120)
+  end
+
+  # Where its version table is the only one, every version of a number is
+  # read as one transaction's.
+  it 'keeps the start for versions outside a transaction, of the only version table' do
+    allow(ActiveRecord::Base).to receive(:descendants).and_return([FilterVersion])
+    early, = versions(0)
+    child, = versions(1, transactions: [7])
+    late, root = versions(3, 4, transactions: [nil, 7])
+
+    expect(described_class.range_start([early, late], noon + 120)).to eq(noon + 120)
+    expect(described_class.range_start([late, root], noon + 120)).to eq(noon + 120)
+    expect(described_class.range_start([root], noon + 210)).to eq(child.created_at)
   end
 
   it 'keeps the start when the transaction left no versions to read' do

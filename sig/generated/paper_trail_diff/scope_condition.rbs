@@ -22,10 +22,6 @@ module PaperTrailDiff
     # Ruby as the database compares them.
     COMPARABLE_KINDS: untyped
 
-    # Kinds compared, where they sort in Ruby as in SQL (ScopeRanking), as the
-    # values they sort by.
-    TEMPORAL_KINDS: untyped
-
     # Raised while reading a node that has no exact plain-Ruby reading.
     class Unreadable < StandardError
     end
@@ -146,12 +142,12 @@ module PaperTrailDiff
     # : (bool?) -> bool?
     def negate: (bool?) -> bool?
 
-    # The form the database holds, as the scope's own values were cast. An
-    # order, and any comparison of a date or a time, reads the value the
-    # database sorts by instead: SQL Server holds a time or date in a wrapper
-    # that only compares for equality, and history may hold either as text.
-    # : (String, Hash[String, untyped], bool?) -> untyped
-    def stored: (String, Hash[String, untyped], bool?) -> untyped
+    # The value the database compares and sorts by, as the scope's own
+    # values were read (see ScopeRanking.sort_value): SQL Server holds a time
+    # or date in a wrapper that only compares for equality, and history may
+    # hold either as text.
+    # : (String, Hash[String, untyped]) -> untyped
+    def stored: (String, Hash[String, untyped]) -> untyped
 
     # Builds each reflection's condition once per target class.
     class Cache
@@ -221,13 +217,11 @@ module PaperTrailDiff
       # : (Symbol, untyped, Array[untyped]) -> Array[untyped]
       def list: (Symbol, untyped, Array[untyped]) -> Array[untyped]
 
-      # A date, or a time history holds as it was stored, is compared as the
-      # value it sorts by, which the block reads from the expected one.
+      # A column that sorts in Ruby as in SQL (ScopeRanking) is compared as
+      # the value it sorts by, which the block reads from the expected one: a
+      # date, or a time history holds as it was stored, can be held as text.
       # : (Symbol, untyped, untyped) { (String) -> untyped } -> Array[untyped]
       def compared: (Symbol, untyped, untyped) { (String) -> untyped } -> Array[untyped]
-
-      # : (untyped) -> bool
-      def temporal?: (untyped) -> bool
 
       # Ruby comparison stands in for SQL only on the record's own column of
       # a type both compare alike (ExactColumnType). Whether a value is NULL,

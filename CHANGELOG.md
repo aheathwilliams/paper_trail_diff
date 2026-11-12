@@ -85,6 +85,8 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Comparing a JSON array that holds a BigDecimal NaN or infinity no longer
+  raises `FloatDomainError`; it compares as a Float NaN or infinity did.
 - An activity timeline no longer leaves a record as it was at one of two
   places a path reaches it. An article read with
   `associations: ["author.articles"]` is the root and one of its author's

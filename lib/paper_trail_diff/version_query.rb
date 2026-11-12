@@ -49,7 +49,7 @@ module PaperTrailDiff
     # with no create may have been.
     #: (untyped, untyped, untyped, untyped) -> untyped
     def self.created_after(table, item_type, item_id, time)
-      created = table.alias('paper_trail_diff_created_versions')
+      created = created_versions(table)
       item = created[:item_type].eq(item_type).and(created[:item_id].eq(item_id))
       any(created, item.and(first_create_after(table, created, time)))
     end
@@ -85,5 +85,14 @@ module PaperTrailDiff
       table.alias('paper_trail_diff_other_versions')
     end
     private_class_method :other_versions
+
+    # The version table under a name of its own for `created_after`, beside
+    # `other_versions`. As for that, no spec can tell its mutations apart.
+    # mutant:disable
+    #: (untyped) -> untyped
+    def self.created_versions(table)
+      table.alias('paper_trail_diff_created_versions')
+    end
+    private_class_method :created_versions
   end
 end

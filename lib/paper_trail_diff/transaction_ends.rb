@@ -33,13 +33,20 @@ module PaperTrailDiff
     def initialize(versions, recorded = {}, floor: nil)
       @recorded = recorded
       @floor = floor && Support.chronological_version_key(floor)
-      @floor_transaction = floor && ActivityTransactionGroups.transaction_key(floor)
-      @last = {} #: Hash[Array[untyped], untyped]
-      @keys = {} #: Hash[Array[untyped], Array[untyped]]
-      versions.each { |version| note(version) }
-      @horizon = versions.map { |version| Support.chronological_version_key(version) }.max
-      @reordered = reordered?(versions)
+      @floor_transaction = ActivityTransactionGroups.transaction_key(floor)
+      saved = versions.sort_by { |version| Support.chronological_version_key(version) }
+      @last = TransactionEnds.lasts(saved)
+      @horizon = saved.last && Support.chronological_version_key(saved.last)
+      @reordered = !saved.eql?(saved.sort_by { |version| sort_key(version) })
       freeze
+    end
+
+    # The last of the versions of each transaction, and of those outside one,
+    # by transaction key.
+    #: (Array[untyped]) -> Hash[Array[untyped]?, untyped]
+    def self.lasts(saved)
+      saved.group_by { |version| ActivityTransactionGroups.transaction_key(version) }
+           .transform_values(&:last)
     end
 
     # Whether placing the versions at their transactions' ends changes their
@@ -63,8 +70,7 @@ module PaperTrailDiff
     # everything the timeline holds, whenever its transaction ended.
     #: (untyped) -> bool
     def beyond?(version)
-      horizon = @horizon
-      !horizon.nil? && (Support.chronological_version_key(version) <=> horizon) == 1
+      (Support.chronological_version_key(version) <=> @horizon) == 1
     end
 
     # Orders versions by where their transactions end, then as they were
@@ -80,8 +86,7 @@ module PaperTrailDiff
     # @rbs @recorded: Hash[Array[untyped], untyped]
     # @rbs @floor: Array[untyped]?
     # @rbs @floor_transaction: Array[untyped]?
-    # @rbs @last: Hash[Array[untyped], untyped]
-    # @rbs @keys: Hash[Array[untyped], Array[untyped]]
+    # @rbs @last: Hash[Array[untyped]?, untyped]
     # @rbs @horizon: Array[untyped]?
     # @rbs @reordered: bool
 
@@ -89,29 +94,7 @@ module PaperTrailDiff
     # than the floor's.
     #: (untyped, Array[untyped]) -> bool
     def settled?(version, key)
-      floor = @floor
-      return false if floor.nil? || key == @floor_transaction
-
-      (Support.chronological_version_key(version) <=> floor) == -1
-    end
-
-    #: (untyped) -> void
-    def note(version)
-      key = ActivityTransactionGroups.transaction_key(version)
-      return unless key
-
-      own = Support.chronological_version_key(version)
-      held = @keys[key]
-      return if held && (held <=> own) != -1
-
-      @keys[key] = own
-      @last[key] = version
-    end
-
-    #: (Array[untyped]) -> bool
-    def reordered?(versions)
-      saved = versions.sort_by { |version| Support.chronological_version_key(version) }
-      saved != saved.sort_by { |version| sort_key(version) }
+      !key.eql?(@floor_transaction) && (Support.chronological_version_key(version) <=> @floor) == -1
     end
   end
 
@@ -172,12 +155,10 @@ module PaperTrailDiff
     # where it is, and the one read otherwise.
     #: (untyped, Array[untyped], Hash[untyped, Array[untyped]]) -> void
     def read(version_class, numbers, held)
-      return if numbers.empty?
-
       column = last_column(version_class)
       last = version_class.where(transaction_id: numbers).group(:transaction_id).maximum(column)
-      known = held.values_at(*last.keys).flatten + other(version_class, column, last, held)
-      note(version_class, known.select { |each| each[column] == last[each.transaction_id] })
+      known = held.fetch_values(*last.keys).flatten + other(version_class, column, last, held)
+      note(version_class, known.select { |each| each[column] == last.fetch(each.transaction_id) })
     end
 
     # Of the versions with the id or the time of their transaction's last,
@@ -193,16 +174,13 @@ module PaperTrailDiff
     # The versions not held that may be the last of their transactions:
     # those with the id or the time of the last of one that holds no such
     # version.
-    #: (untyped, String, Hash[untyped, untyped], Hash[untyped, Array[untyped]]) -> Array[untyped]
+    #: (untyped, String, Hash[untyped, untyped], Hash[untyped, Array[untyped]]) -> untyped
     def other(version_class, column, last, held)
       missing = last.reject do |number, value|
         held.fetch(number).any? { |version| version[column] == value }
       end
-      return [] if missing.empty?
-
-      version_class.where(transaction_id: missing.keys, column => missing.values.uniq)
-                   .select(version_class.primary_key, :created_at, :transaction_id,
-                           :item_type, :item_id).to_a
+      version_class.where(transaction_id: missing.keys, column => missing.values)
+                   .select(version_class.primary_key, :created_at, :transaction_id)
     end
 
     # What names a transaction's last version: its id where ids count up,
@@ -210,8 +188,7 @@ module PaperTrailDiff
     #: (untyped) -> String
     def last_column(version_class)
       key = version_class.primary_key
-      counts_up = key.is_a?(String) && version_class.type_for_attribute(key).type == :integer
-      counts_up ? key : 'created_at'
+      version_class.type_for_attribute(key).type == :integer ? key : 'created_at'
     end
   end
 end

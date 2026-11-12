@@ -35,8 +35,6 @@ module PaperTrailDiff
       @root_versions = root_versions
       @tree = tree
       @traversal = traversal
-      @end_at = end_at
-      @live_records = live_records
       start_at = TransactionCut.range_start(root_versions, start_at) unless window
       @records = PreparedRecordIndex.new(start_at, end_at: end_at, live_records: live_records)
       @activity = PreparedActivityIndex.new(@records, root_versions, start_at: start_at)
@@ -56,8 +54,6 @@ module PaperTrailDiff
     private
 
     # @rbs @window: bool
-    # @rbs @end_at: untyped
-    # @rbs @live_records: Array[untyped]
     # @rbs @record: untyped
     # @rbs @root_ids: Array[untyped]
     # @rbs @root_versions: Array[untyped]

@@ -53,5 +53,11 @@ module PaperTrailDiff
     # mutant:disable
     # : (untyped) -> untyped
     def self.other_versions: (untyped) -> untyped
+
+    # The version table under a name of its own for `created_after`, beside
+    # `other_versions`. As for that, no spec can tell its mutations apart.
+    # mutant:disable
+    # : (untyped) -> untyped
+    def self.created_versions: (untyped) -> untyped
   end
 end

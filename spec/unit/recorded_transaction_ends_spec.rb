@@ -61,6 +61,37 @@ RSpec.describe PaperTrailDiff::RecordedTransactionEnds do
     expect(found.fetch(['FilterVersion', 7])).to eq(other)
     expect(found.fetch(['FilterVersion', 7]).created_at).to eq(noon + 104)
     expect(found.fetch(['FilterVersion', 8])).to equal(last_held)
+    # Only what places a version is read of one not held.
+    expect(found.fetch(['FilterVersion', 7]).attributes.keys)
+      .to contain_exactly('id', 'created_at', 'transaction_id')
+  end
+
+  # Ids that count up name the last version, whatever the clock said.
+  it 'finds the last version of a transaction by its id where ids count up' do
+    held = version(101, 7, at: 9)
+    later = version(102, 7, at: 1, item_id: 2)
+    last_held = version(104, 8, at: 1)
+    version(103, 8, at: 9, item_id: 2)
+
+    found = ends(held, last_held)
+
+    expect(found.fetch(['FilterVersion', 7])).to eq(later)
+    expect(found.fetch(['FilterVersion', 8])).to equal(last_held)
+  end
+
+  it 'reads, of the versions not held, only those that may be last' do
+    held = version(101, 7)
+    version(102, 7, item_id: 2)
+    last = version(103, 7, item_id: 2)
+    loaded = []
+    count = ->(*, payload) { loaded << payload[:record_count] }
+
+    found = ActiveSupport::Notifications.subscribed(count, 'instantiation.active_record') do
+      ends(held)
+    end
+
+    expect(found.fetch(['FilterVersion', 7])).to eq(last)
+    expect(loaded).to eq([1])
   end
 
   it 'reads the versions of a table in one statement, and those not held in one more' do
@@ -80,12 +111,15 @@ RSpec.describe PaperTrailDiff::RecordedTransactionEnds do
     expect(statements { found = recorded.call([first]) { [second] } }.length).to eq(1)
     expect(found.keys).to contain_exactly(['FilterVersion', 7], ['FilterVersion', 8])
     expect(statements { recorded.call([first, second]) { raise 'asked again' } }).to eq([])
+    third = version(103, 9)
+    expect(recorded.call([first, third]) { [] }.keys).to include(['FilterVersion', 9])
   end
 
   it 'asks nothing about versions outside a transaction' do
     alone = version(101, nil)
 
     expect(statements { expect(ends(alone)).to eq({}) }).to eq([])
+    expect(ends(alone, version(102, 7)).keys).to eq([['FilterVersion', 7]])
   end
 
   it 'reads 500 transactions in a statement' do
@@ -131,12 +165,22 @@ RSpec.describe PaperTrailDiff::RecordedTransactionEnds do
       first = keyed('g', 9, at: 1)
       keyed('c', 9, at: 4, item_id: 2)
       last = keyed('d', 9, at: 5, item_id: 2)
+      keyed('x', 10, at: 4, item_id: 3)
 
       found = ends(held, last_held, first)
 
       expect(found.fetch(['EndsKeyedVersion', 7])).to eq(other)
       expect(found.fetch(['EndsKeyedVersion', 9])).to eq(last)
       expect(found.fetch(['EndsKeyedVersion', 8])).to equal(last_held)
+    end
+
+    it 'takes the greatest id of the versions saved last at one time' do
+      held = keyed('n', 7, at: 1)
+      tied = %w[z nn m].map { |id| keyed(id, 7, at: 4, item_id: 2) }
+
+      # As versions sort: a longer id after a shorter one, though it was
+      # saved neither first nor last, and is neither by its text.
+      expect(ends(held).fetch(['EndsKeyedVersion', 7])).to eq(tied[1])
     end
   end
 end

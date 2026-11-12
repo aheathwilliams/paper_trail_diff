@@ -31,7 +31,10 @@ end
 # same time interleave their versions, and a window's edge can fall between
 # two versions of one transaction.
 RSpec.describe 'Transactions that overlap each other or a window edge',
-               mutant_expression: 'PaperTrailDiff::TransactionEnds' do
+               mutant_expression: %w[PaperTrailDiff::TransactionEnds
+                                     PaperTrailDiff::TimelineRange
+                                     PaperTrailDiff::ActivityVersionCollector
+                                     PaperTrailDiff::ActivityTimelineBuilder] do
   before do
     PaperTrail::VersionAssociation.delete_all
     PaperTrail::Version.delete_all

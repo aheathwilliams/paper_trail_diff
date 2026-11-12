@@ -110,6 +110,35 @@ RSpec.describe PaperTrailDiff::AssociationActivitySelection do
     expect(scope_ids([:comments], window_start..Time.now.utc)).to eq([first.id, second.id])
   end
 
+  # The window reports a transaction that ends inside it, so it selects the
+  # records such a transaction saved before the window began.
+  describe 'over a window a transaction crosses',
+           mutant_expression: %w[PaperTrailDiff::AssociationActivitySelection
+                                 PaperTrailDiff::ScopedRootSelection] do
+    it 'selects an article whose comment a transaction open at the start changed before it' do
+      TrackedArticle.create!(title: 'Earlier').comments.create!(body: 'before the window')
+      article = TrackedArticle.create!(title: 'Quiet')
+      comment = article.comments.create!(body: 'one')
+      window_start = nil
+      ActiveRecord::Base.transaction do
+        comment.update!(body: 'two')
+        window_start = Time.now.utc
+        TrackedTag.create!(name: 'unrelated')
+      end
+      window = PaperTrailDiff::TimeRange.new(window_start..Time.now.utc)
+      widened = lambda do |paths, range = window|
+        described_class.window(TrackedArticle, PaperTrailDiff::AssociationTree.build(paths), range)
+      end
+
+      expect(scope_ids([:comments], window.to_range)).to eq([article.id])
+      expect(scope_ids([], window.to_range)).to eq([])
+      expect(widened.call([:comments]).begin_time).to eq(comment.versions.last.created_at)
+      expect([widened.call([]), described_class.window(TrackedArticle, nil, window)])
+        .to all(equal(window))
+      expect(widened.call([:comments], nil)).to be_nil
+    end
+  end
+
   it 'keeps selecting by own versions only for checkpoint analyses, which cannot see the rest' do
     article = TrackedArticle.create!(title: 'Quiet')
     comment = article.comments.create!(body: 'one')
@@ -630,6 +659,17 @@ RSpec.describe PaperTrailDiff::AssociationActivitySelection do
 
       expect(query.missing(TrackedComment)).to eq([gone.id])
       expect(kept.id).not_to eq(gone.id)
+    end
+
+    it 'names no id of a row the default scope of its model hides' do
+      hiding = Class.new(ActiveRecord::Base) do
+        self.table_name = 'tracked_comments'
+        default_scope { where.not(body: 'hidden') }
+      end
+      article = TrackedArticle.create!(title: 'Article')
+      article.comments.create!(body: 'shown').update!(body: 'hidden')
+
+      expect(query.missing(hiding)).to eq([])
     end
 
     # PostgreSQL does not plan `NOT IN (SELECT ...)` as an anti-join: it reads

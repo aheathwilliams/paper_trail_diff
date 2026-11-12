@@ -37,9 +37,10 @@ module PaperTrailDiff
     def match?: (RecordSnapshot, String, String) -> bool
 
     # The values an id of this text may be held as, the number first, as
-    # records sort a number before the string that prints like it.
-    # : (untyped) -> Array[untyped]
-    def forms: (untyped) -> Array[untyped]
+    # records sort a number before the string that prints like it. Text that
+    # reads as no number gives nil, which no record found by text matches.
+    # : (String) -> Array[untyped]
+    def forms: (String) -> Array[untyped]
 
     # Each type the collection holds, found by searching for where the next begins.
     # : () { (String) -> void } -> void

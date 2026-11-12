@@ -41,11 +41,12 @@ module PaperTrailDiff
     # : (String, Array[untyped]) -> untyped
     def live_relation: (String, Array[untyped]) -> untyped
 
-    # A version saved by the end, or any version of a child that was not
-    # created after it.
+    # Any version of a child that was not created after the end. A version
+    # saved by the end precedes any create after it, so it is always kept.
     # : (untyped) -> untyped
     def there_by_end: (untyped) -> untyped
 
+    # The child class is quoted as its name, which its versions record.
     # : () -> untyped
     def live_by_end: () -> untyped
 

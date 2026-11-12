@@ -364,6 +364,19 @@ RSpec.describe PaperTrailDiff::PreparedHistoryLoader do
     end
   end
 
+  # A window's reader finds where its open transactions began (see
+  # CrossingTransactions); a range of versions starts where the first
+  # transaction of each root began.
+  it 'moves the start of a range of versions back, but not a window' do
+    article = TrackedArticle.create!(title: 'Root')
+    allow(PaperTrailDiff::TransactionCut).to receive(:range_start).and_call_original
+
+    load_history(article, [], window: true)
+    expect(PaperTrailDiff::TransactionCut).not_to have_received(:range_start)
+    load_history(article, [])
+    expect(PaperTrailDiff::TransactionCut).to have_received(:range_start).once
+  end
+
   it 'marks an edge with a composite foreign key as unsupported' do
     article = TrackedArticle.create!(title: 'Root')
     tree = PaperTrailDiff::AssociationTree.build([])

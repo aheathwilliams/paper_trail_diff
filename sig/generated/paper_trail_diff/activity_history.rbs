@@ -34,11 +34,11 @@ module PaperTrailDiff
     # the current record. Any other range ends at a root event, or at events
     # after a window whose steps are not reported, so nothing reads it.
     # `include_step` says whether an event's step is reported. `root` names
-    # the root, whose steps then credit each change row to the version that
-    # made it (see ChangeAttribution). `floor` is the first version of a
+    # the root, whose steps credit each change row to the version that made
+    # it (see ChangeAttribution). `floor` is the first version of a
     # history read without a window (see TransactionEnds).
-    # : (Array[untyped], Array[ActivityEvent], untyped, view: ActivityView, include_step: untyped, ?current: untyped, ?closing: RecordSnapshot?, ?root: RecordReference?, ?floor: untyped) -> void
-    def initialize: (Array[untyped], Array[ActivityEvent], untyped, view: ActivityView, include_step: untyped, ?current: untyped, ?closing: RecordSnapshot?, ?root: RecordReference?, ?floor: untyped) -> void
+    # : (Array[untyped], Array[ActivityEvent], untyped, view: ActivityView, include_step: untyped, ?current: untyped, ?closing: RecordSnapshot?, root: RecordReference, ?floor: untyped) -> void
+    def initialize: (Array[untyped], Array[ActivityEvent], untyped, view: ActivityView, include_step: untyped, root: RecordReference, ?current: untyped, ?closing: RecordSnapshot?, ?floor: untyped) -> void
 
     # : () -> ActivityHistory
     def call: () -> ActivityHistory
@@ -69,7 +69,7 @@ module PaperTrailDiff
 
     @previous_snapshot: RecordSnapshot?
 
-    @root: RecordReference?
+    @root: RecordReference
 
     @root_snapshots: Hash[Array[untyped], RecordSnapshot?]
 
@@ -104,8 +104,8 @@ module PaperTrailDiff
     # Inside a transaction a record's change can surface at a later event
     # than its own, so the rows of a step its boundary opens are read with
     # the boundaries its transaction kept before it (see ChangeAttribution).
-    # : (ActivityEvent, ActivityBoundary) -> ChangeAttribution?
-    def attribution: (ActivityEvent, ActivityBoundary) -> ChangeAttribution?
+    # : (ActivityEvent, ActivityBoundary) -> ChangeAttribution
+    def attribution: (ActivityEvent, ActivityBoundary) -> ChangeAttribution
 
     # The boundaries kept so far of the event's transaction. A version saved
     # outside a transaction is a transaction of its own.

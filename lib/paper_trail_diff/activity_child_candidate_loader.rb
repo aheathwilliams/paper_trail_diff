@@ -66,22 +66,21 @@ module PaperTrailDiff
       comparable_keys? ? relation.where(live_by_end) : relation
     end
 
-    # A version saved by the end, or any version of a child that was not
-    # created after it.
+    # Any version of a child that was not created after the end. A version
+    # saved by the end precedes any create after it, so it is always kept.
     #: (untyped) -> untyped
     def there_by_end(version_class)
       versions = version_class.arel_table
-      created = VersionQuery.created_after(versions, versions[:item_type], versions[:item_id],
-                                           @end_at)
-      versions[:created_at].lteq(@end_at).or(created.not)
+      VersionQuery.created_after(versions, versions[:item_type], versions[:item_id], @end_at).not
     end
 
+    # The child class is quoted as its name, which its versions record.
     #: () -> untyped
     def live_by_end
       children = @reflection.klass.base_class
       VersionQuery.created_after(
         @parent_class.paper_trail.version_class.arel_table,
-        children.name, children.arel_table[children.primary_key], @end_at
+        children, children.arel_table[children.primary_key], @end_at
       ).not
     end
 
@@ -92,10 +91,9 @@ module PaperTrailDiff
     def comparable_keys?
       return false unless @end_at
 
-      children = @reflection.klass.base_class
-      key = children.primary_key
+      children = @reflection.klass
       item_ids = @parent_class.paper_trail.version_class.type_for_attribute('item_id')
-      key.is_a?(String) && children.type_for_attribute(key).type == item_ids.type
+      children.type_for_attribute(children.primary_key).type == item_ids.type
     end
 
     #: (Array[Array[untyped]]) -> Array[Array[untyped]]

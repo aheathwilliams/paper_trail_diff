@@ -39,8 +39,10 @@ RSpec.describe PaperTrailDiff::ActivityHistoryBuilder do
 
   def build(events, reported: ->(_event) { true }, view: PaperTrailDiff::ActivityView.new,
             **options)
+    root = PaperTrailDiff::RecordReference.new(type: 'FilterArticle',
+                                               id: events.first.version.item_id)
     builder = described_class.new(events.map(&:version), events, :snapshotter,
-                                  view: view, include_step: reported, **options)
+                                  view: view, include_step: reported, root: root, **options)
     builder.call
   end
 

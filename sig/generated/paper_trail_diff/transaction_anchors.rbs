@@ -23,21 +23,21 @@ module PaperTrailDiff
   # the same time are not told apart.
   module TransactionAnchors
     # A condition on versions of `table` that keeps those no anchor separates
-    # from the edge. Nothing when the model's version table is the only one,
+    # from the start. Nothing when the model's version table is the only one,
     # where a number names one transaction.
-    # : (untyped, TransactionCut::Edge, ?untyped) -> untyped
-    def self.unbroken: (untyped, TransactionCut::Edge, ?untyped) -> untyped
+    # : (untyped, Time, ?untyped) -> untyped
+    def self.unbroken: (untyped, Time, ?untyped) -> untyped
 
-    # `relation` narrowed to the versions no anchor separates from the edge.
-    # : (untyped, untyped, TransactionCut::Edge) -> untyped
-    def self.scope: (untyped, untyped, TransactionCut::Edge) -> untyped
+    # `relation` narrowed to the versions no anchor separates from the start.
+    # : (untyped, untyped, Time) -> untyped
+    def self.scope: (untyped, untyped, Time) -> untyped
 
-    # `relation` narrowed to the versions of the transactions that the
-    # versions of these ids, saved after the edge, belong to: of a number's
-    # versions before the edge, those of the transaction that went on to save
-    # one of these.
-    # : (untyped, untyped, TransactionCut::Edge, Array[untyped]) -> untyped
-    def self.continued: (untyped, untyped, TransactionCut::Edge, Array[untyped]) -> untyped
+    # `relation` narrowed to the versions of the transactions that these
+    # versions (or the versions of these ids), saved after the start, belong
+    # to: of a number's versions before the start, those of the transaction
+    # that went on to save one of these.
+    # : (untyped, untyped, Time, Array[untyped]) -> untyped
+    def self.continued: (untyped, untyped, Time, Array[untyped]) -> untyped
 
     # Those of the numbers that more than one transaction took: each the id
     # of the first version of a transaction in more than one version table.
@@ -60,21 +60,21 @@ module PaperTrailDiff
     # : (untyped, untyped, untyped) -> bool
     def self.numbers?: (untyped, untyped, untyped) -> bool
 
-    # No anchor of the version's number between the version and the edge:
-    # none after a version saved before the edge and before the edge, and
-    # none after the edge and up to a version saved after it, which the
+    # No anchor of the version's number between the version and the start:
+    # none after a version saved before the start and before the start, and
+    # none after the start and up to a version saved after it, which the
     # version's own anchor is when its transaction began there.
-    # : (untyped, Integer, TransactionCut::Edge, untyped) -> untyped
-    def self.none: (untyped, Integer, TransactionCut::Edge, untyped) -> untyped
+    # : (untyped, Integer, Time, untyped) -> untyped
+    def self.none: (untyped, Integer, Time, untyped) -> untyped
 
     # A version that carries its own id as its number, which is the number
     # of the version of `table`.
     # : (untyped, String, untyped) -> untyped
     def self.numbering: (untyped, String, untyped) -> untyped
 
-    # An anchor saved after the version and before the edge, or after the
-    # edge and no later than the version.
-    # : (untyped, untyped, TransactionCut::Edge) -> untyped
-    def self.between: (untyped, untyped, TransactionCut::Edge) -> untyped
+    # An anchor saved after the version and before the start, or after the
+    # start and no later than the version.
+    # : (untyped, untyped, Time) -> untyped
+    def self.between: (untyped, untyped, Time) -> untyped
   end
 end

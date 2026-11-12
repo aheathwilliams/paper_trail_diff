@@ -198,9 +198,19 @@ RSpec.describe PaperTrailDiff::NestedComparator do
     end
 
     it 'matches a whole number with its float, alone or inside an element, as == does' do
-      change = array_change([1, { 'n' => 2, 'tags' => [3.0] }, 4], [{ n: 2.0, tags: [3] }, 1.0, 5])
+      change = array_change([1, { 'n' => 2, 'tags' => [3.0] }, 4, [6]],
+                            [{ n: 2.0, tags: [3] }, [7], 1.0, 5, [6.0]])
 
-      expect(change.to_h).to include(added: [5], removed: [4], reordered: false)
+      expect(change.to_h).to include(added: [[7], 5], removed: [4], reordered: false)
+    end
+
+    it 'counts a number with no rational, such as NaN or a complex number, as itself' do
+      odd = [Float::INFINITY, Float::NAN, BigDecimal('NaN'), BigDecimal('-Infinity'), Complex(1, 2)]
+      change = array_change(odd + [1], [1.0] + odd.reverse)
+
+      expect(change.to_h).to include(added: [], removed: [], reordered: true)
+      expect(array_change([Float::INFINITY], [nil]).to_h)
+        .to include(added: [nil], removed: [Float::INFINITY])
     end
 
     # Each element is counted once, rather than searched for among the

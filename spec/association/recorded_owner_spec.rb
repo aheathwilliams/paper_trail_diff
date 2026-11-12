@@ -135,6 +135,21 @@ RSpec.describe PaperTrailDiff::RecordedOwner do
       expect(reason(TrackedArticle, :contributors)).to be_nil
     end
 
+    describe 'as the reason a request cannot name it',
+             mutant_expression: 'PaperTrailDiff::AssociationTraversal' do
+      it 'is the reason the traversal gives, directly or through' do
+        expected = unrecorded('OwnerSpecLooseComment', 'article_id',
+                              'OwnerSpecArticle#loose_comments')
+
+        %i[loose_comments loose_comment_replies].each do |name|
+          reflection = OwnerSpecArticle.reflect_on_association(name)
+          expect(PaperTrailDiff::AssociationTraversal.unsupported_reason(
+                   OwnerSpecArticle, reflection, root: true
+                 )).to eq(expected)
+        end
+      end
+    end
+
     # Nothing would say a comment that was destroyed, or moved to another
     # article, was ever this article's.
     it 'is refused in every method, reported by diagnose and left out of discovery' do

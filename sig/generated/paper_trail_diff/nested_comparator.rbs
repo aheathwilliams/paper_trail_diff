@@ -53,7 +53,8 @@ module PaperTrailDiff
     # : (untyped) -> untyped
     def self.countable: (untyped) -> untyped
 
-    # The number as a rational, or as it is when it has none.
+    # The number as a rational, or as it is when it has none: a complex
+    # number, or one that is not finite, such as a Float or BigDecimal NaN.
     # : (untyped) -> untyped
     def self.rational: (untyped) -> untyped
 

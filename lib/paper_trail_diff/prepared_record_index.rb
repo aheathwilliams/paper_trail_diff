@@ -619,7 +619,7 @@ module PaperTrailDiff
   # RecordedTransactionEnds), and a timeline reads no version saved after its
   # own last one (see TransactionEnds#beyond?).
   class CrossingTransactions
-    #: (Array[untyped], untyped) -> void
+    #: (Enumerable[untyped], untyped) -> void
     def initialize(version_classes, start)
       @version_classes = version_classes
       @start = start
@@ -629,7 +629,7 @@ module PaperTrailDiff
     # nil when none is open, or without a start.
     #: (Enumerable[untyped], untyped) -> untyped
     def self.reach(version_classes, start)
-      new(version_classes.to_a, start).call if start
+      new(version_classes, start).call if start
     end
 
     # The same, in the version tables of the models of these names that
@@ -641,12 +641,11 @@ module PaperTrailDiff
       reach(models.map { |model| model.paper_trail.version_class }.uniq, start)
     end
 
-    # The same, in the version tables of a root and of the first record on
-    # each requested path.
+    # The same, in the version tables of a root model and of the records on
+    # its requested paths.
     #: (untyped, AssociationTraversal, untyped) -> untyped
-    def self.open_around(record, traversal, start)
-      model = record.class
-      open_among([model.base_class.name, *traversal.path_types(model)], start)
+    def self.open_around(model, traversal, start)
+      open_among([model.name, *traversal.path_types(model)], start)
     end
 
     #: () -> untyped
@@ -656,7 +655,7 @@ module PaperTrailDiff
 
     private
 
-    # @rbs @version_classes: Array[untyped]
+    # @rbs @version_classes: Enumerable[untyped]
     # @rbs @start: untyped
 
     # When the earliest transaction open at the start began in this table.
@@ -664,38 +663,36 @@ module PaperTrailDiff
     def open_at_start(version_class)
       return unless version_class.column_names.include?('transaction_id')
 
-      edge = TransactionCut::Edge.start_at(@start)
-      earlier(version_class, edge).minimum(:created_at)
+      earlier(version_class).minimum(:created_at)
     end
 
     # The versions saved before the start by a transaction that saved one
     # from it onward.
-    #: (untyped, TransactionCut::Edge) -> untyped
-    def earlier(version_class, edge)
+    #: (untyped) -> untyped
+    def earlier(version_class)
       saved = version_class.where(version_class.arel_table[:created_at].lt(@start))
-      TransactionAnchors.scope(saved, version_class, edge)
-                        .where(transaction_id: later(version_class, edge).select(:transaction_id))
+      TransactionAnchors.scope(saved, version_class, @start)
+                        .where(transaction_id: later(version_class).select(:transaction_id))
     end
 
     # The versions saved from the start onward that were not the first of
     # their transaction, of the transactions no anchor separates from it.
-    #: (untyped, TransactionCut::Edge) -> untyped
-    def later(version_class, edge)
+    #: (untyped) -> untyped
+    def later(version_class)
       table = version_class.arel_table
       saved = version_class.where(table[:created_at].gteq(@start)).where.not(transaction_id: nil)
       if own_numbers?(version_class)
         saved = saved.where(table[version_class.primary_key].not_eq(table[:transaction_id]))
       end
-      TransactionAnchors.scope(saved, version_class, edge)
+      TransactionAnchors.scope(saved, version_class, @start)
     end
 
     # Whether the table's ids can number its transactions, as they do unless
     # the two columns differ in type.
     #: (untyped) -> bool
     def own_numbers?(version_class)
-      key = version_class.primary_key
-      number = version_class.type_for_attribute('transaction_id').type
-      key.is_a?(String) && version_class.type_for_attribute(key).type == number
+      version_class.type_for_attribute(version_class.primary_key).type ==
+        version_class.type_for_attribute('transaction_id').type
     end
   end
 end

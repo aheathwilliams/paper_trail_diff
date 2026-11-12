@@ -4,8 +4,7 @@ require_relative '../support/filter_database'
 
 RSpec.describe PaperTrailDiff::TransactionAnchors do
   let(:noon) { Time.utc(2032, 1, 1, 12) }
-  let(:edge) { PaperTrailDiff::TransactionCut::Edge.new(noon, false) }
-  let(:strict) { PaperTrailDiff::TransactionCut::Edge.new(noon, true) }
+  let(:start) { noon }
 
   before do
     FilterVersion.delete_all
@@ -23,16 +22,17 @@ RSpec.describe PaperTrailDiff::TransactionAnchors do
                   transaction_id: transaction_id, created_at: noon + seconds)
   end
 
-  def kept(edge)
-    described_class.scope(FilterVersion.all, FilterVersion, edge).order(:id).pluck(:id)
+  def kept
+    described_class.scope(FilterVersion.all, FilterVersion, start).order(:id).pluck(:id)
   end
 
   describe '.unbroken' do
     it 'is nothing when the version table is the only one' do
       known(FilterVersion, Class.new(FilterVersion))
 
-      expect(described_class.unbroken(FilterVersion, edge)).to be_nil
-      expect(described_class.scope(FilterVersion.all, FilterVersion, edge)).to eq(FilterVersion.all)
+      expect(described_class.unbroken(FilterVersion, start)).to be_nil
+      expect(described_class.scope(FilterVersion.all, FilterVersion, start))
+        .to eq(FilterVersion.all)
     end
 
     it 'leaves out a class that is not a version table of this database with such ids' do
@@ -41,7 +41,7 @@ RSpec.describe PaperTrailDiff::TransactionAnchors do
       missing = Class.new(FilterJsonVersion) { self.table_name = 'filter_missing_versions' }
       known(FilterVersion, model, abstract, missing)
 
-      expect(described_class.unbroken(FilterVersion, edge)).to be_nil
+      expect(described_class.unbroken(FilterVersion, start)).to be_nil
     end
 
     it 'leaves out a version table whose ids are of another type than the number' do
@@ -49,7 +49,7 @@ RSpec.describe PaperTrailDiff::TransactionAnchors do
       allow(FilterJsonVersion).to receive(:type_for_attribute).with('id')
                                                               .and_return(ActiveRecord::Type::String.new)
 
-      expect(described_class.unbroken(FilterVersion, edge)).to be_nil
+      expect(described_class.unbroken(FilterVersion, start)).to be_nil
     end
   end
 
@@ -64,33 +64,32 @@ RSpec.describe PaperTrailDiff::TransactionAnchors do
       version(73, 2, 70)
     end
 
-    it 'keeps the versions no first version of their number separates from the edge' do
-      expect(kept(edge)).to eq([72, 73])
+    it 'keeps the versions no first version of their number separates from the start' do
+      expect(kept).to eq([72, 73])
     end
 
-    it 'keeps the versions after the edge up to the next first version' do
+    it 'keeps the versions after the start up to the next first version' do
       version(71, 4, 71, table: FilterJsonVersion)
       version(74, 3, 71)
       version(75, 4, 71)
       version(76, 5, 71)
 
-      expect(kept(edge)).to eq([72, 73, 74])
+      expect(kept).to eq([72, 73, 74])
     end
 
-    it 'counts a first version at the edge as after it, or before a strict one' do
+    it 'counts a first version at the start as after it' do
       version(80, -1, 80)
       version(80, 0, 80, table: FilterJsonVersion)
       version(81, 1, 80)
 
-      expect(kept(edge)).to eq([72, 73, 80])
-      expect(kept(strict)).to eq([72, 73, 81])
+      expect(kept).to eq([72, 73, 80])
     end
 
-    it 'keeps a version saved at the instant of a first version before the edge' do
+    it 'keeps a version saved at the instant of a first version before the start' do
       version(90, -2, 90, table: FilterJsonVersion)
       version(91, -2, 90)
 
-      expect(kept(edge)).to include(91)
+      expect(kept).to include(91)
     end
 
     it 'separates by a first version of the table itself' do
@@ -98,7 +97,7 @@ RSpec.describe PaperTrailDiff::TransactionAnchors do
       version(60, 1, 60)
       version(96, 2, 60)
 
-      expect(kept(edge)).to eq([72, 73, 95])
+      expect(kept).to eq([72, 73, 95])
     end
   end
 
@@ -128,7 +127,7 @@ RSpec.describe PaperTrailDiff::TransactionAnchors do
   describe '.continued' do
     def continued(ids)
       saved = FilterVersion.where(FilterVersion.arel_table[:created_at].lt(noon))
-      described_class.continued(saved, FilterVersion, edge, ids).order(:id).pluck(:id)
+      described_class.continued(saved, FilterVersion, start, ids).order(:id).pluck(:id)
     end
 
     # Transaction 60 began in the other table at -5 s, and another began
@@ -151,7 +150,7 @@ RSpec.describe PaperTrailDiff::TransactionAnchors do
       known(FilterVersion)
       saved = FilterVersion.where(transaction_id: 60)
 
-      expect(described_class.continued(saved, FilterVersion, edge, [74])).to eq(saved)
+      expect(described_class.continued(saved, FilterVersion, start, [74])).to eq(saved)
     end
   end
 end

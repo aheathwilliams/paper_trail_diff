@@ -28,11 +28,7 @@ module PaperTrailDiff
 
     @edges: PreparedEdgeLoader
 
-    @end_at: untyped
-
     @history: PreparedHistory
-
-    @live_records: Array[untyped]
 
     @prepared: Hash[untyped, Set[String]]
 

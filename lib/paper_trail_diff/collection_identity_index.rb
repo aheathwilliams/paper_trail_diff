@@ -30,9 +30,9 @@ module PaperTrailDiff
         return @records.index { |record| match?(record, type, text) }
       end
 
-      forms(id).each do |form|
+      forms(text).each do |form|
         index = insertion(type, form)
-        record = @records[index]
+        record = @records.at(index)
         return index if record && match?(record, type, text)
       end
       nil
@@ -57,7 +57,8 @@ module PaperTrailDiff
     def insertion(type, id)
       key = Support.sortable_identity(type, id)
       @records.bsearch_index do |record|
-        (Support.sortable_identity(record.type, record.id) <=> key).to_i >= 0
+        order = Support.sortable_identity(record.type, record.id) <=> key #: Integer
+        order >= 0
       end || @records.length
     end
 
@@ -71,14 +72,11 @@ module PaperTrailDiff
     end
 
     # The values an id of this text may be held as, the number first, as
-    # records sort a number before the string that prints like it.
-    #: (untyped) -> Array[untyped]
-    def forms(id)
-      case id
-      when Numeric then [id, id.to_s]
-      when String, Symbol then [Integer(id.to_s, 10, exception: false), id].compact
-      else [id]
-      end
+    # records sort a number before the string that prints like it. Text that
+    # reads as no number gives nil, which no record found by text matches.
+    #: (String) -> Array[untyped]
+    def forms(text)
+      [Integer(text, exception: false), text]
     end
 
     # Each type the collection holds, found by searching for where the next begins.

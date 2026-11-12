@@ -29,8 +29,8 @@ module PaperTrailDiff
     def self.narrowed(result, relation)
       return result unless result.respond_to?(:klass)
 
-      given = relation.klass.table_name
-      returned = result.klass.table_name
+      given = relation.table_name
+      returned = result.table_name
       return result if returned == given
 
       raise ConfigurationError, 'version_scope: must return the relation it is given, ' \

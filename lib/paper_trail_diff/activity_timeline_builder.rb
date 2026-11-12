@@ -128,7 +128,8 @@ module PaperTrailDiff
 
     # Whether the event's step is reported: it is inside the range, and a
     # version filter keeps it. A window holds an event when it holds the last
-    # version of the event's transaction (see TransactionEnds). With
+    # version of the event's transaction (see TransactionEnds); an explicit
+    # range holds every event it collected. With
     # associations the filter keeps whole transactions (see
     # ActivityScopeFilter). On the root alone it keeps the root's versions, as
     # `timeline` does, and so does a plan without one, but for the version it
@@ -136,7 +137,7 @@ module PaperTrailDiff
     #: (ActivityEvent, RootVersionPlan) -> bool
     def reported?(event, plan)
       ends = @ends
-      return false unless @range.include?(ends ? ends.last(event.version) : event.version)
+      return false if ends && !@range.include?(ends.last(event.version))
 
       filter = @filter
       filter ? filter.kept?(event.version) : !event.root? || plan.mutation?(event.version)
@@ -212,8 +213,10 @@ module PaperTrailDiff
     # in the window is reported.
     #: () -> [RootVersionPlan, ActivityHistory, Array[ActivityStep], RecordSnapshot?, RecordSnapshot?, untyped]?
     def window_replay
-      wide, events, snapshots, captured_at = window_events
-      return unless wide && events && snapshots
+      read = window_events
+      return unless read
+
+      wide, events, snapshots, captured_at = read
 
       plan = reporting_plan(wide, events, snapshots)
       return unless events.any? { |event| reported?(event, plan) }
@@ -225,8 +228,9 @@ module PaperTrailDiff
     end
 
     # The plan of every root version the window's transactions saved, its
-    # events, their history, and when the live record it closes on was read.
-    #: () -> [RootVersionPlan?, Array[ActivityEvent]?, untyped, untyped]
+    # events, their history, and when the live record it closes on was read;
+    # nil when there is nothing to replay.
+    #: () -> [RootVersionPlan, Array[ActivityEvent], untyped, untyped]?
     def window_events
       wide = select_plan
       return gone_events if nothing?(wide)
@@ -235,7 +239,7 @@ module PaperTrailDiff
       reach = snapshots.history&.reach
       return [wide, events, snapshots, captured_at] unless reach
 
-      reached_events(reach)
+      reached_events(reach, @range.reach_plan(reach, context_required: true))
     end
 
     # A plan with no version to replay and no live record to close on.
@@ -243,23 +247,26 @@ module PaperTrailDiff
     def nothing?(plan) = plan.empty? && !plan.closing_record
 
     # The window read again from where the earliest transaction open at its
-    # start began.
-    #: (untyped) -> [RootVersionPlan?, Array[ActivityEvent]?, untyped, untyped]
-    def reached_events(reach)
-      wide = @range.reach_plan(reach, context_required: true)
-      return [nil, nil, nil, nil] if nothing?(wide)
-
+    # start began. It holds what the window's own read held, and more.
+    #: (untyped, RootVersionPlan) -> [RootVersionPlan, Array[ActivityEvent], untyped, untyped]
+    def reached_events(reach, wide)
       events, snapshots, captured_at = events_through(wide, start_at: reach, reach: false)
       [wide, events, snapshots, captured_at]
     end
 
     # A root with no version in the window and no row was gone before it,
     # unless a transaction open at its start destroyed it and ended inside:
-    # the window reports that one. A batch has asked for its roots already.
-    #: () -> [RootVersionPlan?, Array[ActivityEvent]?, untyped, untyped]
+    # the window reports that one. A batch has asked for its roots already,
+    # and asking again for each would only find the same answer, a statement
+    # a root, so no spec can tell the batch's guard from its absence.
+    # mutant:disable
+    #: () -> [RootVersionPlan, Array[ActivityEvent], untyped, untyped]?
     def gone_events
       reach = (@snapshotter.reach_before(@record, @range.begin_time) unless @range.preselected?)
-      reach ? reached_events(reach) : [nil, nil, nil, nil]
+      return unless reach
+
+      wide = @range.reach_plan(reach, context_required: true)
+      reached_events(reach, wide) unless nothing?(wide)
     end
 
     #: (RootVersionPlan, **untyped) -> [Array[ActivityEvent], untyped, untyped]
@@ -271,12 +278,10 @@ module PaperTrailDiff
       [events, snapshots, captured_at]
     end
 
-    # On the root alone a version is reported where it was saved, and the
-    # plan is the one that selected it.
+    # The versions whose transactions end inside the window. On the root
+    # alone nothing else is read, so each ends where it was saved.
     #: (RootVersionPlan, Array[ActivityEvent], untyped) -> RootVersionPlan
     def reporting_plan(wide, events, snapshots)
-      return wide if @tree.empty?
-
       ends = snapshots.transaction_ends(events.map(&:version))
       @ends = ends
       @range.reporting_plan(wide, ends, context_required: true)
@@ -360,11 +365,12 @@ module PaperTrailDiff
       events
     end
 
+    # A window's history starts where the transactions across its start
+    # began. Without one, only root versions are collected, all of them in
+    # the window, so the first of them starts it.
     #: (untyped) -> untyped
     def range_start(snapshots)
-      return unless @range.time?
-
-      snapshots.history&.start_time || @range.begin_time
+      snapshots.history&.start_time if @range.time?
     end
 
     # A version filter reads its answers for a batch's history once, for the

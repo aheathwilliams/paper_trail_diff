@@ -78,18 +78,12 @@ module PaperTrailDiff
     # chose.
     #: (RootVersionPlan, TransactionEnds, context_required: bool) -> RootVersionPlan
     def reporting_plan(wide, ends, context_required:)
-      versions = wide.reconstruction_versions
-      inside, after = placed(versions, ends)
-      live = wide.closing_record || @live_endpoint
-      # Every root version ended before the window, and nothing follows them:
-      # the root was gone when the window began.
-      return RootVersionPlan.empty if versions.any? && inside.empty? && !after && !live
-
+      inside, after = placed(wide.reconstruction_versions, ends)
       RootVersionSelection.new(
         in_range: inside, selected: inside.select { |version| wide.mutation?(version) },
         after_range: after, windowed: true,
         context_required: context_required,
-        live_endpoint: live, whole: true
+        live_endpoint: wide.closing_record
       ).call
     end
 
@@ -125,10 +119,9 @@ module PaperTrailDiff
     #: (Array[untyped], TransactionEnds) -> [Array[untyped], untyped]
     def placed(versions, ends)
       range = time_range #: TimeRange
-      inside, outside = versions.partition do |version|
-        range.include?(ends.last(version).created_at)
-      end
-      [inside, outside.find { |version| ends.last(version).created_at >= range.begin_time }]
+      started = versions.reject { |version| ends.last(version).created_at < begin_time }
+      inside, after = started.partition { |version| range.include?(ends.last(version).created_at) }
+      [inside, after.first]
     end
 
     #: (bool) -> RootVersionPlan

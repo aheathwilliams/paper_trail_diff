@@ -82,7 +82,7 @@ module PaperTrailDiff
     # reported in the window.
     #: (untyped, untyped) -> untyped
     def reach_before(record, start_at)
-      CrossingTransactions.open_around(record, @traversal, start_at) unless @tree.empty?
+      CrossingTransactions.open_around(record.class, @traversal, start_at) unless @tree.empty?
     end
 
     # `history` is the one `prepare` returned for this root, if any.

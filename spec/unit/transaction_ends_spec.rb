@@ -31,7 +31,7 @@ RSpec.describe PaperTrailDiff::TransactionEnds do
   it 'keeps a version outside a transaction, or of one it was not given, where it is' do
     alone = version(1, nil)
     unknown = version(2, 9)
-    ends = described_class.new([alone, version(3, 7)])
+    ends = described_class.new([alone, version(3, 7), version(4, nil)])
 
     expect([ends.last(alone), ends.last(unknown)]).to eq([alone, unknown])
     expect(ends.sort_key(unknown).first).to eq(ends.sort_key(unknown).last)

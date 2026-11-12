@@ -104,6 +104,26 @@ RSpec.describe PaperTrailDiff::ActivityTreeFilter do
     let(:added) { "comments +#{names.key('added').last}" }
     let(:stray) { article.comments.find(names.key('stray').last) }
 
+    # A snapshot holds each record as its own class, which may be any
+    # subclass of the class its versions name.
+    it 'asks snapshots about the events it judges, by every class they may hold' do
+      stub_const('TrackedFilterComment', Class.new(TrackedComment))
+      asked = []
+      allow(PaperTrailDiff::SnapshotMembers).to receive(:new).and_wrap_original do |original|
+        original.call.tap do |members|
+          allow(members).to receive(:holds?).and_wrap_original do |holds, *arguments|
+            asked << arguments
+            holds.call(*arguments)
+          end
+        end
+      end
+
+      comment_steps(article)
+
+      expect(asked.map { |_branches, types, _id| types }.uniq)
+        .to eq([%w[TrackedComment TrackedFilterComment]])
+    end
+
     it 'credits the added comment to its own version, not to that edit' do
       steps = comment_steps(article, from: first_version(article), to: article)
 

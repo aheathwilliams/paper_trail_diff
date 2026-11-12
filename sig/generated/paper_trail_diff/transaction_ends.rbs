@@ -31,6 +31,11 @@ module PaperTrailDiff
     # : (Array[untyped], ?Hash[Array[untyped], untyped], ?floor: untyped) -> void
     def initialize: (Array[untyped], ?Hash[Array[untyped], untyped], ?floor: untyped) -> void
 
+    # The last of the versions of each transaction, and of those outside one,
+    # by transaction key.
+    # : (Array[untyped]) -> Hash[Array[untyped]?, untyped]
+    def self.lasts: (Array[untyped]) -> Hash[Array[untyped]?, untyped]
+
     # Whether placing the versions at their transactions' ends changes their
     # order: some transaction saved a version between two of another's.
     # : () -> bool
@@ -61,9 +66,7 @@ module PaperTrailDiff
 
     @horizon: Array[untyped]?
 
-    @keys: Hash[Array[untyped], Array[untyped]]
-
-    @last: Hash[Array[untyped], untyped]
+    @last: Hash[Array[untyped]?, untyped]
 
     @recorded: Hash[Array[untyped], untyped]
 
@@ -73,12 +76,6 @@ module PaperTrailDiff
     # than the floor's.
     # : (untyped, Array[untyped]) -> bool
     def settled?: (untyped, Array[untyped]) -> bool
-
-    # : (untyped) -> void
-    def note: (untyped) -> void
-
-    # : (Array[untyped]) -> bool
-    def reordered?: (Array[untyped]) -> bool
   end
 
   # Reads where transactions end from their version tables: the last version
@@ -130,8 +127,8 @@ module PaperTrailDiff
     # The versions not held that may be the last of their transactions:
     # those with the id or the time of the last of one that holds no such
     # version.
-    # : (untyped, String, Hash[untyped, untyped], Hash[untyped, Array[untyped]]) -> Array[untyped]
-    def other: (untyped, String, Hash[untyped, untyped], Hash[untyped, Array[untyped]]) -> Array[untyped]
+    # : (untyped, String, Hash[untyped, untyped], Hash[untyped, Array[untyped]]) -> untyped
+    def other: (untyped, String, Hash[untyped, untyped], Hash[untyped, Array[untyped]]) -> untyped
 
     # What names a transaction's last version: its id where ids count up,
     # and the time it was saved otherwise.

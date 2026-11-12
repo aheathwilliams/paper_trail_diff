@@ -24,35 +24,35 @@ module PaperTrailDiff
   # the same time are not told apart.
   module TransactionAnchors
     # A condition on versions of `table` that keeps those no anchor separates
-    # from the edge. Nothing when the model's version table is the only one,
+    # from the start. Nothing when the model's version table is the only one,
     # where a number names one transaction.
-    #: (untyped, TransactionCut::Edge, ?untyped) -> untyped
-    def self.unbroken(version_class, edge, table = version_class.arel_table)
+    #: (untyped, Time, ?untyped) -> untyped
+    def self.unbroken(version_class, start, table = version_class.arel_table)
       classes = version_classes(version_class)
       return if classes.length < 2
 
       classes.each_with_index.map do |anchors, index|
-        none(anchors, index, edge, table)
+        none(anchors, index, start, table)
       end.reduce(:and)
     end
 
-    # `relation` narrowed to the versions no anchor separates from the edge.
-    #: (untyped, untyped, TransactionCut::Edge) -> untyped
-    def self.scope(relation, version_class, edge)
-      condition = unbroken(version_class, edge)
+    # `relation` narrowed to the versions no anchor separates from the start.
+    #: (untyped, untyped, Time) -> untyped
+    def self.scope(relation, version_class, start)
+      condition = unbroken(version_class, start)
       condition ? relation.where(condition) : relation
     end
 
-    # `relation` narrowed to the versions of the transactions that the
-    # versions of these ids, saved after the edge, belong to: of a number's
-    # versions before the edge, those of the transaction that went on to save
-    # one of these.
-    #: (untyped, untyped, TransactionCut::Edge, Array[untyped]) -> untyped
-    def self.continued(relation, version_class, edge, ids)
-      condition = unbroken(version_class, edge)
+    # `relation` narrowed to the versions of the transactions that these
+    # versions (or the versions of these ids), saved after the start, belong
+    # to: of a number's versions before the start, those of the transaction
+    # that went on to save one of these.
+    #: (untyped, untyped, Time, Array[untyped]) -> untyped
+    def self.continued(relation, version_class, start, versions)
+      condition = unbroken(version_class, start)
       return relation unless condition
 
-      later = version_class.where(version_class.primary_key => ids).where(condition)
+      later = version_class.where(version_class.primary_key => versions).where(condition)
       relation.where(condition).where(transaction_id: later.select(:transaction_id))
     end
 
@@ -103,15 +103,15 @@ module PaperTrailDiff
     end
     private_class_method :numbers?
 
-    # No anchor of the version's number between the version and the edge:
-    # none after a version saved before the edge and before the edge, and
-    # none after the edge and up to a version saved after it, which the
+    # No anchor of the version's number between the version and the start:
+    # none after a version saved before the start and before the start, and
+    # none after the start and up to a version saved after it, which the
     # version's own anchor is when its transaction began there.
-    #: (untyped, Integer, TransactionCut::Edge, untyped) -> untyped
-    def self.none(anchors, index, edge, table)
+    #: (untyped, Integer, Time, untyped) -> untyped
+    def self.none(anchors, index, start, table)
       anchor = anchors.arel_table.alias("paper_trail_diff_anchors_#{index}")
       separating = numbering(anchor, anchors.primary_key, table)
-                   .and(between(anchor[:created_at], table[:created_at], edge))
+                   .and(between(anchor[:created_at], table[:created_at], start))
       Support.arel::SelectManager.new(anchor).project(Support.arel.sql('1'))
                                  .where(separating).exists.not
     end
@@ -126,12 +126,12 @@ module PaperTrailDiff
     end
     private_class_method :numbering
 
-    # An anchor saved after the version and before the edge, or after the
-    # edge and no later than the version.
-    #: (untyped, untyped, TransactionCut::Edge) -> untyped
-    def self.between(anchor_at, version_at, edge)
-      anchor_at.gt(version_at).and(edge.left(anchor_at))
-               .or(edge.right(anchor_at).and(anchor_at.lteq(version_at)))
+    # An anchor saved after the version and before the start, or after the
+    # start and no later than the version.
+    #: (untyped, untyped, Time) -> untyped
+    def self.between(anchor_at, version_at, start)
+      anchor_at.gt(version_at).and(anchor_at.lt(start))
+               .or(anchor_at.gteq(start).and(anchor_at.lteq(version_at)))
     end
     private_class_method :between
   end

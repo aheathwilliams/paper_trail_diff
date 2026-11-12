@@ -216,6 +216,18 @@ RSpec.describe PaperTrailDiff::ActivityChildCandidateLoader do
       expect(reader.current_pairs).to eq([[article.id, comment.id]])
     end
 
+    # Its versions, and those its live row is matched to, name the base class.
+    it 'leaves out a child of a subclass created after it' do
+      board = document
+      kept = board.pinned_badges.create!(label: 'Before')
+      finish = marker
+      board.pinned_badges.create!(label: 'After')
+      reader = loader(ChildLoaderDocument, [board.id], :pinned_badges, nil, finish)
+
+      expect(reader.historical_rows.map { |row| row.fetch(1) }).to eq([kept.id])
+      expect(reader.current_pairs).to eq([[board.id, kept.id]])
+    end
+
     # A version's item_id held as a string cannot be compared with an
     # integer key in every database, so the live rows are all read.
     it 'reads every live child where item ids are not held as the child key is' do
@@ -227,6 +239,23 @@ RSpec.describe PaperTrailDiff::ActivityChildCandidateLoader do
       expect(reader.historical_rows).to eq([])
       expect(reader.current_pairs).to eq([[post.id, note.id]])
     end
+  end
+
+  # Without an end no child was created after it, so nothing asks.
+  it 'reads without asking when children were created where there is no end' do
+    article = TrackedArticle.create!(title: 'Article')
+    article.comments.create!(body: 'Comment')
+    statements = []
+    count = ->(*, payload) { statements << payload[:sql] unless payload[:name] == 'SCHEMA' }
+    reader = loader(TrackedArticle, [article.id], :comments)
+
+    ActiveSupport::Notifications.subscribed(count, 'sql.active_record') do
+      reader.historical_rows
+      reader.current_pairs
+    end
+
+    expect(statements.length).to eq(2)
+    expect(statements.grep(/created_versions/)).to eq([])
   end
 
   it 'reads the owners Support::IDS_PER_STATEMENT to a statement' do

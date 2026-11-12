@@ -6,7 +6,11 @@ require_relative '../support/association_database'
 # history, the same way: a batch shares one history between its roots, which
 # starts before and runs on past the versions one root replays, and neither
 # that nor what else a batch reads changes what a root reports.
-RSpec.describe 'A record read alone and in a batch' do
+RSpec.describe 'A record read alone and in a batch',
+               mutant_expression: %w[PaperTrailDiff::CrossingTransactions
+                                     PaperTrailDiff::TimelineRange
+                                     PaperTrailDiff::ActivityTimelineBuilder
+                                     PaperTrailDiff::ActivityVersionCollector] do
   before do
     PaperTrail::VersionAssociation.delete_all
     PaperTrail::Version.delete_all

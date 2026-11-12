@@ -186,6 +186,20 @@ RSpec.describe PaperTrailDiff::DeletedAnalysisBatch do
     expect(plan.mutation?(destroyed)).to be(false)
   end
 
+  # A record saved since with the id, and removed without a version, is not
+  # the root: its versions are not context for the window.
+  it 'does not read a root destroyed before the window from a later record with its id' do
+    article, = deleted
+    reborn = FilterArticle.create!(id: article.id, title: 'Again')
+    FilterVersion.where(item_id: article.id, event: 'create').last.update_columns(created_at: at(9))
+    reborn.delete
+
+    result = analyze([key(article)], within: at(5)..at(6), context: true)
+
+    expect(result.fetch(key(article)).activity_timeline).to eq([])
+    expect(analyzed).to eq([])
+  end
+
   it 'does not read a root destroyed before the window, even when asked' do
     article, = deleted
     early, = deleted(minutes: [0, 1, 2])

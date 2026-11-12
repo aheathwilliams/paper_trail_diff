@@ -72,13 +72,11 @@ module PaperTrailDiff
       end
     end
 
-    # The number as a rational, or as it is when it has none.
+    # The number as a rational, or as it is when it has none: a complex
+    # number, or one that is not finite, such as a Float or BigDecimal NaN.
     #: (untyped) -> untyped
     def self.rational(number)
-      return number unless number.real?
-      return number if number.is_a?(Float) && !number.finite?
-
-      number.to_r
+      number.real? && number.finite? ? number.to_r : number
     end
 
     # The hash keyed by name, each value as the block returns it. Two keys

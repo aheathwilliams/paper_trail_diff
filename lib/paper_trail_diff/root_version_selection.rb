@@ -90,7 +90,6 @@ module PaperTrailDiff
       if @after_range
         return RootVersionPlan.contiguous([@after_range], context_version: @after_range)
       end
-      return RootVersionPlan.empty if @windowed && !@live_endpoint
       return RootVersionPlan.closing_on(@live_endpoint) if @windowed
 
       raise IncompleteTimeRangeError, INCOMPLETE

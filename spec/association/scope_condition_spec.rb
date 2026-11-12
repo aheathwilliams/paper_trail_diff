@@ -14,10 +14,18 @@ ActiveRecord::Schema.define do
     table.date :due
     table.decimal :amount, precision: 10, scale: 2
   end
+
+  create_table :scope_condition_pairs, primary_key: %i[owner_id position], force: true do |table|
+    table.integer :owner_id
+    table.integer :position
+  end
 end
 
 class ScopeConditionItem < ActiveRecord::Base
   enum :status, { draft: 0, live: 1 }
+end
+
+class ScopeConditionPair < ActiveRecord::Base
 end
 
 # The owner of each reflection under test; only reflections are read.
@@ -69,6 +77,13 @@ RSpec.describe PaperTrailDiff::ScopeCondition do
       expect(matches(build(-> { where(table[:rank].in([1, 2])) }), { rank: 1 }, { rank: 3 },
                      { rank: nil })).to eq([true, false, false])
       expect(matches(build(-> { where(table[:rank].not_in([1, 2])) }), { rank: 3 }, { rank: 2 },
+                     { rank: nil })).to eq([true, false, false])
+      expect(matches(build(-> { where(label: %w[a b]) }), { label: 'b' }, { label: 'c' }))
+        .to eq([true, false])
+    end
+
+    it 'reads an IN list holding NULL as matching its other values, as SQL does' do
+      expect(matches(build(-> { where(table[:rank].in([1, nil])) }), { rank: 1 }, { rank: 2 },
                      { rank: nil })).to eq([true, false, false])
     end
 
@@ -340,6 +355,10 @@ RSpec.describe PaperTrailDiff::ScopeCondition do
         .to eq([true, false])
       expect(matches(wrapped.call(-> { where(rank: [3, 5]) }), { rank: 5 }, { rank: 4 }))
         .to eq([true, false])
+      expect(matches(wrapped.call(-> { where(seen_at: cutoff) }), { seen_at: cutoff },
+                     { seen_at: cutoff + 1 })).to eq([true, false])
+      expect(matches(wrapped.call(-> { where(seen_at: [cutoff, cutoff + 5]) }),
+                     { seen_at: cutoff + 5 }, { seen_at: cutoff + 1 })).to eq([true, false])
     end
 
     it 'declines ranges on columns that do not sort in Ruby as in SQL' do
@@ -392,6 +411,25 @@ RSpec.describe PaperTrailDiff::ScopeCondition do
       expect(build(-> { order(:id) }, macro: :belongs_to, name: :owner_item)).not_to be_nil
       expect(build(-> { order(:id).limit(1) }, macro: :belongs_to, name: :owner_item)).to be_nil
       expect(build(-> { order(:label, :id).limit(1) })).to be_nil
+    end
+
+    # Active Record reads an unordered has_one with LIMIT 1, which most
+    # databases answer in key order.
+    it 'takes the first record as ranked, or without an order, the one with the lowest key' do
+      rows = lambda do |*keyed|
+        keyed.map { |row| Struct.new(:attributes).new(row.transform_keys(&:to_s)) }
+      end
+      first = ->(condition, records) { condition.first(records).map(&:attributes) }
+      items = rows.call({ id: 9 }, { id: 10 }, { id: 3 }, { id: 21 })
+      pairs = rows.call({ owner_id: 1, position: 10 }, { owner_id: 2, position: 0 },
+                        { owner_id: 1, position: 9 })
+      scoped = -> { where.not(owner_id: nil) }
+
+      expect(first.call(build(scoped, macro: :has_one, name: :item), items)).to eq([{ 'id' => 3 }])
+      expect(first.call(build(-> { order(:rank, :id) }, macro: :has_one, name: :item), items))
+        .to eq([{ 'id' => 9 }])
+      pair = build(scoped, macro: :has_one, name: :pair, target: 'ScopeConditionPair')
+      expect(first.call(pair, pairs)).to eq([{ 'owner_id' => 1, 'position' => 9 }])
     end
 
     # A has_many through keeps only its parts' conditions, so a part is read

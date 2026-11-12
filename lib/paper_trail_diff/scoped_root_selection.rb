@@ -107,12 +107,12 @@ module PaperTrailDiff
 
     # The roots with a version of their own in the window. Those without a
     # row are found in the database too (see Query#missing), not by comparing
-    # two plucked lists.
+    # two plucked lists. Only the related queries' types are compared, so
+    # this one names none.
     #: () -> AssociationActivitySelection::Query
     def changed_roots
-      AssociationActivitySelection::Query.new(
-        window_versions, version_class.arel_table[:item_id], key_type
-      )
+      AssociationActivitySelection::Query.new(window_versions, version_class.arel_table[:item_id],
+                                              nil)
     end
 
     # Comparing in SQL needs every subquery's column to share the key's type.
@@ -167,7 +167,7 @@ module PaperTrailDiff
 
       filter = HistoricalFilter.new(base_class, predicate: predicate, time_range: @time_range,
                                                 limit: @limit, max_versions: max_versions)
-      FilteredCandidates.new(@scope, filter, ordered: ->(ids) { candidate_relation([ids]) })
+      FilteredCandidates.new(@scope, filter, ordered: ->(ids) { candidate_relation(ids) })
     end
 
     # Accepts a model class as readily as a relation: `Article` and
@@ -220,7 +220,7 @@ module PaperTrailDiff
     # CandidateTable's; a record matching any of them is selected.
     #: (Array[untyped]) -> Array[untyped]
     def selected_records(candidates)
-      relation = candidate_relation(candidates)
+      relation = candidate_relation(*candidates)
       records = {} #: Hash[untyped, untyped]
       consumed = 0
       loop do
@@ -235,8 +235,8 @@ module PaperTrailDiff
     end
 
     # Pages are read by offset, so under a total order.
-    #: (Array[untyped]) -> untyped
-    def candidate_relation(candidates)
+    #: (*untyped) -> untyped
+    def candidate_relation(*candidates)
       candidates.map do |ids|
         conditions = { primary_key => ids } #: Hash[untyped, untyped]
         TotalOrder.apply(@scope).where(conditions)

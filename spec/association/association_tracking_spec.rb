@@ -988,7 +988,8 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     expect(bodies).to eq(%w[First Second Third])
   end
 
-  it 'filters descendant events by time and excludes later mutations from analysis' do
+  it 'filters descendant events by time and excludes later mutations from analysis',
+     mutant_expression: 'PaperTrailDiff::ActivityTimelineBuilder' do
     graph = article_with_graph
     range_start = Time.utc(2031, 1, 1, 12)
     graph[:before].update_columns(created_at: range_start - 3600)

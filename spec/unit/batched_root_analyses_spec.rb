@@ -230,10 +230,12 @@ RSpec.describe PaperTrailDiff::BatchedRootAnalyses do
       article, = root
       allow(Time).to receive(:now).and_return(at(60))
 
-      analyze([[article, PaperTrailDiff::RootVersionPlan.closing_on(article)]],
-              within: at(0)..at(1))
+      [true, false].each do |activity|
+        analyze([[article, PaperTrailDiff::RootVersionPlan.closing_on(article)]],
+                within: at(0)..at(1), activity: activity)
+      end
 
-      expect(prepared).to eq([[[article], [], { start_at: at(0), end_at: at(60) }]])
+      expect(prepared).to eq([[[article], [], { start_at: at(0), end_at: at(60) }]] * 2)
     end
 
     it 'prepares a class through now when one of its roots closes on its current state' do

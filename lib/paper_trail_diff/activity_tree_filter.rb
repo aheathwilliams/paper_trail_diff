@@ -67,7 +67,7 @@ module PaperTrailDiff
     def kept(pairs)
       kept = pairs.map { |event, _snapshot| unjudged?(event) }
       members = SnapshotMembers.new
-      judged(pairs, kept).zip(pairs.map(&:last) << @closing) do |indexes, snapshot|
+      judged(pairs).zip(pairs.map(&:last) << @closing) do |indexes, snapshot|
         members.move_to(snapshot)
         indexes.each { |index| kept[index] ||= holds?(members, pairs.fetch(index).first) }
       end
@@ -82,16 +82,14 @@ module PaperTrailDiff
     # The events each snapshot judges, by the snapshot's position, the one
     # after the last event being what the range closes on: an event is judged
     # by the snapshots at the first event and the root events of its
-    # transaction, and by the one after its last event.
-    #: (Array[[ActivityEvent, RecordSnapshot?]], Array[bool]) -> Array[Array[Integer]]
-    def judged(pairs, kept)
-      asked = Array.new(pairs.length + 1) { [] } #: Array[Array[Integer]]
-      kept.each_with_index do |known, index|
-        next if known
-
-        positions = [@starts.fetch(index), *@roots.fetch(@keys.fetch(index), []),
-                     @ends.fetch(index)]
-        positions.uniq.each { |position| asked.fetch(position) << index }
+    # transaction, and by the one after its last event. An event kept
+    # already is not asked about again (see #kept).
+    #: (Array[[ActivityEvent, RecordSnapshot?]]) -> Array[Array[Integer]]
+    def judged(pairs)
+      asked = Array.new(pairs.length.succ) { [] } #: Array[Array[Integer]]
+      pairs.each_index do |index|
+        positions = [@starts.fetch(index), *@roots[@keys.fetch(index)], @ends.fetch(index)]
+        positions.each { |position| asked.fetch(position) << index }
       end
       asked
     end

@@ -59,6 +59,7 @@ module PaperTrailDiff
     def initialize: (Array[ActivityEvent]) -> void
 
     # The events of the event's transaction, in the order they are replayed.
+    # The event is in a transaction with others.
     # : (ActivityEvent) -> Array[ActivityEvent]
     def events_for: (ActivityEvent) -> Array[ActivityEvent]
 

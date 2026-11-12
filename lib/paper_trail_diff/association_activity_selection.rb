@@ -67,8 +67,8 @@ module PaperTrailDiff
     def self.window(model, tree, range)
       return range unless range && tree && !tree.empty?
 
-      types = [model.base_class.name, *AssociationTraversal.new(tree).path_types(model)]
-      reach = CrossingTransactions.open_among(types, range.begin_time)
+      traversal = AssociationTraversal.new(tree)
+      reach = CrossingTransactions.open_around(model, traversal, range.begin_time)
       reach ? range.widened(reach) : range
     end
 
