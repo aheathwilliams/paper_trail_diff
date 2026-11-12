@@ -681,13 +681,15 @@ RSpec.describe PaperTrailDiff::ScopeCondition do
     # A destroyed record holds a skipped column only as its default.
     it 'refuses a condition on a column history skips, but reads a default scope on it' do
       stub_const('ScopeConditionSkipping', Class.new(ScopeConditionItem))
-      ScopeConditionSkipping.has_paper_trail skip: [:note]
+      ScopeConditionSkipping.has_paper_trail skip: %i[note due]
       stub_const('ScopeConditionSkippingDefault', Class.new(ScopeConditionSkipping))
       ScopeConditionSkippingDefault.class_eval { default_scope { where(note: 'kept') } }
       skipping = [ScopeConditionSkipping, ScopeConditionSkippingDefault]
       refused = ->(model, condition) { described_class.for_relation(model.where(condition), model) }
 
-      skipping.product([{ note: 'x' }, { note: %w[x y] }, { note: nil }, { note: 'a'..'b' }])
+      day = Date.new(2026, 1, 1)
+      skipping.product([{ note: 'x' }, { note: %w[x y] }, { note: nil }, { note: 'a'..'b' },
+                        { due: day }, { due: day.. }])
               .each { |model, condition| expect(refused.call(model, condition)).to be_nil }
       expect(relation_matches(ScopeConditionSkipping.where(rank: 1), { rank: 1, note: 'x' }))
         .to eq([true])

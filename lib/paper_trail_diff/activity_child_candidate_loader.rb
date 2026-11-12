@@ -130,27 +130,22 @@ module PaperTrailDiff
       first_versions(version_class).filter_map do |version|
         state = version.object && version.object_deserialized
         owner = state[foreign_key] if state
-        next unless held.include?(owner.to_s) && owned_by_type?(state)
+        # An `as:` child's type column must name one of the owner's types,
+        # which take a child with no type, as any plain child has.
+        next unless held.include?(owner.to_s) && parent_types.include?(state[@reflection.type])
 
         [owner, version.item_id, version.created_at, version.event]
       end
     end
 
-    # An `as:` child's type column must name one of the owner's types.
-    #: (Hash[String, untyped]) -> bool
-    def owned_by_type?(state)
-      type = @reflection.type
-      !type || parent_types.include?(state[type])
-    end
-
-    # The first versions since the start that do not create their item. One
-    # saved after the end holds the state the child had there too.
+    # The first version of each child since the start; one that created its
+    # child holds no state. One saved after the end holds the state the child
+    # had there too.
     #: (untyped) -> untyped
     def first_versions(version_class)
       versions = version_class.arel_table
-      relation = version_class.unscoped.where(item_type: @reflection.klass.base_class.name)
-                              .where.not(event: 'create')
-                              .where(VersionQuery.no_earlier_version(versions))
+      relation = VersionQuery.for_model(@reflection.klass)
+                             .where(VersionQuery.no_earlier_version(versions))
       relation = relation.where(versions[:created_at].gteq(@start_at)) if @start_at
       relation
     end

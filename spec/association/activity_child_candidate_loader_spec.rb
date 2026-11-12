@@ -333,9 +333,11 @@ RSpec.describe PaperTrailDiff::ActivityChildCandidateLoader do
       [stateless, keyless].each { |comment| comment.update!(article: other) }
       stateless.versions.last.update_column(:object, nil)
       version = keyless.versions.last
-      version.update_column(:object, version.object.sub(/^article_id: .*\n/, ''))
+      keyless_state = version.object_deserialized.except('article_id')
+      version.update_column(:object, PaperTrail.serializer.dump(keyless_state))
       PaperTrail::Version.create!(item_type: 'TrackedAuthor', item_id: stateless.id,
-                                  event: 'update', object: { 'article_id' => article.id }.to_yaml)
+                                  event: 'update',
+                                  object: PaperTrail.serializer.dump('article_id' => article.id))
 
       expect(rows(TrackedArticle, [article.id], :comments)).to eq([])
     end
@@ -349,9 +351,14 @@ RSpec.describe PaperTrailDiff::ActivityChildCandidateLoader do
         end
       end
       badges.each { |badge| badge.update!(holder: away) }
+      # A first version that names no type is under any owner.
+      untyped = badges.last.versions.last
+      state = untyped.object_deserialized.except('holder_type')
+      untyped.update_column(:object, PaperTrail.serializer.dump(state))
 
       expect(rows(ChildLoaderDocument, [board.id], :badges))
-        .to eq([[board.id, badges.first.id, 'update']])
+        .to contain_exactly([board.id, badges.first.id, 'update'],
+                            [board.id, badges.last.id, 'update'])
     end
   end
 end

@@ -176,7 +176,8 @@ module PaperTrailDiff
     #: (String) -> untyped
     def parse(value)
       # A part it does not name is nil, which `valid_date?` refuses as a TypeError.
-      year, month, day = Date._parse(value).values_at(:year, :mon, :mday)
+      parts = Date._parse(value).values_at(:year, :mon, :mday) #: Array[untyped]
+      year, month, day = parts
       raise ArgumentError unless Date.valid_date?(year, month, day)
 
       zone.parse(value)

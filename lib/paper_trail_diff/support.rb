@@ -228,7 +228,7 @@ module PaperTrailDiff
     # integer id by its value, so 2 comes before 10, and any other by its text.
     #: (Array[untyped]) -> Array[String]
     def self.sort_ids(ids)
-      ids.map(&:to_s).uniq.sort_by { |id| id.match?(/\A\d+\z/) ? [0, id.to_i, id] : [1, id] }
+      ids.map(&:to_s).uniq.sort_by { |id| id.match?(/\A\d+\z/) ? [id.to_i, id] : [Float::INFINITY, id] }
     end
 
     # Records sort by type first so that mixed id types stay comparable, then

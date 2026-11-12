@@ -73,12 +73,9 @@ module PaperTrailDiff
     # : (untyped, String) -> Array[Array[untyped]]
     def first_owner_rows: (untyped, String) -> Array[Array[untyped]]
 
-    # An `as:` child's type column must name one of the owner's types.
-    # : (Hash[String, untyped]) -> bool
-    def owned_by_type?: (Hash[String, untyped]) -> bool
-
-    # The first versions since the start that do not create their item. One
-    # saved after the end holds the state the child had there too.
+    # The first version of each child since the start; one that created its
+    # child holds no state. One saved after the end holds the state the child
+    # had there too.
     # : (untyped) -> untyped
     def first_versions: (untyped) -> untyped
 
