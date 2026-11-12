@@ -1,13 +1,13 @@
 # Generated from lib/paper_trail_diff/scoped_analysis.rb with RBS::Inline
 
 module PaperTrailDiff
-  # What the relation form of `analyze_many` returns: the analyses, plus the
-  # roots the relation could not reach.
+  # What `analyze_scope` and `report` return: the analyses, plus the roots the
+  # relation could not reach.
   #
   # `to_ary` is defined so the pair destructures, which keeps the common case
-  # reading like the plain Hash the record form returns:
+  # reading like the plain Hash `analyze_many` returns:
   #
-  #   analyses, unreachable = PaperTrailDiff.analyze_many(scope: ..., limit: 500)
+  #   analyses, unreachable = PaperTrailDiff.analyze_scope(Article.all, limit: 500)
   #
   # It deliberately does not pretend to be a Hash beyond that. Somebody
   # iterating this object should have to decide which half they meant.

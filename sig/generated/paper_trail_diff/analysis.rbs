@@ -13,9 +13,9 @@ module PaperTrailDiff
 
     attr_reader to_snapshot: RecordSnapshot?
 
-    # The time window the analysis covers, or nil without one; a report's has
-    # no end. It is the window asked for unless a transaction crossed an edge,
-    # which moves the edge back to where that transaction began.
+    # The time window asked for, or nil without one; a report's has no end.
+    # It does not move: a transaction that crossed an edge is reported in the
+    # window it ended in.
     attr_reader window: Range[Time?]?
 
     # The result for a record whose requested history contains no versions,

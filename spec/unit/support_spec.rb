@@ -283,11 +283,14 @@ RSpec.describe PaperTrailDiff::Support do
 
       expect(nans.product(nans).map { |left, right| described_class.same?(left, right) })
         .to all(be(true))
-      expect([[1, BigDecimal(1)], %w[a a], [time, time.in_time_zone('Tokyo')], [[Float::NAN], [Float::NAN]],
-              [{ 'n' => [1] }, { 'n' => [1] }]].map { |pair| described_class.same?(*pair) }).to all(be(true))
-      expect([[1, 1.0], [time, time.iso8601], [time.iso8601, time], [{ 'n' => 1 }, { 'n' => 1.0 }],
-              [[1], [1.0]], [[1], [1, 2]], [{ 'n' => 1 }, { 'm' => 1 }], [{ 'n' => 1 }, { 'n' => 1, 'm' => 2 }],
-              [{ 'n' => 1 }, [['n', 1]]], [[1], 1]].map { |pair| described_class.same?(*pair) }).to eq([false] * 10)
+      same = [[1, BigDecimal(1)], %w[a a], [time, time.in_time_zone('Tokyo')],
+              [[Float::NAN], [Float::NAN]], [{ 'n' => [1] }, { 'n' => [1] }]]
+      different = [[1, 1.0], [time, time.iso8601], [time.iso8601, time],
+                   [{ 'n' => 1 }, { 'n' => 1.0 }], [[1], [1.0]], [[1], [1, 2]],
+                   [{ 'n' => 1 }, { 'm' => 1 }], [{ 'n' => 1 }, { 'n' => 1, 'm' => 2 }],
+                   [{ 'n' => 1 }, [['n', 1]]], [[1], 1]]
+      expect(same.map { |pair| described_class.same?(*pair) }).to all(be(true))
+      expect(different.map { |pair| described_class.same?(*pair) }).to eq([false] * 10)
       expect([[Float::NAN, 1], [1, Float::NAN], [1, 2], ['NaN', Float::NAN]]
         .map { |pair| described_class.same?(*pair) }).to eq([false] * 4)
     end

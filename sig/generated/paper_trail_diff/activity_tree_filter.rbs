@@ -27,7 +27,8 @@ module PaperTrailDiff
   # read with it, so an event of a record outside the tree would bound a step
   # in one read and not in another. A snapshot does not hold a through's join
   # rows, so their versions are judged when they are collected, by the row's
-  # own state (PreparedActivityIndex#join_versions), and kept here.
+  # own state (PreparedActivityIndex#join_versions), and kept here where
+  # their transaction changed the snapshot.
   class ActivityTreeFilter
     # `closing` is the snapshot after the last event: the current record's,
     # or nil when nothing follows, as after the root's destruction.
@@ -60,10 +61,18 @@ module PaperTrailDiff
     # : (Array[[ActivityEvent, RecordSnapshot?]]) -> Array[bool]
     def kept: (Array[[ ActivityEvent, RecordSnapshot? ]]) -> Array[bool]
 
-    # The root's own events are kept, and a through's join rows were judged
-    # when they were collected.
-    # : (ActivityEvent) -> bool
-    def unjudged?: (ActivityEvent) -> bool
+    # A through's join rows were judged when they were collected, by where
+    # each leads, but a row can lead somewhere before the owner it joins is
+    # in the tree, or lead to records with nothing to show: its transaction
+    # is then left as it found the snapshot.
+    # The root's own events, and join rows whose transaction changed the
+    # snapshot, are kept whatever else holds.
+    # : (Array[ActivityEvent], Array[RecordSnapshot?]) -> Array[bool]
+    def unjudged: (Array[ActivityEvent], Array[RecordSnapshot?]) -> Array[bool]
+
+    # Each snapshot is read once, by its position.
+    # : (Array[RecordSnapshot?], Hash[Integer, untyped], Integer) -> bool
+    def changed?: (Array[RecordSnapshot?], Hash[Integer, untyped], Integer) -> bool
 
     # The events each snapshot judges, by the snapshot's position, the one
     # after the last event being what the range closes on: an event is judged

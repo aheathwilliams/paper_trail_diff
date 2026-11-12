@@ -220,11 +220,11 @@ module PaperTrailDiff
       end
     end
 
-    # Ids read as strings, in the order their records' ids take: an integer
-    # id by its value, so 2 comes before 10, and any other by its text.
-    #: (Array[String]) -> Array[String]
+    # Ids as strings, once each, in the order their records' ids take: an
+    # integer id by its value, so 2 comes before 10, and any other by its text.
+    #: (Array[untyped]) -> Array[String]
     def self.sort_ids(ids)
-      ids.sort_by { |id| id.match?(/\A\d+\z/) ? [0, id.to_i, id] : [1, 0, id] }
+      ids.map(&:to_s).uniq.sort_by { |id| id.match?(/\A\d+\z/) ? [0, id.to_i, id] : [1, 0, id] }
     end
 
     # Records sort by type first so that mixed id types stay comparable, then
@@ -367,21 +367,24 @@ module PaperTrailDiff
     #: (untyped, untyped) -> bool
     def self.same?(left, right)
       return nan?(right) if nan?(left)
+      return same_hash?(left, right) if left.is_a?(Hash)
+      return same_array?(left, right) if left.is_a?(Array)
 
-      case left
-      when Hash then right.is_a?(Hash) && same_members?(left, right)
-      when Array then right.is_a?(Array) && left.length == right.length &&
-        left.each_index.all? { |index| same?(left[index], right[index]) }
-      else left == right && right == left && left.is_a?(Float) == right.is_a?(Float)
-      end
+      left == right && right == left && left.is_a?(Float) == right.is_a?(Float)
     end
 
-    #: (Hash[untyped, untyped], Hash[untyped, untyped]) -> bool
-    def self.same_members?(left, right)
-      left.length == right.length &&
+    #: (Hash[untyped, untyped], untyped) -> bool
+    def self.same_hash?(left, right)
+      right.is_a?(Hash) && left.length == right.length &&
         left.all? { |key, value| right.key?(key) && same?(value, right[key]) }
     end
-    private_class_method :same_members?
+
+    #: (Array[untyped], untyped) -> bool
+    def self.same_array?(left, right)
+      right.is_a?(Array) && left.length == right.length &&
+        left.each_index.all? { |index| same?(left[index], right[index]) }
+    end
+    private_class_method :same_hash?, :same_array?
 
     # A Float or BigDecimal NaN.
     #: (untyped) -> bool

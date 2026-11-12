@@ -254,7 +254,8 @@ RSpec.describe PaperTrailDiff::ActivityChildCandidateLoader do
       reader.current_pairs
     end
 
-    expect(statements.length).to eq(2)
+    # The rows, the first versions of children made without one, the live rows.
+    expect(statements.length).to eq(3)
     expect(statements.grep(/created_versions/)).to eq([])
   end
 
@@ -273,7 +274,9 @@ RSpec.describe PaperTrailDiff::ActivityChildCandidateLoader do
     owned = articles.map(&:id).zip(comments.map(&:id))
     expect(rows.map { |row| row.first(2) }).to match_array(owned)
     expect(pairs).to match_array(owned)
-    expect(statements.length).to eq(4)
+    # Two statements of rows and two of live rows; the first versions of
+    # children made without one are read once for every owner.
+    expect(statements.length).to eq(5)
   end
 
   it 'reads nothing for a composite foreign key' do

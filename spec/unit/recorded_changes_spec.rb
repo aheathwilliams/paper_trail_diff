@@ -174,7 +174,8 @@ RSpec.describe PaperTrailDiff::RecordedChanges do
   end
 
   it 'rejects a version loaded without its object_changes column' do
-    version = RecordedVersion.select(:id, :item_type, :item_id, :event).find(event_version(edited_note, 'update').id)
+    version = RecordedVersion.select(:id, :item_type, :item_id,
+                                     :event).find(event_version(edited_note, 'update').id)
 
     expect { recorded(version) }
       .to raise_error(PaperTrailDiff::InvalidEndpointError, /without its object_changes column/)

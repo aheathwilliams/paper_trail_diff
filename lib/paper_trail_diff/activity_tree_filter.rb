@@ -28,7 +28,8 @@ module PaperTrailDiff
   # read with it, so an event of a record outside the tree would bound a step
   # in one read and not in another. A snapshot does not hold a through's join
   # rows, so their versions are judged when they are collected, by the row's
-  # own state (PreparedActivityIndex#join_versions), and kept here.
+  # own state (PreparedActivityIndex#join_versions), and kept here where
+  # their transaction changed the snapshot.
   class ActivityTreeFilter
     # `closing` is the snapshot after the last event: the current record's,
     # or nil when nothing follows, as after the root's destruction.
@@ -65,19 +66,39 @@ module PaperTrailDiff
     # with its events times the records of the tree.
     #: (Array[[ActivityEvent, RecordSnapshot?]]) -> Array[bool]
     def kept(pairs)
-      kept = pairs.map { |event, _snapshot| unjudged?(event) }
+      snapshots = pairs.map(&:last) << @closing
+      kept = unjudged(pairs.map(&:first), snapshots)
       members = SnapshotMembers.new
-      judged(pairs).zip(pairs.map(&:last) << @closing) do |indexes, snapshot|
+      judged(pairs).zip(snapshots) do |indexes, snapshot|
         members.move_to(snapshot)
         indexes.each { |index| kept[index] ||= holds?(members, pairs.fetch(index).first) }
       end
       kept
     end
 
-    # The root's own events are kept, and a through's join rows were judged
-    # when they were collected.
-    #: (ActivityEvent) -> bool
-    def unjudged?(event) = event.root? || event.join?
+    # A through's join rows were judged when they were collected, by where
+    # each leads, but a row can lead somewhere before the owner it joins is
+    # in the tree, or lead to records with nothing to show: its transaction
+    # is then left as it found the snapshot.
+    # The root's own events, and join rows whose transaction changed the
+    # snapshot, are kept whatever else holds.
+    #: (Array[ActivityEvent], Array[RecordSnapshot?]) -> Array[bool]
+    def unjudged(events, snapshots)
+      read = {} #: Hash[Integer, untyped]
+      events.each_with_index.map do |event, index|
+        event.root? || (event.join? && changed?(snapshots, read, index))
+      end
+    end
+
+    # Each snapshot is read once, by its position.
+    #: (Array[RecordSnapshot?], Hash[Integer, untyped], Integer) -> bool
+    def changed?(snapshots, read, index)
+      before, after = [@starts, @ends].map do |positions|
+        position = positions.fetch(index)
+        read.fetch(position) { read[position] = snapshots.fetch(position)&.to_h }
+      end
+      before != after
+    end
 
     # The events each snapshot judges, by the snapshot's position, the one
     # after the last event being what the range closes on: an event is judged

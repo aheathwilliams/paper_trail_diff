@@ -34,9 +34,8 @@ module PaperTrailDiff
 
     #: (untyped) -> bool
     def self.cut_part?(reflection)
-      reflection.collection? &&
-        (ScopeCondition.ranked_parts?(reflection) ||
-          AssociationTraversal.through_parts(reflection).any?(&:has_one?))
+      ScopeCondition.ranked_parts?(reflection) ||
+        AssociationTraversal.through_parts(reflection).any?(&:has_one?)
     end
     private_class_method :cut_part?
   end

@@ -82,7 +82,8 @@ module PaperTrailDiff
     def self.check_recorded!(clause, model_class)
       return if clause.empty? || !model_class.respond_to?(:paper_trail_options)
 
-      skipped = Array(model_class.paper_trail_options[:skip]).map(&:to_s)
+      skip = model_class.paper_trail_options[:skip] #: Array[untyped]?
+      skipped = Array(skip).map(&:to_s)
       Reader.new(model_class, refused: skipped).call(clause.ast)
     end
     private_class_method :check_recorded!

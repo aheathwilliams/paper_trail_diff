@@ -96,6 +96,11 @@ module PaperTrailDiff
     # : (untyped) -> untyped
     def time_value: (untyped) -> untyped
 
+    # A string must name a real day, which `parse` alone does not demand: it
+    # reads '12' as noon today and rolls 30 February into March.
+    # : (String) -> untyped
+    def parse: (String) -> untyped
+
     # An inclusive date end runs through the day: to the next one's start.
     # : (Range[untyped]) -> untyped
     def end_value: (Range[untyped]) -> untyped

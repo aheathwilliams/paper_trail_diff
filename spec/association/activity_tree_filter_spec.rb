@@ -334,9 +334,21 @@ RSpec.describe PaperTrailDiff::ActivityTreeFilter do
 
     it 'keeps the root\'s events and join rows, and judges every other' do
       pairs = [[root_event(1, 1), holding], [event(2, 5, 2, join: true), holding],
-               [event(3, 6, 3), holding], [event(4, 7, 4), holding(7)], [root_event(5, 5), holding]]
+               [event(3, 6, 3), holding(9)], [event(4, 7, 4), holding(7)],
+               [root_event(5, 5), holding]]
 
       expect(kept(pairs)).to eq([1, 2, 4, 5])
+    end
+
+    # A snapshot holds no join rows, so one whose transaction left the
+    # snapshot as it found it led nowhere the root shows.
+    it 'keeps a join row only where its transaction changed the snapshot' do
+      pairs = [[root_event(1, 1), holding], [event(2, 5, 2, join: true), holding],
+               [event(3, 6, 3, join: true), holding], [event(4, 7, 3), holding(7)],
+               [root_event(5, 5), holding(7)]]
+
+      expect(kept(pairs)).to eq([1, 3, 4, 5])
+      expect(kept(pairs.first(2), closing: holding(5))).to eq([1, 2])
     end
 
     it 'judges the last transaction by what the range closes on' do

@@ -42,8 +42,8 @@ module PaperTrailDiff
 
   # Performs read-only checks for known PaperTrail/PT-AT reconstruction hazards.
   #
-  # The endpoints are a comparison's: two versions, or a version and the
-  # current record, in either order. Two current records read no history, so
+  # The endpoints are a comparison's: two versions in time order, or a
+  # version and the current record, in either order. Two current records read no history, so
   # nothing is checked.
   class HistoryDiagnostics
     STOPPING_CODES: untyped
@@ -74,7 +74,8 @@ module PaperTrailDiff
 
     @versions: Array[untyped]
 
-    # The endpoints that are versions, in the order given.
+    # The endpoints that are versions, in the order given. Endpoints that
+    # `compare` rejects whatever their history raise as it would.
     # : (untyped, untyped) -> Array[untyped]
     def validated_versions: (untyped, untyped) -> Array[untyped]
 

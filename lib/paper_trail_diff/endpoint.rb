@@ -177,8 +177,9 @@ module PaperTrailDiff
       return unless version.respond_to?(:has_attribute?) && version.class.respond_to?(:column_names)
       return if version.has_attribute?(column) || !version.class.column_names.include?(column)
 
-      raise InvalidEndpointError, "version #{version.id} was loaded without its #{column} column; " \
-                                  'load versions with all their columns'
+      raise InvalidEndpointError,
+            "version #{version.id} was loaded without its #{column} column; " \
+            'load versions with all their columns'
     end
   end
 

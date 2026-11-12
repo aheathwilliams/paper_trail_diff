@@ -31,11 +31,12 @@ module PaperTrailDiff
 
       version_class = @parent_class.paper_trail.version_class
       scope = VersionAssociationCandidateScope.new(version_class, @start_at)
-      owner_slices.flat_map do |owners|
+      recorded = owner_slices.flat_map do |owners|
         relation = scope.call(historical_relation(version_class, foreign_key, owners))
         relation = relation.where(there_by_end(version_class)) if @end_at
-        typed_rows(pluck_rows(relation, version_class))
+        pluck_rows(relation, version_class)
       end
+      typed_rows((recorded + first_owner_rows(version_class, foreign_key)).uniq)
     end
 
     #: () -> Array[Array[untyped]]
@@ -117,6 +118,41 @@ module PaperTrailDiff
         foreign_key_id: owners,
         foreign_type: parent_types
       ).where(version_class.table_name => { item_type: @reflection.klass.base_class.name })
+    end
+
+    # PT-AT stores the keys a version saved, so the owner a child held before
+    # its first version is in no row when that version is not a create: the
+    # child was made without one, and its first version's state, which holds
+    # that owner, is read instead.
+    #: (untyped, String) -> Array[Array[untyped]]
+    def first_owner_rows(version_class, foreign_key)
+      held = @parent_ids.to_set(&:to_s)
+      first_versions(version_class).filter_map do |version|
+        state = version.object && version.object_deserialized
+        owner = state[foreign_key] if state.is_a?(Hash)
+        next unless held.include?(owner.to_s) && owned_by_type?(state)
+
+        [owner, version.item_id, version.created_at, version.event]
+      end
+    end
+
+    # An `as:` child's type column must name one of the owner's types.
+    #: (Hash[String, untyped]) -> bool
+    def owned_by_type?(state)
+      type = @reflection.type
+      !type || parent_types.include?(state[type])
+    end
+
+    # The first versions since the start that do not create their item. One
+    # saved after the end holds the state the child had there too.
+    #: (untyped) -> Array[untyped]
+    def first_versions(version_class)
+      versions = version_class.arel_table
+      relation = version_class.unscoped.where(item_type: @reflection.klass.base_class.name)
+                              .where.not(event: 'create')
+                              .where(VersionQuery.no_earlier_version(versions))
+      relation = relation.where(versions[:created_at].gteq(@start_at)) if @start_at
+      relation.select(:id, :item_type, :item_id, :created_at, :event, :object).to_a
     end
 
     #: (untyped, untyped) -> Array[Array[untyped]]

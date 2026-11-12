@@ -98,7 +98,7 @@ module PaperTrailDiff
     #: (Array[AssociationActivitySelection::Query]) -> Result
     def database_selection(related)
       sources = [changed_roots, *related]
-      missing = Support.sort_ids(sources.flat_map { |ids| ids.missing(base_class) }.map(&:to_s).uniq)
+      missing = Support.sort_ids(sources.flat_map { |ids| ids.missing(base_class) })
       Result.new(
         records: selected_records(sources.map(&:relation)),
         unreachable: missing.map { |id| identity(id) }.freeze
@@ -168,7 +168,6 @@ module PaperTrailDiff
 
     #: (untyped, Integer) -> FilteredCandidates?
     def historical_filter_for(predicate, max_versions)
-      HistoricalFilter.budget(max_versions)
       return if predicate.nil?
 
       filter = HistoricalFilter.new(base_class, predicate: predicate, time_range: @time_range,

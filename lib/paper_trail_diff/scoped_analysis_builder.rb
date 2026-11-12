@@ -12,6 +12,7 @@ module PaperTrailDiff
       raise ConfigurationError, 'limit: is required when selecting roots by scope' if limit.nil?
 
       Support.boolean!(:include_deleted, include_deleted)
+      HistoricalFilter.budget(max_filter_versions)
 
       @selection = ScopedRootSelection.new(
         scope, limit: limit, time_range: time_range(within, scope),

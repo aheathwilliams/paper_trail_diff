@@ -136,6 +136,7 @@ module PaperTrailDiff
       unless Endpoint.identity(from) == Endpoint.identity(to)
         raise VersionMismatchError, 'endpoints must belong to the same PaperTrail item'
       end
+
       Endpoint.validate_order!(from, to)
 
       [from, to].select { |endpoint| Endpoint.version?(endpoint) }
