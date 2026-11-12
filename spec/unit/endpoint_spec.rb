@@ -66,6 +66,20 @@ RSpec.describe PaperTrailDiff::Endpoint do
           .to refused('current record endpoint must be persisted and not destroyed')
       end
     end
+
+    it 'refuses a version of a model whose version table keeps no states, first or second' do
+      feature, created, = history(FilterFeature)
+      allow(FilterVersion).to receive(:column_names)
+        .and_return(FilterVersion.column_names - ['object'])
+
+      [[created, feature], [feature, created]].each do |from, to|
+        expect { described_class.validate_pair!(from, to) }
+          .to raise_error(PaperTrailDiff::ConfigurationError,
+                          'FilterVersion has no object column, so FilterArticle has no ' \
+                          'recorded states to rebuild history from: add one to its version table')
+      end
+      expect(described_class.validate_pair!(feature, feature)).to be_nil
+    end
   end
 
   describe '.validate_order!' do
@@ -105,6 +119,15 @@ RSpec.describe PaperTrailDiff::Endpoint do
           .to refused('expected a PaperTrail version or persisted record endpoint')
       end
     end
+
+    it 'refuses a version loaded without the column its state is in' do
+      _article, created, = history
+      partial = FilterVersion.select(:id, :item_type, :item_id, :event).find(created.id)
+
+      expect { described_class.validate!(partial) }
+        .to refused("version #{created.id} was loaded without its object column; " \
+                    'load versions with all their columns')
+    end
   end
 
   describe '.validate_root!' do
@@ -115,6 +138,15 @@ RSpec.describe PaperTrailDiff::Endpoint do
 
       expect([article, destroyed, plain_record.new(1, false)]
         .map { |record| described_class.validate_root!(record) }).to eq([nil, nil, nil])
+    end
+
+    it 'refuses a saved record with unsaved changes, but not a new one' do
+      article, = history
+      article.title = 'Unsaved'
+
+      expect { described_class.validate_root!(article) }
+        .to refused('record must not have unsaved changes')
+      expect(described_class.validate_root!(FilterArticle.new(title: 'New'))).to be_nil
     end
 
     it 'names what it was given instead of a record, without loading a relation' do

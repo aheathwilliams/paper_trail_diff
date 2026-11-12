@@ -6,7 +6,15 @@ require_relative '../support/association_database'
 # of one range and the start of the next. Each reads the records around it as
 # they stood before every transaction that had not ended where the version's
 # own took effect.
-RSpec.describe 'One reading of a version' do
+RSpec.describe 'One reading of a version',
+               mutant_expression: %w[PaperTrailDiff::ActivityTimelineBuilder
+                                     PaperTrailDiff::ActivityTransactionGroups
+                                     PaperTrailDiff::TransactionCut
+                                     PaperTrailDiff::TransactionEnds
+                                     PaperTrailDiff::ScopedRootSelection
+                                     PaperTrailDiff::VersionScopeFilter
+                                     PaperTrailDiff::AssociationActivitySelection
+                                     PaperTrailDiff::PreparedHistoryLoader] do
   before do
     PaperTrail::VersionAssociation.delete_all
     PaperTrail::Version.delete_all
@@ -84,6 +92,55 @@ RSpec.describe 'One reading of a version' do
 
     expect(rows(steps)).to contain_exactly([:changed, 'title', 'two', 'A'],
                                            [:changed, 'comments.body', 'edited', 'A'])
+  end
+
+  # A saves the article, B edits a comment and ends, then A ends: the range
+  # from A's version starts where A took effect, after B.
+  it "reads another transaction that ended inside the first version's as the start" do
+    article = TrackedArticle.create!(title: 'one')
+    comment = article.comments.create!(body: 'kept')
+    in_transaction(1, 'A') { article.update!(title: 'two') }
+    in_transaction(2, 'B') { comment.update!(body: 'by B') }
+    in_transaction(1, 'A') { TrackedAuthor.create!(name: 'done') }
+    article.update!(title: 'three')
+    _create, from, to = article.versions.reorder(:id).to_a
+
+    steps = PaperTrailDiff.activity_timeline(article, from: from, to: to,
+                                                      associations: [:comments])
+
+    expect(rows(steps).map(&:last)).not_to include('B')
+  end
+
+  # Y edits a comment and is still open when X saves the article; Y ends
+  # after X. A range that ends at X's version ends before Y took effect.
+  it 'leaves out of a range what took effect after the version it ends at' do
+    article = TrackedArticle.create!(title: 'one')
+    comment = article.comments.create!(body: 'kept')
+    in_transaction(2, 'Y') { comment.destroy! }
+    in_transaction(1, 'X') { article.update!(title: 'two') }
+    in_transaction(2, 'Y') { TrackedAuthor.create!(name: 'done') }
+    article.update!(title: 'three')
+    created, crossed, last = article.versions.reorder(:id).to_a
+    authors = lambda do |from, to|
+      rows(PaperTrailDiff.activity_timeline(article, from: from, to: to, associations: [:comments]))
+        .map(&:last)
+    end
+
+    expect(authors.call(created, crossed)).not_to include('Y')
+    expect(authors.call(crossed, last)).to include('Y')
+  end
+
+  it 'reports what was saved after the last version of a range that ends at the live record' do
+    article = TrackedArticle.create!(title: 'one')
+    comment = article.comments.create!(body: 'kept')
+    article.update!(title: 'two')
+    in_transaction(1, 'A') { comment.update!(body: 'live') }
+    from = article.versions.reorder(:id).last
+
+    steps = PaperTrailDiff.activity_timeline(article.reload, from: from, to: article,
+                                                             associations: [:comments])
+
+    expect(rows(steps)).to include([:changed, 'comments.body', 'live', 'A'])
   end
 
   # Without associations no other record is read, so nothing places a

@@ -26,8 +26,6 @@ module PaperTrailDiff
     # : (untyped, AssociationTraversal, untyped) -> untyped
     def self.crossing_start: (untyped, AssociationTraversal, untyped) -> untyped
 
-    # Each root's first version at or after the start, where a transaction
-    # saved it.
     # A range that ends at a version ends where that version's transaction
     # takes effect, at the last version it saved (see TransactionEnds), so
     # what another transaction saved and committed before then is read, and
@@ -40,6 +38,8 @@ module PaperTrailDiff
     # : (Array[untyped]) -> untyped
     def self.ends_at: (Array[untyped]) -> untyped
 
+    # Each root's first version at or after the start, where a transaction
+    # saved it.
     # : (Array[untyped], untyped) -> Array[untyped]
     def self.opening_versions: (Array[untyped], untyped) -> Array[untyped]
 

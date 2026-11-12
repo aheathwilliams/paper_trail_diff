@@ -249,7 +249,7 @@ module PaperTrailDiff
 
     # A composite key names a record only when every part of it is read.
     #: (untyped) -> bool
-    def keyless?(id) = id.nil? || [*id].include?(nil)
+    def keyless?(id) = [id].flatten.include?(nil)
 
     # Pages are read by offset, so under a total order.
     #: (*untyped) -> untyped

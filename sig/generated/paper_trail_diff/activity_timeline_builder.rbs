@@ -220,19 +220,14 @@ module PaperTrailDiff
     # : (Array[untyped], start_at: untyped, end_at: untyped, reach: bool) -> untyped
     def prepare_history: (Array[untyped], start_at: untyped, end_at: untyped, reach: bool) -> untyped
 
-    # A window collects from where its history starts, which is where the
-    # transactions across its start began; explicit endpoints from their first
-    # version. Explicit endpoints also stop before the rest of the closing
-    # version's transaction (see ActivityTransactionGroups.before_closing); a
-    # window keeps every event it collected and reports only those inside it.
+    # Events are collected from where the history starts, which is where the
+    # transactions across the range's start began. Without a history only
+    # root versions are collected, all of them in the range. Explicit
+    # endpoints also stop before the rest of the closing version's
+    # transaction (see ActivityTransactionGroups.before_closing); a window
+    # keeps every event it collected and reports only those inside it.
     # : (Array[untyped], untyped, range_end: untyped, closing: untyped) -> Array[ActivityEvent]
     def collect_events: (Array[untyped], untyped, range_end: untyped, closing: untyped) -> Array[ActivityEvent]
-
-    # A history starts where the transactions across the range's start
-    # began. Without one, only root versions are collected, all of them in
-    # the range, so the first of them starts it.
-    # : (untyped) -> untyped
-    def range_start: (untyped) -> untyped
 
     # A version filter reads its answers for a batch's history once, for the
     # first root that history serves.

@@ -34,6 +34,27 @@ RSpec.describe PaperTrailDiff::ActivityTransactionGroups do
     end
   end
 
+  describe '.until_destroyed' do
+    def change(event, root: false)
+      version = Struct.new(:id, :transaction_id, :event).new(1, nil, event)
+      PaperTrailDiff::ActivityEvent.new(version: version, branches: root ? nil : ['comments'])
+    end
+
+    it "leaves out what the root's tree saw from its destruction until it is created again" do
+      before = change('update')
+      destroyed = change('destroy', root: true)
+      created = change('create', root: true)
+      after = change('create')
+      events = [change('create'), change('update', root: true), before, destroyed,
+                change('update'), change('destroy'), created, after]
+
+      kept = described_class.until_destroyed(events)
+
+      expect(kept).to eq([*events.first(2), before, destroyed, created, after])
+      expect(kept).to be_frozen
+    end
+  end
+
   describe '#events_for' do
     it "gives the events of an event's transaction, in the order given" do
       first = event(1, 7)

@@ -178,7 +178,8 @@ module PaperTrailDiff
     def record_matches?(record)
       return @predicate.call(record) unless @predicate.instance_of?(Hash)
 
-      @predicate.all? { |name, expected| stored(name, record.attributes.fetch(name)) == expected }
+      live = StoredValues.apply(@model, record.attributes)
+      @predicate.all? { |name, expected| live.fetch(name) == expected }
     end
 
     #: (Integer) -> void

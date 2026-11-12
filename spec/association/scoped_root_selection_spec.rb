@@ -99,6 +99,18 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
                         'add has_paper_trail to it')
     end
 
+    it 'refuses a relation whose rows name no record, for want of a key or a part of one' do
+      TrackedArticle.create!(title: 'One')
+      refusal = 'scope: selects columns without id, so its rows name no record; select it too'
+
+      expect { select(TrackedArticle.select(:title)) }
+        .to raise_error(PaperTrailDiff::ConfigurationError, refusal)
+      expect(select(TrackedArticle.select(:id, :title)).records.map(&:title)).to eq(['One'])
+      allow_any_instance_of(described_class).to receive(:record_page)
+        .and_return([TrackedArticle.new(id: 1), Struct.new(:id).new([1, nil])])
+      expect { select(TrackedArticle) }.to raise_error(PaperTrailDiff::ConfigurationError, refusal)
+    end
+
     it 'requires a positive Integer limit' do
       [0, -1, 1.0, '1', nil].each do |limit|
         expect { select(TrackedArticle, limit: limit) }
@@ -542,6 +554,21 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
       result = select(TrackedArticle, time_range: since(start), version_scope: by_people)
 
       expect(result.unreachable).to eq([['TrackedArticle', by_alice.id.to_s]])
+    end
+
+    # With associations the scope keeps whole transactions, as their activity
+    # reports them; on the root alone it keeps only the root's own versions.
+    it 'selects a root by a transaction the scope keeps, only with associations' do
+      article = TrackedArticle.create!(title: 'Draft')
+      start = Time.now.utc
+      article.update!(title: 'Final')
+      PaperTrail.request(whodunnit: 'alice') { TrackedAuthor.create!(name: 'Alice') }
+      PaperTrail::Version.where('created_at >= ?', start).update_all(transaction_id: 1_000_007)
+      options = { time_range: since(start), version_scope: by_people }
+
+      expect(select(TrackedArticle, **options, activity_tree: tree(:comments)).records)
+        .to eq([article])
+      expect(select(TrackedArticle, **options).records).to eq([])
     end
 
     it 'selects a root through its requested associations only by versions the scope keeps' do

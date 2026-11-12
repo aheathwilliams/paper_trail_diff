@@ -37,7 +37,6 @@ module PaperTrailDiff
       @window = window
       @record = record
       @root_ids = root_ids
-      @root_versions = root_versions
       @tree = tree
       @traversal = traversal
       start_at = TransactionCut.range_start(root_versions, start_at) unless window
@@ -62,7 +61,6 @@ module PaperTrailDiff
     # @rbs @window: bool
     # @rbs @record: untyped
     # @rbs @root_ids: Array[untyped]
-    # @rbs @root_versions: Array[untyped]
     # @rbs @tree: AssociationTree
     # @rbs @traversal: AssociationTraversal
     # @rbs @records: PreparedRecordIndex

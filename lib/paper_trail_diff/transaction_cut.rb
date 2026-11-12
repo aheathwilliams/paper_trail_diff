@@ -32,20 +32,16 @@ module PaperTrailDiff
     # the model and its paths.
     #: (untyped, AssociationTraversal, untyped) -> untyped
     def self.crossing_start(model, traversal, start_at)
-      [start_at, CrossingTransactions.open_around(model, traversal, start_at)].compact.min
+      CrossingTransactions.open_around(model, traversal, start_at) || start_at
     end
 
-    # Each root's first version at or after the start, where a transaction
-    # saved it.
     # A range that ends at a version ends where that version's transaction
     # takes effect, at the last version it saved (see TransactionEnds), so
     # what another transaction saved and committed before then is read, and
     # a destroyed root's tree is read up to its destruction.
     #: (untyped) -> untyped
     def self.range_end(version)
-      key = ActivityTransactionGroups.transaction_key(version)
-      return version unless key
-
+      key = ActivityTransactionGroups.transaction_key(version) #: untyped
       RecordedTransactionEnds.new.call([version]) { [] }.fetch(key, version)
     end
 
@@ -53,12 +49,12 @@ module PaperTrailDiff
     # latest time any of their transactions takes effect; nil for none.
     #: (Array[untyped]) -> untyped
     def self.ends_at(versions)
-      return if versions.empty?
-
       recorded = RecordedTransactionEnds.new.call(versions) { [] }
       (versions + recorded.values).map(&:created_at).max
     end
 
+    # Each root's first version at or after the start, where a transaction
+    # saved it.
     #: (Array[untyped], untyped) -> Array[untyped]
     def self.opening_versions(root_versions, start_at)
       return [] unless start_at

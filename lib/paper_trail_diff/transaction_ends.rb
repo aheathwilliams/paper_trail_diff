@@ -29,8 +29,7 @@ module PaperTrailDiff
   class TransactionEnds
     #: (Array[untyped], ?Hash[Array[untyped], untyped]?) -> void
     def initialize(versions, recorded = nil)
-      @grouped = !recorded.nil?
-      @recorded = recorded || {}
+      @recorded = recorded
       saved = versions.sort_by { |version| Support.chronological_version_key(version) }
       @last = TransactionEnds.lasts(saved)
       freeze
@@ -47,10 +46,11 @@ module PaperTrailDiff
     # The last version of the version's transaction, or the version itself.
     #: (untyped) -> untyped
     def last(version)
+      recorded = @recorded
       key = ActivityTransactionGroups.transaction_key(version)
-      return version if key.nil? || !@grouped
+      return version if key.nil? || recorded.nil?
 
-      @recorded[key] || @last[key] || version
+      recorded[key] || @last[key] || version
     end
 
     # Orders versions by where their transactions end, then as they were
@@ -61,8 +61,7 @@ module PaperTrailDiff
        Support.chronological_version_key(version)]
     end
 
-    # @rbs @grouped: bool
-    # @rbs @recorded: Hash[Array[untyped], untyped]
+    # @rbs @recorded: Hash[Array[untyped], untyped]?
     # @rbs @last: Hash[Array[untyped]?, untyped]
   end
 

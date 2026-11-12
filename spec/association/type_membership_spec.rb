@@ -70,11 +70,26 @@ end
 # class's STI type condition, an `as:` owner's polymorphic name and a
 # through's `source_type:`. A batch of roots of several classes of one table
 # reads each as it is read alone.
-RSpec.describe 'Membership by type' do
+RSpec.describe 'Membership by type',
+               mutant_expression: %w[PaperTrailDiff::PreparedHistoryLoader
+                                     PaperTrailDiff::AssociationTraversal
+                                     PaperTrailDiff::PreparedActivityIndex] do
   before do
     PaperTrail::VersionAssociation.delete_all
     PaperTrail::Version.delete_all
     [TmNote, TmItem, TmProject, TmPerson].each(&:delete_all)
+  end
+
+  # The groups of records the history of `record` holds for an edge.
+  def prepared_edge(record, path, name)
+    tree = PaperTrailDiff::AssociationTree.build([path])
+    versions = record.versions.reorder(:id).to_a
+    history = PaperTrailDiff::PreparedHistoryLoader.new(
+      record, root_ids: [record.id], root_versions: versions, tree: tree,
+              traversal: PaperTrailDiff::AssociationTraversal.new(tree),
+              start_at: versions.first.created_at, end_at: nil, live_records: []
+    ).call
+    history.edge(record.class, record.class.reflect_on_association(name))
   end
 
   def ids(snapshot, name)
@@ -149,6 +164,7 @@ RSpec.describe 'Membership by type' do
 
       steps = PaperTrailDiff.activity_timeline(person, associations: ['noted_items.blocked_by'])
       expect(steps.length).to eq(2)
+      expect(prepared_edge(person, 'noted_items.blocked_by', :noted_items).keys).to eq(['TmItem'])
     end
   end
 

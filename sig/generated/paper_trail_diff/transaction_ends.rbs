@@ -43,11 +43,9 @@ module PaperTrailDiff
     # : (untyped) -> Array[untyped]
     def sort_key: (untyped) -> Array[untyped]
 
-    @grouped: bool
-
     @last: Hash[Array[untyped]?, untyped]
 
-    @recorded: Hash[Array[untyped], untyped]
+    @recorded: Hash[Array[untyped], untyped]?
   end
 
   # Reads where transactions end from their version tables: the last version

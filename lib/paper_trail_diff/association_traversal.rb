@@ -68,7 +68,7 @@ module PaperTrailDiff
     # The declaring class shares the owner's base class, so it names it.
     #: (untyped) -> String
     def self.owner_type(reflection)
-      reflection.active_record.polymorphic_name.to_s
+      reflection.active_record.polymorphic_name
     end
 
     # A type left by a renamed or removed model names no class. Active Record

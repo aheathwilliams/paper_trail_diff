@@ -32,7 +32,7 @@ module PaperTrailDiff
     def self.takes_relation?(scope)
       return true if scope.is_a?(Proc) && !scope.lambda?
 
-      arity = (scope.respond_to?(:arity) ? scope : scope.method(:call)).arity
+      arity = (scope.respond_to?(:arity) ? scope : scope.public_method(:call)).arity
       arity.negative? ? arity >= -2 : arity == 1
     end
     private_class_method :takes_relation?
@@ -40,7 +40,7 @@ module PaperTrailDiff
     #: (untyped, untyped) -> untyped
     def self.narrowed(result, relation)
       return result if versions?(result)
-      unless result.respond_to?(:klass) && result.respond_to?(:table_name)
+      unless result.respond_to?(:table_name)
         raise ConfigurationError, 'version_scope: must return the relation it is given, ' \
                                   'narrowed, or an array of its versions; it returned ' \
                                   "#{result.class}"
@@ -56,18 +56,16 @@ module PaperTrailDiff
     private_class_method :narrowed
 
     # The versions of `relation` that activity on associations reports under
-    # the filter (see ActivityScopeFilter): those of a transaction the filter
-    # keeps a version of, of any record in their table, and those saved
-    # outside one that it keeps. A table without transactions keeps each
-    # version alone.
+    # the filter (see ActivityScopeFilter): those it keeps, and those of a
+    # transaction it keeps a version of, of any record in their table. A
+    # table without transactions keeps each version alone.
     #: (untyped, untyped) -> untyped
     def self.whole_transactions(scope, relation)
-      return scope.call(relation) unless relation.klass.column_names.include?('transaction_id')
+      return scope.call(relation) unless relation.column_names.include?('transaction_id')
 
       saved = relation.klass.where(transaction_id: relation.select(:transaction_id))
       kept = values(scope.call(saved), :transaction_id)
-      loose = values(scope.call(relation.where(transaction_id: nil)), :id)
-      relation.where(transaction_id: kept).or(relation.where(id: loose))
+      relation.where(transaction_id: kept).or(relation.where(id: values(scope.call(relation), :id)))
     end
 
     # A column of what the filter returned, read in the database where it

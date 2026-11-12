@@ -63,6 +63,29 @@ RSpec.describe PaperTrailDiff::VersionScopeFilter do
       end
     end
 
+    it 'reads what a filter returns as a relation in the database' do
+      saved(7, 'alice')
+      selects = []
+      count = ->(*, payload) { selects << payload[:sql] unless payload[:name] == 'SCHEMA' }
+      by_alice = ->(relation) { relation.where(whodunnit: 'alice') }
+
+      chosen = ActiveSupport::Notifications.subscribed(count, 'sql.active_record') do
+        described_class.whole_transactions(by_alice, FilterVersion.all)
+      end
+      expect(selects).to be_empty
+      expect(chosen.count).to eq(1)
+    end
+
+    # SQL Server refuses an ORDER BY in a subquery.
+    it 'leaves out of its subqueries the order a filter gives' do
+      saved(7, 'alice')
+      newest = ->(relation) { relation.where(whodunnit: 'alice').order(id: :desc) }
+
+      chosen = described_class.whole_transactions(newest, FilterVersion.all)
+      expect(chosen.to_sql).not_to match(/ORDER BY/i)
+      expect(chosen.count).to eq(1)
+    end
+
     it 'keeps each version alone in a table without transactions' do
       relation = FilterVersion.all
       columns = FilterVersion.column_names - ['transaction_id']
@@ -79,12 +102,14 @@ RSpec.describe PaperTrailDiff::VersionScopeFilter do
       expect(described_class.checked(nil)).to be_nil
       expect { described_class.checked(:updates) }
         .to raise_error(PaperTrailDiff::ConfigurationError, 'version_scope: must respond to call')
-      [-> {}, ->(_relation, _other) {}, Object.new.tap { |o| def o.call = nil }].each do |scope|
+      [-> {}, ->(_relation, _other) {}, ->(_relation, _other, *_rest) {},
+       Object.new.tap { |o| def o.call = nil }].each do |scope|
         expect { described_class.checked(scope) }
           .to raise_error(PaperTrailDiff::ConfigurationError,
                           'version_scope: must take the version relation as its one argument')
       end
-      [proc { |relation| relation }, proc {}, ->(*relations) { relations },
+      [proc { |relation| relation }, proc {}, Class.new(Proc).new { |_relation, _other| nil },
+       ->(*relations) { relations }, ->(relation, *_rest) { relation },
        ->(relation, _ = 1) { relation }, Object.new.tap do |o|
                                            def o.call(relation)
                                              relation

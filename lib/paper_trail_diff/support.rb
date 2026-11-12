@@ -64,7 +64,7 @@ module PaperTrailDiff
     # The time JSON wrote, or the text as it is when it names none.
     #: (String) -> untyped
     def self.written_time(text)
-      parser = ::Time #: untyped
+      parser = Time #: untyped
       time_of_day(parser.iso8601(text))
     rescue ArgumentError
       text
@@ -88,13 +88,11 @@ module PaperTrailDiff
     # local zone can have another offset: a summer time read back in winter.
     #: (untyped) -> untyped
     def self.time_of_day(value)
-      return value.change(**TIME_OF_DAY_DATE) unless value.instance_of?(::Time)
+      return value.change(**TIME_OF_DAY_DATE) unless value.instance_of?(Time)
 
-      local = Object.const_get(:ActiveRecord).default_timezone == :local
-      clock = local ? value.getlocal : value.getutc
-      fraction = clock.subsec #: untyped
-      ::Time.public_send(local ? :local : :utc, *TIME_OF_DAY_DATE.values, clock.hour, clock.min,
-                         clock.sec + fraction)
+      local = constant('ActiveRecord').default_timezone == :local
+      clock = local ? value.getlocal : value.getutc #: untyped
+      clock.change(**TIME_OF_DAY_DATE)
     end
 
     # PaperTrail's `reify`, with each time of day its version recorded.
@@ -171,7 +169,7 @@ module PaperTrailDiff
       when Array
         value.map { |item| immutable_copy(item) }.freeze
       else
-        value.frozen? ? value : duplicate_and_freeze(value)
+        duplicate_and_freeze(value)
       end
     end
 

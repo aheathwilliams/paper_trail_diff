@@ -137,8 +137,8 @@ module PaperTrailDiff
     # holds only to reveal the last change in it.
     #: (ActivityEvent, RootVersionPlan) -> bool
     def reported?(event, plan)
-      ends = @ends
-      return false if ends && !in_range?(ends.last(event.version))
+      ends = @ends #: TransactionEnds
+      return false unless in_range?(ends.last(event.version))
 
       filter = @filter
       filter ? filter.kept?(event.version) : !event.root? || plan.mutation?(event.version)
@@ -191,8 +191,6 @@ module PaperTrailDiff
     # took effect, so what took effect after it is left out.
     #: (untyped, Array[ActivityEvent], RootVersionPlan, closes: bool) -> Array[ActivityEvent]
     def by_transaction_end(snapshots, events, plan, closes:)
-      return events unless snapshots.history
-
       ends = snapshots.transaction_ends(events.map(&:version))
       @ends = ends
       first = plan.reconstruction_versions.first
@@ -380,11 +378,12 @@ module PaperTrailDiff
       @snapshotter.prepare(@record, root_versions, **options)
     end
 
-    # A window collects from where its history starts, which is where the
-    # transactions across its start began; explicit endpoints from their first
-    # version. Explicit endpoints also stop before the rest of the closing
-    # version's transaction (see ActivityTransactionGroups.before_closing); a
-    # window keeps every event it collected and reports only those inside it.
+    # Events are collected from where the history starts, which is where the
+    # transactions across the range's start began. Without a history only
+    # root versions are collected, all of them in the range. Explicit
+    # endpoints also stop before the rest of the closing version's
+    # transaction (see ActivityTransactionGroups.before_closing); a window
+    # keeps every event it collected and reports only those inside it.
     #: (Array[untyped], untyped, range_end: untyped, closing: untyped) -> Array[ActivityEvent]
     def collect_events(root_versions, snapshots, range_end:, closing:)
       events = ActivityVersionCollector.new(
@@ -392,21 +391,13 @@ module PaperTrailDiff
         root_versions: root_versions,
         traversal: @traversal,
         prepared: snapshots.activity_index,
-        range_start: range_start(snapshots) || root_versions.first,
+        range_start: snapshots.history&.start_time,
         range_end: range_end
       ).call
       events = ActivityTransactionGroups.before_closing(events, closing) unless @range.time?
       events = ActivityTransactionGroups.until_destroyed(events)
       prepare_filter(snapshots, events)
       events
-    end
-
-    # A history starts where the transactions across the range's start
-    # began. Without one, only root versions are collected, all of them in
-    # the range, so the first of them starts it.
-    #: (untyped) -> untyped
-    def range_start(snapshots)
-      snapshots.history&.start_time
     end
 
     # A version filter reads its answers for a batch's history once, for the

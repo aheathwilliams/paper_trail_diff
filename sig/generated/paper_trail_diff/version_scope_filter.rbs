@@ -22,10 +22,9 @@ module PaperTrailDiff
     def self.narrowed: (untyped, untyped) -> untyped
 
     # The versions of `relation` that activity on associations reports under
-    # the filter (see ActivityScopeFilter): those of a transaction the filter
-    # keeps a version of, of any record in their table, and those saved
-    # outside one that it keeps. A table without transactions keeps each
-    # version alone.
+    # the filter (see ActivityScopeFilter): those it keeps, and those of a
+    # transaction it keeps a version of, of any record in their table. A
+    # table without transactions keeps each version alone.
     # : (untyped, untyped) -> untyped
     def self.whole_transactions: (untyped, untyped) -> untyped
 

@@ -42,8 +42,6 @@ module PaperTrailDiff
 
     @root_ids: Array[untyped]
 
-    @root_versions: Array[untyped]
-
     @traversal: AssociationTraversal
 
     @tree: AssociationTree
