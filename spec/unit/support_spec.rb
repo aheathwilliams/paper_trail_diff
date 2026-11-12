@@ -4,10 +4,12 @@ require_relative '../support/filter_database'
 
 RSpec.describe PaperTrailDiff::Support do
   let(:noon) { Time.utc(2032, 1, 1, 12) }
-
   # Versions of two tables, and of one whose ids do not count up.
   let(:version) { Struct.new(:created_at, :id) { def self.table_name = 'versions' } }
   let(:other_version) { Struct.new(:created_at, :id) { def self.table_name = 'other_versions' } }
+
+  # New York's zone as POSIX writes it, which Windows reads too.
+  def new_york = 'EST5EDT'
 
   describe '.per_model' do
     it 'answers once for each Active Record class, and every time for anything else' do
@@ -82,7 +84,7 @@ RSpec.describe PaperTrailDiff::Support do
       summer = Time.new(2032, 7, 1, 18, 0, 0, '-04:00')
 
       read = ENV.fetch('TZ', nil).then do |zone|
-        ENV['TZ'] = 'America/New_York'
+        ENV['TZ'] = new_york
         described_class.decodable({ 'rings_at' => ActiveRecord::Type::Time::Value.new(summer) },
                                   clock)
       ensure
@@ -106,7 +108,7 @@ RSpec.describe PaperTrailDiff::Support do
     # The time read with the process in New York, where summer time ends.
     def read_in_new_york(time)
       zone = ENV.fetch('TZ', nil)
-      ENV['TZ'] = 'America/New_York'
+      ENV['TZ'] = new_york
       read = described_class.time_of_day(time)
       [read.to_a.first(6), read.subsec, read.utc_offset]
     ensure
