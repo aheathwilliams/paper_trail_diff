@@ -342,6 +342,13 @@ RSpec.describe PaperTrailDiff::ActivityChildCandidateLoader do
       expect(rows(TrackedArticle, [article.id], :comments)).to eq([])
     end
 
+    it 'reads none of a model PaperTrail does not version' do
+      article = TrackedArticle.create!(title: 'Article')
+      UnversionedAttachment.create!(article: article, filename: 'a.txt')
+
+      expect(rows(TrackedArticle, [article.id], :unversioned_attachments)).to eq([])
+    end
+
     it "is under an `as:` owner only where its type names the owner's class" do
       board = document
       away = document('Away')
