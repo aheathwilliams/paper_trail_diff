@@ -24,9 +24,17 @@ module PaperTrailDiff
       @predicate = validate_predicate(predicate)
       @time_range = time_range
       @limit = limit
-      @max_versions = validate_budget(max_versions)
+      @max_versions = HistoricalFilter.budget(max_versions)
       @loaded = 0
       @state_loader = PreparedVersionStateLoader.new
+    end
+
+    # The version budget, checked whether or not a filter is given.
+    #: (untyped) -> Integer
+    def self.budget(value)
+      return value if value.instance_of?(Integer) && value.positive?
+
+      raise ConfigurationError, 'max_filter_versions: must be a positive Integer'
     end
 
     # More matches than the limit raise, unless the caller does not count
@@ -38,6 +46,8 @@ module PaperTrailDiff
     # the limit.
     #: (Array[String], ?counted: bool, ?page: [Integer, Integer]?) -> Array[String]
     def call(candidates, counted: true, page: nil)
+      return [] if page&.last&.zero?
+
       skipped = page ? page.first : 0
       full = page&.sum
       matched = [] #: Array[String]
@@ -140,13 +150,6 @@ module PaperTrailDiff
     #: (String, untyped) -> untyped
     def stored(name, value)
       StoredValues.apply(@model, { name => cast(name, value) }).fetch(name)
-    end
-
-    #: (untyped) -> Integer
-    def validate_budget(value)
-      return value if value.instance_of?(Integer) && value.positive?
-
-      raise ConfigurationError, 'max_filter_versions: must be a positive Integer'
     end
 
     #: (Array[String], TimeRange?) -> Hash[String, Array[untyped]]

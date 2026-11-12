@@ -35,6 +35,7 @@ module PaperTrailDiff
       raise InvalidEndpointError, 'expected a PaperTrail version' unless Endpoint.version?(@version)
 
       ignored = ignored_names
+      ReadableHistory.check_version!(@version, 'object_changes')
       return unless recorded?
 
       model_class = RecordedClass.for(@version)

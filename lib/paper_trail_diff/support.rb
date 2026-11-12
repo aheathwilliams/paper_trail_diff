@@ -220,6 +220,13 @@ module PaperTrailDiff
       end
     end
 
+    # Ids read as strings, in the order their records' ids take: an integer
+    # id by its value, so 2 comes before 10, and any other by its text.
+    #: (Array[String]) -> Array[String]
+    def self.sort_ids(ids)
+      ids.sort_by { |id| id.match?(/\A\d+\z/) ? [0, id.to_i, id] : [1, 0, id] }
+    end
+
     # Records sort by type first so that mixed id types stay comparable, then
     # naturally within one type. Ordering by the printed form instead would put
     # id 10 before id 2, which is deterministic but reads as unsorted wherever a
@@ -352,11 +359,29 @@ module PaperTrailDiff
 
     # Whether two values are one, as a diff reads them: `==`, but a NaN is the
     # same as a NaN, as PostgreSQL stores and compares it, though Ruby has
-    # NaN unequal to everything.
+    # NaN unequal to everything. A value a serialized attribute holds can be
+    # of any class, so `==` must hold both ways, which Active Support's
+    # Time == String does not, and a Float is not the Integer it equals: each
+    # is written differently, so the change is real. Hashes and arrays are
+    # compared by their members.
     #: (untyped, untyped) -> bool
     def self.same?(left, right)
-      left == right || (nan?(left) && nan?(right))
+      return nan?(right) if nan?(left)
+
+      case left
+      when Hash then right.is_a?(Hash) && same_members?(left, right)
+      when Array then right.is_a?(Array) && left.length == right.length &&
+        left.each_index.all? { |index| same?(left[index], right[index]) }
+      else left == right && right == left && left.is_a?(Float) == right.is_a?(Float)
+      end
     end
+
+    #: (Hash[untyped, untyped], Hash[untyped, untyped]) -> bool
+    def self.same_members?(left, right)
+      left.length == right.length &&
+        left.all? { |key, value| right.key?(key) && same?(value, right[key]) }
+    end
+    private_class_method :same_members?
 
     # A Float or BigDecimal NaN.
     #: (untyped) -> bool

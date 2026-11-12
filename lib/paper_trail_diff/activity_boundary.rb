@@ -22,7 +22,8 @@ module PaperTrailDiff
     # Stands for recorded changes nobody asked to read, which differs from a
     # version that recorded nothing (nil).
     NOT_READ = Object.new.freeze
-    NOT_READ_MESSAGE = 'recorded changes were not read; pass recorded_changes: true'
+    NOT_READ_MESSAGE = 'recorded changes were not read; pass recorded_changes: true to the ' \
+                       'method that takes it, or call PaperTrailDiff.recorded_changes(version)'
     private_constant :NOT_READ, :NOT_READ_MESSAGE
 
     class << self

@@ -98,7 +98,7 @@ module PaperTrailDiff
     #: (Array[AssociationActivitySelection::Query]) -> Result
     def database_selection(related)
       sources = [changed_roots, *related]
-      missing = sources.flat_map { |ids| ids.missing(base_class) }.map(&:to_s).uniq.sort
+      missing = Support.sort_ids(sources.flat_map { |ids| ids.missing(base_class) }.map(&:to_s).uniq)
       Result.new(
         records: selected_records(sources.map(&:relation)),
         unreachable: missing.map { |id| identity(id) }.freeze
@@ -135,7 +135,7 @@ module PaperTrailDiff
       filter = @historical_filter
       live, missing = filter.call(live, missing) if filter
       Result.new(records: CandidateTable.with(base_class, live) { |ids| selected_records([ids]) },
-                 unreachable: missing.sort.map { |id| identity(id) }.freeze)
+                 unreachable: Support.sort_ids(missing).map { |id| identity(id) }.freeze)
     end
 
     # Comparing the two columns in SQL needs them to share a type: PostgreSQL
@@ -168,6 +168,7 @@ module PaperTrailDiff
 
     #: (untyped, Integer) -> FilteredCandidates?
     def historical_filter_for(predicate, max_versions)
+      HistoricalFilter.budget(max_versions)
       return if predicate.nil?
 
       filter = HistoricalFilter.new(base_class, predicate: predicate, time_range: @time_range,

@@ -173,6 +173,13 @@ RSpec.describe PaperTrailDiff::RecordedChanges do
     expect(recorded(version.reload).keys).to eq(%w[rank stage title])
   end
 
+  it 'rejects a version loaded without its object_changes column' do
+    version = RecordedVersion.select(:id, :item_type, :item_id, :event).find(event_version(edited_note, 'update').id)
+
+    expect { recorded(version) }
+      .to raise_error(PaperTrailDiff::InvalidEndpointError, /without its object_changes column/)
+  end
+
   it 'rejects anything but a version' do
     expect { recorded(edited_note) }
       .to raise_error(PaperTrailDiff::InvalidEndpointError, /PaperTrail version/)

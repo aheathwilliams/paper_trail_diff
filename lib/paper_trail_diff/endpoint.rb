@@ -170,13 +170,14 @@ module PaperTrailDiff
       raise ConfigurationError, reason if reason
     end
 
-    # A version read with `select` can lack the column its state is in.
-    #: (untyped) -> void
-    def self.check_version!(version)
+    # A version read with `select` can lack the column its state, or its
+    # changes, are in.
+    #: (untyped, ?String) -> void
+    def self.check_version!(version, column = 'object')
       return unless version.respond_to?(:has_attribute?) && version.class.respond_to?(:column_names)
-      return if version.has_attribute?(:object) || !version.class.column_names.include?('object')
+      return if version.has_attribute?(column) || !version.class.column_names.include?(column)
 
-      raise InvalidEndpointError, "version #{version.id} was loaded without its object column; " \
+      raise InvalidEndpointError, "version #{version.id} was loaded without its #{column} column; " \
                                   'load versions with all their columns'
     end
   end

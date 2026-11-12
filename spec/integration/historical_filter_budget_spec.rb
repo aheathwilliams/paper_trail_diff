@@ -90,5 +90,7 @@ RSpec.describe 'bounded historical filtering' do
     expect do
       report({}, budget: nil)
     end.to raise_error(PaperTrailDiff::ConfigurationError, /positive/)
+    expect { PaperTrailDiff.analyze_scope(CoreArticle, limit: 10, max_filter_versions: 0) }
+      .to raise_error(PaperTrailDiff::ConfigurationError, 'max_filter_versions: must be a positive Integer')
   end
 end

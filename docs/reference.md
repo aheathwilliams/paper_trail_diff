@@ -182,7 +182,8 @@ that second.
 
 A `Date` bound is a whole day in `Time.zone`, so `Date.today..Date.today` is
 all of today and `august...september` stops before September 1. A string is a
-time in `Time.zone` unless it names an offset. Without `Time.zone`, both are
+time in `Time.zone` unless it names an offset, and must name a real day:
+`"12"` or `"2026-02-30"` raises `InvalidTimeRangeError`. Without `Time.zone`, both are
 read in UTC, never in the server's own zone.
 
 An endless range, such as `1.day.ago..`, runs through the current saved state:
@@ -286,8 +287,9 @@ PaperTrailDiff.timeline(article, within: window, version_scope: user_edits)
 ```
 
 It is accepted by `timeline`, `activity_timeline`, `analyze`, `analyze_many`,
-`analyze_scope`, and `report`. A callable that returns anything but a relation
-on the version class it was given raises `ConfigurationError`.
+`analyze_scope`, and `report`. It may return the relation narrowed, or an
+array of versions taken from it. Anything else, such as a relation on another
+class or an array of IDs, raises `ConfigurationError`.
 
 - Each reported change is compared with the version right after it, even if
   that version is filtered out. So each step shows exactly what that one change
@@ -1589,7 +1591,9 @@ with the message `compare` would raise, so `ok?` is false whenever `compare`
 would refuse: an unknown or unsupported association, missing association
 tracking, an unversioned target, or a path read only approximately. Pass
 `allow_approximate: true`, as you would to `compare`, and such a path is a
-warning instead. `ok?` does not prove the history is complete.
+warning instead. Endpoints `compare` rejects whatever their history holds,
+such as versions given newest first, two records, or an unsaved record, raise
+the error `compare` raises. `ok?` does not prove the history is complete.
 
 ## Models, schemas, and edge cases
 
@@ -1743,9 +1747,9 @@ If you change `created_at` after saving instead, change every version saved
 in the same transaction, not only the ones you check. PT-AT gives all of
 them the same `transaction_id`, including versions of other models saved by
 callbacks. A version left at the time the test ran makes that transaction
-seem to last from your chosen time until today. A window edge in between
-then moves back to the transaction's start (see [Time windows](#time-windows)),
-and the window can lose the changes the test expects.
+seem to last from your chosen time until today. The transaction is then
+reported where it ends, today (see [Time windows](#time-windows)), and a window
+around your chosen time loses the changes the test expects.
 
 ```ruby
 def set_version_time(version, time)
