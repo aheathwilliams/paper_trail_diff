@@ -9,10 +9,10 @@ module PaperTrailDiff
   # per record. A scope it cannot read exactly builds no condition, and the
   # caller keeps its slower path.
   class ScopeCondition
-    # Relation parts that choose rows, or order them, other than by the where
-    # clause and the ranking the reader follows. Any other part, such as a
-    # lock, a comment, a table named for a string order, or what to load,
-    # leaves membership alone.
+    # Relation parts that choose rows other than by the where clause and the
+    # ranking the reader follows. Any other part, such as a lock, a comment,
+    # a table named for a string order, or what to load, leaves membership
+    # alone; `reverse_order` is applied to the order at once.
     ROW_CHOOSING_VALUES: untyped
 
     BIND_PARAM: ::String
@@ -50,7 +50,8 @@ module PaperTrailDiff
 
     # A destroyed record's state holds a column `has_paper_trail skip:`
     # leaves out of history only as its default. A default scope is read
-    # with it so; a condition the caller wrote is refused.
+    # with it so; a condition the caller wrote is refused. PaperTrail lists
+    # the skipped columns by name.
     # : (untyped, untyped) -> void
     def self.check_recorded!: (untyped, untyped) -> void
 

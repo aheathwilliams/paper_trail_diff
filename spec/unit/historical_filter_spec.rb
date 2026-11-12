@@ -364,6 +364,17 @@ RSpec.describe PaperTrailDiff::HistoricalFilter do
         .to raise_error(PaperTrailDiff::BatchLimitExceededError)
     end
 
+    # As `limit(0)` takes none, matching or not.
+    it 'takes no matches for a page of none, and reads no history for it' do
+      ids = Array.new(2) { history.first.id.to_s }
+      paged = filter({ title: 'Draft' }, limit: 1)
+
+      taken = nil
+      selects, = queries { taken = [[0, 0], [1, 0]].map { |page| paged.call(ids, page: page) } }
+      expect(taken).to eq([[], []])
+      expect(selects).to eq([])
+    end
+
     it 'reads no batch of candidates past a full page' do
       stub_const('PaperTrailDiff::Support::IDS_PER_STATEMENT', 1)
       ids = Array.new(3) { history.first.id.to_s }

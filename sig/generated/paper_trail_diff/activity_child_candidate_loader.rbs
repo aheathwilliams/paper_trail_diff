@@ -79,8 +79,8 @@ module PaperTrailDiff
 
     # The first versions since the start that do not create their item. One
     # saved after the end holds the state the child had there too.
-    # : (untyped) -> Array[untyped]
-    def first_versions: (untyped) -> Array[untyped]
+    # : (untyped) -> untyped
+    def first_versions: (untyped) -> untyped
 
     # : (untyped, untyped) -> Array[Array[untyped]]
     def pluck_rows: (untyped, untyped) -> Array[Array[untyped]]

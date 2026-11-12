@@ -175,8 +175,9 @@ module PaperTrailDiff
     # reads '12' as noon today and rolls 30 February into March.
     #: (String) -> untyped
     def parse(value)
+      # A part it does not name is nil, which `valid_date?` refuses as a TypeError.
       year, month, day = Date._parse(value).values_at(:year, :mon, :mday)
-      raise ArgumentError unless year && month && day && Date.valid_date?(year, month, day)
+      raise ArgumentError unless Date.valid_date?(year, month, day)
 
       zone.parse(value)
     end

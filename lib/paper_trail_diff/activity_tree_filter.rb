@@ -84,20 +84,18 @@ module PaperTrailDiff
     # snapshot, are kept whatever else holds.
     #: (Array[ActivityEvent], Array[RecordSnapshot?]) -> Array[bool]
     def unjudged(events, snapshots)
-      read = {} #: Hash[Integer, untyped]
       events.each_with_index.map do |event, index|
-        event.root? || (event.join? && changed?(snapshots, read, index))
+        event.root? || (event.join? && changed?(snapshots, index))
       end
     end
 
-    # Each snapshot is read once, by its position.
-    #: (Array[RecordSnapshot?], Hash[Integer, untyped], Integer) -> bool
-    def changed?(snapshots, read, index)
+    # A missing snapshot, after the root's destruction, reads as empty.
+    #: (Array[RecordSnapshot?], Integer) -> bool
+    def changed?(snapshots, index)
       before, after = [@starts, @ends].map do |positions|
-        position = positions.fetch(index)
-        read.fetch(position) { read[position] = snapshots.fetch(position)&.to_h }
+        snapshots.fetch(positions.fetch(index)).to_h
       end
-      before != after
+      !before.eql?(after)
     end
 
     # The events each snapshot judges, by the snapshot's position, the one

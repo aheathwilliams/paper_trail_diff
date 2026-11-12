@@ -24,6 +24,10 @@ module PaperTrailDiff
     # The date a database gives a time of day it reads back.
     TIME_OF_DAY_DATE = { year: 2000, month: 1, day: 1 }.freeze #: Hash[Symbol, Integer]
 
+    # Where a hash has no value for a key the other has (see .same?).
+    MISSING = Object.new.freeze
+    private_constant :MISSING
+
     # Answers a question about `value` once for each Active Record class, in
     # `answers`: its respond_to? also looks through the instance's attributes,
     # which costs more than most of what reading a version does, and every
@@ -224,7 +228,7 @@ module PaperTrailDiff
     # integer id by its value, so 2 comes before 10, and any other by its text.
     #: (Array[untyped]) -> Array[String]
     def self.sort_ids(ids)
-      ids.map(&:to_s).uniq.sort_by { |id| id.match?(/\A\d+\z/) ? [0, id.to_i, id] : [1, 0, id] }
+      ids.map(&:to_s).uniq.sort_by { |id| id.match?(/\A\d+\z/) ? [0, id.to_i, id] : [1, id] }
     end
 
     # Records sort by type first so that mixed id types stay comparable, then
@@ -370,19 +374,20 @@ module PaperTrailDiff
       return same_hash?(left, right) if left.is_a?(Hash)
       return same_array?(left, right) if left.is_a?(Array)
 
-      left == right && right == left && left.is_a?(Float) == right.is_a?(Float)
+      left == right && right == left && left.instance_of?(Float) == right.instance_of?(Float)
     end
 
+    # A key the right side lacks reads as a value nothing else is.
     #: (Hash[untyped, untyped], untyped) -> bool
     def self.same_hash?(left, right)
       right.is_a?(Hash) && left.length == right.length &&
-        left.all? { |key, value| right.key?(key) && same?(value, right[key]) }
+        left.all? { |key, value| same?(value, right.fetch(key, MISSING)) }
     end
 
     #: (Array[untyped], untyped) -> bool
     def self.same_array?(left, right)
       right.is_a?(Array) && left.length == right.length &&
-        left.each_index.all? { |index| same?(left[index], right[index]) }
+        left.zip(right).all? { |pair| same?(*pair) }
     end
     private_class_method :same_hash?, :same_array?
 

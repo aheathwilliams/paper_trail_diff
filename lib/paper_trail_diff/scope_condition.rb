@@ -10,12 +10,11 @@ module PaperTrailDiff
   # per record. A scope it cannot read exactly builds no condition, and the
   # caller keeps its slower path.
   class ScopeCondition
-    # Relation parts that choose rows, or order them, other than by the where
-    # clause and the ranking the reader follows. Any other part, such as a
-    # lock, a comment, a table named for a string order, or what to load,
-    # leaves membership alone.
-    ROW_CHOOSING_VALUES = %i[joins left_outer_joins from group having with
-                             reverse_order].freeze
+    # Relation parts that choose rows other than by the where clause and the
+    # ranking the reader follows. Any other part, such as a lock, a comment,
+    # a table named for a string order, or what to load, leaves membership
+    # alone; `reverse_order` is applied to the order at once.
+    ROW_CHOOSING_VALUES = %i[joins left_outer_joins from group having with].freeze
     BIND_PARAM = 'Arel::Nodes::BindParam'
     # Column kinds (ExactColumnType) whose values compare for equality in
     # Ruby as the database compares them.
@@ -77,14 +76,14 @@ module PaperTrailDiff
 
     # A destroyed record's state holds a column `has_paper_trail skip:`
     # leaves out of history only as its default. A default scope is read
-    # with it so; a condition the caller wrote is refused.
+    # with it so; a condition the caller wrote is refused. PaperTrail lists
+    # the skipped columns by name.
     #: (untyped, untyped) -> void
     def self.check_recorded!(clause, model_class)
-      return if clause.empty? || !model_class.respond_to?(:paper_trail_options)
+      return unless model_class.respond_to?(:paper_trail_options)
 
-      skip = model_class.paper_trail_options[:skip] #: Array[untyped]?
-      skipped = Array(skip).map(&:to_s)
-      Reader.new(model_class, refused: skipped).call(clause.ast)
+      Reader.new(model_class,
+                 refused: model_class.paper_trail_options.fetch(:skip)).call(clause.ast)
     end
     private_class_method :check_recorded!
 
@@ -148,9 +147,7 @@ module PaperTrailDiff
     # empty.
     #: (untyped) -> bool
     def self.plain_relation?(relation)
-      relation.values.slice(*ROW_CHOOSING_VALUES).values.all? do |value|
-        value.respond_to?(:empty?) ? value.empty? : !value
-      end
+      relation.values.slice(*ROW_CHOOSING_VALUES).values.all?(&:blank?)
     end
     private_class_method :plain_relation?
 
@@ -387,7 +384,7 @@ module PaperTrailDiff
       #: (String, untyped) -> bool
       def text_date?(name, stored)
         stored.instance_of?(Date) && :datetime.equal?(ExactColumnType.kind(@model_class, name)) &&
-          @model_class.connection_db_config.adapter.to_s == 'sqlite3'
+          @model_class.connection_db_config.adapter == 'sqlite3'
       end
 
       # Whether a value is NULL compares alike on every type.

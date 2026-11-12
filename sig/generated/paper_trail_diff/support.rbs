@@ -24,6 +24,9 @@ module PaperTrailDiff
     # The date a database gives a time of day it reads back.
     TIME_OF_DAY_DATE: Hash[Symbol, Integer]
 
+    # Where a hash has no value for a key the other has (see .same?).
+    MISSING: untyped
+
     # Answers a question about `value` once for each Active Record class, in
     # `answers`: its respond_to? also looks through the instance's attributes,
     # which costs more than most of what reading a version does, and every
@@ -208,6 +211,7 @@ module PaperTrailDiff
     # : (untyped, untyped) -> bool
     def self.same?: (untyped, untyped) -> bool
 
+    # A key the right side lacks reads as a value nothing else is.
     # : (Hash[untyped, untyped], untyped) -> bool
     def self.same_hash?: (Hash[untyped, untyped], untyped) -> bool
 

@@ -46,7 +46,8 @@ module PaperTrailDiff
     # the limit.
     #: (Array[String], ?counted: bool, ?page: [Integer, Integer]?) -> Array[String]
     def call(candidates, counted: true, page: nil)
-      skipped, full = page ? [page.first, page.sum] : [0, nil]
+      skipped, = page || [0]
+      full = page&.sum
       return [] if full == skipped
 
       matched = [] #: Array[String]
@@ -127,8 +128,9 @@ module PaperTrailDiff
     def unbound?(name, value)
       return false if value.nil?
 
+      # The attribute's name is not read.
       bound = Support.constant('ActiveRecord::Relation::QueryAttribute')
-                     .new(name, value, @model.type_for_attribute(name)) #: untyped
+                     .new(nil, value, @model.type_for_attribute(name)) #: untyped
       bound.unboundable? || bound.value_for_database.nil?
     end
 

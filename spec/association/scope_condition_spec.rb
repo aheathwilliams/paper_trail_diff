@@ -661,17 +661,40 @@ RSpec.describe PaperTrailDiff::ScopeCondition do
 
     # SQLite compares the date with the stored text, which no time equals.
     it 'reads a date bound on a datetime column as midnight, except on SQLite' do
-      relation = ScopeConditionItem.where(seen_at: Date.new(2026, 1, 1)..)
-      condition = described_class.for_relation(relation, ScopeConditionItem)
-      if ScopeConditionItem.connection_db_config.adapter.to_s == 'sqlite3'
-        expect(condition).to be_nil
-      else
-        expect(matches(condition, { seen_at: Time.utc(2026, 1, 1) },
-                       { seen_at: Time.utc(2025, 12, 31) }))
-          .to eq([true, false])
+      # The column types each adapter lists are read as SQLite's.
+      allow(PaperTrailDiff::ExactColumnType).to(receive(:sql_kind)
+        .and_wrap_original { |original, _adapter, sql_type| original.call('sqlite3', sql_type) })
+      read = lambda do |adapter, bound|
+        allow(ScopeConditionItem.connection_db_config).to receive(:adapter).and_return(adapter)
+        described_class.for_relation(ScopeConditionItem.where(seen_at: bound), ScopeConditionItem)
       end
-      expect(described_class.for_relation(ScopeConditionItem.where(seen_at: Time.utc(2026)..),
+
+      expect(read.call('sqlite3', Date.new(2026, 1, 1)..)).to be_nil
+      expect(matches(read.call('postgresql', Date.new(2026, 1, 1)..),
+                     { seen_at: Time.utc(2026, 1, 1) }, { seen_at: Time.utc(2025, 12, 31) }))
+        .to eq([true, false])
+      expect(read.call('sqlite3', Time.utc(2026)..)).not_to be_nil
+      expect(described_class.for_relation(ScopeConditionItem.where(due: Date.new(2026, 1, 1)..),
                                           ScopeConditionItem)).not_to be_nil
+    end
+
+    # A destroyed record holds a skipped column only as its default.
+    it 'refuses a condition on a column history skips, but reads a default scope on it' do
+      stub_const('ScopeConditionSkipping', Class.new(ScopeConditionItem))
+      ScopeConditionSkipping.has_paper_trail skip: [:note]
+      stub_const('ScopeConditionSkippingDefault', Class.new(ScopeConditionSkipping))
+      ScopeConditionSkippingDefault.class_eval { default_scope { where(note: 'kept') } }
+      skipping = [ScopeConditionSkipping, ScopeConditionSkippingDefault]
+      refused = ->(model, condition) { described_class.for_relation(model.where(condition), model) }
+
+      skipping.product([{ note: 'x' }, { note: %w[x y] }, { note: nil }, { note: 'a'..'b' }])
+              .each { |model, condition| expect(refused.call(model, condition)).to be_nil }
+      expect(relation_matches(ScopeConditionSkipping.where(rank: 1), { rank: 1, note: 'x' }))
+        .to eq([true])
+      expect(relation_matches(ScopeConditionSkippingDefault.where(rank: 1),
+                              { rank: 1, note: 'kept' }, { rank: 1, note: 'other' }))
+        .to eq([true, false])
+      expect(relation_matches(ScopeConditionItem.where(note: 'x'), { note: 'x' })).to eq([true])
     end
 
     it 'declines a relation that joins, groups, or that it cannot read' do

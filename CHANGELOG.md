@@ -430,7 +430,7 @@ project follows [Semantic Versioning](https://semver.org/).
   read beside parts that choose no rows, such as `distinct`, `select`,
   `order`, `unscope`, `rewhere`, `lock`, `annotate`, `preload` or
   `create_with`, instead of being refused. Joins, `from`, `group`,
-  `having`, `with` and `reverse_order` are still refused.
+  `having` and `with` are still refused.
 - `include_deleted:` refuses a condition on a column `has_paper_trail skip:`
   leaves out of history, as `historical_filter:` does, instead of comparing
   it with the column's default; and, on SQLite, a `Date` bound on a datetime

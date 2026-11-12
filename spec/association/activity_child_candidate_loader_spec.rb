@@ -288,4 +288,70 @@ RSpec.describe PaperTrailDiff::ActivityChildCandidateLoader do
 
     expect([composite.historical_rows, composite.current_pairs]).to eq([[], []])
   end
+
+  # PT-AT names only the owner a version saved, so a child made without a
+  # version names the owner it had before its first one only in that
+  # version's state.
+  describe 'a child made without a version' do
+    def unversioned(article, body = 'Unversioned')
+      PaperTrail.request(enabled: false) { article.comments.create!(body: body) }
+    end
+
+    def rows(owner_class, owner_ids, association, start_at = nil)
+      loader(owner_class, owner_ids, association, start_at).historical_rows
+                                                           .map { |row| row.values_at(0, 1, 3) }
+    end
+
+    it 'is under the owner its first version left, once, from the start on' do
+      left = TrackedArticle.create!(title: 'Left')
+      joined = TrackedArticle.create!(title: 'Joined')
+      moved = unversioned(left)
+      edited = unversioned(left, 'Edited')
+      back = unversioned(left, 'Back')
+      start = marker
+      moved.update!(article: joined)
+      edited.update!(body: 'Edited again')
+      back.update!(article: joined)
+      back.update!(article: left)
+
+      expect(rows(TrackedArticle, [left.id], :comments, start))
+        .to contain_exactly([left.id, moved.id, 'update'], [left.id, edited.id, 'update'],
+                            [left.id, back.id, 'update'], [left.id, back.id, 'update'])
+      expect(rows(TrackedArticle, [joined.id], :comments))
+        .to contain_exactly([joined.id, moved.id, 'update'], [joined.id, back.id, 'update'])
+      # Past the move, the comment it moved away is left out; the others'
+      # versions before the start name this article.
+      expect(rows(TrackedArticle, [left.id], :comments, marker))
+        .to contain_exactly([left.id, edited.id, 'update'], [left.id, back.id, 'update'])
+    end
+
+    it 'reads nothing from a first version with no state, or none for the key' do
+      article = TrackedArticle.create!(title: 'Article')
+      other = TrackedArticle.create!(title: 'Other')
+      stateless = unversioned(article, 'Stateless')
+      keyless = unversioned(article, 'Keyless')
+      [stateless, keyless].each { |comment| comment.update!(article: other) }
+      stateless.versions.last.update_column(:object, nil)
+      version = keyless.versions.last
+      version.update_column(:object, version.object.sub(/^article_id: .*\n/, ''))
+      PaperTrail::Version.create!(item_type: 'TrackedAuthor', item_id: stateless.id,
+                                  event: 'update', object: { 'article_id' => article.id }.to_yaml)
+
+      expect(rows(TrackedArticle, [article.id], :comments)).to eq([])
+    end
+
+    it "is under an `as:` owner only where its type names the owner's class" do
+      board = document
+      away = document('Away')
+      badges = [board.class.polymorphic_name, 'TrackedArticle'].map do |type|
+        PaperTrail.request(enabled: false) do
+          ChildLoaderBadge.create!(label: type, holder_type: type, holder_id: board.id)
+        end
+      end
+      badges.each { |badge| badge.update!(holder: away) }
+
+      expect(rows(ChildLoaderDocument, [board.id], :badges))
+        .to eq([[board.id, badges.first.id, 'update']])
+    end
+  end
 end
