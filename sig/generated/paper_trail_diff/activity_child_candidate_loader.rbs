@@ -70,14 +70,14 @@ module PaperTrailDiff
     # its first version is in no row when that version is not a create: the
     # child was made without one, and its first version's state, which holds
     # that owner, is read instead.
-    # : (untyped, String) -> Array[Array[untyped]]
-    def first_owner_rows: (untyped, String) -> Array[Array[untyped]]
+    # : (String) -> Array[Array[untyped]]
+    def first_owner_rows: (String) -> Array[Array[untyped]]
 
     # The first version of each child since the start; one that created its
     # child holds no state. One saved after the end holds the state the child
-    # had there too.
-    # : (untyped) -> untyped
-    def first_versions: (untyped) -> untyped
+    # had there too. A model PaperTrail does not version has none.
+    # : () -> untyped
+    def first_versions: () -> untyped
 
     # : (untyped, untyped) -> Array[Array[untyped]]
     def pluck_rows: (untyped, untyped) -> Array[Array[untyped]]

@@ -36,7 +36,7 @@ module PaperTrailDiff
         relation = relation.where(there_by_end(version_class)) if @end_at
         pluck_rows(relation, version_class)
       end
-      typed_rows((recorded + first_owner_rows(version_class, foreign_key)).uniq)
+      typed_rows((recorded + first_owner_rows(foreign_key)).uniq)
     end
 
     #: () -> Array[Array[untyped]]
@@ -124,10 +124,10 @@ module PaperTrailDiff
     # its first version is in no row when that version is not a create: the
     # child was made without one, and its first version's state, which holds
     # that owner, is read instead.
-    #: (untyped, String) -> Array[Array[untyped]]
-    def first_owner_rows(version_class, foreign_key)
+    #: (String) -> Array[Array[untyped]]
+    def first_owner_rows(foreign_key)
       held = @parent_ids.to_set(&:to_s)
-      first_versions(version_class).filter_map do |version|
+      first_versions.filter_map do |version|
         state = version.object && version.object_deserialized
         owner = state[foreign_key] if state
         # An `as:` child's type column must name one of the owner's types,
@@ -140,12 +140,14 @@ module PaperTrailDiff
 
     # The first version of each child since the start; one that created its
     # child holds no state. One saved after the end holds the state the child
-    # had there too.
-    #: (untyped) -> untyped
-    def first_versions(version_class)
-      versions = version_class.arel_table
+    # had there too. A model PaperTrail does not version has none.
+    #: () -> untyped
+    def first_versions
+      return [] unless Support.versioned?(@reflection.klass)
+
       relation = VersionQuery.for_model(@reflection.klass)
-                             .where(VersionQuery.no_earlier_version(versions))
+      versions = relation.arel_table
+      relation = relation.where(VersionQuery.no_earlier_version(versions))
       relation = relation.where(versions[:created_at].gteq(@start_at)) if @start_at
       relation
     end
