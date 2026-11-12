@@ -9,8 +9,8 @@ module PaperTrailDiff
     # : (timeline_snapshotter: untyped, activity_snapshotter: untyped, preparer: untyped, activity: bool, view: ActivityView, traversal: AssociationTraversal) -> void
     def initialize: (timeline_snapshotter: untyped, activity_snapshotter: untyped, preparer: untyped, activity: bool, view: ActivityView, traversal: AssociationTraversal) -> void
 
-    # `window` is the root's window as the batch moved it to transaction edges,
-    # or nil when the batch reads each root's whole history.
+    # `window` is the batch's window, or nil when it reads each root's whole
+    # history.
     # : (untyped, RootVersionPlan, TimeRange?) -> Analysis
     def call: (untyped, RootVersionPlan, TimeRange?) -> Analysis
 

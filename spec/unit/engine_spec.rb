@@ -319,8 +319,7 @@ RSpec.describe PaperTrailDiff::Engine do
     to_association = from_association.transition_to(
       [after],
       before: before,
-      after: after,
-      membership_preserved: true
+      after: after
     )
     from = snapshot(
       type: 'Article', id: 1, attributes: {},
@@ -344,8 +343,7 @@ RSpec.describe PaperTrailDiff::Engine do
     to_association = from_association.transition_to(
       [after],
       before: before,
-      after: after,
-      membership_preserved: true
+      after: after
     )
 
     expect(to_association.transition_from(from_association)).not_to be_nil
@@ -361,14 +359,12 @@ RSpec.describe PaperTrailDiff::Engine do
     after_add = before_add.transition_to(
       [existing, transient],
       before: nil,
-      after: transient,
-      membership_preserved: false
+      after: transient
     )
     after_remove = after_add.transition_to(
       [existing],
       before: transient,
-      after: nil,
-      membership_preserved: false
+      after: nil
     )
 
     added = PaperTrailDiff::CollectionComparator.new(
@@ -397,7 +393,7 @@ RSpec.describe PaperTrailDiff::Engine do
     after = snapshot(type: 'Comment', id: 50, attributes: { body: 'After' })
     from_association = association(:has_many, *records)
     serialized = from_association.to_h
-    from_association.position('Comment', 50)
+    from_association.validate_unique_identities!
     expect(from_association.to_h).to eq(serialized)
     expect(from_association).to be_frozen
     identity_reads[0] = 0
@@ -406,15 +402,16 @@ RSpec.describe PaperTrailDiff::Engine do
     to_association = from_association.transition_to(
       updated,
       before: before,
-      after: after,
-      membership_preserved: true
+      after: after
     )
 
     PaperTrailDiff::CollectionComparator.new(
       from_association, to_association, record_comparer: ->(*) {}
     ).call
 
-    expect(identity_reads.fetch(0)).to eq(1)
+    # The record that was replaced, and the one after it in the order, which
+    # the transition reads to see that the record put in does not repeat it.
+    expect(identity_reads.fetch(0)).to eq(2)
   end
 
   it 'treats HABTM as a collection while preserving its macro kind' do
@@ -571,8 +568,7 @@ RSpec.describe PaperTrailDiff::Engine do
     to_association = from_association.transition_to(
       [duplicate, duplicate],
       before: nil,
-      after: duplicate,
-      membership_preserved: false
+      after: duplicate
     )
     from = snapshot(
       type: 'Article', id: 1, attributes: {},

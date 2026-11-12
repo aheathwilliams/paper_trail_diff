@@ -11,13 +11,21 @@ module PaperTrailDiff
     # already sorts by the key. Such an order is kept as given, since SQL
     # Server rejects a column listed twice. So is the order of a relation
     # grouped by anything but the key: each of its rows is a group, which a
-    # database sorts only by what it groups or aggregates. A relation answers
-    # for its model the key and table name read here.
+    # database sorts only by what it groups or aggregates; one without an order
+    # is refused. A relation answers for its model the key and table name read
+    # here.
     #: (untyped) -> untyped
     def self.apply(relation)
       orders = relation.order_values
       return relation if orders.any? { |order| key?(order, relation) }
-      return relation if !orders.empty? && grouped_by_other?(relation)
+
+      if grouped_by_other?(relation)
+        return relation unless orders.empty?
+
+        # Sorting its groups by the key is what the database would reject.
+        raise ConfigurationError, 'scope: a relation grouped by anything but its primary key ' \
+                                  'needs an order of its own to be read in pages'
+      end
 
       relation.order(relation.primary_key => :asc)
     end
@@ -40,12 +48,18 @@ module PaperTrailDiff
     end
     private_class_method :key?
 
+    # A name alone or after a table's, each as it is or in the quotes of any
+    # adapter here: "name", `name` or [name].
+    QUALIFIED_NAME = /(?:["`\[]?(\w+)["`\]]?\.)?["`\[]?(\w+)["`\]]?/
+    private_constant :QUALIFIED_NAME
+
     # Whether SQL text names the key, alone or after its table's name. That
     # also finds a key the text only uses, as in `LENGTH(id)`, which then goes
-    # without the tie-breaker, but it misses no sort by the key.
+    # without the tie-breaker, but it misses no sort by the key. Another
+    # table's key, quoted or not, is not this one.
     #: (String, untyped) -> bool
     def self.key_in_sql?(sql, relation)
-      names = sql.scan(/(?:(\w+)\.)?(\w+)/) #: Array[[String?, String]]
+      names = sql.scan(QUALIFIED_NAME) #: Array[[String?, String]]
       names.any? do |table, column|
         column.casecmp?(relation.primary_key) && (table.nil? || table.casecmp?(relation.table_name))
       end

@@ -35,9 +35,13 @@ module PaperTrailDiff
     # @rbs @version_scope: untyped
     # @rbs @live_endpoint: untyped
 
+    # Two are read, so that a tie for first that ids cannot order raises, as
+    # a tie inside the range does, instead of the lower id choosing the state
+    # the range ends in.
     #: (untyped) -> untyped
     def trailing_version(relation)
-      VersionQuery.chronological(@time_range.trailing_scope(relation)).first
+      candidates = VersionQuery.chronological(@time_range.trailing_scope(relation)).limit(2)
+      Support.earliest_version(candidates)
     end
   end
 end

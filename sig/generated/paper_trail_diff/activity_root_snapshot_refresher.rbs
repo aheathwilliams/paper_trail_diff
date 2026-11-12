@@ -15,6 +15,9 @@ module PaperTrailDiff
 
     private
 
+    # : (untyped) -> bool
+    def root_only?: (untyped) -> bool
+
     # The snapshot at a root version starts from the state stored in that
     # version, and the next one from the state at its own root endpoint. Where
     # prepared history built both from those states, the two are compared
@@ -48,6 +51,8 @@ module PaperTrailDiff
     @normalizer: SnapshotNormalizer
 
     @partial_snapshotter: untyped
+
+    @places: ActivityTreePlaces
 
     @record_after: untyped
 

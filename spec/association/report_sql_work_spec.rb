@@ -26,6 +26,9 @@ RSpec.describe 'The SQL work of a report with associations' do
   before do
     skip 'counts SQLite statements' unless ActiveRecord::Base.connection.adapter_name == 'SQLite'
 
+    # Every other version table the suite defines would be checked for
+    # transactions numbered alike, in each statement that reads a transaction.
+    allow(ActiveRecord::Base).to receive(:descendants).and_return([PaperTrail::Version])
     PaperTrail::VersionAssociation.delete_all
     PaperTrail::Version.delete_all
     [TrackedComment, TrackedArticle].each(&:delete_all)
@@ -143,7 +146,7 @@ RSpec.describe 'The SQL work of a report with associations' do
     work.group_by(&:last).transform_values { |runs| runs.sum(&:first) }
   end
 
-  # Each version of another record took the report 27 more steps when this
+  # Each version of another record took the report 45 more steps when this
   # was written, and 380 when a statement read the window's later comment
   # versions again for each version the roots saved before it.
   it "reads other records' versions a few times, not once for each root version" do

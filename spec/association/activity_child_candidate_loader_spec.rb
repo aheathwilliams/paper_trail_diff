@@ -49,9 +49,14 @@ RSpec.describe PaperTrailDiff::ActivityChildCandidateLoader do
      StringItemNote, StringItemPost].each(&:delete_all)
   end
 
-  def loader(owner_class, owner_ids, association, start_at = nil)
+  def loader(owner_class, owner_ids, association, start_at = nil, end_at = nil)
     described_class.new(owner_class, owner_ids, owner_class.reflect_on_association(association),
-                        start_at)
+                        start_at, end_at)
+  end
+
+  # A time between the versions saved before it and those saved after.
+  def marker
+    TrackedAuthor.create!(name: 'Marker').versions.last.created_at
   end
 
   # The child ids of the rows, which are owner id, child id, time and event.
@@ -153,6 +158,104 @@ RSpec.describe PaperTrailDiff::ActivityChildCandidateLoader do
 
     expect(loader(TrackedArticle, [article.id], :comments).current_pairs)
       .to eq([[article.id, comment.id]])
+  end
+
+  describe 'with an end' do
+    # A child created after the end was not there for any state up to it,
+    # however many versions it has saved since.
+    it 'leaves out a child created after it' do
+      article = TrackedArticle.create!(title: 'Article')
+      before = article.comments.create!(body: 'Before')
+      finish = marker
+      before.update!(body: 'Edited after')
+      article.comments.create!(body: 'After').update!(body: 'Edited')
+      reader = loader(TrackedArticle, [article.id], :comments, nil, finish)
+
+      expect(reader.historical_rows.map { |row| row.values_at(1, 3) })
+        .to contain_exactly([before.id, 'create'], [before.id, 'update'])
+      expect(reader.current_pairs).to eq([[article.id, before.id]])
+    end
+
+    # Its versions say nothing of when it was created, so it may have been
+    # there: one whose create was never recorded, or recorded none at all.
+    it 'keeps a child no version says was created after it' do
+      article = TrackedArticle.create!(title: 'Article')
+      finish = marker
+      unrecorded = article.comments.create!(body: 'Create not recorded')
+      unrecorded.update!(body: 'Edited')
+      unrecorded.versions.where(event: 'create').delete_all
+      unversioned = PaperTrail.request(enabled: false) { article.comments.create!(body: 'None') }
+      reader = loader(TrackedArticle, [article.id], :comments, nil, finish)
+
+      expect(reader.historical_rows.map { |row| row.values_at(1, 3) })
+        .to eq([[unrecorded.id, 'update']])
+      expect(reader.current_pairs)
+        .to contain_exactly([article.id, unrecorded.id], [article.id, unversioned.id])
+    end
+
+    # An id used again: the record destroyed after the end was there at it.
+    it 'keeps a child created after it under an id that had a version before' do
+      article = TrackedArticle.create!(title: 'Article')
+      finish = marker
+      first = PaperTrail.request(enabled: false) { article.comments.create!(body: 'First') }
+      first.destroy!
+      again = TrackedComment.create!(id: first.id, article: article, body: 'Again')
+      reader = loader(TrackedArticle, [article.id], :comments, nil, finish)
+
+      expect(reader.historical_rows.map { |row| row.fetch(3) }).to include('create')
+      expect(reader.current_pairs).to eq([[article.id, again.id]])
+    end
+
+    it 'keeps a child created at the end itself' do
+      article = TrackedArticle.create!(title: 'Article')
+      comment = article.comments.create!(body: 'Comment')
+      finish = comment.versions.last.created_at
+      reader = loader(TrackedArticle, [article.id], :comments, nil, finish)
+
+      expect(reader.historical_rows.map { |row| row.fetch(1) }).to eq([comment.id])
+      expect(reader.current_pairs).to eq([[article.id, comment.id]])
+    end
+
+    # Its versions, and those its live row is matched to, name the base class.
+    it 'leaves out a child of a subclass created after it' do
+      board = document
+      kept = board.pinned_badges.create!(label: 'Before')
+      finish = marker
+      board.pinned_badges.create!(label: 'After')
+      reader = loader(ChildLoaderDocument, [board.id], :pinned_badges, nil, finish)
+
+      expect(reader.historical_rows.map { |row| row.fetch(1) }).to eq([kept.id])
+      expect(reader.current_pairs).to eq([[board.id, kept.id]])
+    end
+
+    # A version's item_id held as a string cannot be compared with an
+    # integer key in every database, so the live rows are all read.
+    it 'reads every live child where item ids are not held as the child key is' do
+      post = StringItemPost.create!(title: 'Post')
+      finish = marker
+      note = post.notes.create!(body: 'After')
+      reader = loader(StringItemPost, [post.id], :notes, nil, finish)
+
+      expect(reader.historical_rows).to eq([])
+      expect(reader.current_pairs).to eq([[post.id, note.id]])
+    end
+  end
+
+  # Without an end no child was created after it, so nothing asks.
+  it 'reads without asking when children were created where there is no end' do
+    article = TrackedArticle.create!(title: 'Article')
+    article.comments.create!(body: 'Comment')
+    statements = []
+    count = ->(*, payload) { statements << payload[:sql] unless payload[:name] == 'SCHEMA' }
+    reader = loader(TrackedArticle, [article.id], :comments)
+
+    ActiveSupport::Notifications.subscribed(count, 'sql.active_record') do
+      reader.historical_rows
+      reader.current_pairs
+    end
+
+    expect(statements.length).to eq(2)
+    expect(statements.grep(/created_versions/)).to eq([])
   end
 
   it 'reads the owners Support::IDS_PER_STATEMENT to a statement' do

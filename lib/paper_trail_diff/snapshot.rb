@@ -42,20 +42,28 @@ module PaperTrailDiff
     SUPPORTED_KINDS = %i[belongs_to has_one has_many has_and_belongs_to_many].freeze
     private_constant :COLLECTION_KINDS, :SUPPORTED_KINDS
 
-    # Non-semantic memoization shared by structurally adjacent snapshots. The
-    # cached value is derived only from frozen records and is itself immutable.
-    class IdentityIndexCache
+    # Whether a collection's identities were found distinct. The snapshots a
+    # transition derives from one another share the answer: a transition
+    # replaces a record in its place, takes one out, or puts in one that was
+    # not there, and none of those can repeat an identity. Records are held
+    # in identity order, so two with one identity are neighbours.
+    class IdentityCheck
       #: () -> void
       def initialize
-        @index = nil #: CollectionIdentityIndex?
+        @passed = false
       end
 
-      #: (Array[RecordSnapshot]) -> CollectionIdentityIndex
-      def index(records)
-        @index ||= CollectionIdentityIndex.new(records)
+      #: (Array[RecordSnapshot]) -> void
+      def call(records)
+        return if @passed
+
+        records.map(&:identity).each_cons(2) do |left, right|
+          raise ArgumentError, "duplicate record identity: #{right}" if left.eql?(right)
+        end
+        @passed = true
       end
     end
-    private_constant :IdentityIndexCache
+    private_constant :IdentityCheck
 
     # Identifies one snapshot for internal carry-forward. A transition cannot
     # hold its origin without retaining every earlier snapshot at that path,
@@ -92,8 +100,11 @@ module PaperTrailDiff
     attr_reader :records #: Array[RecordSnapshot]
     attr_reader :serial #: Integer
 
-    #: (kind: Symbol, records: Array[RecordSnapshot], ?identity_index_cache: untyped, ?transition: CollectionTransition?) -> void
-    def initialize(kind:, records:, identity_index_cache: nil, transition: nil)
+    # `ordered` says the records are already in documented order, as a
+    # transition's are: checking them again for each event made a replay's
+    # time grow with its events times the size of the collection they changed.
+    #: (kind: Symbol, records: Array[RecordSnapshot], ?identity_check: untyped, ?transition: CollectionTransition?, ?ordered: bool) -> void
+    def initialize(kind:, records:, identity_check: nil, transition: nil, ordered: false)
       unless SUPPORTED_KINDS.include?(kind)
         raise ArgumentError, "unsupported association kind: #{kind.inspect}"
       end
@@ -102,25 +113,30 @@ module PaperTrailDiff
       end
 
       @kind = kind
-      @records = ordered(records)
-      @identity_index_cache = identity_index_cache || IdentityIndexCache.new
+      @records = ordered ? in_order(records) : ordered(records)
+      @identity_check = identity_check || IdentityCheck.new
+      @identity_index = CollectionIdentityIndex.new(@records)
       @transition = transition
       @serial = SERIALS.next_serial
       freeze
     end
 
-    # Builds a structurally adjacent collection snapshot for internal activity carry-forward.
-    #: (Array[RecordSnapshot], before: RecordSnapshot?, after: RecordSnapshot?, membership_preserved: bool) -> AssociationSnapshot
-    def transition_to(records, before:, after:, membership_preserved:)
-      cache = membership_preserved ? @identity_index_cache : nil
+    # Builds a structurally adjacent collection snapshot for internal activity
+    # carry-forward. Its records are this one's with one of them replaced in
+    # its place, taken out, or put in where its identity sorts, so they are in
+    # order, and as distinct as these unless the record put in repeats one
+    # beside it.
+    #: (Array[RecordSnapshot], before: RecordSnapshot?, after: RecordSnapshot?) -> AssociationSnapshot
+    def transition_to(records, before:, after:)
       transition = if before || after
                      CollectionTransition.new(from: self, before: before, after: after)
                    end
       self.class.new(
         kind: kind,
         records: records,
-        identity_index_cache: cache,
-        transition: transition
+        identity_check: (@identity_check unless after && repeated?(records, after)),
+        transition: transition,
+        ordered: true
       )
     end
 
@@ -131,7 +147,7 @@ module PaperTrailDiff
       keys = records.map { |record| Support.sortable_identity(record.type, record.id) }
       return records.sort_by.with_index { |_, index| keys.fetch(index) }.freeze unless sorted?(keys)
 
-      records.frozen? ? records : records.dup.freeze
+      in_order(records)
     end
 
     #: (Array[Array[untyped]]) -> bool
@@ -146,17 +162,17 @@ module PaperTrailDiff
 
     #: (untyped, untyped) -> Integer?
     def position(type, id)
-      identity_index.position(type, id)
+      @identity_index.position(type, id)
     end
 
     #: (untyped) -> Integer?
     def position_for_id(id)
-      identity_index.position_for_id(id)
+      @identity_index.position_for_id(id)
     end
 
     #: () -> void
     def validate_unique_identities!
-      identity_index
+      @identity_check.call(records)
       nil
     end
 
@@ -167,12 +183,22 @@ module PaperTrailDiff
 
     private
 
-    # @rbs @identity_index_cache: untyped
+    # @rbs @identity_check: untyped
+    # @rbs @identity_index: CollectionIdentityIndex
     # @rbs @transition: CollectionTransition?
 
-    #: () -> CollectionIdentityIndex
-    def identity_index
-      @identity_index_cache.index(records)
+    #: (Array[RecordSnapshot]) -> Array[RecordSnapshot]
+    def in_order(records)
+      records.frozen? ? records : records.dup.freeze
+    end
+
+    # Whether the records hold this record's identity twice: a second one
+    # follows the first in their order.
+    #: (Array[RecordSnapshot], RecordSnapshot) -> bool
+    def repeated?(records, record)
+      first = CollectionIdentityIndex.new(records).insertion(record.type, record.id)
+      twin = records[first + 1]
+      !twin.nil? && twin.identity.eql?(record.identity)
     end
   end
 

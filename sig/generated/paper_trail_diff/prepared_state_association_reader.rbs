@@ -46,9 +46,9 @@ module PaperTrailDiff
     # : (untyped, Array[PreparedRecordState], bool) -> Array[PreparedRecordState]
     def through_members: (untyped, Array[PreparedRecordState], bool) -> Array[PreparedRecordState]
 
-    # A has_one keeps the first of its records.
-    # : (untyped, Array[PreparedRecordState]) -> Array[PreparedRecordState]
-    def first_if_one: (untyped, Array[PreparedRecordState]) -> Array[PreparedRecordState]
+    # A has_one keeps one of its records (see ScopeCondition#first).
+    # : (untyped, ScopeCondition, Array[PreparedRecordState]) -> Array[PreparedRecordState]
+    def first_if_one: (untyped, ScopeCondition, Array[PreparedRecordState]) -> Array[PreparedRecordState]
 
     # : (untyped, PreparedRecordState) -> bool
     def typed_join?: (untyped, PreparedRecordState) -> bool

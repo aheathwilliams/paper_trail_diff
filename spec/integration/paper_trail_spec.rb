@@ -522,6 +522,36 @@ RSpec.describe PaperTrailDiff do
       expect(e.message).to include('sequential ids')
     end
 
+    # The state a window ends in is held by the first version after it, so a
+    # tie for that place is as unorderable as one inside the window.
+    def tied_after_window
+      article = UuidKeyedArticle.create!(title: 'start')
+      article.update!(title: 'mid')
+      article.update!(title: 'end')
+      created, *updates = UuidVersion.where(item_id: article.id.to_s).order(:created_at).to_a
+      created.update_columns(created_at: Time.utc(2026, 1, 1))
+      updates.each { |version| version.update_columns(created_at: Time.utc(2026, 1, 3)) }
+      article
+    end
+
+    it 'refuses a window whose first later version it cannot tell apart' do
+      article = tied_after_window
+      window = Time.utc(2026, 1, 1)..Time.utc(2026, 1, 2)
+
+      [
+        -> { described_class.timeline(article, within: window) },
+        -> { described_class.analyze_many([article], within: window) },
+        -> { described_class.analyze_scope(UuidKeyedArticle.all, within: window, limit: 10) },
+        lambda do
+          described_class.analyze_scope(UuidKeyedArticle.all, within: window, limit: 10,
+                                                              historical_filter: { title: 'mid' })
+        end
+      ].each do |call|
+        expect(&call)
+          .to raise_error(PaperTrailDiff::AmbiguousVersionOrderError, /share the timestamp/)
+      end
+    end
+
     it 'tolerates tied timestamps when the ids still order them' do
       article = CoreArticle.create!(title: 't0', internal_note: 'stable')
       article.update!(title: 't1')

@@ -55,6 +55,10 @@ module PaperTrailDiff
     # : (Array[untyped], within: untyped, activity: bool, version_scope: untyped, view: ActivityView) -> Hash[identity, Analysis]
     def analyze_batch: (Array[untyped], within: untyped, activity: bool, version_scope: untyped, view: ActivityView) -> Hash[identity, Analysis]
 
+    # The window as the models' version tables keep times.
+    # : (untyped, Array[untyped]) -> TimeRange?
+    def time_range: (untyped, Array[untyped]) -> TimeRange?
+
     # Analysis reads association history, so a request it would refuse is
     # refused before the first selection query rather than once analysis starts.
     # : (untyped) -> void

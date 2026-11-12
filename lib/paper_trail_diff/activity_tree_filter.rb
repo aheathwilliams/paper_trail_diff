@@ -22,29 +22,22 @@ module PaperTrailDiff
   # before the next root version is in the tree only there. A record in none
   # of these was outside the tree throughout.
   #
-  # The root's own events are always kept, and so is an event whose step is
-  # not reported, which only bounds one that is, unless its transaction has an
-  # event whose step is: the transaction crossed the window's end. A version
-  # it saved after the edge reads each record as it stood before the
-  # transaction, so a step ending there shows none of its changes. Judged
-  # like the rest, as the window after the edge judges it, the event bounds
-  # that step when the later window reports the transaction; left out, the
-  # step runs past it and reports the changes here instead (see
-  # ActivityHistoryBuilder#consume). A snapshot does not hold a through's join
+  # The root's own events are always kept. Every other event is judged,
+  # whether or not its step is reported: one left in only bounds a reported
+  # step, and which records' events a history holds depends on what else was
+  # read with it, so an event of a record outside the tree would bound a step
+  # in one read and not in another. A snapshot does not hold a through's join
   # rows, so their versions are judged when they are collected, by the row's
   # own state (PreparedActivityIndex#join_versions), and kept here.
   class ActivityTreeFilter
-    # `reported` says whether an event's step is reported. `closing` is the
-    # snapshot after the last event: the current record's, or nil when
-    # nothing follows, as after the root's destruction.
-    #: (Array[ActivityEvent], reported: untyped, closing: RecordSnapshot?) -> void
-    def initialize(events, reported:, closing:)
-      @reported = reported
+    # `closing` is the snapshot after the last event: the current record's,
+    # or nil when nothing follows, as after the root's destruction.
+    #: (Array[ActivityEvent], closing: RecordSnapshot?) -> void
+    def initialize(events, closing:)
       @closing = closing
       @keys = transaction_keys(events)
       @starts, @ends = spans(@keys)
       @roots = root_positions(events)
-      @judged = reported_transactions(events)
       @types = {} #: Hash[String, Array[String?]]
     end
 
@@ -53,42 +46,52 @@ module PaperTrailDiff
     #: (untyped) { (ActivityEvent, RecordSnapshot?, bool) -> void } -> void
     def call(sequence)
       pairs = sequence.to_enum.to_a #: Array[[ActivityEvent, RecordSnapshot?]]
-      pairs.each_with_index do |(event, snapshot), index|
-        yield event, snapshot, keep?(event, index, pairs)
-      end
+      kept = kept(pairs)
+      pairs.each_with_index { |(event, snapshot), index| yield event, snapshot, kept.fetch(index) }
     end
 
     private
 
-    # @rbs @reported: untyped
     # @rbs @closing: RecordSnapshot?
     # @rbs @keys: Array[Array[untyped] | Integer]
     # @rbs @starts: Array[Integer]
     # @rbs @ends: Array[Integer]
     # @rbs @roots: Hash[Array[untyped] | Integer, Array[Integer]]
-    # @rbs @judged: Set[Array[untyped] | Integer]
     # @rbs @types: Hash[String, Array[String?]]
 
-    #: (ActivityEvent, Integer, Array[[ActivityEvent, RecordSnapshot?]]) -> bool
-    def keep?(event, index, pairs)
-      key = @keys.fetch(index)
-      return true if event.root? || event.join? || !@judged.include?(key)
-
-      judged_by(index, key, pairs).any? { |snapshot| holds?(snapshot, event) }
+    # Whether to keep each event. The snapshots are gone through once, in
+    # order, each answering for the events it judges (see SnapshotMembers):
+    # looking through a snapshot for each event made a replay's time grow
+    # with its events times the records of the tree.
+    #: (Array[[ActivityEvent, RecordSnapshot?]]) -> Array[bool]
+    def kept(pairs)
+      kept = pairs.map { |event, _snapshot| unjudged?(event) }
+      members = SnapshotMembers.new
+      judged(pairs).zip(pairs.map(&:last) << @closing) do |indexes, snapshot|
+        members.move_to(snapshot)
+        indexes.each { |index| kept[index] ||= holds?(members, pairs.fetch(index).first) }
+      end
+      kept
     end
 
-    # The snapshots at the first event and the root events of the event's
-    # transaction, and the one after its last event.
-    #: (Integer, Array[untyped] | Integer, Array[[ActivityEvent, RecordSnapshot?]]) -> Array[RecordSnapshot?]
-    def judged_by(index, key, pairs)
-      position = @ends.fetch(index)
-      after = position < pairs.length ? pairs.fetch(position).last : @closing
-      ([@starts.fetch(index)] + @roots.fetch(key, [])).map { |at| pairs.fetch(at).last } << after
-    end
-
+    # The root's own events are kept, and a through's join rows were judged
+    # when they were collected.
     #: (ActivityEvent) -> bool
-    def reported?(event)
-      @reported.call(event)
+    def unjudged?(event) = event.root? || event.join?
+
+    # The events each snapshot judges, by the snapshot's position, the one
+    # after the last event being what the range closes on: an event is judged
+    # by the snapshots at the first event and the root events of its
+    # transaction, and by the one after its last event. An event kept
+    # already is not asked about again (see #kept).
+    #: (Array[[ActivityEvent, RecordSnapshot?]]) -> Array[Array[Integer]]
+    def judged(pairs)
+      asked = Array.new(pairs.length.succ) { [] } #: Array[Array[Integer]]
+      pairs.each_index do |index|
+        positions = [@starts.fetch(index), *@roots[@keys.fetch(index)], @ends.fetch(index)]
+        positions.each { |position| asked.fetch(position) << index }
+      end
+      asked
     end
 
     # Where each event's transaction starts, and the position just past its
@@ -112,13 +115,6 @@ module PaperTrailDiff
             .group_by { |index| @keys.fetch(index) }
     end
 
-    # The transactions that have an event whose step is reported.
-    #: (Array[ActivityEvent]) -> Set[Array[untyped] | Integer]
-    def reported_transactions(events)
-      events.each_index.select { |index| reported?(events.fetch(index)) }
-            .to_set { |index| @keys.fetch(index) }
-    end
-
     # A version saved outside a transaction is a transaction of its own,
     # keyed by its position.
     #: (Array[ActivityEvent]) -> Array[Array[untyped] | Integer]
@@ -128,21 +124,11 @@ module PaperTrailDiff
       end
     end
 
-    #: (RecordSnapshot?, ActivityEvent) -> bool
-    def holds?(snapshot, event)
-      return false unless snapshot
-
+    #: (SnapshotMembers, ActivityEvent) -> bool
+    def holds?(members, event)
       version = event.version
-      types = types(version.item_type)
       branches = event.branches #: Array[String]
-      branches.any? { |name| contains?(snapshot.associations.fetch(name), types, version.item_id) }
-    end
-
-    #: (AssociationSnapshot, Array[String?], untyped) -> bool
-    def contains?(association, types, id)
-      types.any? { |type| association.position(type, id) } || association.records.any? do |record|
-        record.associations.each_value.any? { |nested| contains?(nested, types, id) }
-      end
+      members.holds?(branches, types(version.item_type), version.item_id)
     end
 
     # A version names its record's base class, and a snapshot the record's

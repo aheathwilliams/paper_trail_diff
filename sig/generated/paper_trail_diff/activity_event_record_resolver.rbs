@@ -3,6 +3,8 @@
 module PaperTrailDiff
   # Reconstructs an event's post-change record or immutable scalar delta.
   class ActivityEventRecordResolver
+    SERIALIZED_TYPE: ::String
+
     # : (?record_transition: untyped, ?prepared_record_after: untyped) -> void
     def initialize: (?record_transition: untyped, ?prepared_record_after: untyped) -> void
 
@@ -35,5 +37,17 @@ module PaperTrailDiff
 
     # : (untyped, untyped, untyped) -> untyped
     def standard_changeset: (untyped, untyped, untyped) -> untyped
+
+    # : (untyped) -> bool
+    def json_column?: (untyped) -> bool
+
+    # PaperTrail writes a `json` or `jsonb` column without its attribute
+    # serializer and reads it back the same way, so a decimal, a date and a
+    # time are still the strings JSON gave. Each is cast as assigning it to
+    # the record would, which is how a version's stored state is read. A
+    # `serialize`d value stays as JSON wrote it, which is the form every
+    # account of it is read in (StoredJsonValues).
+    # : (untyped, untyped) -> untyped
+    def cast: (untyped, untyped) -> untyped
   end
 end

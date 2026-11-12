@@ -32,11 +32,17 @@ module PaperTrailDiff
     # A version saved before the start names the state there unless a later
     # one saved before the start replaced it. PT-AT stores the keys a version
     # saved, and a start inside a transaction reads each record as it stood
-    # before the transaction, so a later version that the record's
-    # transaction across the start saved before it replaced nothing yet.
-    # Without the version before it, a record that this transaction moved
-    # away is not found, nor is the transaction (see
-    # PreparedHistoryLoader#reload).
+    # before the transaction, so a later version that a transaction across
+    # the start saved before it replaced nothing yet. Without the version
+    # before it, a record that this transaction moved away is not found, nor
+    # is the transaction (see CrossingTransactions).
+    #
+    # The transaction crosses the start by a version of any record, not only
+    # of this one: one that moved a comment away before the start and saved
+    # only the comment's reply after it is found by the reply, which hangs
+    # under the comment as it stood before. A transaction that went on to
+    # save nothing in the tree brings a candidate the history loads and no
+    # snapshot holds (see PreparedActivityIndex#eligible_version?).
     #: (untyped) -> String
     def condition_sql(connection) # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
       outer = connection.quote_table_name(@version_class.table_name)
@@ -60,9 +66,7 @@ module PaperTrailDiff
                  AND NOT EXISTS (
                    SELECT 1
                      FROM #{outer} #{crossing}
-                    WHERE #{columns.fetch(:crossing_item_type)} = #{columns.fetch(:later_item_type)}
-                      AND #{columns.fetch(:crossing_item_id)} = #{columns.fetch(:later_item_id)}
-                      AND #{columns.fetch(:crossing_transaction_id)} = #{columns.fetch(:later_transaction_id)}
+                    WHERE #{columns.fetch(:crossing_transaction_id)} = #{columns.fetch(:later_transaction_id)}
                       AND #{columns.fetch(:crossing_created_at)} >= #{start_at}
                  )
             )
@@ -83,8 +87,6 @@ module PaperTrailDiff
         later_item_id: column(connection, later, 'item_id'),
         later_transaction_id: column(connection, later, 'transaction_id'),
         crossing_created_at: column(connection, crossing, 'created_at'),
-        crossing_item_type: column(connection, crossing, 'item_type'),
-        crossing_item_id: column(connection, crossing, 'item_id'),
         crossing_transaction_id: column(connection, crossing, 'transaction_id')
       }
     end

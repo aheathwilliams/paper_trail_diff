@@ -130,31 +130,16 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
     it 'names roots destroyed in the window instead of filtering them' do
       start = Time.now.utc
       live = model.create!(title: 'Live')
-      gone = Array.new(2) { |index| model.create!(title: "Gone #{index}") }
-      gone.reverse_each(&:destroy!)
+      gone = [999_999, 1_000_000].map { |id| model.create!(id: id, title: "Gone #{id}") }
+      gone.each(&:destroy!)
 
       result = select(model.where(title: 'Nothing matches'), time_range: since(start))
 
       expect(result.records).to eq([])
-      # Ids sort as strings, so "10" comes before "9".
-      expect(result.unreachable).to eq(gone.map { |record| [model.name, record.id.to_s] }.sort)
+      # Ids sort as strings, so "1000000" comes before "999999".
+      expect(result.unreachable).to eq(gone.reverse.map { |record| [model.name, record.id.to_s] })
       expect(result.unreachable).to all(be_frozen)
       expect(select(model, time_range: since(start)).records).to eq([live])
-    end
-
-    # Such a transaction moves the root's window back to take its version in
-    # (see TransactionCut).
-    it 'selects a root saved before the window in a transaction that saved its paths inside it' do
-      root, other = %w[Root Other].map { |title| model.create!(title: title) }
-      start = model.transaction do
-        root.update!(title: 'Root edited')
-        Time.now.utc.tap { other.update!(title: 'Other edited') }
-      end
-      paths = instance_double(PaperTrailDiff::AssociationTraversal)
-      allow(paths).to receive(:path_types).with(model).and_return([model.name])
-
-      expect(select(model, time_range: since(start), traversal: paths).records).to eq([root, other])
-      expect(select(model, time_range: since(start)).records).to eq([other])
     end
 
     it 'selects nothing from an empty window' do
@@ -220,7 +205,7 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
       plucked = sql.grep(/SELECT DISTINCT "versions"."item_id" FROM "versions"/)
 
       expect(plucked.length).to eq(1)
-      expect(plucked.first).to include('NOT IN (SELECT "tracked_articles"."id"')
+      expect(plucked.first).to include('NOT (EXISTS (SELECT "tracked_articles".* ')
       expect(sql.grep(/IN \(SELECT "versions"."item_id"/).length).to eq(1)
     end
   end
@@ -241,6 +226,22 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
     end
 
     it_behaves_like 'a selection'
+
+    # On SQL Server a long candidate list is held in a temporary table; here
+    # a subquery over the posts' own table stands in for it.
+    it 'reads each page from the subquery a CandidateTable yields' do
+      posts = Array.new(3) { |index| StringItemPost.create!(title: "Post #{index}") }
+      page_bounds(2)
+      allow(PaperTrailDiff::CandidateTable).to receive(:with) do |model, ids, &block|
+        expect([model, ids]).to eq([StringItemPost, posts.map { |post| post.id.to_s }])
+        block.call(StringItemPost.unscoped.where(id: posts).select(:id))
+      end
+
+      sql = queries { expect(select(StringItemPost).records).to eq(posts) }
+
+      pages = sql.grep(/FROM "string_item_posts" WHERE "string_item_posts"."id" IN \(SELECT /)
+      expect(pages.length).to eq(2)
+    end
 
     it 'checks which candidates still exist in pages' do
       posts = Array.new(3) { |index| StringItemPost.create!(title: "Post #{index}") }
@@ -380,7 +381,8 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
         expect(select(TrackedArticle.offset(1).limit(4)).records).to eq(articles[1, 4])
       end
 
-      expect(sql.grep(/FROM "tracked_articles" WHERE/).length).to eq(2)
+      expect(sql.grep(/\ASELECT "tracked_articles"\.\* FROM "tracked_articles" WHERE/).length)
+        .to eq(2)
     end
 
     it 'rejects too many roots as soon as a page holds them' do
@@ -424,24 +426,6 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
       result = select(latest, time_range: since(start), historical_filter: { 'title' => 'Draft' })
 
       expect(result.records.map(&:id)).to eq([ann_draft.id, TrackedArticle.maximum(:id)])
-    end
-
-    # Such a transaction moves the root's window back to where it began, so
-    # the filter reads it from there (see TransactionCut).
-    it 'reads a root over the window a transaction crossing its start moved it to' do
-      root, other = %w[Root Other].map { |title| TrackedArticle.create!(title: title) }
-      start = TrackedArticle.transaction do
-        root.update!(title: 'Root edited')
-        Time.now.utc.tap { other.update!(title: 'Other edited') }
-      end
-      paths = instance_double(PaperTrailDiff::AssociationTraversal)
-      allow(paths).to receive(:path_types).with(TrackedArticle).and_return(['TrackedArticle'])
-      filtered = lambda do |traversal|
-        select(TrackedArticle, time_range: since(start), historical_filter: { 'title' => 'Root' },
-                               traversal: traversal).records
-      end
-
-      expect([filtered.call(paths), filtered.call(nil)]).to eq([[root], []])
     end
 
     it 'reads states from the window only' do
@@ -694,7 +678,7 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
       expect(sql.grep(/FROM "tracked_articles" WHERE .*IN \(SELECT "version_associations"/).length)
         .to eq(1)
       plucked = sql.grep(/\ASELECT DISTINCT "version_associations"/)
-      expect(plucked.reject { |query| query.include?('NOT IN') }).to eq([])
+      expect(plucked.reject { |query| query.include?('NOT (EXISTS (SELECT') }).to eq([])
     end
 
     it 'plucks every source when one source cannot stay a subquery' do

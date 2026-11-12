@@ -95,53 +95,14 @@ RSpec.describe PaperTrailDiff::TimelineRange do
   end
 
   describe 'a window' do
-    let(:moved) { PaperTrailDiff::TimeRange.new((start_time - 60)...(start_time + 3600)) }
+    it "reads it as the record's version table keeps times, and keeps one a batch read" do
+      read = PaperTrailDiff::TimeRange.new(window)
+      allow(PaperTrailDiff::TimeRange).to receive(:for).and_return(read)
 
-    # As Support.versioned? tells a model PaperTrail tracks.
-    let(:versioned_record) do
-      Class.new(self.class.record_class) { def self.paper_trail_options = {} }.new
-    end
-
-    def versioned(windows)
-      allow(PaperTrailDiff::TransactionCut).to receive(:windows).and_return(windows)
-    end
-
-    def versioned_range(within, **options)
-      described_class.new(versioned_record, from: nil, to: nil, within: within, **options)
-    end
-
-    # The requested paths decide which transactions move an edge.
-    it 'moves its edges to transaction edges for a versioned record' do
-      versioned('5' => moved)
-      paths = instance_double(PaperTrailDiff::AssociationTraversal)
-
-      expect(versioned_range(window, traversal: paths).time_range).to equal(moved)
-      expect(PaperTrailDiff::TransactionCut)
-        .to have_received(:windows) do |model, records, asked, traversal:|
-          expect([model, records, asked.begin_time, asked.end_time, asked.exclude_end?, traversal])
-            .to eq([versioned_record.class, [versioned_record], start_time, start_time + 3600,
-                    true, paths])
-        end
-    end
-
-    it 'keeps the window when no transaction crosses an edge' do
-      versioned('6' => moved)
-
-      expect(versioned_range(window).time_range.begin_time).to eq(start_time)
-    end
-
-    it 'keeps a window a batch already moved' do
-      versioned('5' => PaperTrailDiff::TimeRange.new(window))
-
-      expect(versioned_range(moved, plan: plan).time_range).to equal(moved)
-      expect(PaperTrailDiff::TransactionCut).not_to have_received(:windows)
-    end
-
-    it 'does not look for transactions of an unversioned record' do
-      allow(PaperTrailDiff::TransactionCut).to receive(:windows)
-
-      expect(range(within: window).time_range.begin_time).to eq(start_time)
-      expect(PaperTrailDiff::TransactionCut).not_to have_received(:windows)
+      expect(range(within: window).time_range).to equal(read)
+      expect(PaperTrailDiff::TimeRange).to have_received(:for).with(window, [record.class]).once
+      expect(range(within: read, plan: plan).time_range).to equal(read)
+      expect(PaperTrailDiff::TimeRange).to have_received(:for).once
     end
 
     it 'keeps versions created inside it' do
@@ -233,5 +194,48 @@ RSpec.describe PaperTrailDiff::TimelineRange do
     expect(range(within: window, plan: plan).select_plan).to equal(plan)
     expect(PaperTrailDiff::VersionRange).not_to have_received(:new)
     expect(PaperTrailDiff::TimeVersionRange).not_to have_received(:new)
+  end
+
+  describe 'a window over transactions' do
+    before { stub_const('RangeVersion', Struct.new(:id, :transaction_id, :created_at, :event)) }
+
+    def saved(id, minutes, transaction_id = nil)
+      RangeVersion.new(id, transaction_id, start_time + (minutes * 60), 'update')
+    end
+
+    it 'reads the plan widened to where a transaction across its start began' do
+      scope = ->(relation) { relation }
+      live = Object.new
+      selector = instance_double(PaperTrailDiff::TimeVersionRange, select_plan: plan)
+      allow(PaperTrailDiff::TimeVersionRange).to receive(:new).and_return(selector)
+      windowed = range(within: window, version_scope: scope, live_endpoint: live)
+
+      expect(windowed.reach_plan(start_time - 60, context_required: false)).to equal(plan)
+      widened = PaperTrailDiff::TimeRange.new((start_time - 60)...(start_time + 3600))
+      expect(PaperTrailDiff::TimeVersionRange).to have_received(:new)
+        .with(record, time_range: have_attributes(to_range: widened.to_range),
+                      version_scope: scope, live_endpoint: live)
+      expect(selector).to have_received(:select_plan).with(context_required: false, whole: true)
+    end
+
+    # Each version is placed where its transaction ends: version 2 ends with
+    # version 4, inside the window, and version 5 with version 7, after it, so
+    # version 5 is the first after it.
+    it 'reports the versions whose transactions end inside it, up to the first that ends after' do
+      versions = [saved(1, -2), saved(2, -1, 9), saved(3, 0), saved(4, 1, 9), saved(5, 30, 8),
+                  saved(6, 61), saved(7, 62, 8), saved(8, 63)]
+      wide = PaperTrailDiff::RootVersionPlan.contiguous(versions)
+      ends = PaperTrailDiff::TransactionEnds.new(versions)
+
+      reported = range(within: window).reporting_plan(wide, ends, context_required: true)
+
+      expect(reported.versions.map(&:id)).to eq([2, 3, 4, 5])
+      expect(reported.steps.last.map(&:id)).to eq([4, 5])
+    end
+
+    it 'is preselected only with a plan a batch selected' do
+      expect(range(within: window, plan: plan)).to be_preselected
+      expect(range(within: window)).not_to be_preselected
+    end
   end
 end

@@ -1,0 +1,147 @@
+# frozen_string_literal: true
+
+RSpec.describe PaperTrailDiff::TransactionEnds do
+  let(:base) { Time.utc(2032, 1, 1, 12) }
+
+  before do
+    stub_const('EndsVersion', Struct.new(:id, :transaction_id, :created_at))
+    stub_const('EndsOtherVersion', Class.new(EndsVersion))
+  end
+
+  # A version saved `id` seconds in, so ids order as times do.
+  def version(id, transaction_id, table: EndsVersion, at: id)
+    table.new(id, transaction_id, base + at)
+  end
+
+  def ordered(versions)
+    ends = described_class.new(versions)
+    versions.sort_by { |each| ends.sort_key(each) }.map(&:id)
+  end
+
+  it 'places each version at the last its transaction saved, whatever order they are given in' do
+    first = version(1, 7)
+    other = version(2, 8)
+    last = version(3, 7)
+    ends = described_class.new([last, other, first])
+
+    expect([first, other, last].map { |each| ends.last(each) }).to eq([last, other, last])
+    expect(ends).to be_frozen
+  end
+
+  it 'keeps a version outside a transaction, or of one it was not given, where it is' do
+    alone = version(1, nil)
+    unknown = version(2, 9)
+    ends = described_class.new([alone, version(3, 7), version(4, nil)])
+
+    expect([ends.last(alone), ends.last(unknown)]).to eq([alone, unknown])
+    expect(ends.sort_key(unknown).first).to eq(ends.sort_key(unknown).last)
+  end
+
+  it 'orders transactions by where they end, and the versions of each as they were saved' do
+    versions = [version(1, 7), version(2, 8), version(3, nil), version(4, 8), version(5, 7),
+                version(6, 9)]
+
+    expect(ordered(versions)).to eq([3, 2, 4, 1, 5, 6])
+    expect(ordered(versions.reverse)).to eq([3, 2, 4, 1, 5, 6])
+  end
+
+  it 'places a version at one saved at the same instant with a later id' do
+    first = version(1, 7)
+    tied = version(2, 7, at: 1)
+
+    expect(described_class.new([tied, first]).last(first)).to eq(tied)
+    expect(described_class.new([first, tied]).last(tied)).to eq(tied)
+  end
+
+  it 'tells transactions numbered alike in two version tables apart' do
+    here = version(1, 7)
+    there = version(2, 7, table: EndsOtherVersion)
+    ends = described_class.new([here, there, version(3, 7)])
+
+    expect(ends.last(here).id).to eq(3)
+    expect(ends.last(there)).to eq(there)
+  end
+
+  it 'places a transaction at the version recorded as its last, held or not' do
+    first = version(1, 7)
+    other = version(2, 8)
+    last = version(3, 7)
+    recorded = version(9, 7)
+    ends = described_class.new([first, other, last], { ['EndsVersion', 7] => recorded })
+
+    expect([first, other, last].map { |each| ends.last(each) }).to eq([recorded, other, recorded])
+    expect(ends.sort_key(first)).to eq([PaperTrailDiff::Support.chronological_version_key(recorded),
+                                        PaperTrailDiff::Support.chronological_version_key(first)])
+    expect([last, other, first].sort_by { |each| ends.sort_key(each) }).to eq([other, first, last])
+  end
+
+  # A whole history begins at its floor, whatever else a history holds.
+  describe 'with a floor' do
+    it 'keeps a version saved before the floor by another transaction where it is' do
+      before = version(1, 7)
+      floor = version(2, 8)
+      ends = described_class.new([floor, version(4, 8)], { ['EndsVersion', 7] => version(9, 7) },
+                                 floor: floor)
+
+      expect(ends.last(before)).to eq(before)
+      expect(ends.last(version(3, 7)).id).to eq(9)
+      expect(ends.last(version(2, 7, at: 2)).id).to eq(9)
+    end
+
+    it "places a version saved before the floor by the floor's transaction at its end" do
+      child = version(1, 8)
+      floor = version(2, 8)
+      last = version(4, 8)
+
+      expect(described_class.new([floor, last], floor: floor).last(child)).to eq(last)
+    end
+
+    it 'keeps a version before a floor saved outside a transaction where it is' do
+      before = version(1, 7)
+      floor = version(2, nil)
+      ends = described_class.new([floor, version(3, 7)], floor: floor)
+
+      expect([ends.last(before), ends.last(version(1, nil))].map(&:id)).to eq([1, 1])
+    end
+  end
+
+  describe '#beyond?' do
+    it 'is true only for a version saved after every version given' do
+      ends = described_class.new([version(4, 7), version(2, 8)])
+
+      expect([1, 2, 4].map { |id| ends.beyond?(version(id, nil)) }).to eq([false, false, false])
+      expect(ends.beyond?(version(5, 7))).to be(true)
+      expect(ends.beyond?(version(5, nil, at: 4))).to be(true)
+    end
+
+    it 'does not move with where a transaction is recorded as ending, and is false of none' do
+      ends = described_class.new([version(1, 7)], { ['EndsVersion', 7] => version(9, 7) })
+
+      expect(ends.beyond?(version(2, 8))).to be(true)
+      expect(described_class.new([]).beyond?(version(1, nil))).to be(false)
+    end
+  end
+
+  describe '#interleaved?' do
+    it 'is true when a transaction saved between two versions of another' do
+      expect(described_class.new([version(1, 7), version(2, 8), version(3, 7)])).to be_interleaved
+      expect(described_class.new([version(1, 7), version(2, nil), version(3, 7)]))
+        .to be_interleaved
+    end
+
+    it 'is false when each transaction saved its versions together, in any order given' do
+      versions = [version(1, 7), version(2, 7), version(3, nil), version(4, 8)]
+
+      expect(described_class.new(versions)).not_to be_interleaved
+      expect(described_class.new(versions.reverse)).not_to be_interleaved
+      expect(described_class.new([])).not_to be_interleaved
+    end
+
+    it 'is true when a transaction is recorded as ending after a later one' do
+      versions = [version(1, 7), version(2, 8)]
+
+      expect(described_class.new(versions, { ['EndsVersion', 7] => version(3, 7) }))
+        .to be_interleaved
+    end
+  end
+end

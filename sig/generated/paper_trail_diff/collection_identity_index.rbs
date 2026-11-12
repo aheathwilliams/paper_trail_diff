@@ -1,29 +1,49 @@
 # Generated from lib/paper_trail_diff/collection_identity_index.rb with RBS::Inline
 
 module PaperTrailDiff
-  # Immutable positions for one collection membership and ordering.
+  # Finds records in a collection held in type, then ID, order, as an
+  # association snapshot holds its records, by searching that order. A table
+  # of every record's position would be built again for each event that
+  # changed who is in the collection, which made a replay's time grow with
+  # its events times the collection's size.
   class CollectionIdentityIndex
-    # : (Array[untyped]) -> void
-    def initialize: (Array[untyped]) -> void
+    # A search builds a sort key for each record it looks at, so a collection
+    # of up to this many records is quicker to read through. Most nested
+    # collections are that small, and a tree is looked through for each event.
+    READ_THROUGH: ::Integer
 
-    # : (String, untyped) -> Integer?
-    def position: (String, untyped) -> Integer?
+    # : (Array[RecordSnapshot]) -> void
+    def initialize: (Array[RecordSnapshot]) -> void
 
+    # Ids match by their text: a version's item_id can arrive as a string
+    # where the record's id is an integer. The first match in the order is
+    # the one found, however it is looked for.
+    # : (untyped, untyped) -> Integer?
+    def position: (untyped, untyped) -> Integer?
+
+    # The position of the only record with this id, whatever its type.
     # : (untyped) -> Integer?
     def position_for_id: (untyped) -> Integer?
 
+    # Where a record of this type and id is, or would be put to keep the order.
+    # : (untyped, untyped) -> Integer
+    def insertion: (untyped, untyped) -> Integer
+
     private
 
-    @id_positions: Hash[String, Integer?]
+    @records: Array[RecordSnapshot]
 
-    @identities: Set[Array[untyped]]
+    # : (RecordSnapshot, String, String) -> bool
+    def match?: (RecordSnapshot, String, String) -> bool
 
-    @serialized_positions: Hash[Array[String], Integer]
+    # The values an id of this text may be held as, the number first, as
+    # records sort a number before the string that prints like it. Text that
+    # reads as no number gives nil, which no record found by text matches.
+    # : (String) -> Array[untyped]
+    def forms: (String) -> Array[untyped]
 
-    # : (untyped, Integer) -> void
-    def register: (untyped, Integer) -> void
-
-    # : (untyped, Integer) -> void
-    def register_id: (untyped, Integer) -> void
+    # Each type the collection holds, found by searching for where the next begins.
+    # : () { (String) -> void } -> void
+    def each_type: () { (String) -> void } -> void
   end
 end

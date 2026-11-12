@@ -71,7 +71,8 @@ record (`reify` returns `nil`), so comparing it with the current record reports
 
 To include comments, add `associations: [:comments]`. If comments have replies,
 `associations: ["comments.replies"]` includes those too. Associated models must
-also use `has_paper_trail`, and association tracking must be enabled.
+also use `has_paper_trail` and declare the `belongs_to` side of a `has_many` or
+`has_one`, and association tracking must be enabled.
 
 For nested results, `each_change` lets you read changes without walking every
 association yourself:

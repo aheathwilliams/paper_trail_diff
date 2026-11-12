@@ -43,25 +43,31 @@ module PaperTrailDiff
     # `activity_tree` names the association paths whose changes also select a
     # root, as an activity analysis reports them. Without one, only a root's
     # own versions select it. `version_scope` narrows which of either count,
-    # as it narrows which are reported. `traversal` names the requested paths,
-    # which decide where a window's edges move (see TransactionCut).
-    # : (untyped, time_range: TimeRange?, limit: Integer, ?historical_filter: untyped, ?max_filter_versions: Integer, ?activity_tree: AssociationTree?, ?version_scope: untyped, ?traversal: AssociationTraversal?) -> void
-    def initialize: (untyped, time_range: TimeRange?, limit: Integer, ?historical_filter: untyped, ?max_filter_versions: Integer, ?activity_tree: AssociationTree?, ?version_scope: untyped, ?traversal: AssociationTraversal?) -> void
+    # as it narrows which are reported.
+    #
+    # A window selects by the versions saved in it. A transaction that saves
+    # there and ends after it is reported in a later window (see
+    # TransactionEnds), so a root can be selected with nothing to report. One
+    # open at the window's start is reported in it, though it may have saved
+    # the root's tree only before it, so with associations the roots are
+    # selected from where the earliest such transaction began.
+    # : (untyped, time_range: TimeRange?, limit: Integer, ?historical_filter: untyped, ?max_filter_versions: Integer, ?activity_tree: AssociationTree?, ?version_scope: untyped) -> void
+    def initialize: (untyped, time_range: TimeRange?, limit: Integer, ?historical_filter: untyped, ?max_filter_versions: Integer, ?activity_tree: AssociationTree?, ?version_scope: untyped) -> void
 
     # : () -> Result
     def call: () -> Result
 
     private
 
-    @historical_filter: untyped
+    @historical_filter: FilteredCandidates?
 
     @limit: Integer
-
-    @path_types: Array[String]
 
     @related: AssociationActivitySelection?
 
     @scope: untyped
+
+    @selecting: TimeRange?
 
     @time_range: TimeRange?
 
@@ -75,25 +81,22 @@ module PaperTrailDiff
     # : (Array[AssociationActivitySelection::Query]) -> Result
     def database_selection: (Array[AssociationActivitySelection::Query]) -> Result
 
+    # The roots with a version of their own in the window. Those without a
+    # row are found in the database too (see Query#missing), not by comparing
+    # two plucked lists. Only the related queries' types are compared, so
+    # this one names none.
+    # : () -> AssociationActivitySelection::Query
+    def changed_roots: () -> AssociationActivitySelection::Query
+
     # Comparing in SQL needs every subquery's column to share the key's type.
     # : (Array[AssociationActivitySelection::source]) -> Array[AssociationActivitySelection::Query]?
     def subqueries: (Array[AssociationActivitySelection::source]) -> Array[AssociationActivitySelection::Query]?
 
     # Which candidates still have a row is asked without the relation's
     # conditions, so that "filtered out" and "no longer exists" stay
-    # separable. A filter then reads the history of the relation's records
-    # only, whose order and page choose among those that match, and of the
-    # deleted ones, which no relation can test. Those it lists, as without a
-    # filter, but does not count toward `limit:`.
+    # separable. A filter then keeps those it matches (FilteredCandidates).
     # : (Array[String]) -> Result
     def plucked_selection: (Array[String]) -> Result
-
-    # The candidates the relation's conditions accept. A grouped relation's
-    # rows are groups, which a condition on one record cannot decide, and its
-    # aggregates read every candidate at once, so it keeps them all: the
-    # filter reads each, and the relation groups those that match.
-    # : (Array[String]) -> Array[String]
-    def relation_members: (Array[String]) -> Array[String]
 
     # Comparing the two columns in SQL needs them to share a type: PostgreSQL
     # rejects an integer key against a string item_id outright. A composite
@@ -104,24 +107,13 @@ module PaperTrailDiff
     # : () -> Symbol?
     def key_type: () -> Symbol?
 
-    # : (Array[AssociationActivitySelection::Query]) -> Array[String]
-    def related_missing_ids: (Array[AssociationActivitySelection::Query]) -> Array[String]
-
-    # Changed in the window but without a row, found with an anti-join instead
-    # of comparing two plucked lists.
-    # : () -> Array[String]
-    def missing_ids: () -> Array[String]
-
     # Only the versions `version_scope` keeps select a root: one whose versions
-    # in the window it drops would have nothing to report. A version saved
-    # just before the window selects its root when TransactionCut moves the
-    # root's window back to take it in.
+    # in the window it drops would have nothing to report.
     # : () -> untyped
     def window_versions: () -> untyped
 
-    # The filter reads each candidate over the window its analysis will.
-    # : (untyped, Integer, AssociationTraversal?) -> HistoricalFilter?
-    def historical_filter_for: (untyped, Integer, AssociationTraversal?) -> HistoricalFilter?
+    # : (untyped, Integer) -> FilteredCandidates?
+    def historical_filter_for: (untyped, Integer) -> FilteredCandidates?
 
     # Accepts a model class as readily as a relation: `Article` and
     # `Article.where(...)` both name a population, and `all` is what makes them
@@ -148,14 +140,14 @@ module PaperTrailDiff
     # Deduplicate records rather than adding SQL DISTINCT: an otherwise valid
     # relation may order by joined columns or select a PostgreSQL json column.
     # Read bounded pages until the relation ends or too many unique roots appear.
-    # Each candidate source is an id list or a subquery; a record matching any
-    # of them is selected.
+    # Each candidate source is an id list or a subquery, such as a
+    # CandidateTable's; a record matching any of them is selected.
     # : (Array[untyped]) -> Array[untyped]
     def selected_records: (Array[untyped]) -> Array[untyped]
 
     # Pages are read by offset, so under a total order.
-    # : (Array[untyped]) -> untyped
-    def candidate_relation: (Array[untyped]) -> untyped
+    # : (*untyped) -> untyped
+    def candidate_relation: (*untyped) -> untyped
 
     # : (untyped, Integer) -> Array[untyped]
     def record_page: (untyped, Integer) -> Array[untyped]
@@ -170,7 +162,8 @@ module PaperTrailDiff
     # holds at least 250 rows, for a relation whose joins repeat a record,
     # and at most 2,000: SQL Server compiles a statement with its ids written
     # in, and one that listed 20,000 and returned them all outlasted the
-    # adapter's default timeout of 5 seconds.
+    # adapter's default timeout of 5 seconds. There a long list is now read
+    # from a CandidateTable, but other databases still repeat it.
     # : () -> Integer
     def page_size: () -> Integer
 

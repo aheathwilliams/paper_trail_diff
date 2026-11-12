@@ -15,10 +15,8 @@ module PaperTrailDiff
 
     attr_reader time_range: TimeRange?
 
-    # `traversal` names the requested paths, which decide where a window's
-    # edges move (see TransactionCut).
-    # : (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped, ?plan: RootVersionPlan?, ?live_endpoint: untyped, ?traversal: AssociationTraversal?) -> void
-    def initialize: (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped, ?plan: RootVersionPlan?, ?live_endpoint: untyped, ?traversal: AssociationTraversal?) -> void
+    # : (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped, ?plan: RootVersionPlan?, ?live_endpoint: untyped) -> void
+    def initialize: (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped, ?plan: RootVersionPlan?, ?live_endpoint: untyped) -> void
 
     # A record with no versions has no first boundary to resolve, which
     # is an empty history rather than a bad request. Both endpoints are
@@ -31,8 +29,24 @@ module PaperTrailDiff
     # The plan says which pairs of versions become steps, which a filter can
     # make different from adjacent pairs of the selected versions. A `whole`
     # plan replays every version in the range; see RootVersionSelection.
+    # : () -> bool
+    def preselected?: () -> bool
+
     # : (?context_required: bool, ?whole: bool) -> RootVersionPlan
     def select_plan: (?context_required: bool, ?whole: bool) -> RootVersionPlan
+
+    # The plan over the window widened to start at its `reach`: where the
+    # earliest transaction across its start began (see PreparedHistoryLoader).
+    # : (untyped, context_required: bool) -> RootVersionPlan
+    def reach_plan: (untyped, context_required: bool) -> RootVersionPlan
+
+    # The plan of what the window reports, from the root versions a `wide`
+    # plan replays: those whose transactions end inside the window, bounded
+    # by the first that ends after it (see TransactionEnds). The root's own
+    # mutations among them are those the wide plan names, which a filter
+    # chose.
+    # : (RootVersionPlan, TransactionEnds, context_required: bool) -> RootVersionPlan
+    def reporting_plan: (RootVersionPlan, TransactionEnds, context_required: bool) -> RootVersionPlan
 
     # : () -> bool
     def time?: () -> bool
@@ -59,9 +73,12 @@ module PaperTrailDiff
 
     @to: untyped
 
-    @traversal: AssociationTraversal?
-
     @version_scope: untyped
+
+    # The versions whose transactions end inside the window, and the first
+    # whose transaction ends after it.
+    # : (Array[untyped], TransactionEnds) -> [Array[untyped], untyped]
+    def placed: (Array[untyped], TransactionEnds) -> [ Array[untyped], untyped ]
 
     # : (bool) -> RootVersionPlan
     def explicit_plan: (bool) -> RootVersionPlan
@@ -78,8 +95,7 @@ module PaperTrailDiff
     # : () -> untyped
     def ordered_versions: () -> untyped
 
-    # A batch passes each root the window it already moved to transaction
-    # edges; a single record's window is moved here.
+    # A batch passes each root its window as it read it.
     # : (untyped) -> TimeRange?
     def build_time_range: (untyped) -> TimeRange?
 

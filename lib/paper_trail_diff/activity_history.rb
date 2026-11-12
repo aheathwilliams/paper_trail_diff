@@ -40,13 +40,15 @@ module PaperTrailDiff
     # the current record. Any other range ends at a root event, or at events
     # after a window whose steps are not reported, so nothing reads it.
     # `include_step` says whether an event's step is reported. `root` names
-    # the root, whose steps then credit each change row to the version that
-    # made it (see ChangeAttribution).
-    #: (Array[untyped], Array[ActivityEvent], untyped, view: ActivityView, include_step: untyped, ?current: untyped, ?closing: RecordSnapshot?, ?root: RecordReference?) -> void
+    # the root, whose steps credit each change row to the version that made
+    # it (see ChangeAttribution). `floor` is the first version of a
+    # history read without a window (see TransactionEnds).
+    #: (Array[untyped], Array[ActivityEvent], untyped, view: ActivityView, include_step: untyped, ?current: untyped, ?closing: RecordSnapshot?, root: RecordReference, ?floor: untyped) -> void
     def initialize( # rubocop:disable Metrics/ParameterLists
       root_versions, events, snapshotter,
-      view:, include_step:, current: nil, closing: nil, root: nil
+      view:, include_step:, root:, current: nil, closing: nil, floor: nil
     )
+      @floor = floor
       @root_versions = root_versions
       @events = events
       @snapshotter = snapshotter
@@ -80,6 +82,7 @@ module PaperTrailDiff
     private
 
     # @rbs @root_versions: Array[untyped]
+    # @rbs @floor: untyped
     # @rbs @events: Array[ActivityEvent]
     # @rbs @snapshotter: untyped
     # @rbs @current: untyped
@@ -96,13 +99,12 @@ module PaperTrailDiff
     # @rbs @previous_event: ActivityEvent?
     # @rbs @previous_attribution: ChangeAttribution?
     # @rbs @passed_reported: bool?
-    # @rbs @root: RecordReference?
+    # @rbs @root: RecordReference
     # @rbs @transactions: Hash[Array[untyped], ChangeAttribution::Transaction]
-    # @rbs @opening: Array[Array[untyped]]?
 
     #: () -> ActivityTreeFilter
     def filter
-      ActivityTreeFilter.new(@events, reported: @include_step, closing: @closing)
+      ActivityTreeFilter.new(@events, closing: @closing)
     end
 
     #: () -> ActivitySnapshotSequence
@@ -111,7 +113,8 @@ module PaperTrailDiff
         @root_versions,
         @events,
         @snapshotter,
-        current: @current
+        current: @current,
+        floor: @floor
       )
     end
 
@@ -119,11 +122,9 @@ module PaperTrailDiff
     # still moves the reported range's end past it, to the next boundary.
     #
     # The history starts at the first kept event whose step is reported. The
-    # events left out before it change nothing the root shows, unless they are
-    # of a transaction that crossed the window's start and has no event kept
-    # here: the snapshot at them is the state before that transaction, whose
-    # changes the window before this one reports (see ActivityTreeFilter). And
-    # a version filter starts it at the first change it keeps.
+    # events left out before it are of records outside the root's tree, and
+    # change nothing the root shows (see ActivityTreeFilter). And a version
+    # filter starts it at the first change it keeps.
     #: (ActivityEvent, RecordSnapshot?, bool) -> void
     def consume(event, snapshot, kept)
       return pass(event) unless kept
@@ -145,34 +146,23 @@ module PaperTrailDiff
     # Inside a transaction a record's change can surface at a later event
     # than its own, so the rows of a step its boundary opens are read with
     # the boundaries its transaction kept before it (see ChangeAttribution).
-    #: (ActivityEvent, ActivityBoundary) -> ChangeAttribution?
+    #: (ActivityEvent, ActivityBoundary) -> ChangeAttribution
     def attribution(event, boundary)
-      root = @root
-      return unless root
-
-      transaction, complete = transaction_of(event)
-      attribution = ChangeAttribution.new(root: root, sources: [boundary], transaction: transaction,
-                                          complete: complete)
+      transaction = transaction_of(event)
+      attribution = ChangeAttribution.new(root: @root, sources: [boundary],
+                                          transaction: transaction)
       transaction.add(boundary)
       attribution
     end
 
-    # The boundaries kept so far of the event's transaction, and whether the
-    # history holds all of it. A version saved outside a transaction is a
-    # transaction of its own.
-    #: (ActivityEvent) -> [ChangeAttribution::Transaction, bool]
+    # The boundaries kept so far of the event's transaction. A version saved
+    # outside a transaction is a transaction of its own.
+    #: (ActivityEvent) -> ChangeAttribution::Transaction
     def transaction_of(event)
       key = ActivityTransactionGroups.transaction_key(event.version)
-      return [ChangeAttribution::Transaction.new, true] unless key
+      return ChangeAttribution::Transaction.new unless key
 
-      [@transactions[key] ||= ChangeAttribution::Transaction.new, !opening.include?(key)]
-    end
-
-    # The transactions that began before the history did (see
-    # PreparedHistoryLoader#reload).
-    #: () -> Array[Array[untyped]]
-    def opening
-      @opening ||= @snapshotter.opening_transactions
+      @transactions[key] ||= ChangeAttribution::Transaction.new
     end
 
     #: (ActivityEvent) -> void

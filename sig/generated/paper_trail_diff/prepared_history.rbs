@@ -5,16 +5,31 @@ module PaperTrailDiff
   class PreparedHistory
     attr_reader activity_index: PreparedActivityIndex?
 
-    # The transactions that crossed the history's start, keyed as
-    # ActivityTransactionGroups keys a version's; see
-    # PreparedHistoryLoader#reload.
-    attr_reader opening_transactions: Array[Array[untyped]]
+    # : (PreparedRecordIndex, ?activity_index: PreparedActivityIndex?) -> void
+    def initialize: (PreparedRecordIndex, ?activity_index: PreparedActivityIndex?) -> void
 
-    # : (PreparedRecordIndex, ?activity_index: PreparedActivityIndex?, ?opening_transactions: Array[Array[untyped]]) -> void
-    def initialize: (PreparedRecordIndex, ?activity_index: PreparedActivityIndex?, ?opening_transactions: Array[Array[untyped]]) -> void
+    # Where the earliest transaction open at a window's start began; see
+    # PreparedHistoryLoader. Nil for a history that was not asked, or where
+    # none was open.
+    attr_accessor reach: untyped
+
+    # When the history was read from.
+    # : () -> untyped
+    def start_time: () -> untyped
 
     # : () -> Array[untyped]
     def versions: () -> Array[untyped]
+
+    # See PreparedRecordIndex#reading.
+    # : (TransactionEnds) { () -> void } -> void
+    def reading: (TransactionEnds) { () -> void } -> void
+
+    # See PreparedRecordIndex#transaction_ends.
+    # : (Array[untyped], ?floor: untyped) -> TransactionEnds
+    def transaction_ends: (Array[untyped], ?floor: untyped) -> TransactionEnds
+
+    # : () -> TransactionEnds?
+    def reading_ends: () -> TransactionEnds?
 
     # Returns every group the edge now holds.
     # : (untyped, untyped, Hash[String, Hash[Symbol, untyped]]) -> Hash[String, Hash[Symbol, untyped]]
@@ -70,6 +85,12 @@ module PaperTrailDiff
 
     # : (untyped, untyped, untyped, bool) -> Array[untyped]
     def child_records: (untyped, untyped, untyped, bool) -> Array[untyped]
+
+    # A ranked has_one keeps one of its records, as the state path reads it
+    # (see ScopeCondition#first). An unranked read is a part of a has_many
+    # through, whose join keeps every row.
+    # : (untyped, Array[untyped], bool) -> Array[untyped]
+    def one_if_has_one: (untyped, Array[untyped], bool) -> Array[untyped]
 
     # : (Hash[Symbol, untyped], untyped) -> Array[untyped]
     def child_ids_for: (Hash[Symbol, untyped], untyped) -> Array[untyped]

@@ -64,14 +64,24 @@ RSpec.describe PaperTrailDiff::PreparedChildCandidates do
     expect(owners_read).to eq([[first.id], [third.id, second.id]])
   end
 
-  it 'reads each owner from its start' do
+  it 'reads each owner from its start to its end' do
     owner = article
     start_at = Time.now.utc
+    end_at = start_at + 60
 
-    described_class.new(start_at).call(TrackedArticle, [owner.id], comments)
+    described_class.new(start_at, end_at).call(TrackedArticle, [owner.id], comments)
 
     expect(PaperTrailDiff::ActivityChildCandidateLoader).to have_received(:new)
-      .with(TrackedArticle, [owner.id], comments, start_at)
+      .with(TrackedArticle, [owner.id], comments, start_at, end_at)
+  end
+
+  it 'reads without an end unless given one' do
+    owner = article
+
+    candidates.call(TrackedArticle, [owner.id], comments)
+
+    expect(PaperTrailDiff::ActivityChildCandidateLoader).to have_received(:new)
+      .with(TrackedArticle, [owner.id], comments, nil, nil)
   end
 
   it 'keeps the owners of each class and association apart' do

@@ -169,6 +169,13 @@ window = Time.zone.parse("2026-08-01")...Time.zone.parse("2026-09-01")
 steps = PaperTrailDiff.timeline(article, within: window)
 ```
 
+A bound is read to the microsecond, as adapters write it into SQL, so a
+version saved in the microsecond of a `Time.now` start is inside the window.
+Where the versions table's `created_at` keeps fewer digits, as a MySQL
+`datetime` column without a precision keeps whole seconds, a bound is read to
+those: a window from 12:00:00.7 starts at 12:00:00, with the versions saved in
+that second.
+
 A `Date` bound is a whole day in `Time.zone`, so `Date.today..Date.today` is
 all of today and `august...september` stops before September 1. A string is a
 time in `Time.zone` unless it names an offset. Without `Time.zone`, both are
@@ -178,47 +185,49 @@ An endless range, such as `1.day.ago..`, runs through the current saved state:
 it holds every version saved since it began, whatever time its server's clock
 gave it, and it ends at the current record. `report` uses one.
 
-A window edge that falls inside a transaction moves back to where that
-transaction began, so the whole transaction is in the later window, as it is
-when a range [starts or ends at a version](#choosing-a-range). It moves when
-the transaction saved the root record after the edge, such as a comment edit
-and the `touch: true` article version saved with it, or saved the root before
-the edge and a record of a class on the requested paths after it. A
-transaction that saved the root only before the edge, and nothing on its paths
-after it, moves no edge: the root's change is in the earlier window, with its
-version, even when the transaction went on to save another article. A
-transaction that saved only associated records moves no edge either. When it
-saved some of them before the edge and some after, its changes are still all
-in one window: in the later one when a version it saved after the edge is of a
-record on the requested paths before or after the transaction, and otherwise
-in the earlier one. A polymorphic `belongs_to` names its target's class only in
-each record, so a target saved after the edge moves nothing: the root's change
-is then in the earlier window and the target's in the later one. A
-[transaction group](#one-step-per-transaction-group-transaction) lists in
-`sources` only the versions inside its window. So back-to-back windows, or a
-`report` with `since:` after an earlier report, show each change exactly
-once, credited to the transaction that made it. Each root moves its own
-edges, so in a batch two roots can start a few moments apart.
+A transaction takes effect where it saved its last version, so a window
+reports the transactions that end inside it, each of them whole. One that
+began before the window and ends inside it is reported there, with what it
+saved before the window: a comment edit, say, and the `touch: true` article
+version saved with it after the window's start. One that begins inside the
+window and ends after it is left to the window its last version is in. So
+back-to-back windows, or a `report` with `since:` after an earlier report,
+show each change exactly once, credited to the transaction that made it and to
+its own version, and a
+[transaction group](#one-step-per-transaction-group-transaction) lists every
+version its transaction saved, wherever they fall.
 
-`analysis.window` is the window an `Analysis` covers after any such move, as a
-Ruby range, endless for `report` and any other endless window. It is `nil` when
-`within:` or `since:` was not given. Every step of the analysis is inside it,
-so to check a step against the window, use `analysis.window` rather than the
-range you passed: a step at the start of a moved window begins before the time
-you asked for.
+Where a transaction ends is read from its version table: the last version it
+saved there, of any record, on the requested paths or not. So every window
+places a transaction alike, whichever of its records the window reads. A
+version table whose ids do not count up, such as one keyed by UUID, names the
+last version by when it was saved. Without associations, each version of the
+record is reported where it was saved, since nothing else of its transaction
+is read. `timeline`, and `analyze` without `activity:`, compare the record's
+own versions, and report each where it was saved too. With associations, the
+records around each of those versions still read as they stood before every
+transaction that had not ended yet, so an associated record's change is
+reported once, in the step where its transaction ends.
+
+A history read without a window begins at the record's first version, or at
+`from:`. What a transaction saved before that, such as an author it renamed
+before it created the article, is part of the state the history begins in,
+even when the transaction ended later.
+
+Two transactions that save in one record's tree at the same time interleave
+their versions. Each is reported as if it ran alone, in the order they end: a
+record reads as it stood before every transaction that had not ended yet.
+
+The window itself does not move. `analysis.window` is the window you asked
+for, as a Ruby range, endless for `report` and any other endless window, and
+`nil` when `within:` or `since:` was not given. A step of a transaction that
+began before the window can hold a version saved before `analysis.window`
+begins.
 
 ```ruby
 analysis = PaperTrailDiff.analyze_many(articles, within: window, activity: true).values.first
-analysis.window # => window, or one that starts earlier
+analysis.window # => window
 ```
-
-Each move emits a `moved_window.paper_trail_diff` notification whose payload
-has `item_type`, `item_id`, the `requested` range, and the moved `window`. In
-history saved by your application, an edge moves back by the time one
-transaction took, usually well under a second. A move of minutes or days
-means a transaction ran that long, or that the versions' times were changed
-after they were saved, as a test might do; see
-[writing history in tests](#writing-history-in-tests).
 
 A closed window can still change. PaperTrail stamps a version's `created_at`
 when it builds the version, inside its transaction, and the transaction commits
@@ -267,7 +276,8 @@ PaperTrailDiff.timeline(article, within: window, version_scope: user_edits)
 ```
 
 It is accepted by `timeline`, `activity_timeline`, `analyze`, `analyze_many`,
-`analyze_scope`, and `report`.
+`analyze_scope`, and `report`. A callable that returns anything but a relation
+on the version class it was given raises `ConfigurationError`.
 
 - Each reported change is compared with the version right after it, even if
   that version is filtered out. So each step shows exactly what that one change
@@ -508,9 +518,10 @@ PaperTrailDiff.activity_timeline(article, associations: [:comments], group: :tra
   the savepoint keeps one group.
 - A step joins only the group of the step just before it. Two transactions
   that save in the same tree at the same time, so that their versions
-  interleave, each form a group for every run of their own versions: the
-  state between two runs holds the other transaction's change, so no single
-  step could show either one alone.
+  interleave, each form a group for every run of their own versions. A
+  transaction's changes to associated records are read once it has ended
+  (see [version order](#version-order)), so they appear in the group of its
+  last run; the changes its root versions record appear in their own runs.
 - Also accepted by `analyze`, `analyze_many`, and `analyze_scope` with
   `activity: true`, and by `report`.
 
@@ -601,6 +612,12 @@ removal.diff.record_presence_change.to   # => nil
 A `within:` window whose last change is the deletion ends the same way, and the
 `diff` of an `analyze` over that window ends at "no record". Removing a chosen
 child is reported as `removed` in its parent's association.
+
+With `activity: true` and associations, the deletion is reported in the
+window its transaction ends in, like any other change. So a window after the
+`destroy` version can still report it, when the transaction went on saving
+other records, and a window after that transaction's end reports nothing: an
+empty timeline and an empty diff.
 
 ### HABTM limitation
 
@@ -785,12 +802,15 @@ and `allow_approximate:`.
   once, in order of first appearance. A relation grouped by anything but the
   ID, such as `select("MAX(id) AS id").group(:author_id)`, keeps its own
   order, since a database sorts groups only by what they group or aggregate.
-  It needs one that tells its groups apart, such as `order(:author_id)`.
+  It needs one that tells its groups apart, such as `order(:author_id)`;
+  without any order it raises `ConfigurationError`.
 - Selection still scans the versions in the window, so keep windows reasonable
   for large tables. Each requested association adds one query per level, however
   many records it selects. Changes to associations are found from PT-AT's
   `version_associations`, so history recorded before PT-AT was installed selects
-  nothing.
+  nothing, and neither does a `belongs_to` target's change for a record that
+  has no version of its own, such as one created with PaperTrail turned off:
+  `analyze` on that record reports the change, but no selection finds it.
 
 ### Deleted records
 
@@ -808,7 +828,8 @@ as it stood when it was destroyed, and keeps only those that match. So a report
 on `Article.where(account_id: account.id)` returns that account's deletions,
 not every account's. The relation's conditions must be plain conditions on the
 model's own columns, as a [readable association scope's](#costly-associations)
-must, ranges included; anything else, such as a join or SQL text, raises
+must, ranges and equality on a date or a time included; anything else, such
+as a join or SQL text, raises
 `ConfigurationError`. `Article.none` keeps none. Its order, limit, and offset
 are ignored here, since they choose a page of existing rows. A record whose
 destroy PaperTrail did not record has no state to test and stays listed.
@@ -841,17 +862,23 @@ report = PaperTrailDiff.report(
 )
 ```
 
-The filter checks the record as it was when its window started and after each
-change made inside it. That window is the one its analysis covers
-(`analysis.window`): a transaction that crosses an edge moves the edge to where
-the transaction began (see [time windows](#time-windows)). A record matches if
+The filter checks the record as it was when the window started and after each
+change saved inside it. It reads each version where it was saved, not where
+its transaction ended (see [time windows](#time-windows)), so a record whose
+transaction began before the window and ends inside it is checked from the
+state its versions before the window left. A record matches if
 any of those states match. With a
 hash, every key must be equal (`==`) once both sides are cast to the
 attribute's type, as `where` casts its values: `{ status: :published }` matches
 an enum, and a date or time matches whether the history stored it as YAML or
 as a string in a `json` column. Values are read from the stored history
-without calling `reify`, and unknown or unrecorded attributes raise an error
-instead of matching `nil`. For other checks, pass a callable such as
+without calling `reify`, except for a model whose stored values only a record
+can read, such as one with an encrypted attribute, whose versions are rebuilt
+with `reify` and compared by their decrypted values. Unknown or unrecorded
+attributes raise an error instead of matching `nil`. So does a list or a
+range as a value, such as `{ status: %i[published archived] }`, which `where`
+would read as any of them, unless the attribute itself holds one. For other
+checks, pass a callable such as
 `->(article) { article.title.start_with?("Pub") }`; it receives each state as a
 model instance and may run queries of its own.
 
@@ -864,6 +891,12 @@ model instance and may run queries of its own.
 - Matching records the relation selects count toward `limit:`, and matching
   stops as soon as the limit is exceeded. Matching deleted records count only
   with `include_deleted: true`, as without a filter.
+- A relation with a `limit` pages the matches: records are read in the
+  relation's order, matching stops when the page is full, and only the page
+  counts toward `limit:`. So `Article.order(:id).limit(20).offset(40)` with
+  `limit: 20` returns the third page however many records match, and reads
+  history only as far as that page. A grouped relation, and one without a
+  `limit`, still read every match.
 - `max_filter_versions:` limits how many versions the filter loads, including
   the one version after the window it reads for each record, and the versions
   of deleted records. The default is 10,000. Going over raises
@@ -895,13 +928,21 @@ boolean, and enum columns, with SQL's rules for NULL. A `nil` test
 scope such as `where(deleted_at: nil)` is read too. String and text columns
 are read only on SQLite and PostgreSQL, and only without a column collation:
 MySQL and SQL Server compare strings without regard to case or trailing spaces
-by default, which the gem cannot repeat, and neither is PostgreSQL's
-`citext`.
+by default, which the gem cannot repeat. Neither is PostgreSQL's `citext`,
+which ignores case, nor its `character(n)`, which pads with spaces.
+
+The gem lists the SQL column types it reads this way for each of SQLite,
+PostgreSQL, MySQL (`mysql2` and `trilogy`), and SQL Server. A condition or
+order on a column of any other type, or on another adapter, is not read,
+like the scopes described below. On SQL Server a `datetime2` is read but not
+a legacy `datetime` or `smalldatetime`, which round the times they store.
 
 Ranges, such as `where(position: 2..)` or `where(created_at: 1.day.ago...)`,
 and Arel's `gt`, `gteq`, `lt`, and `lteq`, are read on the columns an order
 can sort by, below: integer, integer enum, date, and datetime columns, with
-the same conditions on a datetime's precision.
+the same conditions on a datetime's precision. Equality and `IN` on a date or a
+datetime column, such as `where(due_on: Date.current)`, are read under those
+conditions too.
 
 A `limit` or `offset`, and the order of a `has_one`, are read the same way
 when the order is total and the gem can repeat it:
@@ -982,10 +1023,17 @@ diff = PaperTrailDiff.compare(from, to, associations: [:author, "comments.replie
 (`associations: [:author, { comments: :replies }]`).
 
 Supported: `belongs_to`, `has_one`, `has_many` (including `:through`), and
-`has_and_belongs_to_many`. Associated models must use `has_paper_trail`, and
+`has_and_belongs_to_many`. Associated models must use `has_paper_trail`, the
+target of a `has_one` or `has_many` must declare the `belongs_to` back, and
 historical states need PT-AT installed and enabled
 (`PaperTrail.config.track_associations = true`). The gem never follows
 associations you did not ask for, so cyclic models are safe.
+
+When more than one record points at the owner of a `has_one` without an
+order, history reads the one with the lowest primary key, as Active Record's
+`LIMIT 1` does on SQLite, MySQL, and SQL Server. PostgreSQL promises no order
+there, so its current record can read another one: give such a `has_one` an
+order, or a unique index, to make the choice the same everywhere.
 
 How each kind is reported:
 
@@ -1061,13 +1109,24 @@ comments.changed.first.associations["replies"].added
   pointed at by that record's ID, so history read that way would show other
   records' children. `association_paths` leaves it out. Naming the primary key
   itself, `primary_key: :id`, is accepted.
+- A `has_many` or `has_one` whose target declares no `belongs_to` on its
+  foreign key, such as `has_many :comments` when `Comment` has no
+  `belongs_to :article`, raises `UnsupportedAssociationError` up front in
+  every method, and so does a `has_many :through` with such a part. PT-AT
+  records a record's owner on the record's own versions, once for each
+  `belongs_to` it declares, so with none nothing says a comment that was
+  destroyed or moved away was ever the article's. `association_paths` leaves
+  it out. Declare the `belongs_to` to request the path; versions saved before
+  then recorded no owner, so a record that left before then is not reported.
 - A root that uses single-table inheritance gets the associations of the
   class it had at each version, so you can request one that only a subclass
   declares. Without an `item_subtype` column, PaperTrail stores only the base
   class; the gem reads the subclass from the type column the version stored.
   A version where the record was a class without that association raises
   `UnknownAssociationError`, as a current record of that class would. A
-  stored type that names no class raises `InvalidEndpointError`.
+  stored type that names no class raises `InvalidEndpointError`. A child's
+  `belongs_to` may name any class of the owner's table: PT-AT records the
+  class it names, and the gem looks for each one the target declares.
 - Requesting associations for a historical state without PT-AT raises
   `AssociationTrackingUnavailableError`. Unknown names raise
   `UnknownAssociationError`; unsupported macros raise
@@ -1448,7 +1507,8 @@ Other details:
   `{}`.
 - `ignore:` takes an array of attribute names and defaults to `updated_at`, as
   elsewhere. It does not take `paths:`, because a version does not say which
-  association path it was reached through. Primary keys are left out.
+  association path it was reached through. Primary keys are left out, and so
+  is a name the model no longer has, such as a column dropped since.
 - Unlike PaperTrail's `version.changeset`, it never loads the record. That
   saves a query per version, and a deleted record's values keep their types,
   such as an enum's label rather than the integer PaperTrail stored.
@@ -1528,12 +1588,24 @@ warning instead. `ok?` does not prove the history is complete.
 - **Custom version classes** (`has_paper_trail versions: { class_name: }`) are
   supported. For association history, a model and each association you ask
   for must keep their versions, and their PT-AT version associations, in the
-  same tables. PT-AT reads an association's history from its owner's tables
-  and numbers transactions within one table, so it cannot follow an
-  association into a different version table. Such an association raises
-  `UnsupportedAssociationError` naming both tables, and `association_paths`
-  leaves it out. One custom table shared by the models works like
-  PaperTrail's own.
+  same tables. PT-AT reads an association's history from its owner's
+  tables, so it cannot follow an association into a different version
+  table. Such an association raises `UnsupportedAssociationError` naming
+  both tables, and `association_paths` leaves it out. One custom table
+  shared by the models works like PaperTrail's own.
+
+  PaperTrail numbers a transaction by the id of the first version it
+  saved, in whichever table that was, so with more than one version table
+  two transactions can share a number. Where a [time window](#time-windows)
+  looks for the start of a transaction, the gem tells them apart by the
+  version each began with, which carries its own id as its number. It
+  consults the version classes loaded at the time, in the model's
+  database: load them eagerly, as production does, or name them before
+  reading. It cannot tell two apart when the earlier one's first version
+  has been deleted, or when both ran at the same time. Within the history
+  of one record and its associations, versions are still grouped by number
+  alone, so where two transactions of one number both saved them, their
+  versions are read as one transaction's.
 - **A scoped versions association** (`has_paper_trail versions: { scope: }`)
   does not change what is read: every method reads all of a record's
   versions, because a history replayed without some of them would credit
@@ -1547,6 +1619,8 @@ works when IDs increase with each insert, as autoincrement IDs do, in one
 table. UUID version IDs do not, and models with their own version tables count
 IDs separately, so two such versions with the same timestamp cannot be ordered;
 the gem raises `AmbiguousVersionOrderError` naming both instead of guessing.
+That includes a tie for the first version after a `within:` window, which
+holds the state the window ends in.
 Timestamps stored to the second, as on a MySQL `datetime` column, make ties
 common. `diagnose` reports this as an error.
 
@@ -1573,6 +1647,20 @@ commits last can still sort first. The gem cannot see commit order. A report
 can therefore show a state the database never held, and a result for an earlier
 version or a closed window can change once that transaction commits.
 [Time windows](#time-windows) explains how to settle a report.
+
+Two transactions that save in one record's tree at the same time interleave
+their versions. Each version was saved while the other transaction's changes
+were not yet committed, so at a version of one, a record the other saved
+reads as it stood before the other began, as a record the version's own
+transaction saved does. The other's changes appear from the event after its
+last version, in a step it opens, so a record it changed and changed back,
+such as a comment it created and deleted again, appears in no step and in no
+window's starting state or diff. A transaction is open from its first
+version on the requested paths in the range, or from the range's start when
+it began before it, to the last version it saved of any record in the same
+version table. Row locks keep the two from saving the same
+record. The association shapes below that fall back to PT-AT's own reifier
+still read by time.
 
 Association changes between versions with the same timestamp are placed using
 the same order. A few association shapes fall back to PT-AT's own reifier, which
@@ -1650,7 +1738,6 @@ subscribe to:
 - `load_live_endpoints.paper_trail_diff`
 - `prepare_history.paper_trail_diff`
 - `ambiguous_association_boundary.paper_trail_diff`
-- `moved_window.paper_trail_diff`, when a [window edge moves](#time-windows)
 
 ```ruby
 ActiveSupport::Notifications.subscribe(/\.paper_trail_diff\z/) do |name, start, finish, _id, payload|
@@ -1685,7 +1772,7 @@ All errors inherit from `PaperTrailDiff::Error`.
 | `FilterLimitExceededError` | `historical_filter:` needs more than `max_filter_versions:` |
 | `AssociationTrackingUnavailableError` | Association history is requested without PT-AT |
 | `UnknownAssociationError` | An association name does not exist |
-| `UnsupportedAssociationError` | An association's macro is not supported, a path continues past a polymorphic `belongs_to`, a `has_many :through` goes through a HABTM, a HABTM is scoped or below the root, an association is keyed on a column other than a primary key, or history cannot read a [costly association](#costly-associations) and `allow_approximate: true` was not passed |
+| `UnsupportedAssociationError` | An association's macro is not supported, a path continues past a polymorphic `belongs_to`, a `has_many :through` goes through a HABTM, a HABTM is scoped or below the root, an association is keyed on a column other than a primary key, the target of a `has_one` or `has_many` declares no `belongs_to` on its foreign key, or history cannot read a [costly association](#costly-associations) and `allow_approximate: true` was not passed |
 | `UnversionedAssociationError` | An association's target model, or a model a `has_many :through` goes through, has no `has_paper_trail`, including the class a polymorphic `belongs_to` names |
 | `IncompleteAssociationHistoryError` | PT-AT did not record enough to rebuild an association, such as HABTM without a transaction or in a transaction another record with that HABTM also saved a version in, or a polymorphic type names no class |
 | `UnsupportedLiveActivityError` | A HABTM activity range ends at the current record |
@@ -1731,17 +1818,8 @@ Results can only be as complete as the history PaperTrail and PT-AT recorded.
 - A savepoint that rolls back, or another transaction saving in the same tree
   at the same time, can split one transaction into several transaction groups;
   see [one step per transaction group](#one-step-per-transaction-group-transaction).
-- Two transactions that save in one record's tree at the same time, so that
-  their versions interleave, are read in the order of their versions. A
-  version reads the records its own transaction saved as they stood before
-  the transaction, but a version of the other transaction reads them as they
-  stood after the change saved before it. So a record that one transaction
-  changed and changed back, such as a comment it created and deleted again,
-  can appear in the other's steps, crediting that transaction with adding
-  or removing it, and a window's starting state and diff can hold it too.
-  Row locks keep the two from saving the same record, so this needs both to
-  save different records of one tree within moments of each other. See
-  [version order](#version-order).
+- A transaction that saves in two version tables is read in each as far as
+  its versions there: where it ends is read from one version table at a time.
 - HABTM membership history exists only where PT-AT recorded it in a
   transaction, and only for the root record without a scope: a scoped HABTM,
   or one below the root, raises `UnsupportedAssociationError`, and a transaction that another record with

@@ -7,13 +7,11 @@ module PaperTrailDiff
   # every root are supported: a shared wall-clock window, or each root's own
   # whole history.
   class BatchedRootVersions
-    #: (Array[untyped], time_range: TimeRange?, version_scope: untyped, live_endpoints: Hash[Array[String], untyped]?, context_required: bool, whole: bool, windows: Hash[Array[String], TimeRange]) -> void
+    #: (Array[untyped], time_range: TimeRange?, version_scope: untyped, live_endpoints: Hash[Array[String], untyped]?, context_required: bool, whole: bool) -> void
     def initialize( # rubocop:disable Metrics/ParameterLists
-      records, time_range:, version_scope:, live_endpoints:, context_required:, whole:, windows:
+      records, time_range:, version_scope:, live_endpoints:, context_required:, whole:
     )
       @records = records
-      # Roots whose window moved to a transaction's start, by identity.
-      @windows = windows
       # An activity view needs a root to reconstruct from even in a window with
       # no root version, exactly as a single-record activity timeline does.
       @context_required = context_required
@@ -43,7 +41,6 @@ module PaperTrailDiff
     # @rbs @live_endpoints: Hash[Array[String], untyped]?
     # @rbs @context_required: bool
     # @rbs @whole: bool
-    # @rbs @windows: Hash[Array[String], TimeRange]
 
     # Each statement reads the versions of 500 roots.
     #: (untyped, Array[untyped], Hash[Array[String], RootVersionPlan]) -> void
@@ -52,42 +49,22 @@ module PaperTrailDiff
         in_range, chosen, trailing = model_versions(model_class, slice)
         slice.each do |record|
           key = Endpoint.identity(record)
-          own = own_window(key, record.id.to_s, in_range, trailing)
-          selected[key] = versions_for(*own, chosen, live_endpoint(key, record))
+          id = record.id.to_s
+          selected[key] = versions_for(in_range.fetch(id, []), trailing[id], chosen,
+                                       live_endpoint(key, record))
         end
       end
-    end
-
-    # Each root's own versions, and the first after its window (see OwnWindow).
-    #: (Array[String], String, Hash[String, Array[untyped]], Hash[String, untyped]) -> [Array[untyped], untyped]
-    def own_window(key, id, in_range, trailing)
-      loaded = in_range.fetch(id, [])
-      return [loaded, trailing[id]] if @windows.empty?
-
-      # A batch moves windows only when it has one, so this is never nil.
-      window = @windows.fetch(key) { @time_range } #: untyped
-      own, past = OwnWindow.split(window, loaded)
-      [own, past || trailing[id]]
     end
 
     #: (untyped, Array[untyped]) -> [Hash[String, Array[untyped]], Set[untyped]?, Hash[String, untyped]]
     def model_versions(model_class, records)
       range = @time_range
       empty = {} #: Hash[String, untyped]
-      widest = widest_range(records)
       [
-        grouped_versions(model_class, records, widest),
-        chosen_version_ids(model_class, records, widest),
+        grouped_versions(model_class, records, range),
+        chosen_version_ids(model_class, records, range),
         range ? trailing_versions(model_class, records, range) : empty
       ]
-    end
-
-    #: (Array[untyped]) -> TimeRange?
-    def widest_range(records)
-      range = @time_range
-      return unless range
-
-      OwnWindow.widest(range, records.filter_map { |record| @windows[Endpoint.identity(record)] })
     end
 
     #: (Array[untyped], untyped, Set[untyped]?, untyped) -> RootVersionPlan

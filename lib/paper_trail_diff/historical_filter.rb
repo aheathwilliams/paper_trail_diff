@@ -9,39 +9,39 @@ module PaperTrailDiff
   # the window supply the state at its start and after every change but the
   # last. The state after the last change lives in the first version after
   # the window, or in the live row when nothing follows; a destroy leaves none.
-  #
-  # Each candidate is read over the window its analysis covers, which a
-  # transaction crossing an edge moves (see TransactionCut). `windows` gives
-  # the moved ones, keyed by id, for a slice of candidates and the window.
   class HistoricalFilter
     DEFAULT_VERSION_LIMIT = 10_000
+    # Values `where` reads as several.
+    SEVERAL = [Array, Range, Set].freeze
+    private_constant :SEVERAL
 
-    #: (untyped, predicate: untyped, time_range: TimeRange?, limit: Integer, max_versions: Integer, windows: ^(Array[String], TimeRange) -> Hash[String, TimeRange]) -> void
-    def initialize(model, predicate:, time_range:, limit:, max_versions:, windows:) # rubocop:disable Metrics/ParameterLists
+    #: (untyped, predicate: untyped, time_range: TimeRange?, limit: Integer, max_versions: Integer) -> void
+    def initialize(model, predicate:, time_range:, limit:, max_versions:)
       @model = model
       @predicate = validate_predicate(predicate)
       @time_range = time_range
       @limit = limit
       @max_versions = validate_budget(max_versions)
-      @windows = windows
       @loaded = 0
       @state_loader = PreparedVersionStateLoader.new
     end
 
     # More matches than the limit raise, unless the caller does not count
     # them: candidates it only lists, such as deleted roots.
-    #: (Array[String], ?counted: bool) -> Array[String]
-    def call(candidates, counted: true)
+    #
+    # A `page` is the relation's own, as the matches to skip and to take
+    # among candidates given in its order. Matching stops when the page is
+    # full, so no history is read past it, and only the page counts toward
+    # the limit.
+    #: (Array[String], ?counted: bool, ?page: [Integer, Integer]?) -> Array[String]
+    def call(candidates, counted: true, page: nil)
+      skipped = page ? page.first : 0
+      full = page&.sum
       matched = [] #: Array[String]
-      candidates.each_slice(Support::IDS_PER_STATEMENT) do |slice|
-        versions, past = own_versions(slice)
-        closing = closing_states(slice, versions, past)
-        slice.each do |id|
-          next unless held?(versions.fetch(id, []), closing[id])
-
-          matched << id
-          reject_root_limit! if counted && matched.length > @limit
-        end
+      each_match(candidates) do |id|
+        matched << id
+        reject_root_limit! if counted && matched.length - skipped > @limit
+        break if matched.length == full
       end
       matched
     end
@@ -53,9 +53,19 @@ module PaperTrailDiff
     # @rbs @time_range: TimeRange?
     # @rbs @limit: Integer
     # @rbs @max_versions: Integer
-    # @rbs @windows: ^(Array[String], TimeRange) -> Hash[String, TimeRange]
     # @rbs @loaded: Integer
     # @rbs @state_loader: PreparedVersionStateLoader
+
+    # Each candidate that held a matching state, in the order given, read a
+    # batch at a time.
+    #: (Array[String]) { (String) -> void } -> void
+    def each_match(candidates)
+      candidates.each_slice(Support::IDS_PER_STATEMENT) do |slice|
+        versions = candidate_versions(slice, @time_range)
+        closing = closing_states(slice, versions)
+        slice.each { |id| yield id if held?(versions.fetch(id, []), closing[id]) }
+      end
+    end
 
     #: (untyped) -> untyped
     def validate_predicate(predicate)
@@ -71,7 +81,20 @@ module PaperTrailDiff
               "unknown historical attributes: #{unknown.join(', ')}"
       end
 
-      attributes.to_h { |name, value| [name, cast(name, value)] }
+      attributes.to_h { |name, value| [name, expected(name, value)] }
+    end
+
+    # `where` reads a list or a range as any of its values, which an
+    # equality with one cast value cannot mean, so it is refused unless the
+    # attribute itself holds one, as a serialized or an array column does.
+    #: (String, untyped) -> untyped
+    def expected(name, value)
+      cast = cast(name, value)
+      return cast unless SEVERAL.any? { |kind| value.is_a?(kind) } && !cast.is_a?(value.class)
+
+      raise ConfigurationError,
+            "historical_filter: #{name} takes one value, not #{value.class.name.downcase}; " \
+            'use a callable to match any of several'
     end
 
     # Expected and recorded values compare as the attribute casts them, as
@@ -89,23 +112,6 @@ module PaperTrailDiff
       return value if value.instance_of?(Integer) && value.positive?
 
       raise ConfigurationError, 'max_filter_versions: must be a positive Integer'
-    end
-
-    # Each candidate's versions in its own window, read from the earliest
-    # moved start, and the first past each end that moved.
-    #: (Array[String]) -> [Hash[String, Array[untyped]], Hash[String, untyped]]
-    def own_versions(ids)
-      range = @time_range
-      past = {} #: Hash[String, untyped]
-      return [candidate_versions(ids, nil), past] unless range
-
-      windows = @windows.call(ids, range)
-      loaded = candidate_versions(ids, OwnWindow.widest(range, windows.values))
-      own = loaded.to_h do |id, versions|
-        inside, past[id] = OwnWindow.split(windows.fetch(id, range), versions)
-        [id, inside]
-      end
-      [own, past]
     end
 
     #: (Array[String], TimeRange?) -> Hash[String, Array[untyped]]
@@ -127,15 +133,12 @@ module PaperTrailDiff
     end
 
     # What each candidate held after its last change in the window: the
-    # first version past an end that moved, read already, or past the end as
-    # asked, or the live row.
-    #: (Array[String], Hash[String, Array[untyped]], Hash[String, untyped]) -> Hash[String, untyped]
-    def closing_states(ids, versions, past)
+    # first version past the end, or the live row.
+    #: (Array[String], Hash[String, Array[untyped]]) -> Hash[String, untyped]
+    def closing_states(ids, versions)
       open = ids.reject { |id| versions.fetch(id, []).last&.event == 'destroy' }
-      ended = past.slice(*open).compact
-      rest = open - ended.keys
-      trailing = trailing_versions(rest)
-      ended.merge(trailing, live_records(rest - trailing.keys))
+      trailing = trailing_versions(open)
+      trailing.merge(live_records(open - trailing.keys))
     end
 
     #: (Array[String]) -> Hash[String, untyped]
@@ -184,20 +187,36 @@ module PaperTrailDiff
 
     #: (untyped) -> bool
     def attributes_match?(version)
-      state = @state_loader.call(version)
-      unless state
-        raise ConfigurationError,
-              'historical_filter: cannot read recorded attributes directly; use a bounded callable'
-      end
-
+      recorded = recorded_attributes(version)
       @predicate.all? do |name, expected|
-        unless state.attributes.key?(name)
+        unless recorded.key?(name)
           raise ConfigurationError,
                 "historical_filter: #{name} was not recorded in version #{version.id}"
         end
 
-        cast(name, state.attributes.fetch(name)) == expected
+        cast(name, recorded.fetch(name)) == expected
       end
+    end
+
+    # The attributes the version recorded, read as stored where they can be.
+    #: (untyped) -> Hash[String, untyped]
+    def recorded_attributes(version)
+      state = @state_loader.call(version)
+      state ? state.attributes : rebuilt_attributes(version)
+    end
+
+    # A model whose stored values only a record can read, such as one with an
+    # encrypted attribute, or whose version names a column since removed, is
+    # rebuilt as PaperTrail rebuilds it. The record also holds attributes the
+    # version did not record, which are left out.
+    #: (untyped) -> Hash[String, untyped]
+    def rebuilt_attributes(version)
+      recorded = version.object_deserialized
+      record = Support.reify(version, dup: true) if recorded.is_a?(Hash)
+      return record.attributes.slice(*recorded.keys) if record
+
+      raise ConfigurationError,
+            'historical_filter: cannot read recorded attributes directly; use a bounded callable'
     end
 
     #: () -> void

@@ -145,6 +145,15 @@ RSpec.describe PaperTrailDiff::RecordedChanges do
     end
   end
 
+  # A diff and a change row read only the model's attributes, so this does too.
+  it 'leaves out a name the model no longer has, such as a column since dropped' do
+    version = event_version(edited_note, 'update')
+    changes = version.changeset.to_h.merge('dropped' => %w[a b])
+    version.update_column(:object_changes, PaperTrail.serializer.dump(changes))
+
+    expect(recorded(version.reload).keys).to eq(%w[rank stage title])
+  end
+
   it 'rejects anything but a version' do
     expect { recorded(edited_note) }
       .to raise_error(PaperTrailDiff::InvalidEndpointError, /PaperTrail version/)

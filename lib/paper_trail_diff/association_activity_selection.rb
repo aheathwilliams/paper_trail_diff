@@ -37,10 +37,16 @@ module PaperTrailDiff
         @relation.distinct.pluck(@column).compact
       end
 
-      # The ids with no match in `keys`, a subquery of the keys that exist.
+      # The ids no row of the model has for its key, whatever scope the model
+      # has by default. They are asked for with NOT EXISTS: PostgreSQL does
+      # not plan `NOT IN (SELECT ...)` as an anti-join, so it reads every key
+      # of the table for the statement, and again for each id once the keys
+      # outgrow its working memory. An empty key names no record.
       #: (untyped) -> Array[untyped]
-      def missing(keys)
-        @relation.where(@column.not_in(keys)).distinct.pluck(@column)
+      def missing(model)
+        key = model.arel_table[model.primary_key]
+        rows = model.unscoped.where(key.eq(@column)).arel.exists
+        @relation.where(rows.not).distinct.pluck(@column).compact
       end
     end
 
@@ -51,6 +57,19 @@ module PaperTrailDiff
     #: (Array[source]) -> Array[untyped]
     def self.values(sources)
       sources.flat_map { |ids| ids.is_a?(Query) ? ids.values : ids }.uniq
+    end
+
+    # The window roots are selected over: the one asked for, and with a tree,
+    # from where the earliest transaction open at its start began (see
+    # CrossingTransactions). A window reports such a transaction, which may
+    # have saved a root's tree only before it.
+    #: (untyped, AssociationTree?, TimeRange?) -> TimeRange?
+    def self.window(model, tree, range)
+      return range unless range && tree && !tree.empty?
+
+      traversal = AssociationTraversal.new(tree)
+      reach = CrossingTransactions.open_around(model, traversal, range.begin_time)
+      reach ? range.widened(reach) : range
     end
 
     # Only the versions `version_scope` keeps select a root, on its

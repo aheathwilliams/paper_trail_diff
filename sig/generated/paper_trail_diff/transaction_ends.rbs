@@ -1,0 +1,138 @@
+# Generated from lib/paper_trail_diff/transaction_ends.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Where each transaction of a root's timeline takes effect: at the last
+  # version it saved, of any record, as `recorded` holds it (see
+  # RecordedTransactionEnds); among the timeline's own versions where that is
+  # not known, as on a root read without its associations.
+  #
+  # Two transactions that save in one tree at the same time interleave their
+  # versions, yet neither sees what the other has not committed, and one may
+  # undo its own changes before it ends, such as a comment it created and
+  # deleted again. Rows locked by a write keep two open transactions from
+  # saving one record, so wherever the order of two transactions matters, the
+  # one that saved its last version first also ended first. A timeline that
+  # places every version of a transaction at its last one therefore reads the
+  # transactions one after another, as if none had overlapped: a record reads
+  # as it stood before every transaction that had not ended yet, and each
+  # change is reported with its own transaction's.
+  #
+  # A version saved outside a transaction takes effect where it was saved.
+  class TransactionEnds
+    #
+    #  A whole history, read without a window, begins at its root's first
+    #  version, its `floor`. A version saved before it took effect before the
+    #  history began, whenever its transaction ended, unless that transaction
+    #  is the floor's own: a history can hold such a version, as a batch's
+    #  does when another of its roots is older, and what a root reports does
+    #  not depend on what was read with it. A window has no floor: it is read
+    #  from where the transactions open at its start began, since it reports
+    #  them.
+    # : (Array[untyped], ?Hash[Array[untyped], untyped], ?floor: untyped) -> void
+    def initialize: (Array[untyped], ?Hash[Array[untyped], untyped], ?floor: untyped) -> void
+
+    # The last of the versions of each transaction, and of those outside one,
+    # by transaction key.
+    # : (Array[untyped]) -> Hash[Array[untyped]?, untyped]
+    def self.lasts: (Array[untyped]) -> Hash[Array[untyped]?, untyped]
+
+    # Whether placing the versions at their transactions' ends changes their
+    # order: some transaction saved a version between two of another's.
+    # : () -> bool
+    def interleaved?: () -> bool
+
+    # The last version of the version's transaction, or the version itself.
+    # : (untyped) -> untyped
+    def last: (untyped) -> untyped
+
+    # Whether the version was saved after every version of the timeline. A
+    # history can hold such a version, as the next one of a record after the
+    # range it was read for, or as part of a batch's history that runs on for
+    # another root. The timeline ends before it, so it takes effect after
+    # everything the timeline holds, whenever its transaction ended.
+    # : (untyped) -> bool
+    def beyond?: (untyped) -> bool
+
+    # Orders versions by where their transactions end, then as they were
+    # saved.
+    # : (untyped) -> Array[untyped]
+    def sort_key: (untyped) -> Array[untyped]
+
+    private
+
+    @floor: Array[untyped]?
+
+    @floor_transaction: Array[untyped]?
+
+    @horizon: Array[untyped]?
+
+    @last: Hash[Array[untyped]?, untyped]
+
+    @recorded: Hash[Array[untyped], untyped]
+
+    @reordered: bool
+
+    # Whether the version was saved before the floor, by another transaction
+    # than the floor's.
+    # : (untyped, Array[untyped]) -> bool
+    def settled?: (untyped, Array[untyped]) -> bool
+  end
+
+  # Reads where transactions end from their version tables: the last version
+  # each saved there, of any record.
+  #
+  # A transaction can go on to save a record a timeline does not hold, such
+  # as one it moved out of the tree, and which records a timeline holds
+  # depends on where it is read from. Were a transaction placed at the last
+  # of the versions held, two windows could place it differently, and what it
+  # did would be reported in neither or in both.
+  #
+  # The versions held are asked about together, a statement for 500
+  # transactions, and one more for those whose last version is not held. Ids
+  # that count up name the last version; otherwise the time it was saved
+  # does. A number that transactions of two version tables took is not read
+  # (see TransactionAnchors), and its versions are placed at the last held.
+  class RecordedTransactionEnds
+    # : () -> void
+    def initialize: () -> void
+
+    # The last version of each transaction asked about so far, by transaction
+    # key, once those of `versions` are among them. They are asked about along
+    # with every version the block returns, so that a history is read at once.
+    # : (Array[untyped]) { () -> Array[untyped] } -> Hash[Array[untyped], untyped]
+    def call: (Array[untyped]) { () -> Array[untyped] } -> Hash[Array[untyped], untyped]
+
+    private
+
+    @asked: Set[Array[untyped]]
+
+    @ends: Hash[Array[untyped], untyped]
+
+    # : (untyped) -> bool
+    def asked?: (untyped) -> bool
+
+    # : (Array[untyped]) -> void
+    def ask: (Array[untyped]) -> void
+
+    # Notes the last version of each of these transactions: the one held
+    # where it is, and the one read otherwise.
+    # : (untyped, Array[untyped], Hash[untyped, Array[untyped]]) -> void
+    def read: (untyped, Array[untyped], Hash[untyped, Array[untyped]]) -> void
+
+    # Of the versions with the id or the time of their transaction's last,
+    # the last of each transaction.
+    # : (untyped, Array[untyped]) -> void
+    def note: (untyped, Array[untyped]) -> void
+
+    # The versions not held that may be the last of their transactions:
+    # those with the id or the time of the last of one that holds no such
+    # version.
+    # : (untyped, String, Hash[untyped, untyped], Hash[untyped, Array[untyped]]) -> untyped
+    def other: (untyped, String, Hash[untyped, untyped], Hash[untyped, Array[untyped]]) -> untyped
+
+    # What names a transaction's last version: its id where ids count up,
+    # and the time it was saved otherwise.
+    # : (untyped) -> String
+    def last_column: (untyped) -> String
+  end
+end

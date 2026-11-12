@@ -91,13 +91,13 @@ module PaperTrailDiff
       members = condition.members(rows)
       return members unless ranked
 
-      first_if_one(reflection, members.uniq { |state| identity(state) })
+      first_if_one(reflection, condition, members.uniq { |state| identity(state) })
     end
 
-    # A has_one keeps the first of its records.
-    #: (untyped, Array[PreparedRecordState]) -> Array[PreparedRecordState]
-    def first_if_one(reflection, states)
-      reflection.collection? ? states : states.first(1)
+    # A has_one keeps one of its records (see ScopeCondition#first).
+    #: (untyped, ScopeCondition, Array[PreparedRecordState]) -> Array[PreparedRecordState]
+    def first_if_one(reflection, condition, states)
+      reflection.collection? ? states : condition.first(states)
     end
 
     #: (untyped, PreparedRecordState) -> bool
@@ -129,7 +129,7 @@ module PaperTrailDiff
       end
       return [true, selected] unless ranked
 
-      [true, first_if_one(reflection, condition.rank(selected))]
+      [true, first_if_one(reflection, condition, condition.rank(selected))]
     end
 
     #: (untyped, String) -> Array[untyped]

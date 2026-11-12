@@ -236,13 +236,20 @@ RSpec.describe PaperTrailDiff::RootVersionSelection do
       expect(described(plan)).to include(versions: [], closing: article)
     end
 
-    it 'refuses when a context is needed and there is none to read' do
+    it 'refuses a range of versions when a context is needed and there is none to read' do
       article, created, = history
 
-      [{ live_endpoint: article }, { windowed: true }].each do |options|
-        expect { select([created], selected: [], context_required: true, **options) }
-          .to raise_error(PaperTrailDiff::IncompleteTimeRangeError, described_class::INCOMPLETE)
-      end
+      expect { select([created], selected: [], context_required: true, live_endpoint: article) }
+        .to raise_error(PaperTrailDiff::IncompleteTimeRangeError, described_class::INCOMPLETE)
+    end
+
+    # The root was gone before the window began.
+    it 'reads nothing for a window with no version after it and no live record' do
+      _article, created, = history
+
+      plan = select([created], selected: [], context_required: true, windowed: true)
+
+      expect([plan.empty?, plan.closing_record]).to eq([true, nil])
     end
   end
 end

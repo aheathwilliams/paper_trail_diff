@@ -30,16 +30,17 @@ module PaperTrailDiff
       replacement if @relationship.member_of_owner?(record, reflection, owner)
     end
 
-    #: (AssociationSnapshot, untyped, RecordSnapshot?) -> [Array[RecordSnapshot], RecordSnapshot?, RecordSnapshot?, bool]
+    # The collection's records after the event, with the record it took out
+    # and the one it put in.
+    #: (AssociationSnapshot, untyped, RecordSnapshot?) -> [Array[RecordSnapshot], RecordSnapshot?, RecordSnapshot?]
     def call(association, version, replacement)
       records = association.records
       position = association.position(replacement_type(version, replacement), version.item_id) ||
                  retyped_position(association, version)
-      return [records, nil, nil, true] unless replacement || position
+      return [records, nil, nil] unless replacement || position
 
       before = records.fetch(position) if position
-      updated = replacement_records(records, position, replacement)
-      [updated, before, replacement, !!before && before.identity == replacement&.identity]
+      [replacement_records(records, position, replacement), before, replacement]
     end
 
     #: (untyped, RecordSnapshot?) -> String
@@ -66,16 +67,25 @@ module PaperTrailDiff
       nil
     end
 
+    # A record that keeps its identity keeps its place. Any other, one that
+    # joined or a row whose type changed, goes where its identity sorts, so
+    # the records stay in the order a snapshot holds them in without being
+    # sorted again for each event.
     #: (Array[RecordSnapshot], Integer?, RecordSnapshot?) -> Array[RecordSnapshot]
     def replacement_records(records, position, replacement)
       updated = records.dup
-      if replacement
-        position ? updated[position] = replacement : updated << replacement
+      if replacement && position && updated.fetch(position).identity == replacement.identity
+        updated[position] = replacement
       else
-        position ||= raise(ConfigurationError, 'missing collection event identity')
-        updated.delete_at(position)
+        updated.delete_at(position) if position
+        insert(updated, replacement) if replacement
       end
       updated.freeze
+    end
+
+    #: (Array[RecordSnapshot], RecordSnapshot) -> void
+    def insert(records, record)
+      records.insert(CollectionIdentityIndex.new(records).insertion(record.type, record.id), record)
     end
   end
 end

@@ -55,12 +55,13 @@ module PaperTrailDiff
     # : (untyped) -> Array[untyped]?
     def self.transaction_key: (untyped) -> Array[untyped]?
 
-    # An `opening` transaction began before the history's start, so its
-    # versions there are not events, yet the state after it has their changes
-    # (see PreparedHistoryLoader#reload). The snapshot after
-    # it is read whole rather than refreshed from its events alone.
-    # : (Array[ActivityEvent], ?opening: Array[Array[untyped]]) -> void
-    def initialize: (Array[ActivityEvent], ?opening: Array[Array[untyped]]) -> void
+    # : (Array[ActivityEvent]) -> void
+    def initialize: (Array[ActivityEvent]) -> void
+
+    # The events of the event's transaction, in the order they are replayed.
+    # The event is in a transaction with others.
+    # : (ActivityEvent) -> Array[ActivityEvent]
+    def events_for: (ActivityEvent) -> Array[ActivityEvent]
 
     # An event outside a transaction, or in one it was not given, keeps its
     # own.
@@ -70,8 +71,7 @@ module PaperTrailDiff
     # : (ActivityEvent) -> bool
     def isolated?: (ActivityEvent) -> bool
 
-    # Whether two events were saved in one transaction that began inside the
-    # history.
+    # Whether two events were saved in one transaction.
     # : (ActivityEvent, ActivityEvent) -> bool
     def shared?: (ActivityEvent, ActivityEvent) -> bool
 
@@ -81,7 +81,7 @@ module PaperTrailDiff
 
     @group_sizes: Hash[Array[untyped]?, Integer]
 
-    @opening: Array[untyped]
+    @groups: Hash[Array[untyped]?, Array[ActivityEvent]]
 
     # : (Hash[Array[untyped]?, Array[ActivityEvent]]) -> Hash[Array[untyped]?, Array[String]?]
     def build_groups: (Hash[Array[untyped]?, Array[ActivityEvent]]) -> Hash[Array[untyped]?, Array[String]?]

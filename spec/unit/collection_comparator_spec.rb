@@ -148,7 +148,7 @@ RSpec.describe PaperTrailDiff::CollectionComparator do
 
   describe 'a transition carried from the previous snapshot' do
     def transition(from, records, before:, after:)
-      from.transition_to(records, before: before, after: after, membership_preserved: false)
+      from.transition_to(records, before: before, after: after)
     end
 
     it 'reports an update to the named record' do

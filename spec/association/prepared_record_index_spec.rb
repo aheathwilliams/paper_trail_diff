@@ -69,6 +69,29 @@ RSpec.describe PaperTrailDiff::PreparedRecordIndex do
     expect(index.record_before(TrackedAuthor, author.id, after).name).to eq('After')
   end
 
+  # A timeline whose last version belongs to a transaction that saved on,
+  # outside it, reads no version saved after its own last one, though that
+  # version's transaction ended before the timeline's last did.
+  it 'reads a record before a version saved after the last version of the timeline' do
+    article = TrackedArticle.create!(title: 'Horizon')
+    author = TrackedAuthor.create!(name: 'Before')
+    last = boundary_for(article)
+    author.update!(name: 'After')
+    later = boundary_for(article)
+    [last, later].each { |version| version.update_columns(transaction_id: 1_000_000) }
+    ends = PaperTrailDiff::TransactionEnds.new([last], { [last.class.name, 1_000_000] => later })
+    index = described_class.new(last)
+
+    index.load(TrackedAuthor, [author.id])
+
+    names = []
+    index.reading(ends) do
+      names = [last, later].map { |at| index.record_before(TrackedAuthor, author.id, at).name }
+    end
+
+    expect(names).to eq(%w[Before Before])
+  end
+
   it 'keeps one trailing version per identity instead of everything after the range' do
     article = TrackedArticle.create!(title: 'Bounded tail')
     comment = TrackedComment.create!(article: article, body: 'In range')

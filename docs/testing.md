@@ -285,8 +285,9 @@ passes is behavior nothing checks. `mutant.yml` lists the classes it mutates:
   `Endpoint` and `EndpointKind`;
 - which versions a range reads: `TimeRange`, `TimelineRange`, `VersionRange`,
   `TimeVersionRange`, `RootVersionSelection`, `RootVersionPlan`,
-  `TransactionCut`, `OpeningTransactions`, `VersionBoundary`, and
-  `VersionQuery`;
+  `TransactionCut`, `CrossingTransactions`, `TransactionEnds`,
+  `RecordedTransactionEnds`,
+  `VersionBoundary`, and `VersionQuery`;
 - which versions a batch or filter reads: `AnalysisBatch`,
   `BatchedRootVersions`, `BatchedRootAnalyses`, `BatchBoundaryResolver`,
   `DeletedAnalysisBatch`, `HistoricalFilter`, and `VersionScopeFilter`;
@@ -317,7 +318,7 @@ passes is behavior nothing checks. `mutant.yml` lists the classes it mutates:
 - which association paths history cannot read exactly, and whether a request
   reads one with PT-AT: `ApproximatePaths` and `FallbackPaths`;
 - which records an association scope admits, and how it ranks them:
-  `ScopeCondition` and `ScopeRanking`;
+  `ScopeCondition`, `ScopeRanking`, and `ExactColumnType`;
 - the helpers these share, which order versions, name records, and copy
   values: `Support`.
 

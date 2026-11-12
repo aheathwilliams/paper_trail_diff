@@ -9,7 +9,8 @@ module PaperTrailDiff
     def initialize: (untyped, root_versions: Array[untyped], traversal: AssociationTraversal, range_start: untyped, range_end: untyped, prepared: PreparedActivityIndex?) -> void
 
     # A tie between version tables, or between ids that do not count up,
-    # raises rather than building a timeline in an arbitrary order.
+    # raises rather than building a timeline in an arbitrary order. The events
+    # are in the order their transactions end (see TransactionEnds).
     # : () -> Array[ActivityEvent]
     def call: () -> Array[ActivityEvent]
 
@@ -26,6 +27,9 @@ module PaperTrailDiff
     @root_versions: Array[untyped]
 
     @traversal: AssociationTraversal
+
+    # : (Array[ActivityEvent]) -> Array[ActivityEvent]
+    def ordered: (Array[ActivityEvent]) -> Array[ActivityEvent]
 
     # Each event is credited to the top-level association it was reached
     # through.

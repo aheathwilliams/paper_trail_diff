@@ -1,0 +1,101 @@
+# frozen_string_literal: true
+
+require_relative '../support/association_database'
+
+# A window reports the transactions that end inside it (see TransactionEnds),
+# and reads the one across its start from where it began. Where the versions
+# column keeps whole seconds, or the clock that dated them stood still, that
+# transaction can begin at the instant the one before it saved its last
+# versions. The earlier one ended before the window, which leaves it out.
+RSpec.describe 'A window read from an instant another transaction ends at' do
+  let(:base) { Time.utc(2026, 3, 1, 12) }
+  let(:article) { TrackedArticle.create!(title: 'First') }
+  let(:comment) { article.comments.create!(body: 'before') }
+  let(:paths) { [:comments] }
+
+  before do
+    PaperTrail::VersionAssociation.delete_all
+    PaperTrail::Version.delete_all
+    [TrackedReply, TrackedComment, TrackedArticle].each(&:delete_all)
+    comment
+    stamp(PaperTrail::Version.order(:id).to_a, [base, base])
+    edit_then_retitle
+    retitle_then_add
+  end
+
+  # Saves the versions of a block, in order, at `times`.
+  def saved(times, &block)
+    last = PaperTrail::Version.maximum(:id)
+    TrackedArticle.transaction(&block)
+    stamp(PaperTrail::Version.where(id: (last + 1)..).order(:id).to_a, times)
+  end
+
+  def stamp(versions, times)
+    versions.zip(times) do |version, time|
+      PaperTrail::Version.where(id: version.id).update_all(created_at: time)
+    end
+  end
+
+  # The comment at 10 s, then the article at 20 s.
+  def edit_then_retitle
+    saved([base + 10, base + 20]) do
+      comment.update!(body: 'after')
+      article.update!(title: 'Second')
+    end
+  end
+
+  # The article at 20 s, where the transaction before it ended, then a new
+  # comment at 30 s.
+  def retitle_then_add
+    saved([base + 20, base + 30]) do
+      article.update!(title: 'Third')
+      article.comments.create!(body: 'new')
+    end
+  end
+
+  # What each step that changed something changed.
+  def changes(within, method)
+    timeline(within, method).reject(&:empty?).map do |step|
+      titles = step.diff.attributes.slice('title').map { |_, change| change.to_h.fetch(:to) }
+      titles + bodies(step.diff.associations['comments'])
+    end
+  end
+
+  # The bodies comments changed to, then those of comments added.
+  def bodies(comments)
+    return [] unless comments
+
+    comments.changed.map { |change| change.attributes.fetch('body').to_h.fetch(:to) } +
+      comments.added.map { |record| record.attributes.fetch('body') }
+  end
+
+  def timeline(within, method)
+    options = { within: within, associations: paths, activity: true }
+    return PaperTrailDiff.analyze(article.reload, **options).activity_timeline if method == :single
+
+    PaperTrailDiff.analyze_many([article.reload], **options).values.first.activity_timeline
+  end
+
+  %i[single batch].each do |method|
+    context "when read #{method}" do
+      # The edge is inside the second transaction, which began at 20 s, the
+      # instant the first saved the article and ended.
+      it 'reports each transaction whole, in the window it ends in' do
+        edge = base + 25
+        whole = changes((base + 5).., method)
+
+        expect(changes((base + 5)...edge, method) + changes(edge.., method)).to eq(whole)
+        expect(changes((base + 5)...edge, method)).to eq([%w[Second after]])
+        expect(changes(edge.., method)).to eq([['Third'], ['new']])
+      end
+
+      it 'leaves the later window where it was asked for' do
+        analysis = PaperTrailDiff.analyze_many(
+          [article.reload], within: (base + 25).., activity: true, associations: paths
+        ).values.first
+
+        expect(analysis.window.begin).to eq(base + 25)
+      end
+    end
+  end
+end

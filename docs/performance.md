@@ -65,12 +65,42 @@ Flat query counts do not make a report's cost flat:
 - **Work on a wide collection grows with its size times its history.** Each
   step of an activity timeline copies the collection's list of records, so
   an activity timeline over `n` comments that changed `m` times does about
-  `n × m` work: 800 comments edited 1,000 times took about 3 s. Members
+  `n × m` work: 800 comments edited 1,000 times took about 0.4 s, and 3,200
+  edited 3,200 times about 1.8 s. A transaction that saves several records
+  costs the same for each: its versions are applied to the records they
+  saved at the event after its last, so 1,000 comments edited two at a time
+  in 1,000 transactions took 1.9 s, and edited one at a time along with
+  their article, 1.0 s. A record that joins a collection or leaves it costs
+  a little more than an edit: 1,000 comments created one at a time on one
+  article took about 0.8 s, and 3,000 about 1.8 s. Records nested under a
+  wide collection cost no more: 2,000 replies created one at a time under
+  2,000 comments took about 1.4 s. Members
   saved in one transaction share one snapshot: a `report` on 100 articles,
   each created with 100 comments in one transaction and edited with all of
   them in another, took about 4.6 s. `timeline` reads every member at each
   version of the root instead: 300 comments over 2,001 versions of their
   article took about 7.5 s.
+- **A range that ended in the past does not read what was created since.**
+  A child whose first version is a `create` saved after the range's end is
+  left out when the children are found, with its row and versions: with 2,000
+  comments added to an article after the range, `compare`, `timeline`, and a
+  window that a later version of the article ends each took 10 to 13 ms, as
+  with none. A window with `activity: true` on a record that has not been
+  saved since is the exception: it closes on the record as it is now, so it
+  replays everything up to now and reports what fell inside the window, which
+  took about 0.8 s with those 2,000 comments.
+- **A record that a path reaches twice has its branch read again at each
+  of its events.** An article read with `associations: ["author.articles"]`
+  is the root and one of its author's articles, and under
+  `articles.comments.article` an article is a member of a collection and the
+  target of a `belongs_to` below it. An event on a record of such a model,
+  or on any record when the tree holds a polymorphic `belongs_to`, which can
+  point at a record of any model, is not applied to the previous snapshot in
+  place: the branches that hold the record are read again, or the whole
+  snapshot for the root, so the event costs the size of what is read. An
+  article with `author.articles` and 400 events on the author's articles
+  took 0.3 s when the author had 10 articles, 0.5 s with 100, and 3.4 s with
+  1,000; with `associations: ["author"]`, 0.1 s for each.
 - **`snapshots: true` and `recorded_changes: true` cost memory and time.** Ask
   for them only when you use them. Records that did not change are shared
   between steps, so the cost is modest: an activity `report` of 10,000
@@ -78,17 +108,34 @@ Flat query counts do not make a report's cost flat:
   about 40 s and held 372 MB, and 411 MB with snapshots, at the same
   time within run-to-run noise. Folding its rows with `net_changes` took
   another 17 s, and listing them with `change_rows` 13 s.
-- **Each edge of a window takes one statement per 250 records, and one or two
-  per 500 transactions it finds.** A
-  window from `within:` or `since:` looks for transactions that cross either
-  edge, and with associations also for those that saved a record before it
-  and an associated record after it. A `report` window has no end, so only
-  its start is read. With associations, it also takes one statement per 500
-  of the transactions its history reads, to find one that saved associated
-  records on both sides of its start; when it finds one, it reads the
-  window's history again from where that transaction began. On 1.4 million
-  versions, both edges of a window over 10,800 records took about 6 s on SQL
-  Server and 1.5 s on PostgreSQL and MySQL.
+- **A window with associations looks for the transactions open at its
+  start.** A window reports the transactions that end inside it, so its
+  history is asked where the earliest transaction open at its start began,
+  whatever records it saved. That takes one statement per version table, and
+  one per 500 transactions its history holds, to read where each ends. When
+  one was open, the window's history is read once more, from where the
+  earliest began. The
+  statement for the start reads the versions saved since the window began
+  that were not the first of their transaction, and no index of the README
+  serves that. On SQLite, in a table of a million versions with the README's
+  indexes and PT-AT's on `transaction_id`, it took 0.06 s for a window that
+  began 1% of the table ago, 0.18 s for one that began half of it ago, and
+  0.27 s for one that began near its start. An index on `created_at` alone
+  took the first to 0.006 s and left the others as they were. `analyze_scope`
+  and `report` run it once more, to select the records such a transaction
+  saved before the window. A read without associations runs none of these
+  statements, with a window or not.
+- **A read with associations reads where its transactions end**, with
+  `activity: true` or without. A
+  transaction takes effect at the last version it saved, of any record, so a
+  history asks its version table for the last version of each transaction it
+  holds: one statement per 500 transactions, and one more when some of those
+  versions are of records it does not hold. Each reads by `transaction_id`,
+  which PT-AT indexes: in the same table, the ends of 10,000 transactions
+  took 0.11 s in 20 statements, and 0.19 s in 40 when none of their last
+  versions was held. With several version tables, one more
+  statement per table per 500 finds the numbers two tables both gave a
+  transaction.
 - **`version_scope:` on activity reads every version in the range**, as
   activity without one does. With associations, it takes one more statement
   per 500 of the transactions its history reads, to find those the filter
@@ -102,6 +149,14 @@ On a large version table, add both indexes from the
 records that changed: with 5 million versions on PostgreSQL, about 230 ms per
 report instead of 2 ms. [Database indexes](architecture.md#database-indexes)
 explains why.
+
+Selecting a report's records does not grow with the model's own table. The
+records changed in the window and deleted since are found with `NOT EXISTS`,
+which every database plans as an anti-join. With 2 million articles on
+PostgreSQL 17 and 2,000 of them edited in the window, that statement took 3 ms
+and the `report` 1.4 s. Asked with `NOT IN`, which PostgreSQL reads the whole
+table for, it took 14.8 s of a 16 s report, and 9.7 s of 11 s with 500,000
+articles.
 
 ## What costs a query per record
 
@@ -126,17 +181,34 @@ instance for each state, so it costs a `reify` per version, plus its own
 queries. `max_filter_versions:` (10,000 by default) caps the versions it loads.
 Either way, every version of every candidate in the window is decoded: with
 1,000 candidates and no match, a hash and a callable each took about 0.8 s.
+A relation with a `limit` reads candidates in its own order and stops when
+its page is full: of 5,000 matching records with three versions each, the
+first page of 20 took 0.09 s and the page at offset 2,000 took 0.4 s, where
+reading every match took 1.0 s.
 Finding the relation's records among the candidates takes up to two queries
-per 500 of them, and with PT-AT, finding where their windows move takes one
-statement per 250 of them and one or two per 500 transactions, for each edge.
+per 500 of them.
 
 The relation then reads the records that matched in pages of up to 2,000, and
 each page lists every matching id, so the relation keeps its own order,
 `limit`, and `offset`. A version table whose `item_id` does not share the key's
-type selects records the same way. SQL Server compiles each such statement
-afresh: with 10,000 matching records, each page took about 0.7 s, 5 s of a
-12 s report, and with about 20,000 a page can outlast the adapter's default
-timeout of 5 seconds. Narrow the window, or page with the relation.
+type selects records the same way. On SQL Server, more than 500 matching
+records are first written to a temporary table, in statements of 1,000 rows,
+and each page selects from it instead of listing them, since SQL Server
+compiles a statement with its ids written in afresh. The table is dropped
+when the selection ends. A read that prevents writes, as a replica read
+through Rails' automatic role switching does, lists the ids instead, since
+Active Record counts the table's statements as writes. On a local SQL Server 2022 container, with the plan
+cache cleared before each run:
+
+| Matching records | Listing every id | Temporary table |
+| --- | --- | --- |
+| 10,000, selection only | 5.0 s | 0.6 s |
+| 20,000, selection only | 29.7 s | 1.1 s |
+| 40,000, selection only | not run | 2.2 s |
+| 10,000, `analyze_scope` with `historical_filter:` | 11.5 s, 4.3 s of it in pages | 7.4 s, 0.1 s in pages |
+
+The `analyze_scope` row is the mean of three runs; the rest are one run each.
+Other databases still list the ids on each page, which they parse quickly.
 
 ## Large reports
 

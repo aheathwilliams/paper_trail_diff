@@ -1,0 +1,58 @@
+# Generated from lib/paper_trail_diff/snapshot_members.rb with RBS::Inline
+
+module PaperTrailDiff
+  # The records one snapshot of a root holds under each of its associations,
+  # at any depth, kept up as a replay moves from each snapshot to the next.
+  #
+  # Looking through a snapshot for a record means reading every collection in
+  # it, and a replay asks for each of its events, so its time grew with its
+  # events times the records of the tree. A snapshot differs from the one
+  # before it by the record its event changed, which the collections say
+  # (see AssociationSnapshot#transition_to), so moving costs what changed.
+  #
+  # A record can be in a tree at several places, so each is counted.
+  class SnapshotMembers
+    # : () -> void
+    def initialize: () -> void
+
+    # : (RecordSnapshot?) -> void
+    def move_to: (RecordSnapshot?) -> void
+
+    # Whether a record of one of the types is under one of the root's
+    # associations named. Ids match by their text, as a collection's do.
+    # : (Array[String], Array[String?], untyped) -> bool
+    def holds?: (Array[String], Array[String?], untyped) -> bool
+
+    private
+
+    @counts: Hash[String, Hash[String, Hash[String, Integer]]]
+
+    @snapshot: RecordSnapshot?
+
+    # : (Hash[String, Hash[String, Integer]], AssociationSnapshot?, AssociationSnapshot?) -> void
+    def change: (Hash[String, Hash[String, Integer]], AssociationSnapshot?, AssociationSnapshot?) -> void
+
+    # Two collections with no transition between them share the records
+    # before and after those that changed.
+    # : (Hash[String, Hash[String, Integer]], Array[RecordSnapshot], Array[RecordSnapshot]) -> void
+    def compare: (Hash[String, Hash[String, Integer]], Array[RecordSnapshot], Array[RecordSnapshot]) -> void
+
+    # How many records two lists begin with alike.
+    # : (Array[RecordSnapshot], Array[RecordSnapshot]) -> Integer
+    def shared: (Array[RecordSnapshot], Array[RecordSnapshot]) -> Integer
+
+    # : (Hash[String, Hash[String, Integer]], Array[RecordSnapshot], Array[RecordSnapshot]) -> void
+    def exchange: (Hash[String, Hash[String, Integer]], Array[RecordSnapshot], Array[RecordSnapshot]) -> void
+
+    # A record that stays is followed into its collections; another is taken
+    # out, or put in, with everything it holds.
+    # : (Hash[String, Hash[String, Integer]], RecordSnapshot?, RecordSnapshot?) -> void
+    def replace: (Hash[String, Hash[String, Integer]], RecordSnapshot?, RecordSnapshot?) -> void
+
+    # : (Hash[String, Hash[String, Integer]], RecordSnapshot, RecordSnapshot) -> void
+    def follow: (Hash[String, Hash[String, Integer]], RecordSnapshot, RecordSnapshot) -> void
+
+    # : (Hash[String, Hash[String, Integer]], RecordSnapshot?, Integer) -> void
+    def count: (Hash[String, Hash[String, Integer]], RecordSnapshot?, Integer) -> void
+  end
+end

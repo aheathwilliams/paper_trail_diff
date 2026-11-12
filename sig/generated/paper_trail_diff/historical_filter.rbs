@@ -8,20 +8,24 @@ module PaperTrailDiff
   # the window supply the state at its start and after every change but the
   # last. The state after the last change lives in the first version after
   # the window, or in the live row when nothing follows; a destroy leaves none.
-  #
-  # Each candidate is read over the window its analysis covers, which a
-  # transaction crossing an edge moves (see TransactionCut). `windows` gives
-  # the moved ones, keyed by id, for a slice of candidates and the window.
   class HistoricalFilter
     DEFAULT_VERSION_LIMIT: ::Integer
 
-    # : (untyped, predicate: untyped, time_range: TimeRange?, limit: Integer, max_versions: Integer, windows: ^(Array[String], TimeRange) -> Hash[String, TimeRange]) -> void
-    def initialize: (untyped, predicate: untyped, time_range: TimeRange?, limit: Integer, max_versions: Integer, windows: ^(Array[String], TimeRange) -> Hash[String, TimeRange]) -> void
+    # Values `where` reads as several.
+    SEVERAL: untyped
+
+    # : (untyped, predicate: untyped, time_range: TimeRange?, limit: Integer, max_versions: Integer) -> void
+    def initialize: (untyped, predicate: untyped, time_range: TimeRange?, limit: Integer, max_versions: Integer) -> void
 
     # More matches than the limit raise, unless the caller does not count
     # them: candidates it only lists, such as deleted roots.
-    # : (Array[String], ?counted: bool) -> Array[String]
-    def call: (Array[String], ?counted: bool) -> Array[String]
+    #
+    # A `page` is the relation's own, as the matches to skip and to take
+    # among candidates given in its order. Matching stops when the page is
+    # full, so no history is read past it, and only the page counts toward
+    # the limit.
+    # : (Array[String], ?counted: bool, ?page: [Integer, Integer]?) -> Array[String]
+    def call: (Array[String], ?counted: bool, ?page: [ Integer, Integer ]?) -> Array[String]
 
     private
 
@@ -39,10 +43,19 @@ module PaperTrailDiff
 
     @time_range: TimeRange?
 
-    @windows: ^(Array[String], TimeRange) -> Hash[String, TimeRange]
+    # Each candidate that held a matching state, in the order given, read a
+    # batch at a time.
+    # : (Array[String]) { (String) -> void } -> void
+    def each_match: (Array[String]) { (String) -> void } -> void
 
     # : (untyped) -> untyped
     def validate_predicate: (untyped) -> untyped
+
+    # `where` reads a list or a range as any of its values, which an
+    # equality with one cast value cannot mean, so it is refused unless the
+    # attribute itself holds one, as a serialized or an array column does.
+    # : (String, untyped) -> untyped
+    def expected: (String, untyped) -> untyped
 
     # Expected and recorded values compare as the attribute casts them, as
     # `where` reads its values: an enum's symbol names its stored value, and a
@@ -55,11 +68,6 @@ module PaperTrailDiff
     # : (untyped) -> Integer
     def validate_budget: (untyped) -> Integer
 
-    # Each candidate's versions in its own window, read from the earliest
-    # moved start, and the first past each end that moved.
-    # : (Array[String]) -> [Hash[String, Array[untyped]], Hash[String, untyped]]
-    def own_versions: (Array[String]) -> [ Hash[String, Array[untyped]], Hash[String, untyped] ]
-
     # : (Array[String], TimeRange?) -> Hash[String, Array[untyped]]
     def candidate_versions: (Array[String], TimeRange?) -> Hash[String, Array[untyped]]
 
@@ -67,10 +75,9 @@ module PaperTrailDiff
     def held?: (Array[untyped], untyped) -> boolish
 
     # What each candidate held after its last change in the window: the
-    # first version past an end that moved, read already, or past the end as
-    # asked, or the live row.
-    # : (Array[String], Hash[String, Array[untyped]], Hash[String, untyped]) -> Hash[String, untyped]
-    def closing_states: (Array[String], Hash[String, Array[untyped]], Hash[String, untyped]) -> Hash[String, untyped]
+    # first version past the end, or the live row.
+    # : (Array[String], Hash[String, Array[untyped]]) -> Hash[String, untyped]
+    def closing_states: (Array[String], Hash[String, Array[untyped]]) -> Hash[String, untyped]
 
     # : (Array[String]) -> Hash[String, untyped]
     def trailing_versions: (Array[String]) -> Hash[String, untyped]
@@ -89,6 +96,17 @@ module PaperTrailDiff
 
     # : (untyped) -> bool
     def attributes_match?: (untyped) -> bool
+
+    # The attributes the version recorded, read as stored where they can be.
+    # : (untyped) -> Hash[String, untyped]
+    def recorded_attributes: (untyped) -> Hash[String, untyped]
+
+    # A model whose stored values only a record can read, such as one with an
+    # encrypted attribute, or whose version names a column since removed, is
+    # rebuilt as PaperTrail rebuilds it. The record also holds attributes the
+    # version did not record, which are left out.
+    # : (untyped) -> Hash[String, untyped]
+    def rebuilt_attributes: (untyped) -> Hash[String, untyped]
 
     # : () -> void
     def reject_root_limit!: () -> void

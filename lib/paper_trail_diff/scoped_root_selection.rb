@@ -47,22 +47,28 @@ module PaperTrailDiff
     # `activity_tree` names the association paths whose changes also select a
     # root, as an activity analysis reports them. Without one, only a root's
     # own versions select it. `version_scope` narrows which of either count,
-    # as it narrows which are reported. `traversal` names the requested paths,
-    # which decide where a window's edges move (see TransactionCut).
-    #: (untyped, time_range: TimeRange?, limit: Integer, ?historical_filter: untyped, ?max_filter_versions: Integer, ?activity_tree: AssociationTree?, ?version_scope: untyped, ?traversal: AssociationTraversal?) -> void
+    # as it narrows which are reported.
+    #
+    # A window selects by the versions saved in it. A transaction that saves
+    # there and ends after it is reported in a later window (see
+    # TransactionEnds), so a root can be selected with nothing to report. One
+    # open at the window's start is reported in it, though it may have saved
+    # the root's tree only before it, so with associations the roots are
+    # selected from where the earliest such transaction began.
+    #: (untyped, time_range: TimeRange?, limit: Integer, ?historical_filter: untyped, ?max_filter_versions: Integer, ?activity_tree: AssociationTree?, ?version_scope: untyped) -> void
     def initialize(scope, time_range:, limit:, historical_filter: nil, # rubocop:disable Metrics/ParameterLists
                    max_filter_versions: HistoricalFilter::DEFAULT_VERSION_LIMIT, activity_tree: nil,
-                   version_scope: nil, traversal: nil)
+                   version_scope: nil)
       @scope = normalize_scope(scope)
       reject_unversioned!
       @time_range = time_range
-      @path_types = traversal ? traversal.path_types(model) : [] #: Array[String]
       @version_scope = VersionScopeFilter.validated(version_scope)
       @limit = validate_limit(limit)
+      @selecting = AssociationActivitySelection.window(model, activity_tree, time_range)
       @related = activity_tree && AssociationActivitySelection.new(
-        model, tree: activity_tree, time_range: time_range, version_scope: @version_scope
+        model, tree: activity_tree, time_range: @selecting, version_scope: @version_scope
       )
-      @historical_filter = historical_filter_for(historical_filter, max_filter_versions, traversal)
+      @historical_filter = historical_filter_for(historical_filter, max_filter_versions)
     end
 
     #: () -> Result
@@ -78,11 +84,11 @@ module PaperTrailDiff
 
     # @rbs @scope: untyped
     # @rbs @time_range: TimeRange?
+    # @rbs @selecting: TimeRange?
     # @rbs @limit: Integer
-    # @rbs @historical_filter: untyped
+    # @rbs @historical_filter: FilteredCandidates?
     # @rbs @related: AssociationActivitySelection?
     # @rbs @version_scope: untyped
-    # @rbs @path_types: Array[String]
 
     # Leaves the candidate set in the database. Plucking every root changed in
     # the window would cost memory and a statement proportional to all activity
@@ -91,12 +97,22 @@ module PaperTrailDiff
     # bounded by what the relation and the deletions actually contain.
     #: (Array[AssociationActivitySelection::Query]) -> Result
     def database_selection(related)
-      candidates = [window_versions.select(:item_id)] + related.map(&:relation)
-      missing = (missing_ids + related_missing_ids(related)).uniq.sort
+      sources = [changed_roots, *related]
+      missing = sources.flat_map { |ids| ids.missing(base_class) }.map(&:to_s).uniq.sort
       Result.new(
-        records: selected_records(candidates),
+        records: selected_records(sources.map(&:relation)),
         unreachable: missing.map { |id| identity(id) }.freeze
       )
+    end
+
+    # The roots with a version of their own in the window. Those without a
+    # row are found in the database too (see Query#missing), not by comparing
+    # two plucked lists. Only the related queries' types are compared, so
+    # this one names none.
+    #: () -> AssociationActivitySelection::Query
+    def changed_roots
+      AssociationActivitySelection::Query.new(window_versions, version_class.arel_table[:item_id],
+                                              nil)
     end
 
     # Comparing in SQL needs every subquery's column to share the key's type.
@@ -111,29 +127,15 @@ module PaperTrailDiff
 
     # Which candidates still have a row is asked without the relation's
     # conditions, so that "filtered out" and "no longer exists" stay
-    # separable. A filter then reads the history of the relation's records
-    # only, whose order and page choose among those that match, and of the
-    # deleted ones, which no relation can test. Those it lists, as without a
-    # filter, but does not count toward `limit:`.
+    # separable. A filter then keeps those it matches (FilteredCandidates).
     #: (Array[String]) -> Result
     def plucked_selection(candidates)
       live = ids_in(base_class.unscoped, candidates)
       missing = candidates - live
-      if (filter = @historical_filter)
-        live = filter.call(relation_members(live))
-        missing = filter.call(missing, counted: false)
-      end
-      Result.new(records: selected_records([live]),
+      filter = @historical_filter
+      live, missing = filter.call(live, missing) if filter
+      Result.new(records: CandidateTable.with(base_class, live) { |ids| selected_records([ids]) },
                  unreachable: missing.sort.map { |id| identity(id) }.freeze)
-    end
-
-    # The candidates the relation's conditions accept. A grouped relation's
-    # rows are groups, which a condition on one record cannot decide, and its
-    # aggregates read every candidate at once, so it keeps them all: the
-    # filter reads each, and the relation groups those that match.
-    #: (Array[String]) -> Array[String]
-    def relation_members(ids)
-      @scope.group_values.empty? ? ids_in(@scope.except(:order, :limit, :offset), ids).uniq : ids
     end
 
     # Comparing the two columns in SQL needs them to share a type: PostgreSQL
@@ -149,37 +151,23 @@ module PaperTrailDiff
       base_class.type_for_attribute(primary_key).type
     end
 
-    #: (Array[AssociationActivitySelection::Query]) -> Array[String]
-    def related_missing_ids(related)
-      live = base_class.unscoped.select(primary_key).arel
-      related.flat_map { |ids| ids.missing(live) }.map(&:to_s)
-    end
-
-    # Changed in the window but without a row, found with an anti-join instead
-    # of comparing two plucked lists.
-    #: () -> Array[String]
-    def missing_ids
-      window_versions.where.not(item_id: base_class.unscoped).distinct.pluck(:item_id).map(&:to_s)
-    end
-
     # Only the versions `version_scope` keeps select a root: one whose versions
-    # in the window it drops would have nothing to report. A version saved
-    # just before the window selects its root when TransactionCut moves the
-    # root's window back to take it in.
+    # in the window it drops would have nothing to report.
     #: () -> untyped
     def window_versions
-      relation = TransactionCut.window_versions(model, @time_range, @path_types)
+      range = @selecting
+      relation = VersionQuery.for_model(model)
+      relation = range.scope(relation) if range
       @version_scope ? @version_scope.call(relation) : relation
     end
 
-    # The filter reads each candidate over the window its analysis will.
-    #: (untyped, Integer, AssociationTraversal?) -> HistoricalFilter?
-    def historical_filter_for(predicate, max_versions, traversal)
+    #: (untyped, Integer) -> FilteredCandidates?
+    def historical_filter_for(predicate, max_versions)
       return if predicate.nil?
 
-      HistoricalFilter.new(base_class, predicate: predicate, time_range: @time_range,
-                                       limit: @limit, max_versions: max_versions,
-                                       windows: TransactionCut.reader(model, traversal))
+      filter = HistoricalFilter.new(base_class, predicate: predicate, time_range: @time_range,
+                                                limit: @limit, max_versions: max_versions)
+      FilteredCandidates.new(@scope, filter, ordered: ->(ids) { candidate_relation(ids) })
     end
 
     # Accepts a model class as readily as a relation: `Article` and
@@ -228,11 +216,11 @@ module PaperTrailDiff
     # Deduplicate records rather than adding SQL DISTINCT: an otherwise valid
     # relation may order by joined columns or select a PostgreSQL json column.
     # Read bounded pages until the relation ends or too many unique roots appear.
-    # Each candidate source is an id list or a subquery; a record matching any
-    # of them is selected.
+    # Each candidate source is an id list or a subquery, such as a
+    # CandidateTable's; a record matching any of them is selected.
     #: (Array[untyped]) -> Array[untyped]
     def selected_records(candidates)
-      relation = candidate_relation(candidates)
+      relation = candidate_relation(*candidates)
       records = {} #: Hash[untyped, untyped]
       consumed = 0
       loop do
@@ -247,8 +235,8 @@ module PaperTrailDiff
     end
 
     # Pages are read by offset, so under a total order.
-    #: (Array[untyped]) -> untyped
-    def candidate_relation(candidates)
+    #: (*untyped) -> untyped
+    def candidate_relation(*candidates)
       candidates.map do |ids|
         conditions = { primary_key => ids } #: Hash[untyped, untyped]
         TotalOrder.apply(@scope).where(conditions)
@@ -276,7 +264,8 @@ module PaperTrailDiff
     # holds at least 250 rows, for a relation whose joins repeat a record,
     # and at most 2,000: SQL Server compiles a statement with its ids written
     # in, and one that listed 20,000 and returned them all outlasted the
-    # adapter's default timeout of 5 seconds.
+    # adapter's default timeout of 5 seconds. There a long list is now read
+    # from a CandidateTable, but other databases still repeat it.
     #: () -> Integer
     def page_size
       (@limit + 1).clamp(MIN_PAGE_SIZE, MAX_PAGE_SIZE)
@@ -306,9 +295,7 @@ module PaperTrailDiff
     end
 
     #: () -> untyped
-    def base_class
-      model.base_class
-    end
+    def base_class = model.base_class
 
     #: () -> untyped
     def primary_key

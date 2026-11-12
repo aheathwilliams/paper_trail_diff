@@ -77,10 +77,10 @@ RSpec.describe PaperTrailDiff::PreparedHistoryLoader do
     expect([handled, after.body]).to eq([true, 'comment'])
   end
 
-  # A boundary in a transaction that crossed a window's start reads its
-  # records as they were before it began. A range of versions starts at its
-  # first version's state instead, so it looks for no such transaction.
-  it 'finds, for a window only, the transactions that crossed its start' do
+  # A window reports the transactions that end inside it, so its reader
+  # reads it again from where the one across its start began. A range of
+  # versions starts at its first version's state instead, and says nothing.
+  it 'says, for a window only, where the transaction open at its start began' do
     article = TrackedArticle.create!(title: 'Root')
     comment = article.comments.create!(body: 'before')
     added = TrackedArticle.transaction do
@@ -89,21 +89,18 @@ RSpec.describe PaperTrailDiff::PreparedHistoryLoader do
     end
     edge = versions_of(added).first
     allow(PaperTrailDiff::PreparedRecordIndex).to receive(:new).and_call_original
-    allow(PaperTrailDiff::PreparedHistory).to receive(:new).and_call_original
     end_at = Time.now.utc + 60
     window = load_history(article, ['comments'], start_at: edge.created_at, end_at: end_at,
                                                  live_records: [article], window: true)
     range = load_history(article, ['comments'], start_at: edge.created_at)
-    crossing = [[edge.class.name, edge.transaction_id]]
+    inside = load_history(article, ['comments'], start_at: edge.created_at + 1, end_at: end_at,
+                                                 live_records: [article], window: true)
 
-    expect(window.opening_transactions).to eq(crossing)
-    expect(range.opening_transactions).to eq([])
-    # Read again from where the transaction began, over the same range.
+    expect(window.reach).to eq(versions_of(comment).last.created_at)
+    expect([range.reach, inside.reach]).to eq([nil, nil])
+    # Each is read once, from where it was asked for.
     expect(PaperTrailDiff::PreparedRecordIndex).to have_received(:new)
-      .with(versions_of(comment).last.created_at, end_at: end_at, live_records: [article])
-    expect(PaperTrailDiff::PreparedHistory).to have_received(:new)
-      .with(instance_of(PaperTrailDiff::PreparedRecordIndex),
-            activity_index: anything, opening_transactions: crossing)
+      .with(edge.created_at, end_at: end_at, live_records: [article]).once
   end
 
   it 'prepares every root it is given, as one batch' do
@@ -357,13 +354,27 @@ RSpec.describe PaperTrailDiff::PreparedHistoryLoader do
     expect(PaperTrailDiff::PreparedRecordIndex).to have_received(:new)
       .with(start_at, end_at: end_at, live_records: live)
     expect(PaperTrailDiff::PreparedActivityIndex).to have_received(:new)
-      .with(instance_of(PaperTrailDiff::PreparedRecordIndex), versions, start_at: start_at).twice
+      .with(instance_of(PaperTrailDiff::PreparedRecordIndex), versions,
+            start_at: start_at).twice
     # Each edge loader reads children into its activity index's.
     activities.each do |activity|
       expect(PaperTrailDiff::PreparedEdgeLoader).to have_received(:new)
         .with(instance_of(PaperTrailDiff::PreparedRecordIndex), versions,
               children: equal(activity.children))
     end
+  end
+
+  # A window's reader finds where its open transactions began (see
+  # CrossingTransactions); a range of versions starts where the first
+  # transaction of each root began.
+  it 'moves the start of a range of versions back, but not a window' do
+    article = TrackedArticle.create!(title: 'Root')
+    allow(PaperTrailDiff::TransactionCut).to receive(:range_start).and_call_original
+
+    load_history(article, [], window: true)
+    expect(PaperTrailDiff::TransactionCut).not_to have_received(:range_start)
+    load_history(article, [])
+    expect(PaperTrailDiff::TransactionCut).to have_received(:range_start).once
   end
 
   it 'marks an edge with a composite foreign key as unsupported' do

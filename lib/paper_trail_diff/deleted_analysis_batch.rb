@@ -6,15 +6,12 @@ module PaperTrailDiff
   class DeletedAnalysisBatch
     # `context_required` reads a root that did not change in the window from
     # the version after it, so its associations' activity can be reported.
-    # `traversal` names the requested paths, which decide where a window's
-    # edges move (see TransactionCut).
-    #: (untyped, identities: Array[Array[String]], time_range: TimeRange?, analyzer: untyped, history_preparer: untyped, version_scope: untyped, context_required: bool, traversal: AssociationTraversal?) -> void
+    #: (untyped, identities: Array[Array[String]], time_range: TimeRange?, analyzer: untyped, history_preparer: untyped, version_scope: untyped, context_required: bool) -> void
     def initialize( # rubocop:disable Metrics/ParameterLists
       model, identities:, time_range:, analyzer:, history_preparer:, version_scope:,
-      context_required:, traversal:
+      context_required:
     )
       @model = model
-      @traversal = traversal
       @context_required = context_required
       @identities = identities
       @time_range = time_range
@@ -27,11 +24,11 @@ module PaperTrailDiff
     def call
       destroys = destroy_versions
       records = historical_roots(destroys)
-      windows = TransactionCut.batch_windows(records, @time_range, traversal: @traversal)
       analyses = BatchedRootAnalyses.new(
-        time_range: @time_range, windows: windows, history_preparer: @history_preparer,
-        analyzer: @analyzer
-      ).call(records, plans(records, destroys, windows))
+        time_range: @time_range, planner: ->(roots, range) { plans(roots, destroys, range) },
+        history_preparer: @history_preparer, analyzer: @analyzer,
+        activity: @context_required
+      ).call(records)
       with_unavailable(analyses)
     end
 
@@ -43,7 +40,6 @@ module PaperTrailDiff
     end
 
     # @rbs @model: untyped
-    # @rbs @traversal: AssociationTraversal?
     # @rbs @context_required: bool
     # @rbs @identities: Array[Array[String]]
     # @rbs @time_range: TimeRange?
@@ -51,26 +47,27 @@ module PaperTrailDiff
     # @rbs @history_preparer: untyped
     # @rbs @version_scope: untyped
 
-    # A root destroyed before the window had no state inside it to read, so
-    # only the others take the version after the window as context. Every
-    # root replays the whole of its window for activity on associations: one
-    # whose destroy saved in a transaction that crossed the window's start
-    # has the destroy inside its moved window.
-    #: (Array[untyped], Array[untyped], Hash[Array[String], TimeRange]) -> Hash[Array[String], RootVersionPlan]
-    def plans(records, destroys, windows)
-      start = @time_range&.begin_time
+    # A root destroyed before the range had no state inside it to read, so
+    # only the others take the version after the range as context. Every
+    # root replays the whole of its range for activity on associations. The
+    # range is the window, or the window widened to where the transactions
+    # open at its start began, which can hold a destroy that one of them saved.
+    #: (Array[untyped], Array[untyped], TimeRange?) -> Hash[Array[String], RootVersionPlan]
+    def plans(records, destroys, range)
+      start = range&.begin_time
       early = destroys.select { |version| start && version.created_at < start }
                       .map { |version| version.item_id.to_s }
       before, during = records.partition { |record| early.include?(record.id.to_s) }
-      plans_for(during, @context_required, windows).merge(plans_for(before, false, windows))
+      plans_for(during, @context_required, range)
+        .merge(plans_for(before, false, range))
     end
 
-    #: (Array[untyped], bool, Hash[Array[String], TimeRange]) -> Hash[Array[String], RootVersionPlan]
-    def plans_for(records, context_required, windows)
+    #: (Array[untyped], bool, TimeRange?) -> Hash[Array[String], RootVersionPlan]
+    def plans_for(records, context_required, range)
       BatchedRootVersions.new(
-        records, time_range: @time_range, version_scope: @version_scope,
+        records, time_range: range, version_scope: @version_scope,
                  live_endpoints: nil, context_required: context_required,
-                 whole: @context_required, windows: windows
+                 whole: @context_required
       ).call
     end
 

@@ -4,16 +4,16 @@
 module PaperTrailDiff
   # Selects and compares a chronological slice of a record's version history.
   class TimelineBuilder
-    #: (untyped, from: untyped, to: untyped, snapshotter: untyped, ?within: untyped, ?version_scope: untyped, ?plan: RootVersionPlan?, ?live_endpoint: untyped, ?traversal: AssociationTraversal?) -> void
+    #: (untyped, from: untyped, to: untyped, snapshotter: untyped, ?within: untyped, ?version_scope: untyped, ?plan: RootVersionPlan?, ?live_endpoint: untyped) -> void
     def initialize( # rubocop:disable Metrics/ParameterLists
       record, from:, to:, snapshotter:, within: nil, version_scope: nil, plan: nil,
-      live_endpoint: nil, traversal: nil
+      live_endpoint: nil
     )
       @record = record
       @range = TimelineRange.new(
         record, from: from, to: to, within: within,
                 version_scope: version_scope, plan: plan,
-                live_endpoint: live_endpoint, traversal: traversal
+                live_endpoint: live_endpoint
       )
       @snapshotter = snapshotter
     end
@@ -24,7 +24,7 @@ module PaperTrailDiff
       steps
     end
 
-    # The window the range covers once its edges have moved to transactions.
+    # The window the range covers, as it was asked for.
     #: () -> TimeRange?
     def window
       @range.time_range
@@ -52,7 +52,7 @@ module PaperTrailDiff
       return empty_history if plan.empty?
 
       versions = plan.versions
-      snapshots = @snapshotter.prepare(@record, versions)
+      snapshots = @snapshotter.prepare(@record, versions, start_at: @range.begin_time)
       steps = build_steps(plan, snapshots)
       final = plan.closes_on_destroy ? nil : snapshots.call(plan.final_endpoint)
       [steps, snapshots.call(versions.first), final]

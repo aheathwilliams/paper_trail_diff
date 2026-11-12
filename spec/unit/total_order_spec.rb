@@ -32,6 +32,15 @@ RSpec.describe PaperTrailDiff::TotalOrder do
         .to eq("filter_events.id DESC, #{key}")
     end
 
+    it "sorts by the key after another table's key written in quotes" do
+      key = '"filter_articles"."id" ASC'
+
+      expect(order_of(FilterArticle.order(Arel.sql(quoted('filter_events', 'id')))))
+        .to eq(%("filter_events"."id", #{key}))
+      expect(order_of(FilterArticle.order(Arel.sql(%(filter_events."id" DESC)))))
+        .to eq(%(filter_events."id" DESC, #{key}))
+    end
+
     # SQL Server rejects a column listed twice in an order, in any spelling.
     it 'keeps an order that sorts by the key' do
       key = '"filter_articles"."id"'
@@ -55,9 +64,10 @@ RSpec.describe PaperTrailDiff::TotalOrder do
 
       expect(order_of(latest.group(:title).order(:title))).to eq('"filter_articles"."title" ASC')
       expect(order_of(latest.group(:title).order(Arel.sql('MAX(id) DESC')))).to eq('MAX(id) DESC')
-      # Without an order of its own it is sorted by the key, which a database
-      # rejects; it needs one.
-      expect(order_of(latest.group(:title))).to eq(key)
+      # Without an order of its own it would be sorted by the key, which a
+      # database rejects, so it is refused before any query.
+      expect { described_class.apply(latest.group(:title)) }
+        .to raise_error(PaperTrailDiff::ConfigurationError, /needs an order of its own/)
       [:id, 'filter_articles.id', FilterArticle.arel_table[:id]].each do |group|
         expect(order_of(FilterArticle.group(group, :title).order(:title)))
           .to eq(%("filter_articles"."title" ASC, #{key}))

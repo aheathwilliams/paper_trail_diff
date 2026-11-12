@@ -3,13 +3,18 @@
 module PaperTrailDiff
   # Selects both populations and checks their shared ceiling before analysis.
   class ScopedAnalysisBuilder
-    # : (untyped, limit: Integer?, within: untyped, historical_filter: untyped, max_filter_versions: Integer, include_deleted: bool, analyzer: untyped, deleted_analyzer: untyped, ?activity_tree: AssociationTree?, ?version_scope: untyped, ?traversal: AssociationTraversal?) -> void
-    def initialize: (untyped, limit: Integer?, within: untyped, historical_filter: untyped, max_filter_versions: Integer, include_deleted: bool, analyzer: untyped, deleted_analyzer: untyped, ?activity_tree: AssociationTree?, ?version_scope: untyped, ?traversal: AssociationTraversal?) -> void
+    # : (untyped, limit: Integer?, within: untyped, historical_filter: untyped, max_filter_versions: Integer, include_deleted: bool, analyzer: untyped, deleted_analyzer: untyped, ?activity_tree: AssociationTree?, ?version_scope: untyped) -> void
+    def initialize: (untyped, limit: Integer?, within: untyped, historical_filter: untyped, max_filter_versions: Integer, include_deleted: bool, analyzer: untyped, deleted_analyzer: untyped, ?activity_tree: AssociationTree?, ?version_scope: untyped) -> void
 
     # : () -> ScopedAnalysis
     def call: () -> ScopedAnalysis
 
     private
+
+    # The window as the relation's version table keeps times. Anything but a
+    # relation or a model is left for the selection to refuse.
+    # : (untyped, untyped) -> TimeRange?
+    def time_range: (untyped, untyped) -> TimeRange?
 
     # Without the option, the deleted roots are still tested when the
     # relation can be read, so that another selection's are not listed.

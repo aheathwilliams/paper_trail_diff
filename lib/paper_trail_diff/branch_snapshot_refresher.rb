@@ -39,6 +39,7 @@ module PaperTrailDiff
         record_transition: record_transition,
         root_state: root_state
       )
+      @applier = ActivityTransactionApplier.new(@event_refresher, @root_refresher)
     end
 
     # Without associations there is no prepared history, so nothing but the
@@ -85,7 +86,29 @@ module PaperTrailDiff
       refreshed(root_endpoint, context_endpoint, previous_snapshot, branches)
     end
 
+    # The snapshot after a transaction that saved several records: each of
+    # its events applied in turn to the record it saved, as an event alone in
+    # its transaction is. Where one cannot be applied that way, the
+    # transaction's branches are read again instead, or the whole snapshot
+    # when the root is among the records it saved (`branches` is nil).
+    #: (untyped, untyped, RecordSnapshot, Array[String]?, Array[ActivityEvent]) -> RecordSnapshot?
+    def apply_transaction(root_endpoint, context_endpoint, previous_snapshot, branches, events)
+      recorded = with_habtm(root_endpoint, context_endpoint, [])
+      snapshot = @applier.call(root_endpoint, context_endpoint, previous_snapshot, events)
+      return carried(root_endpoint, context_endpoint, snapshot, recorded) if snapshot
+      return full_snapshot(root_endpoint, context_endpoint) unless branches
+
+      refreshed(root_endpoint, context_endpoint, previous_snapshot, recorded | branches)
+    end
+
     private
+
+    # The snapshot, with the branches a root version itself records read
+    # again where the context is one.
+    #: (untyped, untyped, RecordSnapshot, Array[String]) -> RecordSnapshot?
+    def carried(root_endpoint, context_endpoint, snapshot, recorded)
+      recorded.empty? ? snapshot : refreshed(root_endpoint, context_endpoint, snapshot, recorded)
+    end
 
     # @rbs @tree: AssociationTree
     # @rbs @ignore_policy: IgnorePolicy
@@ -96,6 +119,7 @@ module PaperTrailDiff
     # @rbs @components: Hash[Array[String], [AssociationTree, SnapshotNormalizer]]
     # @rbs @event_refresher: ActivityEventSnapshotRefresher
     # @rbs @root_refresher: ActivityRootSnapshotRefresher
+    # @rbs @applier: ActivityTransactionApplier
 
     # A root version's HABTM members include any created earlier in its
     # transaction. A range ending at that version leaves those creations out

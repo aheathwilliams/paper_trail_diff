@@ -98,47 +98,45 @@ module PaperTrailDiff
       [version.class.name, transaction_id] if transaction_id
     end
 
-    # An `opening` transaction began before the history's start, so its
-    # versions there are not events, yet the state after it has their changes
-    # (see PreparedHistoryLoader#reload). The snapshot after
-    # it is read whole rather than refreshed from its events alone.
-    #: (Array[ActivityEvent], ?opening: Array[Array[untyped]]) -> void
-    def initialize(events, opening: [])
-      groups = grouped_events(events)
-      @branches = build_groups(groups)
-      @group_sizes = groups.transform_values(&:length)
-      @opening = opening
+    #: (Array[ActivityEvent]) -> void
+    def initialize(events)
+      @groups = grouped_events(events)
+      @branches = build_groups(@groups)
+      @group_sizes = @groups.transform_values(&:length)
+    end
+
+    # The events of the event's transaction, in the order they are replayed.
+    # The event is in a transaction with others.
+    #: (ActivityEvent) -> Array[ActivityEvent]
+    def events_for(event)
+      @groups.fetch(transaction_key(event))
     end
 
     # An event outside a transaction, or in one it was not given, keeps its
     # own.
     #: (ActivityEvent) -> Array[String]?
     def branches_for(event)
-      key = transaction_key(event)
-      return if @opening.include?(key)
-
-      @branches.fetch(key) { event.branches }
+      @branches.fetch(transaction_key(event)) { event.branches }
     end
 
     #: (ActivityEvent) -> bool
     def isolated?(event)
       key = transaction_key(event)
-      !key || (@group_sizes[key] == 1 && !@opening.include?(key))
+      !key || @group_sizes[key] == 1
     end
 
-    # Whether two events were saved in one transaction that began inside the
-    # history.
+    # Whether two events were saved in one transaction.
     #: (ActivityEvent, ActivityEvent) -> bool
     def shared?(left, right)
       key = transaction_key(left)
-      !key.nil? && key == transaction_key(right) && !@opening.include?(key)
+      !key.nil? && key == transaction_key(right)
     end
 
     private
 
+    # @rbs @groups: Hash[Array[untyped]?, Array[ActivityEvent]]
     # @rbs @branches: Hash[Array[untyped]?, Array[String]?]
     # @rbs @group_sizes: Hash[Array[untyped]?, Integer]
-    # @rbs @opening: Array[untyped]
 
     #: (Hash[Array[untyped]?, Array[ActivityEvent]]) -> Hash[Array[untyped]?, Array[String]?]
     def build_groups(groups)

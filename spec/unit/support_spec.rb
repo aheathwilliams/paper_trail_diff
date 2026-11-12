@@ -259,6 +259,17 @@ RSpec.describe PaperTrailDiff::Support do
     end
   end
 
+  describe '.earliest_version' do
+    it 'takes the earliest by time, then by id, ordering only the earliest instant' do
+      versions = [version.new(noon + 1, 'a91f'), version.new(noon, 10), version.new(noon, 9),
+                  version.new(noon + 1, '7d0c')]
+
+      expect(described_class.earliest_version(versions).id).to eq(9)
+      expect { described_class.earliest_version(versions.first(2) + [version.new(noon, 'b')]) }
+        .to raise_error(PaperTrailDiff::AmbiguousVersionOrderError)
+    end
+  end
+
   describe '.ambiguous_pair' do
     it 'finds the first tie between tables, or between ids that do not count up' do
       apart = [version.new(noon, 1), version.new(noon + 1, 'a')]

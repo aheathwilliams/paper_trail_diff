@@ -220,6 +220,16 @@ module PaperTrailDiff
       raise AmbiguousVersionOrderError, ambiguous_message(ambiguous)
     end
 
+    # The earliest of some versions of one item, as chronological_sort orders
+    # them. Only the versions saved at the earliest instant are compared, so a
+    # tie that cannot be ordered raises there, as it does inside a range, and
+    # one among later versions does not.
+    #: (Array[untyped]) -> untyped
+    def self.earliest_version(versions)
+      earliest = versions.map(&:created_at).min
+      chronological_sort(versions.select { |version| version.created_at == earliest }).first
+    end
+
     #: (Array[untyped]) -> Array[untyped]?
     def self.ambiguous_pair(sorted)
       sorted.each_cons(2).find do |left, right|

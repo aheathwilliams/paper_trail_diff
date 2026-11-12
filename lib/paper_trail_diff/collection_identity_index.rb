@@ -2,48 +2,92 @@
 # rbs_inline: enabled
 
 module PaperTrailDiff
-  # Immutable positions for one collection membership and ordering.
+  # Finds records in a collection held in type, then ID, order, as an
+  # association snapshot holds its records, by searching that order. A table
+  # of every record's position would be built again for each event that
+  # changed who is in the collection, which made a replay's time grow with
+  # its events times the collection's size.
   class CollectionIdentityIndex
-    #: (Array[untyped]) -> void
+    # A search builds a sort key for each record it looks at, so a collection
+    # of up to this many records is quicker to read through. Most nested
+    # collections are that small, and a tree is looked through for each event.
+    READ_THROUGH = 8
+
+    #: (Array[RecordSnapshot]) -> void
     def initialize(records)
-      @identities = Set.new #: Set[Array[untyped]]
-      @serialized_positions = {} #: Hash[Array[String], Integer]
-      @id_positions = {} #: Hash[String, Integer?]
-      records.each_with_index { |record, index| register(record, index) }
+      @records = records
       freeze
     end
 
-    #: (String, untyped) -> Integer?
+    # Ids match by their text: a version's item_id can arrive as a string
+    # where the record's id is an integer. The first match in the order is
+    # the one found, however it is looked for.
+    #: (untyped, untyped) -> Integer?
     def position(type, id)
-      @serialized_positions[[type, id.to_s]]
+      type = type.to_s
+      text = id.to_s
+      if @records.length <= READ_THROUGH
+        return @records.index { |record| match?(record, type, text) }
+      end
+
+      forms(text).each do |form|
+        index = insertion(type, form)
+        record = @records.at(index)
+        return index if record && match?(record, type, text)
+      end
+      nil
     end
 
+    # The position of the only record with this id, whatever its type.
     #: (untyped) -> Integer?
     def position_for_id(id)
-      @id_positions[id.to_s]
+      found = nil #: Integer?
+      each_type do |type|
+        index = position(type, id)
+        next unless index
+        return if found
+
+        found = index
+      end
+      found
+    end
+
+    # Where a record of this type and id is, or would be put to keep the order.
+    #: (untyped, untyped) -> Integer
+    def insertion(type, id)
+      key = Support.sortable_identity(type, id)
+      @records.bsearch_index do |record|
+        order = Support.sortable_identity(record.type, record.id) <=> key #: Integer
+        order >= 0
+      end || @records.length
     end
 
     private
 
-    # @rbs @identities: Set[Array[untyped]]
-    # @rbs @serialized_positions: Hash[Array[String], Integer]
-    # @rbs @id_positions: Hash[String, Integer?]
+    # @rbs @records: Array[RecordSnapshot]
 
-    #: (untyped, Integer) -> void
-    def register(record, index)
-      identity = record.identity
-      unless @identities.add?(identity)
-        raise ArgumentError, "duplicate record identity: #{identity}"
-      end
-
-      @serialized_positions[[record.type, record.id.to_s]] = index
-      register_id(record.id, index)
+    #: (RecordSnapshot, String, String) -> bool
+    def match?(record, type, text)
+      record.type == type && record.id.to_s == text
     end
 
-    #: (untyped, Integer) -> void
-    def register_id(id, index)
-      key = id.to_s
-      @id_positions[key] = (index unless @id_positions.key?(key))
+    # The values an id of this text may be held as, the number first, as
+    # records sort a number before the string that prints like it. Text that
+    # reads as no number gives nil, which no record found by text matches.
+    #: (String) -> Array[untyped]
+    def forms(text)
+      [Integer(text, exception: false), text]
+    end
+
+    # Each type the collection holds, found by searching for where the next begins.
+    #: () { (String) -> void } -> void
+    def each_type
+      index = 0
+      while index < @records.length
+        type = @records.fetch(index).type
+        yield type
+        index = @records.bsearch_index { |record| record.type > type } || @records.length
+      end
     end
   end
 end

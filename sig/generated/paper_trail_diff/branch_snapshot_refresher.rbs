@@ -16,7 +16,22 @@ module PaperTrailDiff
     # : (untyped, untyped, RecordSnapshot?, Array[String], ?event: ActivityEvent?, ?isolated: bool) -> RecordSnapshot?
     def call: (untyped, untyped, RecordSnapshot?, Array[String], ?event: ActivityEvent?, ?isolated: bool) -> RecordSnapshot?
 
+    # The snapshot after a transaction that saved several records: each of
+    # its events applied in turn to the record it saved, as an event alone in
+    # its transaction is. Where one cannot be applied that way, the
+    # transaction's branches are read again instead, or the whole snapshot
+    # when the root is among the records it saved (`branches` is nil).
+    # : (untyped, untyped, RecordSnapshot, Array[String]?, Array[ActivityEvent]) -> RecordSnapshot?
+    def apply_transaction: (untyped, untyped, RecordSnapshot, Array[String]?, Array[ActivityEvent]) -> RecordSnapshot?
+
     private
+
+    # The snapshot, with the branches a root version itself records read
+    # again where the context is one.
+    # : (untyped, untyped, RecordSnapshot, Array[String]) -> RecordSnapshot?
+    def carried: (untyped, untyped, RecordSnapshot, Array[String]) -> RecordSnapshot?
+
+    @applier: ActivityTransactionApplier
 
     @components: Hash[Array[String], [ AssociationTree, SnapshotNormalizer ]]
 

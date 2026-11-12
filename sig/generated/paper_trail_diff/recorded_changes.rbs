@@ -40,9 +40,15 @@ module PaperTrailDiff
     # : () -> bool
     def recorded?: () -> bool
 
+    # An adapter may name its changes with symbols.
+    # : (untyped) -> Hash[String, untyped]
+    def named: (untyped) -> Hash[String, untyped]
+
     # Primary keys identify the record rather than describe it, as in a diff.
     # Each side is read as a step's diff reads it (see StoredValues), so a
-    # value compares equal to the state the change produced.
+    # value compares equal to the state the change produced. A name the model
+    # no longer has, such as a column since dropped, is left out, as a diff
+    # leaves it out.
     # : (untyped, untyped, Array[String]) -> Hash[String, ValueChange]
     def value_changes: (untyped, untyped, Array[String]) -> Hash[String, ValueChange]
   end

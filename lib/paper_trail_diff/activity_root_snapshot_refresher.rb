@@ -26,6 +26,7 @@ module PaperTrailDiff
       @root_state = root_state
       @unsupported_branches = {} #: Hash[String, Array[String]]
       @relationship_reflections = {} #: Hash[String, Array[untyped]]
+      @places = ActivityTreePlaces.new(traversal)
     end
 
     # `previous` is the snapshot at the root's `event`, and the result the one
@@ -47,6 +48,12 @@ module PaperTrailDiff
 
     private
 
+    #: (untyped) -> bool
+    def root_only?(root_endpoint)
+      root_class = RecordedClass.of_endpoint(root_endpoint)
+      @places.one_kind?(root_class, root_class.base_class.name)
+    end
+
     # The snapshot at a root version starts from the state stored in that
     # version, and the next one from the state at its own root endpoint. Where
     # prepared history built both from those states, the two are compared
@@ -54,6 +61,10 @@ module PaperTrailDiff
     # recorded change and the record after it are read.
     #: (RecordSnapshot, untyped, untyped) -> [untyped, Array[String]]?
     def target(previous, version, root_endpoint)
+      # A root that a path leads back to is changed there too, which only
+      # reading the snapshot again shows.
+      return unless root_only?(root_endpoint)
+
       before = @root_state&.call(version)
       after = before && @root_state&.call(root_endpoint)
       return advance_target(previous, version) unless before && after
@@ -108,6 +119,7 @@ module PaperTrailDiff
                          associations: associations)
     end
 
+    # @rbs @places: ActivityTreePlaces
     # @rbs @tree: AssociationTree
     # @rbs @traversal: AssociationTraversal
     # @rbs @normalizer: SnapshotNormalizer

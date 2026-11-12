@@ -19,6 +19,9 @@ module PaperTrailDiff
 
     @version_scope: untyped
 
+    # Two are read, so that a tie for first that ids cannot order raises, as
+    # a tie inside the range does, instead of the lower id choosing the state
+    # the range ends in.
     # : (untyped) -> untyped
     def trailing_version: (untyped) -> untyped
   end

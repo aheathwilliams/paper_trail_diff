@@ -11,12 +11,21 @@ ActiveRecord::Schema.define do
     table.string :label
     table.text :note
     table.datetime :seen_at
+    table.date :due
     table.decimal :amount, precision: 10, scale: 2
+  end
+
+  create_table :scope_condition_pairs, primary_key: %i[owner_id position], force: true do |table|
+    table.integer :owner_id
+    table.integer :position
   end
 end
 
 class ScopeConditionItem < ActiveRecord::Base
   enum :status, { draft: 0, live: 1 }
+end
+
+class ScopeConditionPair < ActiveRecord::Base
 end
 
 # The owner of each reflection under test; only reflections are read.
@@ -69,6 +78,15 @@ RSpec.describe PaperTrailDiff::ScopeCondition do
                      { rank: nil })).to eq([true, false, false])
       expect(matches(build(-> { where(table[:rank].not_in([1, 2])) }), { rank: 3 }, { rank: 2 },
                      { rank: nil })).to eq([true, false, false])
+      # As SQLite holds text without a collation, which compares it exactly.
+      columns('sqlite3', label: 'varchar')
+      expect(matches(build(-> { where(label: %w[a b]) }), { label: 'b' }, { label: 'c' }))
+        .to eq([true, false])
+    end
+
+    it 'reads an IN list holding NULL as matching its other values, as SQL does' do
+      expect(matches(build(-> { where(table[:rank].in([1, nil])) }), { rank: 1 }, { rank: 2 },
+                     { rank: nil })).to eq([true, false, false])
     end
 
     it 'reads a NOT IN list holding NULL as matching nothing, as SQL does' do
@@ -83,6 +101,10 @@ RSpec.describe PaperTrailDiff::ScopeCondition do
         where(rank: [])
       }), { rank: 1 }, { rank: nil })).to eq([false, false])
       expect(matches(build(-> { where(table[:rank].in([])) }), { rank: 1 })).to eq([false])
+      # An empty IN is the constant `1=0`: false for a NULL too, so true under NOT.
+      expect(matches(build(-> { where.not(rank: [], status: 1) }), { rank: nil, status: 1 }))
+        .to eq([true])
+      expect(matches(build(-> { where.not(table[:rank].in([])) }), { rank: nil })).to eq([true])
       expect(matches(build(-> { where.not(rank: []) }), { rank: 1 }, { rank: nil }))
         .to eq([true, true])
       expect(matches(build(-> { where(table[:rank].not_in([])) }), { rank: 1 }, { rank: nil }))
@@ -147,41 +169,67 @@ RSpec.describe PaperTrailDiff::ScopeCondition do
     end
 
     # Column objects are frozen, so the columns are replaced through the model.
-    def collation(value, sql_type: 'varchar')
-      column = Struct.new(:collation, :sql_type).new(value, sql_type)
-      columns = ScopeConditionItem.columns_hash.merge('label' => column, 'note' => column)
-      allow(ScopeConditionItem).to receive(:columns_hash).and_return(columns)
+    def columns(adapter, **sql_types)
+      allow(ScopeConditionItem.connection_db_config).to receive(:adapter).and_return(adapter)
+      collation = sql_types.delete(:collation)
+      replaced = sql_types.to_h do |name, sql_type|
+        [name.to_s, Struct.new(:collation, :sql_type).new(collation, sql_type)]
+      end
+      allow(ScopeConditionItem).to receive(:columns_hash)
+        .and_return(ScopeConditionItem.columns_hash.merge(replaced))
+    end
+
+    def label_read?
+      matches(build(-> { where(label: 'a') }), { label: 'a' }, { label: 'A' }) == [true, false]
     end
 
     it 'reads string columns only where the database compares strings exactly' do
-      config = ScopeConditionItem.connection_db_config
-      collation(nil)
-      %w[sqlite3 postgresql].each do |adapter|
-        allow(config).to receive(:adapter).and_return(adapter)
-        expect(matches(build(-> { where(label: 'a') }), { label: 'a' }, { label: 'A' }))
-          .to eq([true, false])
-        expect(build(-> { where(note: 'a') })).not_to be_nil
-      end
-      %w[mysql2 trilogy sqlserver].each do |adapter|
-        allow(config).to receive(:adapter).and_return(adapter)
+      columns('sqlite3', label: 'varchar', note: 'TEXT', rank: 'integer')
+      expect([label_read?, build(-> { where(note: 'a') }).nil?]).to eq([true, false])
+      columns('postgresql', label: 'character varying(255)', note: 'text', rank: 'integer')
+      expect([label_read?, build(-> { where(note: 'a') }).nil?]).to eq([true, false])
+      { 'mysql2' => %w[varchar(255) int], 'trilogy' => %w[varchar(255) int(11)],
+        'sqlserver' => %w[nvarchar(4000) int] }.each do |adapter, (label, rank)|
+        columns(adapter, label: label, rank: rank)
         expect(build(-> { where(label: 'a') })).to be_nil
         expect(matches(build(-> { where(rank: 1) }), { rank: 1 })).to eq([true])
       end
-      allow(config).to receive(:adapter).and_return('sqlite3')
-      collation('NOCASE')
+      columns('sqlite3', label: 'varchar', collation: 'NOCASE')
       expect(build(-> { where(label: 'a') })).to be_nil
       expect(build(-> { where(rank: 1) })).not_to be_nil
     end
 
-    # citext compares without regard to case, and Active Record reads it as a
-    # plain string.
-    it 'leaves a PostgreSQL citext column unread' do
-      allow(ScopeConditionItem.connection_db_config).to receive(:adapter).and_return('postgresql')
-      collation(nil, sql_type: 'citext')
+    # citext compares without regard to case, and character(n) pads, while
+    # Active Record reads both as a plain string. An adapter it does not know
+    # reads no column.
+    it 'leaves unlisted column types and adapters unread, but tests them for NULL' do
+      ['citext', 'character(6)', 'bpchar'].each do |sql_type|
+        columns('postgresql', label: sql_type)
+        expect(build(-> { where(label: 'a') })).to be_nil
+        expect(matches(build(-> { where(label: nil) }), { label: nil }, { label: 'a' }))
+          .to eq([true, false])
+      end
+      columns('oracle', label: 'varchar', rank: 'integer')
+      expect([build(-> { where(label: 'a') }), build(-> { where(rank: 1) })]).to eq([nil, nil])
+      columns('mysql2', flag: 'tinyint(1)', rank: 'bigint(20) unsigned')
+      expect(matches(build(-> { where(flag: true, rank: 2) }), { flag: true, rank: 2 }))
+        .to eq([true])
+    end
 
+    # PostgreSQL pads a character(n) value with spaces and compares it
+    # without them, so `where(label: 'a')` matches a stored "a   ".
+    it 'leaves a PostgreSQL fixed-length character column unread' do
+      ['character(6)', 'CHAR(3)', 'bpchar', 'character'].each do |sql_type|
+        columns('postgresql', label: sql_type)
+        expect(build(-> { where(label: 'a') })).to be_nil
+      end
+      ['character varying(255)', 'CHARACTER VARYING', 'text'].each do |sql_type|
+        columns('postgresql', label: sql_type)
+        expect(build(-> { where(label: 'a') })).not_to be_nil
+      end
+      # A type the adapter does not list, such as a domain, is not trusted.
+      columns('postgresql', label: 'char_code')
       expect(build(-> { where(label: 'a') })).to be_nil
-      expect(matches(build(-> { where(label: nil) }), { label: nil }, { label: 'a' }))
-        .to eq([true, false])
     end
 
     # Active Record before 7.2 wraps each bound value in a BindParam node.
@@ -224,10 +272,8 @@ RSpec.describe PaperTrailDiff::ScopeCondition do
     end
 
     it 'declines column types whose values Ruby cannot compare as SQL does' do
-      expect(build(-> { where(seen_at: Time.utc(2026)) })).to be_nil
-      expect(build(-> { where.not(seen_at: Time.utc(2026)) })).to be_nil
-      expect(build(-> { where(seen_at: [Time.utc(2026), Time.utc(2027)]) })).to be_nil
       expect(build(-> { where(amount: 1) })).to be_nil
+      expect(build(-> { where(amount: [1, 2]) })).to be_nil
       stub_const('ScopeConditionSerialized', Class.new(ScopeConditionItem))
       ScopeConditionSerialized.serialize :note, coder: YAML
       expect(build(-> { where(note: 'a') }, target: 'ScopeConditionSerialized')).to be_nil
@@ -259,6 +305,33 @@ RSpec.describe PaperTrailDiff::ScopeCondition do
                      { seen_at: cutoff - 1 }, { seen_at: nil })).to eq([true, false, false])
     end
 
+    # History holds a date or a time as text, or as the adapter wraps it, so
+    # each is compared as the value it sorts by, as a range's bounds are.
+    it 'reads equality and lists on a date or a time that sorts in Ruby as in SQL' do
+      day = Date.new(2026, 3, 1)
+      expect(matches(build(-> { where(due: day) }), { due: day }, { due: '2026-03-01' },
+                     { due: day + 1 }, { due: nil })).to eq([true, true, false, false])
+      expect(matches(build(-> { where.not(due: day) }), { due: day + 1 }, { due: '2026-03-01' },
+                     { due: nil })).to eq([true, false, false])
+      expect(matches(build(-> { where(due: [day, day + 2]) }), { due: '2026-03-03' },
+                     { due: day + 1 }, { due: nil })).to eq([true, false, false])
+      expect(matches(build(-> { where.not(due: [day, day + 2]) }), { due: '2026-03-02' },
+                     { due: day }, { due: nil })).to eq([true, false, false])
+      seen = Time.utc(2026, 3, 1, 12)
+      expect(matches(build(-> { where(seen_at: seen) }), { seen_at: seen },
+                     { seen_at: '2026-03-01 12:00:00.000000' }, { seen_at: seen + 1 },
+                     { seen_at: nil })).to eq([true, true, false, false])
+      expect(matches(build(-> { where(seen_at: [seen, seen + 5]) }), { seen_at: seen + 5 },
+                     { seen_at: seen + 1 })).to eq([true, false])
+    end
+
+    it 'declines equality on a time that history may not hold as it was stored' do
+      stub_const('ScopeConditionLocal', Class.new(ScopeConditionItem))
+      ScopeConditionLocal.attribute :seen_at, ActiveRecord::Type::DateTime.new
+      expect(build(-> { where(seen_at: Time.utc(2026)) }, target: 'ScopeConditionLocal')).to be_nil
+      expect(build(-> { where(seen_at: nil) }, target: 'ScopeConditionLocal')).not_to be_nil
+    end
+
     # SQL Server stores a time or a date in a wrapper that compares only for
     # equality, which reading the value back unwraps.
     def wrapping(base, **options)
@@ -284,6 +357,10 @@ RSpec.describe PaperTrailDiff::ScopeCondition do
         .to eq([true, false])
       expect(matches(wrapped.call(-> { where(rank: [3, 5]) }), { rank: 5 }, { rank: 4 }))
         .to eq([true, false])
+      expect(matches(wrapped.call(-> { where(seen_at: cutoff) }), { seen_at: cutoff },
+                     { seen_at: cutoff + 1 })).to eq([true, false])
+      expect(matches(wrapped.call(-> { where(seen_at: [cutoff, cutoff + 5]) }),
+                     { seen_at: cutoff + 5 }, { seen_at: cutoff + 1 })).to eq([true, false])
     end
 
     it 'declines ranges on columns that do not sort in Ruby as in SQL' do
@@ -336,6 +413,25 @@ RSpec.describe PaperTrailDiff::ScopeCondition do
       expect(build(-> { order(:id) }, macro: :belongs_to, name: :owner_item)).not_to be_nil
       expect(build(-> { order(:id).limit(1) }, macro: :belongs_to, name: :owner_item)).to be_nil
       expect(build(-> { order(:label, :id).limit(1) })).to be_nil
+    end
+
+    # Active Record reads an unordered has_one with LIMIT 1, which most
+    # databases answer in key order.
+    it 'takes the first record as ranked, or without an order, the one with the lowest key' do
+      rows = lambda do |*keyed|
+        keyed.map { |row| Struct.new(:attributes).new(row.transform_keys(&:to_s)) }
+      end
+      first = ->(condition, records) { condition.first(records).map(&:attributes) }
+      items = rows.call({ id: 9 }, { id: 10 }, { id: 3 }, { id: 21 })
+      pairs = rows.call({ owner_id: 1, position: 10 }, { owner_id: 2, position: 0 },
+                        { owner_id: 1, position: 9 })
+      scoped = -> { where.not(owner_id: nil) }
+
+      expect(first.call(build(scoped, macro: :has_one, name: :item), items)).to eq([{ 'id' => 3 }])
+      expect(first.call(build(-> { order(:rank, :id) }, macro: :has_one, name: :item), items))
+        .to eq([{ 'id' => 9 }])
+      pair = build(scoped, macro: :has_one, name: :pair, target: 'ScopeConditionPair')
+      expect(first.call(pair, pairs)).to eq([{ 'owner_id' => 1, 'position' => 9 }])
     end
 
     # A has_many through keeps only its parts' conditions, so a part is read
@@ -553,7 +649,7 @@ RSpec.describe PaperTrailDiff::ScopeCondition do
 
     it 'declines a relation that joins, groups, or that it cannot read' do
       [ScopeConditionItem.joins('JOIN tracked_articles ON 1 = 1'), ScopeConditionItem.group(:rank),
-       ScopeConditionItem.where('rank = 1'), ScopeConditionItem.where(seen_at: Time.utc(2026)),
+       ScopeConditionItem.where('rank = 1'), ScopeConditionItem.where(amount: 1),
        ScopeConditionItem.having('COUNT(*) > 1'), ScopeConditionItem.from('scope_condition_items'),
        ScopeConditionItem.lock]
         .each do |relation|

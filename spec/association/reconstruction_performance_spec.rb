@@ -59,9 +59,11 @@ RSpec.describe 'bounded event reconstruction' do
 
   # Active Record adds `limit(1)` to every has_one's association scope; only a
   # declared limit or offset needs loading per record.
+  # From two records on: a batch ends at its last root version, and a lone
+  # article's profile, created after that, is not read from history at all.
   it 'loads a plain has_one of every current record together' do
     articles = []
-    counts = [1, 4].map do |added|
+    counts = [2, 4].map do |added|
       added.times do
         article = TrackedArticle.create!(title: 'Profiled')
         TrackedProfile.create!(article: article, bio: 'bio')
@@ -275,6 +277,116 @@ RSpec.describe 'bounded event reconstruction' do
       .to eq([article.id, comments.last.id])
     expect(reported.last.diff.associations.fetch('comments').added.map(&:id))
       .to match_array(comments.map(&:id))
+  end
+
+  # Counts the snapshots read from history while a timeline is built: whole
+  # ones, which the first event and the closing state each take, and
+  # branches read again for a snapshot carried forward.
+  def snapshot_reads
+    reads = { whole: 0, branches: 0 }
+    allow_any_instance_of(PaperTrailDiff::PreparedActivitySnapshots)
+      .to receive(:call).and_wrap_original do |original, *arguments|
+        reads[:whole] += 1
+        original.call(*arguments)
+      end
+    allow_any_instance_of(PaperTrailDiff::PreparedActivitySnapshots)
+      .to receive(:custom).and_wrap_original do |original, *arguments, **options|
+        reads[:branches] += 1
+        original.call(*arguments, **options)
+      end
+    reads
+  end
+
+  def edited_bodies(step)
+    step.diff.associations.fetch('comments').changed
+        .to_h { |change| [change.record.id, change.attributes.fetch('body').to_h] }
+  end
+
+  # A transaction's changes appear at the event after its last. Each of its
+  # versions is applied there to the comment it saved, as a version alone in
+  # its transaction is, so no snapshot reads every comment again.
+  it 'applies each version of a transaction that saved several comments' do
+    article = TrackedArticle.create!(title: 'Draft')
+    one, two, three = Array.new(3) { |index| article.comments.create!(body: "Comment #{index}") }
+    start = article.versions.reorder(:created_at, :id).last
+    TrackedComment.transaction do
+      one.update!(body: 'One')
+      two.update!(body: 'Two')
+    end
+    three.update!(body: 'Three')
+    reads = snapshot_reads
+
+    steps = PaperTrailDiff.activity_timeline(article, from: start, to: article.reload,
+                                                      associations: [:comments])
+
+    expect(reads).to eq(whole: 2, branches: 0)
+    expect(steps.reject(&:empty?).last(2).map { |step| edited_bodies(step) }).to eq(
+      [{ one.id => { from: 'Comment 0', to: 'One' }, two.id => { from: 'Comment 1', to: 'Two' } },
+       { three.id => { from: 'Comment 2', to: 'Three' } }]
+    )
+  end
+
+  # A comment created, or destroyed, changes who is in the collection. Reading
+  # the whole collection again for each such event made a replay's time grow
+  # with its events times the comments they left: 3,000 comments created one
+  # at a time took 19 s. Each record's sort key is read once per record a
+  # step examines, so the count of keys read says how much of the collection
+  # each event touched.
+  it 'replays comments created one at a time without reading the collection for each' do
+    keys_read = lambda do |comments|
+      article = TrackedArticle.create!(title: 'Draft')
+      start = article.versions.last
+      comments.times { |index| article.comments.create!(body: "Comment #{index}") }
+      article.comments.first.destroy!
+      count = 0
+      allow(PaperTrailDiff::Support).to receive(:sortable_identity).and_wrap_original do |key, *id|
+        count += 1
+        key.call(*id)
+      end
+      steps = PaperTrailDiff.activity_timeline(article, from: start, to: article.reload,
+                                                        associations: [:comments])
+      expect(steps.size).to eq(comments + 2)
+      count
+    end
+
+    few = keys_read.call(40)
+    many = keys_read.call(160)
+
+    # Four times the events may read four times the keys, and a search of a
+    # longer collection a few more for each; not sixteen times.
+    expect(many).to be < few * 8
+  end
+
+  # The same holds when the article is among the records the transaction
+  # saved, before its comment or after it, as `touch: true` saves it.
+  it 'applies each version of a transaction that saved the article and a comment' do
+    article = TrackedArticle.create!(title: 'Draft')
+    comment = article.comments.create!(body: 'First')
+    start = article.versions.reorder(:created_at, :id).last
+    TrackedArticle.transaction do
+      comment.update!(body: 'Second')
+      article.update!(title: 'Edited')
+    end
+    TrackedArticle.transaction do
+      article.update!(title: 'Final')
+      comment.update!(body: 'Third')
+    end
+    comment.update!(body: 'Fourth')
+    reads = snapshot_reads
+
+    steps = PaperTrailDiff.activity_timeline(article, from: start, to: article.reload,
+                                                      associations: [:comments])
+
+    expect(reads).to eq(whole: 2, branches: 0)
+    reported = steps.reject(&:empty?).last(4)
+    expect(reported.map { |step| step.diff.attributes['title']&.to })
+      .to eq(['Edited', 'Final', nil, nil])
+    expect(reported.map { |step| step.diff.associations.key?('comments') })
+      .to eq([true, false, true, true])
+    expect(reported.values_at(0, 2, 3).map { |step| edited_bodies(step).fetch(comment.id) }).to eq(
+      [{ from: 'First', to: 'Second' }, { from: 'Second', to: 'Third' },
+       { from: 'Third', to: 'Fourth' }]
+    )
   end
 
   # The snapshot at the article's update reads the comments as they stood

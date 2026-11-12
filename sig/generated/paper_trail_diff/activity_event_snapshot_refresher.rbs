@@ -18,16 +18,24 @@ module PaperTrailDiff
     # : (ActivityEventRecordNormalizer) -> ActivityBelongsToEventApplier
     def belongs_to_applier: (ActivityEventRecordNormalizer) -> ActivityBelongsToEventApplier
 
+    # Nothing is applied for a record with places of two kinds in the tree,
+    # since an event is applied at those of one kind only (see
+    # ActivityTreePlaces).
     # : (untyped, untyped, RecordSnapshot, Array[String], ActivityEvent?) -> [bool, RecordSnapshot?]
     def call: (untyped, untyped, RecordSnapshot, Array[String], ActivityEvent?) -> [ bool, RecordSnapshot? ]
 
     private
+
+    # : (untyped, Array[untyped], RecordSnapshot, Array[String], ActivityEvent) -> [bool, RecordSnapshot?]
+    def apply: (untyped, Array[untyped], RecordSnapshot, Array[String], ActivityEvent) -> [ bool, RecordSnapshot? ]
 
     @belongs_to_applier: ActivityBelongsToEventApplier
 
     @collection_applier: ActivityCollectionEventApplier
 
     @components: untyped
+
+    @places: ActivityTreePlaces
 
     @record_resolver: ActivityEventRecordResolver
 

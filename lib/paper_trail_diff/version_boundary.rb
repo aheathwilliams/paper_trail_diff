@@ -29,34 +29,6 @@ module PaperTrailDiff
       Support.compare_versions(candidate, boundary).positive?
     end
 
-    # A range starting at a version starts before that version's transaction,
-    # as PT-AT reads associations there. A version saved earlier in the same
-    # transaction, such as the child update behind a `touch: true` parent
-    # version, can be recorded before the start, so the start moves back to
-    # the earliest version of each root's first transaction in the range.
-    # History loaded from the start alone would read that child after its
-    # change. The transactions go 500 to a statement.
-    #: (Array[untyped], untyped) -> untyped
-    def self.transaction_start(root_versions, start_at)
-      earliest = opening_transactions(root_versions, start_at)
-                 .each_slice(Support::IDS_PER_STATEMENT).filter_map do |slice|
-        root_versions.first.class.where(transaction_id: slice).minimum(:created_at)
-      end.min
-      earliest && earliest < start_at ? earliest : start_at
-    end
-
-    # The transaction of each root's first version at or after the start.
-    #: (Array[untyped], untyped) -> Array[untyped]
-    def self.opening_transactions(root_versions, start_at)
-      return [] unless start_at
-
-      root_versions.reject { |version| version.created_at < start_at }
-                   .sort_by { |version| Support.chronological_version_key(version) }
-                   .uniq { |version| Endpoint.identity(version) }
-                   .filter_map { |version| transaction_id(version) }
-    end
-    private_class_method :opening_transactions
-
     # A custom version class need not carry the column, and PaperTrail leaves
     # it nil outside a transaction. Both read as "no transaction here", which
     # groups with nothing.
@@ -82,7 +54,6 @@ module PaperTrailDiff
           candidate.class.respond_to?(:table_name)
       end
     end
-    private_class_method :version_record?
 
     # The same row of the same version table. A record or instant is never a
     # version.

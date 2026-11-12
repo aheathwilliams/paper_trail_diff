@@ -4,10 +4,10 @@
 module PaperTrailDiff
   # Selects both populations and checks their shared ceiling before analysis.
   class ScopedAnalysisBuilder
-    #: (untyped, limit: Integer?, within: untyped, historical_filter: untyped, max_filter_versions: Integer, include_deleted: bool, analyzer: untyped, deleted_analyzer: untyped, ?activity_tree: AssociationTree?, ?version_scope: untyped, ?traversal: AssociationTraversal?) -> void
+    #: (untyped, limit: Integer?, within: untyped, historical_filter: untyped, max_filter_versions: Integer, include_deleted: bool, analyzer: untyped, deleted_analyzer: untyped, ?activity_tree: AssociationTree?, ?version_scope: untyped) -> void
     def initialize( # rubocop:disable Metrics/ParameterLists
       scope, limit:, within:, historical_filter:, max_filter_versions:, include_deleted:,
-      analyzer:, deleted_analyzer:, activity_tree: nil, version_scope: nil, traversal: nil
+      analyzer:, deleted_analyzer:, activity_tree: nil, version_scope: nil
     )
       raise ConfigurationError, 'limit: is required when selecting roots by scope' if limit.nil?
       unless [true, false].include?(include_deleted)
@@ -15,10 +15,9 @@ module PaperTrailDiff
       end
 
       @selection = ScopedRootSelection.new(
-        scope, limit: limit, time_range: within.nil? ? nil : TimeRange.new(within),
+        scope, limit: limit, time_range: time_range(within, scope),
                historical_filter: historical_filter, max_filter_versions: max_filter_versions,
-               activity_tree: activity_tree, version_scope: version_scope,
-               traversal: traversal
+               activity_tree: activity_tree, version_scope: version_scope
       )
       @deleted_filter = deleted_filter(scope, include_deleted)
       @include_deleted = include_deleted
@@ -41,6 +40,15 @@ module PaperTrailDiff
     end
 
     private
+
+    # The window as the relation's version table keeps times. Anything but a
+    # relation or a model is left for the selection to refuse.
+    #: (untyped, untyped) -> TimeRange?
+    def time_range(within, scope)
+      return if within.nil?
+
+      TimeRange.for(within, scope.respond_to?(:all) ? [scope.all.model] : [])
+    end
 
     # Without the option, the deleted roots are still tested when the
     # relation can be read, so that another selection's are not listed.

@@ -36,11 +36,9 @@ RSpec.describe 'deleted root reporting' do
   end
 
   # Whether the adapter compares text as Ruby does, which is what lets the gem
-  # test a text comparison against a deleted record. It mirrors ScopeCondition.
+  # test a text comparison against a deleted record.
   def text_comparisons_readable?
-    PaperTrailDiff::ScopeCondition::EXACT_TEXT_ADAPTERS.include?(
-      ActiveRecord::Base.connection_db_config.adapter
-    )
+    %w[sqlite3 postgresql].include?(ActiveRecord::Base.connection_db_config.adapter)
   end
 
   # A report on one selection must not list another's deleted records.

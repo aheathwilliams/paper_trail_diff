@@ -10,17 +10,10 @@ RSpec.describe PaperTrailDiff::HistoricalFilter do
     FilterEvent.delete_all
   end
 
-  # Each slice of candidates and window the filter asks where windows move.
-  let(:asked) { [] }
-
-  # `windows` gives the moved windows by id, as TransactionCut would.
-  def filter(predicate, within: nil, limit: 10, max_versions: 100, # rubocop:disable Metrics/ParameterLists
-             model: FilterArticle, windows: {})
+  def filter(predicate, within: nil, limit: 10, max_versions: 100, model: FilterArticle)
     time_range = within && PaperTrailDiff::TimeRange.new(within)
-    moved = windows.transform_values { |range| PaperTrailDiff::TimeRange.new(range) }
-    reader = ->(ids, range) { moved.tap { asked << [ids, range.to_range] } }
     described_class.new(model, predicate: predicate, time_range: time_range,
-                               limit: limit, max_versions: max_versions, windows: reader)
+                               limit: limit, max_versions: max_versions)
   end
 
   def matches(predicate, articles, **options)
@@ -58,6 +51,22 @@ RSpec.describe PaperTrailDiff::HistoricalFilter do
     article.update!(title: 'Published')
     published = Time.now
     [article, created, edited, published]
+  end
+
+  # See spec/integration/json_history_spec.rb: some PaperTrail, Ruby, and
+  # adapter combinations cannot write JSON history at all.
+  def json_event
+    FilterJsonEvent.create!(due_on: Date.new(2026, 1, 2), starts_at: Time.utc(2026, 1, 2, 3))
+  rescue StandardError => e
+    skip "PaperTrail cannot record json history here: #{e.class}: #{e.message}"
+  end
+
+  # Some JSON and Active Support versions cannot encode a json column, as
+  # json_event above cannot.
+  def structured_event(details: { 'size' => 1 }, labels: ['a'])
+    FilterEvent.create!(details: details, labels: labels)
+  rescue StandardError => e
+    skip "Active Record cannot write json columns here: #{e.class}: #{e.message}"
   end
 
   describe 'with an attribute hash' do
@@ -173,22 +182,6 @@ RSpec.describe PaperTrailDiff::HistoricalFilter do
       expect(cast.call({ due_on: Date.new(2026, 1, 3) })).to eq([])
     end
 
-    # See spec/integration/json_history_spec.rb: some PaperTrail, Ruby, and
-    # adapter combinations cannot write JSON history at all.
-    def json_event
-      FilterJsonEvent.create!(due_on: Date.new(2026, 1, 2), starts_at: Time.utc(2026, 1, 2, 3))
-    rescue StandardError => e
-      skip "PaperTrail cannot record json history here: #{e.class}: #{e.message}"
-    end
-
-    # Some JSON and Active Support versions cannot encode a json column, as
-    # json_event above cannot.
-    def structured_event
-      FilterEvent.create!(details: { 'size' => 1 }, labels: ['a'])
-    rescue StandardError => e
-      skip "Active Record cannot write json columns here: #{e.class}: #{e.message}"
-    end
-
     it 'keeps its own copy of a structured expected value' do
       event = structured_event
       details = { 'size' => 1 }
@@ -248,64 +241,6 @@ RSpec.describe PaperTrailDiff::HistoricalFilter do
       expect(matches({ title: 'Draft' }, [article], within: created..edited, max_versions: 2))
         .to eq([article.id.to_s])
       expect(neighbour.versions.count).to eq(3)
-    end
-  end
-
-  describe 'with windows moved to transaction edges' do
-    def key(article) = article.id.to_s
-
-    it 'reads a candidate from where its window moved back to' do
-      article, created, edited, published = history
-
-      moved = { key(article) => created..published }
-
-      expect(matches({ title: 'Draft' }, [article], within: edited..published)).to eq([])
-      expect(matches({ title: 'Draft' }, [article], within: edited..published, windows: moved))
-        .to eq([key(article)])
-    end
-
-    it 'closes a window whose end moved on the first version past it' do
-      article, created, edited, published = history
-      moved = { key(article) => created...edited }
-
-      expect(matches({ title: 'Review' }, [article], within: created..published, windows: moved))
-        .to eq([key(article)])
-      expect(matches({ title: 'Published' }, [article], within: created..published, windows: moved))
-        .to eq([])
-    end
-
-    it 'reads the other candidates over the window as asked' do
-      moved, moved_created, = history
-      other, _other_created, other_edited, other_published = history
-      windows = { key(moved) => moved_created..other_published }
-
-      expect(matches({ title: 'Draft' }, [moved, other], within: other_edited..other_published,
-                                                         windows: windows))
-        .to eq([key(moved)])
-    end
-
-    it 'asks where the windows of each batch of candidates move, for the window' do
-      stub_const('PaperTrailDiff::Support::IDS_PER_STATEMENT', 2)
-      articles = Array.new(3) { history.first }
-      window = (Time.now - 60)..Time.now
-
-      matches({ title: 'Draft' }, articles, within: window)
-      matches({ title: 'Draft' }, articles)
-
-      expect(asked).to eq([[articles.first(2).map { |article| key(article) }, window],
-                           [[key(articles.last)], window]])
-    end
-
-    it 'has no state after a destroy in a moved window, whatever comes past its end' do
-      article = FilterArticle.create!(title: 'Draft')
-      start = Time.now
-      article.destroy!
-      finish = Time.now
-      record_version(article, 'update', { 'id' => article.id, 'title' => 'Restored' })
-
-      expect(matches({ title: 'Restored' }, [article], within: start..Time.now,
-                                                       windows: { key(article) => start...finish }))
-        .to eq([])
     end
   end
 
@@ -379,6 +314,27 @@ RSpec.describe PaperTrailDiff::HistoricalFilter do
         'historical_filter: matched more than 1 roots; narrow the window ' \
         'or the filter, or raise limit: to the population you intend to analyze'
       )
+    end
+
+    it 'stops when a page of matches is full, counting only the page' do
+      ids = Array.new(4) { history.first.id.to_s }
+      paged = filter({ title: 'Draft' }, limit: 1)
+
+      expect(paged.call(ids, page: [0, 1])).to eq(ids.first(1))
+      expect(paged.call(ids, page: [2, 1])).to eq(ids.first(3))
+      expect(paged.call(ids, page: [3, 5])).to eq(ids)
+      expect { paged.call(ids, page: [1, 2]) }
+        .to raise_error(PaperTrailDiff::BatchLimitExceededError)
+    end
+
+    it 'reads no batch of candidates past a full page' do
+      stub_const('PaperTrailDiff::Support::IDS_PER_STATEMENT', 1)
+      ids = Array.new(3) { history.first.id.to_s }
+
+      selects, = queries { filter({ title: 'Draft' }).call(ids, page: [0, 1]) }
+      every, = queries { filter({ title: 'Draft' }).call(ids) }
+
+      expect(selects.length * 3).to eq(every.length)
     end
 
     it 'does not count matches the caller does not count' do
@@ -456,6 +412,150 @@ RSpec.describe PaperTrailDiff::HistoricalFilter do
     end
   end
 
+  # A plain model's recorded state is read as stored. One whose values only a
+  # record can read is rebuilt as PaperTrail rebuilds it.
+  describe 'a model whose recorded state only a record can read' do
+    def model(name, versions: 'FilterVersion', &body)
+      stub_const(name, Class.new(ActiveRecord::Base) do
+        self.table_name = 'filter_articles'
+        self.inheritance_column = nil
+        has_paper_trail versions: { class_name: versions }
+        class_eval(&body)
+      end)
+    end
+
+    def held(model, predicate)
+      record, = history(model)
+      filter(predicate, model: model).call([record.id.to_s])
+    end
+
+    it 'matches a model with an attribute that has no column' do
+      plain = model('FilterVirtual') { attribute :note, :string }
+
+      expect(held(plain, { title: 'Draft' }).length).to eq(1)
+      expect(held(plain, { title: 'Other' })).to eq([])
+    end
+
+    it 'matches a model with an attribute type of its own' do
+      upcased = Class.new(ActiveRecord::Type::String) do
+        def deserialize(value) = super&.upcase
+      end
+      typed = model('FilterTyped') { attribute :title, upcased.new }
+
+      expect(held(typed, { title: 'DRAFT' }).length).to eq(1)
+      expect(held(typed, { title: 'Draft' })).to eq([])
+    end
+
+    it 'matches a model that sets values as it is initialized' do
+      initialized = model('FilterInitialized') { after_initialize { self.views ||= 0 } }
+
+      expect(held(initialized, { title: 'Draft' }).length).to eq(1)
+    end
+
+    it 'matches a model with an encrypted attribute by its decrypted value' do
+      expect(held(encrypted, { title: 'Draft' }).length).to eq(1)
+      expect(held(encrypted, { views: 0 }).length).to eq(1)
+      expect(held(encrypted, { title: 'Other' })).to eq([])
+    end
+
+    def encrypted(name = 'FilterEncrypted', **options, &body)
+      ActiveRecord::Encryption.configure(primary_key: 'p' * 32, deterministic_key: 'd' * 32,
+                                         key_derivation_salt: 's' * 32)
+      model(name, **options) do
+        encrypts :title
+        class_eval(&body) if body
+      end
+    end
+
+    # Rebuilt apart from the live record, which is read once, not per version.
+    it 'rebuilds each state without reading the live record for it' do
+      record, = history(encrypted)
+      selects, = queries do
+        filter({ title: 'Draft' }, model: record.class).call([record.id.to_s])
+      end
+
+      expect(selects.grep(/FROM .filter_articles/).length).to eq(1)
+    end
+
+    it 'reads a rebuilt attribute as stored, not through its reader' do
+      shouted = encrypted('FilterShouted') { define_method(:title) { super().upcase } }
+
+      expect(held(shouted, { title: 'Draft' }).length).to eq(1)
+    end
+
+    # PaperTrail's YAML may read a recorded state back as any kind of Hash.
+    it 'rebuilds a state read back as a kind of Hash' do
+      stub_const('FilterIndifferentVersion', Class.new(FilterVersion) do
+        def object_deserialized = super&.with_indifferent_access
+      end)
+      indifferent = encrypted('FilterIndifferent', versions: 'FilterIndifferentVersion')
+
+      expect(held(indifferent, { title: 'Draft' }).length).to eq(1)
+    end
+
+    it 'reads a plain model as stored, without rebuilding it' do
+      allow(PaperTrailDiff::Support).to receive(:reify).and_call_original
+
+      expect(held(model('FilterPlain') { nil }, { title: 'Draft' }).length).to eq(1)
+      expect(PaperTrailDiff::Support).not_to have_received(:reify)
+    end
+
+    it 'rejects an attribute a rebuilt record holds that its versions did not record' do
+      skipping = encrypted('FilterEncryptedSkipping') { paper_trail_options[:skip] = ['views'] }
+      record, = history(skipping)
+
+      expect { filter({ views: 0 }, model: skipping).call([record.id.to_s]) }
+        .to raise_error(PaperTrailDiff::ConfigurationError, /views was not recorded in version/)
+    end
+
+    it 'still rejects an attribute its versions did not record' do
+      skipping = model('FilterSkipping') do
+        attribute :note, :string
+        paper_trail_options[:skip] = ['hidden']
+      end
+      record, = history(skipping)
+
+      expect { filter({ hidden: 0 }, model: skipping).call([record.id.to_s]) }
+        .to raise_error(PaperTrailDiff::ConfigurationError, /hidden was not recorded in version/)
+    end
+  end
+
+  describe 'a value that names several' do
+    it 'refuses a list or a range, which no single state equals' do
+      [{ title: %w[Draft Review] }, { views: 1..3 }, { title: Set['Draft'] }].each do |predicate|
+        expect { filter(predicate) }.to raise_error(
+          PaperTrailDiff::ConfigurationError,
+          /historical_filter: #{predicate.keys.first} takes one value.*use a callable/
+        )
+      end
+    end
+
+    it 'refuses a kind of list as a list' do
+      titles = stub_const('FilterTitles', Class.new(Array))
+
+      expect { filter({ title: titles.new(['Draft']) }) }
+        .to raise_error(PaperTrailDiff::ConfigurationError, /takes one value, not filtertitles/)
+    end
+
+    it 'keeps a list where the attribute casts it to a kind of list' do
+      tags = stub_const('FilterTags', Class.new(Array))
+      type = Class.new(ActiveModel::Type::Value) { define_method(:cast) { |value| tags.new(value) } }
+      tagged = Class.new(ActiveRecord::Base) do
+        self.table_name = 'filter_events'
+        attribute :labels, type.new
+      end
+
+      expect { filter({ labels: %w[a] }, model: tagged) }.not_to raise_error
+    end
+
+    it 'keeps a list as the value of an attribute that holds one' do
+      event = structured_event(labels: %w[a b])
+      event.update!(labels: %w[c])
+
+      expect(filter({ labels: %w[a b] }, model: FilterEvent).call([event.id.to_s]).length).to eq(1)
+    end
+  end
+
   describe 'unreadable history' do
     it 'rejects an attribute the version did not record' do
       article, = history
@@ -467,7 +567,7 @@ RSpec.describe PaperTrailDiff::HistoricalFilter do
       )
     end
 
-    it 'rejects a version whose state cannot be read directly' do
+    it 'rejects a version whose state cannot be read directly', history: :yaml do
       article = FilterArticle.create!(title: 'Draft')
       FilterVersion.create!(item_type: 'FilterArticle', item_id: article.id, event: 'update',
                             object: 'just text'.to_yaml, created_at: Time.now)

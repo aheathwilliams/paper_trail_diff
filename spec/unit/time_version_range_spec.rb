@@ -53,7 +53,7 @@ RSpec.describe PaperTrailDiff::TimeVersionRange do
   end
 
   it 'orders by time when the ids run the other way' do
-    article, _first, second, third, last = backwards_history
+    article, first, second, third, last = backwards_history
 
     selected = plan(article, second.created_at..third.created_at)
     single = plan(article, second.created_at..second.created_at)
@@ -61,6 +61,25 @@ RSpec.describe PaperTrailDiff::TimeVersionRange do
     expect(selected.versions).to eq([second, third, last])
     expect(single.versions).to eq([second, third])
     expect(single.context_version).to eq(third)
+    expect(plan(article, first.created_at..first.created_at).context_version).to eq(second)
+  end
+
+  # Two are read, so that a tie for first that ids cannot order raises.
+  it 'reads the two earliest versions after the window, raising on a tie it cannot order' do
+    article, created, reviewed, edited, = history
+    edited.update_columns(created_at: reviewed.created_at)
+    loaded = []
+    count = ->(*, payload) { loaded << payload[:record_count] }
+
+    selected = ActiveSupport::Notifications.subscribed(count, 'instantiation.active_record') do
+      plan(article, created.created_at..created.created_at)
+    end
+
+    expect(selected.context_version).to eq(reviewed)
+    expect(loaded).to include(2).and(all(be <= 2))
+    allow(PaperTrailDiff::Support).to receive(:orderable_tie?).and_return(false)
+    expect { plan(article, created.created_at..created.created_at) }
+      .to raise_error(PaperTrailDiff::AmbiguousVersionOrderError)
   end
 
   it 'applies the version scope to the window alone' do

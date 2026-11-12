@@ -34,10 +34,11 @@ module PaperTrailDiff
     # the current record. Any other range ends at a root event, or at events
     # after a window whose steps are not reported, so nothing reads it.
     # `include_step` says whether an event's step is reported. `root` names
-    # the root, whose steps then credit each change row to the version that
-    # made it (see ChangeAttribution).
-    # : (Array[untyped], Array[ActivityEvent], untyped, view: ActivityView, include_step: untyped, ?current: untyped, ?closing: RecordSnapshot?, ?root: RecordReference?) -> void
-    def initialize: (Array[untyped], Array[ActivityEvent], untyped, view: ActivityView, include_step: untyped, ?current: untyped, ?closing: RecordSnapshot?, ?root: RecordReference?) -> void
+    # the root, whose steps credit each change row to the version that made
+    # it (see ChangeAttribution). `floor` is the first version of a
+    # history read without a window (see TransactionEnds).
+    # : (Array[untyped], Array[ActivityEvent], untyped, view: ActivityView, include_step: untyped, ?current: untyped, ?closing: RecordSnapshot?, root: RecordReference, ?floor: untyped) -> void
+    def initialize: (Array[untyped], Array[ActivityEvent], untyped, view: ActivityView, include_step: untyped, root: RecordReference, ?current: untyped, ?closing: RecordSnapshot?, ?floor: untyped) -> void
 
     # : () -> ActivityHistory
     def call: () -> ActivityHistory
@@ -54,9 +55,9 @@ module PaperTrailDiff
 
     @first_snapshot: RecordSnapshot?
 
-    @include_step: untyped
+    @floor: untyped
 
-    @opening: Array[Array[untyped]]?
+    @include_step: untyped
 
     @passed_reported: bool?
 
@@ -68,7 +69,7 @@ module PaperTrailDiff
 
     @previous_snapshot: RecordSnapshot?
 
-    @root: RecordReference?
+    @root: RecordReference
 
     @root_snapshots: Hash[Array[untyped], RecordSnapshot?]
 
@@ -94,30 +95,22 @@ module PaperTrailDiff
     # still moves the reported range's end past it, to the next boundary.
     #
     # The history starts at the first kept event whose step is reported. The
-    # events left out before it change nothing the root shows, unless they are
-    # of a transaction that crossed the window's start and has no event kept
-    # here: the snapshot at them is the state before that transaction, whose
-    # changes the window before this one reports (see ActivityTreeFilter). And
-    # a version filter starts it at the first change it keeps.
+    # events left out before it are of records outside the root's tree, and
+    # change nothing the root shows (see ActivityTreeFilter). And a version
+    # filter starts it at the first change it keeps.
     # : (ActivityEvent, RecordSnapshot?, bool) -> void
     def consume: (ActivityEvent, RecordSnapshot?, bool) -> void
 
     # Inside a transaction a record's change can surface at a later event
     # than its own, so the rows of a step its boundary opens are read with
     # the boundaries its transaction kept before it (see ChangeAttribution).
-    # : (ActivityEvent, ActivityBoundary) -> ChangeAttribution?
-    def attribution: (ActivityEvent, ActivityBoundary) -> ChangeAttribution?
+    # : (ActivityEvent, ActivityBoundary) -> ChangeAttribution
+    def attribution: (ActivityEvent, ActivityBoundary) -> ChangeAttribution
 
-    # The boundaries kept so far of the event's transaction, and whether the
-    # history holds all of it. A version saved outside a transaction is a
-    # transaction of its own.
-    # : (ActivityEvent) -> [ChangeAttribution::Transaction, bool]
-    def transaction_of: (ActivityEvent) -> [ ChangeAttribution::Transaction, bool ]
-
-    # The transactions that began before the history did (see
-    # PreparedHistoryLoader#reload).
-    # : () -> Array[Array[untyped]]
-    def opening: () -> Array[Array[untyped]]
+    # The boundaries kept so far of the event's transaction. A version saved
+    # outside a transaction is a transaction of its own.
+    # : (ActivityEvent) -> ChangeAttribution::Transaction
+    def transaction_of: (ActivityEvent) -> ChangeAttribution::Transaction
 
     # : (ActivityEvent) -> void
     def pass: (ActivityEvent) -> void

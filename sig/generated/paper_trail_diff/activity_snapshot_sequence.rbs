@@ -15,11 +15,15 @@ module PaperTrailDiff
     # nothing but the history.
     #
     # A `start_at` is a window's; a range of versions starts at its first.
-    # : (untyped, Array[untyped], ?start_at: untyped, ?end_at: untyped) -> PreparedActivitySnapshots
-    def prepare: (untyped, Array[untyped], ?start_at: untyped, ?end_at: untyped) -> PreparedActivitySnapshots
+    # : (untyped, Array[untyped], ?start_at: untyped, ?end_at: untyped, ?reach: bool) -> PreparedActivitySnapshots
+    def prepare: (untyped, Array[untyped], ?start_at: untyped, ?end_at: untyped, ?reach: bool) -> PreparedActivitySnapshots
 
     # : (untyped, untyped) -> RecordSnapshot?
     def call: (untyped, untyped) -> RecordSnapshot?
+
+    # See HistoricalSnapshotStore#reach_before.
+    # : (untyped, untyped) -> untyped
+    def reach_before: (untyped, untyped) -> untyped
 
     @last: PreparedActivitySnapshots?
 
@@ -42,8 +46,16 @@ module PaperTrailDiff
     # : () -> PreparedActivityIndex?
     def activity_index: () -> PreparedActivityIndex?
 
-    # : () -> Array[Array[untyped]]
-    def opening_transactions: () -> Array[Array[untyped]]
+    # Reads with where each transaction of a root's timeline takes effect
+    # (see TransactionEnds).
+    # : (TransactionEnds) { () -> void } -> void
+    def reading: (TransactionEnds) { () -> void } -> void
+
+    # Where the transactions of these versions take effect: as recorded,
+    # with a history to read it from. A whole history begins at its `floor`
+    # (see TransactionEnds).
+    # : (Array[untyped], ?floor: untyped) -> TransactionEnds
+    def transaction_ends: (Array[untyped], ?floor: untyped) -> TransactionEnds
 
     # : (untyped, untyped) -> RecordSnapshot?
     def call: (untyped, untyped) -> RecordSnapshot?
@@ -53,6 +65,9 @@ module PaperTrailDiff
 
     # : (untyped, untyped, RecordSnapshot?, event: ActivityEvent) -> RecordSnapshot?
     def advance_root: (untyped, untyped, RecordSnapshot?, event: ActivityEvent) -> RecordSnapshot?
+
+    # : (untyped, untyped, RecordSnapshot, Array[String]?, Array[ActivityEvent]) -> RecordSnapshot?
+    def apply_transaction: (untyped, untyped, RecordSnapshot, Array[String]?, Array[ActivityEvent]) -> RecordSnapshot?
 
     # The branches a refresh rebuilds, with this root's history.
     # : (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer) -> RecordSnapshot?
@@ -81,15 +96,20 @@ module PaperTrailDiff
 
   # Builds chronological snapshots, refreshing only branches affected by prior events.
   class ActivitySnapshotSequence
-    # : (Array[untyped], Array[ActivityEvent], untyped, ?current: untyped) -> void
-    def initialize: (Array[untyped], Array[ActivityEvent], untyped, ?current: untyped) -> void
+    # : (Array[untyped], Array[ActivityEvent], untyped, ?current: untyped, ?floor: untyped) -> void
+    def initialize: (Array[untyped], Array[ActivityEvent], untyped, ?current: untyped, ?floor: untyped) -> void
 
     # : () { (ActivityEvent, RecordSnapshot?) -> void } -> void
     def each: () { (ActivityEvent, RecordSnapshot?) -> void } -> void
 
     private
 
+    # : (ActivityEvent) { (ActivityEvent, RecordSnapshot?) -> void } -> void
+    def replay: (ActivityEvent) { (ActivityEvent, RecordSnapshot?) -> void } -> void
+
     @current: untyped
+
+    @ends: TransactionEnds
 
     @events: Array[ActivityEvent]
 
@@ -104,16 +124,39 @@ module PaperTrailDiff
     # : (ActivityEvent, ActivityEvent, RecordSnapshot?) -> RecordSnapshot?
     def transition_snapshot: (ActivityEvent, ActivityEvent, RecordSnapshot?) -> RecordSnapshot?
 
+    # A transaction that saved several records is read whole once it ends:
+    # until then the records it saved read as they stood before it began, so
+    # the snapshot is the same from one of its events to the next. At the
+    # event after its last, each of its versions is applied to the record it
+    # saved, rather than reading their branches again, which costs every
+    # record in them. `branches` are those of a transaction without a root
+    # event, and nil for one with.
+    # : (ActivityEvent, ActivityEvent, RecordSnapshot, Array[String]?) -> RecordSnapshot?
+    def transaction_snapshot: (ActivityEvent, ActivityEvent, RecordSnapshot, Array[String]?) -> RecordSnapshot?
+
     # A transaction with a root event is read whole once it ends. Until then,
     # PT-AT reads the records it saved as they stood before it began, so from
     # one descendant's event to the next in the same transaction the snapshot
     # is the same, and from the root's event to a descendant's only the root's
     # own version applies, as when it is alone in its transaction. A create
     # leaves nothing to advance. The root's version can record what the
-    # transaction changed, such as HABTM membership, so a snapshot at a root
-    # event is rebuilt.
+    # transaction changed, such as HABTM membership, so at a root event those
+    # branches are read again. At the event after the transaction's last,
+    # each of its versions is applied to the record it saved.
     # : (ActivityEvent, ActivityEvent, RecordSnapshot?) -> RecordSnapshot?
     def rebuilt_snapshot: (ActivityEvent, ActivityEvent, RecordSnapshot?) -> RecordSnapshot?
+
+    # From the root's event to the next in its transaction: a second version
+    # of the root is read again, and a descendant's event takes only the
+    # root's own version.
+    # : (ActivityEvent, ActivityEvent, RecordSnapshot) -> RecordSnapshot?
+    def within_transaction: (ActivityEvent, ActivityEvent, RecordSnapshot) -> RecordSnapshot?
+
+    # The snapshot at a root's event, from the one at a descendant's event
+    # before it in its transaction: the same, but for the branches the
+    # root's version itself records.
+    # : (ActivityEvent, RecordSnapshot) -> RecordSnapshot?
+    def carried_snapshot: (ActivityEvent, RecordSnapshot) -> RecordSnapshot?
 
     # : (ActivityEvent) -> bool
     def incremental_root?: (ActivityEvent) -> bool

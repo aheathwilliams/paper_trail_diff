@@ -196,10 +196,8 @@ RSpec.describe 'A has_many :through whose source is a has_many' do
 
   # Found by the nightly oracle (seed 53679). A post moved to the author and
   # destroyed in the transaction that edited a note was never the author's,
-  # so its versions are judged together and left out. Judged by only the
-  # destroy, as a window starting there holds it, the post looked like the
-  # author's, so that window reported the transaction as well as the one
-  # before the edge, and the note's edit appeared twice.
+  # so its versions are judged together and left out. The transaction ends
+  # after the edge, so the later window reports it, once.
   it 'reports a transaction once in windows that meet at a post it moved in and destroyed' do
     note = MembershipPost.create!(title: 'A', author: ada).notes.create!(body: 'note')
     other = MembershipPost.create!(title: 'B', author: bea)
@@ -227,8 +225,8 @@ RSpec.describe 'A has_many :through whose source is a has_many' do
       later = edits.call(edge..whole.end, method, group)
 
       expect(earlier + later).to eq(edits.call(whole, method, group))
-      expect(earlier.last).to eq([{ 'body' => { from: 'note', to: 'edited' } }])
-      expect(later).to eq([[]])
+      expect(earlier.flatten).to be_empty
+      expect(later.first).to eq([{ 'body' => { from: 'note', to: 'edited' } }])
     end
   end
 

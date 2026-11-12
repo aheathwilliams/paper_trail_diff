@@ -16,19 +16,11 @@ module PaperTrailDiff
     # Relation parts that load or shape rows without choosing them.
     LOADING_VALUES: untyped
 
-    # Types whose stored values compare in Ruby as the database compares them,
-    # named rather than referenced so that loading needs no Active Model.
-    VALUE_TYPES: untyped
-
-    TEXT_TYPE: ::String
-
-    ENUM_TYPE: ::String
-
     BIND_PARAM: ::String
 
-    # Adapters that compare strings exactly by default. MySQL and SQL Server
-    # ignore case and trailing spaces by default, which Ruby cannot follow.
-    EXACT_TEXT_ADAPTERS: untyped
+    # Column kinds (ExactColumnType) whose values compare for equality in
+    # Ruby as the database compares them.
+    COMPARABLE_KINDS: untyped
 
     # Raised while reading a node that has no exact plain-Ruby reading.
     class Unreadable < StandardError
@@ -107,6 +99,15 @@ module PaperTrailDiff
     # : (Array[untyped]) -> Array[untyped]
     def members: (Array[untyped]) -> Array[untyped]
 
+    # The one record a has_one reads of several that meet its conditions:
+    # the first as ranked, or without an order of its own, the one with the
+    # lowest primary key. Active Record reads an unordered has_one with
+    # LIMIT 1, which SQLite, MySQL and SQL Server answer in key order for a
+    # clustered or indexed key; reading any other row would differ from the
+    # current record where nothing changed. PostgreSQL promises no order.
+    # : (Array[untyped]) -> Array[untyped]
+    def first: (Array[untyped]) -> Array[untyped]
+
     # Records that meet the conditions, as ranked; unchanged without a
     # ranking.
     # : (Array[untyped]) -> Array[untyped]
@@ -117,9 +118,6 @@ module PaperTrailDiff
     # is always known. Unknown matters only under NOT, which leaves it
     # unknown where false would become true.
     COMPARISONS: untyped
-
-    # Comparisons that order values, which read them as ScopeRanking sorts.
-    ORDERED: untyped
 
     private
 
@@ -144,11 +142,12 @@ module PaperTrailDiff
     # : (bool?) -> bool?
     def negate: (bool?) -> bool?
 
-    # The form the database holds, as the scope's own values were cast. An
-    # order reads the value the database sorts by instead: SQL Server holds a
-    # time or date in a wrapper that only compares for equality.
-    # : (Symbol, String, Hash[String, untyped]) -> untyped
-    def stored: (Symbol, String, Hash[String, untyped]) -> untyped
+    # The value the database compares and sorts by, as the scope's own
+    # values were read (see ScopeRanking.sort_value): SQL Server holds a time
+    # or date in a wrapper that only compares for equality, and history may
+    # hold either as text.
+    # : (String, Hash[String, untyped]) -> untyped
+    def stored: (String, Hash[String, untyped]) -> untyped
 
     # Builds each reflection's condition once per target class.
     class Cache
@@ -211,28 +210,27 @@ module PaperTrailDiff
       # : (untyped) -> Array[untyped]
       def homogeneous_in: (untyped) -> Array[untyped]
 
-      # Active Record writes an empty NOT IN as a condition that is always
-      # true, and a NOT IN list holding NULL matches no row.
+      # Active Record writes an empty IN as a condition that is always false
+      # and an empty NOT IN as one that is always true, for a NULL as for any
+      # value, so neither is unknown under NOT. A NOT IN list holding NULL
+      # matches no row.
       # : (Symbol, untyped, Array[untyped]) -> Array[untyped]
       def list: (Symbol, untyped, Array[untyped]) -> Array[untyped]
 
+      # A column that sorts in Ruby as in SQL (ScopeRanking) is compared as
+      # the value it sorts by, which the block reads from the expected one: a
+      # date, or a time history holds as it was stored, can be held as text.
+      # : (Symbol, untyped, untyped) { (String) -> untyped } -> Array[untyped]
+      def compared: (Symbol, untyped, untyped) { (String) -> untyped } -> Array[untyped]
+
       # Ruby comparison stands in for SQL only on the record's own column of
-      # a type both compare alike. Whether a value is NULL, any column's
-      # type compares alike.
+      # a type both compare alike (ExactColumnType). Whether a value is NULL,
+      # any column's type compares alike.
       # : (untyped, ?null_test: bool) -> String
       def column: (untyped, ?null_test: bool) -> String
 
-      # : (String, untyped) -> bool
-      def comparable?: (String, untyped) -> bool
-
-      # PostgreSQL's citext is text that compares without regard to case.
-      # : (untyped) -> bool
-      def exact_text?: (untyped) -> bool
-
-      # An enum compares the values it stores, which its subtype describes. A
-      # wrapper such as a serialized or encrypted type is none of these.
-      # : (untyped) -> untyped
-      def value_type: (untyped) -> untyped
+      # : (String) -> bool
+      def comparable?: (String) -> bool
 
       # A list that is not plain values, such as a subquery, is unreadable.
       # : (untyped) -> Array[untyped]

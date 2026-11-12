@@ -5,7 +5,8 @@ require_relative '../support/association_database'
 # `version_scope:` decides which changes activity reports on the root and its
 # associations alike, from a replay of every version.
 RSpec.describe 'version_scope: in activity on associations',
-               mutant_expression: 'PaperTrailDiff::ActivityTimelineBuilder' do
+               mutant_expression: %w[PaperTrailDiff::ActivityTimelineBuilder
+                                     PaperTrailDiff::VersionScopeFilter] do
   before do
     PaperTrail::VersionAssociation.delete_all
     PaperTrail::Version.delete_all

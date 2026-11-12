@@ -3,45 +3,67 @@
 module PaperTrailDiff
   # Prepares the association history of a batch's roots, once per model class
   # across every version the batch replays, then analyzes each root from its
-  # plan over its own window. AnalysisBatch and DeletedAnalysisBatch differ
-  # only in how they find their roots and plans.
+  # plan over the batch's window. AnalysisBatch and DeletedAnalysisBatch
+  # differ only in how they find their roots and plans.
   class BatchedRootAnalyses
-    # A root whose window moved to the start of a transaction crossing its
-    # edge has its window in `windows`; the others take `time_range`.
-    # : (time_range: TimeRange?, windows: Hash[Array[String], TimeRange], history_preparer: untyped, analyzer: untyped) -> void
-    def initialize: (time_range: TimeRange?, windows: Hash[Array[String], TimeRange], history_preparer: untyped, analyzer: untyped) -> void
+    # `planner` selects the roots' plans over a window. On associations, a
+    # window's history is read from where the earliest transaction open at
+    # its start began. With `activity`, the roots are planned from there too,
+    # and each reports the transactions that end inside the window (see
+    # TransactionEnds). Without it each root version is reported where it
+    # was saved, so the roots are planned over the window as it is.
+    # : (time_range: TimeRange?, planner: untyped, history_preparer: untyped, analyzer: untyped, activity: bool) -> void
+    def initialize: (time_range: TimeRange?, planner: untyped, history_preparer: untyped, analyzer: untyped, activity: bool) -> void
 
     # Preparation reads the roots' current association state as a fallback,
     # so a batch that has already loaded them passes them as `loaded`, rather
     # than have preparation walk that state one root at a time.
-    # : (Array[untyped], Hash[Array[String], RootVersionPlan], ?loaded: Hash[Array[String], untyped]) -> Hash[Array[String], Analysis]
-    def call: (Array[untyped], Hash[Array[String], RootVersionPlan], ?loaded: Hash[Array[String], untyped]) -> Hash[Array[String], Analysis]
+    # : (Array[untyped], ?loaded: Hash[Array[String], untyped]) -> Hash[Array[String], Analysis]
+    def call: (Array[untyped], ?loaded: Hash[Array[String], untyped]) -> Hash[Array[String], Analysis]
 
     private
+
+    @activity: bool
 
     @analyzer: untyped
 
     @history_preparer: untyped
 
+    @planner: untyped
+
     @time_range: TimeRange?
 
-    @windows: Hash[Array[String], TimeRange]
+    # The plans the roots are read with: over the window, or with activity
+    # from where the earliest transaction open at its start began, when the
+    # history read for it says one was.
+    # : (Array[untyped], Hash[Array[String], untyped]) -> Hash[Array[String], RootVersionPlan]
+    def prepare: (Array[untyped], Hash[Array[String], untyped]) -> Hash[Array[String], RootVersionPlan]
 
     # Roots that close on their current state are prepared even without a
     # version in the window, since their descendants may have changed there.
-    # : (Array[untyped], Hash[Array[String], RootVersionPlan], Hash[Array[String], untyped]) -> void
-    def prepare: (Array[untyped], Hash[Array[String], RootVersionPlan], Hash[Array[String], untyped]) -> void
+    # : (Array[untyped], Hash[Array[String], RootVersionPlan], Hash[Array[String], untyped], TimeRange?, reach: bool) -> untyped
+    def prepare_history: (Array[untyped], Hash[Array[String], RootVersionPlan], Hash[Array[String], untyped], TimeRange?, reach: bool) -> untyped
+
+    # Roots gone before a window are still asked how far the transactions
+    # open at its start reach, since one of them may have destroyed them and
+    # ended inside it. Without activity nothing of theirs is reported there.
+    # : (bool) -> bool
+    def gone_asked?: (bool) -> bool
+
+    # Each root as the batch loaded it, where it did.
+    # : (Array[untyped], Hash[Array[String], untyped]) -> Array[untyped]
+    def current: (Array[untyped], Hash[Array[String], untyped]) -> Array[untyped]
 
     # A plan closing on the live record reads history up to now; the others
     # stop at the window's end or at the last version they replay past it, so
     # a past window does not load everything since.
-    # : (Array[untyped], live: bool) -> Hash[Symbol, untyped]
-    def preparation_range: (Array[untyped], live: bool) -> Hash[Symbol, untyped]
+    # : (Array[untyped], TimeRange?, live: bool) -> Hash[Symbol, untyped]
+    def preparation_range: (Array[untyped], TimeRange?, live: bool) -> Hash[Symbol, untyped]
 
     # A root with no versions in range has nothing to report, which is an
     # empty result rather than a failed request -- unless it closes on its
     # current state, where its descendants may still have moved.
-    # : (untyped, RootVersionPlan, TimeRange?) -> Analysis
-    def analysis: (untyped, RootVersionPlan, TimeRange?) -> Analysis
+    # : (untyped, RootVersionPlan) -> Analysis
+    def analysis: (untyped, RootVersionPlan) -> Analysis
   end
 end

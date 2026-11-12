@@ -20,6 +20,10 @@ class FullSnapshotter
     @snapshotter.call(*endpoints)
   end
 
+  def apply_transaction(root_endpoint, context_endpoint, *)
+    call(root_endpoint, context_endpoint)
+  end
+
   # The state before the event and the event itself are not needed.
   def refresh(root_endpoint, context_endpoint, *, **)
     @snapshotter.call(root_endpoint, context_endpoint)
@@ -31,7 +35,9 @@ class FullSnapshotter
 
   def activity_index = @prepared.activity_index
 
-  def opening_transactions = @prepared.opening_transactions
-
   def history = @prepared.history
+
+  def reading(open, &block) = @prepared.reading(open, &block)
+
+  def transaction_ends(versions, floor: nil) = @prepared.transaction_ends(versions, floor: floor)
 end

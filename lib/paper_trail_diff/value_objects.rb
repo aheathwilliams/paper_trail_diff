@@ -55,13 +55,14 @@ module PaperTrailDiff
 
     # Elements of `left` with no counterpart left in `right`, matching by value
     # and respecting duplicates, so ["a", "a"] -> ["a"] reports one removal
-    # rather than none.
+    # rather than none. Each element is counted rather than searched for, so
+    # the work grows with the arrays' length, not its square.
     #: (Array[untyped], Array[untyped]) -> Array[untyped]
     def self.surplus(left, right)
-      pool = right.map { |item| NestedComparator.comparable(item) }
+      pool = right.map { |item| NestedComparator.countable(item) }.tally
       left.reject do |item|
-        index = pool.index(NestedComparator.comparable(item))
-        index ? pool.delete_at(index) || true : false
+        key = NestedComparator.countable(item)
+        pool.fetch(key, 0).positive? && (pool[key] -= 1)
       end
     end
 

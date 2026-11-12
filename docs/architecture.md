@@ -62,6 +62,37 @@ previous snapshot forward and replace only the parts an event changed, so an
 edit to one comment does not copy the whole article again. Events in one
 PT-AT transaction are applied together.
 
+A transaction takes effect where it saved its last version, of any record.
+`RecordedTransactionEnds` reads that version from the version table, for all
+the versions a history holds at once, since which of a transaction's records
+a timeline holds depends on where it is read from. `TransactionEnds` places
+every version of a transaction at that last one, and a timeline replays its events in that order, so two
+transactions that interleaved their versions in one tree are read one after
+the other, in the order they ended. The record index reads a record at a
+boundary as it stood before every transaction that ends at or after the
+boundary's own. A transaction thus changes no snapshot while it is open, and
+a change is reported with its own transaction's, under its own version. A
+snapshot read for a timeline whose transactions interleaved is cached apart
+from one read without.
+
+A window reports the transactions that end inside it. Its history is first
+read over the window itself. `CrossingTransactions` then says how far back
+its transactions reach: where the earliest transaction open at its start
+began, whatever records it saved. When one was open, the root's versions and
+the history are read once more from there, the whole of it is replayed, and
+the steps of the transactions that end inside the window are reported. A
+window is not read past its end. A transaction that saves inside it and ends
+later is left to the later window, and a timeline reads no version saved
+after its own last one, wherever that version's transaction ended
+(`TransactionEnds#beyond?`): a history holds such versions, as the next one
+of each record after the range, or as part of a batch's history that runs on
+for another root. A range of versions starts before its first version's
+transaction instead (`TransactionCut.range_start`), and so does a whole
+history, read without a window: a version saved before that by another
+transaction took effect before the history began, whenever its transaction
+ended, though a batch's history holds it when another of its roots is older
+(the `floor` of `TransactionEnds`).
+
 ## When the gem falls back to PT-AT
 
 These association shapes cannot be read from the loaded history. The gem asks
@@ -125,10 +156,10 @@ Keep PT-AT's own index on `version_associations` (`foreign_key_name`,
 - Repeated events in one very wide collection still copy that collection's
   list of records for each step. The comparison work stays small, but memory
   traffic grows with *events × collection size*.
-- With PT-AT installed, a `within:` or `since:` window reads each root's
-  versions nearest each edge, to move an edge that falls inside a
-  transaction (see [time windows](reference.md#time-windows)). Each edge
-  takes one statement per 250 roots and one or two per 500 transactions they
-  find, whatever the length of their histories; a `report` window has no end,
-  so only its start is read. See
-  [performance](performance.md) for the cost on a large table.
+- A read with associations asks its version table where each transaction
+  it holds ends, and a `within:` or `since:` window asks which transactions
+  were open at its start (see [time windows](reference.md#time-windows)).
+  The first takes one statement per 500 transactions; the second reads the
+  versions saved since the window began, which no index of the README
+  serves. See [performance](performance.md#what-still-grows) for the cost on
+  a large table.

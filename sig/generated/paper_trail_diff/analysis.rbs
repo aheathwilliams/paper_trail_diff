@@ -32,8 +32,9 @@ module PaperTrailDiff
     # : (diff: Diff, timeline: Array[Step], ?activity_timeline: Array[ActivityStep]?, ?from_snapshot: RecordSnapshot?, ?to_snapshot: RecordSnapshot?, ?window: Range[Time?]?) -> void
     def initialize: (diff: Diff, timeline: Array[Step], ?activity_timeline: Array[ActivityStep]?, ?from_snapshot: RecordSnapshot?, ?to_snapshot: RecordSnapshot?, ?window: Range[Time?]?) -> void
 
-    # The same result for the window it was read in, which the caller knows
-    # once it has moved the window's edges to transactions.
+    # The same result for the window it was asked in. A batch reads a root
+    # over a wider range when a transaction was open at the window's start,
+    # and reports the window as asked.
     # : (TimeRange?) -> Analysis
     def with_window: (TimeRange?) -> Analysis
 

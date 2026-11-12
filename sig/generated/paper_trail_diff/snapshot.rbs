@@ -26,14 +26,17 @@ module PaperTrailDiff
 
     SUPPORTED_KINDS: untyped
 
-    # Non-semantic memoization shared by structurally adjacent snapshots. The
-    # cached value is derived only from frozen records and is itself immutable.
-    class IdentityIndexCache
+    # Whether a collection's identities were found distinct. The snapshots a
+    # transition derives from one another share the answer: a transition
+    # replaces a record in its place, takes one out, or puts in one that was
+    # not there, and none of those can repeat an identity. Records are held
+    # in identity order, so two with one identity are neighbours.
+    class IdentityCheck
       # : () -> void
       def initialize: () -> void
 
-      # : (Array[RecordSnapshot]) -> CollectionIdentityIndex
-      def index: (Array[RecordSnapshot]) -> CollectionIdentityIndex
+      # : (Array[RecordSnapshot]) -> void
+      def call: (Array[RecordSnapshot]) -> void
     end
 
     # Identifies one snapshot for internal carry-forward. A transition cannot
@@ -63,12 +66,19 @@ module PaperTrailDiff
 
     attr_reader serial: Integer
 
-    # : (kind: Symbol, records: Array[RecordSnapshot], ?identity_index_cache: untyped, ?transition: CollectionTransition?) -> void
-    def initialize: (kind: Symbol, records: Array[RecordSnapshot], ?identity_index_cache: untyped, ?transition: CollectionTransition?) -> void
+    # `ordered` says the records are already in documented order, as a
+    # transition's are: checking them again for each event made a replay's
+    # time grow with its events times the size of the collection they changed.
+    # : (kind: Symbol, records: Array[RecordSnapshot], ?identity_check: untyped, ?transition: CollectionTransition?, ?ordered: bool) -> void
+    def initialize: (kind: Symbol, records: Array[RecordSnapshot], ?identity_check: untyped, ?transition: CollectionTransition?, ?ordered: bool) -> void
 
-    # Builds a structurally adjacent collection snapshot for internal activity carry-forward.
-    # : (Array[RecordSnapshot], before: RecordSnapshot?, after: RecordSnapshot?, membership_preserved: bool) -> AssociationSnapshot
-    def transition_to: (Array[RecordSnapshot], before: RecordSnapshot?, after: RecordSnapshot?, membership_preserved: bool) -> AssociationSnapshot
+    # Builds a structurally adjacent collection snapshot for internal activity
+    # carry-forward. Its records are this one's with one of them replaced in
+    # its place, taken out, or put in where its identity sorts, so they are in
+    # order, and as distinct as these unless the record put in repeats one
+    # beside it.
+    # : (Array[RecordSnapshot], before: RecordSnapshot?, after: RecordSnapshot?) -> AssociationSnapshot
+    def transition_to: (Array[RecordSnapshot], before: RecordSnapshot?, after: RecordSnapshot?) -> AssociationSnapshot
 
     # Collections are documented in record type, then ID, order wherever they
     # were read from. Most arrive sorted, so they are checked before sorting.
@@ -95,12 +105,19 @@ module PaperTrailDiff
 
     private
 
-    @identity_index_cache: untyped
+    @identity_check: untyped
+
+    @identity_index: CollectionIdentityIndex
 
     @transition: CollectionTransition?
 
-    # : () -> CollectionIdentityIndex
-    def identity_index: () -> CollectionIdentityIndex
+    # : (Array[RecordSnapshot]) -> Array[RecordSnapshot]
+    def in_order: (Array[RecordSnapshot]) -> Array[RecordSnapshot]
+
+    # Whether the records hold this record's identity twice: a second one
+    # follows the first in their order.
+    # : (Array[RecordSnapshot], RecordSnapshot) -> bool
+    def repeated?: (Array[RecordSnapshot], RecordSnapshot) -> bool
   end
 
   # An immutable, ActiveRecord-independent representation of a reified record.

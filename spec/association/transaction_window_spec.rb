@@ -25,11 +25,22 @@ class WindowComment < ActiveRecord::Base
   has_paper_trail
 end
 
-# PT-AT reads a root's associations at the start of the transaction of the
-# root version it reifies, so a window edge inside a transaction moves back to
-# where the transaction began: the whole transaction is in the later window.
+# A transaction takes effect where it saved its last version (see
+# TransactionEnds), so one with a window edge inside it is wholly in the later
+# window, which reads it from where it began.
 RSpec.describe 'Windows that meet inside a transaction',
-               mutant_expression: 'PaperTrailDiff::ActivityTimelineBuilder' do
+               mutant_expression: %w[PaperTrailDiff::ActivityTimelineBuilder
+                                     PaperTrailDiff::TimelineRange
+                                     PaperTrailDiff::TransactionEnds
+                                     PaperTrailDiff::RecordedTransactionEnds
+                                     PaperTrailDiff::CrossingTransactions
+                                     PaperTrailDiff::TransactionCut
+                                     PaperTrailDiff::TimeVersionRange
+                                     PaperTrailDiff::ActivityVersionCollector
+                                     PaperTrailDiff::ActivityTreeFilter
+                                     PaperTrailDiff::BatchedRootAnalyses
+                                     PaperTrailDiff::PreparedHistoryLoader
+                                     PaperTrailDiff::RootVersionSelection] do
   before do
     PaperTrail::VersionAssociation.delete_all
     PaperTrail::Version.delete_all
@@ -125,10 +136,9 @@ RSpec.describe 'Windows that meet inside a transaction',
           expect(left.flatten).not_to include(child.id)
         end
 
-        # It moves no edge, but each record in it still reads at its later
-        # versions as it was before it began, here and in a window ending
-        # inside it, so the part saved before the edge is in the later window.
-        # That window's group lists only the versions inside it.
+        # Each record in it reads as it was before it began, here and in a
+        # window ending inside it, so the part saved before the edge is in
+        # the later window.
         it 'reports a transaction of children split by the edge in the later window' do
           article, before_edge, at_edge = comments_only
           whole = window(article)
@@ -164,11 +174,10 @@ RSpec.describe 'Windows that meet inside a transaction',
         end
 
         # The comment it edited after the edge was on another article then,
-        # and moves to this one later. The later window leaves that edit out,
-        # so the earlier one reports the transaction, and the later one
-        # starts after it.
-        it 'reports such a transaction in the earlier window when nothing it saved after ' \
-           'the edge is in the tree' do
+        # and moves to this one later. That edit is still where the
+        # transaction ends, so the later window reports what it destroyed.
+        it 'reports such a transaction in the later window, though what it saved after ' \
+           'the edge was outside the tree' do
           article, comment = article_with_comment
           elsewhere = WindowArticle.create!(title: 'Other').comments.create!(body: 'elsewhere')
           WindowArticle.transaction do
@@ -184,8 +193,10 @@ RSpec.describe 'Windows that meet inside a transaction',
                                                          associations: paths, group: group)
 
           expect(read.call(whole.begin...edge) + read.call(edge..whole.end)).to eq(read.call(whole))
-          expect(read.call(whole.begin...edge).last).to eq([[], ['before']])
-          expect(later.values.first.diff.associations.fetch('comments').removed).to eq([])
+          expect(read.call(edge..whole.end).first).to eq([[], ['before']])
+          expect(later.values.first.diff.associations.fetch('comments').removed.map do |record|
+            record.attributes.fetch('body')
+          end).to eq(['before'])
         end
 
         it 'does so when the root saved first' do
@@ -203,18 +214,18 @@ RSpec.describe 'Windows that meet inside a transaction',
   end
 
   describe 'the window an analysis covers' do
-    it 'starts where the transaction that crossed its start began' do
-      article, child, root = comment_then_article
+    it 'is the window asked for, though it reports a transaction that began before it' do
+      article, _child, root = comment_then_article
       within = root.created_at..Time.now.utc
 
       many = PaperTrailDiff.analyze_many([article], within: within, activity: true,
                                                     associations: paths).values.first
       one = PaperTrailDiff.analyze(article, within: within, activity: true, associations: paths)
 
-      expect([many.window, one.window]).to all(eq(child.created_at..within.end))
+      expect([many.window, one.window]).to all(eq(within))
     end
 
-    it 'holds every step, and is the window asked for when no transaction crosses it' do
+    it 'holds every step when no transaction crosses it' do
       article, = comment_then_article
       within = window(article)
 
@@ -246,6 +257,26 @@ RSpec.describe 'Windows that meet inside a transaction',
     expect(steps.flatten).not_to include(child.id, root.id)
   end
 
+  it 'closes a window read again from where such a transaction began when it read the row' do
+    article, _child, root = comment_then_article
+
+    closing = PaperTrailDiff.activity_timeline(article, within: root.created_at..,
+                                                        associations: paths).last.to_boundary
+
+    expect(closing.kind).to eq(:current)
+    expect(closing.recorded_at).to be_within(60).of(Time.now.utc)
+  end
+
+  # Read again from where it began, the history does not ask again.
+  it 'asks once how far back a transaction open at the start reaches' do
+    article, _child, root = comment_then_article
+    allow(PaperTrailDiff::CrossingTransactions).to receive(:reach).and_call_original
+
+    steps(article, root.created_at..Time.now.utc)
+
+    expect(PaperTrailDiff::CrossingTransactions).to have_received(:reach).once
+  end
+
   it 'reports nothing of a transaction that a window lies inside' do
     article, child, root = comment_then_article
 
@@ -264,9 +295,9 @@ RSpec.describe 'Windows that meet inside a transaction',
     expect(changed_keys(first)).to eq([['body']])
   end
 
-  # Its window moves back to where the transaction began, so a relation's
-  # report selects it in the later window, by the version the move takes in,
-  # whether it compares the root's versions or reads activity.
+  # Activity reports the transaction where it ends, in the later window, which
+  # selects the root by the comment saved there. A comparison of the root's
+  # own versions reports each where it was saved, in the earlier window.
   it 'selects a root saved before the edge in a transaction that saved its paths after it' do
     article, comment = article_with_comment
     start = Time.now.utc
@@ -283,15 +314,16 @@ RSpec.describe 'Windows that meet inside a transaction',
     end
     key = PaperTrailDiff::Endpoint.identity(article)
 
+    change = { key => { from: 'First', to: 'Second' } }
     expect([false, true].map { |activity| titles.call(edge..Time.now.utc, activity) })
-      .to all(eq(key => { from: 'First', to: 'Second' }))
+      .to eq([{}, change])
     expect([false, true].map { |activity| titles.call(start...edge, activity) })
-      .to all(eq(key => nil))
+      .to eq([change, { key => nil }])
   end
 
-  # Its analysis starts where the transaction began, so a historical filter
-  # reads it from there too: it held its old title in the later window.
-  it 'filters a root moved into the later window by what it held where its window starts' do
+  # A historical filter reads what a root held by when its versions were
+  # saved, so in the later window this one held only its new title.
+  it 'filters a root reported in the later window by what its versions held there' do
     article, comment = article_with_comment
     WindowArticle.transaction do
       article.update!(title: 'Second')
@@ -300,13 +332,13 @@ RSpec.describe 'Windows that meet inside a transaction',
     edge = comment.versions.last.created_at
     selected = lambda do |title|
       PaperTrailDiff.analyze_scope(WindowArticle.all, within: edge..Time.now.utc, limit: 5,
-                                                      associations: paths,
+                                                      associations: paths, activity: true,
                                                       historical_filter: { title: title })
                     .analyses.keys
     end
     key = PaperTrailDiff::Endpoint.identity(article)
 
-    expect(%w[First Second Third].map(&selected)).to eq([[key], [key], []])
+    expect(%w[First Second Third].map(&selected)).to eq([[], [key], []])
   end
 
   # Two roots saved in one transaction, one before the edge and one after it.

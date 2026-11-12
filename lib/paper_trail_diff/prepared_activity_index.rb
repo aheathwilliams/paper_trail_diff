@@ -19,7 +19,7 @@ module PaperTrailDiff
     def initialize(records, root_versions, start_at:)
       @records = records
       @start_at = start_at
-      @children = PreparedChildCandidates.new(start_at)
+      @children = PreparedChildCandidates.new(start_at, records.end_time)
       @roots = root_versions.group_by { |version| Endpoint.identity(version) }
       @nodes = {} #: Hash[String, Array[untyped]]
       # Rows are cached by reflection, which a subclass shares with its base.
@@ -27,6 +27,10 @@ module PaperTrailDiff
       @rows = {} #: Hash[untyped, Hash[String, Array[untyped]]]
       @conditions = ScopeCondition::Cache.new
     end
+
+    # See PreparedRecordIndex#transaction_ends.
+    #: (Array[untyped]) -> TransactionEnds
+    def transaction_ends(versions) = @records.transaction_ends(versions)
 
     #: (untyped, Array[untyped]) -> void
     def register(model, ids)
@@ -201,14 +205,12 @@ module PaperTrailDiff
       end
     end
 
+    # The records of a model the history holds. None is an answer too: a
+    # path past a belongs_to that named no record, as `post.owner` under
+    # notes without a post, reaches a model no record of which was loaded.
     #: (untyped) -> Array[untyped]
     def node_ids(model)
-      name = model.base_class.name
-      @nodes.fetch(name) do
-        raise ConfigurationError,
-              "prepared activity graph is missing #{name}; " \
-              'register the model before collecting activity'
-      end
+      @nodes.fetch(model.base_class.name) { [] }
     end
 
     #: (Hash[String, Array[ActivityTargetCandidateLoader::Row]], Array[untyped]) -> Array[ActivityTargetCandidateLoader::Row]
@@ -234,7 +236,7 @@ module PaperTrailDiff
     # series includes changes to other owners too, so an old membership cannot
     # survive a later pre-window reassignment just because that owner is absent.
     # A range starting at a version starts before that version's transaction,
-    # as the scope's start does (see VersionBoundary.transaction_start), so a
+    # as the scope's start does (see TransactionCut.range_start), so a
     # membership that ended earlier in that transaction still held there. So
     # did one that the record's own transaction across the start ended.
     #: (untyped, untyped, untyped, String?, ActivityRange) -> bool
@@ -256,17 +258,22 @@ module PaperTrailDiff
     end
 
     # Whether every version of a record from `first` up to the start is one
-    # of the transactions it saved a version in from the start onward.
+    # of a transaction that crossed the start: one the record saved a version
+    # in from the start onward, or one the history found crossing it by
+    # another record's versions. Such a transaction may have saved this
+    # record only before the start, as when it moved a comment away there
+    # and saved the comment's reply after it. The window before the start
+    # leaves that move to this one, which finds the reply only under the
+    # comment where it stood before the transaction.
     #: (Array[untyped], Integer, untyped) -> bool
     def crossed_start?(versions, first, start)
-      after = versions.bsearch_index { |version| version.created_at >= start }
-      return false unless after
-
+      after = versions.bsearch_index { |version| version.created_at >= start } || versions.length
+      later = versions.drop(after).map do |version|
+        ActivityTransactionGroups.transaction_key(version)
+      end
       versions.take(after).drop(first).all? do |version|
-        transaction_id = VersionBoundary.transaction_id(version)
-        transaction_id && versions.drop(after).any? do |other|
-          VersionBoundary.transaction_id(other) == transaction_id
-        end
+        key = ActivityTransactionGroups.transaction_key(version)
+        !key.nil? && later.include?(key)
       end
     end
 

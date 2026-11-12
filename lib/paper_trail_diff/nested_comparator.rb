@@ -58,6 +58,27 @@ module PaperTrailDiff
       end
     end
 
+    # The comparable value as a Hash key: two values that are `==` are one
+    # key. A Hash looks its keys up with `eql?`, which tells 1 from 1.0, so
+    # every number is read as a rational, at any depth. One that is not
+    # finite has none, and equals nothing but itself.
+    #: (untyped) -> untyped
+    def self.countable(value)
+      case value
+      when Hash then string_keyed(value) { |item| countable(item) }
+      when Array then value.map { |item| countable(item) }
+      when Numeric then rational(value)
+      else value
+      end
+    end
+
+    # The number as a rational, or as it is when it has none: a complex
+    # number, or one that is not finite, such as a Float or BigDecimal NaN.
+    #: (untyped) -> untyped
+    def self.rational(number)
+      number.real? && number.finite? ? number.to_r : number
+    end
+
     # The hash keyed by name, each value as the block returns it. Two keys
     # with one name, such as `:a` and `"a"`, cannot both be kept.
     #: (Hash[untyped, untyped]) { (untyped) -> untyped } -> Hash[String, untyped]

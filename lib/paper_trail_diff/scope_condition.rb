@@ -16,16 +16,10 @@ module PaperTrailDiff
                          extending].freeze
     # Relation parts that load or shape rows without choosing them.
     LOADING_VALUES = %i[includes preload select distinct].freeze
-    # Types whose stored values compare in Ruby as the database compares them,
-    # named rather than referenced so that loading needs no Active Model.
-    VALUE_TYPES = %w[ActiveModel::Type::Integer ActiveModel::Type::Boolean
-                     ActiveModel::Type::ImmutableString].freeze
-    TEXT_TYPE = 'ActiveModel::Type::ImmutableString'
-    ENUM_TYPE = 'ActiveRecord::Enum::EnumType'
     BIND_PARAM = 'Arel::Nodes::BindParam'
-    # Adapters that compare strings exactly by default. MySQL and SQL Server
-    # ignore case and trailing spaces by default, which Ruby cannot follow.
-    EXACT_TEXT_ADAPTERS = %w[sqlite3 postgresql].freeze
+    # Column kinds (ExactColumnType) whose values compare for equality in
+    # Ruby as the database compares them.
+    COMPARABLE_KINDS = %i[integer boolean text].freeze
 
     # Raised while reading a node that has no exact plain-Ruby reading.
     class Unreadable < StandardError; end
@@ -174,6 +168,22 @@ module PaperTrailDiff
       rank(records.select { |record| matches?(record.attributes) })
     end
 
+    # The one record a has_one reads of several that meet its conditions:
+    # the first as ranked, or without an order of its own, the one with the
+    # lowest primary key. Active Record reads an unordered has_one with
+    # LIMIT 1, which SQLite, MySQL and SQL Server answer in key order for a
+    # clustered or indexed key; reading any other row would differ from the
+    # current record where nothing changed. PostgreSQL promises no order.
+    #: (Array[untyped]) -> Array[untyped]
+    def first(records)
+      return records.first(1) if @ranking
+
+      keys = Array(@model_class.primary_key)
+      records.min_by(1) do |record|
+        keys.map { |key| record.attributes.fetch(key) }
+      end
+    end
+
     # Records that meet the conditions, as ranked; unchanged without a
     # ranking.
     #: (Array[untyped]) -> Array[untyped]
@@ -198,10 +208,6 @@ module PaperTrailDiff
     }.freeze
     private_constant :COMPARISONS
 
-    # Comparisons that order values, which read them as ScopeRanking sorts.
-    ORDERED = %i[gt gteq lt lteq].freeze
-    private_constant :ORDERED
-
     private
 
     # @rbs @model_class: untyped
@@ -216,7 +222,7 @@ module PaperTrailDiff
       when :and then all(first.map { |part| evaluate(part, attributes) })
       when :or then any(first.map { |part| evaluate(part, attributes) })
       when :not then negate(evaluate(first, attributes))
-      else COMPARISONS.fetch(operator).call(stored(operator, first, attributes), second)
+      else COMPARISONS.fetch(operator).call(stored(first, attributes), second)
       end
     end
 
@@ -241,15 +247,13 @@ module PaperTrailDiff
       !value unless value.nil?
     end
 
-    # The form the database holds, as the scope's own values were cast. An
-    # order reads the value the database sorts by instead: SQL Server holds a
-    # time or date in a wrapper that only compares for equality.
-    #: (Symbol, String, Hash[String, untyped]) -> untyped
-    def stored(operator, name, attributes)
-      value = attributes[name]
-      return ScopeRanking.sort_value(@model_class, name, value) if ORDERED.include?(operator)
-
-      @model_class.type_for_attribute(name).serialize(value)
+    # The value the database compares and sorts by, as the scope's own
+    # values were read (see ScopeRanking.sort_value): SQL Server holds a time
+    # or date in a wrapper that only compares for equality, and history may
+    # hold either as text.
+    #: (String, Hash[String, untyped]) -> untyped
+    def stored(name, attributes)
+      ScopeRanking.sort_value(@model_class, name, attributes[name])
     end
 
     # Builds each reflection's condition once per target class.
@@ -343,7 +347,7 @@ module PaperTrailDiff
       #: (Symbol, untyped, untyped) -> Array[untyped]
       def bound(operator, attribute, node)
         name = column(attribute, null_test: true)
-        boolean = :boolean.equal?(@model_class.type_for_attribute(name).type)
+        boolean = :boolean.equal?(ExactColumnType.kind(@model_class, name))
         raise Unreadable unless ScopeRanking.orderable?(@model_class, name) && !boolean
 
         expected = value(node)
@@ -364,7 +368,9 @@ module PaperTrailDiff
       #: (Symbol, untyped) -> Array[untyped]
       def binary(operator, node)
         expected = value(node.right)
-        [operator, column(node.left, null_test: expected.nil?), expected]
+        return [operator, column(node.left, null_test: true)] if expected.nil?
+
+        compared(operator, node.left, expected) { |name| sort_value(name, expected) }
       end
 
       #: (untyped) -> Array[untyped]
@@ -372,51 +378,52 @@ module PaperTrailDiff
         list(node.type == :in ? :in : :not_in, node.attribute, node.casted_values)
       end
 
-      # Active Record writes an empty NOT IN as a condition that is always
-      # true, and a NOT IN list holding NULL matches no row.
+      # Active Record writes an empty IN as a condition that is always false
+      # and an empty NOT IN as one that is always true, for a NULL as for any
+      # value, so neither is unknown under NOT. A NOT IN list holding NULL
+      # matches no row.
       #: (Symbol, untyped, Array[untyped]) -> Array[untyped]
       def list(operator, attribute, expected)
-        name = column(attribute)
-        return [operator, name, expected] if operator == :in
-        return [:and, []] if expected.empty?
+        comparison = compared(operator, attribute, expected) do |name|
+          expected.map { |item| sort_value(name, item) }
+        end
+        return [operator == :in ? :or : :and, []] if expected.empty?
+        return comparison if operator == :in
 
-        expected.include?(nil) ? [:or, []] : [operator, name, expected]
+        expected.include?(nil) ? [:or, []] : comparison
+      end
+
+      # A column that sorts in Ruby as in SQL (ScopeRanking) is compared as
+      # the value it sorts by, which the block reads from the expected one: a
+      # date, or a time history holds as it was stored, can be held as text.
+      #: (Symbol, untyped, untyped) { (String) -> untyped } -> Array[untyped]
+      def compared(operator, attribute, expected)
+        name = ScopeRanking.own_column(attribute, @model_class)
+        if ScopeRanking.orderable?(@model_class, name)
+          orderable = name #: String
+          [operator, orderable, yield(orderable)]
+        else
+          [operator, column(attribute), expected]
+        end
       end
 
       # Ruby comparison stands in for SQL only on the record's own column of
-      # a type both compare alike. Whether a value is NULL, any column's
-      # type compares alike.
+      # a type both compare alike (ExactColumnType). Whether a value is NULL,
+      # any column's type compares alike.
       #: (untyped, ?null_test: bool) -> String
       def column(attribute, null_test: false)
         # Nil for anything but a column of the model's own table, which finds
         # no column below.
         name = ScopeRanking.own_column(attribute, @model_class) #: String
-        column = @model_class.columns_hash[name]
-        raise Unreadable unless column && (null_test || comparable?(name, column))
+        exists = @model_class.columns_hash.key?(name)
+        raise Unreadable unless exists && (null_test || comparable?(name))
 
         name
       end
 
-      #: (String, untyped) -> bool
-      def comparable?(name, column)
-        kinds = value_type(@model_class.type_for_attribute(name)).class.ancestors.map(&:name)
-        return false unless VALUE_TYPES.intersect?(kinds)
-
-        !kinds.include?(TEXT_TYPE) || exact_text?(column)
-      end
-
-      # PostgreSQL's citext is text that compares without regard to case.
-      #: (untyped) -> bool
-      def exact_text?(column)
-        EXACT_TEXT_ADAPTERS.include?(@model_class.connection_db_config.adapter) &&
-          column.collation.nil? && !column.sql_type.casecmp?('citext')
-      end
-
-      # An enum compares the values it stores, which its subtype describes. A
-      # wrapper such as a serialized or encrypted type is none of these.
-      #: (untyped) -> untyped
-      def value_type(type)
-        ENUM_TYPE.eql?(type.class.name) ? type.subtype : type
+      #: (String) -> bool
+      def comparable?(name)
+        COMPARABLE_KINDS.include?(ExactColumnType.kind(@model_class, name))
       end
 
       # A list that is not plain values, such as a subquery, is unreadable.

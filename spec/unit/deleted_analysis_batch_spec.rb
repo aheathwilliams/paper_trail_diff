@@ -14,9 +14,14 @@ RSpec.describe PaperTrailDiff::DeletedAnalysisBatch do
     analyze.tap { |call| call.define_singleton_method(:empty) { PaperTrailDiff::Analysis.empty } }
   end
   let(:history_preparer) do
-    ->(records, versions, **range) { prepared << [records, versions, range] }
+    lambda do |records, versions, reach: true, **range|
+      prepared << [records, versions, range]
+      reaches.shift if reach
+    end
   end
 
+  # How far the history of each read says its transactions reach, in turn.
+  def reaches = (@reaches ||= [])
   before do
     FilterVersion.delete_all
     FilterArticle.unscoped.delete_all
@@ -46,13 +51,11 @@ RSpec.describe PaperTrailDiff::DeletedAnalysisBatch do
     ['FilterArticle', record.id.to_s]
   end
 
-  # The requested paths reach the notes a transaction saves with a root.
   def analyze(identities, model: FilterArticle, within: nil, version_scope: nil, context: false)
-    traversal = instance_double(PaperTrailDiff::AssociationTraversal, path_types: ['FilterNote'])
     described_class.new(
       model, identities: identities, time_range: within && PaperTrailDiff::TimeRange.new(within),
              analyzer: analyzer, history_preparer: history_preparer, version_scope: version_scope,
-             context_required: context, traversal: traversal
+             context_required: context
     ).call
   end
 
@@ -93,21 +96,20 @@ RSpec.describe PaperTrailDiff::DeletedAnalysisBatch do
     expect(statements.length).to eq(2)
   end
 
-  it 'passes each root the window it moved to the start of a transaction crossing its edge' do
+  it 'plans a window again from where its open transactions began, and passes the window ' \
+     'as asked' do
     article, _created, updated, = deleted
-    updated.update_columns(transaction_id: 7)
-    FilterVersion.insert({ item_type: 'FilterNote', item_id: 1, event: 'update',
-                           created_at: at(1.5), transaction_id: 7 })
+    reaches << at(1)
 
-    result = analyze([key(article)], within: at(1.25)..at(3))
+    result = analyze([key(article)], within: at(1.25)..at(3), context: true)
 
     _record, plan, window = analyzed.sole
-    expect([window.begin_time, window.end_time]).to eq([at(1), at(3)])
+    expect([window.begin_time, window.end_time]).to eq([at(1.25), at(3)])
     expect(plan.versions.first).to eq(updated)
-    expect(result.fetch(key(article)).window).to eq(at(1)..at(3))
+    expect(result.fetch(key(article)).window).to eq(at(1.25)..at(3))
   end
 
-  it 'passes an unmoved root the window as asked' do
+  it 'passes a root the window as asked' do
     article, = deleted
     range = at(0.5)..at(3)
 
@@ -184,6 +186,20 @@ RSpec.describe PaperTrailDiff::DeletedAnalysisBatch do
     expect(plan.mutation?(destroyed)).to be(false)
   end
 
+  # A record saved since with the id, and removed without a version, is not
+  # the root: its versions are not context for the window.
+  it 'does not read a root destroyed before the window from a later record with its id' do
+    article, = deleted
+    reborn = FilterArticle.create!(id: article.id, title: 'Again')
+    FilterVersion.where(item_id: article.id, event: 'create').last.update_columns(created_at: at(9))
+    reborn.delete
+
+    result = analyze([key(article)], within: at(5)..at(6), context: true)
+
+    expect(result.fetch(key(article)).activity_timeline).to eq([])
+    expect(analyzed).to eq([])
+  end
+
   it 'does not read a root destroyed before the window, even when asked' do
     article, = deleted
     early, = deleted(minutes: [0, 1, 2])
@@ -197,20 +213,32 @@ RSpec.describe PaperTrailDiff::DeletedAnalysisBatch do
       .to eq([[late.id, [after]]])
   end
 
-  # Its destroy saved in a transaction that crossed the window's start, which
-  # moved back to take it in. Activity on associations replays it, as it
-  # replays any root, however little of it the scope keeps.
-  it 'replays the moved window of a root destroyed just before the start' do
+  # A transaction open at the window's start saved its destroy, and may have
+  # gone on to save its tree inside the window, which then reports both. The
+  # root has no version in the window to find the transaction by, so the
+  # history is asked how far the transactions open there reach. Activity on
+  # associations replays the destroy, however little of it the scope keeps.
+  it 'replays a root destroyed just before the start by a transaction open there' do
     article, _created, _updated, destroyed = deleted
-    destroyed.update_columns(transaction_id: 7)
-    FilterVersion.insert({ item_type: 'FilterNote', item_id: 1, event: 'update',
-                           created_at: at(2.5), transaction_id: 7 })
+    reaches << at(2)
 
     analyze([key(article)], within: at(2.25)..at(3), version_scope: :none.to_proc, context: true)
 
     plan = analyzed.sole[1]
+    expect(prepared.first).to match([[an_object_having_attributes(id: article.id)], [],
+                                     { start_at: at(2.25), end_at: at(3) }])
     expect(plan.reconstruction_versions).to eq([destroyed])
     expect(plan.mutations).to eq([])
+  end
+
+  it 'does not ask how far transactions reach for a root destroyed before the start ' \
+     'unless activity on associations is asked for, or when none is open' do
+    article, = deleted
+
+    analyze([key(article)], within: at(2.25)..at(3))
+    expect(prepared).to eq([])
+    analyze([key(article)], within: at(2.25)..at(3), context: true)
+    expect(analyzed).to eq([])
   end
 
   it 'passes the version scope on to version selection' do

@@ -10,14 +10,43 @@ module PaperTrailDiff
   # it runs through every version saved since it began, whatever the clock
   # that dated them read, as a report through the current state does.
   class TimeRange
+    MICROSECOND_DIGITS = 6
+
     attr_reader :begin_time #: Time
     attr_reader :end_time #: Time?
 
-    #: (untyped) -> void
-    def initialize(value)
+    # A window over the versions of `models`, its edges cut to the digits
+    # their version tables keep. Active Record cuts a time it binds to the
+    # precision of the column it is compared with, so an edge left finer than
+    # a table that keeps whole seconds would select versions in SQL by the
+    # cut time and in Ruby by the whole one. Tables that differ take the
+    # coarsest, so that every check of one window cuts it alike.
+    #: (untyped, Array[untyped]) -> TimeRange
+    def self.for(value, models)
+      new(value, digits: models.filter_map do |model|
+        stored_digits(model)
+      end.min || MICROSECOND_DIGITS)
+    end
+
+    # The fractional digits a model's version table keeps for `created_at`,
+    # or nil for a model without versions. A column without a precision
+    # keeps whatever the adapter writes, which is microseconds.
+    #: (untyped) -> Integer?
+    def self.stored_digits(model)
+      return unless Support.versioned?(model)
+
+      precision = model.paper_trail.version_class.type_for_attribute('created_at').precision
+      [precision || MICROSECOND_DIGITS, MICROSECOND_DIGITS].min
+    end
+    private_class_method :stored_digits
+
+    #: (untyped, ?digits: Integer) -> void
+    def initialize(value, digits: MICROSECOND_DIGITS)
       unless value.is_a?(Range) && value.begin
         raise InvalidTimeRangeError, '`within` must be a Range with a beginning'
       end
+
+      @digits = digits
 
       @begin_time = coerce_time(value.begin, boundary: :begin)
       last = value.end
@@ -55,6 +84,15 @@ module PaperTrailDiff
       exclude_end? ? (begin_time...end_time) : (begin_time..end_time)
     end
 
+    # The window widened to start at `earliest`, where that is before it:
+    # what a window reads when a transaction crosses its start (see
+    # PreparedHistoryLoader).
+    #: (untyped) -> TimeRange
+    def widened(earliest)
+      start = [earliest, begin_time].min
+      self.class.new(Range.new(start, end_time, exclude_end?), digits: @digits)
+    end
+
     # The versions after the window; none follows an endless one.
     #: (untyped) -> untyped
     def trailing_scope(relation)
@@ -62,26 +100,26 @@ module PaperTrailDiff
       finish ? after(relation, finish) : relation.none
     end
 
-    # Each item's earliest version after the range, keyed by item id. One row
-    # per item comes back from a NOT EXISTS rather than a window function, so
-    # the query stays portable; a timestamp tie keeps the lower id.
+    # Each item's earliest version after the range, keyed by item id. The
+    # versions at each item's earliest instant come back from a NOT EXISTS
+    # rather than a window function, so the query stays portable. A timestamp
+    # tie keeps the lower id when ids order it, and raises when they cannot.
     #: (untyped) -> Hash[String, untyped]
     def first_trailing_versions(relation)
       finish = end_time
-      first = {} #: Hash[String, untyped]
-      return first unless finish
+      return {} unless finish
 
       first_after = VersionQuery.no_earlier_version(relation.arel_table) do |earlier|
         after_end(earlier[:created_at], finish)
       end
-      versions = VersionQuery.chronological(after(relation, finish).where(first_after))
-      versions.each { |version| first[version.item_id.to_s] ||= version }
-      first
+      after(relation, finish).where(first_after).group_by { |version| version.item_id.to_s }
+                             .transform_values { |tied| Support.earliest_version(tied) }
     end
 
     private
 
     # @rbs @exclude_end: bool
+    # @rbs @digits: Integer
 
     #: (untyped, Time) -> untyped
     def after(relation, finish)
@@ -93,9 +131,14 @@ module PaperTrailDiff
       exclude_end? ? column.gteq(finish) : column.gt(finish)
     end
 
+    # Cut to the microsecond, as adapters write a time they bind, or to the
+    # fewer digits the versions' column keeps: a finer edge would select
+    # versions in SQL by the cut time but in Ruby by the whole one, and a
+    # version in the edge's microsecond or second would be in one method's
+    # window and not another's.
     #: (untyped, boundary: Symbol) -> Time
     def coerce_time(value, boundary:)
-      time_value(value).getutc.freeze
+      time_value(value).getutc.floor(@digits).freeze
     rescue ArgumentError, NoMethodError, TypeError
       raise InvalidTimeRangeError, "`within` #{boundary} must be time-like"
     end

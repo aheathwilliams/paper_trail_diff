@@ -31,6 +31,19 @@ module PaperTrailDiff
     # : (untyped) { (untyped) -> untyped } -> untyped
     def self.exists: (untyped) { (untyped) -> untyped } -> untyped
 
+    # Whether the item's versions say it was created after `time`: a create
+    # saved after it that no version of the item precedes. An item with an
+    # earlier version was there before, whatever created it again, and one
+    # with no create may have been.
+    # : (untyped, untyped, untyped, untyped) -> untyped
+    def self.created_after: (untyped, untyped, untyped, untyped) -> untyped
+
+    # : (untyped, untyped, untyped) -> untyped
+    def self.first_create_after: (untyped, untyped, untyped) -> untyped
+
+    # : (untyped, untyped) -> untyped
+    def self.any: (untyped, untyped) -> untyped
+
     # : (untyped, untyped) ?{ (untyped) -> untyped } -> untyped
     def self.earlier_version: (untyped, untyped) ?{ (untyped) -> untyped } -> untyped
 
@@ -40,5 +53,11 @@ module PaperTrailDiff
     # mutant:disable
     # : (untyped) -> untyped
     def self.other_versions: (untyped) -> untyped
+
+    # The version table under a name of its own for `created_after`, beside
+    # `other_versions`. As for that, no spec can tell its mutations apart.
+    # mutant:disable
+    # : (untyped) -> untyped
+    def self.created_versions: (untyped) -> untyped
   end
 end

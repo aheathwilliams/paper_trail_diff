@@ -165,6 +165,22 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
     IndexSpecPage.reflect_on_association(:sections)
   end
 
+  # A child created after the history ends is in none of its states.
+  it "reads the children its owners had by the record index's end" do
+    origin = Time.now.utc
+    page = IndexSpecPage.create!(title: 'Page')
+    before = page.sections.create!(title: 'Before')
+    finish = before.versions.last.created_at
+    page.sections.create!(title: 'After')
+    records = PaperTrailDiff::PreparedRecordIndex.new(origin, end_at: finish)
+    index = described_class.new(records, [], start_at: origin)
+
+    historical, live = index.children.call(IndexSpecPage, [page.id], sections)
+
+    expect(historical.fetch(page.id.to_s).map { |row| row.fetch(1) }).to eq([before.id])
+    expect(live).to eq(page.id.to_s => [before.id])
+  end
+
   it 'reads root versions as given and every other record from the record index' do
     origin = Time.now.utc
     root, other = %w[Root Other].map { |title| IndexSpecLandingPage.create!(title: title) }
@@ -302,7 +318,7 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
   end
 
   # A range starting at a version starts before that version's transaction
-  # (see VersionBoundary.transaction_start), so a section that left the page
+  # (see TransactionCut.range_start), so a section that left the page
   # earlier in it was still one of the page's sections at the start.
   it 'reads the sections that left a page in the transaction a version start opens' do
     page, other = %w[Page Other].map { |title| IndexSpecPage.create!(title: title) }
@@ -313,7 +329,7 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
       page.update!(title: 'Renamed')
       page.versions.reorder(:created_at, :id).last
     end
-    origin = PaperTrailDiff::VersionBoundary.transaction_start([start], start.created_at)
+    origin = PaperTrailDiff::TransactionCut.range_start([start], start.created_at)
     index = index_for(origin, { IndexSpecSection => [moved.id, gone.id] })
     index.register(IndexSpecPage, [page.id, other.id])
 
@@ -672,14 +688,18 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
     end
   end
 
-  it 'explains missing graph registration instead of leaking a hash lookup error' do
+  # A path past a belongs_to that named no record reaches a model the
+  # history holds no record of (see empty_belongs_to_path_spec.rb).
+  it 'finds no children for a model none of whose records were registered' do
     records = PaperTrailDiff::PreparedRecordIndex.new(Time.now.utc - 60)
     index = described_class.new(records, [], start_at: Time.now.utc - 60)
 
-    expect do
-      index.child_ids(TrackedArticle, [1], TrackedArticle.reflect_on_association(:comments),
-                      PaperTrailDiff::ActivityRange.new(Time.now.utc - 60, Time.now.utc))
-    end.to raise_error(PaperTrailDiff::ConfigurationError, /missing TrackedArticle.*register/)
+    children = index.child_ids(
+      TrackedArticle, [], TrackedArticle.reflect_on_association(:comments),
+      PaperTrailDiff::ActivityRange.new(Time.now.utc - 60, Time.now.utc)
+    )
+
+    expect(children).to eq([])
   end
 
   it 'matches SQL candidate selection for pre-window moves, destroys, ties and boundaries' do

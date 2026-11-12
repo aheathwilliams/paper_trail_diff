@@ -13,18 +13,10 @@ module PaperTrailDiff
 
     ENUM_TYPE: ::String
 
-    # Rails wraps a time-zone-aware attribute's type, by default every
-    # datetime's, in this delegator; the time it stores is the wrapped type's.
-    TIME_ZONE_TYPE: ::String
-
-    # Integers, booleans and dates sort alike everywhere. Strings follow a
-    # collation, so they are not read.
-    ORDER_TYPES: untyped
-
-    # Times sort alike only at the precision both the column and history
-    # keep. A time of day is not read: in memory it keeps the date it was
-    # given, which the database drops.
-    DATETIME_TYPE: ::String
+    # Column kinds (ExactColumnType) that sort alike everywhere. Text follows
+    # a collation, so it is not read. Times sort alike only at the precision
+    # both the column and history keep.
+    ORDER_KINDS: untyped
 
     # Where each adapter sorts NULL in an ascending order by default; a
     # descending order reverses it. Another adapter's ranking is not read.
@@ -77,16 +69,13 @@ module PaperTrailDiff
     # : (untyped, String, untyped) -> untyped
     def self.sort_value: (untyped, String, untyped) -> untyped
 
-    # The type of the value a column stores, under an enum or time zone wrapper.
-    # : (untyped) -> untyped
-    def self.stored_type: (untyped) -> untyped
-
     # Active Record truncates a time to its column's precision before writing
     # it, so history holds the stored value when it keeps that many digits.
     # Times the type stores in UTC sort as the instants they name; local
-    # times repeat an hour when clocks go back.
-    # : (untyped, untyped) -> bool
-    def self.exact_time?: (untyped, untyped) -> bool
+    # times repeat an hour when clocks go back. A time-zone-aware type passes
+    # both questions to the time it wraps.
+    # : (untyped, String?) -> bool
+    def self.exact_time?: (untyped, String?) -> bool
 
     # : (untyped, Array[[String, bool]], bool, Integer?, Integer) -> void
     def initialize: (untyped, Array[[ String, bool ]], bool, Integer?, Integer) -> void

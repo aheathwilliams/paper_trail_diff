@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 # rbs_inline: enabled
 
+require 'set' # Ruby 3.1 does not load it by itself
 require 'paper_trail'
 
 require_relative 'paper_trail_diff/version'
@@ -18,8 +19,10 @@ require_relative 'paper_trail_diff/configuration'
 require_relative 'paper_trail_diff/endpoint'
 require_relative 'paper_trail_diff/recorded_class'
 require_relative 'paper_trail_diff/association_key'
+require_relative 'paper_trail_diff/recorded_owner'
 require_relative 'paper_trail_diff/version_table'
 require_relative 'paper_trail_diff/association_traversal'
+require_relative 'paper_trail_diff/exact_column_type'
 require_relative 'paper_trail_diff/scope_ranking'
 require_relative 'paper_trail_diff/scope_condition'
 require_relative 'paper_trail_diff/approximate_paths'
@@ -63,7 +66,6 @@ require_relative 'paper_trail_diff/comparison_batch'
 require_relative 'paper_trail_diff/root_version_plan'
 require_relative 'paper_trail_diff/version_scope_filter'
 require_relative 'paper_trail_diff/root_version_selection'
-require_relative 'paper_trail_diff/own_window'
 require_relative 'paper_trail_diff/batched_root_versions'
 require_relative 'paper_trail_diff/snapshot_normalizer'
 require_relative 'paper_trail_diff/historical_snapshot_store'
@@ -72,6 +74,7 @@ require_relative 'paper_trail_diff/activity_event_record_resolver'
 require_relative 'paper_trail_diff/recorded_changes'
 require_relative 'paper_trail_diff/recorded_changes_reader'
 require_relative 'paper_trail_diff/activity_event_route_finder'
+require_relative 'paper_trail_diff/activity_tree_places'
 require_relative 'paper_trail_diff/activity_relationship'
 require_relative 'paper_trail_diff/activity_collection_route_change'
 require_relative 'paper_trail_diff/activity_collection_record_updater'
@@ -81,6 +84,7 @@ require_relative 'paper_trail_diff/activity_collection_event_applier'
 require_relative 'paper_trail_diff/activity_belongs_to_event_applier'
 require_relative 'paper_trail_diff/activity_event_snapshot_refresher'
 require_relative 'paper_trail_diff/activity_root_snapshot_refresher'
+require_relative 'paper_trail_diff/activity_transaction_applier'
 require_relative 'paper_trail_diff/branch_snapshot_refresher'
 require_relative 'paper_trail_diff/activity_boundary'
 require_relative 'paper_trail_diff/recorded_columns'
@@ -100,6 +104,8 @@ require_relative 'paper_trail_diff/historical_filter'
 require_relative 'paper_trail_diff/association_activity_edge'
 require_relative 'paper_trail_diff/association_activity_selection'
 require_relative 'paper_trail_diff/total_order'
+require_relative 'paper_trail_diff/candidate_table'
+require_relative 'paper_trail_diff/filtered_candidates'
 require_relative 'paper_trail_diff/scoped_root_selection'
 require_relative 'paper_trail_diff/deleted_root_filter'
 require_relative 'paper_trail_diff/scoped_analysis_builder'
@@ -108,6 +114,7 @@ require_relative 'paper_trail_diff/version_range'
 require_relative 'paper_trail_diff/version_sequence_diagnostics'
 require_relative 'paper_trail_diff/time_range'
 require_relative 'paper_trail_diff/transaction_cut'
+require_relative 'paper_trail_diff/transaction_anchors'
 require_relative 'paper_trail_diff/time_version_range'
 require_relative 'paper_trail_diff/timeline_range'
 require_relative 'paper_trail_diff/timeline_builder'
@@ -117,7 +124,9 @@ require_relative 'paper_trail_diff/activity_child_candidate_loader'
 require_relative 'paper_trail_diff/prepared_child_candidates'
 require_relative 'paper_trail_diff/activity_target_candidate_loader'
 require_relative 'paper_trail_diff/activity_version_collector'
+require_relative 'paper_trail_diff/transaction_ends'
 require_relative 'paper_trail_diff/activity_snapshot_sequence'
+require_relative 'paper_trail_diff/snapshot_members'
 require_relative 'paper_trail_diff/activity_tree_filter'
 require_relative 'paper_trail_diff/activity_history'
 require_relative 'paper_trail_diff/activity_timeline_builder'
@@ -208,7 +217,7 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
         from: from,
         to: to,
         within: within,
-        version_scope: version_scope
+        version_scope: VersionScopeFilter.checked(version_scope)
       )
     end
 
@@ -235,7 +244,7 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
         from: from,
         to: to,
         within: within,
-        version_scope: version_scope,
+        version_scope: VersionScopeFilter.checked(version_scope),
         group: group,
         snapshots: snapshots
       )
@@ -266,7 +275,7 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
         to: to,
         within: within,
         activity: activity,
-        version_scope: version_scope,
+        version_scope: VersionScopeFilter.checked(version_scope),
         snapshots: snapshots,
         group: group
       )
@@ -293,8 +302,9 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
       PaperTrailAdapter.new(
         associations: associations, ignore: ignore,
         recorded_changes: recorded_changes, allow_approximate: allow_approximate
-      ).analyze_many(records, within: within, activity: activity, version_scope: version_scope,
-                              snapshots: snapshots, group: group)
+      ).analyze_many(records, within: within, activity: activity, snapshots: snapshots,
+                              group: group,
+                              version_scope: VersionScopeFilter.checked(version_scope))
     end
 
     # Analyzes every root the relation reaches whose history moved inside the
@@ -345,7 +355,8 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
                                       allow_approximate: allow_approximate)
       adapter.analyze_scope(
         scope, limit: limit, within: within, activity: activity,
-               version_scope: version_scope, snapshots: snapshots, group: group,
+               version_scope: VersionScopeFilter.checked(version_scope),
+               snapshots: snapshots, group: group,
                historical_filter: historical_filter, max_filter_versions: max_filter_versions,
                include_deleted: include_deleted
       )

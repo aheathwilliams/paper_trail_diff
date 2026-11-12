@@ -9,12 +9,29 @@ module PaperTrailDiff
   # it runs through every version saved since it began, whatever the clock
   # that dated them read, as a report through the current state does.
   class TimeRange
+    MICROSECOND_DIGITS: ::Integer
+
     attr_reader begin_time: Time
 
     attr_reader end_time: Time?
 
-    # : (untyped) -> void
-    def initialize: (untyped) -> void
+    # A window over the versions of `models`, its edges cut to the digits
+    # their version tables keep. Active Record cuts a time it binds to the
+    # precision of the column it is compared with, so an edge left finer than
+    # a table that keeps whole seconds would select versions in SQL by the
+    # cut time and in Ruby by the whole one. Tables that differ take the
+    # coarsest, so that every check of one window cuts it alike.
+    # : (untyped, Array[untyped]) -> TimeRange
+    def self.for: (untyped, Array[untyped]) -> TimeRange
+
+    # The fractional digits a model's version table keeps for `created_at`,
+    # or nil for a model without versions. A column without a precision
+    # keeps whatever the adapter writes, which is microseconds.
+    # : (untyped) -> Integer?
+    def self.stored_digits: (untyped) -> Integer?
+
+    # : (untyped, ?digits: Integer) -> void
+    def initialize: (untyped, ?digits: Integer) -> void
 
     # : () -> bool
     def exclude_end?: () -> bool
@@ -30,17 +47,26 @@ module PaperTrailDiff
     # : () -> Range[Time?]
     def to_range: () -> Range[Time?]
 
+    # The window widened to start at `earliest`, where that is before it:
+    # what a window reads when a transaction crosses its start (see
+    # PreparedHistoryLoader).
+    # : (untyped) -> TimeRange
+    def widened: (untyped) -> TimeRange
+
     # The versions after the window; none follows an endless one.
     # : (untyped) -> untyped
     def trailing_scope: (untyped) -> untyped
 
-    # Each item's earliest version after the range, keyed by item id. One row
-    # per item comes back from a NOT EXISTS rather than a window function, so
-    # the query stays portable; a timestamp tie keeps the lower id.
+    # Each item's earliest version after the range, keyed by item id. The
+    # versions at each item's earliest instant come back from a NOT EXISTS
+    # rather than a window function, so the query stays portable. A timestamp
+    # tie keeps the lower id when ids order it, and raises when they cannot.
     # : (untyped) -> Hash[String, untyped]
     def first_trailing_versions: (untyped) -> Hash[String, untyped]
 
     private
+
+    @digits: Integer
 
     @exclude_end: bool
 
@@ -50,6 +76,11 @@ module PaperTrailDiff
     # : (untyped, Time) -> untyped
     def after_end: (untyped, Time) -> untyped
 
+    # Cut to the microsecond, as adapters write a time they bind, or to the
+    # fewer digits the versions' column keeps: a finer edge would select
+    # versions in SQL by the cut time but in Ruby by the whole one, and a
+    # version in the edge's microsecond or second would be in one method's
+    # window and not another's.
     # : (untyped, boundary: Symbol) -> Time
     def coerce_time: (untyped, boundary: Symbol) -> Time
 

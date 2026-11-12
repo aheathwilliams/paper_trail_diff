@@ -5,8 +5,316 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- A transaction now takes effect where it saved its last version, in every
+  activity timeline. A window from `within:` or `since:` reports the
+  transactions that end inside it, each whole and under its own versions,
+  instead of moving its edges to where a transaction began. `analysis.window`
+  is therefore always the window you asked for, a step of a transaction that
+  began before the window can hold a version saved before it, and a
+  transaction group lists every version its transaction saved. The
+  `moved_window.paper_trail_diff` notification is gone, since no window
+  moves. Four things follow that you may notice:
+  - `timeline`, and a window without associations, report each version of the
+    record where it was saved, as before, but no longer move a window for a
+    transaction that also saved an associated record.
+  - `analyze_scope` and `report` select a record for a window by the versions
+    saved in it. A record whose transaction saves in the window and ends after
+    it is selected with nothing to report, and reported in the later window.
+    With associations, a window also selects by the versions that
+    transactions open at its start saved before it, since it reports those
+    transactions.
+  - `historical_filter:` reads each version where it was saved, so a record
+    whose transaction began before the window is checked from the state its
+    versions before the window left.
+  - With associations and `activity: true`, a window after a destroyed
+    record's last version reports nothing, or the deletion when the
+    transaction that destroyed the record ends inside the window, as
+    `analyze_scope` with `include_deleted: true` does. `analyze` and
+    `activity_timeline` raised `IncompleteTimeRangeError` there.
+- A window with associations, with `activity: true` or without, runs one
+  more statement per version table, to find the transactions open at its
+  start, and no longer one per 250 records
+  for each edge, and `analyze_scope` and `report` run it once more to select
+  their records. A read with associations runs one more statement per 500
+  transactions its history holds, to read where each ends. See
+  [performance](docs/performance.md#what-still-grows).
+
+- On SQL Server, a selection that reads its candidates in Ruby, as one with
+  `historical_filter:` or a version table whose `item_id` does not share the
+  key's type does, writes more than 500 of them to a temporary table once and
+  reads each page from it, instead of listing every id on every page. A
+  selection of 10,000 records took 0.6 s instead of 5 s, and one of 20,000
+  took 1.1 s instead of 30 s. A read that prevents writes, such as a replica
+  read through Rails' automatic role switching, still lists the ids, since
+  Active Record counts the table's statements as writes.
+
+- An activity timeline no longer reads a whole association again for each
+  event of a transaction that saved more than one record in the tree, such
+  as two comments, or a comment and the article it touches. Each of the
+  transaction's versions is applied to the record it saved, as a version
+  alone in its transaction already was. One article with 1,000 comments and
+  1,000 transactions that each edited two of them took 1.9 s instead of
+  20.6 s, and 1.0 s instead of 18.8 s when each edited one comment and the
+  article. Results are unchanged.
+
+- Replaying a `has_many` whose membership a version did not change no
+  longer sorts the collection again. A history of 3,200 comments edited
+  3,200 times took 1.8 s instead of 11 s.
+
+- Association scopes, and ranges and orders in them, are read in Ruby only on
+  the SQL column types the gem lists for each of SQLite, PostgreSQL, MySQL, and
+  SQL Server, instead of on any column Active Record casts as an integer,
+  boolean, string, date, or time. A column of another type, or on another
+  adapter, is now refused unless you pass `allow_approximate: true`, like any
+  scope the gem cannot read. On SQL Server this leaves out a legacy `datetime` or `smalldatetime` key, which
+  rounds the times it stores.
+
+- A `has_many` or `has_one` whose target declares no `belongs_to` on its
+  foreign key, and a `has_many :through` with such a part, now raises
+  `UnsupportedAssociationError` up front in every method. `diagnose` reports
+  it as `:unsupported_association` and `association_paths` leaves it out.
+  PT-AT records a record's owner on the record's own versions, once for each
+  `belongs_to` it declares, so with none nothing said a record that was
+  destroyed or moved away had been in the association: `compare`, timelines,
+  analyses and `report` showed the records the association holds now and
+  silently left out the ones that left. Declare the `belongs_to` on the
+  target to request the path. Versions saved before then recorded no owner,
+  so a record that left before then is still not reported.
+
 ### Fixed
 
+- Comparing a JSON array that holds a BigDecimal NaN or infinity no longer
+  raises `FloatDomainError`; it compares as a Float NaN or infinity did.
+- An activity timeline no longer leaves a record as it was at one of two
+  places a path reaches it. An article read with
+  `associations: ["author.articles"]` is the root and one of its author's
+  articles; a comment read with `["article.comments"]` is one of its
+  article's comments; under `["articles.comments.article"]` an article is a
+  member of a collection and the target of a `belongs_to` below it; and a
+  polymorphic `belongs_to` can point back at any record in the tree. An
+  event on such a record changed it at one place only. The step and any
+  window around it then missed the change at the other, and the next event
+  in that branch reported it, credited to its own author in `change_rows`.
+  Such an event now has the branches that hold the record read again, or
+  the whole snapshot for the root, which costs the size of what is read. See
+  [performance](docs/performance.md#what-still-grows). `compare` and
+  `timeline` were not affected.
+
+- `activity_timeline`, `analyze` with `activity: true`, `analyze_many`, and
+  `report` no longer raise `ConfigurationError` ("prepared activity graph is
+  missing ...") for a path that continues past a `belongs_to` when no record
+  read had one, such as `associations: ["article.author"]` on a comment
+  created without an article. They read the record with nothing on that path.
+
+- An activity timeline no longer reads a whole collection again for each event
+  that put a record into it or took one out. A snapshot kept a table of its
+  records' positions, and built it again and checked their order again
+  whenever its members changed, so a replay's time grew with its events times
+  the size of the collection: 3,000 comments created one at a time on one
+  article took 19.2 s to replay and now take 3.6 s, and 1,000 took 2.1 s and
+  now take 0.7 s. Edits were not affected. A record is now found by searching
+  the order a snapshot holds its records in. See
+  [performance](docs/performance.md#what-still-grows).
+
+- A `has_many` or `has_one` whose owners use single-table inheritance no
+  longer loses the records that left it when the target's `belongs_to` names
+  another class of the owners' table than the owner's own or its base class.
+  With `Doc`, `Report < Doc` and `AnnualReport < Report`, and notes that
+  `belongs_to :report`, a note destroyed or moved away from an annual report
+  was missing from `compare`, timelines and analyses, and when `Doc` declared
+  the association, `analyze_scope` and `report` did not select a record whose
+  only change was such a note. PT-AT records the class the `belongs_to` names,
+  and the gem looked for the owner's class and its base class only.
+
+- `analyze_scope` and `report` over a window no longer slow down with the size
+  of the model's table on PostgreSQL. The statement that finds the records
+  changed in the window and deleted since asked with `NOT IN (SELECT id ...)`,
+  which PostgreSQL does not plan as an anti-join: it reads every id of the
+  table, and reads them again for each version in the window once they
+  outgrow `work_mem`. With 2 million articles and 2,000 of them edited in the
+  window, a `report` took 16 s and now takes 1.4 s, and with 500,000 it took
+  11 s and now takes 1.5 s. That statement, and the one like it for records
+  selected by their associations, now asks with `NOT EXISTS`. Results are
+  unchanged. See [performance](docs/performance.md#database-indexes).
+
+- An activity timeline over a tree no longer slows down with the tree's size
+  times its events. Each event of an associated record is checked against the
+  snapshots around its transaction, to leave out a record that was outside
+  the tree, and each check looked through every collection of the snapshot.
+  The records each snapshot holds are now kept up from one snapshot to the
+  next, by what its event changed. 2,000 replies created one at a time under
+  2,000 comments of one article took 10.4 s to replay and now take 1.4 s, and
+  3,000 comments created one at a time took 3.6 s and now take 1.8 s. A window
+  with `activity: true` on a record not saved since the window, with 2,000
+  comments created after it, took 1.8 s and now takes 0.8 s. Results are
+  unchanged.
+
+- A range that ended in the past no longer slows down with the children its
+  records have gained since. A `has_many` or `has_one` read every child that
+  was ever its owner's from the range's start onward, with each child's row
+  and versions, and only then left out those created after the range. With
+  2,000 comments added to an article after the range, a `compare` of two of
+  its versions took 132 ms and now takes 10 ms, as with none, and `timeline`
+  between them, or `analyze` over a window that a later version of the article
+  ends, went from about 160 ms to about 12 ms. A child is left out when its
+  first version is a `create` saved after the range's end, so one whose
+  creation was never recorded is still read. Where `item_id` is not stored as
+  the child's key is, as with a string `item_id` and integer keys, the child's
+  current row is still read, though not its versions. Results are unchanged.
+
+- An association scope that negates an empty list along with another
+  condition, such as `where.not(status: [], score: 1)`, now reads a record
+  whose `status` is NULL as the database does. Active Record writes the empty
+  list as a condition that is always false, so the negation is true for every
+  record, but history read it against a NULL as unknown and left the record
+  out, reporting a current member as added.
+
+- `recorded_changes`, and change rows with `recorded_changes: true`, now cast
+  the values a `json` or `jsonb` `object_changes` column stores. PaperTrail
+  leaves such a column's dates, times, and decimals as the strings JSON gives
+  back, and the gem returned them that way: a recorded change no longer
+  equalled the state it produced, so one change became three change rows, two
+  of them credited to writes without a version, and a model with a `time`
+  column raised `NoMethodError`.
+
+- A report with `historical_filter:` can be paged with the relation, as the
+  reference says. A relation with a `limit` now reads its candidates in its
+  own order and stops matching when the page is full, and only the page
+  counts toward `limit:`. Before, every match counted, so
+  `Article.order(:id).limit(20)` with `limit: 20` raised
+  `BatchLimitExceededError` whenever more than 20 records matched, and the
+  history of every match was read to return one page.
+
+- A hash `historical_filter:` now works on a model with an encrypted
+  attribute, and on a version that names a column since dropped. It raised
+  "cannot read recorded attributes directly"; such a version is now rebuilt
+  as PaperTrail rebuilds it and compared by its decrypted, cast values.
+
+- A hash `historical_filter:` with a list or a range as a value, such as
+  `{ status: %i[published archived] }`, raises `ConfigurationError` instead
+  of matching nothing. `where` would match any of the values; a filter
+  compares one, so use a callable for several. A list is still the value of
+  an attribute that holds one, such as a serialized or an array column.
+
+- `include_deleted: true`, and a readable association scope, accept an
+  equality or a list on a date or a time column, such as `where(due: date)`,
+  wherever they already accepted a range on it. Before, the relation was
+  refused, or the scope read by its slower path.
+
+- `version_scope:` raises `ConfigurationError` when the callable returns
+  anything but a relation on the version class it was given. A callable that
+  returned another model's relation, such as `Document.all`, silently
+  selected the versions whose ids equalled that model's ids.
+
+- A relation ordered by another table's key written in quotes, such as
+  `order('accounts."id"')`, is no longer read as ordered by the model's own
+  key, so its pages get the tie-breaker they need.
+
+- `recorded_changes(version)` leaves out a name the model no longer has,
+  such as a column dropped since, as diffs, timelines, and change rows do.
+
+- `nested_changes` compares two arrays in time proportional to their length.
+  Arrays of objects took time proportional to its square: 16,000 objects
+  took 53 s and now take 0.2 s. Results are unchanged.
+
+- Without `activity:`, `analyze`, `analyze_many`, `analyze_scope` and
+  `timeline` with associations could report an associated record's change
+  backwards, and then again forwards, when two transactions interleaved: one
+  edited a comment, another saved the article, and the first then saved the
+  article too. The comment read as edited at the other transaction's version
+  and as not yet edited at its own. Whether it did depended on how far back
+  the history read went, so `analyze_many` could disagree with `analyze` for
+  the same record. These reads now place each associated record's change
+  where its transaction ends, as activity does, and report it once. They
+  run the statements activity runs for that: one per version table for a
+  window, to find the transactions open at its start, and one per 500
+  transactions the history holds.
+- `analyze_many`, `analyze_scope` and `report` without a window could read
+  a record's history differently from `analyze`, when a transaction changed
+  an associated record before the record's first version and ended after it,
+  such as one that renamed an author and later saved an article created in
+  between. The batch reported the rename as a change in the article's
+  history, once backwards and once forwards, because its history also held
+  an older record's versions. A history without a window now
+  begins at the record's first version, however it is read.
+- Two transactions that saved in one record's tree at the same time
+  interleave their versions, and activity timelines read them wrongly in four
+  ways, all fixed by reading each transaction where it ends:
+  - A change could be credited to the other transaction's author, such as a
+    comment one transaction removed reported under the one that saved
+    meanwhile.
+  - Back-to-back windows that met inside such a transaction could report one
+    of its changes in neither window.
+  - Back-to-back windows could report a change in both, when a transaction
+    saved an associated record before the record itself, around another
+    transaction.
+  - A window that started inside a transaction credited an edit the
+    transaction saved before the window to the version of another record.
+- A transaction that went on to save a record outside the requested paths,
+  such as a comment moved to another article, was placed at its last version
+  on them, which depends on where a window starts. Back-to-back windows could
+  then report one of its changes in neither. Where a transaction ends is now
+  read from its version table, whatever records it saved.
+- A range that ended while a transaction saving in the tree was still open
+  read the records it had saved as changed. They now read as they stood
+  before it, since it had not ended.
+- A window that started while a transaction was open read a record that
+  transaction had already saved as changed, when the transaction saved
+  nothing else of the tree inside the window. Its snapshot then disagreed
+  with the one the window before it ended on.
+- Without `paper_trail-association_tracking` loaded, asking for an
+  association between two versioned models raised `NoMethodError`. Reading
+  its history now raises `AssociationTrackingUnavailableError`, as
+  documented, and `association_paths` and a comparison of two current
+  records work again.
+- On PostgreSQL, an association scope with a condition on a `character(n)`
+  column is no longer read as plain conditions. PostgreSQL pads such values
+  and compares them without the padding, which Ruby does not, so a member
+  could read as leaving and rejoining the association. It is now refused
+  unless you pass `allow_approximate: true`, as a `citext` condition is.
+- A `within:` window whose first later version tied with another version
+  of the same record, with ids that cannot order them (such as UUIDs),
+  ended in whichever of the two had the lower id. Such a tie now raises
+  `AmbiguousVersionOrderError`, as one inside the window already did.
+- `analyze_scope` and `report` raise `ConfigurationError` for a relation
+  grouped by anything but its primary key that has no order of its own,
+  instead of sending a query the database rejects.
+- A `has_one` that two records point at, with no order of its own, now reads
+  the one with the lowest primary key at every point in history, as Active
+  Record reads it on SQLite, MySQL and SQL Server. History read another one,
+  so comparing the last version with the current record reported the
+  relationship changing when nothing had.
+- A `within:` edge finer than a microsecond is cut to the microsecond, as
+  adapters write it into SQL. A version saved in the edge's microsecond was
+  in `timeline`'s window but not in `activity_timeline`'s or
+  `analyze_many`'s.
+- A `within:` edge is cut to the digits the version table's `created_at`
+  keeps, as the database compares it. On a column that keeps whole seconds,
+  as a MySQL `datetime` without a precision does, an edge with a fraction
+  put a version saved in that second inside the window for one method and
+  outside it for another.
+- With more than one version table, a `within:` window no longer reads an
+  unrelated transaction as one that crosses its edge. PaperTrail numbers a
+  transaction by the id of its first version in whichever table that was, so
+  two transactions can share a number in one table, and a window that started
+  or ended before the later one moved to where the earlier one began,
+  which could be years before: a window could take in changes from long
+  before it, or come back empty. `analyze_scope` selected records by the
+  earlier transaction too. Transactions of one number are now told apart
+  by the versions they began with.
+- A transaction of associated records that moved a record away from the
+  root before a window's start, and after it saved only records under the
+  one it moved, was reported in neither window: `activity_timeline` and an
+  `activity: true` analysis left its changes out.
+- A window that started inside a transaction which began at the instant
+  another saved its last versions, as it can where `created_at` keeps whole
+  seconds or two versions share a time, cut the earlier transaction in two,
+  and part of its change surfaced in the later transaction's step.
+- A comment one transaction created and deleted again while another saved in
+  the same tree is no longer reported as added or removed in the other's
+  steps, nor held in a window's starting state or diff.
 - Two activity windows that meet inside a transaction no longer both report
   it when the transaction moved a `has_many :through` join row onto the
   root and destroyed it after the edge, such as a card moved to a board and

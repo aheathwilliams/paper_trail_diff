@@ -53,7 +53,7 @@ matcher:
     - PaperTrailDiff::VersionScopeFilter*
     - PaperTrailDiff::TimeRange*
     - PaperTrailDiff::TransactionCut*
-    - PaperTrailDiff::OpeningTransactions*
+    - PaperTrailDiff::CrossingTransactions*
     - PaperTrailDiff::VersionBoundary*
     - PaperTrailDiff::VersionTable*
     - PaperTrailDiff::VersionRange*
@@ -61,7 +61,6 @@ matcher:
     - PaperTrailDiff::ReadSnapshot*
     - PaperTrailDiff::TimeVersionRange*
     - PaperTrailDiff::BatchedRootVersions*
-    - PaperTrailDiff::OwnWindow*
     - PaperTrailDiff::BatchBoundaryResolver*
     - PaperTrailDiff::BatchedRootAnalyses*
     - PaperTrailDiff::AnalysisBatch*
@@ -94,6 +93,8 @@ matcher:
     - PaperTrailDiff::ActivityTreeFilter*
     - PaperTrailDiff::ActivityTransactionGrouper*
     - PaperTrailDiff::ActivityTransactionGroups*
+    - PaperTrailDiff::TransactionEnds*
+    - PaperTrailDiff::RecordedTransactionEnds*
     - PaperTrailDiff::ActivityView*
     - PaperTrailDiff::ActivityScopeFilter*
     - PaperTrailDiff::ActivitySnapshotDelta*
@@ -101,6 +102,7 @@ matcher:
     - PaperTrailDiff::FallbackPaths*
     - PaperTrailDiff::ScopeCondition*
     - PaperTrailDiff::ScopeRanking*
+    - PaperTrailDiff::ExactColumnType*
     - PaperTrailDiff::AssociationTraversal*
     - PaperTrailDiff::AssociationKey*
     - PaperTrailDiff::HabtmTransactionOwners*
