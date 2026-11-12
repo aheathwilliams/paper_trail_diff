@@ -345,7 +345,7 @@ RSpec.describe PaperTrailDiff::ActivityChildCandidateLoader do
     it "is under an `as:` owner only where its type names the owner's class" do
       board = document
       away = document('Away')
-      badges = [board.class.polymorphic_name, 'TrackedArticle'].map do |type|
+      badges = [board.class.polymorphic_name, 'TrackedArticle', 'Untyped'].map do |type|
         PaperTrail.request(enabled: false) do
           ChildLoaderBadge.create!(label: type, holder_type: type, holder_id: board.id)
         end

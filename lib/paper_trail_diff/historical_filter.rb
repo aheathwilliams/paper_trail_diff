@@ -46,7 +46,8 @@ module PaperTrailDiff
     # the limit.
     #: (Array[String], ?counted: bool, ?page: [Integer, Integer]?) -> Array[String]
     def call(candidates, counted: true, page: nil)
-      skipped, full = page ? [page.first, page.sum] : [0]
+      skipped = page&.first || 0
+      full = page&.sum
       return [] if full == skipped
 
       matched = [] #: Array[String]

@@ -311,8 +311,8 @@ RSpec.describe PaperTrailDiff::Support do
 
   describe '.sort_ids' do
     it 'lists ids once each as strings, integers by value and others by text after them' do
-      expect(described_class.sort_ids([10, 'b', '9', 2, 'a', 10, '010', 'a1']))
-        .to eq(%w[2 9 010 10 a a1 b])
+      expect(described_class.sort_ids([10, 'b', '9', 100, 2, 'a', 10, '010', '20', 'a1']))
+        .to eq(%w[2 9 010 10 20 100 a a1 b])
     end
   end
 
