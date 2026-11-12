@@ -28,6 +28,11 @@ RSpec.describe PaperTrailDiff::Support do
 
   describe '.decodable' do
     let(:time_of_day) { Time.utc(2000, 1, 1, 12) }
+    # A model whose `rings_at` is a time of day.
+    let(:clock) do
+      types = { 'rings_at' => ActiveModel::Type::Time.new, 'title' => ActiveModel::Type::String.new }
+      Class.new { define_singleton_method(:attribute_types) { types } }
+    end
 
     # The wrapper delegates ==, so only its class tells it from the time.
     it 'keys stored values by name, unwrapping each time of day, alone or in a pair' do
@@ -36,9 +41,9 @@ RSpec.describe PaperTrailDiff::Support do
       fields = ActiveRecord::Type::Time::Value.allocate
       fields.instance_variable_set(:@time, noon)
 
-      decodable = described_class.decodable(rings_at: wrapped, 'changed' => [nil, wrapped],
-                                            'title' => 'Draft', 'labels' => [1, 2],
-                                            'zoned' => fields)
+      decodable = described_class.decodable({ rings_at: wrapped, 'changed' => [nil, wrapped],
+                                              'title' => 'Draft', 'labels' => [1, 2],
+                                              'zoned' => fields }, clock)
 
       expect(decodable).to eq('rings_at' => time_of_day, 'changed' => [nil, time_of_day],
                               'title' => 'Draft', 'labels' => [1, 2], 'zoned' => time_of_day)
@@ -47,17 +52,41 @@ RSpec.describe PaperTrailDiff::Support do
     end
 
     # A time assigned in memory keeps its date there, and in its version, but
-    # the row keeps only the time, which reads back on 2000-01-01.
-    it 'reads a time of day on the date the database gives it, in its own zone' do
+    # the row keeps only the time as its clock read in the default time zone,
+    # which reads back on 2000-01-01 there.
+    it 'reads a time of day on the date the database gives it, in the default time zone' do
       assigned = Time.new(2032, 3, 4, 7, 30, Rational(31, 2), '+13:00')
       empty = ActiveRecord::Type::Time::Value.allocate
 
-      decodable = described_class.decodable('rings_at' => ActiveRecord::Type::Time::Value.new(assigned),
-                                            'unset' => empty)
+      decodable = described_class.decodable({ 'rings_at' => ActiveRecord::Type::Time::Value.new(assigned),
+                                              'unset' => empty }, clock)
 
-      expect(decodable).to eq('rings_at' => Time.new(2000, 1, 1, 7, 30, Rational(31, 2), '+13:00'),
-                              'unset' => nil)
-      expect(decodable.fetch('rings_at').utc_offset).to eq(13 * 3600)
+      expect(decodable).to eq('rings_at' => Time.utc(2000, 1, 1, 18, 30, Rational(31, 2)), 'unset' => nil)
+      expect(decodable.fetch('rings_at')).to be_utc
+    end
+
+    # JSON keeps a time of day as the text of the time assigned, date and
+    # offset included; its clock is read on that date.
+    it 'reads the text JSON wrote for a time of day as a time, and leaves other text' do
+      decodable = described_class.decodable({ 'rings_at' => ['2032-06-01T18:00:00.000-04:00', '09:30'],
+                                              'title' => '2032-06-01T18:00:00.000-04:00' }, clock)
+
+      expect(decodable).to eq('rings_at' => [Time.utc(2000, 1, 1, 22), '09:30'],
+                              'title' => '2032-06-01T18:00:00.000-04:00')
+    end
+
+    it 'reads a plain time by its local clock when Active Record keeps local times' do
+      allow(ActiveRecord).to receive(:default_timezone).and_return(:local)
+      summer = Time.new(2032, 7, 1, 18, 0, 0, '-04:00')
+
+      read = ENV.fetch('TZ', nil).then do |zone|
+        ENV['TZ'] = 'America/New_York'
+        described_class.decodable({ 'rings_at' => ActiveRecord::Type::Time::Value.new(summer) }, clock)
+      ensure
+        ENV['TZ'] = zone
+      end
+
+      expect(read.fetch('rings_at').to_a.first(6)).to eq([0, 0, 18, 1, 1, 2000])
     end
   end
 
@@ -70,6 +99,8 @@ RSpec.describe PaperTrailDiff::Support do
         attr_accessor :alarm
 
         def self.version_association_name = :version
+
+        def self.attribute_types = { 'rings_at' => ActiveModel::Type::Time.new }
 
         def initialize(version)
           @version = version

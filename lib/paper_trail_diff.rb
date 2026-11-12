@@ -10,6 +10,7 @@ require_relative 'paper_trail_diff/version_query'
 require_relative 'paper_trail_diff/stored_time_precision'
 require_relative 'paper_trail_diff/stored_json_values'
 require_relative 'paper_trail_diff/time_of_day'
+require_relative 'paper_trail_diff/stored_form'
 require_relative 'paper_trail_diff/stored_values'
 require_relative 'paper_trail_diff/version_boundary'
 require_relative 'paper_trail_diff/instrumentation'
@@ -377,6 +378,12 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
       if since.nil? || since.is_a?(Range)
         raise InvalidTimeRangeError, '`since` must be a time, date, or string; for a range, ' \
                                      'pass it as `within:` to analyze_scope'
+      end
+      # Read here as the window will read it, so a message names `since`.
+      begin
+        TimeRange.new(since..)
+      rescue InvalidTimeRangeError
+        raise InvalidTimeRangeError, '`since` must be a time, date, or string'
       end
 
       # Endless, so a version a server dated ahead of this one's clock is in it.

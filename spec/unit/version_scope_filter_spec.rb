@@ -15,15 +15,6 @@ RSpec.describe PaperTrailDiff::VersionScopeFilter do
     FilterVersion.where(item_id: article.id).order(:id).to_a
   end
 
-  it 'takes no filter or a callable one, and refuses anything else as it is built' do
-    callable = ->(relation) { relation }
-
-    expect(described_class.validated(nil)).to be_nil
-    expect(described_class.validated(callable)).to equal(callable)
-    expect { described_class.new(:updates) }
-      .to raise_error(PaperTrailDiff::ConfigurationError, 'version_scope: must respond to call')
-  end
-
   it 'keeps every version in range when there is no filter' do
     in_range = versions
     filter = described_class.new(nil)
@@ -51,9 +42,32 @@ RSpec.describe PaperTrailDiff::VersionScopeFilter do
   end
 
   describe '.checked' do
-    it 'leaves a missing or uncallable filter for validation' do
+    it 'takes no filter, or one that can be called with the relation, and refuses anything else' do
       expect(described_class.checked(nil)).to be_nil
-      expect(described_class.checked(:updates)).to eq(:updates)
+      expect { described_class.checked(:updates) }
+        .to raise_error(PaperTrailDiff::ConfigurationError, 'version_scope: must respond to call')
+      [-> {}, ->(_relation, _other) {}, Object.new.tap { |o| def o.call = nil }].each do |scope|
+        expect { described_class.checked(scope) }
+          .to raise_error(PaperTrailDiff::ConfigurationError,
+                          'version_scope: must take the version relation as its one argument')
+      end
+      [proc { |relation| relation }, proc { nil }, ->(*relations) { relations },
+       ->(relation, _ = 1) { relation }, Object.new.tap { |o| def o.call(relation) = relation }].each do |scope|
+        expect(described_class.checked(scope)).to respond_to(:call)
+      end
+    end
+
+    it 'refuses what the filter returns unless it is the relation narrowed or its versions' do
+      created, = versions
+      [nil, [created.id], [created, created.item]].each do |returned|
+        checked = described_class.checked(->(_relation) { returned })
+
+        expect { checked.call(FilterVersion.all) }.to raise_error(
+          PaperTrailDiff::ConfigurationError,
+          'version_scope: must return the relation it is given, narrowed, or an array of its ' \
+          "versions; it returned #{returned.class}"
+        )
+      end
     end
 
     it 'passes on what the filter returns of the relation it is given' do

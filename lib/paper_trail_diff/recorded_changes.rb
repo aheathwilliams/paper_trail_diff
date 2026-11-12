@@ -61,10 +61,11 @@ module PaperTrailDiff
     end
 
     # Without the column, or with it left empty for this version, nothing was
-    # recorded. That is not the same answer as a recorded empty changeset.
+    # recorded. That is not the same answer as a recorded empty changeset. A
+    # version need not be an Active Record model, as for compare.
     #: () -> bool
     def recorded?
-      @version.class.column_names.include?('object_changes') && !@version.object_changes.nil?
+      @version.respond_to?(:object_changes) && !@version.object_changes.nil?
     end
 
     # An adapter may name its changes with symbols.
@@ -77,13 +78,17 @@ module PaperTrailDiff
     # Each side is read as a step's diff reads it (see StoredValues), so a
     # value compares equal to the state the change produced. A name the model
     # no longer has, such as a column since dropped, is left out, as a diff
-    # leaves it out.
+    # leaves it out. So is a change whose sides read alike, as a diff compares
+    # them: Rails records a value assigned in another form than the column
+    # keeps, such as a time of day with another date, though the row holds
+    # what it held.
     #: (untyped, untyped, Array[String]) -> Hash[String, ValueChange]
     def value_changes(model_class, changes, excluded)
       kept = named(changes).slice(*model_class.attribute_names).except(*excluded)
       from = StoredValues.apply(model_class, kept.transform_values(&:first))
       to = StoredValues.apply(model_class, kept.transform_values(&:last))
-      kept.keys.sort.to_h { |key| [key, ValueChange.new(from: from.fetch(key), to: to.fetch(key))] }
+      kept.keys.sort.reject { |key| Support.same?(from.fetch(key), to.fetch(key)) }
+          .to_h { |key| [key, ValueChange.new(from: from.fetch(key), to: to.fetch(key))] }
           .freeze
     end
   end

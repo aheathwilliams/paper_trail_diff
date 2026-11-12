@@ -73,10 +73,11 @@ module PaperTrailDiff
       added.empty? && removed.empty?
     end
 
-    # The same elements in the same order, with keys read as strings.
+    # The same elements in the same order, with keys read as strings and
+    # every NaN alike.
     #: () -> bool
     def empty?
-      NestedComparator.comparable(from) == NestedComparator.comparable(to)
+      NestedComparator.countable(from) == NestedComparator.countable(to)
     end
 
     #: () -> Hash[Symbol, untyped]

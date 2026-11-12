@@ -7,27 +7,39 @@ module PaperTrailDiff
   # caller, because the one that reveals the last selected mutation is drawn
   # from them.
   class VersionScopeFilter
-    # A filter is a callable that narrows the version relation.
-    #: (untyped) -> untyped
-    def self.validated(scope)
-      return scope if scope.nil? || scope.respond_to?(:call)
-
-      raise ConfigurationError, 'version_scope: must respond to call'
-    end
-
-    # The filter, with what it returns checked wherever it is called. A
-    # relation on another table would be read for its ids all the same, and
-    # choose the versions that happen to share them.
+    # The filter, checked once where it is given: a callable that takes the
+    # version relation, and that wherever it is called returns it narrowed,
+    # or an array of its versions. A relation on another table would be read
+    # for its ids all the same, and choose the versions that happen to share
+    # them.
     #: (untyped) -> untyped
     def self.checked(scope)
-      return scope unless scope.respond_to?(:call)
+      return if scope.nil?
+      raise ConfigurationError, 'version_scope: must respond to call' unless scope.respond_to?(:call)
+      unless takes_relation?(scope)
+        raise ConfigurationError, 'version_scope: must take the version relation as its one argument'
+      end
 
       ->(relation) { narrowed(scope.call(relation), relation) }
     end
 
+    # A proc that is not a lambda takes any number of arguments.
+    #: (untyped) -> bool
+    def self.takes_relation?(scope)
+      return true if scope.is_a?(Proc) && !scope.lambda?
+
+      arity = (scope.respond_to?(:arity) ? scope : scope.method(:call)).arity
+      arity.negative? ? arity >= -2 : arity == 1
+    end
+    private_class_method :takes_relation?
+
     #: (untyped, untyped) -> untyped
     def self.narrowed(result, relation)
-      return result unless result.respond_to?(:klass)
+      return result if versions?(result)
+      unless result.respond_to?(:klass) && result.respond_to?(:table_name)
+        raise ConfigurationError, 'version_scope: must return the relation it is given, narrowed, ' \
+                                  "or an array of its versions; it returned #{result.class}"
+      end
 
       given = relation.table_name
       returned = result.table_name
@@ -38,9 +50,15 @@ module PaperTrailDiff
     end
     private_class_method :narrowed
 
+    #: (untyped) -> bool
+    def self.versions?(result)
+      result.instance_of?(Array) && result.all? { |version| Endpoint.version?(version) }
+    end
+    private_class_method :versions?
+
     #: (untyped) -> void
     def initialize(scope)
-      @scope = self.class.validated(scope)
+      @scope = scope
     end
 
     #: (untyped, Array[untyped]) -> Array[untyped]

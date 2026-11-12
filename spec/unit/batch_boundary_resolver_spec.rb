@@ -111,9 +111,9 @@ RSpec.describe PaperTrailDiff::BatchBoundaryResolver do
     record, = history
 
     expect { resolve([:last, record]) }
-      .to raise_error(PaperTrailDiff::ConfigurationError, PaperTrailDiff::TimelineRange::LAST_REMOVED)
+      .to raise_error(PaperTrailDiff::InvalidTimelineRangeError, PaperTrailDiff::TimelineRange::LAST_REMOVED)
     expect { resolve([:latest, record]) }
-      .to raise_error(PaperTrailDiff::ConfigurationError,
+      .to raise_error(PaperTrailDiff::InvalidTimelineRangeError,
                       'unsupported boundary: :latest; use :first, a version, or a record')
     [%i[first first], [:first, nil], [:first, 'a title']].each do |pair|
       expect { resolve(pair) }

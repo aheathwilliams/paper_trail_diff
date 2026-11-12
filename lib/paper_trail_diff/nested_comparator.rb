@@ -41,6 +41,9 @@ module PaperTrailDiff
     private_constant :Absent
 
     ABSENT = Absent.new.freeze
+    # Every NaN, as a key.
+    NAN = Object.new.freeze
+    private_constant :NAN
 
     #: (untyped, untyped) -> nested_changes
     def self.call(from_value, to_value)
@@ -61,7 +64,8 @@ module PaperTrailDiff
     # The comparable value as a Hash key: two values that are `==` are one
     # key. A Hash looks its keys up with `eql?`, which tells 1 from 1.0, so
     # every number is read as a rational, at any depth. One that is not
-    # finite has none, and equals nothing but itself.
+    # finite has none: an infinity keeps its sign, and every NaN is one key,
+    # as a database stores it (see Support.same?).
     #: (untyped) -> untyped
     def self.countable(value)
       case value
@@ -76,6 +80,8 @@ module PaperTrailDiff
     # number, or one that is not finite, such as a Float or BigDecimal NaN.
     #: (untyped) -> untyped
     def self.rational(number)
+      return NAN if Support.nan?(number)
+
       number.real? && number.finite? ? number.to_r : number
     end
 
@@ -150,7 +156,7 @@ module PaperTrailDiff
       keys(from_hash, to_hash).each do |key|
         from_item = from_hash.fetch(key, ABSENT)
         to_item = to_hash.fetch(key, ABSENT)
-        next if from_item == to_item
+        next if Support.same?(from_item, to_item)
 
         here = (path + [key]).freeze
         if from_item.is_a?(Hash) && to_item.is_a?(Hash)

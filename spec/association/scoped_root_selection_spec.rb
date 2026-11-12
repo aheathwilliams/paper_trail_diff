@@ -94,9 +94,9 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
       expect { select(Struct.new(:where).new([])) }
         .to raise_error(PaperTrailDiff::ConfigurationError, /scope: must be/)
       expect { select(UnversionedAttachment.where(id: 1)) }
-        .to raise_error(PaperTrailDiff::UnversionedAssociationError,
-                        'scope: UnversionedAttachment is not versioned, so it has no ' \
-                        'history to select from')
+        .to raise_error(PaperTrailDiff::InvalidEndpointError,
+                        'UnversionedAttachment is not versioned, so it has no history: ' \
+                        'add has_paper_trail to it')
     end
 
     it 'requires a positive Integer limit' do
@@ -554,11 +554,6 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
 
       expect(select(TrackedArticle, **options, version_scope: by_people).records).to eq([article])
       expect(select(TrackedArticle, **options).records).to eq([article, other])
-    end
-
-    it 'rejects a scope that cannot be called' do
-      expect { select(TrackedArticle, version_scope: :people) }
-        .to raise_error(PaperTrailDiff::ConfigurationError, 'version_scope: must respond to call')
     end
   end
 

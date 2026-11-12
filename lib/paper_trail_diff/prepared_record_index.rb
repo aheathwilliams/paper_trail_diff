@@ -64,8 +64,8 @@ module PaperTrailDiff
       attributes = version.object_deserialized
       return unless attributes.is_a?(Hash)
 
-      attributes = Support.decodable(attributes)
-      model_class = reification_class(version, attributes)
+      model_class = reification_class(version, attributes.transform_keys(&:to_s))
+      attributes = Support.decodable(attributes, model_class)
       return unless direct_attributes?(model_class, attributes)
 
       object_attribute_serializer(model_class).deserialize(attributes)

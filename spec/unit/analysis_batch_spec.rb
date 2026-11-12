@@ -127,11 +127,6 @@ RSpec.describe PaperTrailDiff::AnalysisBatch do
     expect(loaded).to eq([])
   end
 
-  it 'checks the version scope as it is built' do
-    expect { batch([], version_scope: :updates) }
-      .to raise_error(PaperTrailDiff::ConfigurationError, 'version_scope: must respond to call')
-  end
-
   it 'selects the versions the version scope keeps' do
     record, _created, updated = article
 

@@ -62,7 +62,7 @@ module PaperTrailDiff
       @scope = normalize_scope(scope)
       reject_unversioned!
       @time_range = time_range
-      @version_scope = VersionScopeFilter.validated(version_scope)
+      @version_scope = version_scope
       @limit = validate_limit(limit)
       @selecting = AssociationActivitySelection.window(model, activity_tree, time_range)
       @related = activity_tree && AssociationActivitySelection.new(
@@ -184,10 +184,7 @@ module PaperTrailDiff
 
     #: () -> void
     def reject_unversioned!
-      return if Support.versioned?(model)
-
-      raise UnversionedAssociationError,
-            "scope: #{model} is not versioned, so it has no history to select from"
+      Endpoint.validate_history!(model)
     end
 
     # No Integer subclass has instances, so this is `is_a?` by another name.
@@ -225,6 +222,7 @@ module PaperTrailDiff
       consumed = 0
       loop do
         page = record_page(relation, consumed)
+        reject_keyless!(page)
         page.each { |record| records[record.id] ||= record }
         reject_oversized!(records.length)
         break if page.length < page_size
@@ -232,6 +230,16 @@ module PaperTrailDiff
         consumed += page.length
       end
       records.values.freeze
+    end
+
+    # A relation that selects columns without the primary key reads rows that
+    # name no record.
+    #: (Array[untyped]) -> void
+    def reject_keyless!(page)
+      return if page.none? { |record| record.id.nil? || Array(record.id).include?(nil) }
+
+      raise ConfigurationError, "scope: selects columns without #{primary_key}, so its rows name " \
+                                'no record; select it too'
     end
 
     # Pages are read by offset, so under a total order.

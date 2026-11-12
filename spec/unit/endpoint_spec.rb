@@ -10,6 +10,7 @@ RSpec.describe PaperTrailDiff::Endpoint do
       def persisted? = true
       def self.base_class = self
       def self.paper_trail_options = {}
+      def self.paper_trail = Struct.new(:version_class).new(FilterVersion)
     end
   end
 

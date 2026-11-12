@@ -21,6 +21,9 @@ RSpec.describe PaperTrailDiff::StoredValues do
       define_singleton_method(:type_for_attribute) { |name| types.fetch(name) }
       define_singleton_method(:paper_trail_options) { {} }
       define_singleton_method(:paper_trail) { paper_trail }
+      # A table whose columns keep every value as Ruby holds it.
+      define_singleton_method(:columns) { [] }
+      define_singleton_method(:connection_db_config) { Struct.new(:adapter).new('sqlite3') }
     end
   end
 

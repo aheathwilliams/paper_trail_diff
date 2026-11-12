@@ -11,6 +11,7 @@ module PaperTrailDiff
     # `allow_approximate:` accepts association paths read with PT-AT.
     #: (associations: association_option, ignore: ignore_option, ?recorded_changes: bool, ?allow_approximate: bool) -> void
     def initialize(associations:, ignore:, recorded_changes: false, allow_approximate: false)
+      Support.boolean!(:recorded_changes, recorded_changes)
       @association_tree = AssociationTree.build(associations)
       @ignore_policy = IgnorePolicy.build(ignore, association_paths: @association_tree.paths)
       @recorded = (@ignore_policy if recorded_changes)
@@ -307,7 +308,17 @@ module PaperTrailDiff
     def default_range(record, from, to, within)
       return [from, to] unless within.nil?
 
-      [from.nil? ? :first : from, to.nil? ? record : to]
+      [from.nil? ? :first : from, to.nil? ? default_end(record) : to]
+    end
+
+    # The current record, or a destroyed one's last version, which a window
+    # also ends at: its history stops at the destroy.
+    #: (untyped) -> untyped
+    def default_end(record)
+      return record unless Endpoint.record?(record) && record.destroyed?
+
+      relation = VersionQuery.for_items(record.class, [record.id.to_s])
+      VersionQuery.chronological(relation).last || record
     end
 
     # A window with nothing recorded after its last change ends at the live
