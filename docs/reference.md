@@ -91,7 +91,11 @@ Six things follow from this:
   `create` version, so history never reports it as added: its earliest
   version's stored values are its state from before history began, and an
   association includes it there. Rows from before PaperTrail was installed
-  are the same, which is usually what you want.
+  are the same, which is usually what you want. One such row is missed: a
+  child whose first version moves it to another owner. That version stores
+  the old owner's key, but PaperTrail-AssociationTracking records the new
+  one, and the gem finds a past owner's children by those records, so the
+  owner it left never held it. Every later move is found.
 - **Pruned history is gone.** With `has_paper_trail limit:`, PaperTrail
   deletes a record's oldest versions, and the earliest one left becomes its
   start: states before it cannot be read, and an older version passed in is

@@ -45,7 +45,7 @@ module PaperTrailDiff
 
     #: () -> PreparedHistory
     def call
-      @records.seed(@record.class, @root_ids, @root_versions)
+      @records.load(@record.class, @root_ids)
       load_node(@record.class, @root_ids, @tree, path: '')
       @history.reach = @records.reach if @window
       @history
@@ -87,7 +87,9 @@ module PaperTrailDiff
 
     # Either part can itself be a through, which has no key of its own to
     # read, so each part is prepared as what it is. Like an edge, it returns
-    # every group it holds, not only those of these owners.
+    # every group it holds, not only those of these owners. Under
+    # `source_type:`, only targets of that type are members, so the path
+    # descends into no other.
     #: (untyped, Array[untyped], untyped) -> Hash[String, Hash[Symbol, untyped]]
     def prepare_through(owner_class, owner_ids, reflection)
       through_groups = prepare_reflection(owner_class, owner_ids, reflection.through_reflection)
@@ -95,9 +97,16 @@ module PaperTrailDiff
       through_groups.each_value do |group|
         source = prepare_reflection(group.fetch(:model), group.fetch(:ids),
                                     reflection.source_reflection)
-        targets = merge_groups(targets, source)
+        targets = merge_groups(targets, of_source_type(reflection, source))
       end
       @history.merge_edge(owner_class, reflection, targets)
+    end
+
+    #: (untyped, Hash[String, Hash[Symbol, untyped]]) -> Hash[String, Hash[Symbol, untyped]]
+    def of_source_type(reflection, groups)
+      groups.select do |_name, group|
+        AssociationTraversal.source_type_member?(reflection, group.fetch(:model).name)
+      end
     end
 
     #: (untyped, Array[untyped], untyped) -> Hash[String, Hash[Symbol, untyped]]

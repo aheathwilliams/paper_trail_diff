@@ -309,7 +309,7 @@ module PaperTrailDiff
         @through = reflection.through_reflection
         @keyed = keyed?
         @ids = owners.fetch(:ids).to_set(&:to_s)
-        @owner_types = owner_types(owners.fetch(:model))
+        @owner_type = @through.type && AssociationTraversal.owner_type(@through)
         @conditions = conditions
       end
 
@@ -330,7 +330,7 @@ module PaperTrailDiff
       # @rbs @through: untyped
       # @rbs @keyed: bool
       # @rbs @ids: Set[String]
-      # @rbs @owner_types: Array[String]?
+      # @rbs @owner_type: String?
       # @rbs @conditions: ScopeCondition::Cache
 
       #: () -> bool
@@ -345,18 +345,11 @@ module PaperTrailDiff
           AssociationTraversal.sti_member?(@through.klass, attributes) && in_scope?(attributes)
       end
 
-      # The names an `as:` row's type column may hold for an owner.
-      #: (untyped) -> Array[String]?
-      def owner_types(model)
-        return unless @through.type
-
-        [model.name, model.base_class.name, @through.active_record.name]
-      end
-
+      # An `as:` row's type column must hold its owner's polymorphic name.
       #: (Hash[untyped, untyped]) -> bool
       def owner_type?(attributes)
-        types = @owner_types
-        !types || types.include?(attributes.fetch(@through.type))
+        type = @owner_type
+        !type || type == attributes.fetch(@through.type)
       end
 
       #: (Hash[untyped, untyped]) -> bool

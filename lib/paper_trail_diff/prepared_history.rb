@@ -134,7 +134,10 @@ module PaperTrailDiff
       return unless model_class && @conditions.call(reflection, model_class, ranked: ranked) &&
                     @records.loaded?(model_class, id)
 
-      target = Array(@records.record_before(model_class, id, boundary)).compact
+      # An STI subclass reads no sibling's row, as its type condition reads none.
+      target = Array(@records.record_before(model_class, id, boundary)).compact.select do |row|
+        AssociationTraversal.sti_member?(model_class, row.attributes)
+      end
       @conditions.select(reflection, target, model_class, ranked: ranked)
     end
 
@@ -230,13 +233,7 @@ module PaperTrailDiff
       return false unless AssociationTraversal.sti_member?(reflection.klass, child.attributes)
       return true unless reflection.options[:as]
 
-      owner_types(reflection, owner).include?(child.public_send(reflection.type).to_s)
-    end
-
-    #: (untyped, untyped) -> Array[String]
-    def owner_types(reflection, owner)
-      types = [owner.class.name, owner.class.base_class.name, reflection.active_record.name]
-      types.map(&:to_s).uniq
+      AssociationTraversal.owner_type(reflection) == child.public_send(reflection.type).to_s
     end
 
     #: (untyped) -> untyped

@@ -315,11 +315,13 @@ RSpec.describe 'PaperTrailDiff association tracking' do
       diff.associations.fetch('comments').changed.length == 1
     end)
     # The read's transaction statements are constant too, so the totals match.
-    # The data statements, which are the ones this spec pins, stay at five.
+    # The data statements, which are the ones this spec pins, stay at six:
+    # the roots' versions are read once to plan the batch and once more,
+    # with every other record's, for its history.
     data_sql = large_sql.reject { |payload| payload[:name] == 'TRANSACTION' }
     expect(large_sql.length).to eq(small_sql.length)
-    expect(data_sql.length).to eq(5)
-    expect(large_sql.count { |payload| payload[:name] == 'PaperTrail::Version Load' }).to eq(1)
+    expect(data_sql.length).to eq(6)
+    expect(large_sql.count { |payload| payload[:name] == 'PaperTrail::Version Load' }).to eq(2)
     expect(large_sql.count { |payload| payload[:name] == 'TrackedArticle Load' }).to eq(1)
     expect(large_sql.count { |payload| payload[:name] == 'TrackedComment Load' }).to eq(1)
   end

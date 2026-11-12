@@ -92,7 +92,7 @@ module PaperTrailDiff
     #: (untyped, untyped, ?history: PreparedHistory?) -> RecordSnapshot?
     def call(root_endpoint, context_endpoint, history: nil)
       key = snapshot_key(root_endpoint, context_endpoint)
-      ends = history_for(context_endpoint, history)&.reading_ends
+      ends = history_for(root_endpoint, context_endpoint, history)&.reading_ends
       key += [ends] if ends
       return @snapshots[key] if @snapshots.key?(key)
 
@@ -107,7 +107,7 @@ module PaperTrailDiff
 
     #: (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer, ?history: PreparedHistory?) -> RecordSnapshot?
     def custom(root_endpoint, context_endpoint, tree:, normalizer:, history: nil)
-      history = history_for(context_endpoint, history)
+      history = history_for(root_endpoint, context_endpoint, history)
       if Endpoint.version?(root_endpoint)
         return snapshot_from_version(
           root_endpoint, context_endpoint, tree: tree, normalizer: normalizer, history: history
@@ -134,7 +134,8 @@ module PaperTrailDiff
         context_version,
         habtm_version: habtm_version
       )
-      history = history_for(context_version, history)
+      # Callers pass the root's history; a batch's for the version is the rest.
+      history ||= @prepared_histories[Support.row_key(context_version)]
       return fallback unless history
 
       PreparedAssociationReifier.new(
@@ -159,10 +160,15 @@ module PaperTrailDiff
     # @rbs @live_roots: Hash[identity, untyped]
     # @rbs @live_states: Hash[identity, PreparedRecordState]
 
-    # A batch's history for the version wins over the one a caller passes.
-    #: (untyped, PreparedHistory?) -> PreparedHistory?
-    def history_for(context_endpoint, history)
-      @prepared_histories[Support.row_key(context_endpoint)] || history
+    # The history a root is read from: the one its batch prepared for it,
+    # then the one a caller passes, then a batch's for the version. A batch
+    # prepares one history per class of its roots, and a boundary can be a
+    # version of a root of another class that stands in this root's tree,
+    # whose history never loaded this root's associations.
+    #: (untyped, untyped, PreparedHistory?) -> PreparedHistory?
+    def history_for(root_endpoint, context_endpoint, history)
+      @batched_roots[Endpoint.identity(root_endpoint)] || history ||
+        @prepared_histories[Support.row_key(context_endpoint)]
     end
 
     #: (Array[untyped], Array[untyped]) -> Hash[Symbol, untyped]

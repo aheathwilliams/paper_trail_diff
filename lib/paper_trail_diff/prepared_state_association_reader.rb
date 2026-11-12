@@ -58,7 +58,15 @@ module PaperTrailDiff
                                 @conditions.call(reflection, model_class, ranked: ranked)
 
       handled, state = @records.snapshot_state_before(model_class, id, boundary)
-      [handled, state && in_scope?(state, reflection, ranked, model_class) ? [state] : []]
+      [handled, state && target?(state, reflection, ranked, model_class) ? [state] : []]
+    end
+
+    # A target class that is an STI subclass reads no sibling's row, as Active
+    # Record's type condition reads none.
+    #: (PreparedRecordState, untyped, bool, untyped) -> bool
+    def target?(state, reflection, ranked, model_class)
+      AssociationTraversal.sti_member?(model_class, state.attributes) &&
+        in_scope?(state, reflection, ranked, model_class)
     end
 
     # The members of each join record the owner had at the boundary, as
@@ -147,19 +155,12 @@ module PaperTrailDiff
       return false unless condition.matches?(attributes)
       return true unless reflection.options[:as]
 
-      matching_type?(child, owner.model_class, reflection)
+      AssociationTraversal.owner_type(reflection) == child.attributes[reflection.type.to_s].to_s
     end
 
     #: (PreparedRecordState) -> String
     def owner_id(owner)
       owner.attributes[owner.model_class.primary_key].to_s
-    end
-
-    #: (PreparedRecordState, untyped, untyped) -> bool
-    def matching_type?(child, model, reflection)
-      types = [model.name, model.base_class.name,
-               reflection.active_record.name]
-      types.include?(child.attributes[reflection.type.to_s].to_s)
     end
   end
 end

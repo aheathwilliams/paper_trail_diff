@@ -362,14 +362,6 @@ module PaperTrailDiff
       missing.each { |id| add_series(model_class, id, versions, live) }
     end
 
-    #: (untyped, Array[untyped], Array[untyped]) -> void
-    def seed(model_class, ids, versions)
-      @version_classes << model_class.paper_trail.version_class
-      grouped = versions.group_by { |version| version.item_id.to_s }
-      live = available_live_records(model_class, ids).to_h { |record| [record.id.to_s, record] }
-      ids.each { |id| add_series(model_class, id, grouped, live) }
-    end
-
     # Where the earliest transaction open at the range's start began, in the
     # version tables of the records held; nil when none was open. See
     # PreparedHistoryLoader.
