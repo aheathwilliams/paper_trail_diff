@@ -8,8 +8,17 @@ RSpec.describe PaperTrailDiff::Support do
   let(:version) { Struct.new(:created_at, :id) { def self.table_name = 'versions' } }
   let(:other_version) { Struct.new(:created_at, :id) { def self.table_name = 'other_versions' } }
 
-  # New York's zone as POSIX writes it, which Windows reads too.
-  def new_york = 'EST5EDT'
+  # Runs the block with the process in New York, where summer time ends,
+  # named as POSIX writes it, which Windows reads too. Windows applies no
+  # summer time to some years, so it also yields the hour a time's local
+  # clock reads there, and the offset New York has on 2000-01-01.
+  def in_new_york(time)
+    zone = ENV.fetch('TZ', nil)
+    ENV['TZ'] = 'EST5EDT'
+    yield time.getlocal.hour, Time.local(2000).utc_offset
+  ensure
+    ENV['TZ'] = zone
+  end
 
   describe '.per_model' do
     it 'answers once for each Active Record class, and every time for anything else' do
@@ -83,16 +92,13 @@ RSpec.describe PaperTrailDiff::Support do
       allow(ActiveRecord).to receive(:default_timezone).and_return(:local)
       summer = Time.new(2032, 7, 1, 18, 0, 0, '-04:00')
 
-      read = ENV.fetch('TZ', nil).then do |zone|
-        ENV['TZ'] = new_york
-        described_class.decodable({ 'rings_at' => ActiveRecord::Type::Time::Value.new(summer) },
-                                  clock)
-      ensure
-        ENV['TZ'] = zone
-      end
+      in_new_york(summer) do |hour, offset|
+        read = described_class.decodable(
+          { 'rings_at' => ActiveRecord::Type::Time::Value.new(summer) }, clock
+        ).fetch('rings_at')
 
-      expect(read.fetch('rings_at').to_a.first(6)).to eq([0, 0, 18, 1, 1, 2000])
-      expect(read.fetch('rings_at').utc_offset).to eq(-5 * 3600)
+        expect([read.to_a.first(6), read.utc_offset]).to eq([[0, 0, hour, 1, 1, 2000], offset])
+      end
     end
   end
 
@@ -105,14 +111,11 @@ RSpec.describe PaperTrailDiff::Support do
       expect([read.time_zone, read.subsec]).to eq([zoned.time_zone, 1/2r])
     end
 
-    # The time read with the process in New York, where summer time ends.
     def read_in_new_york(time)
-      zone = ENV.fetch('TZ', nil)
-      ENV['TZ'] = new_york
-      read = described_class.time_of_day(time)
-      [read.to_a.first(6), read.subsec, read.utc_offset]
-    ensure
-      ENV['TZ'] = zone
+      in_new_york(time) do
+        read = described_class.time_of_day(time)
+        [read.to_a.first(6), read.subsec, read.utc_offset]
+      end
     end
 
     it 'reads a plain time in the default time zone, fraction kept' do
@@ -125,7 +128,12 @@ RSpec.describe PaperTrailDiff::Support do
       allow(ActiveRecord).to receive(:default_timezone).and_return(:local)
       summer = Time.new(2032, 7, 1, 18, 0, 0.5r, '-04:00')
 
-      expect(read_in_new_york(summer)).to eq([[0, 0, 18, 1, 1, 2000], 1/2r, -5 * 3600])
+      in_new_york(summer) do |hour, offset|
+        read = described_class.time_of_day(summer)
+
+        expect([read.to_a.first(6), read.subsec, read.utc_offset])
+          .to eq([[0, 0, hour, 1, 1, 2000], 1/2r, offset])
+      end
     end
   end
 
