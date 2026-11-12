@@ -214,9 +214,15 @@ transaction that had not ended yet, so an associated record's change is
 reported once, in the step where its transaction ends.
 
 A history read without a window begins at the record's first version, or at
-`from:`. What a transaction saved before that, such as an author it renamed
-before it created the article, is part of the state the history begins in,
-even when the transaction ended later.
+`from:`, before that version's transaction took effect, and ends where the
+transaction of its last version, or of `to:`, took effect. What another
+transaction saved before the start, such as an author it renamed before the
+article was created, is part of the state the history begins in if that
+transaction ended first, and is reported in its own step if it ended later.
+So two ranges that meet at a version report each change once, as the range
+over both does, and `compare` reads a version as both ranges do. A destroyed
+record's history ends where its destruction took effect; a change another
+transaction committed later is not the record's.
 
 Two transactions that save in one record's tree at the same time interleave
 their versions. Each is reported as if it ran alone, in the order they end: a
@@ -307,9 +313,12 @@ on the version class it was given raises `ConfigurationError`.
   keeps, as `timeline` reports them.
 - In `analyze_scope` and `report`, it also chooses which records are selected:
   a record is selected only when the filter keeps one of its own versions in
-  the window, or a version of a record on a requested association. A record
-  changed only by versions it drops would have nothing to report, so it is
-  left out, and it does not count toward `limit:`.
+  the window, or a version of a record on a requested association. With
+  associations, as activity reports them, it keeps a version when it keeps
+  any version of that version's transaction, so a record is selected
+  whenever its activity reports something. A record changed only by versions
+  it drops would have nothing to report, so it is left out, and it does not
+  count toward `limit:`.
 - The record and its requested associations keep their versions in one table
   (see [custom version classes](#models-schemas-and-edge-cases)), and the
   filter reads it for all of them. A condition on `item_type` or `item_id`
@@ -784,7 +793,8 @@ and `allow_approximate:`.
   versions and cannot show a change to its associations alone, so only a
   record's own version selects it. With
   [`version_scope:`](#reporting-only-some-changes-version_scope), only the
-  versions the filter keeps select it, the record's own and its associations'.
+  versions the filter keeps select it, the record's own and its associations',
+  each with its whole transaction when associations are requested.
 - **An analysis can still be empty.** A record is selected by any version on its
   paths, but its analysis compares only the state you requested. A join row
   whose role changed, or a version that touched only ignored columns, selects a
@@ -1615,6 +1625,16 @@ warning instead. `ok?` does not prove the history is complete.
   versions, because a history replayed without some of them would credit
   their changes to the next version kept. To report only some changes, pass
   [`version_scope:`](#reporting-only-some-changes-version_scope).
+- **Values the database rounds.** PaperTrail stores the value a record held
+  in memory, and the database may have stored less of it. The gem compares
+  every side in the form the database keeps: times to the column's precision
+  (a SQL Server `datetime` to 1/300 s, read back to the millisecond), a MySQL
+  `float` to single precision, a SQLite decimal as the number SQLite returns,
+  and a fixed-width `char` column padded (PostgreSQL, SQL Server) or with its
+  trailing spaces stripped (MySQL). So saving `12:00:00.1234567` to a column
+  that keeps microseconds is not reported as a change. A `serialize`d hash in
+  a `json` or `jsonb` history keeps string keys only (see
+  [history stored as JSON](#history-stored-as-json)).
 
 ### Version order
 
@@ -1656,7 +1676,8 @@ Two transactions that save in one record's tree at the same time interleave
 their versions. Each version was saved while the other transaction's changes
 were not yet committed, so at a version of one, a record the other saved
 reads as it stood before the other began, as a record the version's own
-transaction saved does. The other's changes appear from the event after its
+transaction saved does. A version reads so wherever it is used: in
+`compare`, and as the start or the end of a range. The other's changes appear from the event after its
 last version, in a step it opens, so a record it changed and changed back,
 such as a comment it created and deleted again, appears in no step and in no
 window's starting state or diff. A transaction is open from its first
@@ -1687,7 +1708,10 @@ PaperTrail's JSON serializer, and a `json` or `jsonb` `object` column, store
 times to milliseconds by default (`ActiveSupport::JSON::Encoding.time_precision`).
 For those histories the gem compares all times at that precision, so an
 unchanged timestamp is not reported as changed. A change smaller than that
-precision was never recorded and cannot be reported. A `json` or `jsonb`
+precision was never recorded and cannot be reported. For the same reason
+`historical_filter:` compares a time at that precision too: a filter for
+`12:00:00.123456` also matches a version that stored `12:00:00.123`, since
+the history cannot tell them apart. A `json` or `jsonb`
 column also returns times and dates as strings, which PaperTrail leaves as
 they are; the gem casts them back to the attribute's type.
 
@@ -1764,11 +1788,11 @@ All errors inherit from `PaperTrailDiff::Error`.
 
 | Error | Raised when |
 | --- | --- |
-| `ConfigurationError` | An option is invalid |
-| `InvalidEndpointError` | A record is unsaved, destroyed, or has unsaved changes, or `recorded_changes` is given something other than a version |
+| `ConfigurationError` | An option is invalid, or the version class has no `object` column to read states from |
+| `InvalidEndpointError` | A record is unsaved, destroyed, or has unsaved changes, a version was loaded without its `object`, a model has no `has_paper_trail`, or `recorded_changes` is given something other than a version |
 | `VersionMismatchError` | Two endpoints belong to different records |
 | `ReversedEndpointsError` | Two versions are given newest first |
-| `InvalidTimelineRangeError` | A range is invalid, for example `within:` with `from:`, or `:last` |
+| `InvalidTimelineRangeError` | A range is invalid, for example `within:` with `from:`, or `:last`, or a boundary symbol is unknown |
 | `InvalidTimeRangeError` | `within:` is not a range with a beginning, in time order |
 | `IncompleteTimeRangeError` | A window's last change has no later version and the record has no saved row to read instead |
 | `AmbiguousVersionOrderError` | Versions cannot be ordered (see [version order](#version-order)) |

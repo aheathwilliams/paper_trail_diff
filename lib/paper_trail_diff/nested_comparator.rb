@@ -156,16 +156,17 @@ module PaperTrailDiff
       keys(from_hash, to_hash).each do |key|
         from_item = from_hash.fetch(key, ABSENT)
         to_item = to_hash.fetch(key, ABSENT)
-        next if Support.same?(from_item, to_item)
-
-        here = (path + [key]).freeze
-        if from_item.is_a?(Hash) && to_item.is_a?(Hash)
-          walk(from_item, to_item, here, changes)
-        else
-          change = change_for(from_item, to_item)
-          changes[here] = change if change
-        end
+        visit(from_item, to_item, (path + [key]).freeze, changes) unless Support.same?(from_item,
+                                                                                       to_item)
       end
+    end
+
+    #: (untyped, untyped, Array[String], nested_changes) -> void
+    def visit(from_item, to_item, here, changes)
+      return walk(from_item, to_item, here, changes) if from_item.is_a?(Hash) && to_item.is_a?(Hash)
+
+      change = change_for(from_item, to_item)
+      changes[here] = change if change
     end
 
     #: (Hash[untyped, untyped]) -> Hash[String, untyped]

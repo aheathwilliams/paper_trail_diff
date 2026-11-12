@@ -112,6 +112,9 @@ module PaperTrailDiff
     # : (untyped) -> bool
     def synchronized_timestamp_disabled?: (untyped) -> bool
 
+    # : (String) -> DiagnosticReport
+    def report_stateless: (String) -> DiagnosticReport
+
     # : (Symbol, String, ?String?, ?untyped) -> void
     def add_error: (Symbol, String, ?String?, ?untyped) -> void
 

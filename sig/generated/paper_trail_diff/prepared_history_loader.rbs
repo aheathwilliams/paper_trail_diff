@@ -16,8 +16,12 @@ module PaperTrailDiff
     # history says where the earliest of them began, its `reach`, and its
     # reader reads it again from there. Where the second ends is read from
     # its version table, so nothing past the window's end is.
-    # : (untyped, root_ids: Array[untyped], root_versions: Array[untyped], tree: AssociationTree, traversal: AssociationTraversal, start_at: untyped, end_at: untyped, live_records: Array[untyped], ?window: bool) -> void
-    def initialize: (untyped, root_ids: Array[untyped], root_versions: Array[untyped], tree: AssociationTree, traversal: AssociationTraversal, start_at: untyped, end_at: untyped, live_records: Array[untyped], ?window: bool) -> void
+    #
+    # A range of versions reads the same way from its first version's
+    # transaction (see TransactionCut), and so, unless it is read again from
+    # a window's reach, from where a transaction open there began.
+    # : (untyped, root_ids: Array[untyped], root_versions: Array[untyped], tree: AssociationTree, traversal: AssociationTraversal, start_at: untyped, end_at: untyped, live_records: Array[untyped], ?window: bool, ?crossing: bool) -> void
+    def initialize: (untyped, root_ids: Array[untyped], root_versions: Array[untyped], tree: AssociationTree, traversal: AssociationTraversal, start_at: untyped, end_at: untyped, live_records: Array[untyped], ?window: bool, ?crossing: bool) -> void
 
     # : () -> PreparedHistory
     def call: () -> PreparedHistory
@@ -54,9 +58,14 @@ module PaperTrailDiff
 
     # Either part can itself be a through, which has no key of its own to
     # read, so each part is prepared as what it is. Like an edge, it returns
-    # every group it holds, not only those of these owners.
+    # every group it holds, not only those of these owners. Under
+    # `source_type:`, only targets of that type are members, so the path
+    # descends into no other.
     # : (untyped, Array[untyped], untyped) -> Hash[String, Hash[Symbol, untyped]]
     def prepare_through: (untyped, Array[untyped], untyped) -> Hash[String, Hash[Symbol, untyped]]
+
+    # : (untyped, Hash[String, Hash[Symbol, untyped]]) -> Hash[String, Hash[Symbol, untyped]]
+    def of_source_type: (untyped, Hash[String, Hash[Symbol, untyped]]) -> Hash[String, Hash[Symbol, untyped]]
 
     # : (untyped, Array[untyped], untyped) -> Hash[String, Hash[Symbol, untyped]]
     def prepare_edge: (untyped, Array[untyped], untyped) -> Hash[String, Hash[Symbol, untyped]]

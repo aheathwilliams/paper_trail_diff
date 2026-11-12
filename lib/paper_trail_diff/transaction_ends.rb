@@ -4,8 +4,11 @@
 module PaperTrailDiff
   # Where each transaction of a root's timeline takes effect: at the last
   # version it saved, of any record, as `recorded` holds it (see
-  # RecordedTransactionEnds); among the timeline's own versions where that is
-  # not known, as on a root read without its associations.
+  # RecordedTransactionEnds), or among the timeline's own versions where a
+  # number is shared (see TransactionAnchors). A root read without its
+  # associations is read without them: its versions take effect where they
+  # were saved, since row locks keep two transactions from interleaving the
+  # versions of one record.
   #
   # Two transactions that save in one tree at the same time interleave their
   # versions, yet neither sees what the other has not committed, and one may
@@ -19,25 +22,17 @@ module PaperTrailDiff
   # change is reported with its own transaction's.
   #
   # A version saved outside a transaction takes effect where it was saved.
+  #
+  # Every history, of a window or of a range of versions, is read from where
+  # the transactions open at its start began (see PreparedHistoryLoader), so
+  # what a root reports does not depend on what else a batch read with it.
   class TransactionEnds
-    #
-    # A whole history, read without a window, begins at its root's first
-    # version, its `floor`. A version saved before it took effect before the
-    # history began, whenever its transaction ended, unless that transaction
-    # is the floor's own: a history can hold such a version, as a batch's
-    # does when another of its roots is older, and what a root reports does
-    # not depend on what was read with it. A window has no floor: it is read
-    # from where the transactions open at its start began, since it reports
-    # them.
-    #: (Array[untyped], ?Hash[Array[untyped], untyped], ?floor: untyped) -> void
-    def initialize(versions, recorded = {}, floor: nil)
-      @recorded = recorded
-      @floor = floor && Support.chronological_version_key(floor)
-      @floor_transaction = ActivityTransactionGroups.transaction_key(floor)
+    #: (Array[untyped], ?Hash[Array[untyped], untyped]?) -> void
+    def initialize(versions, recorded = nil)
+      @grouped = !recorded.nil?
+      @recorded = recorded || {}
       saved = versions.sort_by { |version| Support.chronological_version_key(version) }
       @last = TransactionEnds.lasts(saved)
-      @horizon = saved.last && Support.chronological_version_key(saved.last)
-      @reordered = !saved.eql?(saved.sort_by { |version| sort_key(version) })
       freeze
     end
 
@@ -49,28 +44,13 @@ module PaperTrailDiff
            .transform_values(&:last)
     end
 
-    # Whether placing the versions at their transactions' ends changes their
-    # order: some transaction saved a version between two of another's.
-    #: () -> bool
-    def interleaved? = @reordered
-
     # The last version of the version's transaction, or the version itself.
     #: (untyped) -> untyped
     def last(version)
       key = ActivityTransactionGroups.transaction_key(version)
-      return version if key.nil? || settled?(version, key)
+      return version if key.nil? || !@grouped
 
       @recorded[key] || @last[key] || version
-    end
-
-    # Whether the version was saved after every version of the timeline. A
-    # history can hold such a version, as the next one of a record after the
-    # range it was read for, or as part of a batch's history that runs on for
-    # another root. The timeline ends before it, so it takes effect after
-    # everything the timeline holds, whenever its transaction ended.
-    #: (untyped) -> bool
-    def beyond?(version)
-      (Support.chronological_version_key(version) <=> @horizon) == 1
     end
 
     # Orders versions by where their transactions end, then as they were
@@ -81,21 +61,9 @@ module PaperTrailDiff
        Support.chronological_version_key(version)]
     end
 
-    private
-
+    # @rbs @grouped: bool
     # @rbs @recorded: Hash[Array[untyped], untyped]
-    # @rbs @floor: Array[untyped]?
-    # @rbs @floor_transaction: Array[untyped]?
     # @rbs @last: Hash[Array[untyped]?, untyped]
-    # @rbs @horizon: Array[untyped]?
-    # @rbs @reordered: bool
-
-    # Whether the version was saved before the floor, by another transaction
-    # than the floor's.
-    #: (untyped, Array[untyped]) -> bool
-    def settled?(version, key)
-      !key.eql?(@floor_transaction) && (Support.chronological_version_key(version) <=> @floor) == -1
-    end
   end
 
   # Reads where transactions end from their version tables: the last version

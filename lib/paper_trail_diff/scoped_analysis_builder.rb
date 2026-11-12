@@ -10,6 +10,7 @@ module PaperTrailDiff
       analyzer:, deleted_analyzer:, activity_tree: nil, version_scope: nil
     )
       raise ConfigurationError, 'limit: is required when selecting roots by scope' if limit.nil?
+
       Support.boolean!(:include_deleted, include_deleted)
 
       @selection = ScopedRootSelection.new(

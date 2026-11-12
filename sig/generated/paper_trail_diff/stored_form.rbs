@@ -1,0 +1,63 @@
+# Generated from lib/paper_trail_diff/stored_form.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Reads each value as the database stores it.
+  #
+  # PaperTrail writes a version from the instance in memory, which can hold a
+  # value more exactly than its column does: a record saved twice through one
+  # instance records the value as Ruby held it, and every later version as the
+  # row gave it back. The two would compare as an edit nobody made. Each side
+  # is brought to the form the column keeps, which leaves a value read from
+  # the row as it is:
+  #
+  # - a time in a column without a declared precision, which Active Record
+  #   writes with six fractional digits, and SQL Server's `datetime` rounds
+  #   to 1/300 s;
+  # - a fixed-width string, which PostgreSQL and SQL Server pad with spaces
+  #   and MySQL reads back without trailing spaces;
+  # - MySQL's single-precision `float`, which reads back with six significant
+  #   digits;
+  # - a decimal on SQLite, which stores it as a double.
+  #
+  # Other columns are read as they are; docs/reference.md lists the limit.
+  module StoredForm
+    MICROSECOND_DIGITS: ::Integer
+
+    SQL_SERVER_DATETIME_STEPS: ::Integer
+
+    FIXED_WIDTH: ::Regexp
+
+    INT64: untyped
+
+    # : (untyped, Hash[untyped, untyped]) -> Hash[untyped, untyped]
+    def self.apply: (untyped, Hash[untyped, untyped]) -> Hash[untyped, untyped]
+
+    # The form each column of the model's table needs, by name.
+    # : (untyped) -> Hash[String, ^(untyped) -> untyped]
+    def self.forms: (untyped) -> Hash[String, ^(untyped) -> untyped]
+
+    # : (String, untyped, untyped) -> (^(untyped) -> untyped)?
+    def self.form: (String, untyped, untyped) -> (^(untyped) -> untyped)?
+
+    # Active Record truncates a time to a declared precision itself.
+    # : (String, untyped, untyped) -> (^(untyped) -> untyped)?
+    def self.time_form: (String, untyped, untyped) -> (^(untyped) -> untyped)?
+
+    # SQL Server's `datetime` keeps steps of 1/300 s, read back to the
+    # millisecond, and rounds to the nearest.
+    # : (untyped) -> untyped
+    def self.sql_server_datetime: (untyped) -> untyped
+
+    # MySQL's `float` is single precision, read back with six digits.
+    # : (String, untyped) -> (^(untyped) -> untyped)?
+    def self.float_form: (String, untyped) -> (^(untyped) -> untyped)?
+
+    # SQLite keeps a decimal as a double, or as an integer when it is a whole
+    # number that fits one, and Active Record casts what it reads back.
+    # : (String, untyped) -> (^(untyped) -> untyped)?
+    def self.decimal_form: (String, untyped) -> (^(untyped) -> untyped)?
+
+    # : (String, untyped) -> (^(untyped) -> untyped)?
+    def self.fixed_width_form: (String, untyped) -> (^(untyped) -> untyped)?
+  end
+end

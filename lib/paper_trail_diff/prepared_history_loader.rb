@@ -17,7 +17,11 @@ module PaperTrailDiff
     # history says where the earliest of them began, its `reach`, and its
     # reader reads it again from there. Where the second ends is read from
     # its version table, so nothing past the window's end is.
-    #: (untyped, root_ids: Array[untyped], root_versions: Array[untyped], tree: AssociationTree, traversal: AssociationTraversal, start_at: untyped, end_at: untyped, live_records: Array[untyped], ?window: bool) -> void
+    #
+    # A range of versions reads the same way from its first version's
+    # transaction (see TransactionCut), and so, unless it is read again from
+    # a window's reach, from where a transaction open there began.
+    #: (untyped, root_ids: Array[untyped], root_versions: Array[untyped], tree: AssociationTree, traversal: AssociationTraversal, start_at: untyped, end_at: untyped, live_records: Array[untyped], ?window: bool, ?crossing: bool) -> void
     def initialize( # rubocop:disable Metrics/ParameterLists
       record,
       root_ids:,
@@ -27,7 +31,8 @@ module PaperTrailDiff
       start_at:,
       end_at:,
       live_records:,
-      window: false
+      window: false,
+      crossing: false
     )
       @window = window
       @record = record
@@ -36,6 +41,7 @@ module PaperTrailDiff
       @tree = tree
       @traversal = traversal
       start_at = TransactionCut.range_start(root_versions, start_at) unless window
+      start_at = TransactionCut.crossing_start(record.class, traversal, start_at) if crossing
       @records = PreparedRecordIndex.new(start_at, end_at: end_at, live_records: live_records)
       @activity = PreparedActivityIndex.new(@records, root_versions, start_at: start_at)
       @history = PreparedHistory.new(@records, activity_index: @activity)

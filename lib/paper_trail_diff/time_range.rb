@@ -40,6 +40,23 @@ module PaperTrailDiff
     end
     private_class_method :stored_digits
 
+    # Checks `report(since:)`, the start of the endless window it reads, as
+    # that window will read it, so that a message names `since`. A range
+    # there would become the start of another range.
+    #: (untyped) -> void
+    def self.check_since!(since)
+      if since.nil? || since.is_a?(Range)
+        raise InvalidTimeRangeError, '`since` must be a time, date, or string; for a range, ' \
+                                     'pass it as `within:` to analyze_scope'
+      end
+
+      begin
+        new(since..)
+      rescue InvalidTimeRangeError
+        raise InvalidTimeRangeError, '`since` must be a time, date, or string'
+      end
+    end
+
     #: (untyped, ?digits: Integer) -> void
     def initialize(value, digits: MICROSECOND_DIGITS)
       unless value.is_a?(Range) && value.begin

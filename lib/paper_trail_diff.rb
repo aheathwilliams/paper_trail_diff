@@ -374,18 +374,7 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
       historical_filter: nil, max_filter_versions: HistoricalFilter::DEFAULT_VERSION_LIMIT,
       recorded_changes: false, allow_approximate: false
     )
-      # A range here would become the start of another range.
-      if since.nil? || since.is_a?(Range)
-        raise InvalidTimeRangeError, '`since` must be a time, date, or string; for a range, ' \
-                                     'pass it as `within:` to analyze_scope'
-      end
-      # Read here as the window will read it, so a message names `since`.
-      begin
-        TimeRange.new(since..)
-      rescue InvalidTimeRangeError
-        raise InvalidTimeRangeError, '`since` must be a time, date, or string'
-      end
-
+      TimeRange.check_since!(since)
       # Endless, so a version a server dated ahead of this one's clock is in it.
       analyze_scope(
         scope,

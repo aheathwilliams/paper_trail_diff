@@ -36,8 +36,8 @@ module PaperTrailDiff
     end
 
     # See PreparedRecordIndex#transaction_ends.
-    #: (Array[untyped], ?floor: untyped) -> TransactionEnds
-    def transaction_ends(versions, floor: nil) = @records.transaction_ends(versions, floor: floor)
+    #: (Array[untyped]) -> TransactionEnds
+    def transaction_ends(versions) = @records.transaction_ends(versions)
 
     #: () -> TransactionEnds?
     def reading_ends = @records.reading_ends
@@ -135,9 +135,8 @@ module PaperTrailDiff
                     @records.loaded?(model_class, id)
 
       # An STI subclass reads no sibling's row, as its type condition reads none.
-      target = Array(@records.record_before(model_class, id, boundary)).compact.select do |row|
-        AssociationTraversal.sti_member?(model_class, row.attributes)
-      end
+      rows = Array(@records.record_before(model_class, id, boundary)).compact #: Array[untyped]
+      target = rows.select { |row| AssociationTraversal.sti_member?(model_class, row.attributes) }
       @conditions.select(reflection, target, model_class, ranked: ranked)
     end
 

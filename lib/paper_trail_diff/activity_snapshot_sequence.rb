@@ -21,8 +21,7 @@ module PaperTrailDiff
     #
     # A `start_at` is a window's; a range of versions starts at its first.
     #: (untyped, Array[untyped], ?start_at: untyped, ?end_at: untyped, ?reach: bool) -> PreparedActivitySnapshots
-    def prepare(record, root_versions, start_at: nil, end_at: root_versions.last.created_at,
-                reach: true)
+    def prepare(record, root_versions, start_at: nil, end_at: nil, reach: true)
       history = @store.prepare(record, root_versions, start_at: start_at, end_at: end_at,
                                                       reach: reach)
       last = @last
@@ -36,6 +35,10 @@ module PaperTrailDiff
     def call(root_endpoint, context_endpoint)
       @snapshotter.call(root_endpoint, context_endpoint)
     end
+
+    # See HistoricalSnapshotStore#range_end_of.
+    #: (untyped, untyped) -> untyped
+    def range_end(record, version) = @store.range_end_of(record, version)
 
     # See HistoricalSnapshotStore#reach_before.
     #: (untyped, untyped) -> untyped
@@ -75,14 +78,13 @@ module PaperTrailDiff
     end
 
     # Where the transactions of these versions take effect: as recorded,
-    # with a history to read it from. A whole history begins at its `floor`
-    # (see TransactionEnds).
-    #: (Array[untyped], ?floor: untyped) -> TransactionEnds
-    def transaction_ends(versions, floor: nil)
+    # with a history to read it from.
+    #: (Array[untyped]) -> TransactionEnds
+    def transaction_ends(versions)
       history = @history
-      return TransactionEnds.new(versions, floor: floor) unless history
+      return TransactionEnds.new(versions) unless history
 
-      history.transaction_ends(versions, floor: floor)
+      history.transaction_ends(versions)
     end
 
     #: (untyped, untyped) -> RecordSnapshot?
@@ -144,13 +146,13 @@ module PaperTrailDiff
 
   # Builds chronological snapshots, refreshing only branches affected by prior events.
   class ActivitySnapshotSequence
-    #: (Array[untyped], Array[ActivityEvent], untyped, ?current: untyped, ?floor: untyped) -> void
-    def initialize(root_versions, events, snapshotter, current: nil, floor: nil)
+    #: (Array[untyped], Array[ActivityEvent], untyped, ?current: untyped) -> void
+    def initialize(root_versions, events, snapshotter, current: nil)
       @root_versions = root_versions
       @events = events
       @snapshotter = snapshotter
       @current = current
-      @ends = snapshotter.transaction_ends(events.map(&:version), floor: floor)
+      @ends = snapshotter.transaction_ends(events.map(&:version))
       @transaction_groups = ActivityTransactionGroups.new(events)
       @root_endpoints = build_root_endpoints
     end
@@ -159,8 +161,6 @@ module PaperTrailDiff
     def each(&block)
       first = @events.first
       return unless first
-
-      return replay(first, &block) unless @ends.interleaved?
 
       @snapshotter.reading(@ends) { replay(first, &block) }
     end

@@ -4,7 +4,6 @@
 module PaperTrailDiff
   # Reconstructs an event's post-change record or immutable scalar delta.
   class ActivityEventRecordResolver
-
     #: (?record_transition: untyped, ?prepared_record_after: untyped) -> void
     def initialize(record_transition: nil, prepared_record_after: nil)
       @record_transition = record_transition
@@ -101,7 +100,9 @@ module PaperTrailDiff
     # not one holds the serializer's text.
     #: (untyped) -> untyped
     def stored_changes(version)
-      return version.send(:object_changes_deserialized) if version.respond_to?(:object_changes_deserialized, true)
+      return version.send(:object_changes_deserialized) if version.respond_to?(
+        :object_changes_deserialized, true
+      )
 
       Object.const_get(:PaperTrail).serializer.load(version.object_changes)
     end

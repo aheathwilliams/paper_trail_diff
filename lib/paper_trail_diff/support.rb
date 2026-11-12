@@ -64,7 +64,8 @@ module PaperTrailDiff
     # The time JSON wrote, or the text as it is when it names none.
     #: (String) -> untyped
     def self.written_time(text)
-      time_of_day(::Time.iso8601(text))
+      parser = ::Time #: untyped
+      time_of_day(parser.iso8601(text))
     rescue ArgumentError
       text
     end
@@ -91,8 +92,9 @@ module PaperTrailDiff
 
       local = Object.const_get(:ActiveRecord).default_timezone == :local
       clock = local ? value.getlocal : value.getutc
+      fraction = clock.subsec #: untyped
       ::Time.public_send(local ? :local : :utc, *TIME_OF_DAY_DATE.values, clock.hour, clock.min,
-                         clock.sec + clock.subsec)
+                         clock.sec + fraction)
     end
 
     # PaperTrail's `reify`, with each time of day its version recorded.
@@ -114,16 +116,24 @@ module PaperTrailDiff
       version = rebuilt_from(record)
       return record unless version
 
-      times = TimeOfDay.columns(record.class)
+      rebuilt = record #: untyped
+      times = TimeOfDay.columns(rebuilt.class)
       version.object_deserialized.each do |name, value|
         if TIME_VALUE.eql?(value.class.name)
           assign_recorded(record, name.to_s, recorded_time(value))
-        elsif value.is_a?(String) && times.include?(name.to_s)
+        elsif written_time?(value, name, times)
           assign_recorded(record, name.to_s, written_time(value))
         end
       end
       record
     end
+
+    # JSON writes a time of day as text.
+    #: (untyped, untyped, Array[String]) -> bool
+    def self.written_time?(value, name, times)
+      value.is_a?(String) && times.include?(name.to_s)
+    end
+    private_class_method :written_time?
 
     #: (untyped) -> untyped
     def self.rebuilt_from(record)
@@ -153,7 +163,7 @@ module PaperTrailDiff
 
     #: (untyped) -> untyped
     def self.immutable_copy(value)
-      return value if value.frozen? && deeply_frozen?(value)
+      return value if deeply_frozen?(value)
 
       case value
       when Hash
@@ -169,15 +179,22 @@ module PaperTrailDiff
     # value object that holds it would.
     #: (untyped) -> bool
     def self.deeply_frozen?(value)
-      case value
-      when Hash
-        value.instance_of?(Hash) && value.frozen? &&
-          value.all? { |key, item| deeply_frozen?(key) && deeply_frozen?(item) }
-      when Array then value.instance_of?(Array) && value.frozen? && value.all? { |item| deeply_frozen?(item) }
-      else value.frozen?
-      end
+      members = frozen_members(value)
+      !members.nil? && members.all? { |item| deeply_frozen?(item) }
     end
     private_class_method :deeply_frozen?
+
+    # What a frozen plain Hash or Array holds, keys too, and nothing for any
+    # other frozen value; nil when the value is not frozen or is a subclass.
+    #: (untyped) -> Array[untyped]?
+    def self.frozen_members(value)
+      return unless value.frozen?
+      return value.flatten if value.instance_of?(Hash)
+      return value if value.instance_of?(Array)
+
+      [] unless value.is_a?(Hash) || value.is_a?(Array)
+    end
+    private_class_method :frozen_members
 
     #: (Hash[untyped, untyped]) -> Hash[untyped, untyped]
     def self.immutable_hash(value)
@@ -346,14 +363,16 @@ module PaperTrailDiff
     # A Float or BigDecimal NaN.
     #: (untyped) -> bool
     def self.nan?(value)
-      value.is_a?(Numeric) && value.respond_to?(:nan?) && value.nan?
+      number = value #: untyped
+      number.respond_to?(:nan?) && number.nan?
     end
 
     # An option that is a switch takes only true or false, so a truthy value
     # given by mistake, such as a string, is not read as one.
     #: (Symbol, untyped) -> void
     def self.boolean!(name, value)
-      raise ConfigurationError, "#{name}: must be true or false" unless [true, false].include?(value)
+      raise ConfigurationError, "#{name}: must be true or false" unless [true,
+                                                                         false].include?(value)
     end
 
     # Why a versioned model's history holds no states, or nil. PaperTrail

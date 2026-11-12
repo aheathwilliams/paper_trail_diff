@@ -47,10 +47,12 @@ module PaperTrailDiff
       known = @forms #: Hash[untyped, Hash[String, ^(untyped) -> untyped]]
       known.fetch(model_class) do
         adapter = model_class.connection_db_config.adapter.to_s
-        known[model_class] = model_class.columns.each_with_object({}) do |column, forms|
+        forms = {} #: Hash[String, ^(untyped) -> untyped]
+        model_class.columns.each do |column|
           form = form(adapter, column, model_class.type_for_attribute(column.name))
           forms[column.name] = form if form
-        end.freeze
+        end
+        known[model_class] = forms.freeze
       end
     end
     private_class_method :forms
@@ -70,9 +72,15 @@ module PaperTrailDiff
     #: (String, untyped, untyped) -> (^(untyped) -> untyped)?
     def self.time_form(adapter, column, type)
       return if type.respond_to?(:precision) && type.precision
-      return method(:sql_server_datetime) if adapter == 'sqlserver' && column.sql_type.casecmp?('datetime')
+      if adapter == 'sqlserver' && column.sql_type.casecmp?('datetime')
+        return ->(value) { sql_server_datetime(value) }
+      end
 
-      ->(value) { StoredTimePrecision.truncate(value, MICROSECOND_DIGITS) } unless adapter == 'sqlserver'
+      return if adapter == 'sqlserver'
+
+      lambda { |value|
+        StoredTimePrecision.truncate(value, MICROSECOND_DIGITS)
+      }
     end
     private_class_method :time_form
 
@@ -95,7 +103,12 @@ module PaperTrailDiff
       return unless %w[mysql2 trilogy].include?(adapter) && column.sql_type.casecmp?('float')
 
       lambda do |value|
-        value.is_a?(Float) && value.finite? ? Float(format('%.6g', [value].pack('f').unpack1('f'))) : value
+        if value.is_a?(Float) && value.finite?
+          Float(format('%.6g',
+                       [value].pack('f').unpack1('f')))
+        else
+          value
+        end
       end
     end
     private_class_method :float_form
@@ -107,9 +120,10 @@ module PaperTrailDiff
       return unless adapter == 'sqlite3'
 
       lambda do |value|
-        return value unless value.is_a?(Numeric)
+        number = value #: untyped
+        return number unless number.is_a?(Numeric)
 
-        stored = value.to_f
+        stored = Float(number) #: Float
         stored = stored.to_i if stored.finite? && stored == stored.truncate && stored.abs < INT64
         type.cast(stored)
       end

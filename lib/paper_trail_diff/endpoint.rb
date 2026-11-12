@@ -11,8 +11,9 @@ module PaperTrailDiff
       unless identity(from_endpoint) == identity(to_endpoint)
         raise VersionMismatchError, 'endpoints must belong to the same PaperTrail item'
       end
+
       version = [from_endpoint, to_endpoint].find { |endpoint| version?(endpoint) }
-      validate_history!(model_class(version)) if version
+      ReadableHistory.check_model!(model_class(version)) if version
 
       validate_order!(from_endpoint, to_endpoint)
     end
@@ -42,7 +43,7 @@ module PaperTrailDiff
 
     #: (untyped) -> void
     def self.validate!(endpoint)
-      return validate_version!(endpoint) if version?(endpoint)
+      return ReadableHistory.check_version!(endpoint) if version?(endpoint)
 
       validate_record!(endpoint)
     end
@@ -56,22 +57,12 @@ module PaperTrailDiff
       unless record?(record)
         raise InvalidEndpointError, "expected a record, got #{described(record)}"
       end
-      if record.persisted? && record.respond_to?(:has_changes_to_save?) && record.has_changes_to_save?
+      if record.persisted? && record.respond_to?(:has_changes_to_save?) &&
+         record.has_changes_to_save?
         raise InvalidEndpointError, 'record must not have unsaved changes'
       end
 
-      validate_history!(record.class)
-    end
-
-    # A model whose history can be read.
-    #: (untyped) -> void
-    def self.validate_history!(model_class)
-      unless Support.versioned?(model_class)
-        raise InvalidEndpointError,
-              "#{model_class} is not versioned, so it has no history: add has_paper_trail to it"
-      end
-      reason = Support.stateless_reason(model_class)
-      raise ConfigurationError, reason if reason
+      ReadableHistory.check_model!(record.class)
     end
 
     # What a message names the value as. A relation is named rather than
@@ -152,17 +143,6 @@ module PaperTrailDiff
       raise InvalidEndpointError, 'current record endpoint could not be reloaded from the database'
     end
 
-    # A version read with `select` can lack the column its state is in.
-    #: (untyped) -> void
-    def self.validate_version!(version)
-      return unless version.respond_to?(:has_attribute?) && version.class.respond_to?(:column_names)
-      return if version.has_attribute?(:object) || !version.class.column_names.include?('object')
-
-      raise InvalidEndpointError, "version #{version.id} was loaded without its object column; " \
-                                  'load versions with all their columns'
-    end
-    private_class_method :validate_version!
-
     #: (untyped) -> void
     def self.validate_record!(record)
       unless record?(record)
@@ -176,6 +156,29 @@ module PaperTrailDiff
       raise InvalidEndpointError, 'current record endpoint must not have unsaved changes'
     end
     private_class_method :validate_record!
+  end
+
+  # Whether a history can be read: of a model, and from a version given.
+  module ReadableHistory
+    #: (untyped) -> void
+    def self.check_model!(model_class)
+      unless Support.versioned?(model_class)
+        raise InvalidEndpointError,
+              "#{model_class} is not versioned, so it has no history: add has_paper_trail to it"
+      end
+      reason = Support.stateless_reason(model_class)
+      raise ConfigurationError, reason if reason
+    end
+
+    # A version read with `select` can lack the column its state is in.
+    #: (untyped) -> void
+    def self.check_version!(version)
+      return unless version.respond_to?(:has_attribute?) && version.class.respond_to?(:column_names)
+      return if version.has_attribute?(:object) || !version.class.column_names.include?('object')
+
+      raise InvalidEndpointError, "version #{version.id} was loaded without its object column; " \
+                                  'load versions with all their columns'
+    end
   end
 
   # Whether a value is a version, a record, or neither, answered once for

@@ -51,8 +51,12 @@ RSpec.describe PaperTrailDiff::VersionScopeFilter do
           .to raise_error(PaperTrailDiff::ConfigurationError,
                           'version_scope: must take the version relation as its one argument')
       end
-      [proc { |relation| relation }, proc { nil }, ->(*relations) { relations },
-       ->(relation, _ = 1) { relation }, Object.new.tap { |o| def o.call(relation) = relation }].each do |scope|
+      [proc { |relation| relation }, proc {}, ->(*relations) { relations },
+       ->(relation, _ = 1) { relation }, Object.new.tap do |o|
+                                           def o.call(relation)
+                                             relation
+                                           end
+                                         end].each do |scope|
         expect(described_class.checked(scope)).to respond_to(:call)
       end
     end

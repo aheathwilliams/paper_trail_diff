@@ -95,7 +95,8 @@ RSpec.describe 'Membership by type' do
 
       expect(TmItem.find(item.id).blocking_bug).to be_nil
       version = item.versions.reorder(:id).last
-      analysis = PaperTrailDiff.analyze(item, from: version, to: item, associations: [:blocking_bug])
+      analysis = PaperTrailDiff.analyze(item, from: version, to: item,
+                                              associations: [:blocking_bug])
       expect(ids(analysis.from_snapshot, 'blocking_bug')).to eq([])
       expect(analysis.diff.associations).to eq({})
       steps = PaperTrailDiff.activity_timeline(item, associations: [:blocking_bug])
@@ -127,11 +128,12 @@ RSpec.describe 'Membership by type' do
 
       expect(TmProject.find(project.id).notes.map(&:id)).to eq([note.id])
       versions = project.versions.reorder(:id).to_a
-      analysis = PaperTrailDiff.analyze(project, from: versions[1], to: project, associations: [:notes])
+      analysis = PaperTrailDiff.analyze(project, from: versions[1], to: project,
+                                                 associations: [:notes])
       expect(ids(analysis.from_snapshot, 'notes')).to eq([])
       expect(ids(analysis.to_snapshot, 'notes')).to eq([note.id])
       steps = PaperTrailDiff.activity_timeline(project, associations: [:notes])
-      expect(steps.map { |step| step.diff.associations['notes']&.added&.map(&:id) }.compact)
+      expect(steps.filter_map { |step| step.diff.associations['notes']&.added&.map(&:id) })
         .to eq([[note.id]])
     end
   end
@@ -159,7 +161,8 @@ RSpec.describe 'Membership by type' do
 
       options = { associations: [:blocking], activity: true }
       single = PaperTrailDiff.analyze(second, **options)
-      batch = PaperTrailDiff.analyze_many([second, bug], **options).fetch(['TmItem', second.id.to_s])
+      batch = PaperTrailDiff.analyze_many([second, bug],
+                                          **options).fetch(['TmItem', second.id.to_s])
       expect(steps(batch)).to eq(steps(single))
     end
   end

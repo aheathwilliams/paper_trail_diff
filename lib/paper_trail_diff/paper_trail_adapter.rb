@@ -401,7 +401,7 @@ module PaperTrailDiff
 
     #: (untyped) -> RecordSnapshot?
     def historical_snapshot(version)
-      snapshot_at(version, version)
+      @historical_store.at_version(version)
     end
 
     #: (untyped, untyped, ?history: PreparedHistory?) -> RecordSnapshot?

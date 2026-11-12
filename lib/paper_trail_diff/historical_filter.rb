@@ -74,17 +74,23 @@ module PaperTrailDiff
         raise ConfigurationError, 'historical_filter: must respond to call or be an attribute hash'
       end
 
+      attributes = named_attributes(predicate)
+      attributes.to_h { |name, value| [name, expected(name, value)] }
+    end
+
+    # The attribute hash by name, each named once and on the model.
+    #: (Hash[untyped, untyped]) -> Hash[String, untyped]
+    def named_attributes(predicate)
       attributes = predicate.transform_keys(&:to_s)
       if attributes.length < predicate.length
-        raise ConfigurationError, 'historical_filter: names an attribute twice, as a string and a symbol'
-      end
-      unknown = attributes.keys - @model.attribute_names
-      if unknown.any?
         raise ConfigurationError,
-              "unknown historical attributes: #{unknown.join(', ')}"
+              'historical_filter: names an attribute twice, as a string and a symbol'
       end
 
-      attributes.to_h { |name, value| [name, expected(name, value)] }
+      unknown = attributes.keys - @model.attribute_names
+      return attributes if unknown.empty?
+
+      raise ConfigurationError, "unknown historical attributes: #{unknown.join(', ')}"
     end
 
     # `where` reads a list or a range as any of its values, which an

@@ -132,7 +132,7 @@ module PaperTrailDiff
           handled, child = @records.snapshot_state_before(group.fetch(:model), id, boundary)
           return [false, []] unless handled
 
-          selected << child if child && member?(child, owner, owner_id, reflection, condition)
+          selected << child if child && member?(child, owner_id, reflection, condition)
         end
       end
       return [true, selected] unless ranked
@@ -147,15 +147,19 @@ module PaperTrailDiff
       owners ? owners.fetch(owner_id, empty) : group.fetch(:ids)
     end
 
-    #: (PreparedRecordState, PreparedRecordState, String, untyped, ScopeCondition) -> bool
-    def member?(child, owner, owner_id, reflection, condition)
+    #: (PreparedRecordState, String, untyped, ScopeCondition) -> bool
+    def member?(child, owner_id, reflection, condition)
       attributes = child.attributes
-      return false unless attributes[reflection.foreign_key.to_s].to_s == owner_id
-      return false unless AssociationTraversal.sti_member?(reflection.klass, attributes)
-      return false unless condition.matches?(attributes)
-      return true unless reflection.options[:as]
+      attributes[reflection.foreign_key.to_s].to_s == owner_id &&
+        AssociationTraversal.sti_member?(reflection.klass, attributes) &&
+        condition.matches?(attributes) && owner_typed?(attributes, reflection)
+    end
 
-      AssociationTraversal.owner_type(reflection) == child.attributes[reflection.type.to_s].to_s
+    # An `as:` child names its owner by type as well.
+    #: (Hash[String, untyped], untyped) -> bool
+    def owner_typed?(attributes, reflection)
+      !reflection.options[:as] ||
+        AssociationTraversal.owner_type(reflection) == attributes[reflection.type.to_s].to_s
     end
 
     #: (PreparedRecordState) -> String

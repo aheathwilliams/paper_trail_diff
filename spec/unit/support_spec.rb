@@ -61,15 +61,17 @@ RSpec.describe PaperTrailDiff::Support do
       decodable = described_class.decodable({ 'rings_at' => ActiveRecord::Type::Time::Value.new(assigned),
                                               'unset' => empty }, clock)
 
-      expect(decodable).to eq('rings_at' => Time.utc(2000, 1, 1, 18, 30, Rational(31, 2)), 'unset' => nil)
+      expect(decodable).to eq('rings_at' => Time.utc(2000, 1, 1, 18, 30, Rational(31, 2)),
+                              'unset' => nil)
       expect(decodable.fetch('rings_at')).to be_utc
     end
 
     # JSON keeps a time of day as the text of the time assigned, date and
     # offset included; its clock is read on that date.
     it 'reads the text JSON wrote for a time of day as a time, and leaves other text' do
-      decodable = described_class.decodable({ 'rings_at' => ['2032-06-01T18:00:00.000-04:00', '09:30'],
-                                              'title' => '2032-06-01T18:00:00.000-04:00' }, clock)
+      written = '2032-06-01T18:00:00.000-04:00'
+      stored = { 'rings_at' => [written, '09:30'], 'title' => written }
+      decodable = described_class.decodable(stored, clock)
 
       expect(decodable).to eq('rings_at' => [Time.utc(2000, 1, 1, 22), '09:30'],
                               'title' => '2032-06-01T18:00:00.000-04:00')
@@ -81,7 +83,8 @@ RSpec.describe PaperTrailDiff::Support do
 
       read = ENV.fetch('TZ', nil).then do |zone|
         ENV['TZ'] = 'America/New_York'
-        described_class.decodable({ 'rings_at' => ActiveRecord::Type::Time::Value.new(summer) }, clock)
+        described_class.decodable({ 'rings_at' => ActiveRecord::Type::Time::Value.new(summer) },
+                                  clock)
       ensure
         ENV['TZ'] = zone
       end

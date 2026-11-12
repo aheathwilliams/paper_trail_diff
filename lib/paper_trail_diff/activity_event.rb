@@ -91,6 +91,18 @@ module PaperTrailDiff
       events.reject { |event| !event.root? && transaction_key(event.version) == key }.freeze
     end
 
+    # Where the root's destruction takes effect, its tree is gone, so what a
+    # transaction that ended later saved there is no change of the root's,
+    # until the root is created again.
+    #: (Array[ActivityEvent]) -> Array[ActivityEvent]
+    def self.until_destroyed(events)
+      gone = false
+      events.reject do |event|
+        gone = event.version.event == 'destroy' if event.root?
+        gone && !event.root?
+      end.freeze
+    end
+
     # A version without a transaction shares one with nothing.
     #: (untyped) -> Array[untyped]?
     def self.transaction_key(version)

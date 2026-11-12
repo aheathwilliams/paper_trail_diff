@@ -152,13 +152,18 @@ module PaperTrailDiff
     end
 
     # Only the versions `version_scope` keeps select a root: one whose versions
-    # in the window it drops would have nothing to report.
+    # in the window it drops would have nothing to report. With associations
+    # it keeps whole transactions, as their activity reports them.
     #: () -> untyped
     def window_versions
       range = @selecting
       relation = VersionQuery.for_model(model)
       relation = range.scope(relation) if range
-      @version_scope ? @version_scope.call(relation) : relation
+      scope = @version_scope
+      return relation unless scope
+      return scope.call(relation) unless @related
+
+      VersionScopeFilter.whole_transactions(scope, relation)
     end
 
     #: (untyped, Integer) -> FilteredCandidates?
@@ -184,7 +189,7 @@ module PaperTrailDiff
 
     #: () -> void
     def reject_unversioned!
-      Endpoint.validate_history!(model)
+      ReadableHistory.check_model!(model)
     end
 
     # No Integer subclass has instances, so this is `is_a?` by another name.
@@ -236,11 +241,15 @@ module PaperTrailDiff
     # name no record.
     #: (Array[untyped]) -> void
     def reject_keyless!(page)
-      return if page.none? { |record| record.id.nil? || Array(record.id).include?(nil) }
+      return if page.none? { |record| keyless?(record.id) }
 
       raise ConfigurationError, "scope: selects columns without #{primary_key}, so its rows name " \
                                 'no record; select it too'
     end
+
+    # A composite key names a record only when every part of it is read.
+    #: (untyped) -> bool
+    def keyless?(id) = id.nil? || [*id].include?(nil)
 
     # Pages are read by offset, so under a total order.
     #: (*untyped) -> untyped

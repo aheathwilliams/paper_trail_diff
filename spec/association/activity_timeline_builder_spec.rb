@@ -339,6 +339,8 @@ RSpec.describe PaperTrailDiff::ActivityTimelineBuilder do
       calls
     end
 
+    # Events are read from where the history starts, the first version's
+    # transaction here, as no other was open there.
     it 'prepares history over the root versions and reads events from the first to the last' do
       article, _comment, from, to = edited_history
       prepared = []
@@ -352,9 +354,10 @@ RSpec.describe PaperTrailDiff::ActivityTimelineBuilder do
 
       versions = [from, to]
       expect(provider).to have_received(:prepare).twice
-      expect(provider).to have_received(:prepare).with(article, versions).twice
+      expect(provider).to have_received(:prepare).with(article, versions,
+                                                       end_at: to.created_at).twice
       expect(calls.map { |call| call.slice(:root_versions, :range_start, :range_end) })
-        .to eq([{ root_versions: versions, range_start: from, range_end: to }] * 2)
+        .to eq([{ root_versions: versions, range_start: from.created_at, range_end: to }] * 2)
       expect(calls.map { |call| call[:prepared] }).to all(be_a(PaperTrailDiff::PreparedActivityIndex))
       expect(calls.last[:prepared]).to equal(prepared.last.activity_index)
     end
@@ -372,7 +375,7 @@ RSpec.describe PaperTrailDiff::ActivityTimelineBuilder do
       expect(captured).to be_utc
       expect(provider).to have_received(:prepare).with(article, [from, to], end_at: captured)
       expect(calls.first.slice(:range_start, :range_end))
-        .to eq(range_start: from, range_end: captured)
+        .to eq(range_start: from.created_at, range_end: captured)
       expect(steps.last.from_boundary.version_id).to eq(to.id)
     end
 

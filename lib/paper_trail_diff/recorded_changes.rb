@@ -82,14 +82,22 @@ module PaperTrailDiff
     # them: Rails records a value assigned in another form than the column
     # keeps, such as a time of day with another date, though the row holds
     # what it held.
+    # Each side of the changes in the form the database stores it.
+    #: (untyped, Hash[String, untyped]) -> [Hash[String, untyped], Hash[String, untyped]]
+    def stored_sides(model_class, kept)
+      [StoredValues.apply(model_class, kept.transform_values(&:first)),
+       StoredValues.apply(model_class, kept.transform_values(&:last))]
+    end
+
     #: (untyped, untyped, Array[String]) -> Hash[String, ValueChange]
     def value_changes(model_class, changes, excluded)
       kept = named(changes).slice(*model_class.attribute_names).except(*excluded)
-      from = StoredValues.apply(model_class, kept.transform_values(&:first))
-      to = StoredValues.apply(model_class, kept.transform_values(&:last))
-      kept.keys.sort.reject { |key| Support.same?(from.fetch(key), to.fetch(key)) }
-          .to_h { |key| [key, ValueChange.new(from: from.fetch(key), to: to.fetch(key))] }
-          .freeze
+      from, to = stored_sides(model_class, kept)
+      kept.keys.sort.filter_map do |key|
+        before = from.fetch(key)
+        after = to.fetch(key)
+        [key, ValueChange.new(from: before, to: after)] unless Support.same?(before, after)
+      end.to_h.freeze
     end
   end
 end

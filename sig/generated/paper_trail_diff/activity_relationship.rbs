@@ -19,8 +19,5 @@ module PaperTrailDiff
 
     # : (untyped, untyped, state: Symbol) -> untyped
     def event_attribute: (untyped, untyped, state: Symbol) -> untyped
-
-    # : (untyped, RecordSnapshot) -> Array[String]
-    def owner_types: (untyped, RecordSnapshot) -> Array[String]
   end
 end

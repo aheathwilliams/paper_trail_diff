@@ -55,8 +55,8 @@ module PaperTrailDiff
     def current: (Array[untyped], Hash[Array[String], untyped]) -> Array[untyped]
 
     # A plan closing on the live record reads history up to now; the others
-    # stop at the window's end or at the last version they replay past it, so
-    # a past window does not load everything since.
+    # stop at the window's end or where the transactions of the versions they
+    # replay past it end, so a past window does not load everything since.
     # : (Array[untyped], TimeRange?, live: bool) -> Hash[Symbol, untyped]
     def preparation_range: (Array[untyped], TimeRange?, live: bool) -> Hash[Symbol, untyped]
 
