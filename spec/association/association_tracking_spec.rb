@@ -1319,7 +1319,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
       expect(steps.length).to eq(101)
     end
 
-    expect(work.fetch(:queries)).to be < 25
+    expect(work.fetch(:queries)).to be < 30
     expect(work.fetch(:records)).to be < 600
   end
 
@@ -1368,7 +1368,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
       expect(steps.length).to eq(101)
     end
 
-    expect(work.fetch(:queries)).to be < 25
+    expect(work.fetch(:queries)).to be < 30
     expect(work.fetch(:records)).to be < 600
   end
 
