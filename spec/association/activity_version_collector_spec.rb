@@ -281,14 +281,20 @@ RSpec.describe PaperTrailDiff::ActivityVersionCollector do
   end
 
   # The user is a join row of `user_seats` only while a seat of the team
-  # names it, which its own state cannot show.
-  it 'collects the middle rows of a through over a through only while a row leads to them' do
+  # names it, which its own state cannot show: not while a seat of another
+  # team does, which joins the team later.
+  it 'collects the middle rows of a through over a through only while a row leads to them',
+     mutant_expression: %w[PaperTrailDiff::ActivityVersionCollector PaperTrailDiff::ThroughLead
+                           PaperTrailDiff::JoinRunJudge] do
     team = CollectorTeam.create!(name: 'Team')
+    other = CollectorTeam.create!(name: 'Other')
     user = CollectorUser.create!(name: 'Before')
     seat = CollectorSeat.create!(team: team)
+    elsewhere = CollectorSeat.create!(team: other, user: user)
     user.update!(name: 'Still before')
     seat.update!(user: user)
     user.update!(name: 'Seated')
+    elsewhere.update!(team: team)
     team.update!(name: 'Team B')
 
     users = described(collect(team, [:user_seats])).select { |type, *| type == 'CollectorUser' }

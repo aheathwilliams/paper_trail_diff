@@ -408,7 +408,7 @@ module PaperTrailDiff
       @rows = leads.fetch(:group)
       reflection = leads.fetch(:reflection)
       @path = ThroughPath.new(owners, reflection, conditions)
-      @key = reflection.source_reflection.foreign_key
+      @key = reflection.foreign_key
     end
 
     # `first` and `last` are the target's versions that span its transaction.
@@ -416,8 +416,9 @@ module PaperTrailDiff
     def include?(first, last)
       id = first.item_id.to_s
       @rows.fetch(:ids).any? do |row|
-        @records.typed_states_around(@rows.fetch(:model), row, first, last)
-                .any? { |attributes| attributes[@key].to_s == id && @path.include?(attributes) }
+        @records.typed_states_around(@rows.fetch(:model), row, first, last).any? do |attributes|
+          attributes.fetch(@key).to_s == id && @path.include?(attributes)
+        end
       end
     end
 

@@ -126,16 +126,13 @@ module PaperTrailDiff
     # earlier would miss what changed below the root before the later.
     #: (Array[untyped]) -> void
     def prepare_version_roots!(versions)
+      # A pair's versions are in order (see Endpoint.validate_order!).
       roots = versions.group_by { |version| Endpoint.identity(version) }.values
-      roots.group_by { |own| latest_class(own) }.each do |model, groups|
-        ids = groups.map { |own| own.fetch(0).item_id }
-        @version_history_preparer.call(ids.map { |id| historical_root(model, id) }, groups.flatten)
+      roots.group_by { |own| RecordedClass.for(own.last) }.each do |model, groups|
+        group = groups.flatten
+        ids = group.map(&:item_id).uniq(&:to_s)
+        @version_history_preparer.call(ids.map { |id| historical_root(model, id) }, group)
       end
-    end
-
-    #: (Array[untyped]) -> untyped
-    def latest_class(versions)
-      RecordedClass.for(versions.max { |left, right| Support.compare_versions(left, right) })
     end
 
     # The record supplies identity and model metadata only.

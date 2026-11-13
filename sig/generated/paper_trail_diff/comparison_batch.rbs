@@ -72,9 +72,6 @@ module PaperTrailDiff
     # : (Array[untyped]) -> void
     def prepare_version_roots!: (Array[untyped]) -> void
 
-    # : (Array[untyped]) -> untyped
-    def latest_class: (Array[untyped]) -> untyped
-
     # The record supplies identity and model metadata only.
     # : (untyped, untyped) -> untyped
     def historical_root: (untyped, untyped) -> untyped
