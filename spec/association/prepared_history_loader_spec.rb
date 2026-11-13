@@ -77,32 +77,6 @@ RSpec.describe PaperTrailDiff::PreparedHistoryLoader do
     expect([handled, after.body]).to eq([true, 'comment'])
   end
 
-  # A window reports the transactions that end inside it, so its reader
-  # reads it again from where the one across its start began. A range of
-  # versions starts at its first version's state instead, and says nothing.
-  it 'says, for a window only, where the transaction open at its start began' do
-    article = TrackedArticle.create!(title: 'Root')
-    comment = article.comments.create!(body: 'before')
-    added = TrackedArticle.transaction do
-      comment.update!(body: 'after')
-      article.comments.create!(body: 'added')
-    end
-    edge = versions_of(added).first
-    allow(PaperTrailDiff::PreparedRecordIndex).to receive(:new).and_call_original
-    end_at = Time.now.utc + 60
-    window = load_history(article, ['comments'], start_at: edge.created_at, end_at: end_at,
-                                                 live_records: [article], window: true)
-    range = load_history(article, ['comments'], start_at: edge.created_at)
-    inside = load_history(article, ['comments'], start_at: edge.created_at + 1, end_at: end_at,
-                                                 live_records: [article], window: true)
-
-    expect(window.reach).to eq(versions_of(comment).last.created_at)
-    expect([range.reach, inside.reach]).to eq([nil, nil])
-    # Each is read once, from where it was asked for.
-    expect(PaperTrailDiff::PreparedRecordIndex).to have_received(:new)
-      .with(edge.created_at, end_at: end_at, live_records: [article]).once
-  end
-
   it 'prepares every root it is given, as one batch' do
     articles = Array.new(2) { |index| TrackedArticle.create!(title: "Root #{index}") }
     comments = articles.map { |article| article.comments.create!(body: 'comment') }

@@ -61,23 +61,20 @@ module PaperTrailDiff
 
     # The window roots are selected over: the one asked for, and with a tree,
     # from where the earliest transaction open at its start began (see
-    # CrossingTransactions). A window reports such a transaction, which may
-    # have saved a root's tree only before it.
-    #: (untyped, AssociationTree?, TimeRange?) -> TimeRange?
-    def self.window(model, tree, range)
-      return range unless range && tree && !tree.empty?
-
-      traversal = AssociationTraversal.new(tree)
-      reach = CrossingTransactions.open_around(model, traversal, range.begin_time)
-      reach ? range.widened(reach) : range
+    # AssociationTraversal#reach_before). A window reports such a
+    # transaction, which may have saved a root's tree only before it.
+    #: (untyped, AssociationTraversal?, TimeRange?) -> TimeRange?
+    def self.window(model, traversal, range)
+      reach = (traversal.reach_before(model, range.begin_time) if range && traversal)
+      reach && range ? range.widened(reach) : range
     end
 
     # Only the versions `version_scope` keeps select a root, on its
     # associations as on its own versions.
-    #: (untyped, tree: AssociationTree, time_range: TimeRange?, ?version_scope: untyped) -> void
-    def initialize(model, tree:, time_range:, version_scope: nil)
+    #: (untyped, traversal: AssociationTraversal, time_range: TimeRange?, ?version_scope: untyped) -> void
+    def initialize(model, traversal:, time_range:, version_scope: nil)
       @model = model
-      @traversal = AssociationTraversal.new(tree)
+      @traversal = traversal
       @time_range = time_range
       @version_scope = version_scope
     end

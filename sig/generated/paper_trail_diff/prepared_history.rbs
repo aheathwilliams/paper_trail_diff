@@ -8,11 +8,6 @@ module PaperTrailDiff
     # : (PreparedRecordIndex, ?activity_index: PreparedActivityIndex?) -> void
     def initialize: (PreparedRecordIndex, ?activity_index: PreparedActivityIndex?) -> void
 
-    # Where the earliest transaction open at a window's start began; see
-    # PreparedHistoryLoader. Nil for a history that was not asked, or where
-    # none was open.
-    attr_accessor reach: untyped
-
     # When the history was read from.
     # : () -> untyped
     def start_time: () -> untyped

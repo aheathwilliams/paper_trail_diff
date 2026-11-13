@@ -191,6 +191,21 @@ module PaperTrailDiff
       @tree = tree
       @reflection_cache = {}
       @habtm_paths = {} #: Hash[untyped, Array[String]]
+      @reaches = {} #: Hash[[untyped, untyped], untyped]
+    end
+
+    # Where the earliest transaction open at `start` began, in the version
+    # tables of the model and of the records on its paths; nil when none was
+    # open, without a start, or without paths (see CrossingTransactions). A
+    # call reads every root of a model from one answer, so it is asked once.
+    #: (untyped, untyped) -> untyped
+    def reach_before(model_class, start)
+      return if @tree.empty? || start.nil?
+
+      key = [model_class, start] #: [untyped, untyped]
+      return @reaches[key] if @reaches.key?(key)
+
+      @reaches[key] = CrossingTransactions.open_around(model_class, self, start)
     end
 
     #: (untyped) -> void
@@ -206,14 +221,26 @@ module PaperTrailDiff
     # The names the versions of the records on the requested paths are stored
     # under: each association's class and every part a through passes. A
     # polymorphic belongs_to names its target's class only in each record, so
-    # it adds none.
+    # it adds none (see #polymorphic_paths?).
     #: (untyped) -> Array[String]
     def path_types(model_class)
-      selected_reflections(model_class).flat_map do |_path, reflection|
-        parts = [reflection, *self.class.through_parts(reflection)].reject(&:polymorphic?)
-        parts.map { |part| part.klass.base_class.name }
-      end.uniq
+      path_parts(model_class).reject(&:polymorphic?).map { |part| part.klass.base_class.name }.uniq
     end
+
+    # Whether a path passes a polymorphic belongs_to, whose targets may be of
+    # any class.
+    #: (untyped) -> bool
+    def polymorphic_paths?(model_class)
+      path_parts(model_class).any?(&:polymorphic?)
+    end
+
+    #: (untyped) -> Array[untyped]
+    def path_parts(model_class)
+      selected_reflections(model_class).flat_map do |_path, reflection|
+        [reflection, *self.class.through_parts(reflection)]
+      end
+    end
+    private :path_parts
 
     #: (untyped, untyped) -> void
     def ensure_habtm_history!(model_class, version)

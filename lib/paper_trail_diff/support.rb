@@ -190,7 +190,6 @@ module PaperTrailDiff
     end
     private_class_method :copy_tree
 
-
     #: (untyped) -> untyped
     def self.serialize(value)
       case value

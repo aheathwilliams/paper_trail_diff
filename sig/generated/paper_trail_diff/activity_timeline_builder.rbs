@@ -122,15 +122,15 @@ module PaperTrailDiff
     # if that transaction ended first, and is reported if it ended later. A
     # range that ends at a version ends before that version's transaction
     # took effect, so what took effect after it is left out.
-    # : (untyped, Array[ActivityEvent], RootVersionPlan, closes: bool) -> Array[ActivityEvent]
-    def by_transaction_end: (untyped, Array[ActivityEvent], RootVersionPlan, closes: bool) -> Array[ActivityEvent]
+    # : (Array[ActivityEvent], RootVersionPlan, closes: bool) -> Array[ActivityEvent]
+    def by_transaction_end: (Array[ActivityEvent], RootVersionPlan, closes: bool) -> Array[ActivityEvent]
 
     # The range's events up to its last root version, or to the instant the
     # live record it closes on was read, with the history they are read from.
-    # A window's history says where the earliest transaction open at its
-    # start began; `reach` says not to ask, of a history read from there.
-    # : (RootVersionPlan, untyped, ?start_at: untyped, ?reach: bool) -> [Array[ActivityEvent], untyped]
-    def range_events: (RootVersionPlan, untyped, ?start_at: untyped, ?reach: bool) -> [ Array[ActivityEvent], untyped ]
+    # A window is read from where the earliest transaction open at its start
+    # began.
+    # : (RootVersionPlan, untyped, ?start_at: untyped) -> [Array[ActivityEvent], untyped]
+    def range_events: (RootVersionPlan, untyped, ?start_at: untyped) -> [ Array[ActivityEvent], untyped ]
 
     # : () -> [RecordSnapshot?, untyped]
     def capture_current: () -> [ RecordSnapshot?, untyped ]
@@ -157,35 +157,15 @@ module PaperTrailDiff
 
     # The plan of every root version the window's transactions saved, its
     # events, their history, and when the live record it closes on was read;
-    # nil when there is nothing to replay.
+    # nil when there is nothing to replay. The window is planned and read
+    # from where the earliest transaction open at its start began, which may
+    # have destroyed a root that has no version in the window itself. A
+    # batch has planned and read its roots so already.
     # : () -> [RootVersionPlan, Array[ActivityEvent], untyped, untyped]?
     def window_events: () -> [ RootVersionPlan, Array[ActivityEvent], untyped, untyped ]?
 
-    # A plan with no version to replay and no live record to close on.
-    # : (RootVersionPlan) -> bool
-    def nothing?: (RootVersionPlan) -> bool
-
-    # The window read again from where the earliest transaction open at its
-    # start began. It holds what the window's own read held, and more.
-    # : (untyped, RootVersionPlan) -> [RootVersionPlan, Array[ActivityEvent], untyped, untyped]
-    def reached_events: (untyped, RootVersionPlan) -> [ RootVersionPlan, Array[ActivityEvent], untyped, untyped ]
-
-    # A root with no version in the window and no row was gone before it,
-    # unless a transaction open at its start destroyed it and ended inside:
-    # the window reports that one. A batch has asked for its roots already,
-    # and asking again for each would only find the same answer, a statement
-    # a root, so no spec can tell the batch's guard from its absence.
-    # mutant:disable
-    # : () -> [RootVersionPlan, Array[ActivityEvent], untyped, untyped]?
-    def gone_events: () -> [ RootVersionPlan, Array[ActivityEvent], untyped, untyped ]?
-
     # : (RootVersionPlan, **untyped) -> [Array[ActivityEvent], untyped, untyped]
     def events_through: (RootVersionPlan, **untyped) -> [ Array[ActivityEvent], untyped, untyped ]
-
-    # The versions whose transactions end inside the window. On the root
-    # alone nothing else is read, so each ends where it was saved.
-    # : (RootVersionPlan, Array[ActivityEvent], untyped) -> RootVersionPlan
-    def reporting_plan: (RootVersionPlan, Array[ActivityEvent], untyped) -> RootVersionPlan
 
     # The step that closes the range after its last event, which is reported
     # as that event's step would be. It runs from the last boundary the
@@ -214,11 +194,6 @@ module PaperTrailDiff
 
     # : () -> RecordedChangesReader?
     def root_recorded: () -> RecordedChangesReader?
-
-    # A window prepares from its start, explicit endpoints from their first
-    # version.
-    # : (Array[untyped], start_at: untyped, end_at: untyped, reach: bool) -> untyped
-    def prepare_history: (Array[untyped], start_at: untyped, end_at: untyped, reach: bool) -> untyped
 
     # Events are collected from where the history starts, which is where the
     # transactions across the range's start began. Without a history only

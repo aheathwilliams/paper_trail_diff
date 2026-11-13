@@ -103,6 +103,13 @@ module PaperTrailDiff
     # : (AssociationTree) -> void
     def initialize: (AssociationTree) -> void
 
+    # Where the earliest transaction open at `start` began, in the version
+    # tables of the model and of the records on its paths; nil when none was
+    # open, without a start, or without paths (see CrossingTransactions). A
+    # call reads every root of a model from one answer, so it is asked once.
+    # : (untyped, untyped) -> untyped
+    def reach_before: (untyped, untyped) -> untyped
+
     # : (untyped) -> void
     def validate!: (untyped) -> void
 
@@ -112,9 +119,17 @@ module PaperTrailDiff
     # The names the versions of the records on the requested paths are stored
     # under: each association's class and every part a through passes. A
     # polymorphic belongs_to names its target's class only in each record, so
-    # it adds none.
+    # it adds none (see #polymorphic_paths?).
     # : (untyped) -> Array[String]
     def path_types: (untyped) -> Array[String]
+
+    # Whether a path passes a polymorphic belongs_to, whose targets may be of
+    # any class.
+    # : (untyped) -> bool
+    def polymorphic_paths?: (untyped) -> bool
+
+    # : (untyped) -> Array[untyped]
+    def path_parts: (untyped) -> Array[untyped]
 
     # : (untyped, untyped) -> void
     def ensure_habtm_history!: (untyped, untyped) -> void

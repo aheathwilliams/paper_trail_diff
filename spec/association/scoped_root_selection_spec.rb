@@ -44,7 +44,7 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
   end
 
   def tree(*paths)
-    PaperTrailDiff::AssociationTree.build(paths)
+    PaperTrailDiff::AssociationTraversal.new(PaperTrailDiff::AssociationTree.build(paths))
   end
 
   # Pages of at least `min` and at most `max` rows.
@@ -566,7 +566,7 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
       PaperTrail::Version.where('created_at >= ?', start).update_all(transaction_id: 1_000_007)
       options = { time_range: since(start), version_scope: by_people }
 
-      expect(select(TrackedArticle, **options, activity_tree: tree(:comments)).records)
+      expect(select(TrackedArticle, **options, activity_traversal: tree(:comments)).records)
         .to eq([article])
       expect(select(TrackedArticle, **options).records).to eq([])
     end
@@ -577,14 +577,14 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
       start = Time.now.utc
       PaperTrail.request(whodunnit: 'alice') { article.comments.create!(body: 'by alice') }
       other.comments.create!(body: 'by the system')
-      options = { time_range: since(start), activity_tree: tree(:comments) }
+      options = { time_range: since(start), activity_traversal: tree(:comments) }
 
       expect(select(TrackedArticle, **options, version_scope: by_people).records).to eq([article])
       expect(select(TrackedArticle, **options).records).to eq([article, other])
     end
   end
 
-  describe 'activity_tree:' do
+  describe 'activity_traversal:' do
     it 'adds roots whose requested associations changed, and names those destroyed' do
       quiet = TrackedArticle.create!(title: 'Quiet')
       gone = TrackedArticle.create!(title: 'Gone')
@@ -594,11 +594,11 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
       comments.first(2).each { |comment| comment.update!(body: 'two') }
       TrackedArticle.where(id: gone.id).delete_all
 
-      result = select(TrackedArticle, time_range: since(start), activity_tree: tree(:comments))
+      result = select(TrackedArticle, time_range: since(start), activity_traversal: tree(:comments))
 
       expect(result.records).to eq([quiet])
       expect(result.unreachable).to eq([['TrackedArticle', gone.id.to_s]])
-      expect(select(TrackedArticle, time_range: since(start), activity_tree: tree).records)
+      expect(select(TrackedArticle, time_range: since(start), activity_traversal: tree).records)
         .to eq([])
     end
 
@@ -613,7 +613,7 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
       both.update!(title: 'Both, edited')
       both_note.update!(body: 'two')
 
-      result = select(StringItemPost, time_range: since(start), activity_tree: tree(:notes))
+      result = select(StringItemPost, time_range: since(start), activity_traversal: tree(:notes))
 
       expect(result.records).to eq([quiet, both, edited])
       expect(result.unreachable).to eq([])
@@ -626,7 +626,7 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
       comment.update!(body: 'two')
       article.destroy!
 
-      result = select(TrackedArticle, time_range: since(start), activity_tree: tree(:comments))
+      result = select(TrackedArticle, time_range: since(start), activity_traversal: tree(:comments))
 
       expect(result.unreachable).to eq([['TrackedArticle', article.id.to_s]])
     end
@@ -642,7 +642,7 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
         itself = model.create!(id: 7_102, title: 'Itself')
         model.where(id: [quiet.id, itself.id]).delete_all
 
-        result = select(model, time_range: since(start), activity_tree: tree(path))
+        result = select(model, time_range: since(start), activity_traversal: tree(path))
 
         expect(result.unreachable).to eq([quiet, itself].map { |root| [model.name, root.id.to_s] })
       end
@@ -662,7 +662,7 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
       end
 
       sql = queries do
-        expect(select(TrackedArticle, time_range: since(start), activity_tree: tree(:comments))
+        expect(select(TrackedArticle, time_range: since(start), activity_traversal: tree(:comments))
                  .records).to eq([article])
       end
 
@@ -680,7 +680,8 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
       gone_comment.update!(body: 'two')
       ScopeHiddenArticle.where(id: gone.id).delete_all
 
-      result = select(ScopeHiddenArticle, time_range: since(start), activity_tree: tree(:comments))
+      result = select(ScopeHiddenArticle, time_range: since(start),
+                                          activity_traversal: tree(:comments))
 
       expect(result.records).to eq([])
       expect(result.unreachable).to eq([['ScopeHiddenArticle', gone.id.to_s]])
@@ -693,7 +694,7 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
       comment.update!(body: 'two')
 
       sql = queries do
-        expect(select(TrackedArticle, time_range: since(start), activity_tree: tree(:comments))
+        expect(select(TrackedArticle, time_range: since(start), activity_traversal: tree(:comments))
                  .records).to eq([article])
       end
 
@@ -710,7 +711,7 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
       comment.update!(body: 'two')
       edited = TrackedArticle.create!(title: 'Edited')
       ids = PaperTrailDiff::AssociationActivitySelection.new(
-        TrackedArticle, tree: tree(:comments), time_range: since(start)
+        TrackedArticle, traversal: tree(:comments), time_range: since(start)
       ).call.flat_map(&:values)
       allow(PaperTrailDiff::AssociationActivitySelection).to receive(:new).and_wrap_original do
         |original, *args, **options|
@@ -719,7 +720,7 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
         end
       end
 
-      result = select(TrackedArticle, time_range: since(start), activity_tree: tree(:comments))
+      result = select(TrackedArticle, time_range: since(start), activity_traversal: tree(:comments))
 
       expect(result.records).to eq([quiet, edited])
     end

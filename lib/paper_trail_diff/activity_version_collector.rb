@@ -52,11 +52,14 @@ module PaperTrailDiff
       pair = Support.ambiguous_pair(events.map(&:version))
       raise(AmbiguousVersionOrderError, Support.ambiguous_message(pair)) if pair
 
-      prepared = @prepared #: PreparedActivityIndex?
-      versions = events.map(&:version)
-      ends = prepared ? prepared.transaction_ends(versions) : TransactionEnds.new(versions)
-      @ends = ends
+      ends = transaction_ends(events.map(&:version))
       events.sort_by { |event| ends.sort_key(event.version) }.freeze
+    end
+
+    #: (Array[untyped]) -> TransactionEnds
+    def transaction_ends(versions)
+      prepared = @prepared #: PreparedActivityIndex?
+      @ends = prepared ? prepared.transaction_ends(versions) : TransactionEnds.new(versions)
     end
 
     # Each event is credited to the top-level association it was reached

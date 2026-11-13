@@ -15,8 +15,8 @@ module PaperTrailDiff
     # nothing but the history.
     #
     # A `start_at` is a window's; a range of versions starts at its first.
-    # : (untyped, Array[untyped], ?start_at: untyped, ?end_at: untyped, ?reach: bool) -> PreparedActivitySnapshots
-    def prepare: (untyped, Array[untyped], ?start_at: untyped, ?end_at: untyped, ?reach: bool) -> PreparedActivitySnapshots
+    # : (untyped, Array[untyped], ?start_at: untyped, ?end_at: untyped) -> PreparedActivitySnapshots
+    def prepare: (untyped, Array[untyped], ?start_at: untyped, ?end_at: untyped) -> PreparedActivitySnapshots
 
     # : (untyped, untyped) -> RecordSnapshot?
     def call: (untyped, untyped) -> RecordSnapshot?
@@ -54,11 +54,6 @@ module PaperTrailDiff
     # (see TransactionEnds).
     # : (TransactionEnds) { () -> void } -> void
     def reading: (TransactionEnds) { () -> void } -> void
-
-    # Where the transactions of these versions take effect: as recorded,
-    # with a history to read it from.
-    # : (Array[untyped]) -> TransactionEnds
-    def transaction_ends: (Array[untyped]) -> TransactionEnds
 
     # : (untyped, untyped) -> RecordSnapshot?
     def call: (untyped, untyped) -> RecordSnapshot?
@@ -99,8 +94,9 @@ module PaperTrailDiff
 
   # Builds chronological snapshots, refreshing only branches affected by prior events.
   class ActivitySnapshotSequence
-    # : (Array[untyped], Array[ActivityEvent], untyped, ?current: untyped) -> void
-    def initialize: (Array[untyped], Array[ActivityEvent], untyped, ?current: untyped) -> void
+    # `ends` places the events' transactions, as the events were ordered by.
+    # : (Array[untyped], Array[ActivityEvent], untyped, ends: TransactionEnds, ?current: untyped) -> void
+    def initialize: (Array[untyped], Array[ActivityEvent], untyped, ends: TransactionEnds, ?current: untyped) -> void
 
     # : () { (ActivityEvent, RecordSnapshot?) -> void } -> void
     def each: () { (ActivityEvent, RecordSnapshot?) -> void } -> void

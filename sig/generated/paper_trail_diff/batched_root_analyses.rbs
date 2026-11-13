@@ -11,9 +11,11 @@ module PaperTrailDiff
     # its start began. With `activity`, the roots are planned from there too,
     # and each reports the transactions that end inside the window (see
     # TransactionEnds). Without it each root version is reported where it
-    # was saved, so the roots are planned over the window as it is.
-    # : (time_range: TimeRange?, planner: untyped, history_preparer: untyped, analyzer: untyped, activity: bool) -> void
-    def initialize: (time_range: TimeRange?, planner: untyped, history_preparer: untyped, analyzer: untyped, activity: bool) -> void
+    # was saved, so the roots are planned over the window as it is. `reach`
+    # answers where that transaction began, for a model and a window's start
+    # (see AssociationTraversal#reach_before).
+    # : (time_range: TimeRange?, planner: untyped, history_preparer: untyped, analyzer: untyped, activity: bool, reach: untyped) -> void
+    def initialize: (time_range: TimeRange?, planner: untyped, history_preparer: untyped, analyzer: untyped, activity: bool, reach: untyped) -> void
 
     # Preparation reads the roots' current association state as a fallback,
     # so a batch that has already loaded them passes them as `loaded`, rather
@@ -31,24 +33,20 @@ module PaperTrailDiff
 
     @planner: untyped
 
+    @reach: untyped
+
     @time_range: TimeRange?
 
     # The plans the roots are read with: over the window, or with activity
-    # from where the earliest transaction open at its start began, when the
-    # history read for it says one was.
+    # from where the earliest transaction open at its start began. The
+    # history is read from there either way.
     # : (Array[untyped], Hash[Array[String], untyped]) -> Hash[Array[String], RootVersionPlan]
     def prepare: (Array[untyped], Hash[Array[String], untyped]) -> Hash[Array[String], RootVersionPlan]
 
     # Roots that close on their current state are prepared even without a
     # version in the window, since their descendants may have changed there.
-    # : (Array[untyped], Hash[Array[String], RootVersionPlan], Hash[Array[String], untyped], TimeRange?, reach: bool) -> untyped
-    def prepare_history: (Array[untyped], Hash[Array[String], RootVersionPlan], Hash[Array[String], untyped], TimeRange?, reach: bool) -> untyped
-
-    # Roots gone before a window are still asked how far the transactions
-    # open at its start reach, since one of them may have destroyed them and
-    # ended inside it. Without activity nothing of theirs is reported there.
-    # : (bool) -> bool
-    def gone_asked?: (bool) -> bool
+    # : (Array[untyped], Hash[Array[String], RootVersionPlan], Hash[Array[String], untyped], TimeRange?) -> void
+    def prepare_history: (Array[untyped], Hash[Array[String], RootVersionPlan], Hash[Array[String], untyped], TimeRange?) -> void
 
     # Each root as the batch loaded it, where it did.
     # : (Array[untyped], Hash[Array[String], untyped]) -> Array[untyped]

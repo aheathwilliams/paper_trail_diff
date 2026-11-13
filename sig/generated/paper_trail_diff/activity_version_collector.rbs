@@ -14,7 +14,14 @@ module PaperTrailDiff
     # : () -> Array[ActivityEvent]
     def call: () -> Array[ActivityEvent]
 
+    # Where the transactions of the collected events take effect, once #call
+    # has ordered them by it.
+    # : () -> TransactionEnds?
+    attr_reader ends: untyped
+
     private
+
+    @ends: TransactionEnds?
 
     @prepared: PreparedActivityIndex
 
@@ -30,6 +37,9 @@ module PaperTrailDiff
 
     # : (Array[ActivityEvent]) -> Array[ActivityEvent]
     def ordered: (Array[ActivityEvent]) -> Array[ActivityEvent]
+
+    # : (Array[untyped]) -> TransactionEnds
+    def transaction_ends: (Array[untyped]) -> TransactionEnds
 
     # Each event is credited to the top-level association it was reached
     # through.

@@ -175,7 +175,8 @@ module PaperTrailDiff
           context_required: activity && !@association_tree.empty?,
           live_loader: method(:load_batch_endpoints),
           history_preparer: @historical_store.method(:prepare_batch),
-          analyzer: batched_root_analyzer(activity, view: view)
+          analyzer: batched_root_analyzer(activity, view: view),
+          reach: @traversal.method(:reach_before)
         ).call
       end
     end
@@ -231,7 +232,8 @@ module PaperTrailDiff
                version_scope: options.fetch(:version_scope),
                history_preparer: @historical_store.method(:prepare_deleted_batch),
                analyzer: analyzer,
-               context_required: options.fetch(:activity) && !@association_tree.empty?
+               context_required: options.fetch(:activity) && !@association_tree.empty?,
+               reach: @traversal.method(:reach_before)
       ).call
     end
 
@@ -251,7 +253,7 @@ module PaperTrailDiff
                },
                # Checkpoints compare a root's own versions, so only activity can
                # report a window in which just its associations changed.
-               activity_tree: (@association_tree if activity), version_scope: version_scope
+               activity_traversal: (@traversal if activity), version_scope: version_scope
       )
     end
 

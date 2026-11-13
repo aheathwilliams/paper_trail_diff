@@ -120,7 +120,7 @@ RSpec.describe PaperTrailDiff::CrossingTransactions do
   end
 
   it 'reads the version tables of a record and of the records on its paths' do
-    traversal = instance_double(PaperTrailDiff::AssociationTraversal)
+    traversal = instance_double(PaperTrailDiff::AssociationTraversal, polymorphic_paths?: false)
     allow(traversal).to receive(:path_types).with(FilterFeature).and_return(['FilterJsonEvent'])
     open_around = -> { described_class.open_around(FilterFeature, traversal, start) }
     version(-3, 9, table: FilterJsonVersion)
@@ -132,6 +132,15 @@ RSpec.describe PaperTrailDiff::CrossingTransactions do
     version(-2, 7)
     version(1, 7)
     expect(open_around.call).to eq(at(-2))
+  end
+
+  # Each record names its own polymorphic target's class.
+  it 'reads every version table for a path through a polymorphic belongs_to' do
+    traversal = instance_double(PaperTrailDiff::AssociationTraversal, polymorphic_paths?: true)
+    version(-3, 9, table: FilterJsonVersion)
+    version(1, 9, table: FilterJsonVersion)
+
+    expect(described_class.open_around(FilterFeature, traversal, start)).to eq(at(-3))
   end
 
   # A transaction's first version carries its own id as its number, in

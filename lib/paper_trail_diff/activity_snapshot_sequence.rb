@@ -20,10 +20,9 @@ module PaperTrailDiff
     # nothing but the history.
     #
     # A `start_at` is a window's; a range of versions starts at its first.
-    #: (untyped, Array[untyped], ?start_at: untyped, ?end_at: untyped, ?reach: bool) -> PreparedActivitySnapshots
-    def prepare(record, root_versions, start_at: nil, end_at: nil, reach: true)
-      history = @store.prepare(record, root_versions, start_at: start_at, end_at: end_at,
-                                                      reach: reach)
+    #: (untyped, Array[untyped], ?start_at: untyped, ?end_at: untyped) -> PreparedActivitySnapshots
+    def prepare(record, root_versions, start_at: nil, end_at: nil)
+      history = @store.prepare(record, root_versions, start_at: start_at, end_at: end_at)
       last = @last
       return last if last && last.history.equal?(history)
 

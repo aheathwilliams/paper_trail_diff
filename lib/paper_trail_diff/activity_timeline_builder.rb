@@ -202,14 +202,14 @@ module PaperTrailDiff
 
     # The range's events up to its last root version, or to the instant the
     # live record it closes on was read, with the history they are read from.
-    # A window's history says where the earliest transaction open at its
-    # start began; `reach` says not to ask, of a history read from there.
-    #: (RootVersionPlan, untyped, ?start_at: untyped, ?reach: bool) -> [Array[ActivityEvent], untyped]
-    def range_events(plan, captured_at, start_at: @range.begin_time, reach: true)
+    # A window is read from where the earliest transaction open at its start
+    # began.
+    #: (RootVersionPlan, untyped, ?start_at: untyped) -> [Array[ActivityEvent], untyped]
+    def range_events(plan, captured_at, start_at: @range.begin_time)
       versions = plan.reconstruction_versions
       range_end = captured_at || @snapshotter.range_end(@record, versions.last)
       end_at = captured_at || range_end.created_at
-      snapshots = prepare_history(versions, start_at: start_at, end_at: end_at, reach: reach)
+      snapshots = @snapshotter.prepare(@record, versions, start_at: start_at, end_at: end_at)
       closing = versions.last unless captured_at
       [collect_events(versions, snapshots, range_end: range_end, closing: closing), snapshots]
     end
@@ -261,44 +261,18 @@ module PaperTrailDiff
 
     # The plan of every root version the window's transactions saved, its
     # events, their history, and when the live record it closes on was read;
-    # nil when there is nothing to replay.
+    # nil when there is nothing to replay. The window is planned and read
+    # from where the earliest transaction open at its start began, which may
+    # have destroyed a root that has no version in the window itself. A
+    # batch has planned and read its roots so already.
     #: () -> [RootVersionPlan, Array[ActivityEvent], untyped, untyped]?
     def window_events
-      wide = select_plan
-      return gone_events if nothing?(wide)
-
-      events, snapshots, captured_at = events_through(wide)
-      reach = snapshots.history&.reach
-      return [wide, events, snapshots, captured_at] unless reach
-
-      reached_events(reach, @range.reach_plan(reach, context_required: true))
-    end
-
-    # A plan with no version to replay and no live record to close on.
-    #: (RootVersionPlan) -> bool
-    def nothing?(plan) = plan.empty? && !plan.closing_record
-
-    # The window read again from where the earliest transaction open at its
-    # start began. It holds what the window's own read held, and more.
-    #: (untyped, RootVersionPlan) -> [RootVersionPlan, Array[ActivityEvent], untyped, untyped]
-    def reached_events(reach, wide)
-      events, snapshots, captured_at = events_through(wide, start_at: reach, reach: false)
-      [wide, events, snapshots, captured_at]
-    end
-
-    # A root with no version in the window and no row was gone before it,
-    # unless a transaction open at its start destroyed it and ended inside:
-    # the window reports that one. A batch has asked for its roots already,
-    # and asking again for each would only find the same answer, a statement
-    # a root, so no spec can tell the batch's guard from its absence.
-    # mutant:disable
-    #: () -> [RootVersionPlan, Array[ActivityEvent], untyped, untyped]?
-    def gone_events
       reach = (@snapshotter.reach_before(@record, @range.begin_time) unless @range.preselected?)
-      return unless reach
+      wide = reach ? @range.reach_plan(reach, context_required: true) : select_plan
+      return if wide.empty? && !wide.closing_record
 
-      wide = @range.reach_plan(reach, context_required: true)
-      reached_events(reach, wide) unless nothing?(wide)
+      events, snapshots, captured_at = events_through(wide, start_at: reach || @range.begin_time)
+      [wide, events, snapshots, captured_at]
     end
 
     #: (RootVersionPlan, **untyped) -> [Array[ActivityEvent], untyped, untyped]
@@ -358,14 +332,6 @@ module PaperTrailDiff
     #: () -> RecordedChangesReader?
     def root_recorded
       @view.recorded_reader(root: true)
-    end
-
-    # A window prepares from its start, explicit endpoints from their first
-    # version.
-    #: (Array[untyped], start_at: untyped, end_at: untyped, reach: bool) -> untyped
-    def prepare_history(root_versions, start_at:, end_at:, reach:)
-      options = { start_at: start_at, end_at: end_at, reach: (false unless reach) }.compact
-      @snapshotter.prepare(@record, root_versions, **options)
     end
 
     # Events are collected from where the history starts, which is where the

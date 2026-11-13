@@ -17,11 +17,6 @@ module PaperTrailDiff
       @habtm = {} #: Hash[Array[String], Hash[String, Array[untyped]]]
     end
 
-    # Where the earliest transaction open at a window's start began; see
-    # PreparedHistoryLoader. Nil for a history that was not asked, or where
-    # none was open.
-    attr_accessor :reach #: untyped
-
     # When the history was read from.
     #: () -> untyped
     def start_time = @records.start_time
