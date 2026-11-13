@@ -101,6 +101,12 @@ module PaperTrailDiff
     # : (untyped, untyped) -> Array[PreparedRecordState]
     def states_across: (untyped, untyped) -> Array[PreparedRecordState]
 
+    # The states before the transaction of another record's version `first`
+    # and after the transaction of its version `last`: what this record was
+    # while that record's transaction began and once it had ended.
+    # : (untyped, untyped) -> Array[PreparedRecordState]
+    def states_around: (untyped, untyped) -> Array[PreparedRecordState]
+
     # : (untyped) -> [PreparedRecordState, PreparedRecordState]?
     def transition: (untyped) -> [ PreparedRecordState, PreparedRecordState ]?
 
@@ -121,6 +127,11 @@ module PaperTrailDiff
     @transaction_positions: Hash[untyped, Integer]
 
     @version_positions: Hash[String, Integer]
+
+    # The state before this record's first version past `boundary` and its
+    # transaction, or the live one.
+    # : (untyped) -> PreparedRecordState?
+    def state_after_transaction: (untyped) -> PreparedRecordState?
 
     # : (Integer) -> PreparedRecordState?
     def state_after: (Integer) -> PreparedRecordState?
@@ -241,6 +252,11 @@ module PaperTrailDiff
     # as a reified record's are.
     # : (untyped, untyped, untyped, untyped) -> Array[Hash[untyped, untyped]]
     def typed_states_across: (untyped, untyped, untyped, untyped) -> Array[Hash[untyped, untyped]]
+
+    # A record's attributes around another record's transaction (see
+    # PreparedRecordSeries#states_around), typed as typed_states_across's.
+    # : (untyped, untyped, untyped, untyped) -> Array[Hash[untyped, untyped]]
+    def typed_states_around: (untyped, untyped, untyped, untyped) -> Array[Hash[untyped, untyped]]
 
     # : (untyped, untyped) -> bool
     def loaded?: (untyped, untyped) -> bool
