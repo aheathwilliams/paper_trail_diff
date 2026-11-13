@@ -32,6 +32,7 @@ module PaperTrailDiff
       @recorded = recorded
       saved = versions.sort_by { |version| Support.chronological_version_key(version) }
       @last = TransactionEnds.lasts(saved)
+      @held = [] #: Array[untyped]
       freeze
     end
 
@@ -53,6 +54,20 @@ module PaperTrailDiff
       recorded[key] || @last[key] || version
     end
 
+    # Where a boundary takes effect, and when: at the last version of a
+    # version's transaction, or where a live record was read. Every record of
+    # a snapshot is read at one boundary, so the last answer is kept.
+    #: (untyped) -> [untyped, untyped]
+    def target(boundary)
+      held = @held
+      return held.fetch(1) if !held.empty? && held.fetch(0).equal?(boundary)
+
+      target = VersionBoundary.version_record?(boundary) ? last(boundary) : boundary
+      answer = [target, target.created_at] #: [untyped, untyped]
+      held.replace([boundary, answer])
+      answer
+    end
+
     # Orders versions by where their transactions end, then as they were
     # saved.
     #: (untyped) -> Array[untyped]
@@ -63,6 +78,7 @@ module PaperTrailDiff
 
     # @rbs @recorded: Hash[Array[untyped], untyped]?
     # @rbs @last: Hash[Array[untyped]?, untyped]
+    # @rbs @held: Array[untyped]
   end
 
   # Reads where transactions end from their version tables: the last version

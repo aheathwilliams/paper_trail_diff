@@ -281,8 +281,7 @@ module PaperTrailDiff
     # than those before it.
     #: (untyped, TransactionEnds) -> Integer?
     def effective_index(boundary, ends)
-      target = VersionBoundary.version_record?(boundary) ? ends.last(boundary) : boundary
-      target_time = target.created_at
+      target, target_time = ends.target(boundary)
       effective = effective_versions(ends)
       (0...effective.length).bsearch do |index|
         VersionBoundary.at_or_after?(effective.fetch(index), target, boundary_time: target_time)

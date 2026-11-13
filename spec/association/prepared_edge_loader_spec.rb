@@ -62,11 +62,17 @@ RSpec.describe PaperTrailDiff::PreparedEdgeLoader do
     records
   end
 
+  # Candidates read from the start, as a history reads them, with no end.
+  def loader(records, root_versions, start_at: root_versions.first&.created_at)
+    described_class.new(records, root_versions,
+                        children: PaperTrailDiff::PreparedChildCandidates.new(start_at))
+  end
+
   def load_edge(owner_class, owner_ids, association, root_versions, **options)
     start_at = options.fetch(:start_at, root_versions.first&.created_at)
     records = index(start_at, [owner_class, owner_ids])
-    described_class.new(records, root_versions, **options)
-                   .call(owner_class, owner_ids, owner_class.reflect_on_association(association))
+    loader(records, root_versions, start_at: start_at)
+      .call(owner_class, owner_ids, owner_class.reflect_on_association(association))
   end
 
   describe 'belongs_to' do
@@ -91,9 +97,8 @@ RSpec.describe PaperTrailDiff::PreparedEdgeLoader do
       records = index(versions.first.created_at, [TrackedArticle, [article.id]])
       expect_any_instance_of(PaperTrailDiff::PreparedRecordState).not_to receive(:instantiate)
 
-      groups, = described_class.new(records, versions)
-                               .call(TrackedArticle, [article.id],
-                                     TrackedArticle.reflect_on_association(:author))
+      groups, = loader(records, versions).call(TrackedArticle, [article.id],
+                                               TrackedArticle.reflect_on_association(:author))
 
       expect(groups.fetch('TrackedAuthor').fetch(:ids)).to eq([article.author_id])
     end
@@ -381,27 +386,10 @@ RSpec.describe PaperTrailDiff::PreparedEdgeLoader do
                                  macro: :has_many, klass: TrackedComment,
                                  foreign_key: Class.new(Array).new(%w[article_id body]))
     article = TrackedArticle.create!(title: 'Owner')
-    loader = described_class.new(index(nil), versions_of(article))
+    edges = loader(index(nil), versions_of(article))
 
-    expect(loader.call(TrackedArticle, [article.id], reflection)).to eq([{}, nil])
+    expect(edges.call(TrackedArticle, [article.id], reflection)).to eq([{}, nil])
     allow(reflection).to receive(:macro).and_return(:belongs_to)
-    expect(loader.call(TrackedArticle, [article.id], reflection)).to eq([{}, nil])
-  end
-
-  it 'starts at the first root version unless told otherwise' do
-    article = TrackedArticle.create!(title: 'Owner')
-    gone = article.comments.create!(body: 'gone before')
-    gone.update!(article: TrackedArticle.create!(title: 'Other'))
-    versions = [article.paper_trail.save_with_version && versions_of(article).last]
-
-    defaulted, = described_class.new(index(nil), versions)
-                                .call(TrackedArticle, [article.id],
-                                      TrackedArticle.reflect_on_association(:comments))
-    unbounded, = described_class.new(index(nil), [])
-                                .call(TrackedArticle, [article.id],
-                                      TrackedArticle.reflect_on_association(:comments))
-
-    expect(defaulted).to eq({})
-    expect(unbounded.fetch('TrackedComment').fetch(:ids)).to eq([gone.id])
+    expect(edges.call(TrackedArticle, [article.id], reflection)).to eq([{}, nil])
   end
 end

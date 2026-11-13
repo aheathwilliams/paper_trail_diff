@@ -6,9 +6,8 @@ module PaperTrailDiff
   class PreparedEdgeLoader
     # A history shares `children` with its activity index, which reads the
     # children this finds again.
-    #: (PreparedRecordIndex, Array[untyped], ?start_at: untyped, ?children: PreparedChildCandidates) -> void
-    def initialize(records, root_versions, start_at: root_versions.first&.created_at,
-                   children: PreparedChildCandidates.new(start_at))
+    #: (PreparedRecordIndex, Array[untyped], children: PreparedChildCandidates) -> void
+    def initialize(records, root_versions, children:)
       @records = records
       @transaction_ids = root_versions.filter_map(&:transaction_id)
       @children = children

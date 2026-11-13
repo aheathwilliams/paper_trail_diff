@@ -257,8 +257,8 @@ RSpec.describe PaperTrailDiff::PreparedHistory do
     expect(history.send(:child_ids_for, { ids: [1], owners: {} }, owner)).to eq([])
 
     loader = PaperTrailDiff::PreparedEdgeLoader.new(
-      instance_double(PaperTrailDiff::PreparedRecordIndex),
-      []
+      instance_double(PaperTrailDiff::PreparedRecordIndex), [],
+      children: instance_double(PaperTrailDiff::PreparedChildCandidates)
     )
     expect(loader.send(:group_for, TrackedComment, [], owners: {})).to eq({})
   end
