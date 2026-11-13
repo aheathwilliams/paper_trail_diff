@@ -342,6 +342,20 @@ RSpec.describe PaperTrailDiff::ActivityChildCandidateLoader do
       expect(rows(TrackedArticle, [article.id], :comments)).to eq([])
     end
 
+    it 'reads no version that created its child, which holds no state' do
+      article = TrackedArticle.create!(title: 'Article')
+      2.times { |index| article.comments.create!(body: "Created #{index}") }
+      read = 0
+      count = lambda do |*, payload|
+        read += payload[:record_count] if payload[:class_name] == 'PaperTrail::Version'
+      end
+
+      ActiveSupport::Notifications.subscribed(count, 'instantiation.active_record') do
+        loader(TrackedArticle, [article.id], :comments).historical_rows
+      end
+      expect(read).to eq(0)
+    end
+
     it 'reads none of a model PaperTrail does not version' do
       article = TrackedArticle.create!(title: 'Article')
       UnversionedAttachment.create!(article: article, filename: 'a.txt')

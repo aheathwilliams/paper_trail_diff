@@ -138,14 +138,16 @@ module PaperTrailDiff
       end
     end
 
-    # The first version of each child since the start; one that created its
-    # child holds no state. One saved after the end holds the state the child
-    # had there too. A model PaperTrail does not version has none.
+    # The first version of each child since the start, unless it created its
+    # child: a create holds no state, and every child created after the
+    # range would be read for nothing. One saved after the end holds the
+    # state the child had there too. A model PaperTrail does not version has
+    # none.
     #: () -> untyped
     def first_versions
       return [] unless Support.versioned?(@reflection.klass)
 
-      relation = VersionQuery.for_model(@reflection.klass)
+      relation = VersionQuery.for_model(@reflection.klass).where.not(event: 'create')
       versions = relation.arel_table
       relation = relation.where(VersionQuery.no_earlier_version(versions))
       relation = relation.where(versions[:created_at].gteq(@start_at)) if @start_at
