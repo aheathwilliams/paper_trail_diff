@@ -128,7 +128,7 @@ module PaperTrailDiff
     # version -- has no state to compare.
     #: (untyped, Array[untyped], untyped) -> Array[Hash[Symbol, untyped]]
     def belongs_to_groups(parent_class, parent_ids, reflection)
-      rows = @prepared.target_rows(parent_class, parent_ids, reflection, @range)
+      rows = @prepared.target_rows(parent_class, parent_ids, reflection)
       identity_groups(rows, reflection) { |model_class, id| @prepared.loaded?(model_class, id) }
     end
 

@@ -11,6 +11,23 @@ module PaperTrailDiff
   # and the snapshots read it from there. ActivityTreeFilter leaves out the
   # events of a candidate that was outside the tree throughout.
   class PreparedActivityIndex
+    # A belongs_to target an owner's recorded state names. A plain class
+    # rather than Data.define, which arrived in Ruby 3.2 while this gem
+    # supports 3.1.
+    class TargetRow
+      attr_reader :owner_id #: untyped
+      attr_reader :foreign_key_id #: untyped
+      attr_reader :foreign_type #: String?
+
+      #: (untyped, untyped, String?) -> void
+      def initialize(owner_id, foreign_key_id, foreign_type)
+        @owner_id = owner_id
+        @foreign_key_id = foreign_key_id
+        @foreign_type = foreign_type
+        freeze
+      end
+    end
+
     # The children the history's owners had, which its edge loader reads
     # first for most of them.
     attr_reader :children #: PreparedChildCandidates
@@ -18,12 +35,10 @@ module PaperTrailDiff
     #: (PreparedRecordIndex, Array[untyped], start_at: untyped) -> void
     def initialize(records, root_versions, start_at:)
       @records = records
-      @start_at = start_at
       @children = PreparedChildCandidates.new(start_at, records.end_time)
       @roots = root_versions.group_by { |version| Endpoint.identity(version) }
       @nodes = {} #: Hash[String, Array[untyped]]
       # Rows are cached by reflection, which a subclass shares with its base.
-      @targets = {} #: Hash[untyped, untyped]
       @rows = {} #: Hash[untyped, Hash[String, Array[untyped]]]
       @conditions = ScopeCondition::Cache.new
       @judge = JoinRunJudge.new(records, @conditions)
@@ -107,13 +122,26 @@ module PaperTrailDiff
       historical_ids(child, ids, historical, range) | current
     end
 
-    # The `belongs_to` targets each owner pointed at from the range's start
-    # onward, plus the live row and those its recorded states name.
-    #: (untyped, Array[untyped], untyped, ActivityRange) -> Array[ActivityTargetCandidateLoader::Row]
-    def target_rows(model, ids, reflection, range)
-      historical, live = @targets[reflection] ||= target_candidates(model, reflection)
-      eligible_rows(model, rows_for(historical, ids), range) + rows_for(live, ids) +
-        recorded_target_rows(model, ids, reflection)
+    # The `belongs_to` targets each owner pointed at, as the states the
+    # history holds name them. PT-AT records a version's keys as they stood
+    # after its change, which is the state the record's next version stores,
+    # or its live row, and the history reads both; it also reads the state a
+    # key changed without a version, such as one `has_paper_trail only:`
+    # leaves out, reaches only through. A key of two columns is read per
+    # record instead.
+    #: (untyped, Array[untyped], untyped) -> Array[TargetRow]
+    def target_rows(model, ids, reflection)
+      key = reflection.foreign_key
+      return [] if key.is_a?(Array)
+
+      ids.flat_map do |id|
+        targets = @records.attribute_values_for(model, [id], key)
+        types = (@records.attribute_values_for(model, [id], reflection.foreign_type) if
+                   reflection.polymorphic?) || []
+        targets.zip(types).filter_map do |target, type|
+          TargetRow.new(id, target, type) unless target.nil?
+        end
+      end
     end
 
     #: (untyped, untyped) -> bool
@@ -132,34 +160,11 @@ module PaperTrailDiff
     private
 
     # @rbs @records: PreparedRecordIndex
-    # @rbs @start_at: untyped
     # @rbs @roots: Hash[Array[String], Array[untyped]]
     # @rbs @nodes: Hash[String, Array[untyped]]
-    # @rbs @targets: Hash[untyped, untyped]
     # @rbs @rows: Hash[untyped, Hash[String, Array[untyped]]]
     # @rbs @conditions: ScopeCondition::Cache
     # @rbs @judge: JoinRunJudge
-
-    # The targets the owners' recorded states point at. PT-AT names a target
-    # only in the rows its owner's versions wrote, so a key changed without a
-    # version, such as one `has_paper_trail only:` leaves out, names its target
-    # only in the state the owner's next version recorded. Prepared history
-    # reads that state, so its snapshots show the target, and the target's
-    # versions are events too. A key of two columns is read per record instead.
-    #: (untyped, Array[untyped], untyped) -> Array[ActivityTargetCandidateLoader::Row]
-    def recorded_target_rows(model, ids, reflection)
-      key = reflection.foreign_key
-      return [] if key.is_a?(Array)
-
-      ids.flat_map do |id|
-        targets = @records.attribute_values_for(model, [id], key)
-        types = (@records.attribute_values_for(model, [id], reflection.foreign_type) if
-                   reflection.polymorphic?) || []
-        targets.zip(types).filter_map do |target, type|
-          ActivityTargetCandidateLoader::Row.new(id, target, type) unless target.nil?
-        end
-      end
-    end
 
     #: (untyped, Array[untyped]) -> bool
     def member_class?(model, classes)
@@ -185,25 +190,6 @@ module PaperTrailDiff
     #: (untyped) -> Array[untyped]
     def node_ids(model)
       @nodes.fetch(model.base_class.name) { [] }
-    end
-
-    #: (Hash[String, Array[ActivityTargetCandidateLoader::Row]], Array[untyped]) -> Array[ActivityTargetCandidateLoader::Row]
-    def rows_for(grouped, ids)
-      ids.flat_map { |id| grouped[id.to_s] || [] }
-    end
-
-    #: (untyped, Array[ActivityTargetCandidateLoader::Row], ActivityRange) -> Array[ActivityTargetCandidateLoader::Row]
-    def eligible_rows(model, rows, range)
-      rows.select do |row|
-        eligible_version?(model, row.owner_id, row.created_at, row.event, range)
-      end
-    end
-
-    #: (untyped, untyped) -> untyped
-    def target_candidates(model, reflection)
-      loader = ActivityTargetCandidateLoader.new(model, node_ids(model), reflection, @start_at)
-      [loader.historical_rows.group_by { |row| row.owner_id.to_s },
-       loader.current_rows.group_by { |row| row.owner_id.to_s }]
     end
 
     # Mirrors VersionAssociationCandidateScope's before-window rule. The loaded
