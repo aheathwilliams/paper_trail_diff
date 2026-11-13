@@ -18,6 +18,8 @@ module PaperTrailDiff
     BINARY_KEYS = ['value'].freeze
     private_constant :BINARY_TYPE, :BINARY_KEYS
 
+    @typed = {} #: Hash[[untyped, String], Array[String]]
+
     # For a model whose history is JSON, which StoredTimePrecision.digits
     # tells: a `json` or `jsonb` object column, or the JSON serializer.
     #: (untyped, Hash[untyped, untyped]) -> Hash[untyped, untyped]
@@ -33,12 +35,27 @@ module PaperTrailDiff
     # adapter's type can be a subclass, as PostgreSQL's `bytea` is of binary.
     #: (untyped, Hash[untyped, untyped], String) { (untyped) -> untyped } -> Hash[untyped, untyped]
     def self.convert(model_class, attributes, type_name)
-      type = Support.constant(type_name)
-      attributes.to_h do |name, value|
-        [name, model_class.type_for_attribute(name).is_a?(type) ? yield(value) : value]
-      end
+      names = typed(model_class, type_name).select { |name| attributes.key?(name) }
+      return attributes if names.empty?
+
+      converted = attributes.dup
+      names.each { |name| converted[name] = yield(attributes.fetch(name)) }
+      converted
     end
     private_class_method :convert
+
+    # The names of the model's attributes of this type, which a model keeps
+    # as it was defined, as TimeOfDay.columns does.
+    #: (untyped, String) -> Array[String]
+    def self.typed(model_class, type_name)
+      @typed.fetch([model_class, type_name]) do |key|
+        type = Support.constant(type_name)
+        @typed[key] = model_class.attribute_types.filter_map do |name, attribute_type|
+          name if attribute_type.is_a?(type)
+        end.freeze
+      end
+    end
+    private_class_method :typed
 
     #: (untyped) -> untyped
     def self.bytes(value)
