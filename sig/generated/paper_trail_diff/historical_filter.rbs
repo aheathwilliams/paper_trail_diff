@@ -14,8 +14,16 @@ module PaperTrailDiff
     # Values `where` reads as several.
     SEVERAL: untyped
 
+    # The expected value of an attribute `where` would compare with NULL,
+    # which no stored value equals.
+    NOTHING: untyped
+
     # : (untyped, predicate: untyped, time_range: TimeRange?, limit: Integer, max_versions: Integer) -> void
     def initialize: (untyped, predicate: untyped, time_range: TimeRange?, limit: Integer, max_versions: Integer) -> void
+
+    # The version budget, checked whether or not a filter is given.
+    # : (untyped) -> Integer
+    def self.budget: (untyped) -> Integer
 
     # More matches than the limit raise, unless the caller does not count
     # them: candidates it only lists, such as deleted roots.
@@ -61,6 +69,12 @@ module PaperTrailDiff
     # : (String, untyped) -> untyped
     def expected: (String, untyped) -> untyped
 
+    # `where` writes IS NULL for nil, but `= NULL`, which matches no row, for
+    # a value its type cannot write, such as '' or 'abc' for an integer, and
+    # a constant false condition for one out of the column's range.
+    # : (String, untyped) -> bool
+    def unbound?: (String, untyped) -> bool
+
     # Expected and recorded values compare as the attribute casts them, as
     # `where` reads its values: an enum's symbol names its stored value, and a
     # `json` or `jsonb` version column, which PaperTrail does not cast, holds
@@ -75,9 +89,6 @@ module PaperTrailDiff
     # value less exactly than Ruby does.
     # : (String, untyped) -> untyped
     def stored: (String, untyped) -> untyped
-
-    # : (untyped) -> Integer
-    def validate_budget: (untyped) -> Integer
 
     # : (Array[String], TimeRange?) -> Hash[String, Array[untyped]]
     def candidate_versions: (Array[String], TimeRange?) -> Hash[String, Array[untyped]]
@@ -96,6 +107,8 @@ module PaperTrailDiff
     # : (Array[String]) -> Hash[String, untyped]
     def live_records: (Array[String]) -> Hash[String, untyped]
 
+    # The live row is read as history keeps it, as a version's state is, so
+    # an unchanged value matches alike whichever closes the window.
     # : (untyped) -> boolish
     def record_matches?: (untyped) -> boolish
 

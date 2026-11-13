@@ -197,14 +197,14 @@ module PaperTrailDiff
         (@records.record_created_in(model_class, id, boundary) if created)
     end
 
-    # A has_many through reads its parts unranked, as its query does. Its own
-    # scope applies to each row, and a ranked read then keeps a record reached
-    # twice as one member.
+    # A through reads its parts unranked, as its one query joins every row of
+    # each: a has_one part keeps no single row there. Its own scope applies to
+    # each row, and a ranked read then keeps a record reached twice as one
+    # member, or a has_one through its first.
     #: (untyped, untyped, untyped, untyped, bool) -> Array[untyped]?
     def through_records(record, reflection, boundary, habtm_boundary, ranked)
       read = lambda do |owner, part|
-        resolve(owner, part, boundary, habtm_boundary: habtm_boundary,
-                                       ranked: ranked && !reflection.collection?)
+        resolve(owner, part, boundary, habtm_boundary: habtm_boundary, ranked: false)
       end
       rows = through_rows(record, reflection, read)
       return unless rows

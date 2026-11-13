@@ -10,5 +10,10 @@ module PaperTrailDiff
   module StoredValues
     # : (untyped, Hash[untyped, untyped]) -> Hash[untyped, untyped]
     def self.apply: (untyped, Hash[untyped, untyped]) -> Hash[untyped, untyped]
+
+    # A copy of the record holding `stored`, its attributes as `apply` read
+    # them, or the record itself where it already holds them.
+    # : (untyped, Hash[String, untyped]) -> untyped
+    def self.record: (untyped, Hash[String, untyped]) -> untyped
   end
 end

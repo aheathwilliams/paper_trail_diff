@@ -48,6 +48,12 @@ module PaperTrailDiff
     # : (Hash[Symbol, untyped], untyped, String) -> Array[Hash[Symbol, untyped]]
     def through_groups: (Hash[Symbol, untyped], untyped, String) -> Array[Hash[Symbol, untyped]]
 
+    # The targets a through reaches by a `belongs_to` name the join rows that
+    # lead to them, which judge them as join rows of a through over this one
+    # (see PreparedActivityIndex#join_versions).
+    # : (Hash[Symbol, untyped], untyped, Array[Hash[Symbol, untyped]]) -> Array[Hash[Symbol, untyped]]
+    def led: (Hash[Symbol, untyped], untyped, Array[Hash[Symbol, untyped]]) -> Array[Hash[Symbol, untyped]]
+
     # Every target the owners pointed at in the range, not only those their own
     # changes there recorded: an author renamed under an article nobody edited
     # is still that article's activity. Prepared history holds every target its

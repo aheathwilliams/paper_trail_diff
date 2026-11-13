@@ -24,6 +24,9 @@ module PaperTrailDiff
     # The date a database gives a time of day it reads back.
     TIME_OF_DAY_DATE: Hash[Symbol, Integer]
 
+    # Where a hash has no value for a key the other has (see .same?).
+    MISSING: untyped
+
     # Answers a question about `value` once for each Active Record class, in
     # `answers`: its respond_to? also looks through the instance's attributes,
     # which costs more than most of what reading a version does, and every
@@ -106,6 +109,11 @@ module PaperTrailDiff
 
     # : (untyped) -> untyped
     def self.serialize: (untyped) -> untyped
+
+    # Ids as strings, once each, in the order their records' ids take: an
+    # integer id by its value, so 2 comes before 10, and any other by its text.
+    # : (Array[untyped]) -> Array[String]
+    def self.sort_ids: (Array[untyped]) -> Array[String]
 
     # Records sort by type first so that mixed id types stay comparable, then
     # naturally within one type. Ordering by the printed form instead would put
@@ -195,9 +203,20 @@ module PaperTrailDiff
 
     # Whether two values are one, as a diff reads them: `==`, but a NaN is the
     # same as a NaN, as PostgreSQL stores and compares it, though Ruby has
-    # NaN unequal to everything.
+    # NaN unequal to everything. A value a serialized attribute holds can be
+    # of any class, so `==` must hold both ways, which Active Support's
+    # Time == String does not, and a Float is not the Integer it equals: each
+    # is written differently, so the change is real. Hashes and arrays are
+    # compared by their members.
     # : (untyped, untyped) -> bool
     def self.same?: (untyped, untyped) -> bool
+
+    # A key the right side lacks reads as a value nothing else is.
+    # : (Hash[untyped, untyped], untyped) -> bool
+    def self.same_hash?: (Hash[untyped, untyped], untyped) -> bool
+
+    # : (Array[untyped], untyped) -> bool
+    def self.same_array?: (Array[untyped], untyped) -> bool
 
     # A Float or BigDecimal NaN.
     # : (untyped) -> bool

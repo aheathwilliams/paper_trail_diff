@@ -3,7 +3,7 @@
 require_relative '../support/recorded_changes_database'
 
 RSpec.describe PaperTrailDiff::RecordedChanges do
-  before { [RecordedVersion, UnrecordedVersion, RecordedNote].each(&:delete_all) }
+  before { [RecordedVersion, UnrecordedVersion, RecordedNote, RecordedPub].each(&:delete_all) }
 
   def recorded(version, **options)
     PaperTrailDiff.recorded_changes(version, **options)
@@ -29,6 +29,15 @@ RSpec.describe PaperTrailDiff::RecordedChanges do
       'stage' => { from: 'draft', to: 'published' },
       'title' => { from: 'Draft', to: 'Published' }
     )
+  end
+
+  it 'reads an STI subclass version with the subclass types' do
+    book = RecordedBook.create!(code: 12)
+    book.update!(state: :printed, code: 13)
+    version = RecordedVersion.where(item_id: book.id, event: 'update').sole
+
+    expect(recorded(version).transform_values(&:to_h))
+      .to eq('code' => { from: 12, to: 13 }, 'state' => { from: 'draft', to: 'printed' })
   end
 
   it 'takes ignored names as strings or symbols, and includes updated_at given an empty list' do
@@ -162,6 +171,14 @@ RSpec.describe PaperTrailDiff::RecordedChanges do
     version.update_column(:object_changes, PaperTrail.serializer.dump(changes))
 
     expect(recorded(version.reload).keys).to eq(%w[rank stage title])
+  end
+
+  it 'rejects a version loaded without its object_changes column' do
+    version = RecordedVersion.select(:id, :item_type, :item_id,
+                                     :event).find(event_version(edited_note, 'update').id)
+
+    expect { recorded(version) }
+      .to raise_error(PaperTrailDiff::InvalidEndpointError, /without its object_changes column/)
   end
 
   it 'rejects anything but a version' do

@@ -2,11 +2,25 @@
 
 require_relative '../support/association_database'
 
+ActiveRecord::Schema.define do
+  create_table :comparison_shapes, force: true do |table|
+    table.string :type
+    table.string :name
+    table.timestamps null: false
+  end
+end
+
+class ComparisonShape < ActiveRecord::Base
+  has_paper_trail
+end
+
+class ComparisonCircle < ComparisonShape; end
+
 RSpec.describe PaperTrailDiff::ComparisonBatch do
   before do
     PaperTrail::VersionAssociation.delete_all
     PaperTrail::Version.delete_all
-    [TrackedComment, TrackedArticle].each(&:delete_all)
+    [TrackedComment, TrackedArticle, ComparisonShape].each(&:delete_all)
   end
 
   let(:prepared) { [] }
@@ -60,6 +74,36 @@ RSpec.describe PaperTrailDiff::ComparisonBatch do
     expect(version_prepared.length).to eq(1)
     expect(records.map(&:id)).to eq([article.id, other.id])
     expect(versions).to eq([article_versions[0], article_versions[1], other_versions[1]])
+  end
+
+  # Version `retyped` recorded the shape before it became a circle.
+  it 'prepares a root whose class changed between its versions once, as the later class' do
+    shape = ComparisonShape.create!(name: 'shape')
+    shape.update!(type: 'ComparisonCircle')
+    ComparisonShape.find(shape.id).update!(name: 'circle')
+    retyped, renamed = shape.versions.reorder(:created_at, :id).last(2)
+
+    batch([{ from: retyped, to: renamed }]).call
+
+    expect(version_prepared.length).to eq(1)
+    records, versions = version_prepared.fetch(0)
+    expect(records.map { |record| [record.class, record.id] }).to eq([[ComparisonCircle, shape.id]])
+    expect(versions).to eq([retyped, renamed])
+  end
+
+  it 'prepares the roots of each later class together' do
+    shape = ComparisonShape.create!(name: 'shape')
+    shape.update!(type: 'ComparisonCircle')
+    ComparisonShape.find(shape.id).update!(name: 'circle')
+    plain = ComparisonShape.create!(name: 'plain')
+    2.times { |index| plain.update!(name: "plain #{index}") }
+    retyped, renamed = shape.versions.reorder(:created_at, :id).last(2)
+    first, last = plain.versions.reorder(:created_at, :id).last(2)
+
+    batch([{ from: retyped, to: renamed }, { from: first, to: last }]).call
+
+    expect(version_prepared.map { |records, versions| [records.map(&:class), versions] })
+      .to eq([[[ComparisonCircle], [retyped, renamed]], [[ComparisonShape], [first, last]]])
   end
 
   it 'prepares a root with a live endpoint from that record' do

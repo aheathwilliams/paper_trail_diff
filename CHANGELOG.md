@@ -131,6 +131,18 @@ project follows [Semantic Versioning](https://semver.org/).
   selects columns without the primary key raises `ConfigurationError`.
 - `historical_filter:` refuses an attribute named twice, as a string and a
   symbol.
+- `diagnose` raises `ReversedEndpointsError` for two versions given newest
+  first, as `compare` does, instead of reporting `ok?`.
+- `within:` and `since:` refuse a string that names no real day, such as
+  `"12"` or `"2026-02-30"`, which `Time.zone.parse` read as noon today and
+  as 2 March.
+- `max_filter_versions:` is checked whether or not `historical_filter:` is
+  given, and `recorded_changes` refuses a version loaded without its
+  `object_changes` column instead of answering that it recorded nothing.
+- `unreachable` and `deleted` list integer ids by value, so 2 comes before 10.
+- A has_many or has_one read with associations runs one more statement per
+  read, for the first versions of children made without a version (see
+  Fixed).
 
 ### Fixed
 
@@ -407,6 +419,46 @@ project follows [Semantic Versioning](https://semver.org/).
   window's start, such as a comment moved to another parent and then saved
   again or destroyed. The window before it leaves such a change to this
   one, so a window split there no longer loses it from both halves.
+- A serialized attribute that changed between values Ruby's `==` calls
+  equal, such as a Time to the matching string or `1` to `1.0`, alone or
+  nested, is reported as a change. Values must now be equal both ways, and a
+  Float differs from the Integer it equals.
+- `recorded_changes` types an STI subclass's version with the subclass's
+  attribute types, as a step's states do, so an enum or a retyped column of
+  the subclass reads as its value.
+- A relation passed to `analyze_scope`, `report` or `include_deleted:` is
+  read beside parts that choose no rows, such as `distinct`, `select`,
+  `order`, `unscope`, `rewhere`, `lock`, `annotate`, `preload` or
+  `create_with`, instead of being refused. Joins, `from`, `group`,
+  `having` and `with` are still refused.
+- `include_deleted:` refuses a condition on a column `has_paper_trail skip:`
+  leaves out of history, as `historical_filter:` does, instead of comparing
+  it with the column's default; and, on SQLite, a `Date` bound on a datetime
+  column, which SQLite compares as text, instead of reading it as midnight.
+- `historical_filter:` matches nothing for a value the attribute's type
+  cannot write, such as `''` or `'abc'` for an integer or one out of its
+  range, as `where` does.
+- `historical_filter:`, with a hash or a callable, reads the live row as
+  history keeps it, so an unchanged value matches alike whether a version or
+  the live row closes the window, under JSON history too. A relation with
+  `limit(0)` selects nothing with a filter, as without one.
+- A child made without a version, whose first version moved it to another
+  owner, is under the owner it left until then: PT-AT names only the owner a
+  version saved, so the one before is read from the first version's state.
+- A `has_one :through` over a `has_one` reads every row of its parts, as its
+  one query joins them, rather than only the has_one's first row: a project
+  whose first pin has no user now has the user of the next, as Active Record
+  returns.
+- A through's join row whose transaction changed nothing the tree shows,
+  such as a pin that names no user, or a member's own versions under a
+  through of a through before the member joined, is no longer a step of the
+  root. A member's versions under such a through are steps only where a
+  membership of the root named the member, and a record that is a join row
+  under one association is judged as any member under the others.
+- `compare` between two versions of a record whose STI class changed
+  between them reads both from one history, so a change below the record in
+  between, such as a note moved to a member, is reported. It was read from
+  two histories, each beginning at its own version, and was missed.
 
 ## [0.17.0] - 2026-11-04
 

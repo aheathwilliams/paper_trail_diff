@@ -165,10 +165,22 @@ module PaperTrailDiff
     # zoned time, and without changing the caller's own value as `utc` does.
     #: (untyped) -> untyped
     def time_value(value)
-      return zone.parse(value) || raise(ArgumentError) if value.is_a?(String)
+      return parse(value) if value.is_a?(String)
       return zone.local(value.year, value.month, value.day) if calendar_date?(value)
 
       value
+    end
+
+    # A string must name a real day, which `parse` alone does not demand: it
+    # reads '12' as noon today and rolls 30 February into March.
+    #: (String) -> untyped
+    def parse(value)
+      # A part it does not name is nil, which `valid_date?` refuses as a TypeError.
+      parts = Date._parse(value).values_at(:year, :mon, :mday) #: Array[untyped]
+      year, month, day = parts
+      raise ArgumentError unless Date.valid_date?(year, month, day)
+
+      zone.parse(value)
     end
 
     # An inclusive date end runs through the day: to the next one's start.

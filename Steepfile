@@ -9,4 +9,6 @@ target :lib do
   library 'json'
   # A temporary table's name (see CandidateTable).
   library 'securerandom'
+  # The day a string names (see TimeRange#parse).
+  library 'date'
 end

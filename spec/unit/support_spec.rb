@@ -277,12 +277,26 @@ RSpec.describe PaperTrailDiff::Support do
   end
 
   describe '.same? and .nan?' do
-    it 'reads values as == does, but every NaN as one' do
+    it 'reads values as == does both ways, a Float apart from an Integer, and every NaN as one' do
       nans = [Float::NAN, 0.0 / 0.0, BigDecimal('NaN')]
+      time = Time.utc(2026, 1, 1)
 
       expect(nans.product(nans).map { |left, right| described_class.same?(left, right) })
         .to all(be(true))
-      expect([[1, 1.0], %w[a a]].map { |pair| described_class.same?(*pair) }).to eq([true, true])
+      list = Class.new(Array)
+      loose = ActiveSupport::HashWithIndifferentAccess
+      same = [[1, BigDecimal(1)], [1.0, 1.0], %w[a a], [time, time.in_time_zone('Tokyo')],
+              [[Float::NAN], [Float::NAN]], [{ 'n' => [1] }, { 'n' => [1] }],
+              [[1], list.new([1])], [{ 'n' => 1 }, loose.new('n' => 1)]]
+      different = [[1, 1.0], [time, time.iso8601], [time.iso8601, time],
+                   [{ 'n' => 1 }, { 'n' => 1.0 }], [[1], [1.0]], [[1], [1, 2]], [[1, 2], [1, 3]],
+                   [{ 'n' => 1 }, { 'm' => 1 }], [{ 'n' => 1 }, { 'n' => 1, 'm' => 2 }],
+                   [{ 'n' => nil }, { 'm' => nil }],
+                   [{ 'a' => 1, 'b' => 2 }, { 'a' => 1, 'b' => 3 }],
+                   [{ 'n' => 1 }, [['n', 1]]], [[1], 1], [loose.new('n' => 1), { 'n' => 1.0 }],
+                   [list.new([1]), [1.0]]]
+      expect(same.map { |pair| described_class.same?(*pair) }).to all(be(true))
+      expect(different.map { |pair| described_class.same?(*pair) }).to eq([false] * 15)
       expect([[Float::NAN, 1], [1, Float::NAN], [1, 2], ['NaN', Float::NAN]]
         .map { |pair| described_class.same?(*pair) }).to eq([false] * 4)
     end
@@ -292,6 +306,13 @@ RSpec.describe PaperTrailDiff::Support do
         .to eq([true, true])
       expect([1.0, Float::INFINITY, 1, 'NaN', nil].map { |value| described_class.nan?(value) })
         .to eq([false] * 5)
+    end
+  end
+
+  describe '.sort_ids' do
+    it 'lists ids once each as strings, integers by value and others by text after them' do
+      expect(described_class.sort_ids([10, 'b', '9', 100, 2, 'a', 10, '010', '20', 'a1']))
+        .to eq(%w[2 9 010 10 20 100 a a1 b])
     end
   end
 

@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require 'paper_trail_diff'
+require_relative '../support/filter_database'
 
 RSpec.describe PaperTrailDiff::StoredValues do
   let(:precise) { Time.utc(2032, 1, 1, 12, 0, 0, Rational(123_456_789, 1000)) }
@@ -47,5 +47,22 @@ RSpec.describe PaperTrailDiff::StoredValues do
     expect(read.fetch('rings_at')).to eq(Time.utc(2000, 1, 1, 7, 30))
     expect(read.fetch('at').nsec).to eq(123_000_000)
     expect(read.fetch('blob')).to eq('x'.b)
+  end
+
+  describe '.record' do
+    let(:article) { FilterArticle.new(id: 7, title: 'Title', views: 3) }
+
+    it 'returns the record itself where it holds the stored values already' do
+      expect(described_class.record(article, { 'title' => 'Title', 'id' => 7 })).to equal(article)
+    end
+
+    it 'returns an unchanged copy holding the stored values, leaving the record as it was' do
+      copy = described_class.record(article, { 'title' => 'Stored', 'views' => 3 })
+
+      expect(copy).not_to equal(article)
+      expect(copy.attributes).to eq(article.attributes.merge('title' => 'Stored'))
+      expect(copy).not_to be_changed
+      expect(article.title).to eq('Title')
+    end
   end
 end

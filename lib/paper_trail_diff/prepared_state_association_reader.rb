@@ -71,19 +71,18 @@ module PaperTrailDiff
 
     # The members of each join record the owner had at the boundary, as
     # PreparedHistory#through_records reads them from records. Under
-    # `source_type:`, only join records of that type count. A has_many
-    # through reads its parts unranked, as its query does.
+    # `source_type:`, only join records of that type count. A through reads
+    # its parts unranked, as its one query joins every row of each.
     #: (PreparedRecordState, untyped, untyped, bool) -> [bool, Array[PreparedRecordState]]
     def through(owner, reflection, boundary, ranked)
-      parts_ranked = ranked && !reflection.collection?
-      handled, joins = call(owner, reflection.through_reflection, boundary, ranked: parts_ranked)
+      handled, joins = call(owner, reflection.through_reflection, boundary, ranked: false)
       return [false, []] unless handled
 
       rows = [] #: Array[PreparedRecordState]
       joins.each do |join|
         next unless typed_join?(reflection, join)
 
-        handled, states = call(join, reflection.source_reflection, boundary, ranked: parts_ranked)
+        handled, states = call(join, reflection.source_reflection, boundary, ranked: false)
         return [false, []] unless handled
 
         rows.concat(states)

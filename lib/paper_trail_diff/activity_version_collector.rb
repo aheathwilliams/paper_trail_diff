@@ -94,11 +94,21 @@ module PaperTrailDiff
       targets = edge_groups(parent, reflection.through_reflection, branch).flat_map do |group|
         joins = @prepared.join_versions(parent, group, reflection)
         @registry.add(joins, branch: branch, join: true)
-        edge_groups(group, reflection.source_reflection, branch)
+        led(group, reflection, edge_groups(group, reflection.source_reflection, branch))
       end
       # Under `source_type:`, only targets of that type are members.
       type = reflection.options[:source_type]
       type ? targets.select { |group| type.to_s.eql?(group.fetch(:model).name) } : targets
+    end
+
+    # The targets a through reaches by a `belongs_to` name the join rows that
+    # lead to them, which judge them as join rows of a through over this one
+    # (see PreparedActivityIndex#join_versions).
+    #: (Hash[Symbol, untyped], untyped, Array[Hash[Symbol, untyped]]) -> Array[Hash[Symbol, untyped]]
+    def led(rows, reflection, targets)
+      return targets unless reflection.source_reflection.belongs_to?
+
+      targets.map { |target| target.merge(leads: { group: rows, reflection: reflection }) }
     end
 
     # Every target the owners pointed at in the range, not only those their own

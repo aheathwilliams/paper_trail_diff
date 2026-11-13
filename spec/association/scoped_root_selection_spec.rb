@@ -148,8 +148,8 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
       result = select(model.where(title: 'Nothing matches'), time_range: since(start))
 
       expect(result.records).to eq([])
-      # Ids sort as strings, so "1000000" comes before "999999".
-      expect(result.unreachable).to eq(gone.reverse.map { |record| [model.name, record.id.to_s] })
+      # Ids of digits sort by their value, so "999999" comes before "1000000".
+      expect(result.unreachable).to eq(gone.map { |record| [model.name, record.id.to_s] })
       expect(result.unreachable).to all(be_frozen)
       expect(select(model, time_range: since(start)).records).to eq([live])
     end

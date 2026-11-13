@@ -99,4 +99,22 @@ RSpec.describe 'scoped root selection' do
     expect(result.analyses.length).to eq(2)
     expect(result.unreachable).to eq([PaperTrailDiff::Endpoint.identity(deleted)])
   end
+
+  it 'lists unreachable roots in the order of their integer ids' do
+    [10, 9].each do |id|
+      CoreArticle.create!(id: id, title: 'Deleted', internal_note: 'stable').destroy!
+    end
+
+    expect(analyze(CoreArticle.all).unreachable.map(&:last)).to eq(%w[9 10])
+    expect(analyze(CoreArticle.where(title: 'Deleted')).unreachable.map(&:last)).to eq(%w[9 10])
+  end
+
+  it 'returns no roots for a page of none, with or without a filter' do
+    CoreArticle.create!(title: 'Live', internal_note: 'stable')
+
+    expect(analyze(CoreArticle.limit(0)).roots).to eq([])
+    expect(PaperTrailDiff.analyze_scope(CoreArticle.limit(0), limit: 1,
+                                                              historical_filter: { title: 'Live' })
+      .roots).to eq([])
+  end
 end

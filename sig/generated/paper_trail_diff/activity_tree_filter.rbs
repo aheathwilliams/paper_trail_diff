@@ -27,7 +27,8 @@ module PaperTrailDiff
   # read with it, so an event of a record outside the tree would bound a step
   # in one read and not in another. A snapshot does not hold a through's join
   # rows, so their versions are judged when they are collected, by the row's
-  # own state (PreparedActivityIndex#join_versions), and kept here.
+  # own state (PreparedActivityIndex#join_versions), and kept here where
+  # their transaction changed what the row's branches hold.
   class ActivityTreeFilter
     # `closing` is the snapshot after the last event: the current record's,
     # or nil when nothing follows, as after the root's destruction.
@@ -60,10 +61,24 @@ module PaperTrailDiff
     # : (Array[[ActivityEvent, RecordSnapshot?]]) -> Array[bool]
     def kept: (Array[[ ActivityEvent, RecordSnapshot? ]]) -> Array[bool]
 
-    # The root's own events are kept, and a through's join rows were judged
-    # when they were collected.
-    # : (ActivityEvent) -> bool
-    def unjudged?: (ActivityEvent) -> bool
+    # The root's own events are kept whatever else holds, and so is a join
+    # row whose transaction changed a branch it is a join row of. Its
+    # versions were judged when they were collected, by where the row leads,
+    # but a row can lead somewhere before the owner it joins is in the tree,
+    # or lead to records with nothing to show, and a row of a through that
+    # goes through another is on its path by rows further down, which its
+    # own state cannot show: its transaction then leaves those branches as
+    # it found them. Under any other branch the row is judged as any record.
+    # : (Array[ActivityEvent], Array[RecordSnapshot?]) -> Array[bool]
+    def unjudged: (Array[ActivityEvent], Array[RecordSnapshot?]) -> Array[bool]
+
+    # : (Array[RecordSnapshot?], Array[String], Integer) -> bool
+    def changed?: (Array[RecordSnapshot?], Array[String], Integer) -> bool
+
+    # A missing snapshot, after the root's destruction, and a branch the
+    # snapshot does not hold, as before the root's creation, hold no records.
+    # : (RecordSnapshot?, String) -> Array[untyped]
+    def branch: (RecordSnapshot?, String) -> Array[untyped]
 
     # The events each snapshot judges, by the snapshot's position, the one
     # after the last event being what the range closes on: an event is judged

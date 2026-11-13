@@ -65,8 +65,8 @@ module PaperTrailDiff
 
   # Performs read-only checks for known PaperTrail/PT-AT reconstruction hazards.
   #
-  # The endpoints are a comparison's: two versions, or a version and the
-  # current record, in either order. Two current records read no history, so
+  # The endpoints are a comparison's: two versions in time order, or a
+  # version and the current record, in either order. Two current records read no history, so
   # nothing is checked.
   class HistoryDiagnostics
     STOPPING_CODES = %i[
@@ -127,7 +127,8 @@ module PaperTrailDiff
     # @rbs @allow_approximate: bool
     # @rbs @issues: Array[DiagnosticIssue]
 
-    # The endpoints that are versions, in the order given.
+    # The endpoints that are versions, in the order given. Endpoints that
+    # `compare` rejects whatever their history raise as it would.
     #: (untyped, untyped) -> Array[untyped]
     def validated_versions(from, to)
       Endpoint.validate!(from)
@@ -135,6 +136,8 @@ module PaperTrailDiff
       unless Endpoint.identity(from) == Endpoint.identity(to)
         raise VersionMismatchError, 'endpoints must belong to the same PaperTrail item'
       end
+
+      Endpoint.validate_order!(from, to)
 
       [from, to].select { |endpoint| Endpoint.version?(endpoint) }
     end

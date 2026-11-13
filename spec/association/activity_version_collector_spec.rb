@@ -8,6 +8,41 @@ ActiveRecord::Schema.define do
     table.references :pinnable, polymorphic: true
     table.timestamps null: false
   end
+
+  create_table :collector_teams, force: true do |table|
+    table.string :name
+    table.timestamps null: false
+  end
+
+  create_table :collector_seats, force: true do |table|
+    table.integer :team_id
+    table.integer :user_id
+    table.timestamps null: false
+  end
+
+  create_table :collector_users, force: true do |table|
+    table.string :name
+    table.timestamps null: false
+  end
+end
+
+# A through over a through whose source is a belongs_to.
+class CollectorTeam < ActiveRecord::Base
+  has_many :seats, class_name: 'CollectorSeat', foreign_key: :team_id
+  has_many :users, through: :seats
+  has_many :user_seats, through: :users, source: :seats
+  has_paper_trail
+end
+
+class CollectorSeat < ActiveRecord::Base
+  belongs_to :team, class_name: 'CollectorTeam', optional: true
+  belongs_to :user, class_name: 'CollectorUser', optional: true
+  has_paper_trail
+end
+
+class CollectorUser < ActiveRecord::Base
+  has_many :seats, class_name: 'CollectorSeat', foreign_key: :user_id
+  has_paper_trail
 end
 
 class CollectorArticle < ActiveRecord::Base
@@ -61,7 +96,8 @@ RSpec.describe PaperTrailDiff::ActivityVersionCollector do
     PaperTrail::VersionAssociation.delete_all
     PaperTrail::Version.delete_all
     ActiveRecord::Base.connection.execute('DELETE FROM tracked_articles_tags')
-    [CollectorPin, TrackedReply, TrackedComment, TrackedProfile, TrackedAuthorship,
+    [CollectorSeat, CollectorUser, CollectorTeam, CollectorPin, TrackedReply, TrackedComment,
+     TrackedProfile, TrackedAuthorship,
      TrackedArticle, TrackedAuthor, TrackedTag].each(&:delete_all)
   end
 
@@ -93,7 +129,7 @@ RSpec.describe PaperTrailDiff::ActivityVersionCollector do
   # through's join row.
   def described(events)
     events.map do |event|
-      [event.version.item_type, event.version.event, event.branches, event.join?]
+      [event.version.item_type, event.version.event, event.branches, event.joins]
     end
   end
 
@@ -109,8 +145,8 @@ RSpec.describe PaperTrailDiff::ActivityVersionCollector do
 
     events = collect(article, [])
 
-    expect(described(events)).to eq([['TrackedArticle', 'create', nil, false],
-                                     ['TrackedArticle', 'update', nil, false]])
+    expect(described(events)).to eq([['TrackedArticle', 'create', nil, []],
+                                     ['TrackedArticle', 'update', nil, []]])
     expect(events).to be_frozen
   end
 
@@ -121,9 +157,9 @@ RSpec.describe PaperTrailDiff::ActivityVersionCollector do
     save_again(article, 'Final')
 
     expect(described(collect(article, [{ comments: :replies }, :profile]))).to eq(
-      [['TrackedArticle', 'create', nil, false], ['TrackedComment', 'create', ['comments'], false],
-       ['TrackedReply', 'create', ['comments'], false],
-       ['TrackedProfile', 'create', ['profile'], false], ['TrackedArticle', 'update', nil, false]]
+      [['TrackedArticle', 'create', nil, []], ['TrackedComment', 'create', ['comments'], []],
+       ['TrackedReply', 'create', ['comments'], []],
+       ['TrackedProfile', 'create', ['profile'], []], ['TrackedArticle', 'update', nil, []]]
     )
   end
 
@@ -136,7 +172,7 @@ RSpec.describe PaperTrailDiff::ActivityVersionCollector do
 
     events = described(collect(article, %i[author contributors]))
 
-    expect(events).to include(['TrackedAuthor', 'update', %w[author contributors], false])
+    expect(events).to include(['TrackedAuthor', 'update', %w[author contributors], []])
   end
 
   it 'collects every target the root pointed at in the range' do
@@ -148,8 +184,8 @@ RSpec.describe PaperTrailDiff::ActivityVersionCollector do
     save_again(article, 'Final')
 
     expect(described(collect(article, [:author])).select { |type,| type == 'TrackedAuthor' })
-      .to eq([['TrackedAuthor', 'update', ['author'], false],
-              ['TrackedAuthor', 'update', ['author'], false]])
+      .to eq([['TrackedAuthor', 'update', ['author'], []],
+              ['TrackedAuthor', 'update', ['author'], []]])
   end
 
   # A target with no state there has nothing to compare, as when PT-AT's
@@ -168,7 +204,7 @@ RSpec.describe PaperTrailDiff::ActivityVersionCollector do
     end
 
     expect(described(events).select { |type,| type == 'TrackedAuthor' })
-      .to eq([['TrackedAuthor', 'update', ['author'], false]])
+      .to eq([['TrackedAuthor', 'update', ['author'], []]])
     expect(events.map(&:version)).to include(first.versions.last)
   end
 
@@ -189,7 +225,7 @@ RSpec.describe PaperTrailDiff::ActivityVersionCollector do
     save_again(article, 'Final')
 
     expect(described(collect(article, [:tags])).select { |type,| type == 'TrackedTag' })
-      .to eq([['TrackedTag', 'create', ['tags'], false], ['TrackedTag', 'update', ['tags'], false]])
+      .to eq([['TrackedTag', 'create', ['tags'], []], ['TrackedTag', 'update', ['tags'], []]])
   end
 
   it "collects a through's join rows as joins, then its targets" do
@@ -200,11 +236,11 @@ RSpec.describe PaperTrailDiff::ActivityVersionCollector do
     save_again(article, 'Final')
 
     expect(described(collect(article, [:contributors]))).to eq(
-      [['TrackedArticle', 'create', nil, false],
-       ['TrackedAuthor', 'create', ['contributors'], false],
-       ['TrackedAuthorship', 'create', ['contributors'], true],
-       ['TrackedAuthor', 'update', ['contributors'], false],
-       ['TrackedArticle', 'update', nil, false]]
+      [['TrackedArticle', 'create', nil, []],
+       ['TrackedAuthor', 'create', ['contributors'], []],
+       ['TrackedAuthorship', 'create', ['contributors'], ['contributors']],
+       ['TrackedAuthor', 'update', ['contributors'], []],
+       ['TrackedArticle', 'update', nil, []]]
     )
   end
 
@@ -237,10 +273,36 @@ RSpec.describe PaperTrailDiff::ActivityVersionCollector do
     CollectorAuthor.find(author.id).update!(name: 'Ann B.')
 
     expect(described(collect(author, [:answers]))).to eq(
-      [['CollectorAuthor', 'create', nil, false], ['CollectorPost', 'create', ['answers'], true],
-       ['CollectorNote', 'create', ['answers'], true],
-       ['CollectorAnswer', 'create', ['answers'], false], ['CollectorAuthor', 'update', nil, false]]
+      [['CollectorAuthor', 'create', nil, []],
+       ['CollectorPost', 'create', ['answers'], ['answers']],
+       ['CollectorNote', 'create', ['answers'], ['answers']],
+       ['CollectorAnswer', 'create', ['answers'], []], ['CollectorAuthor', 'update', nil, []]]
     )
+  end
+
+  # The user is a join row of `user_seats` only while a seat of the team
+  # names it, which its own state cannot show: not while a seat of another
+  # team does, which joins the team later.
+  it 'collects the middle rows of a through over a through only while a row leads to them',
+     mutant_expression: %w[PaperTrailDiff::ActivityVersionCollector PaperTrailDiff::ThroughLead
+                           PaperTrailDiff::JoinRunJudge] do
+    team = CollectorTeam.create!(name: 'Team')
+    other = CollectorTeam.create!(name: 'Other')
+    user = CollectorUser.create!(name: 'Before')
+    seat = CollectorSeat.create!(team: team)
+    elsewhere = CollectorSeat.create!(team: other, user: user)
+    user.update!(name: 'Still before')
+    seat.update!(user: user)
+    user.update!(name: 'Seated')
+    seated = versions_of(user).last
+    elsewhere.update!(team: team)
+    team.update!(name: 'Team B')
+
+    events = collect(team, [:user_seats])
+    users = events.select { |event| event.version.item_type == 'CollectorUser' }
+                  .map { |event| [event.version.id, event.joins] }
+
+    expect(users).to eq([[seated.id, ['user_seats']]])
   end
 
   it 'collects the joins of a through that reaches another, under its own branch' do
@@ -249,10 +311,10 @@ RSpec.describe PaperTrailDiff::ActivityVersionCollector do
     CollectorNote.create!(post: post, body: 'Note').answers.create!(body: 'Answer')
     CollectorAuthor.find(author.id).update!(name: 'Ann B.')
 
-    joins = described(collect(author, [:post_answers])).select { |*, join| join }
+    joins = described(collect(author, [:post_answers])).select { |*, joins| joins.any? }
 
-    expect(joins).to eq([['CollectorPost', 'create', ['post_answers'], true],
-                         ['CollectorNote', 'create', ['post_answers'], true]])
+    expect(joins).to eq([['CollectorPost', 'create', ['post_answers'], ['post_answers']],
+                         ['CollectorNote', 'create', ['post_answers'], ['post_answers']]])
   end
 
   it 'names an association it cannot read by its whole path' do

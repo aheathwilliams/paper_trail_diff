@@ -24,6 +24,10 @@ module PaperTrailDiff
     # The date a database gives a time of day it reads back.
     TIME_OF_DAY_DATE = { year: 2000, month: 1, day: 1 }.freeze #: Hash[Symbol, Integer]
 
+    # Where a hash has no value for a key the other has (see .same?).
+    MISSING = Object.new.freeze
+    private_constant :MISSING
+
     # Answers a question about `value` once for each Active Record class, in
     # `answers`: its respond_to? also looks through the instance's attributes,
     # which costs more than most of what reading a version does, and every
@@ -220,6 +224,13 @@ module PaperTrailDiff
       end
     end
 
+    # Ids as strings, once each, in the order their records' ids take: an
+    # integer id by its value, so 2 comes before 10, and any other by its text.
+    #: (Array[untyped]) -> Array[String]
+    def self.sort_ids(ids)
+      ids.map(&:to_s).uniq.sort_by { |id| id.match?(/\A\d+\z/) ? [id.to_i, id] : [Float::INFINITY, id] }
+    end
+
     # Records sort by type first so that mixed id types stay comparable, then
     # naturally within one type. Ordering by the printed form instead would put
     # id 10 before id 2, which is deterministic but reads as unsorted wherever a
@@ -352,11 +363,33 @@ module PaperTrailDiff
 
     # Whether two values are one, as a diff reads them: `==`, but a NaN is the
     # same as a NaN, as PostgreSQL stores and compares it, though Ruby has
-    # NaN unequal to everything.
+    # NaN unequal to everything. A value a serialized attribute holds can be
+    # of any class, so `==` must hold both ways, which Active Support's
+    # Time == String does not, and a Float is not the Integer it equals: each
+    # is written differently, so the change is real. Hashes and arrays are
+    # compared by their members.
     #: (untyped, untyped) -> bool
     def self.same?(left, right)
-      left == right || (nan?(left) && nan?(right))
+      return nan?(right) if nan?(left)
+      return same_hash?(left, right) if left.is_a?(Hash)
+      return same_array?(left, right) if left.is_a?(Array)
+
+      left == right && right == left && left.instance_of?(Float) == right.instance_of?(Float)
     end
+
+    # A key the right side lacks reads as a value nothing else is.
+    #: (Hash[untyped, untyped], untyped) -> bool
+    def self.same_hash?(left, right)
+      right.is_a?(Hash) && left.length == right.length &&
+        left.all? { |key, value| same?(value, right.fetch(key, MISSING)) }
+    end
+
+    #: (Array[untyped], untyped) -> bool
+    def self.same_array?(left, right)
+      right.is_a?(Array) && left.length == right.length &&
+        left.zip(right).all? { |pair| same?(*pair) }
+    end
+    private_class_method :same_hash?, :same_array?
 
     # A Float or BigDecimal NaN.
     #: (untyped) -> bool

@@ -1683,6 +1683,14 @@ RSpec.describe PaperTrailDiff do
         .to raise_error(PaperTrailDiff::VersionMismatchError, /same PaperTrail item/)
     end
 
+    it 'rejects two versions given newest first, as compare does' do
+      _article, _create, draft, published, = create_history
+
+      expect { described_class.diagnose(published, draft) }
+        .to raise_error(PaperTrailDiff::ReversedEndpointsError, /chronological order/)
+      expect(described_class.diagnose(draft, published)).to be_ok
+    end
+
     # As `compare(version, record)` takes them, in either order.
     it 'checks a comparison with the current record' do
       article, _create, draft, = create_history

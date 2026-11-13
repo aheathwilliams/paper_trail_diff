@@ -11,7 +11,9 @@ module PaperTrailDiff
   #
   # PaperTrail's `version.changeset` finds the model through `version.item`,
   # which is a query per version and nothing at all once the record is deleted.
-  # The version already names its model, so neither is needed here.
+  # The version already names its model, and an STI subclass's types are
+  # read from the class it recorded (see RecordedClass), so neither is needed
+  # here.
   class RecordedChanges
     IGNORE_NAMES_REQUIRED = 'ignore: must be an array of strings or symbols; a version ' \
                             'has no association path for paths: to match'
@@ -33,9 +35,10 @@ module PaperTrailDiff
       raise InvalidEndpointError, 'expected a PaperTrail version' unless Endpoint.version?(@version)
 
       ignored = ignored_names
+      ReadableHistory.check_version!(@version, 'object_changes')
       return unless recorded?
 
-      model_class = Endpoint.model_class(@version)
+      model_class = RecordedClass.for(@version)
       changes = ActivityEventRecordResolver.new.deserialized_changeset(@version, model_class)
       return if changes.nil?
 

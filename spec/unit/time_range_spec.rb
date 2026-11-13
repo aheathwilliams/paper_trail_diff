@@ -62,6 +62,9 @@ RSpec.describe PaperTrailDiff::TimeRange do
     expect { described_class.new(Range.new(nil, end_time)) }
       .to invalid('`within` must be a Range with a beginning')
     expect { described_class.new(1..2) }.to invalid('`within` begin must be time-like')
+    %w[12 2026-02-30 10:00].each do |text|
+      expect { described_class.new(text..) }.to invalid('`within` begin must be time-like')
+    end
     expect { described_class.new(end_time..start_time) }
       .to invalid('`within` beginning must not follow its end')
   end

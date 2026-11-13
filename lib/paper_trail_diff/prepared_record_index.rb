@@ -196,6 +196,14 @@ module PaperTrailDiff
       [state_for(first), state_after(@version_positions.fetch(last.id.to_s))].compact
     end
 
+    # The states before the transaction of another record's version `first`
+    # and after the transaction of its version `last`: what this record was
+    # while that record's transaction began and once it had ended.
+    #: (untyped, untyped) -> Array[PreparedRecordState]
+    def states_around(first, last)
+      [state_before(first), state_after_transaction(last)].compact
+    end
+
     #: (untyped) -> [PreparedRecordState, PreparedRecordState]?
     def transition(version)
       index = @version_positions[version.id.to_s]
@@ -218,6 +226,18 @@ module PaperTrailDiff
     # @rbs @version_positions: Hash[String, Integer]
     # @rbs @transaction_positions: Hash[untyped, Integer]
     # @rbs @effective: [TransactionEnds, Array[untyped]]?
+
+    # The state before this record's first version past `boundary` and its
+    # transaction, or the live one.
+    #: (untyped) -> PreparedRecordState?
+    def state_after_transaction(boundary)
+      key = VersionBoundary.transaction_id(boundary)
+      later = versions.find do |version|
+        VersionBoundary.at_or_after?(version, boundary) &&
+          (key.nil? || VersionBoundary.transaction_id(version) != key)
+      end
+      later ? state_for(later) : live
+    end
 
     #: (Integer) -> PreparedRecordState?
     def state_after(index)
@@ -471,6 +491,14 @@ module PaperTrailDiff
     #: (untyped, untyped, untyped, untyped) -> Array[Hash[untyped, untyped]]
     def typed_states_across(model_class, id, first, last)
       @series.fetch(identity(model_class, id)).states_across(first, last)
+             .map { |state| typed_attributes(state) }
+    end
+
+    # A record's attributes around another record's transaction (see
+    # PreparedRecordSeries#states_around), typed as typed_states_across's.
+    #: (untyped, untyped, untyped, untyped) -> Array[Hash[untyped, untyped]]
+    def typed_states_around(model_class, id, first, last)
+      @series.fetch(identity(model_class, id)).states_around(first, last)
              .map { |state| typed_attributes(state) }
     end
 
