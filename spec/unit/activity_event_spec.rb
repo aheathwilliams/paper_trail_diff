@@ -10,6 +10,7 @@ RSpec.describe PaperTrailDiff::ActivityEvent do
 
     expect(event.branches).to eq(%w[a b]).and be_frozen
     expect(event.joins).to eq(%w[c d]).and be_frozen
+    expect(event.version).to equal(version)
     expect(event).to be_frozen
     expect(event).not_to be_root
   end
