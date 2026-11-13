@@ -39,7 +39,5 @@ class FullSnapshotter
 
   def reading(open, &block) = @prepared.reading(open, &block)
 
-  def transaction_ends(versions) = @prepared.transaction_ends(versions)
-
   def range_end(record, version) = @provider.range_end(record, version)
 end

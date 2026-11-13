@@ -31,6 +31,11 @@ module PaperTrailDiff
       ordered(@registry.to_a)
     end
 
+    # Where the transactions of the collected events take effect, once #call
+    # has ordered them by it.
+    #: () -> TransactionEnds?
+    attr_reader :ends
+
     private
 
     # @rbs @prepared: PreparedActivityIndex
@@ -39,6 +44,7 @@ module PaperTrailDiff
     # @rbs @traversal: AssociationTraversal
     # @rbs @range: ActivityRange
     # @rbs @registry: ActivityEventRegistry
+    # @rbs @ends: TransactionEnds?
 
     #: (Array[ActivityEvent]) -> Array[ActivityEvent]
     def ordered(events)
@@ -49,6 +55,7 @@ module PaperTrailDiff
       prepared = @prepared #: PreparedActivityIndex?
       versions = events.map(&:version)
       ends = prepared ? prepared.transaction_ends(versions) : TransactionEnds.new(versions)
+      @ends = ends
       events.sort_by { |event| ends.sort_key(event.version) }.freeze
     end
 
