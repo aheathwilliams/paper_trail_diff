@@ -516,7 +516,9 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
     expect(queries).to eq(transactions.each_slice(2).count)
   end
 
-  describe '#join_versions' do
+  describe '#join_versions',
+           mutant_expression: %w[PaperTrailDiff::PreparedActivityIndex#join_versions PaperTrailDiff::JoinRunJudge
+                                 PaperTrailDiff::ThroughPath PaperTrailDiff::ThroughLead] do
     let!(:origin) { Time.now.utc }
     let(:board) { IndexSpecBoard.create! }
     let(:owners) { { model: IndexSpecBoard, ids: [board.id] } }

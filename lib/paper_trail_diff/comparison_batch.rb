@@ -130,7 +130,7 @@ module PaperTrailDiff
       roots = versions.group_by { |version| Endpoint.identity(version) }.values
       roots.group_by { |own| RecordedClass.for(own.last) }.each do |model, groups|
         group = groups.flatten
-        ids = group.map(&:item_id).uniq(&:to_s)
+        ids = group.map(&:item_id).uniq
         @version_history_preparer.call(ids.map { |id| historical_root(model, id) }, group)
       end
     end

@@ -91,6 +91,21 @@ RSpec.describe PaperTrailDiff::ComparisonBatch do
     expect(versions).to eq([retyped, renamed])
   end
 
+  it 'prepares the roots of each later class together' do
+    shape = ComparisonShape.create!(name: 'shape')
+    shape.update!(type: 'ComparisonCircle')
+    ComparisonShape.find(shape.id).update!(name: 'circle')
+    plain = ComparisonShape.create!(name: 'plain')
+    2.times { |index| plain.update!(name: "plain #{index}") }
+    retyped, renamed = shape.versions.reorder(:created_at, :id).last(2)
+    first, last = plain.versions.reorder(:created_at, :id).last(2)
+
+    batch([{ from: retyped, to: renamed }, { from: first, to: last }]).call
+
+    expect(version_prepared.map { |records, versions| [records.map(&:class), versions] })
+      .to eq([[[ComparisonCircle], [retyped, renamed]], [[ComparisonShape], [first, last]]])
+  end
+
   it 'prepares a root with a live endpoint from that record' do
     article = TrackedArticle.create!(title: 'Article')
     first, = versions_of(article)

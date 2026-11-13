@@ -294,12 +294,15 @@ RSpec.describe PaperTrailDiff::ActivityVersionCollector do
     user.update!(name: 'Still before')
     seat.update!(user: user)
     user.update!(name: 'Seated')
+    seated = versions_of(user).last
     elsewhere.update!(team: team)
     team.update!(name: 'Team B')
 
-    users = described(collect(team, [:user_seats])).select { |type, *| type == 'CollectorUser' }
+    events = collect(team, [:user_seats])
+    users = events.select { |event| event.version.item_type == 'CollectorUser' }
+                  .map { |event| [event.version.id, event.joins] }
 
-    expect(users).to eq([['CollectorUser', 'update', ['user_seats'], ['user_seats']]])
+    expect(users).to eq([[seated.id, ['user_seats']]])
   end
 
   it 'collects the joins of a through that reaches another, under its own branch' do
