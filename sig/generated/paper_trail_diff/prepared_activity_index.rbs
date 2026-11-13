@@ -94,10 +94,6 @@ module PaperTrailDiff
 
     @targets: Hash[untyped, untyped]
 
-    # The versions one row saved in one transaction, or alone.
-    # : (untyped) -> Array[untyped]
-    def join_run: (untyped) -> Array[untyped]
-
     # The targets the owners' recorded states point at. PT-AT names a target
     # only in the rows its owner's versions wrote, so a key changed without a
     # version, such as one `has_paper_trail only:` leaves out, names its target
@@ -216,17 +212,16 @@ module PaperTrailDiff
     def typed?: (Hash[untyped, untyped]) -> bool
   end
 
-  # How the versions a through's join row saved in one transaction are
-  # judged (see PreparedActivityIndex#join_versions): by the row's own
-  # states, or by the rows that lead to it, or not at all.
+  # How the versions of a through's join row are judged (see
+  # PreparedActivityIndex#join_versions): by the row's own states, or by the
+  # rows that lead to it, or not at all. A version is judged by its whole
+  # transaction, so the row's versions in one transaction are judged alike.
   class JoinRunJudge
     # : (PreparedRecordIndex, ScopeCondition::Cache) -> void
     def initialize: (PreparedRecordIndex, ScopeCondition::Cache) -> void
 
-    # How a run of a join row's versions is judged, if it is: by its own
-    # states, or by the rows that lead to it.
-    # : (Hash[Symbol, untyped], Hash[Symbol, untyped], untyped) -> (^(Array[untyped]) -> bool)?
-    def call: (Hash[Symbol, untyped], Hash[Symbol, untyped], untyped) -> (^(Array[untyped]) -> bool)?
+    # : (Hash[Symbol, untyped], Hash[Symbol, untyped], untyped) -> (^(untyped) -> bool)?
+    def call: (Hash[Symbol, untyped], Hash[Symbol, untyped], untyped) -> (^(untyped) -> bool)?
 
     private
 
@@ -234,22 +229,21 @@ module PaperTrailDiff
 
     @records: PreparedRecordIndex
 
-    # A run's versions are in the order they were saved, as the row's series
-    # holds them.
-    # : (untyped, Array[untyped], ThroughPath) -> bool
-    def on_path?: (untyped, Array[untyped], ThroughPath) -> bool
+    # : (untyped, untyped, ThroughPath) -> bool
+    def on_path?: (untyped, untyped, ThroughPath) -> bool
 
-    # A run is judged by the row's whole transaction, not only the part inside
-    # the range. A window whose edge falls inside the transaction holds only
+    # The first and last versions the row saved in the version's
+    # transaction: a version is judged by the row's whole transaction, not
+    # only the part inside the range. A window whose edge falls inside the transaction holds only
     # some of the row's versions in it. Judged by its destroy alone, a row
     # moved here and destroyed in one transaction was on the path, so the
     # window after the edge reported the transaction, which the window before
     # it, judging the row by both versions, reported too. The row's series
     # holds the whole transaction: history crossed by one is read from where
     # it began (see PreparedHistoryLoader#reload). A version saved outside a
-    # transaction is a run of its own.
-    # : (untyped, Array[untyped]) -> [untyped, untyped]
-    def transaction_span: (untyped, Array[untyped]) -> [ untyped, untyped ]
+    # transaction is judged alone.
+    # : (untyped, untyped) -> [untyped, untyped]
+    def transaction_span: (untyped, untyped) -> [ untyped, untyped ]
   end
 
   # Whether the rows that lead to a through's target, as a through over that

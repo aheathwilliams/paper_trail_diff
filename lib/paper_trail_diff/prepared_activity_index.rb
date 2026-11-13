@@ -88,8 +88,7 @@ module PaperTrailDiff
       judge = @judge.call(owners, group, reflection)
       return versions unless judge
 
-      runs = versions.group_by { |version| join_run(version) }.values
-      runs.select { |run| judge.call(run) }.flat_map(&:itself)
+      versions.select { |version| judge.call(version) }
     end
 
     # Only the children the history loaded. Snapshots read children only under
@@ -140,12 +139,6 @@ module PaperTrailDiff
     # @rbs @rows: Hash[untyped, Hash[String, Array[untyped]]]
     # @rbs @conditions: ScopeCondition::Cache
     # @rbs @judge: JoinRunJudge
-
-    # The versions one row saved in one transaction, or alone.
-    #: (untyped) -> Array[untyped]
-    def join_run(version)
-      [version.item_id, ActivityTransactionGroups.transaction_key(version) || version]
-    end
 
     # The targets the owners' recorded states point at. PT-AT names a target
     # only in the rows its owner's versions wrote, so a key changed without a
@@ -348,9 +341,10 @@ module PaperTrailDiff
     end
   end
 
-  # How the versions a through's join row saved in one transaction are
-  # judged (see PreparedActivityIndex#join_versions): by the row's own
-  # states, or by the rows that lead to it, or not at all.
+  # How the versions of a through's join row are judged (see
+  # PreparedActivityIndex#join_versions): by the row's own states, or by the
+  # rows that lead to it, or not at all. A version is judged by its whole
+  # transaction, so the row's versions in one transaction are judged alike.
   class JoinRunJudge
     #: (PreparedRecordIndex, ScopeCondition::Cache) -> void
     def initialize(records, conditions)
@@ -358,19 +352,17 @@ module PaperTrailDiff
       @conditions = conditions
     end
 
-    # How a run of a join row's versions is judged, if it is: by its own
-    # states, or by the rows that lead to it.
-    #: (Hash[Symbol, untyped], Hash[Symbol, untyped], untyped) -> (^(Array[untyped]) -> bool)?
+    #: (Hash[Symbol, untyped], Hash[Symbol, untyped], untyped) -> (^(untyped) -> bool)?
     def call(owners, group, reflection)
       model = group.fetch(:model)
       path = ThroughPath.new(owners, reflection, @conditions)
-      return ->(run) { on_path?(model, run, path) } unless path.open?
+      return ->(version) { on_path?(model, version, path) } unless path.open?
 
       leads = group[:leads]
       return unless leads
 
       lead = ThroughLead.new(@records, owners, leads, @conditions)
-      ->(run) { lead.include?(*transaction_span(model, run)) }
+      ->(version) { lead.include?(*transaction_span(model, version)) }
     end
 
     private
@@ -378,30 +370,30 @@ module PaperTrailDiff
     # @rbs @records: PreparedRecordIndex
     # @rbs @conditions: ScopeCondition::Cache
 
-    # A run's versions are in the order they were saved, as the row's series
-    # holds them.
-    #: (untyped, Array[untyped], ThroughPath) -> bool
-    def on_path?(model, run, path)
-      first, last = transaction_span(model, run)
+    #: (untyped, untyped, ThroughPath) -> bool
+    def on_path?(model, version, path)
+      first, last = transaction_span(model, version)
       @records.typed_states_across(model, first.item_id, first, last)
               .any? { |attributes| path.include?(attributes) }
     end
 
-    # A run is judged by the row's whole transaction, not only the part inside
-    # the range. A window whose edge falls inside the transaction holds only
+    # The first and last versions the row saved in the version's
+    # transaction: a version is judged by the row's whole transaction, not
+    # only the part inside the range. A window whose edge falls inside the transaction holds only
     # some of the row's versions in it. Judged by its destroy alone, a row
     # moved here and destroyed in one transaction was on the path, so the
     # window after the edge reported the transaction, which the window before
     # it, judging the row by both versions, reported too. The row's series
     # holds the whole transaction: history crossed by one is read from where
     # it began (see PreparedHistoryLoader#reload). A version saved outside a
-    # transaction is a run of its own.
-    #: (untyped, Array[untyped]) -> [untyped, untyped]
-    def transaction_span(model, run)
-      first, = run
-      key = ActivityTransactionGroups.transaction_key(first)
-      saved = key ? @records.versions_for_id(model, first.item_id) : run
-      saved = saved.select { |version| ActivityTransactionGroups.transaction_key(version) == key }
+    # transaction is judged alone.
+    #: (untyped, untyped) -> [untyped, untyped]
+    def transaction_span(model, version)
+      key = ActivityTransactionGroups.transaction_key(version)
+      return [version, version] unless key
+
+      saved = @records.versions_for_id(model, version.item_id)
+                      .select { |other| ActivityTransactionGroups.transaction_key(other) == key }
       [saved.fetch(0), saved.fetch(-1)]
     end
   end

@@ -8,6 +8,41 @@ ActiveRecord::Schema.define do
     table.references :pinnable, polymorphic: true
     table.timestamps null: false
   end
+
+  create_table :collector_teams, force: true do |table|
+    table.string :name
+    table.timestamps null: false
+  end
+
+  create_table :collector_seats, force: true do |table|
+    table.integer :team_id
+    table.integer :user_id
+    table.timestamps null: false
+  end
+
+  create_table :collector_users, force: true do |table|
+    table.string :name
+    table.timestamps null: false
+  end
+end
+
+# A through over a through whose source is a belongs_to.
+class CollectorTeam < ActiveRecord::Base
+  has_many :seats, class_name: 'CollectorSeat', foreign_key: :team_id
+  has_many :users, through: :seats
+  has_many :user_seats, through: :users, source: :seats
+  has_paper_trail
+end
+
+class CollectorSeat < ActiveRecord::Base
+  belongs_to :team, class_name: 'CollectorTeam', optional: true
+  belongs_to :user, class_name: 'CollectorUser', optional: true
+  has_paper_trail
+end
+
+class CollectorUser < ActiveRecord::Base
+  has_many :seats, class_name: 'CollectorSeat', foreign_key: :user_id
+  has_paper_trail
 end
 
 class CollectorArticle < ActiveRecord::Base
@@ -61,7 +96,8 @@ RSpec.describe PaperTrailDiff::ActivityVersionCollector do
     PaperTrail::VersionAssociation.delete_all
     PaperTrail::Version.delete_all
     ActiveRecord::Base.connection.execute('DELETE FROM tracked_articles_tags')
-    [CollectorPin, TrackedReply, TrackedComment, TrackedProfile, TrackedAuthorship,
+    [CollectorSeat, CollectorUser, CollectorTeam, CollectorPin, TrackedReply, TrackedComment,
+     TrackedProfile, TrackedAuthorship,
      TrackedArticle, TrackedAuthor, TrackedTag].each(&:delete_all)
   end
 
@@ -242,6 +278,22 @@ RSpec.describe PaperTrailDiff::ActivityVersionCollector do
        ['CollectorNote', 'create', ['answers'], ['answers']],
        ['CollectorAnswer', 'create', ['answers'], []], ['CollectorAuthor', 'update', nil, []]]
     )
+  end
+
+  # The user is a join row of `user_seats` only while a seat of the team
+  # names it, which its own state cannot show.
+  it 'collects the middle rows of a through over a through only while a row leads to them' do
+    team = CollectorTeam.create!(name: 'Team')
+    user = CollectorUser.create!(name: 'Before')
+    seat = CollectorSeat.create!(team: team)
+    user.update!(name: 'Still before')
+    seat.update!(user: user)
+    user.update!(name: 'Seated')
+    team.update!(name: 'Team B')
+
+    users = described(collect(team, [:user_seats])).select { |type, *| type == 'CollectorUser' }
+
+    expect(users).to eq([['CollectorUser', 'update', ['user_seats'], ['user_seats']]])
   end
 
   it 'collects the joins of a through that reaches another, under its own branch' do

@@ -106,9 +106,7 @@ module PaperTrailDiff
     # (see PreparedActivityIndex#join_versions).
     #: (Hash[Symbol, untyped], untyped, Array[Hash[Symbol, untyped]]) -> Array[Hash[Symbol, untyped]]
     def led(rows, reflection, targets)
-      source = reflection.source_reflection
-      return targets if !source.belongs_to? || source.polymorphic?
-      return targets if reflection.through_reflection.through_reflection?
+      return targets unless reflection.source_reflection.belongs_to?
 
       targets.map { |target| target.merge(leads: { group: rows, reflection: reflection }) }
     end

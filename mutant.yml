@@ -109,4 +109,8 @@ matcher:
     - PaperTrailDiff::ActivityRange*
     - PaperTrailDiff::VersionAssociationCandidateScope*
     - PaperTrailDiff::PreparedActivityIndex*
+    - PaperTrailDiff::ThroughPath*
+    - PaperTrailDiff::JoinRunJudge*
+    - PaperTrailDiff::ThroughLead*
+    - PaperTrailDiff::ComparisonBatch*
     - PaperTrailDiff::Support*
