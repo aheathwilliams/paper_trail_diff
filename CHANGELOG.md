@@ -452,7 +452,13 @@ project follows [Semantic Versioning](https://semver.org/).
 - A through's join row whose transaction changed nothing the tree shows,
   such as a pin that names no user, or a member's own versions under a
   through of a through before the member joined, is no longer a step of the
-  root.
+  root. A member's versions under such a through are steps only where a
+  membership of the root named the member, and a record that is a join row
+  under one association is judged as any member under the others.
+- `compare` between two versions of a record whose STI class changed
+  between them reads both from one history, so a change below the record in
+  between, such as a note moved to a member, is reported. It was read from
+  two histories, each beginning at its own version, and was missed.
 
 ## [0.17.0] - 2026-11-04
 
