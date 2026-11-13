@@ -27,6 +27,11 @@ module PaperTrailDiff
     # : (untyped, Hash[untyped, untyped], String) { (untyped) -> untyped } -> Hash[untyped, untyped]
     def self.convert: (untyped, Hash[untyped, untyped], String) { (untyped) -> untyped } -> Hash[untyped, untyped]
 
+    # The names of the model's attributes of this type, which a model keeps
+    # as it was defined, as TimeOfDay.columns does.
+    # : (untyped, String) -> Array[String]
+    def self.typed: (untyped, String) -> Array[String]
+
     # : (untyped) -> untyped
     def self.bytes: (untyped) -> untyped
   end

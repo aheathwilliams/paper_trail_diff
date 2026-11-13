@@ -96,6 +96,10 @@ module PaperTrailDiff
     # : (Hash[String, untyped]) -> bool
     def matches?: (Hash[String, untyped]) -> bool
 
+    # Whether every record matches, as for a relation with no conditions.
+    # : () -> bool
+    def all?: () -> bool
+
     # Whether no record can match, as for a relation `none` built.
     # : () -> bool
     def none?: () -> bool

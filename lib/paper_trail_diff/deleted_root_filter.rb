@@ -40,11 +40,8 @@ module PaperTrailDiff
     def call(identities)
       return [] if @condition.none?
 
-      states = destroyed_states(identities.map(&:last))
-      identities.select do |identity|
-        id = identity.last
-        !states.key?(id) || selected?(states.fetch(id))
-      end
+      selected = selected(identities.map(&:last))
+      identities.select { |identity| selected.fetch(identity.last, true) }
     end
 
     private
@@ -59,6 +56,38 @@ module PaperTrailDiff
     #: () -> untyped
     def model
       @relation.model
+    end
+
+    # Whether the relation selects each root its destroy recorded, by id. A
+    # relation with no conditions, on a model that is not a subclass,
+    # selects every root whose destroy stored a state, so no state is read.
+    #: (Array[String]) -> Hash[String, bool]
+    def selected(ids)
+      return stored(ids) if @condition.all? && model.descends_from_active_record? && object?
+
+      destroyed_states(ids).transform_values { |attributes| selected?(attributes) }
+    end
+
+    #: () -> bool
+    def object? = model.paper_trail.version_class.column_names.include?('object')
+
+    # Whether each root's latest destroy stored a state.
+    #: (Array[String]) -> Hash[String, bool]
+    def stored(ids)
+      stored = {} #: Hash[String, bool]
+      ids.each_slice(Support::IDS_PER_STATEMENT) do |slice|
+        destroys = VersionQuery.for_items(model, slice).where(event: 'destroy')
+        VersionQuery.chronological(destroys).pluck(:item_id, empty(destroys)).each do |id, none|
+          stored[id.to_s] = none.to_i.zero?
+        end
+      end
+      stored
+    end
+
+    # 1 where a version stored no state, as every database can select it.
+    #: (untyped) -> untyped
+    def empty(versions)
+      Arel::Nodes::Case.new.when(versions.arel_table[:object].eq(nil)).then(1).else(0)
     end
 
     #: (Hash[String, untyped]?) -> bool

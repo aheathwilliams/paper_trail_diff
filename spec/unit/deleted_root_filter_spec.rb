@@ -114,6 +114,25 @@ RSpec.describe PaperTrailDiff::DeletedRootFilter do
     expect(filtered).to eq([['FilterEvent', events.first.id.to_s]])
   end
 
+  # Every root whose destroy stored a state meets no conditions, so none is
+  # read, only whether the latest destroy stored one.
+  it 'reads no destroyed state for a relation with no conditions' do
+    kept, emptied = Array.new(2) { FilterEvent.create!(status: :draft).tap(&:destroy!) }
+    record_destroy('FilterEvent', emptied.id, nil, created_at: Time.now + 60)
+    unrecorded = FilterEvent.create!(status: :draft)
+    FilterEvent.where(id: unrecorded.id).delete_all
+    loaded = []
+    count = ->(*, payload) { loaded << payload[:class_name] }
+
+    identities = [kept, emptied, unrecorded].map { |event| ['FilterEvent', event.id.to_s] }
+    filtered = ActiveSupport::Notifications.subscribed(count, 'instantiation.active_record') do
+      described_class.new(FilterEvent.all).call(identities)
+    end
+
+    expect(filtered).to eq([['FilterEvent', kept.id.to_s], ['FilterEvent', unrecorded.id.to_s]])
+    expect(loaded).to eq([])
+  end
+
   it 'keeps a root whose destroy was not recorded, which has no state to test' do
     article = FilterArticle.create!(title: 'Unrecorded', views: 3)
     FilterArticle.where(id: article.id).delete_all

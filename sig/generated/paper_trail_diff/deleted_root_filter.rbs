@@ -33,6 +33,23 @@ module PaperTrailDiff
     # : () -> untyped
     def model: () -> untyped
 
+    # Whether the relation selects each root its destroy recorded, by id. A
+    # relation with no conditions, on a model that is not a subclass,
+    # selects every root whose destroy stored a state, so no state is read.
+    # : (Array[String]) -> Hash[String, bool]
+    def selected: (Array[String]) -> Hash[String, bool]
+
+    # : () -> bool
+    def object?: () -> bool
+
+    # Whether each root's latest destroy stored a state.
+    # : (Array[String]) -> Hash[String, bool]
+    def stored: (Array[String]) -> Hash[String, bool]
+
+    # 1 where a version stored no state, as every database can select it.
+    # : (untyped) -> untyped
+    def empty: (untyped) -> untyped
+
     # : (Hash[String, untyped]?) -> bool
     def selected?: (Hash[String, untyped]?) -> bool
 
