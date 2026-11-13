@@ -117,9 +117,6 @@ module PaperTrailDiff
     # : (untyped, untyped, untyped) -> bool
     def member_of?: (untyped, untyped, untyped) -> bool
 
-    # : (untyped) -> untyped
-    def transaction_id_for: (untyped) -> untyped
-
     # : (Array[untyped]) -> Array[untyped]
     def unique_records: (Array[untyped]) -> Array[untyped]
 

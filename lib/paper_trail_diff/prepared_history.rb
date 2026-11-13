@@ -174,7 +174,7 @@ module PaperTrailDiff
     # previous root version; the member did not exist at those yet.
     #: (untyped, untyped, untyped, untyped, bool) -> Array[untyped]?
     def habtm_records(record, reflection, boundary, habtm_boundary, ranked)
-      transaction_id = transaction_id_for(habtm_boundary)
+      transaction_id = habtm_boundary.transaction_id
       return unless transaction_id
 
       empty = {} #: Hash[String, Array[untyped]]
@@ -228,11 +228,6 @@ module PaperTrailDiff
       return true unless reflection.options[:as]
 
       AssociationTraversal.owner_type(reflection) == child.public_send(reflection.type).to_s
-    end
-
-    #: (untyped) -> untyped
-    def transaction_id_for(boundary)
-      boundary.transaction_id
     end
 
     #: (Array[untyped]) -> Array[untyped]

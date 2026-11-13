@@ -33,9 +33,7 @@ module PaperTrailDiff
     #: (untyped, Array[untyped], AssociationTree, path: String, into: Hash[Array[untyped], untyped]) -> void
     def collect_group(model_class, records, tree, path:, into:)
       @traversal.reflections_for(model_class, tree, path: path).each do |reflection|
-        subtree = tree.child(reflection.name)
-        next unless subtree
-
+        subtree = tree.child(reflection.name) #: AssociationTree
         child_path = Support.association_path(path, reflection.name)
         collect(children_for(records, reflection), subtree, path: child_path, into: into)
       end

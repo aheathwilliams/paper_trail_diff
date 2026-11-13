@@ -61,10 +61,7 @@ module PaperTrailDiff
     #: (untyped, AssociationTree) -> Array[[untyped, AssociationTree]]
     def selected_reflections(model_class, tree)
       tree.children.map do |name, subtree|
-        reflection = model_class.reflect_on_association(name)
-        raise ConfigurationError, "unknown association: #{name}" unless reflection
-
-        [reflection, subtree]
+        [model_class.reflect_on_association(name), subtree]
       end
     end
 
