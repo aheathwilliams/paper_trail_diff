@@ -197,7 +197,10 @@ module PaperTrailDiff
       return events unless closes
 
       closing = ends.sort_key(plan.reconstruction_versions.last)
-      events.select { |event| (ends.sort_key(event.version) <=> closing) <= 0 }
+      events.select do |event|
+        comparison = (ends.sort_key(event.version) <=> closing) #: Integer
+        comparison <= 0
+      end
     end
 
     # The range's events up to its last root version, or to the instant the
@@ -250,7 +253,8 @@ module PaperTrailDiff
 
       wide, events, snapshots, captured_at = read
 
-      plan = @range.reporting_plan(wide, @ends, context_required: true)
+      ends = @ends #: TransactionEnds
+      plan = @range.reporting_plan(wide, ends, context_required: true)
       return unless events.any? { |event| reported?(event, plan) }
 
       live = wide.closing_record
