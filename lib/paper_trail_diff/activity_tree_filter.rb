@@ -29,7 +29,7 @@ module PaperTrailDiff
   # in one read and not in another. A snapshot does not hold a through's join
   # rows, so their versions are judged when they are collected, by the row's
   # own state (PreparedActivityIndex#join_versions), and kept here where
-  # their transaction changed the snapshot.
+  # their transaction changed what the row's branches hold.
   class ActivityTreeFilter
     # `closing` is the snapshot after the last event: the current record's,
     # or nil when nothing follows, as after the root's destruction.
@@ -76,26 +76,34 @@ module PaperTrailDiff
       kept
     end
 
-    # A through's join rows were judged when they were collected, by where
-    # each leads, but a row can lead somewhere before the owner it joins is
-    # in the tree, or lead to records with nothing to show: its transaction
-    # is then left as it found the snapshot.
-    # The root's own events, and join rows whose transaction changed the
-    # snapshot, are kept whatever else holds.
+    # The root's own events are kept whatever else holds, and so is a join
+    # row whose transaction changed a branch it is a join row of. Its
+    # versions were judged when they were collected, by where the row leads,
+    # but a row can lead somewhere before the owner it joins is in the tree,
+    # or lead to records with nothing to show, and a row of a through that
+    # goes through another is on its path by rows further down, which its
+    # own state cannot show: its transaction then leaves those branches as
+    # it found them. Under any other branch the row is judged as any record.
     #: (Array[ActivityEvent], Array[RecordSnapshot?]) -> Array[bool]
     def unjudged(events, snapshots)
       events.each_with_index.map do |event, index|
-        event.root? || (event.join? && changed?(snapshots, index))
+        event.root? || changed?(snapshots, event.joins, index)
       end
     end
 
-    # A missing snapshot, after the root's destruction, reads as empty.
-    #: (Array[RecordSnapshot?], Integer) -> bool
-    def changed?(snapshots, index)
-      before, after = [@starts, @ends].map do |positions|
-        snapshots.fetch(positions.fetch(index)).to_h
-      end
-      !before.eql?(after)
+    #: (Array[RecordSnapshot?], Array[String], Integer) -> bool
+    def changed?(snapshots, branches, index)
+      before = snapshots.fetch(@starts.fetch(index))
+      after = snapshots.fetch(@ends.fetch(index))
+      branches.any? { |name| branch(before, name) != branch(after, name) }
+    end
+
+    # A missing snapshot, after the root's destruction, and a branch the
+    # snapshot does not hold, as before the root's creation, hold no records.
+    #: (RecordSnapshot?, String) -> Array[untyped]
+    def branch(snapshot, name)
+      association = snapshot&.associations&.[](name)
+      association ? association.to_h.fetch(:records) : []
     end
 
     # The events each snapshot judges, by the snapshot's position, the one

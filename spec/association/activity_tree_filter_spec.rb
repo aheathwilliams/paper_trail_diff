@@ -281,9 +281,9 @@ RSpec.describe PaperTrailDiff::ActivityTreeFilter do
   describe 'deciding each event' do
     def event(id, item_id, transaction_id, type: 'TrackedComment', **flags)
       version = TreeFilterVersion.new(id, type, item_id, transaction_id)
-      PaperTrailDiff::ActivityEvent.new(version: version,
-                                        branches: flags.fetch(:branches, ['comments']),
-                                        join: flags.fetch(:join, false))
+      branches = flags.fetch(:branches, ['comments'])
+      PaperTrailDiff::ActivityEvent.new(version: version, branches: branches,
+                                        joins: flags.fetch(:join, false) ? branches : [])
     end
 
     def root_event(id, transaction_id)

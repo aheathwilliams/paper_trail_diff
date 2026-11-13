@@ -7,18 +7,16 @@ module PaperTrailDiff
 
     attr_reader branches: Array[String]?
 
-    # : (version: untyped, branches: Array[String]?, ?join: bool) -> void
-    def initialize: (version: untyped, branches: Array[String]?, ?join: bool) -> void
+    # The branches under which the version is of a through's join row, which
+    # links the root to a target without being one. A record can be a join
+    # row under one branch and a member of another.
+    attr_reader joins: Array[String]
+
+    # : (version: untyped, branches: Array[String]?, ?joins: Array[String]) -> void
+    def initialize: (version: untyped, branches: Array[String]?, ?joins: Array[String]) -> void
 
     # : () -> bool
     def root?: () -> bool
-
-    # Whether the version is of a through's join row, which links the root to
-    # a target without being one.
-    # : () -> bool
-    def join?: () -> bool
-
-    @join: bool
   end
 
   # Accumulates each version once while retaining every selected root branch.
