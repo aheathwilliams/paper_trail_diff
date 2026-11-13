@@ -431,12 +431,15 @@ RSpec.describe PaperTrailDiff::ActivityTimelineBuilder do
       expect(result.diff).to be_empty
     end
 
-    it 'rejects a to that is neither a version nor a record' do
+    # As `analyze` on the same builder does, and `timeline`.
+    it 'rejects a to that is neither a version nor a record as outside the history' do
       article, _comment, from, = edited_history
 
-      expect { builder(article, from: from, to: 'nope').build }
-        .to raise_error(PaperTrailDiff::InvalidEndpointError,
-                        'expected a PaperTrail version or persisted record endpoint')
+      %i[build analyze].each do |call|
+        expect { builder(article, from: from, to: 'nope').public_send(call) }
+          .to raise_error(PaperTrailDiff::InvalidTimelineRangeError,
+                          '`to` version is not in the record history')
+      end
     end
   end
 

@@ -39,8 +39,7 @@ module PaperTrailDiff
   # A normalized association in a bounded record snapshot tree.
   class AssociationSnapshot
     COLLECTION_KINDS = %i[has_many has_and_belongs_to_many].freeze
-    SUPPORTED_KINDS = %i[belongs_to has_one has_many has_and_belongs_to_many].freeze
-    private_constant :COLLECTION_KINDS, :SUPPORTED_KINDS
+    private_constant :COLLECTION_KINDS
 
     # Whether a collection's identities were found distinct. The snapshots a
     # transition derives from one another share the answer: a transition
@@ -105,7 +104,7 @@ module PaperTrailDiff
     # time grow with its events times the size of the collection they changed.
     #: (kind: Symbol, records: Array[RecordSnapshot], ?identity_check: untyped, ?transition: CollectionTransition?, ?ordered: bool) -> void
     def initialize(kind:, records:, identity_check: nil, transition: nil, ordered: false)
-      unless SUPPORTED_KINDS.include?(kind)
+      unless SUPPORTED_ASSOCIATION_MACROS.include?(kind)
         raise ArgumentError, "unsupported association kind: #{kind.inspect}"
       end
       if !self.class.collection_kind?(kind) && records.length > 1

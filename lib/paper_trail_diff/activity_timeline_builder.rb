@@ -32,7 +32,6 @@ module PaperTrailDiff
       return no_steps if @range.unresolved?
       return steps_of(current_replay) if Endpoint.record?(@to)
 
-      Endpoint.validate!(@to)
       steps_of(version_replay)
     end
 
