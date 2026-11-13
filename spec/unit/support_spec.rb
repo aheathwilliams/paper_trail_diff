@@ -375,9 +375,9 @@ RSpec.describe PaperTrailDiff::Support do
       expect(described_class.immutable_copy([].freeze)).to be_frozen
     end
 
-    it 'copies a frozen tree that holds a mutable value, or a subclass, at any depth' do
+    it 'copies a frozen tree that holds a mutable value at any depth, or is a subclass' do
       trees = [{ [1] => 1 }.freeze, { 'key' => [+'a'].freeze }.freeze,
-               [[+'a'].freeze].freeze, [{ 'k' => 1 }.with_indifferent_access.freeze].freeze,
+               [[+'a'].freeze].freeze, [{ 'k' => +'v' }.with_indifferent_access.freeze].freeze,
                Class.new(Array).new([1]).freeze,
                { 'k' => 1 }.with_indifferent_access.freeze]
 
