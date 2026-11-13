@@ -87,7 +87,7 @@ module PaperTrailDiff
     # 1 where a version stored no state, as every database can select it.
     #: (untyped) -> untyped
     def empty(versions)
-      Arel::Nodes::Case.new.when(versions.arel_table[:object].eq(nil)).then(1).else(0)
+      Support.constant('Arel::Nodes::Case').new.when(versions.arel_table[:object].eq(nil)).then(1).else(0)
     end
 
     #: (Hash[String, untyped]?) -> bool
