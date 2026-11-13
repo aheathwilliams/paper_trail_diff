@@ -354,8 +354,8 @@ RSpec.describe PaperTrailDiff::ActivityTimelineBuilder do
 
       versions = [from, to]
       expect(provider).to have_received(:prepare).twice
-      expect(provider).to have_received(:prepare).with(article, versions,
-                                                       end_at: to.created_at).twice
+      expect(provider).to have_received(:prepare)
+        .with(article, versions, start_at: nil, end_at: to.created_at).twice
       expect(calls.map { |call| call.slice(:root_versions, :range_start, :range_end) })
         .to eq([{ root_versions: versions, range_start: from.created_at, range_end: to }] * 2)
       expect(calls.map { |call| call[:prepared] }).to all(be_a(PaperTrailDiff::PreparedActivityIndex))
@@ -373,7 +373,8 @@ RSpec.describe PaperTrailDiff::ActivityTimelineBuilder do
       captured = steps.last.to_boundary.recorded_at
       expect(captured).to be >= before
       expect(captured).to be_utc
-      expect(provider).to have_received(:prepare).with(article, [from, to], end_at: captured)
+      expect(provider).to have_received(:prepare)
+        .with(article, [from, to], start_at: nil, end_at: captured)
       expect(calls.first.slice(:range_start, :range_end))
         .to eq(range_start: from.created_at, range_end: captured)
       expect(steps.last.from_boundary.version_id).to eq(to.id)

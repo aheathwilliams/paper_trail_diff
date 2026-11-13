@@ -2,6 +2,8 @@
 
 module PaperTrailDiff
   # Applies selected non-polymorphic belongs-to target updates to a snapshot.
+  # A target created there changes nothing unless an owner already named it,
+  # as one can where no foreign key constraint forbids it (see #created).
   class ActivityBelongsToEventApplier
     # : (route_finder: ActivityEventRouteFinder, record_resolver: ActivityEventRecordResolver, record_normalizer: ActivityEventRecordNormalizer) -> void
     def initialize: (route_finder: ActivityEventRouteFinder, record_resolver: ActivityEventRecordResolver, record_normalizer: ActivityEventRecordNormalizer) -> void
@@ -16,6 +18,19 @@ module PaperTrailDiff
     @record_resolver: ActivityEventRecordResolver
 
     @route_finder: ActivityEventRouteFinder
+
+    # A created target is new to the snapshot unless an owner named it first.
+    # A snapshot leaves out an owner's key, but an owner that names a record
+    # holds one, and only an owner holding none can name a record that does
+    # not exist yet: the branch is read again only when there is such an
+    # owner.
+    # : (RecordSnapshot, Array[Array[untyped]]) -> [bool, RecordSnapshot?]
+    def created: (RecordSnapshot, Array[Array[untyped]]) -> [ bool, RecordSnapshot? ]
+
+    # Whether a record along the route holds no target where it ends, or the
+    # snapshot does not say.
+    # : (RecordSnapshot, Array[untyped], Integer) -> bool
+    def vacant?: (RecordSnapshot, Array[untyped], Integer) -> bool
 
     # : (Array[untyped], untyped, SnapshotNormalizer, untyped, untyped) -> RecordSnapshot?
     def normalized_route_record: (Array[untyped], untyped, SnapshotNormalizer, untyped, untyped) -> RecordSnapshot?
