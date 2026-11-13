@@ -15,7 +15,7 @@ module PaperTrailDiff
     #: (version: untyped, branches: Array[String]?, ?joins: Array[String]) -> void
     def initialize(version:, branches:, joins: [])
       @version = version
-      @branches = branches ? branches.uniq.sort.freeze : nil
+      @branches = (branches.uniq.sort.freeze if branches)
       @joins = joins.uniq.sort.freeze
       freeze
     end

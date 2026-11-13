@@ -95,7 +95,7 @@ module PaperTrailDiff
     def changed?(snapshots, branches, index)
       before = snapshots.fetch(@starts.fetch(index))
       after = snapshots.fetch(@ends.fetch(index))
-      branches.any? { |name| branch(before, name) != branch(after, name) }
+      branches.any? { |name| !branch(before, name).eql?(branch(after, name)) }
     end
 
     # A missing snapshot, after the root's destruction, and a branch the
