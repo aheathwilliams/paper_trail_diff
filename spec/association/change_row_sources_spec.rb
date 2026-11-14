@@ -106,6 +106,25 @@ RSpec.describe 'Change row sources',
     end
   end
 
+  describe 'records moved in one transaction' do
+    it 'credits each to its own update, whether grouped or not' do
+      from = TrackedArticle.create!(title: 'From')
+      to = TrackedArticle.create!(title: 'To')
+      moved = %w[one two].map { |body| from.comments.create!(body: body) }
+      TrackedArticle.transaction { moved.each { |comment| comment.update!(article: to) } }
+
+      [nil, :transaction].product([from, to]).each do |group, article|
+        rows = SpecTimelines.activity_timeline(article.reload, associations: [:comments],
+                                                               group: group)
+                            .flat_map(&:change_rows).select { |row| row.attribute.nil? }
+        moves = rows.select { |row| row.source.event == 'update' }
+
+        expect(moves.map { |row| [row.record.id, row.source.version_id] })
+          .to eq(moved.map { |comment| [comment.id, version_of(comment)] })
+      end
+    end
+  end
+
   describe 'a change saved without a version' do
     it 'splits it from the change before it, and credits it to no version' do
       article = TrackedArticle.create!(title: 'A')

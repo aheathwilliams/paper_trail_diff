@@ -406,11 +406,12 @@ RSpec.describe PaperTrailDiff::ChangeAttribution do
         .to eq([[:added, 'body', nil, 'z', 5]])
     end
 
-    it 'keeps a record that appeared without its own create on the step source' do
+    it 'credits a record that appeared without its own create to its last version there' do
       moved = version('AttributedComment', 7, 5, changes: { 'article_id' => [2, 1] })
-      joined = row(:added, 'body', nil, 'a', record: comment)
+      edit = version('AttributedComment', 7, 6, changes: {})
 
-      expect(attribution([moved]).call(joined)).to eq([joined])
+      expect(credited(attribution([moved, edit]), row(:added, 'body', nil, 'a', record: comment)))
+        .to eq([[:added, 'body', nil, 'a', 6]])
     end
 
     it 'credits a removed record and its fields to its destroy' do
@@ -421,7 +422,7 @@ RSpec.describe PaperTrailDiff::ChangeAttribution do
       expect(credited(attribution([destroy, edit]), row(:removed, nil, nil, nil, record: comment)))
         .to eq([[:removed, nil, nil, nil, 8]])
       expect(credited(attribution([destroy]), left)).to eq([[:removed, 'body', 'a', nil, 8]])
-      expect(attribution([edit]).call(left)).to eq([left])
+      expect(credited(attribution([edit]), left)).to eq([[:removed, 'body', 'a', nil, 9]])
     end
   end
 end
