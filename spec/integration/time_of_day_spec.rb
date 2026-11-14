@@ -80,7 +80,7 @@ RSpec.describe 'History of a time of day' do
         clock.reload
         _created, set, renamed = clock.versions.reorder(:created_at, :id).to_a
 
-        [PaperTrailDiff.timeline(clock), PaperTrailDiff.activity_timeline(clock)].each do |steps|
+        [SpecTimelines.timeline(clock), SpecTimelines.activity_timeline(clock)].each do |steps|
           expect(steps.drop(1).map { |step| step.diff.attributes.keys })
             .to eq([['rings_at'], ['name']])
         end
@@ -100,7 +100,7 @@ RSpec.describe 'History of a time of day' do
         clock.reload
         _created, set, renamed, = clock.versions.reorder(:created_at, :id).to_a
 
-        [PaperTrailDiff.timeline(clock), PaperTrailDiff.activity_timeline(clock),
+        [SpecTimelines.timeline(clock), SpecTimelines.activity_timeline(clock),
          PaperTrailDiff.report(model, since: Time.now.utc - 3600, limit: 1)
                        .analyses.values.first.activity_timeline].each do |steps|
           expect(steps.drop(1).map { |step| step.diff.attributes.keys })

@@ -56,7 +56,7 @@ RSpec.describe 'A has_many :through with source_type' do
   end
 
   def activity(record, **options)
-    PaperTrailDiff.activity_timeline(record, associations: [association], **options)
+    SpecTimelines.activity_timeline(record, associations: [association], **options)
   end
 
   def analyze_many(records, **options)

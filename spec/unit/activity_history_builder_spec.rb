@@ -42,7 +42,8 @@ RSpec.describe PaperTrailDiff::ActivityHistoryBuilder do
     root = PaperTrailDiff::RecordReference.new(type: 'FilterArticle',
                                                id: events.first.version.item_id)
     builder = described_class.new(events.map(&:version), events, :snapshotter,
-                                  view: view, include_step: reported, root: root, **options)
+                                  view: view, include_step: reported, root: root, ends: :ends,
+                                  **options)
     builder.call
   end
 
@@ -133,7 +134,7 @@ RSpec.describe PaperTrailDiff::ActivityHistoryBuilder do
       .to have_received(:new).with(events, closing: :closing)
     expect(PaperTrailDiff::ActivitySnapshotSequence)
       .to have_received(:new).with(events.map(&:version), events, :snapshotter,
-                                   current: :current)
+                                   ends: :ends, current: :current)
     expect([result.steps, result.first_snapshot, result.last_boundary]).to eq([[], nil, nil])
   end
 end

@@ -56,8 +56,8 @@ RSpec.describe 'Activity for a parent touched by its children' do
     from = parent.versions.first
     to = parent.versions.last
 
-    steps = PaperTrailDiff.activity_timeline(parent, from: from, to: to, associations: [:children],
-                                                     snapshots: true)
+    steps = SpecTimelines.activity_timeline(parent, from: from, to: to, associations: [:children],
+                                                    snapshots: true)
     analysis = PaperTrailDiff.analyze(parent, from: from, to: to, associations: [:children])
 
     expect(steps.map { |step| step.source_boundary.version_id })
@@ -84,16 +84,16 @@ RSpec.describe 'Activity for a parent touched by its children' do
     end
 
     expect(changes).to eq([[{ from: 'before', to: 'after' }]] * 2)
-    steps = PaperTrailDiff.activity_timeline(parent, from: touch, to: later,
-                                                     associations: [:children], group: :transaction)
+    steps = SpecTimelines.activity_timeline(parent, from: touch, to: later,
+                                                    associations: [:children], group: :transaction)
     expect(name_changes(steps)).to eq([['TouchedChild', { from: 'before', to: 'after' }]])
   end
 
   it 'credits the change to the child when the range reaches past the touch' do
     parent, child = history
-    steps = PaperTrailDiff.activity_timeline(parent, from: parent.versions.first,
-                                                     associations: [:children],
-                                                     group: :transaction)
+    steps = SpecTimelines.activity_timeline(parent, from: parent.versions.first,
+                                                    associations: [:children],
+                                                    group: :transaction)
 
     expect(name_changes(steps)).to eq([['TouchedChild', { from: 'before', to: 'after' }]])
     expect(steps.last.source_boundary.version_id).to eq(child.versions.last.id)

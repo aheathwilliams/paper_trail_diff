@@ -17,11 +17,6 @@ module PaperTrailDiff
       @habtm = {} #: Hash[Array[String], Hash[String, Array[untyped]]]
     end
 
-    # Where the earliest transaction open at a window's start began; see
-    # PreparedHistoryLoader. Nil for a history that was not asked, or where
-    # none was open.
-    attr_accessor :reach #: untyped
-
     # When the history was read from.
     #: () -> untyped
     def start_time = @records.start_time
@@ -179,7 +174,7 @@ module PaperTrailDiff
     # previous root version; the member did not exist at those yet.
     #: (untyped, untyped, untyped, untyped, bool) -> Array[untyped]?
     def habtm_records(record, reflection, boundary, habtm_boundary, ranked)
-      transaction_id = transaction_id_for(habtm_boundary)
+      transaction_id = habtm_boundary.transaction_id
       return unless transaction_id
 
       empty = {} #: Hash[String, Array[untyped]]
@@ -233,11 +228,6 @@ module PaperTrailDiff
       return true unless reflection.options[:as]
 
       AssociationTraversal.owner_type(reflection) == child.public_send(reflection.type).to_s
-    end
-
-    #: (untyped) -> untyped
-    def transaction_id_for(boundary)
-      boundary.transaction_id
     end
 
     #: (Array[untyped]) -> Array[untyped]

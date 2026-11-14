@@ -225,7 +225,7 @@ RSpec.describe 'Activity replay against a full snapshot at every event' do
 
   def activity(root, from)
     lambda do |group|
-      ReplayDifferential.steps(PaperTrailDiff.activity_timeline(
+      ReplayDifferential.steps(SpecTimelines.activity_timeline(
                                  root, from: from, to: root, associations: ReplayDifferential::PATHS,
                                        snapshots: true, group: group
                                ))
@@ -283,7 +283,7 @@ RSpec.describe 'Activity replay against a full snapshot at every event' do
       starts = root.versions.reorder(:created_at, :id).first(4)
       reads = starts.product(ReplayDifferential::GROUPS).map do |from, group|
         ["#{root.id} from #{from.id} group #{group.inspect}",
-         PaperTrailDiff.activity_timeline(root, from: from, to: root, group: group, **options)]
+         SpecTimelines.activity_timeline(root, from: from, to: root, group: group, **options)]
       end
       reads + Array.new(3) { net_window(root, versions.sample(2, random: random), options) }
     end
@@ -325,10 +325,10 @@ RSpec.describe 'Activity replay against a full snapshot at every event' do
 
   def from_reads(root, from, scope)
     range = { from: from, to: root, version_scope: scope }
-    expected = root_steps(PaperTrailDiff.timeline(root, **range))
+    expected = root_steps(SpecTimelines.timeline(root, **range))
     ReplayDifferential::GROUPS.map do |group|
       ["#{root.id} from #{from.id} group #{group.inspect}", expected,
-       root_steps(PaperTrailDiff.activity_timeline(root, group: group, **range))]
+       root_steps(SpecTimelines.activity_timeline(root, group: group, **range))]
     end
   end
 

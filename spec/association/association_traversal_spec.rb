@@ -459,6 +459,44 @@ RSpec.describe PaperTrailDiff::AssociationTraversal do
     end
   end
 
+  # A window reports the transactions that end inside it, so it is read from
+  # where the one across its start began.
+  describe '#reach_before' do
+    it 'says where a transaction open at the start began, asking once for a model and start' do
+      article = TrackedArticle.create!(title: 'Root')
+      comment = article.comments.create!(body: 'before')
+      added = TrackedArticle.transaction do
+        comment.update!(body: 'after')
+        article.comments.create!(body: 'added')
+      end
+      start = added.versions.first.created_at
+      reading = traversal(:comments)
+      allow(PaperTrailDiff::CrossingTransactions).to receive(:open_around).and_call_original
+
+      expect(Array.new(2) { reading.reach_before(TrackedArticle, start) })
+        .to eq([comment.versions.last.created_at] * 2)
+      expect(reading.reach_before(TrackedArticle, start + 1)).to be_nil
+      expect(reading.reach_before(TrackedArticle, start + 1)).to be_nil
+      expect(PaperTrailDiff::CrossingTransactions).to have_received(:open_around).twice
+    end
+
+    it 'asks nothing without paths or a start' do
+      allow(PaperTrailDiff::CrossingTransactions).to receive(:open_around)
+
+      expect([traversal.reach_before(TrackedArticle, Time.now.utc),
+              traversal(:comments).reach_before(TrackedArticle, nil)]).to eq([nil, nil])
+      expect(PaperTrailDiff::CrossingTransactions).not_to have_received(:open_around)
+    end
+  end
+
+  describe '#polymorphic_paths?' do
+    it 'says whether a path or a part of a through is a polymorphic belongs_to' do
+      expect([traversal(:holder).polymorphic_paths?(TraversalNote),
+              traversal(:reviewer).polymorphic_paths?(TraversalNote),
+              traversal.polymorphic_paths?(TraversalNote)]).to eq([true, false, false])
+    end
+  end
+
   describe '#path_types' do
     it 'names nothing without paths' do
       expect(traversal.path_types(TrackedArticle)).to eq([])
@@ -614,8 +652,8 @@ RSpec.describe PaperTrailDiff::AssociationTraversal do
         -> { PaperTrailDiff.compare(from, to, **options) },
         -> { PaperTrailDiff.compare(record, record, **options) },
         -> { PaperTrailDiff.compare_many([{ from: from, to: record }], **options) },
-        -> { PaperTrailDiff.timeline(record, from: from, to: to, **options) },
-        -> { PaperTrailDiff.activity_timeline(record, from: from, to: to, **options) },
+        -> { SpecTimelines.timeline(record, from: from, to: to, **options) },
+        -> { SpecTimelines.activity_timeline(record, from: from, to: to, **options) },
         -> { PaperTrailDiff.analyze(record, within: window, **options) },
         -> { PaperTrailDiff.analyze(record, within: window, activity: true, **options) },
         -> { PaperTrailDiff.analyze_many([record], within: window, **options) },

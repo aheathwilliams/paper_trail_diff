@@ -38,10 +38,18 @@ module PaperTrailDiff
     # : (untyped) -> untyped
     def last: (untyped) -> untyped
 
+    # Where a boundary takes effect, and when: at the last version of a
+    # version's transaction, or where a live record was read. Every record of
+    # a snapshot is read at one boundary, so the last answer is kept.
+    # : (untyped) -> [untyped, untyped]
+    def target: (untyped) -> [ untyped, untyped ]
+
     # Orders versions by where their transactions end, then as they were
     # saved.
     # : (untyped) -> Array[untyped]
     def sort_key: (untyped) -> Array[untyped]
+
+    @held: Array[untyped]
 
     @last: Hash[Array[untyped]?, untyped]
 

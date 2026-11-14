@@ -22,11 +22,10 @@ module PaperTrailDiff
       @live_states = {} #: Hash[identity, PreparedRecordState]
     end
 
-    # A `start_at` is a window's (see PreparedHistoryLoader); a range of
-    # versions starts at its first. A window's history says how far back the
-    # transactions open at its start `reach`, unless it was read from there.
-    #: (untyped, Array[untyped], ?start_at: untyped, ?end_at: untyped, ?reach: bool) -> PreparedHistory?
-    def prepare(record, root_versions, start_at: nil, end_at: nil, reach: true)
+    # A `start_at` is a window's, already moved back to its reach (see
+    # PreparedHistoryLoader); a range of versions starts at its first.
+    #: (untyped, Array[untyped], ?start_at: untyped, ?end_at: untyped) -> PreparedHistory?
+    def prepare(record, root_versions, start_at: nil, end_at: nil)
       return if @tree.empty?
 
       # A batch prepared this root with the others, including a root with no
@@ -38,7 +37,7 @@ module PaperTrailDiff
         record, root_ids: [record.id], root_versions: root_versions,
                 start_at: start_at || root_versions.first.created_at,
                 end_at: end_at || range_end(root_versions), tree: @tree,
-                traversal: @traversal, live_records: [], window: reach && !start_at.nil?,
+                traversal: @traversal, live_records: [], window: !start_at.nil?,
                 crossing: start_at.nil?
       ).call
     end
@@ -58,47 +57,35 @@ module PaperTrailDiff
     end
 
     # A `start_at` is a window's, as for `prepare`. A window's roots may have
-    # no version in it, when only their descendants changed there. Returns
-    # where the earliest transaction open at the window's start began, if one
-    # was, for the batch to read it again from there, with `reach` false.
-    #: (Array[untyped], Array[untyped], ?start_at: untyped, ?end_at: untyped, ?reach: bool) -> untyped
-    def prepare_batch(records, root_versions, start_at: nil, end_at: nil, reach: true)
+    # no version in it, when only their descendants changed there.
+    #: (Array[untyped], Array[untyped], ?start_at: untyped, ?end_at: untyped) -> void
+    def prepare_batch(records, root_versions, start_at: nil, end_at: nil)
       return if @tree.empty? || records.empty? || (root_versions.empty? && start_at.nil?)
 
-      history = Instrumentation.instrument('prepare_history',
-                                           batch_payload(records, root_versions)) do
-        register_batch(records, root_versions, start_at: start_at, end_at: end_at, reach: reach)
+      Instrumentation.instrument('prepare_history', batch_payload(records, root_versions)) do
+        register_batch(records, root_versions, start_at: start_at, end_at: end_at)
       end
       # A batch passes its roots as it just loaded them, so the current state
       # they close on is read from them rather than once more per root.
       records.each { |record| @live_roots[Endpoint.identity(record)] = record }
-      history.reach
     end
 
     # Missing roots, and roots compared only between versions, have no live
     # graph to collect. Reading their associations here would issue a query
     # per root and seed nonexistent rows as live state.
-    #
-    # Roots with no version in a window are asked only how far the
-    # transactions open at its start reach (see #reach_before).
-    #: (Array[untyped], Array[untyped], ?start_at: untyped, ?end_at: untyped, ?reach: bool) -> untyped
-    def prepare_deleted_batch(records, root_versions, start_at: nil, end_at: nil, reach: true)
-      return if @tree.empty? || records.empty?
+    #: (Array[untyped], Array[untyped], ?start_at: untyped, ?end_at: untyped) -> void
+    def prepare_deleted_batch(records, root_versions, start_at: nil, end_at: nil)
+      return if @tree.empty? || records.empty? || root_versions.empty?
 
-      return (reach_before(records.first, start_at) if reach) if root_versions.empty?
-
-      register_batch(records, root_versions, live_records: [], start_at: start_at, end_at: end_at,
-                                             reach: reach).reach
+      register_batch(records, root_versions, live_records: [], start_at: start_at, end_at: end_at)
     end
 
-    # Where the earliest transaction open at a window's start began, for a
-    # root with no version in the window and no row: one destroyed just
-    # before it, by a transaction that went on to save its tree inside, is
-    # reported in the window.
+    # Where the earliest transaction open at a window's start began (see
+    # AssociationTraversal#reach_before). A window is read from there: a root
+    # destroyed just before it, by a transaction that went on to save its
+    # tree inside, is reported in the window.
     #: (untyped, untyped) -> untyped
-    def reach_before(record, start_at)
-      CrossingTransactions.open_around(record.class, @traversal, start_at) unless @tree.empty?
-    end
+    def reach_before(record, start_at) = @traversal.reach_before(record.class, start_at)
 
     # `history` is the one `prepare` returned for this root, if any.
     # A snapshot read for a timeline whose transactions overlapped reads each
@@ -212,15 +199,15 @@ module PaperTrailDiff
         model_type: records.first.class.base_class.name.to_s, batched: true }
     end
 
-    #: (Array[untyped], Array[untyped], ?live_records: Array[untyped], ?start_at: untyped, ?end_at: untyped, ?reach: bool) -> PreparedHistory
-    def register_batch(records, root_versions, live_records: @live_graph_collector.call(records), # rubocop:disable Metrics/ParameterLists
-                       start_at: nil, end_at: nil, reach: true)
+    #: (Array[untyped], Array[untyped], ?live_records: Array[untyped], ?start_at: untyped, ?end_at: untyped) -> PreparedHistory
+    def register_batch(records, root_versions, live_records: @live_graph_collector.call(records),
+                       start_at: nil, end_at: nil)
       history = PreparedHistoryLoader.new(
         records.first, root_ids: records.map(&:id), root_versions: root_versions,
                        start_at: start_at || root_versions.map(&:created_at).min,
                        end_at: end_at || range_end(root_versions),
                        tree: @tree, traversal: @traversal, live_records: live_records,
-                       window: reach && !start_at.nil?, crossing: start_at.nil?
+                       window: !start_at.nil?, crossing: start_at.nil?
       ).call
       register(history, records, root_versions)
       history

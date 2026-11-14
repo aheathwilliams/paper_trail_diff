@@ -80,7 +80,7 @@ RSpec.describe 'Recorded changes in a json object_changes column' do
   it 'casts each value to its attribute type, as the step for the same version reads it' do
     ledger = edited
     update = ledger.versions.last
-    step = PaperTrailDiff.timeline(ledger, from: :first, to: ledger).last
+    step = SpecTimelines.timeline(ledger, from: :first, to: ledger).last
 
     recorded = pairs(PaperTrailDiff.recorded_changes(update))
 

@@ -111,19 +111,21 @@ Flat query counts do not make a report's cost flat:
 - **A window with associations looks for the transactions open at its
   start.** A window reports the transactions that end inside it, so its
   history is asked where the earliest transaction open at its start began,
-  whatever records it saved. That takes one statement per version table, and
-  one per 500 transactions its history holds, to read where each ends. When
-  one was open, the window's history is read once more, from where the
-  earliest began. The
+  whatever records it saved. That takes one statement per version table the
+  tree's models use, or per version table of the application when a path
+  passes through a polymorphic `belongs_to`, and one per 500 transactions its
+  history holds, to read where each ends. It is asked before the window is
+  read, so the history is read once, from where the earliest began, and
+  `analyze_scope` and `report` ask it once for record selection and every
+  record of the model. A report on 100 articles with their comments and an
+  unrelated transaction open at the window's start ran 19 statements. The
   statement for the start reads the versions saved since the window began
   that were not the first of their transaction, and no index of the README
   serves that. On SQLite, in a table of a million versions with the README's
   indexes and PT-AT's on `transaction_id`, it took 0.06 s for a window that
   began 1% of the table ago, 0.18 s for one that began half of it ago, and
   0.27 s for one that began near its start. An index on `created_at` alone
-  took the first to 0.006 s and left the others as they were. `analyze_scope`
-  and `report` run it once more, to select the records such a transaction
-  saved before the window. A read without associations runs none of these
+  took the first to 0.006 s and left the others as they were. A read without associations runs none of these
   statements, with a window or not.
 - **A read with associations reads where its transactions end**, with
   `activity: true` or without. A

@@ -5,6 +5,27 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Breaking changes
+
+- `PaperTrailDiff.timeline` and `PaperTrailDiff.activity_timeline` are
+  removed. Each returned what `analyze` already returns alongside its diff,
+  from the same read:
+
+  ```ruby
+  PaperTrailDiff.timeline(article, **options)
+  # becomes
+  PaperTrailDiff.analyze(article, **options).timeline
+
+  PaperTrailDiff.activity_timeline(article, **options)
+  # becomes
+  PaperTrailDiff.analyze(article, activity: true, **options).activity_timeline
+  ```
+
+  The options are the same. The `activity_timeline.paper_trail_diff`
+  notification is replaced by `analyze.paper_trail_diff`, which every
+  `analyze` emits, with the same payload; its `step_count` counts the
+  activity timeline with `activity: true` and the root timeline without.
+
 ### Changed
 
 - A transaction now takes effect where it saved its last version, in every
@@ -62,6 +83,28 @@ project follows [Semantic Versioning](https://semver.org/).
 - Replaying a `has_many` whose membership a version did not change no
   longer sorts the collection again. A history of 3,200 comments edited
   3,200 times took 1.8 s instead of 11 s.
+
+- Reads with associations do less work, with the same results:
+  - A belongs_to target created inside an activity range no longer reads
+    its owners' branch again from history unless an owner holds no target.
+    An article with 1,000 comments, each given a newly created reviewer,
+    took 0.97 s instead of 28.5 s for `comments.reviewer`.
+  - Activity finds each owner's belongs_to targets in the states its history
+    already loaded, and no longer runs two more statements per belongs_to
+    path to read PT-AT's rows and the live rows.
+  - A window finds where the transactions open at its start began once,
+    before reading, instead of reading the window and then reading it again
+    from there; `analyze_scope` and `report` share that one statement
+    across record selection and every record of the model. A report with
+    an unrelated open transaction ran 19 statements instead of 27.
+  - `include_deleted:` with a relation that has no conditions, on a model
+    that is not a subclass, asks the version table which destroys stored a
+    state instead of decoding each one. 2,000 deleted articles took 37 ms
+    instead of 753 ms.
+  - A state read from JSON history converts only the attributes whose type
+    needs it, listed once per model, and a value already frozen throughout
+    is no longer walked again to keep it immutable. A report over records
+    with 100-key JSON values took 2.0 s instead of 2.4 s.
 
 - Association scopes, and ranges and orders in them, are read in Ruby only on
   the SQL column types the gem lists for each of SQLite, PostgreSQL, MySQL, and

@@ -42,11 +42,12 @@ module PaperTrailDiff
     # `include_step` says whether an event's step is reported. `root` names
     # the root, whose steps credit each change row to the version that made
     # it (see ChangeAttribution).
-    #: (Array[untyped], Array[ActivityEvent], untyped, view: ActivityView, include_step: untyped, ?current: untyped, ?closing: RecordSnapshot?, root: RecordReference) -> void
+    #: (Array[untyped], Array[ActivityEvent], untyped, view: ActivityView, include_step: untyped, root: RecordReference, ends: TransactionEnds, ?current: untyped, ?closing: RecordSnapshot?) -> void
     def initialize( # rubocop:disable Metrics/ParameterLists
       root_versions, events, snapshotter,
-      view:, include_step:, root:, current: nil, closing: nil
+      view:, include_step:, root:, ends:, current: nil, closing: nil
     )
+      @ends = ends
       @root_versions = root_versions
       @events = events
       @snapshotter = snapshotter
@@ -97,6 +98,7 @@ module PaperTrailDiff
     # @rbs @previous_attribution: ChangeAttribution?
     # @rbs @passed_reported: bool?
     # @rbs @root: RecordReference
+    # @rbs @ends: TransactionEnds
     # @rbs @transactions: Hash[Array[untyped], ChangeAttribution::Transaction]
 
     #: () -> ActivityTreeFilter
@@ -110,6 +112,7 @@ module PaperTrailDiff
         @root_versions,
         @events,
         @snapshotter,
+        ends: @ends,
         current: @current
       )
     end

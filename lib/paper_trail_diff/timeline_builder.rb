@@ -18,12 +18,6 @@ module PaperTrailDiff
       @snapshotter = snapshotter
     end
 
-    #: () -> Array[Step]
-    def build
-      steps, = compare_history(selected_versions)
-      steps
-    end
-
     # The window the range covers, as it was asked for.
     #: () -> TimeRange?
     def window

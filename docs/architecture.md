@@ -5,12 +5,12 @@ rebuilds history and what that costs. You do not need it to use the gem.
 
 ## Two ways to rebuild a timeline
 
-`timeline` and `analyze(activity: true)` return the same root-record steps for
-the same range, except where a transaction crosses a window's edge: `timeline`
-reports each root version where it was saved, and activity on associations
-reports a transaction in the window it ends in. They build them differently:
+`analyze` returns the same root-record steps for the same range with
+`activity: true` or without, except where a transaction crosses a window's
+edge: without it, each root version is reported where it was saved, and with
+it, activity on associations reports a transaction in the window it ends in. They build them differently:
 
-- `timeline` rebuilds the root record and every chosen association separately
+- Without `activity:`, `analyze` rebuilds the root record and every chosen association separately
   at each root version. Its cost grows with *root versions × size of the chosen
   associations*. It does not depend on how often the associations changed.
 - `analyze(activity: true)` rebuilds the state once, then applies each recorded
@@ -20,7 +20,7 @@ reports a transaction in the window it ends in. They build them differently:
 Neither is always faster. Choose by the output you need. If performance matters,
 measure on real history with the [instrumentation events](reference.md#instrumentation).
 As a rough guide, `analyze(activity: true)` suits wide associations with modest
-activity, and `timeline` suits a few root versions with many child events
+activity, and `analyze` without it suits a few root versions with many child events
 between them.
 
 ## Loading history

@@ -14,13 +14,10 @@ RSpec.describe PaperTrailDiff::AnalysisBatch do
     analyze.tap { |call| call.define_singleton_method(:empty) { AnalysisStandIn.new(nil) } }
   end
   let(:history_preparer) do
-    lambda do |records, versions, reach: true, **range|
-      prepared << [records, versions, range]
-      reaches.shift if reach
-    end
+    ->(records, versions, **range) { prepared << [records, versions, range] }
   end
 
-  # How far the history of each read says its transactions reach, in turn.
+  # Where the earliest transaction open at a window's start began, in turn.
   def reaches = (@reaches ||= [])
   before do
     FilterVersion.delete_all
@@ -68,7 +65,8 @@ RSpec.describe PaperTrailDiff::AnalysisBatch do
     described_class.new(
       records, time_range: within && PaperTrailDiff::TimeRange.new(within),
                live_loader: live_loader, history_preparer: history_preparer,
-               analyzer: analyzer, version_scope: version_scope, context_required: context
+               analyzer: analyzer, version_scope: version_scope, context_required: context,
+               reach: ->(_model, _start) { reaches.shift }
     )
   end
 
@@ -135,8 +133,7 @@ RSpec.describe PaperTrailDiff::AnalysisBatch do
     expect(analyzed.sole[1].mutations).to eq([updated])
   end
 
-  it 'plans a window again from where its open transactions began, and passes the window ' \
-     'as asked' do
+  it 'plans a window from where its open transactions began, and passes the window as asked' do
     record, _created, updated = article
     other, = article(minutes: [0, 2])
     reaches << at(1)
@@ -158,7 +155,6 @@ RSpec.describe PaperTrailDiff::AnalysisBatch do
     analyze([record], within: at(1.25)..at(3))
 
     expect(analyzed).to eq([])
-    expect(reaches).to eq([at(1)])
   end
 
   it 'reads a root with nothing in the window from the version after it when asked' do

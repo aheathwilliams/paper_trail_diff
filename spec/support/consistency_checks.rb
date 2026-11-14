@@ -80,13 +80,11 @@ module ConsistencyChecks
     single = PaperTrailDiff.analyze(root, **options)
     activity = PaperTrailDiff.analyze(root, **options, activity: true, snapshots: true)
     batch = PaperTrailDiff.analyze_many([root], **options).fetch(identity(root))
-    timeline = PaperTrailDiff.timeline(root, **options)
     first = root.versions.reorder(created_at: :asc, id: :asc).first
     compared = PaperTrailDiff.compare(first, root, **options)
 
     expect(diffs(batch)).to eq(diffs(single))
     expect(diffs(activity)).to eq(diffs(single))
-    expect(timeline.map { |step| step.diff.to_h }).to eq(diffs(single).last)
     expect(compared.to_h).to eq(single.diff.to_h)
     expect_chained(activity.activity_timeline, ends_at: single.to_snapshot)
   end

@@ -33,7 +33,7 @@ RSpec.describe 'Activity when a child changes a key its associations follow' do
     PaperTrail.request(whodunnit: 'editor') { article.update!(title: 'Edited') }
     options = { associations: ['comments.reviewer'] }
 
-    steps = PaperTrailDiff.activity_timeline(article, snapshots: true, **options)
+    steps = SpecTimelines.activity_timeline(article, snapshots: true, **options)
     window = PaperTrailDiff.analyze(article, within: swap_start..swap_end, activity: true,
                                              **options)
     to_edit = PaperTrailDiff.analyze(article, from: article.versions.first,
@@ -60,8 +60,8 @@ RSpec.describe 'Activity when a child changes a key its associations follow' do
     PaperTrail.request(whodunnit: 'mover') { authorship.update!(article: other) }
     PaperTrail.request(whodunnit: 'editor') { article.update!(title: 'Edited') }
 
-    steps = PaperTrailDiff.activity_timeline(article, associations: ['contributors.authorships'],
-                                                      snapshots: true)
+    steps = SpecTimelines.activity_timeline(article, associations: ['contributors.authorships'],
+                                                     snapshots: true)
 
     contributors = steps.reject(&:empty?).map do |step|
       [step.source_boundary.whodunnit,

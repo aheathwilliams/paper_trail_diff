@@ -91,21 +91,15 @@ module PaperTrailDiff
     # : (untyped, String, untyped) -> void
     def self.assign_recorded: (untyped, String, untyped) -> void
 
+    # A frozen plain Hash or Array whose contents are all frozen is returned as
+    # it is rather than copied again, as each value object that holds it would.
+    # Ractor.shareable? answers that and remembers a yes on the object, so a
+    # tree passed from one value object to the next is not walked again.
     # : (untyped) -> untyped
     def self.immutable_copy: (untyped) -> untyped
 
-    # A frozen tree is returned as it is rather than copied again, as each
-    # value object that holds it would.
-    # : (untyped) -> bool
-    def self.deeply_frozen?: (untyped) -> bool
-
-    # What a frozen plain Hash or Array holds, keys too, and nothing for any
-    # other frozen value; nil when the value is not frozen or is a subclass.
-    # : (untyped) -> Array[untyped]?
-    def self.frozen_members: (untyped) -> Array[untyped]?
-
-    # : (Hash[untyped, untyped]) -> Hash[untyped, untyped]
-    def self.immutable_hash: (Hash[untyped, untyped]) -> Hash[untyped, untyped]
+    # : (Hash[untyped, untyped] | Array[untyped]) -> (Hash[untyped, untyped] | Array[untyped])
+    def self.copy_tree: (Hash[untyped, untyped] | Array[untyped]) -> (Hash[untyped, untyped] | Array[untyped])
 
     # : (untyped) -> untyped
     def self.serialize: (untyped) -> untyped

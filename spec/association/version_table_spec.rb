@@ -46,8 +46,8 @@ RSpec.describe PaperTrailDiff::VersionTable do
     [first, second].flat_map do |shelf|
       batch = PaperTrailDiff.analyze_many([shelf], within: window, associations: [:books],
                                                    activity: true)
-      [readable(PaperTrailDiff.activity_timeline(shelf, associations: [:books])),
-       readable(PaperTrailDiff.timeline(shelf, associations: [:books])),
+      [readable(SpecTimelines.activity_timeline(shelf, associations: [:books])),
+       readable(SpecTimelines.timeline(shelf, associations: [:books])),
        readable(batch.values.first.activity_timeline)]
     end
   end
@@ -64,7 +64,7 @@ RSpec.describe PaperTrailDiff::VersionTable do
   it "refuses an association whose target keeps versions in another table than its owner's" do
     shelf = SplitShelf.create!(title: 'Split')
 
-    expect { PaperTrailDiff.activity_timeline(shelf, associations: [:books]) }
+    expect { SpecTimelines.activity_timeline(shelf, associations: [:books]) }
       .to raise_error(PaperTrailDiff::UnsupportedAssociationError,
                       'unsupported association books: SplitShelf#books keeps versions in ' \
                       'versions and version_associations but SplitShelfBook in shelf_versions ' \
@@ -89,7 +89,7 @@ RSpec.describe PaperTrailDiff::VersionTable do
   it "refuses an association whose owner keeps versions in another table than its target's" do
     book = SplitShelfBook.create!(title: 'Loose')
 
-    expect { PaperTrailDiff.timeline(book, associations: [:shelf]) }
+    expect { SpecTimelines.timeline(book, associations: [:shelf]) }
       .to raise_error(PaperTrailDiff::UnsupportedAssociationError,
                       /SplitShelfBook#shelf keeps versions in shelf_versions/)
   end

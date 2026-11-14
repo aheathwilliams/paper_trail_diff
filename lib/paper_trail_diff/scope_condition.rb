@@ -166,6 +166,13 @@ module PaperTrailDiff
       evaluate(@predicate, attributes) == true
     end
 
+    # Whether every record matches, as for a relation with no conditions.
+    #: () -> bool
+    def all?
+      operator, parts = @predicate
+      operator == :and && parts.empty?
+    end
+
     # Whether no record can match, as for a relation `none` built.
     #: () -> bool
     def none?

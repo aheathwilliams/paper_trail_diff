@@ -42,7 +42,7 @@ RSpec.describe 'Activity windows where only descendants changed',
   it 'closes on current state, attributing each comment event' do
     article, window_start = child_only_history
 
-    steps = PaperTrailDiff.activity_timeline(
+    steps = SpecTimelines.activity_timeline(
       article, within: window_start..Time.now.utc, associations: [:comments]
     ).reject(&:empty?)
 
@@ -91,7 +91,7 @@ RSpec.describe 'Activity windows where only descendants changed',
     batch = batch_analysis(article, options)
     scoped = PaperTrailDiff.analyze_scope(TrackedArticle.all, limit: 10, **options)
                            .analyses.fetch(PaperTrailDiff::Endpoint.identity(article))
-    steps = PaperTrailDiff.activity_timeline(article, within: window, associations: [:comments])
+    steps = SpecTimelines.activity_timeline(article, within: window, associations: [:comments])
 
     expect(comment_summary(single.diff)).to eq(expected)
     expect(single.to_snapshot.associations.fetch('comments').records.map do |record|

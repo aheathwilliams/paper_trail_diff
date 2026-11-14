@@ -5,8 +5,8 @@ module PaperTrailDiff
   class PreparedEdgeLoader
     # A history shares `children` with its activity index, which reads the
     # children this finds again.
-    # : (PreparedRecordIndex, Array[untyped], ?start_at: untyped, ?children: PreparedChildCandidates) -> void
-    def initialize: (PreparedRecordIndex, Array[untyped], ?start_at: untyped, ?children: PreparedChildCandidates) -> void
+    # : (PreparedRecordIndex, Array[untyped], children: PreparedChildCandidates) -> void
+    def initialize: (PreparedRecordIndex, Array[untyped], children: PreparedChildCandidates) -> void
 
     # HABTM alone also returns each root transaction's members.
     # : (untyped, Array[untyped], untyped) -> [Hash[String, Hash[Symbol, untyped]], Hash[String, Array[untyped]]?]

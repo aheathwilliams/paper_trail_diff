@@ -93,7 +93,7 @@ RSpec.describe PaperTrailDiff::ActivityTreeFilter do
   end
 
   def comment_steps(article, **options)
-    PaperTrailDiff.activity_timeline(article, associations: [:comments], **options)
+    SpecTimelines.activity_timeline(article, associations: [:comments], **options)
   end
 
   context 'with a comment edited elsewhere before it moved in' do
@@ -205,9 +205,9 @@ RSpec.describe PaperTrailDiff::ActivityTreeFilter do
     let(:kept) { names.key('kept').last }
 
     it 'credits the tag to its own creation' do
-      steps = PaperTrailDiff.activity_timeline(article, from: first_version(article),
-                                                        to: article.versions.last,
-                                                        associations: [:tags])
+      steps = SpecTimelines.activity_timeline(article, from: first_version(article),
+                                                       to: article.versions.last,
+                                                       associations: [:tags])
 
       expect(summary(steps, names)).to eq(
         [[['article create'], ['presence']],
@@ -255,8 +255,8 @@ RSpec.describe PaperTrailDiff::ActivityTreeFilter do
     first.update!(name: 'First, renamed')
     article.update!(title: 'Renamed')
 
-    steps = PaperTrailDiff.activity_timeline(article.reload, from: first_version(article),
-                                                             to: article, associations: [:author])
+    steps = SpecTimelines.activity_timeline(article.reload, from: first_version(article),
+                                                            to: article, associations: [:author])
 
     expect(steps.map { |step| [step.source_boundary.item_type, step.source_boundary.event] })
       .to eq([%w[TrackedArticle create], %w[TrackedArticle update], %w[TrackedArticle update]])
@@ -270,8 +270,8 @@ RSpec.describe PaperTrailDiff::ActivityTreeFilter do
     card.update!(title: 'Edited while archived')
     board.update!(name: 'Renamed')
 
-    steps = PaperTrailDiff.activity_timeline(board.reload, from: first_version(board),
-                                                           to: board, associations: [:active_cards])
+    steps = SpecTimelines.activity_timeline(board.reload, from: first_version(board),
+                                                          to: board, associations: [:active_cards])
     events = steps.map { |step| [step.source_boundary.item_type, step.source_boundary.event] }
 
     expect(events).to eq([%w[TreeBoard create], %w[TreeCard create], %w[TreeCard update],
@@ -464,8 +464,8 @@ RSpec.describe PaperTrailDiff::ActivityTreeFilter do
     authorship = TrackedAuthorship.create!(article: article, author: author, role: 'writer')
     authorship.update!(role: 'editor')
 
-    steps = PaperTrailDiff.activity_timeline(article, from: first_version(article), to: article,
-                                                      associations: [:contributors])
+    steps = SpecTimelines.activity_timeline(article, from: first_version(article), to: article,
+                                                     associations: [:contributors])
 
     expect(every_source(steps)).to include(['TrackedAuthorship', authorship.id])
   end

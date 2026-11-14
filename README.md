@@ -61,8 +61,8 @@ historical states.
 PaperTrail's `version.changeset` describes one recorded change. `compare`
 describes the net difference between the two states you choose. If a field
 changes and then changes back, there is no net difference for that field. To
-see every change instead, use `PaperTrailDiff.timeline(article)`, which covers
-the article's whole history through its current saved values.
+see every change instead, use `PaperTrailDiff.analyze(article).timeline`, which
+covers the article's whole history through its current saved values.
 
 An attribute appears in `diff.attributes` only when it changed. `diff.empty?`
 tells you whether anything changed. A PaperTrail `create` version has no earlier
@@ -102,9 +102,9 @@ PaperTrail.request(whodunnit: "alice") do
   end
 end
 
-steps = PaperTrailDiff.activity_timeline(
-  article, associations: [:comments], group: :transaction, snapshots: true
-)
+steps = PaperTrailDiff.analyze(
+  article, associations: [:comments], activity: true, group: :transaction, snapshots: true
+).activity_timeline
 
 feed = steps.reject(&:empty?).map do |step|
   {
@@ -301,16 +301,14 @@ activity step. Labels, grouping, and formatting are left to your application.
 | --- | --- |
 | Net difference between two versions, or a version and the current record | `compare(from, to)` |
 | The same for a list of `{ from:, to: }` pairs, one per record | `compare_many(pairs)` |
-| Each change to one record, version by version | `timeline(record)` |
-| Each change to one record and its chosen associations, with who made it | `activity_timeline(record, associations: ...)` |
-| Net difference and timeline together | `analyze(record)` |
-| The same, plus the activity timeline | `analyze(record, activity: true)` |
+| Net difference and each change to one record, version by version | `analyze(record)`, then `diff` and `timeline` |
+| The same, plus each change to its chosen associations, with who made it | `analyze(record, associations: ..., activity: true)`, then `activity_timeline` |
 | Analyses for an array of records | `analyze_many(records)` |
 | Analyses for the records a relation selects, over a time window | `analyze_scope(scope, within:, limit:)` |
 | Recent activity through now, for the records a relation selects | `report(scope, since:, limit:)` |
 
-`timeline`, `activity_timeline`, and `analyze` cover the whole history through
-the current saved record by default. Narrow them with `from:` and `to:`
+`analyze` covers the whole history through the current saved record by
+default. Narrow them with `from:` and `to:`
 (versions) or `within:` (a time range). See
 [choosing a range](docs/reference.md#choosing-a-range).
 

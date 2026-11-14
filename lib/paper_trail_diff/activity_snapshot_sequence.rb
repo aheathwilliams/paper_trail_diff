@@ -20,10 +20,9 @@ module PaperTrailDiff
     # nothing but the history.
     #
     # A `start_at` is a window's; a range of versions starts at its first.
-    #: (untyped, Array[untyped], ?start_at: untyped, ?end_at: untyped, ?reach: bool) -> PreparedActivitySnapshots
-    def prepare(record, root_versions, start_at: nil, end_at: nil, reach: true)
-      history = @store.prepare(record, root_versions, start_at: start_at, end_at: end_at,
-                                                      reach: reach)
+    #: (untyped, Array[untyped], ?start_at: untyped, ?end_at: untyped) -> PreparedActivitySnapshots
+    def prepare(record, root_versions, start_at: nil, end_at: nil)
+      history = @store.prepare(record, root_versions, start_at: start_at, end_at: end_at)
       last = @last
       return last if last && last.history.equal?(history)
 
@@ -75,16 +74,6 @@ module PaperTrailDiff
     def reading(ends, &block)
       history = @history
       history ? history.reading(ends, &block) : yield
-    end
-
-    # Where the transactions of these versions take effect: as recorded,
-    # with a history to read it from.
-    #: (Array[untyped]) -> TransactionEnds
-    def transaction_ends(versions)
-      history = @history
-      return TransactionEnds.new(versions) unless history
-
-      history.transaction_ends(versions)
     end
 
     #: (untyped, untyped) -> RecordSnapshot?
@@ -146,13 +135,14 @@ module PaperTrailDiff
 
   # Builds chronological snapshots, refreshing only branches affected by prior events.
   class ActivitySnapshotSequence
-    #: (Array[untyped], Array[ActivityEvent], untyped, ?current: untyped) -> void
-    def initialize(root_versions, events, snapshotter, current: nil)
+    # `ends` places the events' transactions, as the events were ordered by.
+    #: (Array[untyped], Array[ActivityEvent], untyped, ends: TransactionEnds, ?current: untyped) -> void
+    def initialize(root_versions, events, snapshotter, ends:, current: nil)
       @root_versions = root_versions
       @events = events
       @snapshotter = snapshotter
       @current = current
-      @ends = snapshotter.transaction_ends(events.map(&:version))
+      @ends = ends
       @transaction_groups = ActivityTransactionGroups.new(events)
       @root_endpoints = build_root_endpoints
     end

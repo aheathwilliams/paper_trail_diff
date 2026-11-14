@@ -13,7 +13,7 @@ RSpec.describe PaperTrailDiff::StoredJsonValues do
     # An adapter's binary type, as PostgreSQL's `bytea` is.
     types = { 'meta' => serialized, 'blob' => Class.new(ActiveModel::Type::Binary).new }
     model = Struct.new(:paper_trail) do
-      define_method(:type_for_attribute) { |name| types.fetch(name, ActiveModel::Type::Value.new) }
+      define_method(:attribute_types) { types.merge('title' => ActiveModel::Type::Value.new) }
     end
     described_class.apply(model.new(paper_trail), attributes)
   end

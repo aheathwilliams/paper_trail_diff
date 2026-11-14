@@ -51,6 +51,10 @@ RSpec.describe PaperTrailDiff::AssociationActivitySelection do
     [StringItemNote, StringItemPost].each(&:delete_all)
   end
 
+  def traversal(paths)
+    PaperTrailDiff::AssociationTraversal.new(PaperTrailDiff::AssociationTree.build(paths))
+  end
+
   def ids(result)
     result.analyses.keys.map { |identity| identity.last.to_i }.sort
   end
@@ -127,7 +131,7 @@ RSpec.describe PaperTrailDiff::AssociationActivitySelection do
       end
       window = PaperTrailDiff::TimeRange.new(window_start..Time.now.utc)
       widened = lambda do |paths, range = window|
-        described_class.window(TrackedArticle, PaperTrailDiff::AssociationTree.build(paths), range)
+        described_class.window(TrackedArticle, traversal(paths), range)
       end
 
       expect(scope_ids([:comments], window.to_range)).to eq([article.id])
@@ -245,7 +249,7 @@ RSpec.describe PaperTrailDiff::AssociationActivitySelection do
     page.update!(title: 'New')
 
     sources = described_class.new(
-      SelectionNote, tree: PaperTrailDiff::AssociationTree.build([:notable]),
+      SelectionNote, traversal: traversal([:notable]),
                      time_range: PaperTrailDiff::TimeRange.new(window_start..Time.now.utc)
     ).call
     selected = sources.flat_map { |ids| ids.is_a?(described_class::Query) ? ids.values : ids }
@@ -385,8 +389,7 @@ RSpec.describe PaperTrailDiff::AssociationActivitySelection do
         PaperTrailDiff::ScopedRootSelection.new(
           TrackedArticle, time_range: PaperTrailDiff::TimeRange.new(since..Time.now.utc),
                           limit: 100,
-                          activity_tree: PaperTrailDiff::AssociationTree.build(['comments.replies',
-                                                                                'author'])
+                          activity_traversal: traversal(['comments.replies', 'author'])
         ).call
       end
     end
@@ -397,7 +400,7 @@ RSpec.describe PaperTrailDiff::AssociationActivitySelection do
   describe 'its sources' do
     def sources(model, paths, window: nil, version_scope: nil)
       range = PaperTrailDiff::TimeRange.new(window) if window
-      described_class.new(model, tree: PaperTrailDiff::AssociationTree.build(paths),
+      described_class.new(model, traversal: traversal(paths),
                                  time_range: range, version_scope: version_scope).call
     end
 

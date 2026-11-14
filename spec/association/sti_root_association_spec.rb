@@ -120,7 +120,7 @@ RSpec.describe 'An association declared by an STI root subclass' do
     checkpoints = PaperTrailDiff.analyze(folder, from: from, to: to, **paths)
     activity = PaperTrailDiff.analyze(folder, from: from, to: to, activity: true, **paths)
 
-    timeline = PaperTrailDiff.timeline(folder, from: from, to: to, **paths)
+    timeline = SpecTimelines.timeline(folder, from: from, to: to, **paths)
     window = from.created_at..to.created_at
     batched = PaperTrailDiff.analyze_many([folder], within: window, **paths).values.first
 
@@ -146,7 +146,7 @@ RSpec.describe 'An association declared by an STI root subclass' do
       end
 
     current = StiRootFolder.find(folder.id)
-    steps = PaperTrailDiff.activity_timeline(current, snapshots: true, **paths)
+    steps = SpecTimelines.activity_timeline(current, snapshots: true, **paths)
 
     expect(steps.map { |step| [step.to_snapshot.type, step.to_snapshot.attributes['name']] })
       .to eq([%w[StiRootSharedFolder Docs], %w[StiRootSharedFolder Docs],
@@ -162,7 +162,7 @@ RSpec.describe 'An association declared by an STI root subclass' do
     StiRootFolder.find(plain.id).update!(type: 'StiRootSharedFolder')
     StiRootFolder.find(plain.id).update!(name: 'Shared')
 
-    steps = PaperTrailDiff.activity_timeline(StiRootFolder.find(plain.id), snapshots: true)
+    steps = SpecTimelines.activity_timeline(StiRootFolder.find(plain.id), snapshots: true)
 
     expect(steps.map { |step| step.to_snapshot.type })
       .to eq(%w[StiRootFolder StiRootSharedFolder StiRootSharedFolder])

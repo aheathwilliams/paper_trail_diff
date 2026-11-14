@@ -60,43 +60,18 @@ module PaperTrailDiff
       end
     end
 
-    #: (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped) -> Array[Step]
-    def timeline(record, from:, to:, within:, version_scope: nil)
-      Endpoint.validate_root!(record)
-      ReadSnapshot.call([record]) do
-        @traversal_preparer.call(record.class, historical: true)
-        from, to = default_range(record, from, to, within)
-        timeline_builder(record, from: from, to: to, within: within, version_scope: version_scope,
-                                 live_endpoint: live_endpoint_for(record, within)).build
-      end
-    end
-
-    #: (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?) -> Array[ActivityStep]
-    def activity_timeline(record, from:, to:, within:, version_scope: nil, snapshots: false, group: nil) # rubocop:disable Metrics/ParameterLists, Layout/LineLength
-      Endpoint.validate_root!(record)
-      payload = model_payload(record)
-      Instrumentation.instrument('activity_timeline', payload) do
-        steps = ReadSnapshot.call([record]) do
-          @traversal_preparer.call(record.class, historical: true)
-          from, to = default_range(record, from, to, within)
-          view = activity_view(true, snapshots, group, version_scope)
-          activity_builder(
-            record, from: from, to: to, within: within, version_scope: version_scope,
-                    live_endpoint: live_endpoint_for(record, within), view: view
-          ).build
-        end
-        payload[:step_count] = steps.length
-        steps
-      end
-    end
-
     #: (untyped, from: untyped, to: untyped, within: untyped, ?activity: bool, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?) -> Analysis
     def analyze(record, from:, to:, within:, activity: false, version_scope: nil, snapshots: false, group: nil) # rubocop:disable Metrics/ParameterLists, Layout/LineLength
       view = activity_view(activity, snapshots, group, version_scope)
       Endpoint.validate_root!(record)
-      ReadSnapshot.call([record]) do
-        analyze_record(record, from: from, to: to, within: within, activity: activity,
-                               version_scope: version_scope, view: view)
+      payload = model_payload(record)
+      Instrumentation.instrument('analyze', payload) do
+        analysis = ReadSnapshot.call([record]) do
+          analyze_record(record, from: from, to: to, within: within, activity: activity,
+                                 version_scope: version_scope, view: view)
+        end
+        payload[:step_count] = (analysis.activity_timeline || analysis.timeline).length
+        analysis
       end
     end
 
@@ -175,7 +150,8 @@ module PaperTrailDiff
           context_required: activity && !@association_tree.empty?,
           live_loader: method(:load_batch_endpoints),
           history_preparer: @historical_store.method(:prepare_batch),
-          analyzer: batched_root_analyzer(activity, view: view)
+          analyzer: batched_root_analyzer(activity, view: view),
+          reach: @traversal.method(:reach_before)
         ).call
       end
     end
@@ -231,7 +207,8 @@ module PaperTrailDiff
                version_scope: options.fetch(:version_scope),
                history_preparer: @historical_store.method(:prepare_deleted_batch),
                analyzer: analyzer,
-               context_required: options.fetch(:activity) && !@association_tree.empty?
+               context_required: options.fetch(:activity) && !@association_tree.empty?,
+               reach: @traversal.method(:reach_before)
       ).call
     end
 
@@ -251,7 +228,7 @@ module PaperTrailDiff
                },
                # Checkpoints compare a root's own versions, so only activity can
                # report a window in which just its associations changed.
-               activity_tree: (@association_tree if activity), version_scope: version_scope
+               activity_traversal: (@traversal if activity), version_scope: version_scope
       )
     end
 

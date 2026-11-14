@@ -6,10 +6,10 @@ module PaperTrailDiff
   class DeletedAnalysisBatch
     # `context_required` reads a root that did not change in the window from
     # the version after it, so its associations' activity can be reported.
-    #: (untyped, identities: Array[Array[String]], time_range: TimeRange?, analyzer: untyped, history_preparer: untyped, version_scope: untyped, context_required: bool) -> void
+    #: (untyped, identities: Array[Array[String]], time_range: TimeRange?, analyzer: untyped, history_preparer: untyped, version_scope: untyped, context_required: bool, reach: untyped) -> void
     def initialize( # rubocop:disable Metrics/ParameterLists
       model, identities:, time_range:, analyzer:, history_preparer:, version_scope:,
-      context_required:
+      context_required:, reach:
     )
       @model = model
       @context_required = context_required
@@ -17,6 +17,7 @@ module PaperTrailDiff
       @time_range = time_range
       @analyzer = analyzer
       @history_preparer = history_preparer
+      @reach = reach
       @version_scope = version_scope
     end
 
@@ -27,7 +28,7 @@ module PaperTrailDiff
       analyses = BatchedRootAnalyses.new(
         time_range: @time_range, planner: ->(roots, range) { plans(roots, destroys, range) },
         history_preparer: @history_preparer, analyzer: @analyzer,
-        activity: @context_required
+        activity: @context_required, reach: @reach
       ).call(records)
       with_unavailable(analyses)
     end
@@ -45,6 +46,7 @@ module PaperTrailDiff
     # @rbs @time_range: TimeRange?
     # @rbs @analyzer: untyped
     # @rbs @history_preparer: untyped
+    # @rbs @reach: untyped
     # @rbs @version_scope: untyped
 
     # A root destroyed before the range had no state inside it to read, so

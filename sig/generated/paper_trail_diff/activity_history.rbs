@@ -36,8 +36,8 @@ module PaperTrailDiff
     # `include_step` says whether an event's step is reported. `root` names
     # the root, whose steps credit each change row to the version that made
     # it (see ChangeAttribution).
-    # : (Array[untyped], Array[ActivityEvent], untyped, view: ActivityView, include_step: untyped, ?current: untyped, ?closing: RecordSnapshot?, root: RecordReference) -> void
-    def initialize: (Array[untyped], Array[ActivityEvent], untyped, view: ActivityView, include_step: untyped, root: RecordReference, ?current: untyped, ?closing: RecordSnapshot?) -> void
+    # : (Array[untyped], Array[ActivityEvent], untyped, view: ActivityView, include_step: untyped, root: RecordReference, ends: TransactionEnds, ?current: untyped, ?closing: RecordSnapshot?) -> void
+    def initialize: (Array[untyped], Array[ActivityEvent], untyped, view: ActivityView, include_step: untyped, root: RecordReference, ends: TransactionEnds, ?current: untyped, ?closing: RecordSnapshot?) -> void
 
     # : () -> ActivityHistory
     def call: () -> ActivityHistory
@@ -47,6 +47,8 @@ module PaperTrailDiff
     @closing: RecordSnapshot?
 
     @current: untyped
+
+    @ends: TransactionEnds
 
     @events: Array[ActivityEvent]
 

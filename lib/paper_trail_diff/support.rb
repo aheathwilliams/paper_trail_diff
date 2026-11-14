@@ -163,50 +163,32 @@ module PaperTrailDiff
     end
     private_class_method :assign_recorded
 
+    # A frozen plain Hash or Array whose contents are all frozen is returned as
+    # it is rather than copied again, as each value object that holds it would.
+    # Ractor.shareable? answers that and remembers a yes on the object, so a
+    # tree passed from one value object to the next is not walked again.
     #: (untyped) -> untyped
     def self.immutable_copy(value)
-      return value if deeply_frozen?(value)
-
       case value
-      when Hash
-        immutable_hash(value)
-      when Array
-        value.map { |item| immutable_copy(item) }.freeze
+      when Hash, Array
+        plain = value.instance_of?(Hash) || value.instance_of?(Array)
+        plain && Ractor.shareable?(value) ? value : copy_tree(value)
       else
-        duplicate_and_freeze(value)
+        value.frozen? ? value : duplicate_and_freeze(value)
       end
     end
 
-    # A frozen tree is returned as it is rather than copied again, as each
-    # value object that holds it would.
-    #: (untyped) -> bool
-    def self.deeply_frozen?(value)
-      members = frozen_members(value)
-      !members.nil? && members.all? { |item| deeply_frozen?(item) }
-    end
-    private_class_method :deeply_frozen?
-
-    # What a frozen plain Hash or Array holds, keys too, and nothing for any
-    # other frozen value; nil when the value is not frozen or is a subclass.
-    #: (untyped) -> Array[untyped]?
-    def self.frozen_members(value)
-      return unless value.frozen?
-      return value.flatten if value.instance_of?(Hash)
-      return value if value.instance_of?(Array)
-
-      [] unless value.is_a?(Hash) || value.is_a?(Array)
-    end
-    private_class_method :frozen_members
-
-    #: (Hash[untyped, untyped]) -> Hash[untyped, untyped]
-    def self.immutable_hash(value)
-      copy = {} #: Hash[untyped, untyped]
-      value.each do |key, item|
-        copy[immutable_copy(key)] = immutable_copy(item)
+    #: (Hash[untyped, untyped] | Array[untyped]) -> (Hash[untyped, untyped] | Array[untyped])
+    def self.copy_tree(value)
+      if value.is_a?(Hash)
+        copy = {} #: Hash[untyped, untyped]
+        value.each { |key, item| copy[immutable_copy(key)] = immutable_copy(item) }
+        copy.freeze
+      else
+        value.map { |item| immutable_copy(item) }.freeze
       end
-      copy.freeze
     end
-    private_class_method :immutable_hash
+    private_class_method :copy_tree
 
     #: (untyped) -> untyped
     def self.serialize(value)

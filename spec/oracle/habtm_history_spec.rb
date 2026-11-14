@@ -223,7 +223,7 @@ RSpec.describe 'Rebuilt HABTM history against the recorded states' do
   def check_timeline(history, failures, paths)
     root = TrackedArticle.find(history.root_id)
     versions = root_versions(history)
-    steps = PaperTrailDiff.timeline(root, from: versions.first, to: root, associations: paths)
+    steps = SpecTimelines.timeline(root, from: versions.first, to: root, associations: paths)
     ends = [*versions.drop(1).map { |version| at_version(history, version, paths) },
             live(history, paths)]
     return failures.add("timeline #{paths.inspect} step count", [steps.length, ends.length]) if
@@ -252,8 +252,8 @@ RSpec.describe 'Rebuilt HABTM history against the recorded states' do
   def check_activity_range(history, failures, paths, from, to, group) # rubocop:disable Metrics/ParameterLists
     root = TrackedArticle.find(history.root_id)
     range = "#{paths.inspect} #{from.id}->#{to.id} (group: #{group.inspect})"
-    steps = PaperTrailDiff.activity_timeline(root, from: from, to: to, associations: paths,
-                                                   group: group, snapshots: true)
+    steps = SpecTimelines.activity_timeline(root, from: from, to: to, associations: paths,
+                                                  group: group, snapshots: true)
     NetChangesCheck.check(failures, "activity #{range}", steps)
     check_activity_steps(history, failures, paths, range, steps)
     return if steps.empty?
@@ -305,7 +305,7 @@ RSpec.describe 'Rebuilt HABTM history against the recorded states' do
 
   def check_live_activity_refused(history, failures, paths)
     root = TrackedArticle.find(history.root_id)
-    PaperTrailDiff.activity_timeline(root, associations: paths)
+    SpecTimelines.activity_timeline(root, associations: paths)
     failures.add("activity #{paths.inspect} to the current record did not raise", nil)
   rescue PaperTrailDiff::UnsupportedLiveActivityError
     nil

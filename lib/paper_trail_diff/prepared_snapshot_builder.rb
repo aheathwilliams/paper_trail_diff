@@ -62,9 +62,7 @@ module PaperTrailDiff
       handled, states = history.snapshot_states(owner, reflection, boundary)
       return [false, nil] unless handled
 
-      subtree = tree.child(reflection.name)
-      return [false, nil] unless subtree
-
+      subtree = tree.child(reflection.name) #: AssociationTree
       child_path = Support.association_path(path, reflection.name)
       records = [] #: Array[RecordSnapshot]
       states.each do |state|

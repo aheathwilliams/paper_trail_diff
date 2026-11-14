@@ -4,12 +4,13 @@
 # that checking only the implementation can overlook.
 record = Object.new
 window = Time.now..Time.now
-PaperTrailDiff.activity_timeline(record, from: :first, to: record,
-                                         group: :transaction, snapshots: true).each do |step|
+activity = PaperTrailDiff.analyze(record, from: :first, to: record, activity: true,
+                                          group: :transaction, snapshots: true)
+activity.activity_timeline&.each do |step|
   step.source_boundary.whodunnit
   step.to_h(metadata: true, snapshots: true)
 end
-PaperTrailDiff.timeline(record, from: :first, to: record).each do |step|
+PaperTrailDiff.analyze(record, from: :first, to: record).timeline.each do |step|
   step.source_boundary.record
   step.to_h(metadata: true)
 end

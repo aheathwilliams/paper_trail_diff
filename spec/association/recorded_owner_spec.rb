@@ -160,7 +160,7 @@ RSpec.describe PaperTrailDiff::RecordedOwner do
                /\Aunsupported association loose_comments: OwnerSpecLooseComment declares no /]
 
       expect { PaperTrailDiff.compare(version, article, **options) }.to raise_error(*error)
-      expect { PaperTrailDiff.activity_timeline(article, **options) }.to raise_error(*error)
+      expect { SpecTimelines.activity_timeline(article, **options) }.to raise_error(*error)
       expect { PaperTrailDiff.report(OwnerSpecArticle, since: Time.utc(2000), limit: 5, **options) }
         .to raise_error(*error)
       expect(PaperTrailDiff.diagnose(version, article, **options).errors.map do |issue|

@@ -114,7 +114,7 @@ RSpec.describe 'Membership by type',
                                               associations: [:blocking_bug])
       expect(ids(analysis.from_snapshot, 'blocking_bug')).to eq([])
       expect(analysis.diff.associations).to eq({})
-      steps = PaperTrailDiff.activity_timeline(item, associations: [:blocking_bug])
+      steps = SpecTimelines.activity_timeline(item, associations: [:blocking_bug])
       expect(steps.flat_map { |step| step.diff.associations.keys }).to eq([])
     end
 
@@ -147,7 +147,7 @@ RSpec.describe 'Membership by type',
                                                  associations: [:notes])
       expect(ids(analysis.from_snapshot, 'notes')).to eq([])
       expect(ids(analysis.to_snapshot, 'notes')).to eq([note.id])
-      steps = PaperTrailDiff.activity_timeline(project, associations: [:notes])
+      steps = SpecTimelines.activity_timeline(project, associations: [:notes])
       expect(steps.filter_map { |step| step.diff.associations['notes']&.added&.map(&:id) })
         .to eq([[note.id]])
     end
@@ -162,7 +162,7 @@ RSpec.describe 'Membership by type',
       TmNote.create!(body: 'project note', notable: TmProject.create!(name: 'project'),
                      tm_person: person)
 
-      steps = PaperTrailDiff.activity_timeline(person, associations: ['noted_items.blocked_by'])
+      steps = SpecTimelines.activity_timeline(person, associations: ['noted_items.blocked_by'])
       expect(steps.length).to eq(2)
       expect(prepared_edge(person, 'noted_items.blocked_by', :noted_items).keys).to eq(['TmItem'])
     end

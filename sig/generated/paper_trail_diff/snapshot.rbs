@@ -24,8 +24,6 @@ module PaperTrailDiff
   class AssociationSnapshot
     COLLECTION_KINDS: untyped
 
-    SUPPORTED_KINDS: untyped
-
     # Whether a collection's identities were found distinct. The snapshots a
     # transition derives from one another share the answer: a transition
     # replaces a record in its place, takes one out, or puts in one that was

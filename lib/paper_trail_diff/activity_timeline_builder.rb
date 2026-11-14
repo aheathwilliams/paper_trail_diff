@@ -26,16 +26,6 @@ module PaperTrailDiff
       @filter = (view.version_filter unless @tree.empty?)
     end
 
-    #: () -> Array[ActivityStep]
-    def build
-      return steps_of(window_replay) if @range.time?
-      return no_steps if @range.unresolved?
-      return steps_of(current_replay) if Endpoint.record?(@to)
-
-      Endpoint.validate!(@to)
-      steps_of(version_replay)
-    end
-
     # The window the range covers, as it was asked for.
     #: () -> TimeRange?
     def window
@@ -66,12 +56,6 @@ module PaperTrailDiff
     # @rbs @ends: TransactionEnds?
     # @rbs @opening: Array[untyped]?
 
-    #: () -> Array[ActivityStep]
-    def no_steps
-      steps = [] #: Array[ActivityStep]
-      steps.freeze
-    end
-
     # Each kind of range replays into the same things, or into nil when it
     # reports no step: its plan and history, the steps it reports, ending with
     # the one that closes the range after its last event, the state it ends
@@ -81,11 +65,6 @@ module PaperTrailDiff
     def replayed(plan, history, closing, final, snapshot = nil, captured_at = nil) # rubocop:disable Metrics/ParameterLists
       steps = closing ? history.steps + [closing] : history.steps
       [plan, history, steps, final, snapshot, captured_at] unless steps.empty?
-    end
-
-    #: ([RootVersionPlan, ActivityHistory, Array[ActivityStep], RecordSnapshot?, RecordSnapshot?, untyped]?) -> Array[ActivityStep]
-    def steps_of(replay)
-      replay ? present(replay.fetch(2)) : no_steps
     end
 
     # A range that reports no step is empty, whatever its replay read: a
@@ -180,7 +159,7 @@ module PaperTrailDiff
     #: (RootVersionPlan, ?RecordSnapshot?, ?untyped) -> ActivityHistory
     def history_until(plan, snapshot = nil, captured_at = nil)
       events, snapshots = range_events(plan, captured_at)
-      events = by_transaction_end(snapshots, events, plan, closes: captured_at.nil?)
+      events = by_transaction_end(events, plan, closes: captured_at.nil?)
       replay(plan, plan, events, snapshots, current: plan.closing_record, closing: snapshot)
     end
 
@@ -189,28 +168,30 @@ module PaperTrailDiff
     # if that transaction ended first, and is reported if it ended later. A
     # range that ends at a version ends before that version's transaction
     # took effect, so what took effect after it is left out.
-    #: (untyped, Array[ActivityEvent], RootVersionPlan, closes: bool) -> Array[ActivityEvent]
-    def by_transaction_end(snapshots, events, plan, closes:)
-      ends = snapshots.transaction_ends(events.map(&:version))
-      @ends = ends
+    #: (Array[ActivityEvent], RootVersionPlan, closes: bool) -> Array[ActivityEvent]
+    def by_transaction_end(events, plan, closes:)
+      ends = @ends #: TransactionEnds
       first = plan.reconstruction_versions.first
       @opening = Support.chronological_version_key(ends.last(first))
       return events unless closes
 
       closing = ends.sort_key(plan.reconstruction_versions.last)
-      events.select { |event| (ends.sort_key(event.version) <=> closing) <= 0 }
+      events.select do |event|
+        comparison = (ends.sort_key(event.version) <=> closing) #: Integer
+        comparison <= 0
+      end
     end
 
     # The range's events up to its last root version, or to the instant the
     # live record it closes on was read, with the history they are read from.
-    # A window's history says where the earliest transaction open at its
-    # start began; `reach` says not to ask, of a history read from there.
-    #: (RootVersionPlan, untyped, ?start_at: untyped, ?reach: bool) -> [Array[ActivityEvent], untyped]
-    def range_events(plan, captured_at, start_at: @range.begin_time, reach: true)
+    # A window is read from where the earliest transaction open at its start
+    # began.
+    #: (RootVersionPlan, untyped, ?start_at: untyped) -> [Array[ActivityEvent], untyped]
+    def range_events(plan, captured_at, start_at: @range.begin_time)
       versions = plan.reconstruction_versions
       range_end = captured_at || @snapshotter.range_end(@record, versions.last)
       end_at = captured_at || range_end.created_at
-      snapshots = prepare_history(versions, start_at: start_at, end_at: end_at, reach: reach)
+      snapshots = @snapshotter.prepare(@record, versions, start_at: start_at, end_at: end_at)
       closing = versions.last unless captured_at
       [collect_events(versions, snapshots, range_end: range_end, closing: closing), snapshots]
     end
@@ -251,7 +232,8 @@ module PaperTrailDiff
 
       wide, events, snapshots, captured_at = read
 
-      plan = reporting_plan(wide, events, snapshots)
+      ends = @ends #: TransactionEnds
+      plan = @range.reporting_plan(wide, ends, context_required: true)
       return unless events.any? { |event| reported?(event, plan) }
 
       live = wide.closing_record
@@ -262,44 +244,18 @@ module PaperTrailDiff
 
     # The plan of every root version the window's transactions saved, its
     # events, their history, and when the live record it closes on was read;
-    # nil when there is nothing to replay.
+    # nil when there is nothing to replay. The window is planned and read
+    # from where the earliest transaction open at its start began, which may
+    # have destroyed a root that has no version in the window itself. A
+    # batch has planned and read its roots so already.
     #: () -> [RootVersionPlan, Array[ActivityEvent], untyped, untyped]?
     def window_events
-      wide = select_plan
-      return gone_events if nothing?(wide)
-
-      events, snapshots, captured_at = events_through(wide)
-      reach = snapshots.history&.reach
-      return [wide, events, snapshots, captured_at] unless reach
-
-      reached_events(reach, @range.reach_plan(reach, context_required: true))
-    end
-
-    # A plan with no version to replay and no live record to close on.
-    #: (RootVersionPlan) -> bool
-    def nothing?(plan) = plan.empty? && !plan.closing_record
-
-    # The window read again from where the earliest transaction open at its
-    # start began. It holds what the window's own read held, and more.
-    #: (untyped, RootVersionPlan) -> [RootVersionPlan, Array[ActivityEvent], untyped, untyped]
-    def reached_events(reach, wide)
-      events, snapshots, captured_at = events_through(wide, start_at: reach, reach: false)
-      [wide, events, snapshots, captured_at]
-    end
-
-    # A root with no version in the window and no row was gone before it,
-    # unless a transaction open at its start destroyed it and ended inside:
-    # the window reports that one. A batch has asked for its roots already,
-    # and asking again for each would only find the same answer, a statement
-    # a root, so no spec can tell the batch's guard from its absence.
-    # mutant:disable
-    #: () -> [RootVersionPlan, Array[ActivityEvent], untyped, untyped]?
-    def gone_events
       reach = (@snapshotter.reach_before(@record, @range.begin_time) unless @range.preselected?)
-      return unless reach
+      wide = reach ? @range.reach_plan(reach, context_required: true) : select_plan
+      return if wide.empty? && !wide.closing_record
 
-      wide = @range.reach_plan(reach, context_required: true)
-      reached_events(reach, wide) unless nothing?(wide)
+      events, snapshots, captured_at = events_through(wide, start_at: reach || @range.begin_time)
+      [wide, events, snapshots, captured_at]
     end
 
     #: (RootVersionPlan, **untyped) -> [Array[ActivityEvent], untyped, untyped]
@@ -309,15 +265,6 @@ module PaperTrailDiff
       captured_at = (Time.now.utc if live)
       events, snapshots = range_events(wide, captured_at, **options)
       [events, snapshots, captured_at]
-    end
-
-    # The versions whose transactions end inside the window. On the root
-    # alone nothing else is read, so each ends where it was saved.
-    #: (RootVersionPlan, Array[ActivityEvent], untyped) -> RootVersionPlan
-    def reporting_plan(wide, events, snapshots)
-      ends = snapshots.transaction_ends(events.map(&:version))
-      @ends = ends
-      @range.reporting_plan(wide, ends, context_required: true)
     end
 
     # The step that closes the range after its last event, which is reported
@@ -370,14 +317,6 @@ module PaperTrailDiff
       @view.recorded_reader(root: true)
     end
 
-    # A window prepares from its start, explicit endpoints from their first
-    # version.
-    #: (Array[untyped], start_at: untyped, end_at: untyped, reach: bool) -> untyped
-    def prepare_history(root_versions, start_at:, end_at:, reach:)
-      options = { start_at: start_at, end_at: end_at, reach: (false unless reach) }.compact
-      @snapshotter.prepare(@record, root_versions, **options)
-    end
-
     # Events are collected from where the history starts, which is where the
     # transactions across the range's start began. Without a history only
     # root versions are collected, all of them in the range. Explicit
@@ -386,14 +325,16 @@ module PaperTrailDiff
     # keeps every event it collected and reports only those inside it.
     #: (Array[untyped], untyped, range_end: untyped, closing: untyped) -> Array[ActivityEvent]
     def collect_events(root_versions, snapshots, range_end:, closing:)
-      events = ActivityVersionCollector.new(
+      collector = ActivityVersionCollector.new(
         @record,
         root_versions: root_versions,
         traversal: @traversal,
         prepared: snapshots.activity_index,
         range_start: snapshots.history&.start_time,
         range_end: range_end
-      ).call
+      )
+      events = collector.call
+      @ends = collector.ends
       events = ActivityTransactionGroups.before_closing(events, closing) unless @range.time?
       events = ActivityTransactionGroups.until_destroyed(events)
       prepare_filter(snapshots, events)
@@ -414,13 +355,15 @@ module PaperTrailDiff
     # need not.
     #: (RootVersionPlan, RootVersionPlan, Array[ActivityEvent], untyped, current: untyped, closing: RecordSnapshot?) -> ActivityHistory
     def replay(plan, wide, events, snapshots, current:, closing:) # rubocop:disable Metrics/ParameterLists
+      ends = @ends #: TransactionEnds
       ActivityHistoryBuilder.new(
         wide.reconstruction_versions, events, snapshots,
         current: current,
         include_step: ->(event) { reported?(event, plan) },
         view: @view,
         closing: closing,
-        root: root_reference
+        root: root_reference,
+        ends: ends
       ).call
     end
 

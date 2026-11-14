@@ -145,7 +145,7 @@ RSpec.describe 'Rebuilt scoped membership against the recorded states' do
         failures.check("to current from #{from.id}", recorder.final.state,
                        snapshot_members(analysis.to_snapshot))
       end
-      steps = PaperTrailDiff.activity_timeline(post, associations: paths, snapshots: true)
+      steps = SpecTimelines.activity_timeline(post, associations: paths, snapshots: true)
       NetChangesCheck.check(failures, 'activity', steps)
       steps.each do |step|
         next unless step.to_snapshot

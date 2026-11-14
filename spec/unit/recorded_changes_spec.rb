@@ -77,7 +77,7 @@ RSpec.describe PaperTrailDiff::RecordedChanges do
     note.update!(title: 'Published', rank: 2)
     note.update!(title: 'Final')
     version = RecordedVersion.where(item_id: note.id, event: 'update').order(:id).first
-    step = PaperTrailDiff.timeline(note).find do |candidate|
+    step = SpecTimelines.timeline(note).find do |candidate|
       candidate.source_boundary.version_id == version.id
     end
 

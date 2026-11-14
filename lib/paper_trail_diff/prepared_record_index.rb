@@ -281,8 +281,7 @@ module PaperTrailDiff
     # than those before it.
     #: (untyped, TransactionEnds) -> Integer?
     def effective_index(boundary, ends)
-      target = VersionBoundary.version_record?(boundary) ? ends.last(boundary) : boundary
-      target_time = target.created_at
+      target, target_time = ends.target(boundary)
       effective = effective_versions(ends)
       (0...effective.length).bsearch do |index|
         VersionBoundary.at_or_after?(effective.fetch(index), target, boundary_time: target_time)
@@ -358,7 +357,6 @@ module PaperTrailDiff
       @seeded_live_records = live_records.to_h { |row| [identity(row.class, row.id), row] }
       @state_loader = PreparedVersionStateLoader.new
       @series = {} #: Hash[Array[String], PreparedRecordSeries]
-      @version_classes = Set.new #: Set[untyped]
       @recorded_ends = RecordedTransactionEnds.new
       @direct_loader = DirectRecordStateLoader.new
       @direct_states = {} #: Hash[PreparedRecordState, PreparedRecordState?]
@@ -366,7 +364,6 @@ module PaperTrailDiff
 
     #: (untyped, Array[untyped]) -> void
     def load(model_class, ids)
-      @version_classes << model_class.paper_trail.version_class
       missing = missing_ids(model_class, ids)
       return if missing.empty?
 
@@ -374,12 +371,6 @@ module PaperTrailDiff
       live = available_live_records(model_class, missing).to_h { |record| [record.id.to_s, record] }
       missing.each { |id| add_series(model_class, id, versions, live) }
     end
-
-    # Where the earliest transaction open at the range's start began, in the
-    # version tables of the records held; nil when none was open. See
-    # PreparedHistoryLoader.
-    #: () -> untyped
-    def reach = CrossingTransactions.reach(@version_classes, @start_time)
 
     # When the history was read from.
     #: () -> untyped
@@ -540,7 +531,6 @@ module PaperTrailDiff
     # @rbs @direct_loader: DirectRecordStateLoader
     # @rbs @direct_states: Hash[PreparedRecordState, PreparedRecordState?]
     # @rbs @ends: TransactionEnds?
-    # @rbs @version_classes: Set[untyped]
     # @rbs @recorded_ends: RecordedTransactionEnds
 
     # Callers bound the range with either a version or a bare timestamp.
@@ -654,11 +644,24 @@ module PaperTrailDiff
     end
 
     # The same, in the version tables of a root model and of the records on
-    # its requested paths.
+    # its requested paths. A polymorphic belongs_to may reach a record of any
+    # class, so with one every version table is read.
     #: (untyped, AssociationTraversal, untyped) -> untyped
     def self.open_around(model, traversal, start)
+      return reach(every_version_class, start) if traversal.polymorphic_paths?(model)
+
       open_among([model.name, *traversal.path_types(model)], start)
     end
+
+    # One version class for each version table the application defines.
+    #: () -> Array[untyped]
+    def self.every_version_class
+      concern = Support.constant('PaperTrail::VersionConcern')
+      Support.constant('ActiveRecord::Base').descendants.select do |candidate|
+        candidate.include?(concern) && !candidate.abstract_class? && candidate.table_exists?
+      end.uniq(&:table_name)
+    end
+    private_class_method :every_version_class
 
     #: () -> untyped
     def call

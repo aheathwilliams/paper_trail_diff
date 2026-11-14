@@ -10,6 +10,20 @@ module PaperTrailDiff
   # and the snapshots read it from there. ActivityTreeFilter leaves out the
   # events of a candidate that was outside the tree throughout.
   class PreparedActivityIndex
+    # A belongs_to target an owner's recorded state names. A plain class
+    # rather than Data.define, which arrived in Ruby 3.2 while this gem
+    # supports 3.1.
+    class TargetRow
+      attr_reader owner_id: untyped
+
+      attr_reader foreign_key_id: untyped
+
+      attr_reader foreign_type: String?
+
+      # : (untyped, untyped, String?) -> void
+      def initialize: (untyped, untyped, String?) -> void
+    end
+
     # The children the history's owners had, which its edge loader reads
     # first for most of them.
     attr_reader children: PreparedChildCandidates
@@ -63,10 +77,15 @@ module PaperTrailDiff
     # : (untyped, Array[untyped], untyped, ActivityRange) -> Array[untyped]
     def child_ids: (untyped, Array[untyped], untyped, ActivityRange) -> Array[untyped]
 
-    # The `belongs_to` targets each owner pointed at from the range's start
-    # onward, plus the live row and those its recorded states name.
-    # : (untyped, Array[untyped], untyped, ActivityRange) -> Array[ActivityTargetCandidateLoader::Row]
-    def target_rows: (untyped, Array[untyped], untyped, ActivityRange) -> Array[ActivityTargetCandidateLoader::Row]
+    # The `belongs_to` targets each owner pointed at, as the states the
+    # history holds name them. PT-AT records a version's keys as they stood
+    # after its change, which is the state the record's next version stores,
+    # or its live row, and the history reads both; it also reads the state a
+    # key changed without a version, such as one `has_paper_trail only:`
+    # leaves out, reaches only through. A key of two columns is read per
+    # record instead.
+    # : (untyped, Array[untyped], untyped) -> Array[TargetRow]
+    def target_rows: (untyped, Array[untyped], untyped) -> Array[TargetRow]
 
     # : (untyped, untyped) -> bool
     def loaded?: (untyped, untyped) -> bool
@@ -90,19 +109,6 @@ module PaperTrailDiff
 
     @rows: Hash[untyped, Hash[String, Array[untyped]]]
 
-    @start_at: untyped
-
-    @targets: Hash[untyped, untyped]
-
-    # The targets the owners' recorded states point at. PT-AT names a target
-    # only in the rows its owner's versions wrote, so a key changed without a
-    # version, such as one `has_paper_trail only:` leaves out, names its target
-    # only in the state the owner's next version recorded. Prepared history
-    # reads that state, so its snapshots show the target, and the target's
-    # versions are events too. A key of two columns is read per record instead.
-    # : (untyped, Array[untyped], untyped) -> Array[ActivityTargetCandidateLoader::Row]
-    def recorded_target_rows: (untyped, Array[untyped], untyped) -> Array[ActivityTargetCandidateLoader::Row]
-
     # : (untyped, Array[untyped]) -> bool
     def member_class?: (untyped, Array[untyped]) -> bool
 
@@ -114,15 +120,6 @@ module PaperTrailDiff
     # notes without a post, reaches a model no record of which was loaded.
     # : (untyped) -> Array[untyped]
     def node_ids: (untyped) -> Array[untyped]
-
-    # : (Hash[String, Array[ActivityTargetCandidateLoader::Row]], Array[untyped]) -> Array[ActivityTargetCandidateLoader::Row]
-    def rows_for: (Hash[String, Array[ActivityTargetCandidateLoader::Row]], Array[untyped]) -> Array[ActivityTargetCandidateLoader::Row]
-
-    # : (untyped, Array[ActivityTargetCandidateLoader::Row], ActivityRange) -> Array[ActivityTargetCandidateLoader::Row]
-    def eligible_rows: (untyped, Array[ActivityTargetCandidateLoader::Row], ActivityRange) -> Array[ActivityTargetCandidateLoader::Row]
-
-    # : (untyped, untyped) -> untyped
-    def target_candidates: (untyped, untyped) -> untyped
 
     # Mirrors VersionAssociationCandidateScope's before-window rule. The loaded
     # series includes changes to other owners too, so an old membership cannot

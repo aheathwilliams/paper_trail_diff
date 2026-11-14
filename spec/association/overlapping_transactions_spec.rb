@@ -58,8 +58,8 @@ RSpec.describe 'Transactions that overlap each other or a window edge',
   # Each reported change of a comment or of the title: its kind, the field,
   # its values and who saved the version it is credited to.
   def rows(article, **options)
-    PaperTrailDiff.activity_timeline(article, associations: paths, **options)
-                  .flat_map(&:change_rows).filter_map { |row| describe_row(row) }
+    SpecTimelines.activity_timeline(article, associations: paths, **options)
+                 .flat_map(&:change_rows).filter_map { |row| describe_row(row) }
   end
 
   def describe_row(row)
@@ -184,8 +184,8 @@ RSpec.describe 'Transactions that overlap each other or a window edge',
     create = in_transaction(100, 'alice') { article.comments.create!(body: 'second') }
     article.reload
 
-    changed = PaperTrailDiff.activity_timeline(article, associations: paths, within: from(create))
-                            .flat_map(&:change_rows).select { |row| row.attribute == 'body' }
+    changed = SpecTimelines.activity_timeline(article, associations: paths, within: from(create))
+                           .flat_map(&:change_rows).select { |row| row.attribute == 'body' }
     expect(changed.map { |row| [row.change, row.to, row.source.version_id] })
       .to contain_exactly([:changed, 'edited', edit.id], [:added, 'second', create.id])
   end

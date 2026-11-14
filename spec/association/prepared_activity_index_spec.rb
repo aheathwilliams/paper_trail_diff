@@ -353,7 +353,7 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
     index.child_ids(IndexSpecLandingPage, [page.id], sections, window)
     owner = ->(name) { IndexSpecSection.reflect_on_association(name) }
     owners = lambda do |name|
-      index.target_rows(IndexSpecSection, [featured.id], owner.call(name), window)
+      index.target_rows(IndexSpecSection, [featured.id], owner.call(name))
            .map(&:foreign_key_id).uniq
     end
 
@@ -365,15 +365,14 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
     expect(index.child_ids(IndexSpecPage, [page.id],
                            IndexSpecPage.reflect_on_association(:featured_sections), window))
       .to eq([featured.id])
-    expect([owners.call(:page), owners.call(:featured_page)]).to eq([[nil], [page.id]])
+    expect([owners.call(:page), owners.call(:featured_page)]).to eq([[], [page.id]])
   end
 
-  # The version a range ends at names the author after it, which the range
-  # never reached, but a key written without a version is recorded only after
-  # it too, so every author from the start onward is a candidate, and the live
-  # one. So is every author a page's recorded states name, without an event,
-  # which a key PT-AT never saw reaches only that way.
-  it 'reads the authors a page pointed at from the range start onward, and its live one' do
+  # PT-AT records a version's keys as they stood after its change, which is
+  # the state the record's next version stores, or its live row. The history
+  # holds both, so its states name every author a page pointed at, a key
+  # PT-AT never saw included, with no statement of their own.
+  it 'reads the authors the states a page held name, its live one included' do
     origin = Time.now.utc
     first, second, third = %w[Ann Bea Cy].map { |name| TrackedAuthor.create!(name: name) }
     page, other, gone = %w[Page Other Gone].map do |title|
@@ -384,56 +383,26 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
     end
     other.update!(author: second)
     gone.destroy!
-    start = Time.now.utc
     page.update!(author: second)
     page.update!(author: third)
-    closing = page.versions.reorder(:id).last
     ids = [page, other, gone, unversioned].map(&:id)
     index = index_for(origin, { IndexSpecPage => ids })
     index.register(IndexSpecPage, ids)
     author = IndexSpecPage.reflect_on_association(:author)
-    fields = ->(rows) { rows.map { |row| [row.owner_id, row.foreign_key_id, row.event] } }
+    fields = ->(rows) { rows.map { |row| [row.owner_id, row.foreign_key_id] }.uniq }
 
-    closed = index.target_rows(IndexSpecLandingPage, [page.id, gone.id], author,
-                               range(start, closing))
-    current = index.target_rows(IndexSpecPage, [page.id, unversioned.id], author,
-                                range(start, Time.now.utc))
-
-    recorded = [[page.id, first.id, nil], [page.id, second.id, nil], [page.id, third.id, nil]]
-    expect(fields.call(closed)).to contain_exactly(
-      [page.id, first.id, 'create'], [page.id, second.id, 'update'],
-      [page.id, third.id, 'update'], [page.id, third.id, nil], *recorded, [gone.id, first.id, nil]
-    )
-    expect(fields.call(current)).to contain_exactly(
-      [page.id, first.id, 'create'], [page.id, second.id, 'update'],
-      [page.id, third.id, 'update'], [page.id, third.id, nil], [unversioned.id, first.id, nil],
-      *recorded, [unversioned.id, first.id, nil]
-    )
+    found = nil
     queries = statements do
-      found = index.target_rows(IndexSpecPage, [other.id], author, range(start, closing))
-      expect(fields.call(found))
-        .to eq([[other.id, second.id, 'update'], [other.id, second.id, nil],
-                [other.id, first.id, nil], [other.id, second.id, nil]])
+      found = index.target_rows(IndexSpecPage, [page.id, gone.id, unversioned.id], author)
     end
+
+    expect(fields.call(found)).to contain_exactly(
+      [page.id, first.id], [page.id, second.id], [page.id, third.id], [gone.id, first.id],
+      [unversioned.id, first.id]
+    )
+    expect(fields.call(index.target_rows(IndexSpecLandingPage, [other.id], author)))
+      .to contain_exactly([other.id, first.id], [other.id, second.id])
     expect(queries).to eq(0)
-  end
-
-  # The latest row before the start names the author a page had there, so the
-  # rows it replaced cannot matter, and are not read.
-  it 'reads no author row that a later one before the start replaced' do
-    first, second, third = %w[Ann Bea Cy].map { |name| TrackedAuthor.create!(name: name) }
-    page = IndexSpecPage.create!(title: 'Page', author: first)
-    page.update!(author: second)
-    origin = Time.now.utc
-    page.update!(author: third)
-    index = index_for(origin, { IndexSpecPage => [page.id] })
-    index.register(IndexSpecPage, [page.id])
-
-    historical, = index.send(:target_candidates, IndexSpecPage,
-                             IndexSpecPage.reflect_on_association(:author))
-
-    expect(historical.fetch(page.id.to_s).map(&:foreign_key_id))
-      .to contain_exactly(second.id, third.id)
   end
 
   # Each state a link recorded names its target by type and id; one with no
@@ -445,8 +414,7 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
     [{ target: tag }, { target: nil }].each { |change| link.update!(change) }
     index = index_for(Time.now.utc - 60, { SourceTypeLink => [link.id] })
     fields = lambda do |name|
-      index.send(:recorded_target_rows, SourceTypeLink, [link.id],
-                 SourceTypeLink.reflect_on_association(name))
+      index.target_rows(SourceTypeLink, [link.id], SourceTypeLink.reflect_on_association(name))
            .map { |row| [row.owner_id, row.foreign_type, row.foreign_key_id] }
     end
     composite = SourceTypeLink.reflect_on_association(:target).dup
@@ -454,7 +422,7 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
 
     expect(fields.call(:target)).to eq([[link.id, 'SourceTypeAuthor', author.id],
                                         [link.id, 'SourceTypeTag', tag.id]])
-    expect(index.send(:recorded_target_rows, SourceTypeLink, [link.id], composite)).to eq([])
+    expect(index.target_rows(SourceTypeLink, [link.id], composite)).to eq([])
   end
 
   def checkpoint(article)

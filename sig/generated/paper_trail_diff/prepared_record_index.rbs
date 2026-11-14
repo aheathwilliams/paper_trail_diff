@@ -186,12 +186,6 @@ module PaperTrailDiff
     # : (untyped, Array[untyped]) -> void
     def load: (untyped, Array[untyped]) -> void
 
-    # Where the earliest transaction open at the range's start began, in the
-    # version tables of the records held; nil when none was open. See
-    # PreparedHistoryLoader.
-    # : () -> untyped
-    def reach: () -> untyped
-
     # When the history was read from.
     # : () -> untyped
     attr_reader start_time: untyped
@@ -294,8 +288,6 @@ module PaperTrailDiff
 
     @state_loader: PreparedVersionStateLoader
 
-    @version_classes: Set[untyped]
-
     # Callers bound the range with either a version or a bare timestamp.
     # : (untyped) -> untyped
     def boundary_time: (untyped) -> untyped
@@ -361,9 +353,14 @@ module PaperTrailDiff
     def self.open_among: (Array[String], untyped) -> untyped
 
     # The same, in the version tables of a root model and of the records on
-    # its requested paths.
+    # its requested paths. A polymorphic belongs_to may reach a record of any
+    # class, so with one every version table is read.
     # : (untyped, AssociationTraversal, untyped) -> untyped
     def self.open_around: (untyped, AssociationTraversal, untyped) -> untyped
+
+    # One version class for each version table the application defines.
+    # : () -> Array[untyped]
+    def self.every_version_class: () -> Array[untyped]
 
     # : () -> untyped
     def call: () -> untyped

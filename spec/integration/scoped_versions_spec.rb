@@ -33,10 +33,10 @@ RSpec.describe 'has_paper_trail versions: { scope: }' do
   it 'credits each change to its own version in single-record methods' do
     article = history
 
-    expect(changes(PaperTrailDiff.timeline(article))).to eq(expected)
-    expect(changes(PaperTrailDiff.timeline(article, within: window))).to eq(expected)
+    expect(changes(SpecTimelines.timeline(article))).to eq(expected)
+    expect(changes(SpecTimelines.timeline(article, within: window))).to eq(expected)
     expect(changes(PaperTrailDiff.analyze(article).timeline)).to eq(expected)
-    expect(changes(PaperTrailDiff.activity_timeline(article))).to eq(expected)
+    expect(changes(SpecTimelines.activity_timeline(article))).to eq(expected)
   end
 
   it 'agrees with the batch methods' do
@@ -55,7 +55,7 @@ RSpec.describe 'has_paper_trail versions: { scope: }' do
     hidden = PaperTrail::Version.where(item_type: 'ScopedHistoryArticle', whodunnit: 'bot')
                                 .order(:id).first
 
-    steps = PaperTrailDiff.timeline(article, from: hidden)
+    steps = SpecTimelines.timeline(article, from: hidden)
     diff = PaperTrailDiff.compare(hidden, article)
 
     expect(changes([nil, *steps])).to eq(expected)

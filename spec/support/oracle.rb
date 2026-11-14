@@ -397,7 +397,7 @@ module Oracle
   # and through a relation, which selects the root by what changed in the
   # window or reports nothing for it.
   SPLIT_READERS = {
-    activity_timeline: ->(root, **options) { PaperTrailDiff.activity_timeline(root, **options) },
+    analyze: ->(root, **options) { SpecTimelines.activity_timeline(root, **options) },
     analyze_many: lambda do |root, **options|
       PaperTrailDiff.analyze_many([root], activity: true, **options).values.first.activity_timeline
     end,
@@ -440,8 +440,8 @@ module Oracle
     # Each step of the activity timeline from each root version.
     def activity(group: nil)
       root_versions.each do |from|
-        steps = PaperTrailDiff.activity_timeline(@root, from: from, to: @root, associations: @paths,
-                                                        snapshots: true, group: group)
+        steps = SpecTimelines.activity_timeline(@root, from: from, to: @root, associations: @paths,
+                                                       snapshots: true, group: group)
         range = "activity from #{from.id} (group: #{group.inspect})"
         NetChangesCheck.check(@failures, range, steps)
         steps.each_with_index do |step, index|
@@ -475,7 +475,7 @@ module Oracle
     # the states recorded just before each root version's transaction.
     def timeline
       versions = root_versions
-      steps = PaperTrailDiff.timeline(@root, from: versions.first, to: @root, associations: @paths)
+      steps = SpecTimelines.timeline(@root, from: versions.first, to: @root, associations: @paths)
       ends = [*versions.drop(1).map { |version| @recorder.before(version.id) }, @recorder.final]
       if steps.length != ends.length
         return @failures.add('timeline step count', [steps.length, ends.length])

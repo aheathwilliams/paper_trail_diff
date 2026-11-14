@@ -31,6 +31,11 @@ module PaperTrailDiff
       ordered(@registry.to_a)
     end
 
+    # Where the transactions of the collected events take effect, once #call
+    # has ordered them by it.
+    #: () -> TransactionEnds?
+    attr_reader :ends
+
     private
 
     # @rbs @prepared: PreparedActivityIndex
@@ -39,6 +44,7 @@ module PaperTrailDiff
     # @rbs @traversal: AssociationTraversal
     # @rbs @range: ActivityRange
     # @rbs @registry: ActivityEventRegistry
+    # @rbs @ends: TransactionEnds?
 
     #: (Array[ActivityEvent]) -> Array[ActivityEvent]
     def ordered(events)
@@ -46,10 +52,14 @@ module PaperTrailDiff
       pair = Support.ambiguous_pair(events.map(&:version))
       raise(AmbiguousVersionOrderError, Support.ambiguous_message(pair)) if pair
 
-      prepared = @prepared #: PreparedActivityIndex?
-      versions = events.map(&:version)
-      ends = prepared ? prepared.transaction_ends(versions) : TransactionEnds.new(versions)
+      ends = transaction_ends(events.map(&:version))
       events.sort_by { |event| ends.sort_key(event.version) }.freeze
+    end
+
+    #: (Array[untyped]) -> TransactionEnds
+    def transaction_ends(versions)
+      prepared = @prepared #: PreparedActivityIndex?
+      @ends = prepared ? prepared.transaction_ends(versions) : TransactionEnds.new(versions)
     end
 
     # Each event is credited to the top-level association it was reached
@@ -118,7 +128,7 @@ module PaperTrailDiff
     # version -- has no state to compare.
     #: (untyped, Array[untyped], untyped) -> Array[Hash[Symbol, untyped]]
     def belongs_to_groups(parent_class, parent_ids, reflection)
-      rows = @prepared.target_rows(parent_class, parent_ids, reflection, @range)
+      rows = @prepared.target_rows(parent_class, parent_ids, reflection)
       identity_groups(rows, reflection) { |model_class, id| @prepared.loaded?(model_class, id) }
     end
 
