@@ -43,7 +43,7 @@ module PaperTrailDiff
       start_at = TransactionCut.range_start(root_versions, start_at) unless window
       start_at = TransactionCut.crossing_start(record.class, traversal, start_at) if crossing
       @records = PreparedRecordIndex.new(start_at, end_at: end_at, live_records: live_records)
-      @activity = PreparedActivityIndex.new(@records, root_versions, start_at: start_at)
+      @activity = PreparedActivityIndex.new(@records, start_at: start_at)
       @history = PreparedHistory.new(@records, activity_index: @activity)
       @edges = PreparedEdgeLoader.new(@records, root_versions, children: @activity.children)
       @prepared = {} #: Hash[untyped, Set[String]]

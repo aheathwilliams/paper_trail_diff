@@ -328,8 +328,7 @@ RSpec.describe PaperTrailDiff::PreparedHistoryLoader do
     expect(PaperTrailDiff::PreparedRecordIndex).to have_received(:new)
       .with(start_at, end_at: end_at, live_records: live)
     expect(PaperTrailDiff::PreparedActivityIndex).to have_received(:new)
-      .with(instance_of(PaperTrailDiff::PreparedRecordIndex), versions,
-            start_at: start_at).twice
+      .with(instance_of(PaperTrailDiff::PreparedRecordIndex), start_at: start_at).twice
     # Each edge loader reads children into its activity index's.
     activities.each do |activity|
       expect(PaperTrailDiff::PreparedEdgeLoader).to have_received(:new)

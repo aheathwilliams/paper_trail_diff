@@ -32,11 +32,10 @@ module PaperTrailDiff
     # first for most of them.
     attr_reader :children #: PreparedChildCandidates
 
-    #: (PreparedRecordIndex, Array[untyped], start_at: untyped) -> void
-    def initialize(records, root_versions, start_at:)
+    #: (PreparedRecordIndex, start_at: untyped) -> void
+    def initialize(records, start_at:)
       @records = records
       @children = PreparedChildCandidates.new(start_at, records.end_time)
-      @roots = root_versions.group_by { |version| Endpoint.identity(version) }
       @nodes = {} #: Hash[String, Array[untyped]]
       # Rows are cached by reflection, which a subclass shares with its base.
       @rows = {} #: Hash[untyped, Hash[String, Array[untyped]]]
@@ -54,11 +53,12 @@ module PaperTrailDiff
       @nodes[name] = (@nodes.fetch(name, []) | ids)
     end
 
+    # A record's events are the versions the history loaded for it, a root of
+    # the batch's too: met in another root's tree, its versions after the
+    # window are events of that tree as well.
     #: (untyped, Array[untyped]) -> Array[untyped]
     def versions(model, ids)
-      ids.flat_map do |id|
-        @roots[Support.record_identity(model, id)] || @records.versions_for_id(model, id)
-      end
+      ids.flat_map { |id| @records.versions_for_id(model, id) }
     end
 
     # Children are found by key across the whole table, so an association to
@@ -160,7 +160,6 @@ module PaperTrailDiff
     private
 
     # @rbs @records: PreparedRecordIndex
-    # @rbs @roots: Hash[Array[String], Array[untyped]]
     # @rbs @nodes: Hash[String, Array[untyped]]
     # @rbs @rows: Hash[untyped, Hash[String, Array[untyped]]]
     # @rbs @conditions: ScopeCondition::Cache

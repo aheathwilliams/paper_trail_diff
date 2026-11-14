@@ -155,10 +155,10 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
 
   # An index over everything from `origin`, as a batch builds one for all its
   # roots, with each call narrowing to one root's range.
-  def index_for(origin, loads, root_versions: [])
+  def index_for(origin, loads)
     records = PaperTrailDiff::PreparedRecordIndex.new(origin)
     loads.each { |model, ids| records.load(model, ids) }
-    described_class.new(records, root_versions, start_at: origin)
+    described_class.new(records, start_at: origin)
   end
 
   def sections
@@ -173,7 +173,7 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
     finish = before.versions.last.created_at
     page.sections.create!(title: 'After')
     records = PaperTrailDiff::PreparedRecordIndex.new(origin, end_at: finish)
-    index = described_class.new(records, [], start_at: origin)
+    index = described_class.new(records, start_at: origin)
 
     historical, live = index.children.call(IndexSpecPage, [page.id], sections)
 
@@ -181,16 +181,17 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
     expect(live).to eq(page.id.to_s => [before.id])
   end
 
-  it 'reads root versions as given and every other record from the record index' do
+  # A root of a batch can sit in another root's tree, where its versions
+  # after the window are that tree's events too.
+  it 'reads every record from the record index, a root too' do
     origin = Time.now.utc
     root, other = %w[Root Other].map { |title| IndexSpecLandingPage.create!(title: title) }
-    given = [root.versions.reorder(:id).first]
     root.update!(title: 'Root again')
     other.update!(title: 'Other again')
-    index = index_for(origin, { IndexSpecPage => [root.id, other.id] }, root_versions: given)
+    index = index_for(origin, { IndexSpecPage => [root.id, other.id] })
 
     expect(index.versions(IndexSpecLandingPage, [root.id, other.id.to_s]))
-      .to eq(given + other.versions.reorder(:id).to_a)
+      .to eq(root.versions.reorder(:id).to_a + other.versions.reorder(:id).to_a)
     expect([index.loaded?(IndexSpecPage, other.id), index.loaded?(IndexSpecPage, 0)])
       .to eq([true, false])
   end
@@ -266,12 +267,12 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
       .to eq(pages.flat_map { |page| inside.call(page) })
   end
 
-  # A base class takes every row, so it reads nothing from the record index.
-  it 'keeps every record and version of a base class without reading their history' do
+  # A base class takes every row, so it reads no class from the record index.
+  it 'keeps every record and version of a base class without reading their classes' do
     origin = Time.now.utc
     page = IndexSpecPage.create!(title: 'Unloaded')
     version = page.versions.last
-    index = index_for(origin, {}, root_versions: [version])
+    index = index_for(origin, { IndexSpecPage => [page.id] })
 
     expect(index.member_ids(IndexSpecPage, [page.id, 0])).to eq([page.id, 0])
     expect(index.member_versions(IndexSpecPage, [page.id], range(origin, Time.now.utc)))
@@ -663,7 +664,7 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
   # history holds no record of (see empty_belongs_to_path_spec.rb).
   it 'finds no children for a model none of whose records were registered' do
     records = PaperTrailDiff::PreparedRecordIndex.new(Time.now.utc - 60)
-    index = described_class.new(records, [], start_at: Time.now.utc - 60)
+    index = described_class.new(records, start_at: Time.now.utc - 60)
 
     children = index.child_ids(
       TrackedArticle, [], TrackedArticle.reflect_on_association(:comments),
@@ -707,7 +708,7 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
     end
     records = PaperTrailDiff::PreparedRecordIndex.new(origin)
     records.load(TrackedComment, (1..14).to_a)
-    index = described_class.new(records, [], start_at: origin)
+    index = described_class.new(records, start_at: origin)
     relation = PaperTrail::Version.where(id: candidates.map(&:id))
 
     left_out = %w[2 10 11 14]
