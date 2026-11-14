@@ -54,4 +54,10 @@ RSpec.describe 'historical_filter given text or a date for a datetime' do
   it 'reads a date as midnight in the database time zone' do
     expect(selected(Date.new(2026, 3, 1))).to eq(['midnight UTC!'])
   end
+
+  it 'refuses a value the attribute cannot take with its own error' do
+    expect do
+      selected({})
+    end.to raise_error(PaperTrailDiff::ConfigurationError, /starts_at cannot take Hash/)
+  end
 end

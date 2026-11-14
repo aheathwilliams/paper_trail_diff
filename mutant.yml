@@ -43,6 +43,7 @@ matcher:
     - PaperTrailDiff::StoredTimePrecision*
     - PaperTrailDiff::StoredJsonValues*
     - PaperTrailDiff::TimeOfDay*
+    - PaperTrailDiff::DatabaseTime*
     - PaperTrailDiff::StoredValues*
     - PaperTrailDiff::Endpoint*
     - PaperTrailDiff::EndpointKind*
@@ -50,6 +51,7 @@ matcher:
     - PaperTrailDiff::RootVersionPlan*
     - PaperTrailDiff::RootVersionSelection*
     - PaperTrailDiff::HistoricalFilter*
+    - PaperTrailDiff::HistoricalFilterValues*
     - PaperTrailDiff::VersionScopeFilter*
     - PaperTrailDiff::TimeRange*
     - PaperTrailDiff::TransactionCut*
