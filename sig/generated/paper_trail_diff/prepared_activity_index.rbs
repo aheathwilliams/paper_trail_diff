@@ -28,8 +28,8 @@ module PaperTrailDiff
     # first for most of them.
     attr_reader children: PreparedChildCandidates
 
-    # : (PreparedRecordIndex, Array[untyped], start_at: untyped) -> void
-    def initialize: (PreparedRecordIndex, Array[untyped], start_at: untyped) -> void
+    # : (PreparedRecordIndex, start_at: untyped) -> void
+    def initialize: (PreparedRecordIndex, start_at: untyped) -> void
 
     # See PreparedRecordIndex#transaction_ends.
     # : (Array[untyped]) -> TransactionEnds
@@ -38,6 +38,9 @@ module PaperTrailDiff
     # : (untyped, Array[untyped]) -> void
     def register: (untyped, Array[untyped]) -> void
 
+    # A record's events are the versions the history loaded for it, a root of
+    # the batch's too: met in another root's tree, its versions after the
+    # window are events of that tree as well.
     # : (untyped, Array[untyped]) -> Array[untyped]
     def versions: (untyped, Array[untyped]) -> Array[untyped]
 
@@ -104,8 +107,6 @@ module PaperTrailDiff
     @nodes: Hash[String, Array[untyped]]
 
     @records: PreparedRecordIndex
-
-    @roots: Hash[Array[String], Array[untyped]]
 
     @rows: Hash[untyped, Hash[String, Array[untyped]]]
 
