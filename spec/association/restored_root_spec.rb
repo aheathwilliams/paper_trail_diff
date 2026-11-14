@@ -4,7 +4,9 @@ require_relative '../support/association_database'
 
 # A record saved again under the id of one destroyed earlier, as saving
 # `version.reify` restores it, is the same root before and after.
-RSpec.describe 'A root restored after its destruction' do
+RSpec.describe 'A root restored after its destruction',
+               mutant_expression: %w[PaperTrailDiff::ActivityTimelineBuilder
+                                     PaperTrailDiff::ActivityTransactionGroups] do
   before do
     PaperTrail::VersionAssociation.delete_all
     PaperTrail::Version.delete_all
@@ -50,6 +52,22 @@ RSpec.describe 'A root restored after its destruction' do
                          .activity_timeline.last
 
     expect(last.to_boundary).to be_destroyed
+  end
+
+  it 'reads nothing past a range that ends anywhere but a destroy' do
+    article = TrackedArticle.create!(title: 'draft')
+    article.update!(title: 'published')
+    article.update!(title: 'final')
+    first, update, = article.versions.reorder(:id).to_a
+    queries = []
+    counter = ->(*, payload) { queries << payload[:sql] }
+
+    ActiveSupport::Notifications.subscribed(counter, 'sql.active_record') do
+      PaperTrailDiff.analyze(article, from: first, to: update, associations: [:comments],
+                                      activity: true)
+    end
+
+    expect(queries.grep(/"versions"."id" > /)).to eq([])
   end
 
   # The transaction that restores it is the root's from its first event, as

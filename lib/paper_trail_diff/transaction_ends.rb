@@ -166,28 +166,27 @@ module PaperTrailDiff
                           .where(table[:created_at].eq(newest(table)))
                           .pluck(:transaction_id, version_class.primary_key)
       rows.group_by(&:first).transform_values do |tied|
-        tied.map(&:last).max_by { |id| Support.version_key(nil, id).last }
+        tied.map(&:last).max_by { |id| Support.version_key(nil, id) }
       end
     end
 
     # When the transaction of a version of `table` saved its latest dated.
     #: (untyped) -> untyped
     def newest(table)
-      dated = table.alias('paper_trail_diff_dated_versions')
+      dated = table.alias
       Support.arel::SelectManager.new.from(dated).project(dated[:created_at].maximum)
                                  .where(dated[:transaction_id].eq(table[:transaction_id]))
     end
 
-    # The last versions not held, read only for what places them.
+    # The last versions not held, read only for what places them. With
+    # none missing, the relation reads nothing.
     #: (untyped, Hash[untyped, untyped], Hash[untyped, Array[untyped]]) -> Array[untyped]
     def other(version_class, last, held)
       missing = last.reject do |number, id|
         held.fetch(number).any? { |version| version.id == id }
       end
-      return [] if missing.empty?
-
       version_class.where(version_class.primary_key => missing.values)
-                   .select(version_class.primary_key, :created_at, :transaction_id).to_a
+                   .select(version_class.primary_key, :created_at, :transaction_id)
     end
   end
 end

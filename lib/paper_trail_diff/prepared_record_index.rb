@@ -665,21 +665,26 @@ module PaperTrailDiff
     # open at it.
     #: (untyped, untyped) -> untyped
     def self.saved_before(version_class, start)
-      new([version_class], start).earlier(version_class)
+      saved = version_class.where(version_class.arel_table[:created_at].lt(start))
+      TransactionAnchors.scope(saved, version_class, start)
+                        .where(transaction_id: later(version_class, start).select(:transaction_id))
     end
+
+    # The versions saved from the start onward, of the transactions no anchor
+    # separates from it. A transaction's versions can be dated out of the
+    # order they were saved in, as when a callback saves other records before
+    # its own version, dated as its save began, so each is judged by its date.
+    #: (untyped, untyped) -> untyped
+    def self.later(version_class, start)
+      table = version_class.arel_table
+      saved = version_class.where(table[:created_at].gteq(start)).where.not(transaction_id: nil)
+      TransactionAnchors.scope(saved, version_class, start)
+    end
+    private_class_method :later
 
     #: () -> untyped
     def call
       @version_classes.filter_map { |version_class| open_at_start(version_class) }.min
-    end
-
-    # The versions saved before the start by a transaction that saved one
-    # from it onward.
-    #: (untyped) -> untyped
-    def earlier(version_class)
-      saved = version_class.where(version_class.arel_table[:created_at].lt(@start))
-      TransactionAnchors.scope(saved, version_class, @start)
-                        .where(transaction_id: later(version_class).select(:transaction_id))
     end
 
     private
@@ -692,18 +697,7 @@ module PaperTrailDiff
     def open_at_start(version_class)
       return unless version_class.column_names.include?('transaction_id')
 
-      earlier(version_class).minimum(:created_at)
-    end
-
-    # The versions saved from the start onward, of the transactions no anchor
-    # separates from it. A transaction's versions can be dated out of the
-    # order they were saved in, as when a callback saves other records before
-    # its own version, dated as its save began, so each is judged by its date.
-    #: (untyped) -> untyped
-    def later(version_class)
-      table = version_class.arel_table
-      saved = version_class.where(table[:created_at].gteq(@start)).where.not(transaction_id: nil)
-      TransactionAnchors.scope(saved, version_class, @start)
+      self.class.saved_before(version_class, @start).minimum(:created_at)
     end
   end
 end

@@ -126,6 +126,16 @@ RSpec.describe PaperTrailDiff::RecordedTransactionEnds do
     expect(ends(alone, version(102, 7)).keys).to eq([['FilterVersion', 7]])
   end
 
+  # Their transactions may end anywhere in the history, so they are asked
+  # about along with the block's versions; a live record asks nothing.
+  it 'asks about the transactions of the history for a version outside one' do
+    alone = version(101, nil)
+    other = version(102, 7)
+
+    expect(recorded.call([alone]) { [other] }.keys).to eq([['FilterVersion', 7]])
+    expect(described_class.new.call([FilterArticle.new]) { raise 'asked' }).to eq({})
+  end
+
   it 'reads 500 transactions in a statement' do
     held = Array.new(501) { |index| FilterVersion.new(id: 1000 + index, transaction_id: index) }
 

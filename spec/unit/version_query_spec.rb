@@ -50,6 +50,25 @@ RSpec.describe PaperTrailDiff::VersionQuery do
     expect(described_class.for_items(FilterArticle, [article.id])).to match_array(versions)
   end
 
+  # A version saved in the same instant comes after it when its id is
+  # higher. Another item's versions, and another type's under the same id,
+  # are not the item's own.
+  it "reads the item's versions saved after a version" do
+    article, created, reviewed, final = history(minutes: [1, 2, 2])
+    _other, *other_versions = history(minutes: [3, 4, 5])
+    FilterVersion.insert({ item_type: 'FilterNote', item_id: article.id, event: 'update',
+                           created_at: start_time + 600 })
+    earlier = FilterVersion.create!(item_type: 'FilterArticle', item_id: article.id,
+                                    event: 'update', created_at: start_time)
+
+    expect(described_class.after(FilterArticle, created)).to contain_exactly(reviewed, final)
+    expect(described_class.after(FilterArticle, reviewed)).to eq([final])
+    expect(described_class.after(FilterArticle, final)).to be_empty
+    expect(described_class.after(FilterArticle, earlier))
+      .to contain_exactly(created, reviewed, final)
+    expect(other_versions).not_to be_empty
+  end
+
   # Another item's versions, and another type's under the same id, are not
   # the item's own, earlier or not.
   it "keeps each item's earliest version, of those the block accepts" do
