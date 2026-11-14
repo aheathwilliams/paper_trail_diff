@@ -92,7 +92,8 @@ RSpec.describe 'PaperTrailDiff association tracking' do
       record,
       range: PaperTrailDiff::TimelineRange.new(record, from: from, to: to, within: nil),
       traversal: PaperTrailDiff::AssociationTraversal.new(tree),
-      snapshotter: FullSnapshotter.new(adapter.method(:snapshot_at), provider),
+      snapshotter: FullSnapshotter.new(FullSnapshotter.pt_at(adapter).method(:snapshot_at),
+                                       provider),
       view: PaperTrailDiff::ActivityView.new
     ).analyze.activity_timeline
   end
@@ -250,32 +251,27 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     end
     associations = [
       'limited_comments.replies',
-      'offset_comments.replies',
-      'owner_comments.replies'
+      'offset_comments.replies'
     ]
-    # A scope that takes the owner is read with PT-AT, whose membership is
-    # approximate; these comparisons stay inside what it reads correctly.
     expected = comparisons.to_h do |comparison|
       identity = PaperTrailDiff::Endpoint.identity(comparison.fetch(:from))
       diff = PaperTrailDiff.compare(
         comparison.fetch(:from),
         comparison.fetch(:to),
-        associations: associations, allow_approximate: true
+        associations: associations
       )
       [identity, diff.to_h]
     end
 
-    actual = PaperTrailDiff.compare_many(comparisons, associations: associations,
-                                                      allow_approximate: true)
+    actual = PaperTrailDiff.compare_many(comparisons, associations: associations)
 
     expect(actual.transform_values(&:to_h)).to eq(expected)
     expect(actual.values).to all(satisfy do |diff|
       association_diffs = diff.associations
       limited = association_diffs.fetch('limited_comments').added
       offset = association_diffs.fetch('offset_comments').added
-      owner = association_diffs.fetch('owner_comments').added
-      limited.length == 1 && offset.length == 2 && owner.length == 1 &&
-        [*limited, *offset, *owner].all? do |record|
+      limited.length == 1 && offset.length == 2 &&
+        [*limited, *offset].all? do |record|
           record.associations.fetch('replies').records.length == 1
         end
     end)
@@ -885,7 +881,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
       associations: associations,
       ignore: PaperTrailDiff::DEFAULT_IGNORED_ATTRIBUTES
     )
-    store = adapter.instance_variable_get(:@historical_store)
+    store = FullSnapshotter.pt_at(adapter).instance_variable_get(:@historical_store)
     reference = nil
     reference_queries = sql_query_count do
       reference = PaperTrailDiff::TimelineBuilder.new(
@@ -1171,7 +1167,8 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     refresher = PaperTrailDiff::ActivityEventSnapshotRefresher.new(
       traversal: traversal,
       pool: pool,
-      components: ->(_branches) { [tree, normalizer] }
+      components: ->(_branches) { [tree, normalizer] },
+      association_reader: ->(version) { PaperTrailDiff::PtAtReferenceReifier.new(version) }
     )
     comment_snapshot = PaperTrailDiff::RecordSnapshot.new(
       type: 'TrackedComment',
@@ -1842,13 +1839,6 @@ RSpec.describe 'PaperTrailDiff association tracking' do
       { before: before.reload, after: after.reload, comment: comment }
     end
 
-    def ambiguous_events(&block)
-      events = []
-      callback = proc { |name, _s, _f, _id, payload| events << [name, payload] }
-      ActiveSupport::Notifications.subscribed(callback, /paper_trail_diff/, &block)
-      events.select { |name, _| name.start_with?('ambiguous_association_boundary') }
-    end
-
     it 'places a change between tied checkpoints by id' do
       tied = tied_boundaries
 
@@ -1858,50 +1848,18 @@ RSpec.describe 'PaperTrailDiff association tracking' do
         .to eq([tied[:comment].id])
     end
 
-    it 'reports no hazard for paths read from loaded history' do
+    it 'warns of no tie for paths read from loaded history' do
       tied = tied_boundaries
-      options = { associations: %w[comments] }
+      report = PaperTrailDiff.diagnose(tied[:before], tied[:after], associations: %w[comments])
 
-      events = ambiguous_events { PaperTrailDiff.compare(tied[:before], tied[:after], **options) }
-      report = PaperTrailDiff.diagnose(tied[:before], tied[:after], **options)
-
-      expect(events).to be_empty
-      expect(report.warnings.map(&:code)).not_to include(:tied_version_timestamps)
+      expect(report.warnings.map(&:code)).to eq([])
     end
 
-    it 'warns and notifies for a path PT-AT reads, without failing the comparison' do
+    it 'refuses a path history cannot read' do
       tied = tied_boundaries
-      options = { associations: ['owner_comments'], allow_approximate: true }
-
-      events = ambiguous_events { PaperTrailDiff.compare(tied[:before], tied[:after], **options) }
-      report = PaperTrailDiff.diagnose(tied[:before], tied[:after], **options)
-
-      expect(events.map { |_, payload| payload[:version_ids] })
-        .to eq([[tied[:before].id, tied[:after].id]])
-      expect(report.warnings.map(&:code)).to include(:tied_version_timestamps)
-      # A tie only *may* hide a change, so it never becomes an error.
-      expect(report).to be_ok
-    end
-
-    it 'refuses a path PT-AT would read before reporting the tie' do
-      tied = tied_boundaries
-      events = []
-      callback = proc { |name, *| events << name }
-
-      ActiveSupport::Notifications.subscribed(callback, /ambiguous_association_boundary/) do
-        expect do
-          PaperTrailDiff.compare(tied[:before], tied[:after], associations: ['owner_comments'])
-        end.to raise_error(PaperTrailDiff::UnsupportedAssociationError, /owner_comments/)
-      end
-      expect(events).to be_empty
-    end
-
-    it 'stays silent when no associations are selected, since nothing can be lost' do
-      tied = tied_boundaries
-
-      events = ambiguous_events { PaperTrailDiff.compare(tied[:before], tied[:after]) }
-
-      expect(events).to be_empty
+      expect do
+        PaperTrailDiff.compare(tied[:before], tied[:after], associations: ['owner_comments'])
+      end.to raise_error(PaperTrailDiff::UnsupportedAssociationError, /owner_comments/)
     end
   end
 

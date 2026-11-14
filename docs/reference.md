@@ -363,8 +363,7 @@ diff.to_h
   deleted.
 - A current record must be saved, not destroyed, and have no unsaved changes.
   The gem reloads it, so in-memory edits and cached associations are ignored.
-- Options: `associations:`, `ignore:`, and `allow_approximate:` (see
-  [costly associations](#costly-associations)).
+- Options: `associations:` and `ignore:`.
 
 ## compare_many
 
@@ -388,8 +387,7 @@ diffs.fetch(["Order", orders.first.id.to_s]) # => PaperTrailDiff::Diff
   record, so `{ from: :first, to: :first }` raises.
 - A record with no versions gets an empty `Diff`.
 - Each record can appear in only one pair, because results are keyed by record.
-- Options: `associations:`, `ignore:`, and `allow_approximate:` (see
-  [costly associations](#costly-associations)).
+- Options: `associations:` and `ignore:`.
 
 If you look up versions yourself, do it in bulk. Looking up one record at a
 time brings back the per-record queries this method avoids.
@@ -434,8 +432,7 @@ analysis.to_h(snapshots: true, metadata: true)
   and `recorded_changes:` apply to the activity timeline and require
   `activity: true`.
 - Options: `from:`, `to:`, `within:`, `associations:`, `ignore:`, `activity:`,
-  `version_scope:`, `snapshots:`, `group:`, `recorded_changes:`,
-  `allow_approximate:`.
+  `version_scope:`, `snapshots:`, `group:`, `recorded_changes:`.
 
 ## timeline
 
@@ -709,7 +706,7 @@ results.fetch(["Order", order.id.to_s]).diff
   are `nil` (see [analyze](#analyze)).
 - Records must be saved and unique.
 - Options: `within:`, `associations:`, `ignore:`, `activity:`, `version_scope:`,
-  `snapshots:`, `group:`, `recorded_changes:`, `allow_approximate:`.
+  `snapshots:`, `group:`, `recorded_changes:`.
 
 ### analyze_scope
 
@@ -750,8 +747,8 @@ report = PaperTrailDiff.report(Article.all, since: 1.day.ago, limit: 100)
 ```
 
 It accepts `associations:`, `ignore:`, `version_scope:`, `snapshots:`, `group:`,
-`recorded_changes:`, `include_deleted:`, `historical_filter:`, `max_filter_versions:`,
-and `allow_approximate:`.
+`recorded_changes:`, `include_deleted:`, `historical_filter:`, and
+`max_filter_versions:`.
 
 ### Which records are selected
 
@@ -818,7 +815,7 @@ is not paginated.
 as it stood when it was destroyed, and keeps only those that match. So a report
 on `Article.where(account_id: account.id)` returns that account's deletions,
 not every account's. The relation's conditions must be plain conditions on the
-model's own columns, as a [readable association scope's](#costly-associations)
+model's own columns, as a [readable association scope's](#association-scopes)
 must, ranges and equality on a date or a time included; anything else, such
 as a join or SQL text, raises
 `ConfigurationError`. `Article.none` keeps none. Its order, limit, and offset
@@ -902,7 +899,7 @@ model instance and may run queries of its own.
 - It is accepted by `analyze_scope` and `report`, which select records from a
   relation.
 
-### Costly associations
+### Association scopes
 
 Most associations are loaded for all records together. That includes an
 association whose scope, or whose target's default scope, is plain conditions
@@ -981,25 +978,20 @@ sorts by another column type (strings follow a collation) or by a datetime
 history cannot rank exactly, scopes that take the owner
 (`->(article) { ... }`), scopes written as SQL strings, ranges on other column
 types, scopes that join or select, and conditions on other column types or
-other tables, such as a string column on MySQL. For these it asks PT-AT, which costs queries per
-record and is approximate: PT-AT rebuilds an association from its current
-members, swapping in their older versions, and never checks the scope against
-them. A record that entered the scope since is reported as a member it was
-not, so a comment moved into `-> { where("position > 2") }`, or restored from
-a soft delete, shows as changed rather than added.
+other tables, such as a string column on MySQL. Who met such a scope at a
+past point cannot be told from stored versions.
 
 So every method that reads history raises `UnsupportedAssociationError` for
-such a path and names it. Remove it from `associations:`, rewrite its scope as
-plain conditions on the target's own columns, or pass `allow_approximate:
-true` to accept PT-AT's answer, which also accepts its cost of queries per
-record in batch methods. A comparison of two current records reads no history
-and needs no opt-in.
+such a path and names it. Remove it from `associations:`, or rewrite its scope
+as plain conditions on the target's own columns. A comparison of two current
+records reads no history and accepts any scope. A composite foreign key is
+refused the same way: association history is recorded by a single id.
 
 A polymorphic `belongs_to` is loaded together too, with one query per target
 class. Its classes are known only from the records, though, so batch methods
-cannot reject one with a scope they cannot read in advance: a record that
-points at such a class is read on its own, without an error. A scope on the
-polymorphic `belongs_to` itself is rejected.
+cannot reject one with a default scope they cannot read in advance: reading a
+record that points at such a class raises `UnsupportedAssociationError`. A
+scope on the polymorphic `belongs_to` itself is rejected.
 
 This check covers known association cases only. Your model callbacks, custom
 attribute types, and callable filters can still run queries. See the
@@ -1569,9 +1561,9 @@ Only associations a request accepts are listed, so each path can be passed to
 association keyed on a column other than a primary key, one whose ends keep
 their versions in different tables, and one whose target, or a model its
 `has_many :through` goes through, has no `has_paper_trail` are left out. A path
-history can read only approximately, such as one with a scope written as SQL
-text, is listed, but requesting it also takes `allow_approximate: true` (see
-[costly associations](#costly-associations)). A `has_many :through` Active
+with a scope history cannot read, such as one written as SQL text, is listed,
+since a comparison of two current records accepts it; a request that reads
+history refuses it (see [association scopes](#association-scopes)). A `has_many :through` Active
 Record cannot follow, such as one through a polymorphic `belongs_to`, raises
 Active Record's own error from any model discovery reaches, as requesting it
 does.
@@ -1592,9 +1584,7 @@ Association checks run only for requested associations. The version-order check
 always runs. Every reason `compare` would refuse the same request is an error,
 with the message `compare` would raise, so `ok?` is false whenever `compare`
 would refuse: an unknown or unsupported association, missing association
-tracking, an unversioned target, or a path read only approximately. Pass
-`allow_approximate: true`, as you would to `compare`, and such a path is a
-warning instead. Endpoints `compare` rejects whatever their history holds,
+tracking, an unversioned target, or a path history cannot read. Endpoints `compare` rejects whatever their history holds,
 such as versions given newest first, two records, or an unsaved record, raise
 the error `compare` raises. `ok?` does not prove the history is complete.
 
@@ -1712,23 +1702,10 @@ window's starting state or diff. A transaction is open from its first
 version on the requested paths in the range, or from the range's start when
 it began before it, to the latest dated version it saved of any record in
 the same version table. Row locks keep the two from saving the same
-record. The association shapes below that fall back to PT-AT's own reifier
-still read by time.
+record.
 
 Association changes between versions with the same timestamp are placed using
-the same order. A few association shapes fall back to PT-AT's own reifier, which
-uses timestamps only: a path history reads only approximately, which takes
-`allow_approximate: true`, a composite foreign key, and a polymorphic
-`belongs_to` whose target's default scope history cannot read. The
-[architecture notes](architecture.md) list them. When a request includes such a
-path, or any polymorphic `belongs_to`, whose targets are known only per record,
-`diagnose` warns about tied timestamps and a comparison between two tied
-versions emits the `ambiguous_association_boundary.paper_trail_diff`
-notification. Recording timestamps below one second avoids the problem. On SQL Server, PT-AT compares
-those timestamps only to about 3 milliseconds (a `datetime` tick, 1/300 s),
-because the adapter writes the times in its queries that way, so for these
-shapes two versions saved closer together than that may be read in the wrong
-order.
+the same order.
 
 ### History stored as JSON
 
@@ -1797,7 +1774,6 @@ subscribe to:
 - `analyze_many.paper_trail_diff`
 - `load_live_endpoints.paper_trail_diff`
 - `prepare_history.paper_trail_diff`
-- `ambiguous_association_boundary.paper_trail_diff`
 
 ```ruby
 ActiveSupport::Notifications.subscribe(/\.paper_trail_diff\z/) do |name, start, finish, _id, payload|
@@ -1832,7 +1808,7 @@ All errors inherit from `PaperTrailDiff::Error`.
 | `FilterLimitExceededError` | `historical_filter:` needs more than `max_filter_versions:` |
 | `AssociationTrackingUnavailableError` | Association history is requested without PT-AT |
 | `UnknownAssociationError` | An association name does not exist |
-| `UnsupportedAssociationError` | An association's macro is not supported, a path continues past a polymorphic `belongs_to`, an association is a `has_and_belongs_to_many` or a `has_many :through` that goes through one, an association is keyed on a column other than a primary key, the target of a `has_one` or `has_many` declares no `belongs_to` on its foreign key, or history cannot read a [costly association](#costly-associations) and `allow_approximate: true` was not passed |
+| `UnsupportedAssociationError` | An association's macro is not supported, a path continues past a polymorphic `belongs_to`, an association is a `has_and_belongs_to_many` or a `has_many :through` that goes through one, an association is keyed on a column other than a primary key, the target of a `has_one` or `has_many` declares no `belongs_to` on its foreign key, an association has a composite foreign key, or history cannot read an [association's scope](#association-scopes) |
 | `UnversionedAssociationError` | An association's target model, or a model a `has_many :through` goes through, has no `has_paper_trail`, including the class a polymorphic `belongs_to` names |
 | `IncompleteAssociationHistoryError` | PT-AT did not record enough to rebuild an association, such as a polymorphic type that names no class |
 | `AmbiguousNestedKeyError` | `nested_changes` finds keys like `:a` and `"a"` together |

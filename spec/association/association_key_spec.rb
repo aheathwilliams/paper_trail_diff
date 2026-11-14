@@ -71,20 +71,22 @@ class KeyedSpecAuthor < ActiveRecord::Base
 end
 
 RSpec.describe PaperTrailDiff::AssociationKey do
-  describe '.scalar_foreign_key' do
-    it 'names the foreign key column, or nothing for a composite key' do
-      comments = TrackedArticle.reflect_on_association(:comments)
-      # An Array subclass, as a composite key may be, so only `is_a?` sees it.
-      composite = instance_double(ActiveRecord::Reflection::BelongsToReflection,
-                                  foreign_key: Class.new(Array).new(%w[shop_id order_id]))
-
-      expect(described_class.scalar_foreign_key(comments)).to eq('article_id')
-      expect(described_class.scalar_foreign_key(composite)).to be_nil
-    end
-  end
-
   def reason(model, name)
     described_class.unsupported_reason(model.reflect_on_association(name))
+  end
+
+  it 'refuses a composite foreign key, on the association or a part of a through' do
+    # An Array subclass, as a composite key may be, so only `is_a?` sees it.
+    key = Class.new(Array).new(%w[article_id reviewer_id])
+    comments = TrackedArticle.reflect_on_association(:comments)
+    through = TrackedAuthor.reflect_on_association(:comments)
+    allow(comments).to receive(:foreign_key).and_return(key)
+    message = 'TrackedArticle#comments has a composite foreign key, and association ' \
+              'history is recorded by a single id'
+
+    expect(described_class.unsupported_reason(comments)).to eq(message)
+    expect(described_class.unsupported_reason(through))
+      .to eq(message.sub('TrackedArticle', 'TrackedAuthor'))
   end
 
   def keyed(owner, key)

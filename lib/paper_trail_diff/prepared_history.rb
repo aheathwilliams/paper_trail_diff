@@ -109,10 +109,7 @@ module PaperTrailDiff
 
     #: (untyped, untyped, untyped, bool) -> Array[untyped]?
     def belongs_to_records(record, reflection, boundary, ranked)
-      foreign_key = AssociationKey.scalar_foreign_key(reflection)
-      return unless foreign_key
-
-      id = record.public_send(foreign_key)
+      id = record.public_send(reflection.foreign_key)
       return [] if id.nil?
 
       model_class = AssociationTraversal.belongs_to_target(reflection, record)
@@ -184,9 +181,7 @@ module PaperTrailDiff
 
     #: (untyped, untyped, untyped) -> bool
     def member_of?(child, reflection, owner)
-      foreign_key = AssociationKey.scalar_foreign_key(reflection)
-      return false unless foreign_key
-      return false unless child.public_send(foreign_key).to_s == owner.id.to_s
+      return false unless child.public_send(reflection.foreign_key).to_s == owner.id.to_s
       return false unless AssociationTraversal.sti_member?(reflection.klass, child.attributes)
       return true unless reflection.options[:as]
 

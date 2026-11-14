@@ -154,7 +154,7 @@ module PaperTrailDiff
               else
                 [AssociationActivityEdge::Child, AssociationActivityEdge::Unversioned]
               end
-      kinds.map { |kind| kind.new(reflection, @time_range) }.select(&:available?)
+      kinds.map { |kind| kind.new(reflection, @time_range) }
     end
 
     # Records with a version in the window, or only those of them `item_ids`

@@ -101,8 +101,7 @@ matcher:
     - PaperTrailDiff::ActivityView*
     - PaperTrailDiff::ActivityScopeFilter*
     - PaperTrailDiff::ActivitySnapshotDelta*
-    - PaperTrailDiff::ApproximatePaths*
-    - PaperTrailDiff::FallbackPaths*
+    - PaperTrailDiff::UnreadablePaths*
     - PaperTrailDiff::ScopeCondition*
     - PaperTrailDiff::ScopeRanking*
     - PaperTrailDiff::ExactColumnType*

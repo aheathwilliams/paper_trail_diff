@@ -20,11 +20,6 @@ module PaperTrailDiff
       @owner = reflection.active_record
     end
 
-    #: () -> bool
-    def available?
-      !@reflection.foreign_key.is_a?(Array)
-    end
-
     #: (untyped) -> untyped
     def relation(_filter)
       raise NotImplementedError, "#{self.class} must build its relation"

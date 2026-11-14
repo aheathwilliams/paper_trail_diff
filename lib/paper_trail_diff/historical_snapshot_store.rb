@@ -6,7 +6,7 @@ module PaperTrailDiff
   # configuration. It keeps the histories batches prepare, by root and by root
   # version; one prepared for a single root goes back to the caller, who
   # passes it to every read for that root.
-  class HistoricalSnapshotStore # rubocop:disable Metrics/ClassLength
+  class HistoricalSnapshotStore
     #: (traversal: AssociationTraversal, normalizer: SnapshotNormalizer, preparer: untyped) -> void
     def initialize(traversal:, normalizer:, preparer:)
       @tree = traversal.tree
@@ -147,12 +147,9 @@ module PaperTrailDiff
 
     #: (untyped, ?history: PreparedHistory?) -> untyped
     def association_reader(context_version, history: nil)
-      fallback = HistoricalAssociationReifier.new(context_version)
       # Callers pass the root's history; a batch's for the version is the rest.
       history ||= @prepared_histories[Support.row_key(context_version)]
-      return fallback unless history
-
-      PreparedAssociationReifier.new(history, context_version, fallback: fallback)
+      PreparedAssociationReifier.new(history, context_version)
     end
 
     private

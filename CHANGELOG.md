@@ -39,6 +39,26 @@ project follows [Semantic Versioning](https://semver.org/).
   `UnsupportedLiveActivityError`, which only a `has_and_belongs_to_many`
   raised, and the `habtm_transaction_shared`, `transaction_id_missing`, and
   `transaction_id_column_missing` codes of `diagnose`.
+- `allow_approximate:` is removed from every method, and no association is
+  read with PT-AT's reifier any more. An association whose scope history
+  cannot read, such as one that takes the owner or is written as SQL text,
+  raises `UnsupportedAssociationError` in every method that reads history:
+  PT-AT rebuilt it from its current members without checking the scope, so
+  a record that entered the scope since was reported as a member it was
+  not. Remove the path, or rewrite its scope as plain conditions on the
+  target's own columns. `diagnose` reports it as `unreadable_association`,
+  formerly `approximate_association`.
+- An association with a composite foreign key, or a `has_many :through`
+  that goes through one, raises `UnsupportedAssociationError`. It was read
+  with PT-AT's reifier, one record at a time and by timestamp alone.
+- A polymorphic `belongs_to` whose record points at a class with a default
+  scope history cannot read raises `UnsupportedAssociationError` when that
+  record is read, instead of being read with PT-AT's reifier.
+- The `ambiguous_association_boundary.paper_trail_diff` notification and
+  the `tied_version_timestamps` warning of `diagnose` are removed. Both
+  reported versions sharing a timestamp on a path PT-AT's reifier read;
+  every path is now read from loaded history, which orders such versions
+  by id.
 
 ### Changed
 

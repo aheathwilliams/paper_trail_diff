@@ -309,8 +309,7 @@ passes is behavior nothing checks. `mutant.yml` lists the classes it mutates:
 - where in a carried snapshot an event's record sits: `ActivityEventRouteFinder`;
 - which association paths a request accepts: `AssociationTraversal`,
   `AssociationKey`, and `VersionTable`;
-- which association paths history cannot read exactly, and whether a request
-  reads one with PT-AT: `ApproximatePaths` and `FallbackPaths`;
+- which association paths history cannot read: `UnreadablePaths`;
 - which records an association scope admits, and how it ranks them:
   `ScopeCondition`, `ScopeRanking`, and `ExactColumnType`;
 - the helpers these share, which order versions, name records, and copy

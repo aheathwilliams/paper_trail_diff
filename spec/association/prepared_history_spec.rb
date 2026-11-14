@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative '../support/association_database'
+require_relative '../support/pt_at_reference_reifier'
 
 RSpec.describe PaperTrailDiff::PreparedHistory do
   before do
@@ -36,11 +37,10 @@ RSpec.describe PaperTrailDiff::PreparedHistory do
 
   def normalize_version(version, tree, traversal, history: nil)
     record = version.reify(dup: true)
-    fallback = PaperTrailDiff::HistoricalAssociationReifier.new(version)
     reifier = if history
-                PaperTrailDiff::PreparedAssociationReifier.new(history, version, fallback: fallback)
+                PaperTrailDiff::PreparedAssociationReifier.new(history, version)
               else
-                fallback
+                PaperTrailDiff::PtAtReferenceReifier.new(version)
               end
     normalizer(tree, traversal).call(record, reifier: reifier)
   end
@@ -126,20 +126,20 @@ RSpec.describe PaperTrailDiff::PreparedHistory do
                            [second_author.id, ['Comment after', 'Added comment']]])
   end
 
-  it 'delegates a reflection when prepared resolution is unavailable' do
-    article = TrackedArticle.create!(title: 'Prepared fallback')
+  it 'refuses a reflection history cannot resolve' do
+    article = TrackedArticle.create!(title: 'Prepared refusal')
     version = article.versions.last
     reflection = TrackedArticle.reflect_on_association(:comments)
     history = instance_double(described_class)
-    fallback = instance_double(PaperTrailDiff::HistoricalAssociationReifier)
     allow(history).to receive(:resolve).and_return([false, []])
-    allow(fallback).to receive(:reify)
-    reifier = PaperTrailDiff::PreparedAssociationReifier.new(history, version, fallback: fallback)
+    message = 'association TrackedArticle#comments cannot be read from history for ' \
+              "TrackedArticle #{article.id}: who was in it at a past point cannot be told"
 
-    reifier.reify(article, [reflection])
-    reifier.reify(article, [reflection])
-
-    expect(fallback).to have_received(:reify).once.with(article, [reflection])
+    [history, nil].each do |source|
+      reifier = PaperTrailDiff::PreparedAssociationReifier.new(source, version)
+      expect { reifier.reify(article, [reflection]) }
+        .to raise_error(PaperTrailDiff::UnsupportedAssociationError, message)
+    end
   end
 
   it 'reconstructs empty optional, singular, and collection edges' do

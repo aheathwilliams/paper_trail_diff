@@ -26,8 +26,7 @@ module PaperTrailDiff
 
     #: (untyped, Array[untyped], untyped) -> Hash[String, Hash[Symbol, untyped]]
     def belongs_to_groups(owner_class, owner_ids, reflection)
-      key = AssociationKey.scalar_foreign_key(reflection)
-      return {} unless key
+      key = reflection.foreign_key
       return polymorphic_groups(owner_class, owner_ids, reflection, key) if reflection.polymorphic?
 
       group_for(reflection.klass, @records.attribute_values_for(owner_class, owner_ids, key))

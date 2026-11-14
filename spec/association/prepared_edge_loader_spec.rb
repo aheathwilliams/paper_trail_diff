@@ -293,16 +293,4 @@ RSpec.describe PaperTrailDiff::PreparedEdgeLoader do
         .to contain_exactly(recorded.id, untyped.id, blank.id)
     end
   end
-
-  it 'reads nothing for a composite foreign key' do
-    reflection = instance_double(ActiveRecord::Reflection::HasManyReflection,
-                                 belongs_to?: false, klass: TrackedComment,
-                                 foreign_key: Class.new(Array).new(%w[article_id body]))
-    article = TrackedArticle.create!(title: 'Owner')
-    edges = loader(index(nil), versions_of(article))
-
-    expect(edges.call(TrackedArticle, [article.id], reflection)).to eq({})
-    allow(reflection).to receive(:belongs_to?).and_return(true)
-    expect(edges.call(TrackedArticle, [article.id], reflection)).to eq({})
-  end
 end

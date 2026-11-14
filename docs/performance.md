@@ -26,7 +26,6 @@ for one association, at 1, 5, and 20 records:
 | Polymorphic `belongs_to` | 17 / 17 / 17 | 0 |
 | `has_many :through` with `source_type:` | 21 / 21 / 21 | 0 |
 | A `has_many` with `order(:id).limit(1)` | 14 / 18 / 33 | 0 |
-| A scope that takes the owner, read with PT-AT | 25 / 73 / 253 | 9 / 45 / 180 |
 | None, with a querying `after_initialize` | 10 / 26 / 86 | 2 / 10 / 40 |
 | None, with a callable `historical_filter:` that queries | 11 / 15 / 30 | 2 / 10 / 40 |
 
@@ -162,11 +161,6 @@ articles.
 
 ## What costs a query per record
 
-- **A path PT-AT reads.** History cannot read a few scopes, such as one that
-  takes the owner, SQL text, or a `limit` ordered by a string. PT-AT reads
-  those, one record at a time and only approximately, so every method refuses
-  them unless you pass `allow_approximate: true`. See
-  [costly associations](reference.md#costly-associations).
 - **A limited association on the current record.** Active Record's `preload`
   applies a `limit` or `offset` across all the records it loads, so each
   record's limited association is loaded on its own: one query per record.
@@ -231,8 +225,7 @@ mise exec -- bundle exec ruby benchmark/reporting.rb --case many_roots --samples
 
 `reconstruction.rb` prints the queries, `reify` calls, and model instances
 one `report` makes for a scenario and a number of records; the table above
-comes from its scenarios. `PTD_PROBE_ALLOW_APPROXIMATE=1` passes
-`allow_approximate: true`.
+comes from its scenarios.
 `reporting.rb` times `analyze_scope` over articles with no associations and,
 as `association_window`, a `report` over articles with their comments read
 through PT-AT, each in a fresh process, and records memory; `--output` keeps

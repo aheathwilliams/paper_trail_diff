@@ -22,9 +22,7 @@ module PaperTrailDiff
     def self.unsupported_reason: (untyped) -> String?
 
     # A belongs_to is recorded on the owner's own versions, and
-    # a through by its parts. PT-AT cannot record a composite key, which is
-    # read another way (see FallbackPaths), and a target without versions is
-    # refused for that.
+    # a through by its parts. A target without versions is refused for that.
     # : (untyped) -> bool
     def self.unrecorded?: (untyped) -> bool
 

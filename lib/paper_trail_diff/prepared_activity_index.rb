@@ -268,8 +268,7 @@ module PaperTrailDiff
 
     #: () -> bool
     def keyed?
-      !@through.through_reflection? && !@through.belongs_to? &&
-        !@through.foreign_key.is_a?(Array)
+      !@through.through_reflection? && !@through.belongs_to?
     end
 
     #: (Hash[untyped, untyped]) -> bool

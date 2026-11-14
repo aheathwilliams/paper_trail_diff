@@ -325,11 +325,10 @@ Scopes and default scopes made of plain conditions, such as
 primary key, such as `-> { order(:position, :id).limit(3) }`, on a direct
 association or a `has_many :through`. History cannot read a few scopes, such
 as a `limit` ordered by a string, a scope that takes the owner, or SQL text.
-PT-AT reads those instead, one record at a time and only approximately, so
-every method raises `UnsupportedAssociationError` naming the association.
-Remove it from `associations:`, or pass `allow_approximate: true` to accept
-PT-AT's answer and its cost. See
-[costly associations](docs/reference.md#costly-associations).
+Who was in such an association at a past point cannot be told, so every
+method that reads history raises `UnsupportedAssociationError` naming the
+association. Remove it from `associations:`, or rewrite its scope. See
+[association scopes](docs/reference.md#association-scopes).
 Callbacks and callable historical filters can also issue queries. See the
 [performance guide](docs/performance.md) for measured behavior and limitations.
 

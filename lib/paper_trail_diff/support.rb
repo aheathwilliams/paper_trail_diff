@@ -343,15 +343,6 @@ module PaperTrailDiff
     end
     private_class_method :version_table
 
-    # Versions sharing a timestamp, whether or not their ids order them. PT-AT
-    # indexes association membership per version but resolves it by timestamp,
-    # so association state cannot be told apart across such a pair even when the
-    # scalar sequence is perfectly recoverable.
-    #: (Array[untyped]) -> Array[untyped]?
-    def self.tied_timestamp_pair(versions)
-      versions.each_cons(2).find { |left, right| left.created_at == right.created_at }
-    end
-
     # Whether a model records history at all.
     #
     # PaperTrail defines `paper_trail` on every ActiveRecord model, so asking

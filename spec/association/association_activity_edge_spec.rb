@@ -79,18 +79,6 @@ RSpec.describe PaperTrailDiff::AssociationActivityEdge do
   end
 
   describe 'the base edge' do
-    it 'is available for a scalar foreign key only' do
-      scalar = described_class.new(reflection(TrackedComment, :article), nil)
-      composite = described_class.new(
-        instance_double(ActiveRecord::Reflection::BelongsToReflection,
-                        foreign_key: Class.new(Array).new(%w[article_id body]),
-                        active_record: TrackedComment), nil
-      )
-
-      expect(scalar.available?).to be(true)
-      expect(composite.available?).to be(false)
-    end
-
     it 'leaves the relation to each kind of edge' do
       edge = described_class.new(reflection(TrackedComment, :article), nil)
 

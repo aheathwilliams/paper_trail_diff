@@ -394,7 +394,7 @@ RSpec.describe PaperTrailDiff::ActivityTimelineBuilder do
     it 'reads the same activity from a snapshotter that rebuilds every state' do
       article, comment, from, to = edited_history
       comment.update!(body: 'live')
-      plain = FullSnapshotter.new(adapter.method(:snapshot_at), provider)
+      plain = FullSnapshotter.new(FullSnapshotter.pt_at(adapter).method(:snapshot_at), provider)
 
       activity = ->(**options) { builder(article, from: from, **options).analyze.activity_timeline }
       expected = [activity.call(to: to), activity.call(to: article, live: article)]

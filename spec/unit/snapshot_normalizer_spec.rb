@@ -7,7 +7,7 @@ RSpec.describe PaperTrailDiff::SnapshotNormalizer do
     [NormVersion, NormAuthor, NormPost, NormComment, NormCover, NormTag].each(&:delete_all)
   end
 
-  let(:reifier) { instance_spy(PaperTrailDiff::HistoricalAssociationReifier) }
+  let(:reifier) { instance_spy(PaperTrailDiff::PreparedAssociationReifier) }
 
   def tree(*paths)
     PaperTrailDiff::AssociationTree.build(paths)

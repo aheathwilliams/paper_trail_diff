@@ -4,9 +4,9 @@
 module PaperTrailDiff
   # Normalizes one event record with the historical reader for its boundary.
   class ActivityEventRecordNormalizer
-    #: (?association_reader: untyped) -> void
-    def initialize(association_reader: nil)
-      @association_reader = association_reader || method(:historical_reader)
+    #: (association_reader: untyped) -> void
+    def initialize(association_reader:)
+      @association_reader = association_reader
     end
 
     #: (untyped, reflection: untyped, subtree: AssociationTree, path: String, normalizer: SnapshotNormalizer, context_endpoint: untyped) -> RecordSnapshot?
@@ -32,13 +32,6 @@ module PaperTrailDiff
       )
     end
 
-    private
-
     # @rbs @association_reader: untyped
-
-    #: (untyped) -> HistoricalAssociationReifier
-    def historical_reader(context_endpoint)
-      HistoricalAssociationReifier.new(context_endpoint)
-    end
   end
 end

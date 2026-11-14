@@ -4,21 +4,12 @@ module PaperTrailDiff
   # PT-AT records which record a child pointed at by that record's id, and
   # history matches children to owners and targets by id. An association
   # keyed on another column (`primary_key:`) would read other records'
-  # history, so it is refused.
+  # history, and one keyed on several columns has no single id to match, so
+  # both are refused.
   module AssociationKey
     # Why the association, or a part of a through, cannot be read by id.
     # : (untyped) -> String?
     def self.unsupported_reason: (untyped) -> String?
-
-    # The association's foreign key column, or nil for a composite key, which
-    # loaded history cannot index. Active Record names a column as a string.
-    # : (untyped) -> String?
-    def self.scalar_foreign_key: (untyped) -> String?
-
-    # The reflection, or the first part of a through, keyed on a column other
-    # than its owner's or target's primary key.
-    # : (untyped) -> untyped
-    def self.keyed_part: (untyped) -> untyped
 
     # A belongs_to names a key of its target; any other macro, one of its
     # owner. A polymorphic target has no single primary key to compare with.

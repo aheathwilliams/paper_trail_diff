@@ -550,20 +550,16 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
       expect(kept).to eq(versions)
     end
 
-    # The owner's key, rows further down, or a key of two columns joins them,
-    # so no state of the row is read.
+    # The owner's key, or rows further down, joins them, so no state of the
+    # row is read.
     it 'keeps every version of join rows a key on the row alone cannot place' do
       target = IndexSpecTarget.create!
       target.update!(name: 'renamed')
       other = IndexSpecBoard.create!
       link = IndexSpecLink.create!(board_id: other.id)
       link.update!(active: false)
-      # An Array subclass, as a composite key may be, so only `is_a?` sees it.
-      composite = through(:coded_targets)
-      key = Class.new(Array).new(%w[board_id board_code])
-      allow(composite.through_reflection).to receive(:foreign_key).and_return(key)
 
-      [[owners, target, through(:target_notes)], [owners, link, composite],
+      [[owners, target, through(:target_notes)],
        [{ model: IndexSpecLink, ids: [link.id] }, board, through(:sibling_links, IndexSpecLink)]]
         .each do |owners, record, reflection|
           kept, versions = join_versions(owners, record, reflection, load: false)

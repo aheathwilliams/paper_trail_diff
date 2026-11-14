@@ -83,12 +83,6 @@ PaperTrailDiff::PreparedRecordState.prepend(Module.new do
     super()
   end
 end)
-PaperTrailDiff::HistoricalAssociationReifier.prepend(Module.new do
-  define_method(:reify) do |record, reflections|
-    counts[:fallback_reflections] += reflections.length
-    super(record, reflections)
-  end
-end)
 # Observe construction without adding callbacks that would disable the plain-state path.
 construction_trace = TracePoint.new(:call) do |event|
   if event.defined_class == ActiveRecord::Core &&
@@ -106,8 +100,6 @@ association = { 'comments' => :comments, 'comments_without_changes' => :comments
                 'source_type_through' => :linked_authors }[scenario]
 options = { since: Time.now.utc - 3600, limit: size, snapshots: true,
             associations: Array(association) }
-# A path PT-AT reads is approximate and per record.
-options[:allow_approximate] = true if ENV['PTD_PROBE_ALLOW_APPROXIMATE'] == '1'
 options[:historical_filter] = ->(state) { state.comments.exists? } if scenario == 'callable'
 model = case scenario
         when 'through_has_many' then TrackedAuthor

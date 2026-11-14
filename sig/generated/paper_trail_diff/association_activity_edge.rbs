@@ -17,9 +17,6 @@ module PaperTrailDiff
     # : (untyped, TimeRange?) -> void
     def initialize: (untyped, TimeRange?) -> void
 
-    # : () -> bool
-    def available?: () -> bool
-
     # : (untyped) -> untyped
     def relation: (untyped) -> untyped
 

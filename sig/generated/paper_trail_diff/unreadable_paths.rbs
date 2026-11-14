@@ -1,10 +1,9 @@
-# Generated from lib/paper_trail_diff/approximate_paths.rb with RBS::Inline
+# Generated from lib/paper_trail_diff/unreadable_paths.rb with RBS::Inline
 
 module PaperTrailDiff
-  # The requested paths prepared history cannot read exactly, each with why.
-  # PT-AT reads such a path instead, one record at a time, when the caller
-  # passes `allow_approximate: true`.
-  module ApproximatePaths
+  # The requested paths history cannot read, each with why: who was in one
+  # at a past point cannot be told, so a request that reads history refuses it.
+  module UnreadablePaths
     # : (AssociationTraversal, untyped) -> Array[[String, String]]
     def self.call: (AssociationTraversal, untyped) -> Array[[ String, String ]]
 
@@ -12,7 +11,7 @@ module PaperTrailDiff
     # has_one through over a ranked part is refused whole, so its parts, too,
     # are checked for conditions alone.
     # : (untyped, ranked: bool) -> String?
-    def self.fallback_reason: (untyped, ranked: bool) -> String?
+    def self.path_reason: (untyped, ranked: bool) -> String?
 
     # A scope prepared history can read as conditions on stored attributes
     # is batched like any other path. A polymorphic target's class, and so

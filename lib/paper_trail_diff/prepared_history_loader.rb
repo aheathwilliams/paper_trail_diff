@@ -141,8 +141,7 @@ module PaperTrailDiff
 
     #: (untyped, untyped, Hash[String, Hash[Symbol, untyped]]) -> void
     def mark_unsupported(owner_class, reflection, groups)
-      unsupported = reflection.foreign_key.is_a?(Array) ||
-                    groups.values.any? { |group| !versioned?(group.fetch(:model)) }
+      unsupported = groups.values.any? { |group| !versioned?(group.fetch(:model)) }
       @history.mark_unsupported(owner_class, reflection) if unsupported
     end
 

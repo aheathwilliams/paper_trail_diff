@@ -335,29 +335,4 @@ RSpec.describe PaperTrailDiff::PreparedHistoryLoader do
     load_history(article, [])
     expect(PaperTrailDiff::TransactionCut).to have_received(:range_start).once
   end
-
-  it 'marks an edge with a composite foreign key as unsupported' do
-    article = TrackedArticle.create!(title: 'Root')
-    tree = PaperTrailDiff::AssociationTree.build([])
-    loader = described_class.new(article, root_ids: [article.id],
-                                          root_versions: versions_of(article), tree: tree,
-                                          traversal: PaperTrailDiff::AssociationTraversal.new(tree),
-                                          start_at: nil, end_at: nil, live_records: [])
-    history = loader.call
-    composite = instance_double(ActiveRecord::Reflection::HasManyReflection,
-                                name: :composite,
-                                foreign_key: Class.new(Array).new(%w[article_id body]),
-                                scope: nil, klass: TrackedComment, polymorphic?: false,
-                                through_reflection?: false)
-    plain = instance_double(ActiveRecord::Reflection::HasManyReflection,
-                            name: :plain, foreign_key: 'article_id', scope: nil,
-                            klass: TrackedComment, polymorphic?: false, collection?: true,
-                            has_one?: false, through_reflection?: false)
-
-    loader.send(:mark_unsupported, TrackedArticle, composite, {})
-    loader.send(:mark_unsupported, TrackedArticle, plain, {})
-
-    expect(history.send(:supported?, TrackedArticle, composite, true)).to be(false)
-    expect(history.send(:supported?, TrackedArticle, plain, true)).to be(true)
-  end
 end
