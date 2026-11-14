@@ -77,8 +77,8 @@ RSpec.describe 'Change row sources',
       end
 
       [{}, { group: :transaction }].each do |options|
-        expect(sorted(rows(article, **options))).to eq(unread)
-        expect(sorted(rows(article, recorded_changes: true, **options))).to eq(recorded)
+        expect(sorted(rows(article, recorded_changes: false, **options))).to eq(unread)
+        expect(sorted(rows(article, **options))).to eq(recorded)
       end
     end
 
@@ -132,11 +132,11 @@ RSpec.describe 'Change row sources',
       article.update_columns(title: 'Z', author_id: 7)
       update = version_of(article)
 
-      expect(table(edits(rows(article, recorded_changes: true))))
+      expect(table(edits(rows(article))))
         .to eq([[:changed, nil, 'author_id', nil, 7, :unversioned],
                 [:changed, nil, 'title', 'A', 'B', update],
                 [:changed, nil, 'title', 'B', 'Z', :unversioned]])
-      expect(table(edits(rows(article))))
+      expect(table(edits(rows(article, recorded_changes: false))))
         .to eq([[:changed, nil, 'author_id', nil, 7, update],
                 [:changed, nil, 'title', 'A', 'Z', update]])
     end

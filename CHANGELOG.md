@@ -66,6 +66,13 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Activity reads what each version recorded unless `recorded_changes: false`
+  is passed; `recorded_changes: true` was needed before. Change rows
+  therefore credit each field's change to the version that recorded it, and
+  a write saved without a version, such as `update_columns`, gets a row of
+  its own with `unversioned?` true, instead of being credited to the
+  record's last version. `to_h(metadata: true)` on an activity step
+  includes each boundary's recorded changes.
 - A transaction now takes effect where it saved its last version, in every
   activity timeline. A window from `within:` or `since:` reports the
   transactions that end inside it, each whole and under its own versions,

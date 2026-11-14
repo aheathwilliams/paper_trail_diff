@@ -99,8 +99,16 @@ Flat query counts do not make a report's cost flat:
   article with `author.articles` and 400 events on the author's articles
   took 0.3 s when the author had 10 articles, 0.5 s with 100, and 3.4 s with
   1,000; with `associations: ["author"]`, 0.1 s for each.
-- **`snapshots: true` and `recorded_changes: true` cost memory and time.** Ask
-  for them only when you use them. Records that did not change are shared
+- **Change rows decode what each version recorded.** Activity keeps each
+  version until its rows are read, then decodes its `object_changes` to
+  credit each change to the version that recorded it. On SQLite, a `report`
+  of 2,000 articles with three comments each (16,000 versions) took 5.6 s
+  with or without them and held 77 MB against 55 MB; listing its 32,000
+  change rows then took 3.0 s against 0.4 s. `recorded_changes: false`
+  skips both, and credits a field's whole change to its record's last
+  version.
+- **`snapshots: true` costs memory.** Ask for it only when you use the
+  snapshots. Records that did not change are shared
   between steps, so the cost is modest: an activity `report` of 10,000
   articles with their 57,000 comments (114,000 versions, 49,000 steps) took
   about 40 s and held 372 MB, and 411 MB with snapshots, at the same

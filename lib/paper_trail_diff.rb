@@ -192,7 +192,7 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
     end
 
     # Builds an endpoint diff and root-checkpoint timeline while normalizing each version once.
-    #: (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: association_option, ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?, ?recorded_changes: bool) -> Analysis
+    #: (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: association_option, ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?, ?recorded_changes: bool?) -> Analysis
     def analyze( # rubocop:disable Metrics/ParameterLists
       record,
       from: nil,
@@ -204,7 +204,7 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
       version_scope: nil,
       snapshots: false,
       group: nil,
-      recorded_changes: false
+      recorded_changes: nil
     )
       PaperTrailAdapter.new(
         associations: associations, ignore: ignore, recorded_changes: recorded_changes
@@ -225,7 +225,7 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
     # returns a frozen Hash keyed by identity. Roots with nothing to report in
     # the window return an empty `Analysis`. To let a relation choose the
     # records, use `analyze_scope`.
-    #: (Array[untyped], ?within: untyped, ?associations: association_option, ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?, ?recorded_changes: bool) -> Hash[identity, Analysis]
+    #: (Array[untyped], ?within: untyped, ?associations: association_option, ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?, ?recorded_changes: bool?) -> Hash[identity, Analysis]
     def analyze_many( # rubocop:disable Metrics/ParameterLists
       records,
       within: nil,
@@ -235,7 +235,7 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
       version_scope: nil,
       snapshots: false,
       group: nil,
-      recorded_changes: false
+      recorded_changes: nil
     )
       PaperTrailAdapter.new(
         associations: associations, ignore: ignore,
@@ -271,7 +271,7 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
     # Note also that a relation selects on current state, not on state during
     # the window: `where(status: 'published')` means published *now*, which is a
     # different set from what was published while the window was open.
-    #: (untyped, limit: Integer?, ?within: untyped, ?associations: association_option, ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?, ?include_deleted: bool, ?recorded_changes: bool) -> ScopedAnalysis
+    #: (untyped, limit: Integer?, ?within: untyped, ?associations: association_option, ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?, ?include_deleted: bool, ?recorded_changes: bool?) -> ScopedAnalysis
     def analyze_scope( # rubocop:disable Metrics/ParameterLists
       scope,
       limit:,
@@ -283,7 +283,7 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
       snapshots: false,
       group: nil,
       include_deleted: false,
-      recorded_changes: false
+      recorded_changes: nil
     )
       adapter = PaperTrailAdapter.new(associations: associations, ignore: ignore,
                                       recorded_changes: recorded_changes)
@@ -298,11 +298,11 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
     # for every root that changed or whose requested associations did.
     # Historical windows remain explicit on analyze_scope; this entry point is
     # deliberately named for a report through now rather than an as-of query.
-    #: (untyped, since: untyped, limit: Integer, ?associations: association_option, ?ignore: ignore_option, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?, ?include_deleted: bool, ?recorded_changes: bool) -> ScopedAnalysis
+    #: (untyped, since: untyped, limit: Integer, ?associations: association_option, ?ignore: ignore_option, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?, ?include_deleted: bool, ?recorded_changes: bool?) -> ScopedAnalysis
     def report( # rubocop:disable Metrics/ParameterLists
       scope, since:, limit:, associations: [], ignore: DEFAULT_IGNORED_ATTRIBUTES,
       version_scope: nil, snapshots: false, group: nil, include_deleted: false,
-      recorded_changes: false
+      recorded_changes: nil
     )
       TimeRange.check_since!(since)
       # Endless, so a version a server dated ahead of this one's clock is in it.

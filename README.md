@@ -123,10 +123,9 @@ and `item_id`. Its `recorded_at` is the version's `created_at`.
 Use this source information for attribution: the version used to read the
 resulting state, exposed as `to_boundary`, may have been saved by someone else.
 A change saved without a version, such as with `update_columns`, appears in the
-step for that record's previous recorded change. To also read only what each
-version recorded, pass `recorded_changes: true` and read
-`step.source_boundary.recorded_changes`; see
-[what each event recorded](docs/reference.md#what-each-event-recorded-recorded_changes-true).
+step for that record's previous recorded change. To read only what each
+version recorded, read `step.source_boundary.recorded_changes`; see
+[what each event recorded](docs/reference.md#what-each-event-recorded).
 
 `group: :transaction` combines changes from one database transaction. Its source
 information comes from the first event in that group, and `step.sources` lists
@@ -260,10 +259,11 @@ article's new author, names the step's first event. `row.source` is the
 `ActivityBoundary` itself.
 
 A write made without a version, such as `update_columns`, shows up in the
-step of the record's previous change. Pass `recorded_changes: true` to
-`report` to tell it apart: the part of a change PaperTrail did not record
-gets a row of its own, with `row.unversioned?` true and no `version_id`,
-`event`, `whodunnit`, or `recorded_at`. To list only what versions recorded:
+step of the record's previous change. Its rows tell it apart: the part of a
+change PaperTrail did not record gets a row of its own, with
+`row.unversioned?` true and no `version_id`, `event`, `whodunnit`, or
+`recorded_at`, so it is never credited to whoever saved next. To list only
+what versions recorded:
 
 ```ruby
 recorded = report.change_rows.transform_values { |rows| rows.reject(&:unversioned?) }
@@ -281,7 +281,7 @@ author:
 ```ruby
 report = PaperTrailDiff.report(
   Article.all, since: 1.day.ago, limit: 100, associations: [:comments],
-  snapshots: true, recorded_changes: true
+  snapshots: true
 )
 
 changes = report.net_changes { |row| row.source.whodunnit }

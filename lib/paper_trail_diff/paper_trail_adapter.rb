@@ -7,13 +7,14 @@ module PaperTrailDiff
   # the only place allowed to know about both PaperTrail and the pure engine.
   # Reconstruction logic lives in the collaborators it wires together.
   class PaperTrailAdapter # rubocop:disable Metrics/ClassLength
-    # `recorded_changes:` reads what each activity boundary's version recorded.
-    #: (associations: association_option, ignore: ignore_option, ?recorded_changes: bool) -> void
-    def initialize(associations:, ignore:, recorded_changes: false)
-      Support.boolean!(:recorded_changes, recorded_changes)
+    # `recorded_changes:` reads what each activity boundary's version
+    # recorded, as activity does unless told not to.
+    #: (associations: association_option, ignore: ignore_option, ?recorded_changes: bool?) -> void
+    def initialize(associations:, ignore:, recorded_changes: nil)
+      Support.boolean!(:recorded_changes, recorded_changes) unless recorded_changes.nil?
       @association_tree = AssociationTree.build(associations)
       @ignore_policy = IgnorePolicy.build(ignore, association_paths: @association_tree.paths)
-      @recorded = (@ignore_policy if recorded_changes)
+      @recorded_changes = recorded_changes
       @traversal = AssociationTraversal.new(@association_tree)
       @traversal_preparer = TraversalPreparer.new(traversal: @traversal)
       @live_endpoints = LiveEndpointProvider.new(tree: @association_tree)
@@ -100,8 +101,9 @@ module PaperTrailDiff
 
     #: (bool, bool, Symbol?, untyped) -> ActivityView
     def activity_view(activity, snapshots, group, version_scope)
+      recorded = @recorded_changes.nil? ? activity : @recorded_changes
       ActivityView.build(activity: activity, snapshots: snapshots, group: group,
-                         recorded: @recorded, version_scope: version_scope)
+                         recorded: (@ignore_policy if recorded), version_scope: version_scope)
     end
 
     #: (untyped) -> Hash[Symbol, untyped]
@@ -231,7 +233,7 @@ module PaperTrailDiff
     # @rbs @live_endpoints: LiveEndpointProvider
     # @rbs @instrumentation_payload: Hash[Symbol, untyped]
     # @rbs @ignore_policy: IgnorePolicy
-    # @rbs @recorded: IgnorePolicy?
+    # @rbs @recorded_changes: bool?
     # @rbs @traversal: AssociationTraversal
     # @rbs @traversal_preparer: TraversalPreparer
     # @rbs @snapshot_pool: SnapshotPool

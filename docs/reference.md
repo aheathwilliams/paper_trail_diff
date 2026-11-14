@@ -23,6 +23,7 @@ including ones most applications never need.
 - [Models, schemas, and edge cases](#models-schemas-and-edge-cases)
 - [Instrumentation](#instrumentation)
 - [Errors](#errors)
+- [What results rest on](#what-results-rest-on)
 - [Limitations](#limitations)
 
 ## Words used on this page
@@ -74,7 +75,9 @@ Six things follow from this:
   with `update_columns` or with versioning off creates no version, but it
   changes the values the record's next version stores, or its current row. The
   gem reads the result of a change from there, so the write appears in the step
-  for that record's previous recorded change and is attributed to its author.
+  for that record's previous recorded change, whose source is that change's
+  version. In [change rows](#change-rows) the write has a row of its own,
+  credited to no one.
   Ending a range at a version leaves out only the writes after it. A column
   that `has_paper_trail only:` or `ignore:` leaves out of `object_changes` is
   read the same way, so a key saved with a version is that version's change.
@@ -82,9 +85,7 @@ Six things follow from this:
   in the step of the parent's previous change; pass the column in `ignore:` to
   leave it out.
   [`recorded_changes`](#what-a-version-recorded) reads what a version itself
-  recorded, and activity steps can [include it](#what-each-event-recorded-recorded_changes-true).
-  With it, [change rows](#change-rows) give such a write a row of its own,
-  credited to no one.
+  recorded, and activity steps [include it](#what-each-event-recorded).
 - **A record created without a version looks as if it always existed.** A
   row written with versioning off, or imported with `insert_all`, has no
   `create` version, so history never reports it as added: its earliest
@@ -605,17 +606,17 @@ step.from_snapshot.associations["comments"].records.first.attributes["author"]
   and by `report`.
 - [`net_changes`](#net-changes) reads them, so it needs this option.
 
-### What each event recorded: `recorded_changes: true`
+### What each event recorded
 
-A step's `diff` compares the state before and after an event. To also see what
-PaperTrail [stored with each version](#what-a-version-recorded), such as for an
-audit log, pass `recorded_changes: true`:
+A step's `diff` compares the state before and after an event. Its boundaries
+also carry what PaperTrail
+[stored with each version](#what-a-version-recorded), such as for an audit
+log:
 
 <!-- executable:reference-step-sources -->
 ```ruby
 steps = PaperTrailDiff.analyze(
-  article, associations: [:comments], activity: true, group: :transaction,
-           recorded_changes: true
+  article, associations: [:comments], activity: true, group: :transaction
 ).activity_timeline
 
 steps.reject(&:empty?).flat_map(&:sources).map do |source|
@@ -639,10 +640,14 @@ end
   for the whole call, however many steps or records share the version. Read
   them from the boundary rather than calling `PaperTrailDiff.recorded_changes`
   for its version, which decodes it again each time.
-- Without the option, `recorded_changes` raises `ConfigurationError` instead of
-  returning `nil`, so a missing option cannot look like a version that recorded
-  nothing.
-- `to_h(metadata: true)` includes them on each boundary and source.
+- `to_h(metadata: true)` includes them on each boundary and source, which
+  decodes every version's changes.
+- `recorded_changes: false` leaves them unread: a boundary's
+  `recorded_changes` then raises `ConfigurationError` instead of returning
+  `nil`, `to_h(metadata: true)` leaves them out, and
+  [change rows](#change-rows) credit a field's whole change to the last of
+  its record's versions. The boundaries of a root `timeline`, built without
+  `activity: true`, never read them.
 - Names in `ignore:`, or in `ignore: { all: }`, are left out. So are names
   ignored on the root path, `"$"`, for the root's own versions. Names ignored
   on an association path are not left out, because a child's version does not
@@ -1291,10 +1296,10 @@ Which version a row names:
 - A field's change names the version of the row's own record that made it,
   among those its step's transaction saved. Inside a transaction, a record's
   change can show up at a later event than its own, in a step another record's
-  version opens; the row still names its own record's version. With
-  `recorded_changes: true`, that is the version that recorded the field's new
-  value. Without it, the gem cannot tell which of a record's versions made
-  the change, so the row names the last of them.
+  version opens; the row still names its own record's version: the one that
+  recorded the field's new value. With `recorded_changes: false`, the gem
+  cannot tell which of a record's versions made the change, so the row names
+  the last of them.
 - A record created or destroyed names its `create` or `destroy`. Its fields
   name the version that recorded each value: the `create`, or a later save in
   the same step. A record that joined or left by its own update, such as a
@@ -1303,8 +1308,8 @@ Which version a row names:
   change, such as a new `belongs_to` target, names the step's
   `source_boundary`.
 
-With `recorded_changes: true`, a change PaperTrail did not record gets a row of
-its own: a write [saved without a version](#how-papertrail-stores-history),
+A change PaperTrail did not record gets a row of its own, unless
+`recorded_changes: false` is passed: a write [saved without a version](#how-papertrail-stores-history),
 such as `update_columns`. Its source has kind `:unversioned` and names the
 record, with no version, event, author, or time, so `to_h` has `nil` for
 `version_id`, `event`, `whodunnit`, `recorded_at`, and `transaction_id`. A
@@ -1316,7 +1321,7 @@ recorded, leave such rows out:
 <!-- executable:reference-unversioned-rows -->
 ```ruby
 analysis = PaperTrailDiff.analyze(
-  article, associations: [:comments], activity: true, recorded_changes: true
+  article, associations: [:comments], activity: true
 )
 
 analysis.change_rows.reject(&:unversioned?)
@@ -1343,13 +1348,12 @@ without a version undid, leaving the field as it was, has no row.
 `net_changes` folds change rows into one entry per record: its fields before
 the rows a block keeps, and its fields with only their changes made. This
 example keeps the rows with an author. A write saved without a version has
-none, so with `recorded_changes: true` it is left out:
+none, so it is left out:
 
 <!-- executable:reference-net-changes -->
 ```ruby
 analysis = PaperTrailDiff.analyze(
-  article, associations: [:comments], activity: true, snapshots: true,
-  recorded_changes: true
+  article, associations: [:comments], activity: true, snapshots: true
 )
 
 changes = analysis.net_changes { |row| row.source.whodunnit }
@@ -1464,15 +1468,14 @@ Other details:
   [JSON history](#history-stored-as-json), times keep the digits history
   stores and binary and `serialize`d values read as JSON stored them.
 
-For activity steps, pass `recorded_changes: true` instead of loading the
-versions again. Each step's sources then carry what their versions recorded,
-with no extra queries; see
-[what each event recorded](#what-each-event-recorded-recorded_changes-true):
+Activity steps need no such call. Each step's sources carry what their
+versions recorded, with no extra queries; see
+[what each event recorded](#what-each-event-recorded):
 
 <!-- executable:reference-recorded-changes -->
 ```ruby
 steps = PaperTrailDiff.analyze(
-  article, associations: [:comments], activity: true, recorded_changes: true
+  article, associations: [:comments], activity: true
 ).activity_timeline
 
 steps.last.source_boundary.recorded_changes
@@ -1745,13 +1748,51 @@ All errors inherit from `PaperTrailDiff::Error`.
 | `IncompleteAssociationHistoryError` | PT-AT did not record enough to rebuild an association, such as a polymorphic type that names no class |
 | `AmbiguousNestedKeyError` | `nested_changes` finds keys like `:a` and `"a"` together |
 
+## What results rest on
+
+Every result is one of three kinds. Knowing which tells you how far to trust
+it for an audit.
+
+**Recorded.** PaperTrail stored it, and the gem reads it back: a record's
+attributes at each version, each version's event, author, and time, and the
+changes a version [recorded](#what-a-version-recorded). A
+[change row](#change-rows) credited to a version is one that version
+recorded.
+
+**Rebuilt by a stated rule.** PaperTrail did not store it, so the gem derives
+it the same way every time:
+
+- *Where a transaction takes effect.* PaperTrail records which versions one
+  transaction saved, not when it committed. The gem places a transaction at
+  the last version it saved, and reports it whole there; see
+  [time windows](#time-windows). Two transactions that overlapped are
+  reported in the order of their last versions, which is usually, but not
+  provably, the order they committed in.
+- *The order of versions saved in the same instant.* By id; see
+  [version order](#version-order).
+- *Who was in an association.* PaperTrail stores no membership. The gem
+  reads each candidate's foreign key, and the columns of a
+  [scope](#association-scopes), from its own versions at that point.
+- *Which record an unordered `has_one` holds* when several match: the one
+  with the lowest primary key.
+- *A write saved without a version*, such as `update_columns`. It is seen
+  only in the state the next version stores, so it appears in the step of
+  the record's previous recorded change. Its change row is marked
+  `unversioned?`, with no author or time, since none was recorded.
+
+**Refused.** Where neither holds, a call raises instead of estimating: an
+association [scope](#association-scopes) history cannot read, a composite
+foreign key, a `has_and_belongs_to_many`, an unversioned target, or versions
+that cannot be ordered. No result is an approximation.
+
 ## Limitations
 
 Results can only be as complete as the history PaperTrail and PT-AT recorded.
 
 - Changes made with versioning off, with `update_columns`, or to `skip:` columns
   were never recorded. The first two still appear, in the step for the record's
-  previous recorded change and attributed to its author; see
+  previous recorded change, and their [change rows](#change-rows) are marked
+  `unversioned?`; see
   [how PaperTrail stores history](#how-papertrail-stores-history).
 - Deleted versions, schema changes, and serializer changes can affect how old
   versions read.
@@ -1788,10 +1829,10 @@ Results can only be as complete as the history PaperTrail and PT-AT recorded.
   its versions there: where it ends is read from one version table at a time.
 - A `has_and_belongs_to_many` has no history to read; see
   [replacing a has_and_belongs_to_many](#replacing-a-has_and_belongs_to_many).
-- PT-AT has its own
-  [limitations](https://github.com/westonganger/paper_trail-association_tracking#limitations),
-  especially for some `has_one` histories. The gem follows PT-AT's configured
-  error behavior.
+- The gem reads the rows PT-AT records with each version to find the records
+  an association held, and rebuilds every state itself. PT-AT's own
+  [limitations](https://github.com/westonganger/paper_trail-association_tracking#limitations)
+  apply to what it records, not to its reifier, which the gem does not use.
 - Deep association paths cost more to rebuild. Request only what you need.
 
 Read PaperTrail's

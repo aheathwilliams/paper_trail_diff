@@ -542,12 +542,14 @@ RSpec.describe PaperTrailDiff::ActivityTimelineBuilder do
       expect(recorded(steps.last.source_boundary)).to eq('body' => { from: 'two', to: 'three' })
     end
 
-    it 'does not read them unless asked' do
+    it 'reads them unless told not to' do
       article, _comment, from, to = edited_history
 
-      steps = timeline(article, from: from, to: to)
+      read = timeline(article, from: from, to: to)
+      unread = timeline(article, from: from, to: to, recorded_changes: false)
 
-      expect(steps.map { |step| step.from_boundary.recorded_changes? }).to all(be(false))
+      expect(read.map { |step| step.from_boundary.recorded_changes? }).to all(be(true))
+      expect(unread.map { |step| step.from_boundary.recorded_changes? }).to all(be(false))
     end
 
     it 'reads the destroy that closes a deleted root, at both of its boundaries' do

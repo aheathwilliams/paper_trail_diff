@@ -17,16 +17,16 @@ module PaperTrailDiff
   def self.compare_many: (Array[comparison_input], ?associations: association_option, ?ignore: ignore_option) -> comparison_results
 
   # Builds an endpoint diff and root-checkpoint timeline while normalizing each version once.
-  # : (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: association_option, ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?, ?recorded_changes: bool) -> Analysis
-  def self.analyze: (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: association_option, ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?, ?recorded_changes: bool) -> Analysis
+  # : (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: association_option, ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?, ?recorded_changes: bool?) -> Analysis
+  def self.analyze: (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: association_option, ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?, ?recorded_changes: bool?) -> Analysis
 
   # Analyzes an array of records over one shared range, preparing their
   # selected history once for the batch instead of once per record, and
   # returns a frozen Hash keyed by identity. Roots with nothing to report in
   # the window return an empty `Analysis`. To let a relation choose the
   # records, use `analyze_scope`.
-  # : (Array[untyped], ?within: untyped, ?associations: association_option, ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?, ?recorded_changes: bool) -> Hash[identity, Analysis]
-  def self.analyze_many: (Array[untyped], ?within: untyped, ?associations: association_option, ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?, ?recorded_changes: bool) -> Hash[identity, Analysis]
+  # : (Array[untyped], ?within: untyped, ?associations: association_option, ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?, ?recorded_changes: bool?) -> Hash[identity, Analysis]
+  def self.analyze_many: (Array[untyped], ?within: untyped, ?associations: association_option, ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?, ?recorded_changes: bool?) -> Hash[identity, Analysis]
 
   # Analyzes every root the relation reaches whose history moved inside the
   # window. With `activity: true`, a change to a record on one of the
@@ -54,15 +54,15 @@ module PaperTrailDiff
   # Note also that a relation selects on current state, not on state during
   # the window: `where(status: 'published')` means published *now*, which is a
   # different set from what was published while the window was open.
-  # : (untyped, limit: Integer?, ?within: untyped, ?associations: association_option, ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?, ?include_deleted: bool, ?recorded_changes: bool) -> ScopedAnalysis
-  def self.analyze_scope: (untyped, limit: Integer?, ?within: untyped, ?associations: association_option, ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?, ?include_deleted: bool, ?recorded_changes: bool) -> ScopedAnalysis
+  # : (untyped, limit: Integer?, ?within: untyped, ?associations: association_option, ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?, ?include_deleted: bool, ?recorded_changes: bool?) -> ScopedAnalysis
+  def self.analyze_scope: (untyped, limit: Integer?, ?within: untyped, ?associations: association_option, ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?, ?include_deleted: bool, ?recorded_changes: bool?) -> ScopedAnalysis
 
   # Recent root and selected-child activity through the current saved state,
   # for every root that changed or whose requested associations did.
   # Historical windows remain explicit on analyze_scope; this entry point is
   # deliberately named for a report through now rather than an as-of query.
-  # : (untyped, since: untyped, limit: Integer, ?associations: association_option, ?ignore: ignore_option, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?, ?include_deleted: bool, ?recorded_changes: bool) -> ScopedAnalysis
-  def self.report: (untyped, since: untyped, limit: Integer, ?associations: association_option, ?ignore: ignore_option, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?, ?include_deleted: bool, ?recorded_changes: bool) -> ScopedAnalysis
+  # : (untyped, since: untyped, limit: Integer, ?associations: association_option, ?ignore: ignore_option, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?, ?include_deleted: bool, ?recorded_changes: bool?) -> ScopedAnalysis
+  def self.report: (untyped, since: untyped, limit: Integer, ?associations: association_option, ?ignore: ignore_option, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?, ?include_deleted: bool, ?recorded_changes: bool?) -> ScopedAnalysis
 
   # Warns about deprecated options; see Deprecation.
   # : () -> untyped

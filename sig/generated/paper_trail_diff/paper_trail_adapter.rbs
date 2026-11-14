@@ -6,9 +6,10 @@ module PaperTrailDiff
   # the only place allowed to know about both PaperTrail and the pure engine.
   # Reconstruction logic lives in the collaborators it wires together.
   class PaperTrailAdapter
-    # `recorded_changes:` reads what each activity boundary's version recorded.
-    # : (associations: association_option, ignore: ignore_option, ?recorded_changes: bool) -> void
-    def initialize: (associations: association_option, ignore: ignore_option, ?recorded_changes: bool) -> void
+    # `recorded_changes:` reads what each activity boundary's version
+    # recorded, as activity does unless told not to.
+    # : (associations: association_option, ignore: ignore_option, ?recorded_changes: bool?) -> void
+    def initialize: (associations: association_option, ignore: ignore_option, ?recorded_changes: bool?) -> void
 
     # : (untyped, untyped) -> Diff
     def compare: (untyped, untyped) -> Diff
@@ -88,7 +89,7 @@ module PaperTrailDiff
 
     @normalizer: SnapshotNormalizer
 
-    @recorded: IgnorePolicy?
+    @recorded_changes: bool?
 
     @snapshot_pool: SnapshotPool
 
