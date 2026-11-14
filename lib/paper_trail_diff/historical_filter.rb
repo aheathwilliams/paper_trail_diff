@@ -141,9 +141,14 @@ module PaperTrailDiff
     # `json` or `jsonb` version column, which PaperTrail does not cast, holds
     # dates and times as strings. Casting also copies a mutable value, so the
     # filter keeps its own.
+    #
+    # `where` sends a date or text given for a datetime column to the
+    # database as it is, which reads it in its own time zone, not Time.zone.
     #: (String, untyped) -> untyped
     def cast(name, value)
-      @model.type_for_attribute(name).cast(value)
+      type = @model.type_for_attribute(name)
+      value = Support.database_time(value) if type.type == :datetime
+      type.cast(value)
     end
 
     # A value cast, then read as history can hold it (see StoredValues), so

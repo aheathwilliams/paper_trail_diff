@@ -74,13 +74,30 @@ module PaperTrailDiff
       return value.map { |item| midnight(item) } if value.instance_of?(Array)
 
       date = value.instance_of?(String) ? written_date(value) : value
-      return value unless date.instance_of?(Date)
-
-      local = constant('ActiveRecord').default_timezone == :local
-      clock = Time #: untyped
-      local ? clock.local(date.year, date.month, date.day) : clock.utc(date.year, date.month, date.day)
+      date.instance_of?(Date) ? database_time(date) : value
     end
     private_class_method :midnight
+
+    # A date, or text, given for a datetime column, as the database reads it
+    # when `where` sends it: in Active Record's default time zone, unless the
+    # text names its own offset. Anything else, and text that names no time,
+    # is returned as it is.
+    #: (untyped) -> untyped
+    def self.database_time(value)
+      return value unless value.instance_of?(Date) || value.is_a?(String)
+
+      clock = Time #: untyped
+      local = constant('ActiveRecord').default_timezone == :local
+      if value.instance_of?(Date)
+        local ? clock.local(value.year, value.month, value.day) : clock.utc(value.year, value.month, value.day)
+      elsif local
+        clock.parse(value)
+      else
+        constant('ActiveSupport::TimeZone')['UTC'].parse(value) || value
+      end
+    rescue ArgumentError
+      value
+    end
 
     #: (String) -> Date?
     def self.written_date(text)
