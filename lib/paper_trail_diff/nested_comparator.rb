@@ -61,20 +61,29 @@ module PaperTrailDiff
       end
     end
 
-    # The comparable value as a Hash key: two values that are `==` are one
-    # key. A Hash looks its keys up with `eql?`, which tells 1 from 1.0, so
-    # every number is read as a rational, at any depth. One that is not
-    # finite has none: an infinity keeps its sign, and every NaN is one key,
-    # as a database stores it (see Support.same?).
+    # The comparable value as a Hash key: two values Support.same? reads
+    # alike are one key, as the attribute diff and the walk through a hash
+    # read them. A Hash looks its keys up with `eql?`, which also tells an
+    # Integer from a BigDecimal of the same value, so every number is read as
+    # a rational beside whether it is a Float, at any depth. One that is not
+    # finite has no rational: an infinity keeps its sign, and every NaN is one
+    # key, as a database stores it.
     #: (untyped) -> untyped
     def self.countable(value)
       case value
       when Hash then string_keyed(value) { |item| countable(item) }
       when Array then value.map { |item| countable(item) }
-      when Numeric then rational(value)
+      when Numeric then number_key(value)
       else value
       end
     end
+
+    #: (Numeric) -> untyped
+    def self.number_key(number)
+      key = rational(number)
+      key.equal?(NAN) ? key : [number.instance_of?(Float), key].freeze
+    end
+    private_class_method :number_key
 
     # The number as a rational, or as it is when it has none: a complex
     # number, or one that is not finite, such as a Float or BigDecimal NaN.
