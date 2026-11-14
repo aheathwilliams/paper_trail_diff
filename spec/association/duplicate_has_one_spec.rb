@@ -34,8 +34,8 @@ RSpec.describe 'a has_one with two rows for one owner' do
   end
 
   it 'reads that row at every point, in timeline and activity alike' do
-    timeline = PaperTrailDiff.timeline(article, associations: [:profile])
-    activity = PaperTrailDiff.activity_timeline(article, associations: [:profile], snapshots: true)
+    timeline = SpecTimelines.timeline(article, associations: [:profile])
+    activity = SpecTimelines.activity_timeline(article, associations: [:profile], snapshots: true)
 
     ids = activity.map { |step| step.to_snapshot.associations.fetch('profile').records.map(&:id) }
     expect(ids.last).to eq([first.id])

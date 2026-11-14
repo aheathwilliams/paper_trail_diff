@@ -26,15 +26,6 @@ module PaperTrailDiff
       @filter = (view.version_filter unless @tree.empty?)
     end
 
-    #: () -> Array[ActivityStep]
-    def build
-      return steps_of(window_replay) if @range.time?
-      return no_steps if @range.unresolved?
-      return steps_of(current_replay) if Endpoint.record?(@to)
-
-      steps_of(version_replay)
-    end
-
     # The window the range covers, as it was asked for.
     #: () -> TimeRange?
     def window
@@ -65,12 +56,6 @@ module PaperTrailDiff
     # @rbs @ends: TransactionEnds?
     # @rbs @opening: Array[untyped]?
 
-    #: () -> Array[ActivityStep]
-    def no_steps
-      steps = [] #: Array[ActivityStep]
-      steps.freeze
-    end
-
     # Each kind of range replays into the same things, or into nil when it
     # reports no step: its plan and history, the steps it reports, ending with
     # the one that closes the range after its last event, the state it ends
@@ -80,11 +65,6 @@ module PaperTrailDiff
     def replayed(plan, history, closing, final, snapshot = nil, captured_at = nil) # rubocop:disable Metrics/ParameterLists
       steps = closing ? history.steps + [closing] : history.steps
       [plan, history, steps, final, snapshot, captured_at] unless steps.empty?
-    end
-
-    #: ([RootVersionPlan, ActivityHistory, Array[ActivityStep], RecordSnapshot?, RecordSnapshot?, untyped]?) -> Array[ActivityStep]
-    def steps_of(replay)
-      replay ? present(replay.fetch(2)) : no_steps
     end
 
     # A range that reports no step is empty, whatever its replay read: a

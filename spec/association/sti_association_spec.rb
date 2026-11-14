@@ -112,9 +112,9 @@ RSpec.describe 'An association to an STI subclass' do
     paths = { associations: %i[pinned_badges] }
 
     timelines = [
-      PaperTrailDiff.activity_timeline(owner, from: from, to: to, **paths),
-      PaperTrailDiff.activity_timeline(owner, from: from, to: owner, **paths),
-      PaperTrailDiff.activity_timeline(owner, within: window, **paths),
+      SpecTimelines.activity_timeline(owner, from: from, to: to, **paths),
+      SpecTimelines.activity_timeline(owner, from: from, to: owner, **paths),
+      SpecTimelines.activity_timeline(owner, within: window, **paths),
       PaperTrailDiff.analyze_many([owner], within: window, activity: true, **paths)
                     .values.first.activity_timeline
     ]
@@ -138,9 +138,9 @@ RSpec.describe 'An association to an STI subclass' do
     paths = { associations: %i[pinned_badges] }
 
     timelines = [
-      PaperTrailDiff.activity_timeline(owner, from: from, to: to, **paths),
-      PaperTrailDiff.activity_timeline(owner, from: from, to: owner, **paths),
-      PaperTrailDiff.activity_timeline(owner, within: window, **paths)
+      SpecTimelines.activity_timeline(owner, from: from, to: to, **paths),
+      SpecTimelines.activity_timeline(owner, from: from, to: owner, **paths),
+      SpecTimelines.activity_timeline(owner, within: window, **paths)
     ]
 
     expected = [['StiBadge', joining.id, ['joining'], [], []],
@@ -158,8 +158,8 @@ RSpec.describe 'An association to an STI subclass' do
     paths = { associations: %i[badges] }
 
     timelines = [
-      PaperTrailDiff.activity_timeline(owner, from: from, to: to, **paths),
-      PaperTrailDiff.activity_timeline(owner, within: start..Time.now.utc, **paths)
+      SpecTimelines.activity_timeline(owner, from: from, to: to, **paths),
+      SpecTimelines.activity_timeline(owner, within: start..Time.now.utc, **paths)
     ]
 
     expect(timelines.map do |steps|
@@ -181,7 +181,7 @@ RSpec.describe 'An association to an STI subclass' do
     plain_note.update!(body: 'plain 2')
     pinned_note.update!(body: 'pinned 2')
 
-    steps = PaperTrailDiff.activity_timeline(
+    steps = SpecTimelines.activity_timeline(
       owner, within: start..Time.now.utc, associations: ['pinned_badges.notes']
     )
 

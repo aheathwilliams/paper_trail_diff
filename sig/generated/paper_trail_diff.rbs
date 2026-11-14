@@ -16,15 +16,6 @@ module PaperTrailDiff
   # : (Array[comparison_input], ?associations: association_option, ?ignore: ignore_option, ?allow_approximate: bool) -> comparison_results
   def self.compare_many: (Array[comparison_input], ?associations: association_option, ?ignore: ignore_option, ?allow_approximate: bool) -> comparison_results
 
-  # Compares every adjacent reconstructed state in an inclusive version range,
-  # by default the record's whole history through its current state.
-  # : (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: association_option, ?ignore: ignore_option, ?version_scope: untyped, ?allow_approximate: bool) -> Array[Step]
-  def self.timeline: (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: association_option, ?ignore: ignore_option, ?version_scope: untyped, ?allow_approximate: bool) -> Array[Step]
-
-  # Compares adjacent root and selected-descendant activity boundaries.
-  # : (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: association_option, ?ignore: ignore_option, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?, ?recorded_changes: bool, ?allow_approximate: bool) -> Array[ActivityStep]
-  def self.activity_timeline: (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: association_option, ?ignore: ignore_option, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?, ?recorded_changes: bool, ?allow_approximate: bool) -> Array[ActivityStep]
-
   # Builds an endpoint diff and root-checkpoint timeline while normalizing each version once.
   # : (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: association_option, ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?, ?recorded_changes: bool, ?allow_approximate: bool) -> Analysis
   def self.analyze: (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: association_option, ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?, ?recorded_changes: bool, ?allow_approximate: bool) -> Analysis

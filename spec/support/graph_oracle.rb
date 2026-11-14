@@ -188,7 +188,7 @@ module Oracle
 
     def timeline(root, paths)
       list = versions(root)
-      steps = PaperTrailDiff.timeline(root, from: list.first, to: root, associations: paths)
+      steps = SpecTimelines.timeline(root, from: list.first, to: root, associations: paths)
       ends = [*list.drop(1).map { |version| @recorder.before(version.id) }, @recorder.final]
       label = "timeline #{[root.id, paths].inspect}"
       return @failures.add("#{label} step count", [steps.length, ends.length]) if
@@ -212,8 +212,8 @@ module Oracle
     end
 
     def activity_from(root, paths, from, group)
-      steps = PaperTrailDiff.activity_timeline(root, from: from, to: root, associations: paths,
-                                                     group: group, snapshots: true)
+      steps = SpecTimelines.activity_timeline(root, from: from, to: root, associations: paths,
+                                                    group: group, snapshots: true)
       label = "activity #{[root.id, paths].inspect} from #{from.id} group #{group.inspect}"
       NetChangesCheck.check(@failures, label, steps)
       if group

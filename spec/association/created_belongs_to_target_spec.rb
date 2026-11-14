@@ -37,7 +37,7 @@ RSpec.describe 'Activity when a belongs_to target is created',
     article.comments.create!(body: 'second', reviewer: reviewer)
 
     steps = nil
-    count = refreshes { steps = PaperTrailDiff.activity_timeline(article, **options) }
+    count = refreshes { steps = SpecTimelines.activity_timeline(article, **options) }
 
     expect(changes(steps)).to eq([[[:record_presence_changed, '']], [[:record_added, 'comments']],
                                   [[:record_added, 'comments']]])
@@ -50,7 +50,7 @@ RSpec.describe 'Activity when a belongs_to target is created',
     TrackedAuthor.create!(id: 4242, name: 'Late')
     comment.update!(body: 'edited')
 
-    steps = PaperTrailDiff.activity_timeline(article, **options)
+    steps = SpecTimelines.activity_timeline(article, **options)
 
     expect(changes(steps).last(2))
       .to eq([[[:record_changed, 'comments'], [:relationship_added, 'comments.reviewer']],
@@ -63,6 +63,6 @@ RSpec.describe 'Activity when a belongs_to target is created',
     reviewer = TrackedAuthor.create!(name: 'Bea')
     article.comments.create!(body: 'reviewed', reviewer: reviewer)
 
-    expect(refreshes { PaperTrailDiff.activity_timeline(article, **options) }).to eq(1)
+    expect(refreshes { SpecTimelines.activity_timeline(article, **options) }).to eq(1)
   end
 end

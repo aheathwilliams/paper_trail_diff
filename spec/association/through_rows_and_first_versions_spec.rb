@@ -158,7 +158,7 @@ RSpec.describe 'Through rows and first versions',
       as('carol') { extra.update!(label: 'edited') }
       as('dave') { extra.destroy! }
 
-      steps = PaperTrailDiff.activity_timeline(project, associations: %w[pin_user])
+      steps = SpecTimelines.activity_timeline(project, associations: %w[pin_user])
       expect(authors(steps) & %w[bob carol dave]).to eq([])
     end
   end
@@ -174,7 +174,7 @@ RSpec.describe 'Through rows and first versions',
       as('leave') { membership.update!(tf_project: other) }
       as('late') { user.update!(name: 'renamed after leaving') }
 
-      steps = PaperTrailDiff.activity_timeline(project, associations: %w[member_notes])
+      steps = SpecTimelines.activity_timeline(project, associations: %w[member_notes])
       expect(authors(steps, 'TfUser')).to eq([])
       expect(authors(steps)).to include('note', 'leave')
     end
@@ -189,7 +189,7 @@ RSpec.describe 'Through rows and first versions',
       as('goes back') { row.update!(tf_project: elsewhere) }
       as('edited again') { row.update!(role: 'y') }
 
-      steps = PaperTrailDiff.activity_timeline(root, associations: %w[members.projects])
+      steps = SpecTimelines.activity_timeline(root, associations: %w[members.projects])
       expect(authors(steps, 'TfMembership')).to eq(['arrives', 'goes back'])
     end
   end

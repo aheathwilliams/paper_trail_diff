@@ -70,7 +70,7 @@ RSpec.describe 'batched deleted association history' do
     expect(five.length).to eq(one.length)
     articles.each do |article|
       root = article.versions.order(:id).last.reify
-      expected = PaperTrailDiff.activity_timeline(
+      expected = SpecTimelines.activity_timeline(
         root, within: (Time.now.utc - 3600)..(Time.now.utc + 60),
               associations: [:comments], snapshots: true
       )

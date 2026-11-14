@@ -48,7 +48,7 @@ RSpec.describe 'Activity on a path past a belongs_to that names no record',
     note = EmptyPathNote.create!(body: 'alone')
     note.update!(body: 'still alone')
 
-    steps = PaperTrailDiff.activity_timeline(note, **options)
+    steps = SpecTimelines.activity_timeline(note, **options)
 
     expect(steps.map { |step| step.diff.attributes.keys }).to eq([[], ['body']])
     expect(steps.last.diff.associations).to be_empty
@@ -59,7 +59,7 @@ RSpec.describe 'Activity on a path past a belongs_to that names no record',
     owner = EmptyPathOwner.create!(name: 'Ann')
     note.update!(post: EmptyPathPost.create!(title: 'Post', owner: owner))
 
-    steps = PaperTrailDiff.activity_timeline(note, **options)
+    steps = SpecTimelines.activity_timeline(note, **options)
 
     joined = steps.last.diff.associations.fetch('post').relationship.to
     expect(joined.associations.fetch('owner').records.map(&:id)).to eq([owner.id])

@@ -5,6 +5,27 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Breaking changes
+
+- `PaperTrailDiff.timeline` and `PaperTrailDiff.activity_timeline` are
+  removed. Each returned what `analyze` already returns alongside its diff,
+  from the same read:
+
+  ```ruby
+  PaperTrailDiff.timeline(article, **options)
+  # becomes
+  PaperTrailDiff.analyze(article, **options).timeline
+
+  PaperTrailDiff.activity_timeline(article, **options)
+  # becomes
+  PaperTrailDiff.analyze(article, activity: true, **options).activity_timeline
+  ```
+
+  The options are the same. The `activity_timeline.paper_trail_diff`
+  notification is replaced by `analyze.paper_trail_diff`, which every
+  `analyze` emits, with the same payload; its `step_count` counts the
+  activity timeline with `activity: true` and the root timeline without.
+
 ### Changed
 
 - A transaction now takes effect where it saved its last version, in every
@@ -84,9 +105,6 @@ project follows [Semantic Versioning](https://semver.org/).
     needs it, listed once per model, and a value already frozen throughout
     is no longer walked again to keep it immutable. A report over records
     with 100-key JSON values took 2.0 s instead of 2.4 s.
-- `activity_timeline` with a `to:` that is neither a version nor a record
-  raises `InvalidTimelineRangeError`, as `timeline` and `analyze` do, instead
-  of `InvalidEndpointError`.
 
 - Association scopes, and ranges and orders in them, are read in Ruby only on
   the SQL column types the gem lists for each of SQLite, PostgreSQL, MySQL, and

@@ -54,8 +54,8 @@ RSpec.describe 'Interleaved transactions',
   # Each reported change row as its kind, comment body or field, and who
   # saved the version it is credited to.
   def rows(article, **options)
-    PaperTrailDiff.activity_timeline(article, associations: paths, **options)
-                  .flat_map(&:change_rows).map { |row| describe_row(row) }
+    SpecTimelines.activity_timeline(article, associations: paths, **options)
+                 .flat_map(&:change_rows).map { |row| describe_row(row) }
   end
 
   def describe_row(row)

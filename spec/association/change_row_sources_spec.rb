@@ -32,7 +32,7 @@ RSpec.describe 'Change row sources',
   end
 
   def rows(article, **options)
-    PaperTrailDiff.activity_timeline(
+    SpecTimelines.activity_timeline(
       article, from: article.versions.reorder(:created_at, :id).first,
                associations: [:comments], **options
     ).flat_map(&:change_rows)
@@ -90,7 +90,7 @@ RSpec.describe 'Change row sources',
         created = article.comments.create!(body: 'new')
         history.fetch(:second).destroy!
       end
-      steps = PaperTrailDiff.activity_timeline(
+      steps = SpecTimelines.activity_timeline(
         article, from: article.versions.reorder(:id).last, associations: [:comments],
                  group: :transaction
       )
@@ -146,8 +146,8 @@ RSpec.describe 'Change row sources',
 
       expect(table(edits(rows(article, recorded_changes: true))))
         .to eq([[:changed, nil, 'title', 'A', 'Z', touched]])
-      ignored = PaperTrailDiff.activity_timeline(RankIgnoringNote.find(note.id),
-                                                 recorded_changes: true).flat_map(&:change_rows)
+      ignored = SpecTimelines.activity_timeline(RankIgnoringNote.find(note.id),
+                                                recorded_changes: true).flat_map(&:change_rows)
       expect(table(edits(ignored)).map { |row| row.values_at(2, 3, 4) })
         .to eq([['rank', 1, 2], %w[title n m]])
       expect(ignored).not_to include(be_unversioned)
@@ -163,7 +163,7 @@ RSpec.describe 'Change row sources',
         comment.update!(reviewer_id: 3)
       end
 
-      rows = PaperTrailDiff.activity_timeline(
+      rows = SpecTimelines.activity_timeline(
         article, within: start.., associations: [:comments], recorded_changes: true
       ).flat_map(&:change_rows)
 
@@ -186,7 +186,7 @@ RSpec.describe 'Change row sources',
       article.update_columns(author_id: 9)
       comment.update!(article_id: article.id)
 
-      steps = PaperTrailDiff.activity_timeline(
+      steps = SpecTimelines.activity_timeline(
         article, from: article.versions.reorder(:created_at, :id).first,
                  associations: [:comments], recorded_changes: true
       )

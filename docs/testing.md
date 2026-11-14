@@ -57,7 +57,7 @@ leave it out there.
 build seeded, generated histories: root edits, checkpoints, and child creates,
 edits, and deletes. For each one they check that every route to the same answer
 agrees: `analyze`, `analyze_many`, and `analyze_scope`; checkpoint and activity
-modes; `compare` and `timeline` against `analyze`; and that activity steps
+modes; `compare` against `analyze`; and that activity steps
 chain into the final state. They run over random windows as well as the whole
 history, with integer and string `versions.item_id`, YAML and JSON history, and
 a `has_paper_trail skip:` column. When one fails, its seed reproduces it, and
@@ -96,7 +96,7 @@ share passes. `spec/oracle` compares them with the truth instead:
    not), and windows through `analyze`, `analyze_many`, and `analyze_scope`
    are compared with the recorded states. Two windows that meet between
    transactions, or inside one, must report each step once, as the window
-   spanning both does, through both `activity_timeline` and `analyze_many`.
+   spanning both does, through both `analyze` and `analyze_many`.
    The transactions take turns between no author, `alice`, and `bob`, and
    the same windows filtered to alice's versions must report exactly the
    unfiltered steps of the transactions she saved a version in.

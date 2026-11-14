@@ -18,12 +18,6 @@ module PaperTrailDiff
     # : (Array[comparison_input]) -> comparison_results
     def compare_many: (Array[comparison_input]) -> comparison_results
 
-    # : (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped) -> Array[Step]
-    def timeline: (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped) -> Array[Step]
-
-    # : (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?) -> Array[ActivityStep]
-    def activity_timeline: (untyped, from: untyped, to: untyped, within: untyped, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?) -> Array[ActivityStep]
-
     # : (untyped, from: untyped, to: untyped, within: untyped, ?activity: bool, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?) -> Analysis
     def analyze: (untyped, from: untyped, to: untyped, within: untyped, ?activity: bool, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?) -> Analysis
 

@@ -6,9 +6,6 @@ module PaperTrailDiff
     # : (untyped, from: untyped, to: untyped, snapshotter: untyped, ?within: untyped, ?version_scope: untyped, ?plan: RootVersionPlan?, ?live_endpoint: untyped) -> void
     def initialize: (untyped, from: untyped, to: untyped, snapshotter: untyped, ?within: untyped, ?version_scope: untyped, ?plan: RootVersionPlan?, ?live_endpoint: untyped) -> void
 
-    # : () -> Array[Step]
-    def build: () -> Array[Step]
-
     # The window the range covers, as it was asked for.
     # : () -> TimeRange?
     def window: () -> TimeRange?

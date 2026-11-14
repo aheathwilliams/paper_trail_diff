@@ -56,7 +56,7 @@ RSpec.describe 'An association scope history cannot read' do
 
     expect { PaperTrailDiff.compare(from, board, **options) }
       .to raise_error(PaperTrailDiff::UnsupportedAssociationError, message)
-    expect { PaperTrailDiff.activity_timeline(board, **options) }
+    expect { SpecTimelines.activity_timeline(board, **options) }
       .to raise_error(PaperTrailDiff::UnsupportedAssociationError, message)
     expect { PaperTrailDiff.analyze_many([board], **options) }
       .to raise_error(PaperTrailDiff::UnsupportedAssociationError, message)

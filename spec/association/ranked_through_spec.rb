@@ -130,9 +130,9 @@ RSpec.describe 'A has_many through a ranked part, or ranked itself, over time' d
 
     ranges.each do |(from_versions, from_live), (to_versions, to_live)|
       shelves.each do |shelf|
-        steps = PaperTrailDiff.activity_timeline(shelf, from: from_versions.fetch(shelf.id),
-                                                        to: to_versions.fetch(shelf.id),
-                                                        associations: paths, snapshots: true)
+        steps = SpecTimelines.activity_timeline(shelf, from: from_versions.fetch(shelf.id),
+                                                       to: to_versions.fetch(shelf.id),
+                                                       associations: paths, snapshots: true)
         expect([members(steps.first.from_snapshot), members(steps.last.to_snapshot)])
           .to eq([from_live.fetch(shelf.id), to_live.fetch(shelf.id)])
       end

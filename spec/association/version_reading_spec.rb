@@ -58,7 +58,7 @@ RSpec.describe 'One reading of a version',
     article, first, middle, last = crossing_history
     options = { associations: [:comments] }
     added = lambda do |from, to|
-      rows(PaperTrailDiff.activity_timeline(article, from: from, to: to, **options))
+      rows(SpecTimelines.activity_timeline(article, from: from, to: to, **options))
         .select { |row| row[1] == 'comments.body' }
     end
 
@@ -88,7 +88,7 @@ RSpec.describe 'One reading of a version',
     in_transaction(1, 'A') { article.update!(title: 'two') }
     from = article.versions.reorder(:id).last
 
-    steps = PaperTrailDiff.activity_timeline(article.reload, from: from, associations: [:comments])
+    steps = SpecTimelines.activity_timeline(article.reload, from: from, associations: [:comments])
 
     expect(rows(steps)).to contain_exactly([:changed, 'title', 'two', 'A'],
                                            [:changed, 'comments.body', 'edited', 'A'])
@@ -105,8 +105,8 @@ RSpec.describe 'One reading of a version',
     article.update!(title: 'three')
     _create, from, to = article.versions.reorder(:id).to_a
 
-    steps = PaperTrailDiff.activity_timeline(article, from: from, to: to,
-                                                      associations: [:comments])
+    steps = SpecTimelines.activity_timeline(article, from: from, to: to,
+                                                     associations: [:comments])
 
     expect(rows(steps).map(&:last)).not_to include('B')
   end
@@ -122,7 +122,7 @@ RSpec.describe 'One reading of a version',
     article.update!(title: 'three')
     created, crossed, last = article.versions.reorder(:id).to_a
     authors = lambda do |from, to|
-      rows(PaperTrailDiff.activity_timeline(article, from: from, to: to, associations: [:comments]))
+      rows(SpecTimelines.activity_timeline(article, from: from, to: to, associations: [:comments]))
         .map(&:last)
     end
 
@@ -137,8 +137,8 @@ RSpec.describe 'One reading of a version',
     in_transaction(1, 'A') { comment.update!(body: 'live') }
     from = article.versions.reorder(:id).last
 
-    steps = PaperTrailDiff.activity_timeline(article.reload, from: from, to: article,
-                                                             associations: [:comments])
+    steps = SpecTimelines.activity_timeline(article.reload, from: from, to: article,
+                                                            associations: [:comments])
 
     expect(rows(steps)).to include([:changed, 'comments.body', 'live', 'A'])
   end
@@ -152,8 +152,8 @@ RSpec.describe 'One reading of a version',
     edge = Time.now.utc
     in_transaction(1, 'A') { article.update!(title: 'three') }
     titles = lambda do |range|
-      PaperTrailDiff.activity_timeline(article.reload, within: range)
-                    .map { |step| step.diff.attributes.fetch('title').to }
+      SpecTimelines.activity_timeline(article.reload, within: range)
+                   .map { |step| step.diff.attributes.fetch('title').to }
     end
 
     expect([titles.call(start...edge), titles.call(edge..)]).to eq([%w[two], %w[three]])
@@ -188,7 +188,7 @@ RSpec.describe 'One reading of a version',
       in_transaction(1, 'A') { TrackedAuthor.create!(name: 'done') }
       gone = TrackedArticle.new(id: article.id)
 
-      steps = PaperTrailDiff.activity_timeline(gone, within: start..edge, associations: [:author])
+      steps = SpecTimelines.activity_timeline(gone, within: start..edge, associations: [:author])
 
       expect(rows(steps)).to eq([[:changed, 'author.name', 'Anne', 'B']])
     end
@@ -207,7 +207,7 @@ RSpec.describe 'One reading of a version',
     in_transaction(2, 'B') { authorship.destroy! }
     in_transaction(3, 'C') { article.update!(title: 'two') }
 
-    steps = PaperTrailDiff.activity_timeline(article.reload, associations: [:contributors])
+    steps = SpecTimelines.activity_timeline(article.reload, associations: [:contributors])
 
     expect(rows(steps).map(&:last).uniq).to eq([nil, 'C'])
     expect(steps.map { |step| step.diff.associations.keys }.flatten).to eq([])
@@ -225,8 +225,8 @@ RSpec.describe 'One reading of a version',
       in_transaction(1, 'A') { TrackedAuthor.create!(name: 'outside') }
       by_a = ->(scope) { scope.where(whodunnit: 'A') }
 
-      steps = PaperTrailDiff.activity_timeline(article, within: since.., associations: [:comments],
-                                                        version_scope: by_a)
+      steps = SpecTimelines.activity_timeline(article, within: since.., associations: [:comments],
+                                                       version_scope: by_a)
       report = PaperTrailDiff.report(TrackedArticle.all, since: since, limit: 10,
                                                          associations: [:comments],
                                                          version_scope: by_a)

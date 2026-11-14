@@ -169,7 +169,7 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
     has_and_belongs_to_many
   ].freeze
 
-  class << self # rubocop:disable Metrics/ClassLength
+  class << self
     # Compares net state between explicit PaperTrail-version or current-record endpoints.
     #: (untyped, untyped, ?associations: association_option, ?ignore: ignore_option, ?allow_approximate: bool) -> Diff
     def compare(
@@ -195,59 +195,6 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
       PaperTrailAdapter.new(
         associations: associations, ignore: ignore, allow_approximate: allow_approximate
       ).compare_many(comparisons)
-    end
-
-    # Compares every adjacent reconstructed state in an inclusive version range,
-    # by default the record's whole history through its current state.
-    #: (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: association_option, ?ignore: ignore_option, ?version_scope: untyped, ?allow_approximate: bool) -> Array[Step]
-    def timeline( # rubocop:disable Metrics/ParameterLists
-      record,
-      from: nil,
-      to: nil,
-      within: nil,
-      associations: [],
-      ignore: DEFAULT_IGNORED_ATTRIBUTES,
-      version_scope: nil,
-      allow_approximate: false
-    )
-      PaperTrailAdapter.new(
-        associations: associations, ignore: ignore, allow_approximate: allow_approximate
-      ).timeline(
-        record,
-        from: from,
-        to: to,
-        within: within,
-        version_scope: VersionScopeFilter.checked(version_scope)
-      )
-    end
-
-    # Compares adjacent root and selected-descendant activity boundaries.
-    #: (untyped, ?from: untyped, ?to: untyped, ?within: untyped, ?associations: association_option, ?ignore: ignore_option, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?, ?recorded_changes: bool, ?allow_approximate: bool) -> Array[ActivityStep]
-    def activity_timeline( # rubocop:disable Metrics/ParameterLists
-      record,
-      from: nil,
-      to: nil,
-      within: nil,
-      associations: [],
-      ignore: DEFAULT_IGNORED_ATTRIBUTES,
-      version_scope: nil,
-      snapshots: false,
-      group: nil,
-      recorded_changes: false,
-      allow_approximate: false
-    )
-      PaperTrailAdapter.new(
-        associations: associations, ignore: ignore,
-        recorded_changes: recorded_changes, allow_approximate: allow_approximate
-      ).activity_timeline(
-        record,
-        from: from,
-        to: to,
-        within: within,
-        version_scope: VersionScopeFilter.checked(version_scope),
-        group: group,
-        snapshots: snapshots
-      )
     end
 
     # Builds an endpoint diff and root-checkpoint timeline while normalizing each version once.

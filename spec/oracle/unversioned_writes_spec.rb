@@ -26,7 +26,7 @@ RSpec.describe 'Change rows against unversioned writes' do
   def each_timeline(history, **options)
     paths.each do |associations, structural|
       groups.each do |group|
-        steps = PaperTrailDiff.activity_timeline(
+        steps = SpecTimelines.activity_timeline(
           history.article, associations: associations, recorded_changes: true, group: group,
                            snapshots: true, **options
         )

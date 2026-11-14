@@ -29,8 +29,8 @@ RSpec.describe 'a window edge finer than a microsecond' do
   it 'starts the window at that microsecond in every method' do
     expected = [{ from: 'A', to: 'B' }, { from: 'B', to: 'C' }]
 
-    expect(titles(PaperTrailDiff.timeline(article, within: edge..))).to eq(expected)
-    expect(titles(PaperTrailDiff.activity_timeline(article, within: edge..))).to eq(expected)
+    expect(titles(SpecTimelines.timeline(article, within: edge..))).to eq(expected)
+    expect(titles(SpecTimelines.activity_timeline(article, within: edge..))).to eq(expected)
     analysis = PaperTrailDiff.analyze_many([article], within: edge.., activity: true).values.sole
     expect(titles(analysis.activity_timeline)).to eq(expected)
   end

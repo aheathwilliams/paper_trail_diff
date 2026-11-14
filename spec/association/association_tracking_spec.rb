@@ -102,7 +102,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
       traversal: PaperTrailDiff::AssociationTraversal.new(tree),
       snapshotter: FullSnapshotter.new(adapter.method(:snapshot_at), provider),
       view: PaperTrailDiff::ActivityView.new
-    ).build
+    ).analyze.activity_timeline
   end
 
   def article_with_graph
@@ -533,7 +533,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     expect(tags.changed.fetch(0).attributes.fetch('name').to_h)
       .to eq(from: 'Kept before', to: 'Kept after')
 
-    step_tags = PaperTrailDiff.timeline(
+    step_tags = SpecTimelines.timeline(
       graph[:article],
       from: before,
       to: after,
@@ -579,8 +579,8 @@ RSpec.describe 'PaperTrailDiff association tracking' do
       end
       by_second = article.versions.reload.last
 
-      steps = PaperTrailDiff.activity_timeline(article, from: by_first, to: by_second,
-                                                        associations: [:tags])
+      steps = SpecTimelines.activity_timeline(article, from: by_first, to: by_second,
+                                                       associations: [:tags])
 
       credited = steps.reject(&:empty?).map do |step|
         [step.source_boundary.whodunnit, step.diff.associations.keys]
@@ -599,9 +599,9 @@ RSpec.describe 'PaperTrailDiff association tracking' do
         habtm_boundary_for(article)
       end
 
-      steps = PaperTrailDiff.activity_timeline(article, from: by_first,
-                                                        to: article.versions.reload.last,
-                                                        associations: [:tags])
+      steps = SpecTimelines.activity_timeline(article, from: by_first,
+                                                       to: article.versions.reload.last,
+                                                       associations: [:tags])
 
       credited = steps.reject(&:empty?).map do |step|
         [step.source_boundary.whodunnit, step.diff.associations.keys]
@@ -630,8 +630,8 @@ RSpec.describe 'PaperTrailDiff association tracking' do
 
       { [:tags] => [[], %w[early late]],
         %i[tags comments] => [[], %w[early], %w[early late]] }.each do |paths, expected|
-        steps = PaperTrailDiff.activity_timeline(article, from: first, to: checkpoint,
-                                                          associations: paths, snapshots: true)
+        steps = SpecTimelines.activity_timeline(article, from: first, to: checkpoint,
+                                                         associations: paths, snapshots: true)
         names = steps.map do |step|
           step.to_snapshot.associations.fetch('tags').records.map do |tag|
             tag.attributes.fetch('name')
@@ -686,7 +686,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     [after, root].each do |to|
       expect { PaperTrailDiff.compare(before, to, **options) }.to raise_error(*error)
     end
-    expect { PaperTrailDiff.activity_timeline(root, from: before, to: after, **options) }
+    expect { SpecTimelines.activity_timeline(root, from: before, to: after, **options) }
       .to raise_error(*error)
     expect(PaperTrailDiff.diagnose(before, after, **options).errors.map { |e| [e.code, e.message] })
       .to match([[:unsupported_association, error.last]])
@@ -734,9 +734,9 @@ RSpec.describe 'PaperTrailDiff association tracking' do
       expect { PaperTrailDiff.compare_many(comparisons, **options) }.to raise_error(*error)
       expect { PaperTrailDiff.analyze(root, from: shared, to: after, **options) }
         .to raise_error(*error)
-      expect { PaperTrailDiff.timeline(root, from: shared, to: after, **options) }
+      expect { SpecTimelines.timeline(root, from: shared, to: after, **options) }
         .to raise_error(*error)
-      expect { PaperTrailDiff.activity_timeline(root, from: shared, to: after, **options) }
+      expect { SpecTimelines.activity_timeline(root, from: shared, to: after, **options) }
         .to raise_error(*error)
 
       [after, root].each do |to|
@@ -817,7 +817,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     graph[:kept_comment].update!(body: 'Timeline after')
     after = boundary_for(graph[:article])
 
-    steps = PaperTrailDiff.timeline(
+    steps = SpecTimelines.timeline(
       graph[:article],
       from: graph[:before],
       to: after,
@@ -834,7 +834,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     graph[:reply].update!(body: 'Timeline nested after')
     after = boundary_for(graph[:article])
 
-    steps = PaperTrailDiff.timeline(
+    steps = SpecTimelines.timeline(
       graph[:article],
       from: graph[:before],
       to: after,
@@ -903,7 +903,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     graph[:reply].update!(body: 'Reply after')
     after = boundary_for(graph[:article])
 
-    steps = PaperTrailDiff.activity_timeline(
+    steps = SpecTimelines.activity_timeline(
       graph[:article],
       from: graph[:before],
       to: after,
@@ -922,7 +922,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     expect(reply.attributes.fetch('body').to_h)
       .to eq(from: 'Nested before', to: 'Reply after')
 
-    empty = PaperTrailDiff.activity_timeline(
+    empty = SpecTimelines.activity_timeline(
       graph[:article],
       from: graph[:before],
       to: graph[:before]
@@ -930,7 +930,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     expect(empty).to eq([])
     expect(empty).to be_frozen
     expect do
-      PaperTrailDiff.activity_timeline(
+      SpecTimelines.activity_timeline(
         graph[:article],
         from: after,
         to: graph[:before]
@@ -938,30 +938,37 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     end.to raise_error(PaperTrailDiff::InvalidTimelineRangeError, /must not follow/)
   end
 
-  it 'emits total activity timeline timing and work metadata' do
+  it 'emits total analysis timing and work metadata' do
     graph = article_with_graph
     graph[:reply].update!(body: 'Instrumented reply')
     after = boundary_for(graph[:article])
     events = []
     callback = proc { |*args| events << args.last.dup }
 
-    steps = ActiveSupport::Notifications.subscribed(
-      callback,
-      'activity_timeline.paper_trail_diff'
-    ) do
-      PaperTrailDiff.activity_timeline(
-        graph[:article],
-        from: graph[:before],
-        to: after,
-        associations: ['comments.replies']
-      )
+    analysis = ActiveSupport::Notifications.subscribed(callback, 'analyze.paper_trail_diff') do
+      PaperTrailDiff.analyze(graph[:article], from: graph[:before], to: after, activity: true,
+                                              associations: ['comments.replies'])
     end
 
     expect(events).to contain_exactly(
       association_paths: ['comments', 'comments.replies'],
       model_type: 'TrackedArticle',
-      step_count: steps.length
+      step_count: analysis.activity_timeline.length
     )
+  end
+
+  it 'counts the root timeline when an analysis reports no activity' do
+    article = TrackedArticle.create!(title: 'Counted')
+    article.update!(title: 'Recounted')
+    events = []
+    callback = proc { |*args| events << args.last.dup }
+
+    analysis = ActiveSupport::Notifications.subscribed(callback, 'analyze.paper_trail_diff') do
+      PaperTrailDiff.analyze(article)
+    end
+
+    expect(events.map { |event| event[:step_count] }).to eq([analysis.timeline.length])
+    expect(analysis.timeline.length).to be_positive
   end
 
   it 'reuses prepared successor states across repeated child updates' do
@@ -971,7 +978,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     %w[First Second Third].each { |body| comment.update!(body: body) }
     after = boundary_for(article)
 
-    optimized = PaperTrailDiff.activity_timeline(
+    optimized = SpecTimelines.activity_timeline(
       article,
       from: before,
       to: after,
@@ -1014,7 +1021,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     trailing.update_columns(created_at: range_start + 7200)
     window = range_start...(range_start + 3600)
 
-    steps = PaperTrailDiff.activity_timeline(
+    steps = SpecTimelines.activity_timeline(
       graph[:article],
       within: window,
       associations: ['comments.replies']
@@ -1050,7 +1057,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     after = boundary_for(article)
     comment.update!(article: article)
 
-    steps = PaperTrailDiff.activity_timeline(
+    steps = SpecTimelines.activity_timeline(
       article,
       from: before,
       to: after,
@@ -1067,7 +1074,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     range_start = Time.now.utc
     graph[:kept_comment].update!(body: 'No trailing checkpoint')
 
-    steps = PaperTrailDiff.activity_timeline(
+    steps = SpecTimelines.activity_timeline(
       graph[:article], within: range_start..Time.now.utc, associations: [:comments]
     ).reject(&:empty?)
 
@@ -1089,7 +1096,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
         to: after,
         associations: associations
       )
-      PaperTrailDiff.activity_timeline(
+      SpecTimelines.activity_timeline(
         graph[:article],
         from: graph[:before],
         to: after,
@@ -1129,7 +1136,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
       to: after,
       associations: associations
     )
-    activity = PaperTrailDiff.activity_timeline(
+    activity = SpecTimelines.activity_timeline(
       graph[:article],
       from: before,
       to: after,
@@ -1221,7 +1228,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     after = boundary_for(graph[:article])
     associations = ['author.comments', 'comments.replies', 'profile']
 
-    optimized = PaperTrailDiff.activity_timeline(
+    optimized = SpecTimelines.activity_timeline(
       graph[:article],
       from: graph[:before],
       to: after,
@@ -1248,7 +1255,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     after = boundary_for(article)
     associations = ['comments.replies']
 
-    optimized = PaperTrailDiff.activity_timeline(
+    optimized = SpecTimelines.activity_timeline(
       article,
       from: before,
       to: after,
@@ -1278,7 +1285,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     associations = ['author', 'comments.replies', 'profile']
 
     optimized_queries = sql_query_count do
-      PaperTrailDiff.activity_timeline(
+      SpecTimelines.activity_timeline(
         graph[:article],
         from: graph[:before],
         to: after,
@@ -1311,7 +1318,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     after = boundary_for(article)
 
     work = database_work do
-      steps = PaperTrailDiff.activity_timeline(
+      steps = SpecTimelines.activity_timeline(
         article,
         from: before,
         to: after,
@@ -1336,7 +1343,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     after = boundary_for(article)
 
     work = database_work do
-      PaperTrailDiff.activity_timeline(
+      SpecTimelines.activity_timeline(
         article,
         from: before,
         to: after,
@@ -1360,7 +1367,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     after = boundary_for(article)
 
     work = database_work do
-      steps = PaperTrailDiff.activity_timeline(
+      steps = SpecTimelines.activity_timeline(
         article,
         from: before,
         to: after,
@@ -1388,7 +1395,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     after = boundary_for(article)
 
     work = database_work do
-      PaperTrailDiff.activity_timeline(
+      SpecTimelines.activity_timeline(
         article,
         from: before,
         to: after,
@@ -1412,7 +1419,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     after = boundary_for(article)
     associations = ['comments.reviewer']
 
-    optimized = PaperTrailDiff.activity_timeline(
+    optimized = SpecTimelines.activity_timeline(
       article,
       from: before,
       to: after,
@@ -1594,7 +1601,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     end
 
     def steps_for(article, **options)
-      PaperTrailDiff.activity_timeline(
+      SpecTimelines.activity_timeline(
         article, from: :first, to: article, associations: [:comments], **options
       )
     end
@@ -1895,7 +1902,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     graph[:kept_comment].update!(body: 'Live activity comment')
     graph[:reply].update!(body: 'Live activity reply')
 
-    steps = PaperTrailDiff.activity_timeline(
+    steps = SpecTimelines.activity_timeline(
       graph[:article],
       from: graph[:before],
       to: graph[:article],
@@ -1924,7 +1931,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     transient = graph[:article].comments.create!(body: 'Live transient')
     transient.destroy!
 
-    changed = PaperTrailDiff.activity_timeline(
+    changed = SpecTimelines.activity_timeline(
       graph[:article],
       from: graph[:before],
       to: graph[:article],
@@ -1941,7 +1948,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     graph = article_with_graph
 
     expect do
-      PaperTrailDiff.activity_timeline(
+      SpecTimelines.activity_timeline(
         graph[:article],
         from: graph[:before],
         to: graph[:article],
@@ -1957,13 +1964,13 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     window_end = Time.now.utc
 
     expect do
-      PaperTrailDiff.activity_timeline(graph[:article], within: window_start..window_end,
-                                                        associations: [:tags])
+      SpecTimelines.activity_timeline(graph[:article], within: window_start..window_end,
+                                                       associations: [:tags])
     end.to raise_error(PaperTrailDiff::UnsupportedLiveActivityError, /HABTM/)
 
     habtm_boundary_for(graph[:article])
-    steps = PaperTrailDiff.activity_timeline(graph[:article], within: window_start..window_end,
-                                                              associations: [:tags])
+    steps = SpecTimelines.activity_timeline(graph[:article], within: window_start..window_end,
+                                                             associations: [:tags])
     expect(steps.map { |step| step.to_boundary.kind }).to all(eq(:version))
   end
 
@@ -1974,7 +1981,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     transient.destroy!
     after = boundary_for(graph[:article])
 
-    changed = PaperTrailDiff.activity_timeline(
+    changed = SpecTimelines.activity_timeline(
       graph[:article],
       from: graph[:before],
       to: after,
@@ -1999,7 +2006,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     after = boundary_for(article)
     associations = ['comments.replies']
 
-    steps = PaperTrailDiff.activity_timeline(
+    steps = SpecTimelines.activity_timeline(
       article,
       from: before,
       to: after,
@@ -2022,7 +2029,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     transient.destroy!
     after = boundary_for(graph[:article])
 
-    optimized = PaperTrailDiff.activity_timeline(
+    optimized = SpecTimelines.activity_timeline(
       graph[:article],
       from: graph[:before],
       to: after,
@@ -2056,7 +2063,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     tag.update!(name: 'Activity after')
     after = habtm_boundary_for(graph[:article])
 
-    changed = PaperTrailDiff.activity_timeline(
+    changed = SpecTimelines.activity_timeline(
       graph[:article],
       from: before,
       to: after,
@@ -2274,7 +2281,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     it 'retains the states each step was compared between' do
       article, = edited_article
 
-      steps = PaperTrailDiff.activity_timeline(
+      steps = SpecTimelines.activity_timeline(
         article, from: :first, to: article, associations: ['comments'], snapshots: true
       )
 
@@ -2290,7 +2297,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     it 'keeps them absent unless asked for, since they hold the whole graph' do
       article, = edited_article
 
-      steps = PaperTrailDiff.activity_timeline(
+      steps = SpecTimelines.activity_timeline(
         article, from: :first, to: article, associations: ['comments']
       )
 
@@ -2302,7 +2309,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
       article, = edited_article
       start_at = PaperTrail::Version.order(:id).first.created_at
 
-      steps = PaperTrailDiff.activity_timeline(
+      steps = SpecTimelines.activity_timeline(
         article, within: start_at..(Time.now.utc + 86_400),
                  associations: ['comments'], snapshots: true
       )
@@ -2339,7 +2346,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     it 'closes an activity timeline on current state' do
       article, window = open_window_article
 
-      steps = PaperTrailDiff.activity_timeline(article, within: window, associations: ['comments'])
+      steps = SpecTimelines.activity_timeline(article, within: window, associations: ['comments'])
 
       expect(steps.last.to_boundary.kind).to eq(:current)
       expect(steps.last.diff.attributes.fetch('title').to_h).to eq(from: 'Start', to: 'Revised')
@@ -2351,7 +2358,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
       # root version would not see it at all. A window reaching now must.
       article.comments.create!(body: 'Added after the final root version')
 
-      steps = PaperTrailDiff.activity_timeline(
+      steps = SpecTimelines.activity_timeline(
         article, within: window, associations: ['comments']
       )
 
@@ -2432,7 +2439,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     it 'reads the state each selected mutation started from, not the one before the run' do
       article, users = filtered_gap_history
 
-      steps = PaperTrailDiff.timeline(article, version_scope: users, associations: ['comments'])
+      steps = SpecTimelines.timeline(article, version_scope: users, associations: ['comments'])
 
       expect(steps.map { |step| step.from_version.whodunnit }).to eq(%w[alice alice bob])
       expect(titles(steps)).to eq([nil, ['Start', 'By Alice'], ['System 3', 'By Bob']])
@@ -2454,8 +2461,8 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     it 'reports only the changes the filter keeps, each from the state before it' do
       article, users = filtered_gap_history
 
-      steps = PaperTrailDiff.activity_timeline(article, version_scope: users,
-                                                        associations: ['comments'])
+      steps = SpecTimelines.activity_timeline(article, version_scope: users,
+                                                       associations: ['comments'])
 
       # Every version is still replayed, so leaving out the system's steps
       # moves none of their changes into the steps that remain.
@@ -2473,8 +2480,8 @@ RSpec.describe 'PaperTrailDiff association tracking' do
       window = start_at..PaperTrail::Version.order(:id).last.created_at
       users = ->(scope) { scope.where.not(whodunnit: nil) }
 
-      steps = PaperTrailDiff.activity_timeline(article, within: window, version_scope: users,
-                                                        associations: ['comments'])
+      steps = SpecTimelines.activity_timeline(article, within: window, version_scope: users,
+                                                       associations: ['comments'])
 
       # Nothing follows a destroy, so it pairs into no step and the rule that
       # drops unrevealed mutations would drop it. The absence it leaves is what
@@ -2490,8 +2497,8 @@ RSpec.describe 'PaperTrailDiff association tracking' do
       versions = PaperTrail::Version.where(item_type: 'TrackedArticle').order(:id).to_a
       window = versions.fetch(1).created_at..versions.fetch(5).created_at
 
-      steps = PaperTrailDiff.timeline(article, within: window, version_scope: users,
-                                               associations: ['comments'])
+      steps = SpecTimelines.timeline(article, within: window, version_scope: users,
+                                              associations: ['comments'])
 
       expect(steps.map { |step| step.from_version.whodunnit }).to eq(%w[alice bob])
       expect(titles(steps)).to eq([['Start', 'By Alice'], ['System 3', 'By Bob']])

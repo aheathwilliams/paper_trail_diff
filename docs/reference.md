@@ -10,9 +10,8 @@ including ones most applications never need.
 - [Choosing a method](#choosing-a-method)
 - [Choosing a range](#choosing-a-range)
 - [compare](#compare) and [compare_many](#compare_many)
-- [timeline](#timeline)
-- [activity_timeline](#activity_timeline)
-- [analyze](#analyze)
+- [analyze](#analyze), with its [timeline](#timeline) and
+  [activity_timeline](#activity_timeline)
 - [Reports for many records](#reports-for-many-records):
   `analyze_many`, `analyze_scope`, `report`
 - [Associations](#associations)
@@ -30,7 +29,7 @@ including ones most applications never need.
 
 | Word | Meaning |
 | --- | --- |
-| Root record | The record you ask about, such as the article in `timeline(article)` |
+| Root record | The record you ask about, such as the article in `analyze(article)` |
 | Child | An associated record you include with `associations:`, such as a comment |
 | Current state | The record's saved values in the database right now |
 | Snapshot | A read-only copy of a record's data at one point, returned by this gem |
@@ -107,15 +106,14 @@ Six things follow from this:
 | --- | --- |
 | Net difference between two versions, or a version and the current record | `compare(from, to)` |
 | The same for a list of `{ from:, to: }` pairs, one per record | `compare_many(pairs)` |
-| Each change to one record, version by version | `timeline(record)` |
-| Each change to one record and its chosen associations, with who made it | `activity_timeline(record, associations: ...)` |
-| Net difference and timeline together | `analyze(record)` |
-| The same, plus the activity timeline | `analyze(record, activity: true)` |
+| Net difference and each change to one record, version by version | `analyze(record)`, then `diff` and `timeline` |
+| The same, plus each change to its chosen associations, with who made it | `analyze(record, associations: ..., activity: true)`, then `activity_timeline` |
 | Analyses for an array of records | `analyze_many(records)` |
 | Analyses for the records a relation selects, over a time window | `analyze_scope(scope, within:, limit:)` |
 | Recent activity through now, for the records a relation selects | `report(scope, since:, limit:)` |
 
-`timeline` and `activity_timeline` differ in which versions become steps. Given
+An analysis's `timeline` and `activity_timeline` differ in which versions
+become steps. Given
 an article with two comment edits between two article versions:
 
 ```text
@@ -135,14 +133,14 @@ belongs to one recorded event, which is what you need to show who did what.
 
 ## Choosing a range
 
-`timeline`, `activity_timeline`, and `analyze` cover the record's whole history
-through its current state unless you say otherwise:
+`analyze` covers the record's whole history through its current state unless
+you say otherwise:
 
 ```ruby
-PaperTrailDiff.timeline(article)                          # all of it
-PaperTrailDiff.timeline(article, from: some_version)      # from a version to now
-PaperTrailDiff.timeline(article, from: :first, to: later_version)
-PaperTrailDiff.timeline(article, within: 1.week.ago..Time.current)
+PaperTrailDiff.analyze(article)                          # all of it
+PaperTrailDiff.analyze(article, from: some_version)      # from a version to now
+PaperTrailDiff.analyze(article, from: :first, to: later_version)
+PaperTrailDiff.analyze(article, within: 1.week.ago..Time.current)
 ```
 
 - `from:` defaults to `:first`, the record's earliest version.
@@ -170,7 +168,7 @@ and `...` excludes it, which is useful for back-to-back windows:
 
 ```ruby
 window = Time.zone.parse("2026-08-01")...Time.zone.parse("2026-09-01")
-steps = PaperTrailDiff.timeline(article, within: window)
+steps = PaperTrailDiff.analyze(article, within: window).timeline
 ```
 
 A bound is read to the microsecond, as adapters write it into SQL, so a
@@ -208,7 +206,7 @@ places a transaction alike, whichever of its records the window reads. A
 version table whose ids do not count up, such as one keyed by UUID, names the
 last version by when it was saved. Without associations, each version of the
 record is reported where it was saved, since nothing else of its transaction
-is read. `timeline`, and `analyze` without `activity:`, compare the record's
+is read. `analyze` without `activity:` compares the record's
 own versions, and report each where it was saved too. With associations, the
 records around each of those versions still read as they stood before every
 transaction that had not ended yet, so an associated record's change is
@@ -252,12 +250,12 @@ open transactions, so it cannot tell when a window has settled.
 To show what the window's last change produced, the gem reads the state just
 before the next change after the window:
 
-- With `activity_timeline`, or `analyze` with `activity: true`, that is the next
+- With `activity: true`, that is the next
   version of the record or of any record on a requested association path. If
   none was recorded after the window, it reads the current record instead,
   and the last step's `to_boundary.kind` is `:current`. So a window that ended
   long ago ends at its own end, even when only a comment changed since.
-- `timeline`, and `analyze` without `activity:`, compare the record's own
+- Without `activity:`, `analyze` compares the record's own
   versions. The last step runs to the record's next version, or to the
   current record when it has none, and an association change made in between
   is part of that step, credited to its author. Use `activity: true` to keep
@@ -271,7 +269,7 @@ in the step for that record's last recorded change.
 If the window's last change destroyed the record, the window closes on that
 deletion instead. See [a destroyed record](#a-destroyed-record).
 
-`timeline` returns no steps for a window with no versions of the root record.
+`timeline` holds no steps for a window with no versions of the root record.
 `activity_timeline` still reports chosen associations that changed in such a
 window.
 
@@ -283,11 +281,10 @@ relation and returns a narrower one:
 ```ruby
 user_edits = ->(scope) { scope.where.not(whodunnit: nil) }
 
-PaperTrailDiff.timeline(article, within: window, version_scope: user_edits)
+PaperTrailDiff.analyze(article, within: window, version_scope: user_edits)
 ```
 
-It is accepted by `timeline`, `activity_timeline`, `analyze`, `analyze_many`,
-`analyze_scope`, and `report`. It may return the relation narrowed, or an
+It is accepted by `analyze`, `analyze_many`, `analyze_scope`, and `report`. It may return the relation narrowed, or an
 array of versions taken from it. Anything else, such as a relation on another
 class or an array of IDs, raises `ConfigurationError`.
 
@@ -303,7 +300,7 @@ class or an array of IDs, raises `ConfigurationError`.
 - `timeline` looks at the root record's versions only, so someone who only
   edited comments has none for it to report. Activity reports their changes:
   see [one person's changes](#one-persons-changes).
-- In activity (`activity_timeline`, `activity: true`, and `report`), it
+- In activity (`activity: true`, and `report`), it
   chooses the changes on the requested associations as well. A transaction is
   reported whole, every step of it, when the filter keeps any version saved
   in it, of whichever record: PT-AT shows a transaction's changes together, at
@@ -396,14 +393,57 @@ diffs.fetch(["Order", orders.first.id.to_s]) # => PaperTrailDiff::Diff
 If you look up versions yourself, do it in bulk. Looking up one record at a
 time brings back the per-record queries this method avoids.
 
+## analyze
+
+`analyze(record)` returns an `Analysis` with the net `diff` and the `timeline`
+for one range, reading each version once:
+
+```ruby
+analysis = PaperTrailDiff.analyze(article, associations: ["comments.replies"], activity: true)
+
+analysis.diff              # net change over the range
+analysis.timeline          # one step per version of the record
+analysis.activity_timeline # nil unless activity: true
+analysis.from_snapshot     # the full state at the start (nil before creation)
+analysis.to_snapshot       # the full state at the end
+analysis.window            # the time window it covers, or nil without within:
+analysis.to_h(snapshots: true, metadata: true)
+```
+
+- See [choosing a range](#choosing-a-range) for `from:`, `to:`, and `within:`.
+- `from_snapshot` is the record as it was when the range began: before the
+  first change in a window, or before the change of the version you passed as
+  `from:`. With `version_scope:`, a window begins at the first change the
+  filter keeps, on the record or, with `activity: true`, on its associations.
+  It is `nil` when the record was created inside the range; the state right
+  after it was created is then the first activity step's `to_snapshot`, which
+  `snapshots: true` keeps.
+- To read the record at one version, with its values typed and its
+  associations, take `from_snapshot` from a range that starts there:
+  `PaperTrailDiff.analyze(article, from: version, to: article).from_snapshot`.
+  Don't decode `version.object` yourself; the gem casts what PaperTrail
+  stores, which a `json` column or an enum leaves in another form.
+- When nothing in the range is reported, the analysis is empty: an empty
+  `diff` and timelines, and `nil` for `from_snapshot` and `to_snapshot`. Here
+  `nil` means no state was read, not that the record did not exist; reading
+  one would rebuild the record's whole graph, a cost per record in a batch.
+  Use `compare` with a version and the record to see a state that did not
+  change.
+- `activity: true` also builds the activity timeline. `snapshots:`, `group:`,
+  and `recorded_changes:` apply to the activity timeline and require
+  `activity: true`.
+- Options: `from:`, `to:`, `within:`, `associations:`, `ignore:`, `activity:`,
+  `version_scope:`, `snapshots:`, `group:`, `recorded_changes:`,
+  `allow_approximate:`.
+
 ## timeline
 
-`timeline(record)` returns one step for each pair of neighboring versions of the
-root record, ending at its current state by default. See
+An analysis's `timeline` holds one step for each pair of neighboring versions
+of the root record, ending at its current state by default. See
 [choosing a range](#choosing-a-range) for `from:`, `to:`, and `within:`.
 
 ```ruby
-steps = PaperTrailDiff.timeline(article)
+steps = PaperTrailDiff.analyze(article).timeline
 
 steps.first.diff            # a PaperTrailDiff::Diff
 steps.first.empty?          # true if nothing reported changed
@@ -425,17 +465,17 @@ steps.reject(&:empty?)      # hide steps with no reported changes
   step. `from` and `to` are boundary hashes with `kind`, `version_id`,
   `item_type`, `item_id`, and `recorded_at`. `to_h(metadata: true)` adds author,
   event, transaction ID, and record to each boundary.
-- Options: `from:`, `to:`, `within:`, `associations:`, `ignore:`,
-  `version_scope:`, `allow_approximate:`.
 
 ## activity_timeline
 
-`activity_timeline(record, associations: ...)` returns one step for each
-recorded event of the root record **or** a chosen association. It ends at the
-current record by default.
+With `activity: true`, an analysis's `activity_timeline` holds one step for
+each recorded event of the root record **or** a chosen association. It ends at
+the current record by default.
 
 ```ruby
-steps = PaperTrailDiff.activity_timeline(article, associations: ["comments.replies", :author])
+steps = PaperTrailDiff.analyze(
+  article, associations: ["comments.replies", :author], activity: true
+).activity_timeline
 
 steps.reject(&:empty?).each do |step|
   step.source_boundary.whodunnit # who made this change
@@ -463,9 +503,6 @@ end
   `to_h(snapshots: true)` adds the retained snapshots.
 - A child's change becomes visible at the next recorded event, or at the
   current record. You do not need to save the article after each comment change.
-- Options: `from:`, `to:`, `within:`, `associations:`, `ignore:`,
-  `version_scope:`, `snapshots:`, `group:`, `recorded_changes:`,
-  `allow_approximate:`.
 
 ### One person's changes
 
@@ -476,9 +513,10 @@ a version in, on the record or on its associations:
 <!-- executable:readme-person-scope -->
 ```ruby
 priya = ->(versions) { versions.where(whodunnit: "Priya Shah") }
-steps = PaperTrailDiff.activity_timeline(
-  article, within: window, associations: %i[comments tags], version_scope: priya
-)
+steps = PaperTrailDiff.analyze(
+  article, within: window, associations: %i[comments tags], activity: true,
+           version_scope: priya
+).activity_timeline
 
 steps.map { |step| step.source_boundary.whodunnit }.uniq  # ["Priya Shah"]
 ```
@@ -488,9 +526,9 @@ To count everyone's changes from one read, group the steps in Ruby by
 
 <!-- executable:readme-person-changes -->
 ```ruby
-steps = PaperTrailDiff.activity_timeline(
-  article, within: window, associations: %i[comments tags]
-)
+steps = PaperTrailDiff.analyze(
+  article, within: window, associations: %i[comments tags], activity: true
+).activity_timeline
 
 attributed = steps.reject(&:empty?)
 by_priya = attributed.select { |step| step.source_boundary.whodunnit == "Priya Shah" }
@@ -503,7 +541,7 @@ authors = attributed.group_by { |step| step.source_boundary.whodunnit }
 ```
 
 For many records, use `report` or `analyze_many(..., activity: true)` instead of
-calling `activity_timeline` in a loop, so the database work is shared. With
+calling `analyze` in a loop, so the database work is shared. With
 `version_scope:`, `report` selects only the records that person changed.
 
 ### One step per transaction: `group: :transaction`
@@ -513,7 +551,7 @@ action shows up as several steps. `group: :transaction` combines steps from the
 same database transaction:
 
 ```ruby
-PaperTrailDiff.activity_timeline(article, associations: [:comments], group: :transaction)
+PaperTrailDiff.analyze(article, associations: [:comments], activity: true, group: :transaction)
 ```
 
 - A combined step compares the state before the transaction with the state after
@@ -537,8 +575,8 @@ PaperTrailDiff.activity_timeline(article, associations: [:comments], group: :tra
   transaction's changes to associated records are read once it has ended
   (see [version order](#version-order)), so they appear in the group of its
   last run; the changes its root versions record appear in their own runs.
-- Also accepted by `analyze`, `analyze_many`, and `analyze_scope` with
-  `activity: true`, and by `report`.
+- Also accepted by `analyze_many` and `analyze_scope` with `activity: true`,
+  and by `report`.
 
 Without grouping, a step inside a transaction can look empty. A child's new
 value is only visible at the next recorded event, and inside a transaction that
@@ -553,7 +591,9 @@ A step's `diff` holds only what changed. To show unchanged fields too, such as
 a comment's author next to an edited comment body, keep the snapshots:
 
 ```ruby
-steps = PaperTrailDiff.activity_timeline(article, associations: [:comments], snapshots: true)
+steps = PaperTrailDiff.analyze(
+  article, associations: [:comments], activity: true, snapshots: true
+).activity_timeline
 
 step = steps.reject(&:empty?).last
 step.from_snapshot.associations["comments"].records.first.attributes["author"]
@@ -563,8 +603,8 @@ step.from_snapshot.associations["comments"].records.first.attributes["author"]
   do use memory, because each one contains every chosen association.
 - `from_snapshot` is `nil` for a step starting at a `create` version, because the
   record did not exist yet.
-- Also accepted by `analyze`, `analyze_many`, and `analyze_scope` with
-  `activity: true`, and by `report`.
+- Also accepted by `analyze_many` and `analyze_scope` with `activity: true`,
+  and by `report`.
 - [`net_changes`](#net-changes) reads them, so it needs this option.
 
 ### What each event recorded: `recorded_changes: true`
@@ -575,9 +615,10 @@ audit log, pass `recorded_changes: true`:
 
 <!-- executable:reference-step-sources -->
 ```ruby
-steps = PaperTrailDiff.activity_timeline(
-  article, associations: [:comments], group: :transaction, recorded_changes: true
-)
+steps = PaperTrailDiff.analyze(
+  article, associations: [:comments], activity: true, group: :transaction,
+           recorded_changes: true
+).activity_timeline
 
 steps.reject(&:empty?).flat_map(&:sources).map do |source|
   {
@@ -670,49 +711,6 @@ membership from before that change again. The gem then reports the change late,
 or reports a member that never left as removed and added again. Load the record
 again, with `find`, before saving it a second time, and save checkpoints from a
 freshly loaded record, as the [checkpoint recipe](#saving-a-checkpoint) does.
-
-## analyze
-
-`analyze(record)` returns an `Analysis` with the net `diff` and the `timeline`
-for one range, reading each version once:
-
-```ruby
-analysis = PaperTrailDiff.analyze(article, associations: ["comments.replies"], activity: true)
-
-analysis.diff              # net change over the range
-analysis.timeline          # the same steps timeline returns
-analysis.activity_timeline # nil unless activity: true
-analysis.from_snapshot     # the full state at the start (nil before creation)
-analysis.to_snapshot       # the full state at the end
-analysis.window            # the time window it covers, or nil without within:
-analysis.to_h(snapshots: true, metadata: true)
-```
-
-- It accepts the same ranges as `timeline`.
-- `from_snapshot` is the record as it was when the range began: before the
-  first change in a window, or before the change of the version you passed as
-  `from:`. With `version_scope:`, a window begins at the first change the
-  filter keeps, on the record or, with `activity: true`, on its associations.
-  It is `nil` when the record was created inside the range; the state right
-  after it was created is then the first activity step's `to_snapshot`, which
-  `snapshots: true` keeps.
-- To read the record at one version, with its values typed and its
-  associations, take `from_snapshot` from a range that starts there:
-  `PaperTrailDiff.analyze(article, from: version, to: article).from_snapshot`.
-  Don't decode `version.object` yourself; the gem casts what PaperTrail
-  stores, which a `json` column or an enum leaves in another form.
-- When nothing in the range is reported, the analysis is empty: an empty
-  `diff` and timelines, and `nil` for `from_snapshot` and `to_snapshot`. Here
-  `nil` means no state was read, not that the record did not exist; reading
-  one would rebuild the record's whole graph, a cost per record in a batch.
-  Use `compare` with a version and the record to see a state that did not
-  change.
-- `activity: true` also builds the activity timeline. `snapshots:`, `group:`,
-  and `recorded_changes:` apply to the activity timeline and require
-  `activity: true`.
-- Options: `from:`, `to:`, `within:`, `associations:`, `ignore:`, `activity:`,
-  `version_scope:`, `snapshots:`, `group:`, `recorded_changes:`,
-  `allow_approximate:`.
 
 ## Reports for many records
 
@@ -1540,9 +1538,9 @@ with no extra queries; see
 
 <!-- executable:reference-recorded-changes -->
 ```ruby
-steps = PaperTrailDiff.activity_timeline(
-  article, associations: [:comments], recorded_changes: true
-)
+steps = PaperTrailDiff.analyze(
+  article, associations: [:comments], activity: true, recorded_changes: true
+).activity_timeline
 
 steps.last.source_boundary.recorded_changes
 ```
@@ -1765,7 +1763,8 @@ subscribe to:
 
 - `compare.paper_trail_diff`
 - `compare_many.paper_trail_diff`
-- `activity_timeline.paper_trail_diff` (includes `step_count`)
+- `analyze.paper_trail_diff` (includes `step_count`, the length of
+  `activity_timeline` with `activity: true` and of `timeline` without)
 - `analyze_many.paper_trail_diff`
 - `load_live_endpoints.paper_trail_diff`
 - `prepare_history.paper_trail_diff`

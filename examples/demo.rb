@@ -119,7 +119,7 @@ section 'What changed between an early draft and now?' do
 end
 
 section 'Every checkpoint in order' do
-  PaperTrailDiff.timeline(article).reject(&:empty?).each do |step|
+  PaperTrailDiff.analyze(article).timeline.reject(&:empty?).each do |step|
     who = step.from_boundary.whodunnit.to_s.ljust(7)
     change = step.diff.attributes['title']
     if change
@@ -133,9 +133,9 @@ section 'Every checkpoint in order' do
 end
 
 section 'Who changed what, including nested records' do
-  steps = PaperTrailDiff.activity_timeline(
-    article, from: :first, to: article, associations: [:comments]
-  )
+  steps = PaperTrailDiff.analyze(
+    article, from: :first, to: article, associations: [:comments], activity: true
+  ).activity_timeline
   steps.reject(&:empty?).each do |step|
     subject = step.from_boundary.item_type
     detail = step.diff.attributes.keys + step.diff.associations.keys
@@ -144,9 +144,9 @@ section 'Who changed what, including nested records' do
 end
 
 section "Just one person's work" do
-  steps = PaperTrailDiff.activity_timeline(
-    article, from: :first, to: article, associations: [:comments]
-  )
+  steps = PaperTrailDiff.analyze(
+    article, from: :first, to: article, associations: [:comments], activity: true
+  ).activity_timeline
   by_jon = steps.reject(&:empty?).select { |step| step.from_boundary.whodunnit == 'Jon' }
   puts "  Jon made #{by_jon.length} change(s), including to records that are not the article:"
   by_jon.each do |step|

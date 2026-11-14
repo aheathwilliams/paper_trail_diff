@@ -15,9 +15,6 @@ module PaperTrailDiff
     # : (untyped, range: TimelineRange, snapshotter: untyped, view: ActivityView, traversal: AssociationTraversal) -> void
     def initialize: (untyped, range: TimelineRange, snapshotter: untyped, view: ActivityView, traversal: AssociationTraversal) -> void
 
-    # : () -> Array[ActivityStep]
-    def build: () -> Array[ActivityStep]
-
     # The window the range covers, as it was asked for.
     # : () -> TimeRange?
     def window: () -> TimeRange?
@@ -49,9 +46,6 @@ module PaperTrailDiff
 
     @view: ActivityView
 
-    # : () -> Array[ActivityStep]
-    def no_steps: () -> Array[ActivityStep]
-
     # Each kind of range replays into the same things, or into nil when it
     # reports no step: its plan and history, the steps it reports, ending with
     # the one that closes the range after its last event, the state it ends
@@ -59,9 +53,6 @@ module PaperTrailDiff
     # timeline's closing step reads.
     # : (RootVersionPlan, ActivityHistory, ActivityStep?, RecordSnapshot?, ?RecordSnapshot?, ?untyped) -> [RootVersionPlan, ActivityHistory, Array[ActivityStep], RecordSnapshot?, RecordSnapshot?, untyped]?
     def replayed: (RootVersionPlan, ActivityHistory, ActivityStep?, RecordSnapshot?, ?RecordSnapshot?, ?untyped) -> [ RootVersionPlan, ActivityHistory, Array[ActivityStep], RecordSnapshot?, RecordSnapshot?, untyped ]?
-
-    # : ([RootVersionPlan, ActivityHistory, Array[ActivityStep], RecordSnapshot?, RecordSnapshot?, untyped]?) -> Array[ActivityStep]
-    def steps_of: ([ RootVersionPlan, ActivityHistory, Array[ActivityStep], RecordSnapshot?, RecordSnapshot?, untyped ]?) -> Array[ActivityStep]
 
     # A range that reports no step is empty, whatever its replay read: a
     # version filter may keep nothing in it, or only the version that ends it,

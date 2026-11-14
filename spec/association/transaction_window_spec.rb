@@ -89,7 +89,7 @@ RSpec.describe 'Windows that meet inside a transaction',
     [article.reload, comment.versions.last, WindowComment.find_by!(body: 'new').versions.first]
   end
 
-  def steps(article, within, method: :activity_timeline, group: nil)
+  def steps(article, within, method: :analyze, group: nil)
     timeline(article, within, method, group).reject(&:empty?).map do |step|
       [step.sources.map(&:version_id), step.diff.attributes.keys, changed_keys(step)]
     end
@@ -97,7 +97,7 @@ RSpec.describe 'Windows that meet inside a transaction',
 
   def timeline(article, within, method, group)
     options = { within: within, associations: paths, group: group }
-    return PaperTrailDiff.activity_timeline(article, **options) unless method == :analyze_many
+    return SpecTimelines.activity_timeline(article, **options) unless method == :analyze_many
 
     PaperTrailDiff.analyze_many([article], activity: true, **options).values.first.activity_timeline
   end
@@ -121,7 +121,7 @@ RSpec.describe 'Windows that meet inside a transaction',
   end
 
   groups = [nil, :transaction]
-  %i[activity_timeline analyze_many].each do |method|
+  %i[analyze analyze_many].each do |method|
     groups.each do |group|
       context "with #{method} (group: #{group.inspect})" do
         it 'reports a transaction split by the edge in the later window' do
@@ -260,8 +260,8 @@ RSpec.describe 'Windows that meet inside a transaction',
   it 'closes a window read again from where such a transaction began when it read the row' do
     article, _child, root = comment_then_article
 
-    closing = PaperTrailDiff.activity_timeline(article, within: root.created_at..,
-                                                        associations: paths).last.to_boundary
+    closing = SpecTimelines.activity_timeline(article, within: root.created_at..,
+                                                       associations: paths).last.to_boundary
 
     expect(closing.kind).to eq(:current)
     expect(closing.recorded_at).to be_within(60).of(Time.now.utc)

@@ -150,11 +150,11 @@ Read the changes between each pair of article versions:
 
 <!-- executable:quickstart-timeline -->
 ```ruby
-steps = PaperTrailDiff.timeline(
+steps = PaperTrailDiff.analyze(
   article,
   from: draft_version,
   to: final_version
-)
+).timeline
 
 steps.map do |step|
   change = step.diff.attributes["title"]
@@ -168,7 +168,7 @@ visible_steps = steps.reject(&:empty?)
 Each item in `steps` has a `diff`, just like the comparison above. Steps with
 no reported changes are kept; `reject(&:empty?)` removes them for display.
 
-Without `from:` and `to:`, `PaperTrailDiff.timeline(article)` reads the whole
+Without `from:` and `to:`, `PaperTrailDiff.analyze(article)` reads the whole
 history through the current saved article, including the change to
 `"Archived"`. Pass a version as `to:` when the result should stay the same after
 later edits.
@@ -180,7 +180,7 @@ Use `within:` to choose changes by their PaperTrail version's `created_at`:
 <!-- executable:quickstart-time-range -->
 ```ruby
 window = draft_version.created_at...final_version.created_at
-ranged_steps = PaperTrailDiff.timeline(article, within: window)
+ranged_steps = PaperTrailDiff.analyze(article, within: window).timeline
 
 ranged_steps.map do |step|
   change = step.diff.attributes["title"]
@@ -225,11 +225,10 @@ For one article, use a window ending now:
 
 <!-- executable:quickstart-current-window -->
 ```ruby
-current_steps = PaperTrailDiff.timeline(article, within: 1.day.ago..Time.current)
+current_steps = PaperTrailDiff.analyze(article, within: 1.day.ago..Time.current).timeline
 ```
 
-The same `within:` option works on `activity_timeline`, `analyze`,
-`analyze_many`, and `analyze_scope`.
+The same `within:` option works on `analyze_many` and `analyze_scope`.
 
 ## 6. Choose a method
 
@@ -237,10 +236,8 @@ The same `within:` option works on `activity_timeline`, `analyze`,
 | --- | --- |
 | Net difference between two versions, or a version and the current record | `compare(from, to)` |
 | The same for a list of `{ from:, to: }` pairs, one per record | `compare_many(pairs)` |
-| Each change to one record, version by version | `timeline(record)` |
-| Each change to one record and its chosen associations, with who made it | `activity_timeline(record, associations: ...)` |
-| Net difference and timeline together | `analyze(record)` |
-| The same, plus the activity timeline | `analyze(record, activity: true)` |
+| Net difference and each change to one record, version by version | `analyze(record)`, then `diff` and `timeline` |
+| The same, plus each change to its chosen associations, with who made it | `analyze(record, associations: ..., activity: true)`, then `activity_timeline` |
 | Analyses for an array of records | `analyze_many(records)` |
 | Analyses for the records a relation selects, over a time window | `analyze_scope(scope, within:, limit:)` |
 | Recent activity through now, for the records a relation selects | `report(scope, since:, limit:)` |
@@ -357,12 +354,13 @@ To show the comment creation as its own activity step, without updating the arti
 
 <!-- executable:quickstart-activity -->
 ```ruby
-steps = PaperTrailDiff.activity_timeline(
+steps = PaperTrailDiff.analyze(
   article,
   from: before,
   to: current,
-  associations: ["comments"]
-)
+  associations: ["comments"],
+  activity: true
+).activity_timeline
 
 steps.reject(&:empty?).each do |step|
   source = step.source_boundary
