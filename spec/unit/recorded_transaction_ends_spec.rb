@@ -66,17 +66,21 @@ RSpec.describe PaperTrailDiff::RecordedTransactionEnds do
       .to contain_exactly('id', 'created_at', 'transaction_id')
   end
 
-  # Ids that count up name the last version, whatever the clock said.
-  it 'finds the last version of a transaction by its id where ids count up' do
+  # Windows compare versions by date, so the latest dated is the last,
+  # whichever was saved last. Ids break a tie.
+  it 'finds the last version of a transaction by its date, then its id' do
     held = version(101, 7, at: 9)
-    later = version(102, 7, at: 1, item_id: 2)
-    last_held = version(104, 8, at: 1)
-    version(103, 8, at: 9, item_id: 2)
+    version(102, 7, at: 1, item_id: 2)
+    saved_first = version(104, 8, at: 1)
+    dated_last = version(103, 8, at: 9, item_id: 2)
+    version(105, 9, at: 4)
+    tied = version(106, 9, at: 4, item_id: 2)
 
-    found = ends(held, last_held)
+    found = ends(held, saved_first, tied)
 
-    expect(found.fetch(['FilterVersion', 7])).to eq(later)
-    expect(found.fetch(['FilterVersion', 8])).to equal(last_held)
+    expect(found.fetch(['FilterVersion', 7])).to equal(held)
+    expect(found.fetch(['FilterVersion', 8])).to eq(dated_last)
+    expect(found.fetch(['FilterVersion', 9])).to equal(tied)
   end
 
   it 'reads, of the versions not held, only those that may be last' do

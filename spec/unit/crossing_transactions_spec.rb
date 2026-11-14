@@ -28,10 +28,6 @@ RSpec.describe PaperTrailDiff::CrossingTransactions do
 
   def reach(tables: [FilterVersion]) = described_class.reach(tables, start)
 
-  def quoted(column) = FilterVersion.connection.quote_table_name("filter_versions.#{column}")
-
-  def own_number = "#{quoted(:id)} != #{quoted(:transaction_id)}"
-
   def statements(&)
     queries = []
     counter = ->(*, payload) { queries << payload[:sql] unless payload[:name] == 'SCHEMA' }
@@ -83,23 +79,24 @@ RSpec.describe PaperTrailDiff::CrossingTransactions do
       expect(statements { reach(tables: [FilterVersion, FilterJsonVersion]) }.length).to eq(2)
     end
 
-    it 'does not look up a version that began its transaction' do
+    # A callback that saves other records before its own version dates that
+    # one first, as its save began, so a transaction's first version by id
+    # can be dated after another of its own. With one version table, no
+    # anchor tells transactions of a number apart.
+    it 'reads a transaction as open by the dates of its versions, whichever was saved first' do
+      allow(ActiveRecord::Base).to receive(:descendants).and_return([FilterVersion])
       FilterVersion.create!(id: 7, item_type: 'FilterArticle', item_id: 2, event: 'update',
                             transaction_id: 7, created_at: at(1))
 
-      expect(reach).to be_nil
-      expect(statements { reach }.first).to include(own_number)
+      expect(reach).to eq(at(-2))
     end
 
-    # Ids of another type, or none, cannot number a transaction.
-    it 'looks up every version when the ids cannot number transactions' do
+    it 'reads the same whatever names the version table keys' do
       [nil, 'item_type'].each do |key|
         keyed = Class.new(FilterVersion) { self.primary_key = key }
         version(1, 7, item_id: 2)
 
         expect(reach(tables: [keyed])).to eq(at(-2))
-        expect(statements { reach(tables: [keyed]) }.first)
-          .not_to include("!= #{quoted(:transaction_id)}")
       end
     end
 
