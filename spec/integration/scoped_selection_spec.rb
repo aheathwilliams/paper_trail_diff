@@ -109,12 +109,9 @@ RSpec.describe 'scoped root selection' do
     expect(analyze(CoreArticle.where(title: 'Deleted')).unreachable.map(&:last)).to eq(%w[9 10])
   end
 
-  it 'returns no roots for a page of none, with or without a filter' do
+  it 'returns no roots for a page of none' do
     CoreArticle.create!(title: 'Live', internal_note: 'stable')
 
     expect(analyze(CoreArticle.limit(0)).roots).to eq([])
-    expect(PaperTrailDiff.analyze_scope(CoreArticle.limit(0), limit: 1,
-                                                              historical_filter: { title: 'Live' })
-      .roots).to eq([])
   end
 end

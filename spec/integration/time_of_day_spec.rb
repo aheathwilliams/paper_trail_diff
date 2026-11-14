@@ -112,22 +112,4 @@ RSpec.describe 'History of a time of day' do
       end
     end
   end
-
-  it 'gives a callable historical_filter: the time each version recorded' do
-    clock = AlarmClock.create!(name: 'Kitchen', rings_at: '07:30')
-    clock.update!(name: 'Bedroom')
-    seen = []
-    filter = lambda do |state|
-      seen << state.rings_at
-      true
-    end
-
-    PaperTrailDiff.analyze_scope(
-      AlarmClock, limit: 1, within: (Time.now.utc - 3600)..(Time.now.utc + 60),
-                  historical_filter: filter
-    )
-
-    expect(seen).not_to be_empty
-    expect(seen).to all(eq(clock.reload.rings_at))
-  end
 end

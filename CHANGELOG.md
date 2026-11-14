@@ -48,6 +48,10 @@ project follows [Semantic Versioning](https://semver.org/).
   not. Remove the path, or rewrite its scope as plain conditions on the
   target's own columns. `diagnose` reports it as `unreadable_association`,
   formerly `approximate_association`.
+- `historical_filter:` and `max_filter_versions:` are removed from
+  `analyze_scope` and `report`, and `FilterLimitExceededError` with them.
+  Select records with the relation, which tests current values, and narrow
+  the changes reported with `version_scope:`.
 - An association with a composite foreign key, or a `has_many :through`
   that goes through one, raises `UnsupportedAssociationError`. It was read
   with PT-AT's reifier, one record at a time and by timestamp alone.

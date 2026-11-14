@@ -50,8 +50,6 @@ matcher:
     - PaperTrailDiff::TimelineRange*
     - PaperTrailDiff::RootVersionPlan*
     - PaperTrailDiff::RootVersionSelection*
-    - PaperTrailDiff::HistoricalFilter*
-    - PaperTrailDiff::HistoricalFilterValues*
     - PaperTrailDiff::VersionScopeFilter*
     - PaperTrailDiff::TimeRange*
     - PaperTrailDiff::SelectionWindow*

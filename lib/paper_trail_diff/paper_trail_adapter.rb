@@ -85,14 +85,13 @@ module PaperTrailDiff
     # caller reporting on a population does not have to rediscover which of its
     # members changed. The roots the relation could not reach come back named
     # rather than dropped -- see `PaperTrailDiff.analyze_scope`.
-    #: (untyped, limit: Integer?, within: untyped, ?activity: bool, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?, ?historical_filter: untyped, ?max_filter_versions: Integer, ?include_deleted: bool) -> ScopedAnalysis
-    def analyze_scope(scope, limit:, within:, activity: false, version_scope: nil, snapshots: false, group: nil, historical_filter: nil, max_filter_versions: HistoricalFilter::DEFAULT_VERSION_LIMIT, include_deleted: false) # rubocop:disable Metrics/ParameterLists, Layout/LineLength
+    #: (untyped, limit: Integer?, within: untyped, ?activity: bool, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?, ?include_deleted: bool) -> ScopedAnalysis
+    def analyze_scope(scope, limit:, within:, activity: false, version_scope: nil, snapshots: false, group: nil, include_deleted: false) # rubocop:disable Metrics/ParameterLists, Layout/LineLength
       view = activity_view(activity, snapshots, group, version_scope)
       ReadSnapshot.call([scope]) do
         check_scope(scope)
         scoped_builder(scope, limit: limit, within: within, activity: activity,
-                              version_scope: version_scope, historical_filter: historical_filter,
-                              max_filter_versions: max_filter_versions,
+                              version_scope: version_scope,
                               include_deleted: include_deleted, view: view).call
       end
     end
@@ -209,13 +208,12 @@ module PaperTrailDiff
       ).call
     end
 
-    #: (untyped, limit: Integer?, within: untyped, activity: bool, version_scope: untyped, historical_filter: untyped, max_filter_versions: Integer, include_deleted: bool, view: ActivityView) -> ScopedAnalysisBuilder
-    def scoped_builder(scope, limit:, within:, activity:, version_scope:, historical_filter:, max_filter_versions:, include_deleted:, view:) # rubocop:disable Metrics/ParameterLists, Layout/LineLength
+    #: (untyped, limit: Integer?, within: untyped, activity: bool, version_scope: untyped, include_deleted: bool, view: ActivityView) -> ScopedAnalysisBuilder
+    def scoped_builder(scope, limit:, within:, activity:, version_scope:, include_deleted:, view:) # rubocop:disable Metrics/ParameterLists
       # @type var options: report_options
       options = { within: within, activity: activity, version_scope: version_scope, view: view }
       ScopedAnalysisBuilder.new(
-        scope, limit: limit, within: within, historical_filter: historical_filter,
-               max_filter_versions: max_filter_versions, include_deleted: include_deleted,
+        scope, limit: limit, within: within, include_deleted: include_deleted,
                analyzer: lambda { |records|
                  analyze_batch(records, within: within, activity: activity,
                                         version_scope: version_scope, view: view)

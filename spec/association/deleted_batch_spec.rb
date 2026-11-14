@@ -82,28 +82,14 @@ RSpec.describe 'batched deleted association history' do
     end
   end
 
-  it 'keeps filter budgets and missing-history behavior with association tracking loaded' do
+  it 'keeps missing-history behavior with association tracking loaded' do
     seed(2)
     TrackedArticle.create!(title: 'No destroy').delete
     options = { since: Time.now.utc - 3600, limit: 10, include_deleted: true }
 
-    result = PaperTrailDiff.report(TrackedArticle, **options, historical_filter: { title: 'After' })
-    expect(result.deleted.length).to eq(2)
-    expect(PaperTrailDiff.report(TrackedArticle, **options).deleted.values).to include(nil)
-    expect do
-      PaperTrailDiff.report(TrackedArticle, **options, historical_filter: {},
-                                                       max_filter_versions: 1)
-    end
-      .to raise_error(PaperTrailDiff::FilterLimitExceededError)
-    expect { PaperTrailDiff.report(TrackedArticle, **options, historical_filter: false) }
-      .to raise_error(PaperTrailDiff::ConfigurationError)
-    expect { PaperTrailDiff.report(TrackedArticle, **options, historical_filter: { absent: nil }) }
-      .to raise_error(PaperTrailDiff::ConfigurationError)
-    expect do
-      PaperTrailDiff.report(TrackedArticle, **options, historical_filter: {},
-                                                       max_filter_versions: nil)
-    end
-      .to raise_error(PaperTrailDiff::ConfigurationError)
+    result = PaperTrailDiff.report(TrackedArticle, **options)
+    expect(result.deleted.length).to eq(3)
+    expect(result.deleted.values).to include(nil)
     expect { PaperTrailDiff.report(TrackedArticle, **options, limit: 1) }
       .to raise_error(PaperTrailDiff::BatchLimitExceededError)
   end

@@ -127,14 +127,4 @@ RSpec.describe 'deleted root reporting' do
     expect(PaperTrailDiff.report(CoreArticle, since: Time.now.utc + 3600, limit: 5).analyses)
       .to eq({})
   end
-
-  it 'applies historical filtering to the missing population before batch analysis' do
-    seed_deleted(2)
-
-    result = analyze(historical_filter: { title: 'Final 0' })
-
-    expect(result.deleted.length).to eq(1)
-    expect(result.deleted.values.first.activity_timeline.last.from_snapshot.attributes['title'])
-      .to eq('Final 0')
-  end
 end

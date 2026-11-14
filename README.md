@@ -211,8 +211,7 @@ Three selection rules matter:
 Use the relation's `order`, `offset`, and `limit` to choose a page, for example
 `Article.order(:id).limit(20)`. Joined rows can repeat a record; each record is
 analyzed once. See the [reporting reference](docs/reference.md#which-records-are-selected)
-for pagination, deleted records, and selecting by past values with
-`historical_filter:`.
+for pagination and deleted records.
 
 For a fixed past window, use `analyze_scope(Article.all, within: start_time...end_time,
 activity: true, limit: 100)`. Without `activity: true`, `analyze_scope` compares
@@ -329,7 +328,7 @@ Who was in such an association at a past point cannot be told, so every
 method that reads history raises `UnsupportedAssociationError` naming the
 association. Remove it from `associations:`, or rewrite its scope. See
 [association scopes](docs/reference.md#association-scopes).
-Callbacks and callable historical filters can also issue queries. See the
+Callbacks can also issue queries. See the
 [performance guide](docs/performance.md) for measured behavior and limitations.
 
 On a large version table, add these indexes, or every `since:` or `within:`

@@ -733,8 +733,8 @@ end
 analyses, unreachable = report # destructures into analyses and unreachable
 ```
 
-It takes the same options as `analyze_many`, plus `limit:`, `historical_filter:`,
-`max_filter_versions:`, and `include_deleted:`. `within:` can be omitted to use
+It takes the same options as `analyze_many`, plus `limit:` and
+`include_deleted:`. `within:` can be omitted to use
 all history.
 
 ### report
@@ -747,8 +747,7 @@ report = PaperTrailDiff.report(Article.all, since: 1.day.ago, limit: 100)
 ```
 
 It accepts `associations:`, `ignore:`, `version_scope:`, `snapshots:`, `group:`,
-`recorded_changes:`, `include_deleted:`, `historical_filter:`, and
-`max_filter_versions:`.
+`recorded_changes:`, and `include_deleted:`.
 
 ### Which records are selected
 
@@ -768,8 +767,7 @@ It accepts `associations:`, `ignore:`, `version_scope:`, `snapshots:`, `group:`,
   whose role changed, or a version that touched only ignored columns, selects a
   record with nothing to report.
 - **A relation checks current values.** `Order.where(status: "open")` means open
-  now, not open during the window. Use `historical_filter:` to select by past
-  values.
+  now, not open during the window.
 - **`limit:` is a safety ceiling, not a page size.** If more records are
   selected, the call raises `BatchLimitExceededError` instead of returning part
   of the answer. Narrow the relation or the window, or raise the limit.
@@ -836,68 +834,6 @@ lists only edits; its `activity_timeline` ends with the deletion. That last
 step's `diff.record_presence_change.from` is the record just before it was
 deleted, even when it was also created inside the window, where
 `from_snapshot` is `nil`.
-
-### Selecting by past values: `historical_filter:`
-
-`historical_filter:` selects records by values they had at any point in the
-window. For example, to find articles that were titled `"Published"` at some
-point in the last day, including ones published during it:
-
-```ruby
-report = PaperTrailDiff.report(
-  Article.all, since: 1.day.ago, limit: 100,
-  historical_filter: { title: "Published" }
-)
-```
-
-The filter checks the record as it was when the window started and after each
-change saved inside it. It reads each version where it was saved, not where
-its transaction ended (see [time windows](#time-windows)), so a record whose
-transaction began before the window and ends inside it is checked from the
-state its versions before the window left. A record matches if
-any of those states match. With a
-hash, every key must be equal (`==`) once both sides are cast to the
-attribute's type, as `where` casts its values: `{ status: :published }` matches
-an enum, and a date or time matches whether the history stored it as YAML or
-as a string in a `json` column. Text or a date given for a datetime
-attribute is read as `where` sends it, in Active Record's default time zone
-rather than `Time.zone`, and a value the attribute cannot take, such as a
-hash for a time, raises `ConfigurationError`. Values are read from the stored history
-without calling `reify`, except for a model whose stored values only a record
-can read, such as one with an encrypted attribute, whose versions are rebuilt
-with `reify` and compared by their decrypted values. Unknown or unrecorded
-attributes raise an error instead of matching `nil`, and so does an
-attribute the model declares without a column, which `where` cannot name. So does a list or a
-range as a value, such as `{ status: %i[published archived] }`, which `where`
-would read as any of them, unless the attribute itself holds one. For other
-checks, pass a callable such as
-`->(article) { article.title.start_with?("Pub") }`; it receives each state as a
-model instance and may run queries of its own.
-
-- It looks only at the record itself, not its associations, and does not check
-  whether a value was held for the whole window.
-- Only the history of records the relation selects is read, and the relation's
-  order, `limit`, and `offset` then page the ones that match. Deleted records,
-  which a relation cannot test, are read too, and those that match are listed
-  in `unreachable`.
-- Matching records the relation selects count toward `limit:`, and matching
-  stops as soon as the limit is exceeded. Matching deleted records count only
-  with `include_deleted: true`, as without a filter.
-- A relation with a `limit` pages the matches: records are read in the
-  relation's order, matching stops when the page is full, and only the page
-  counts toward `limit:`. So `Article.order(:id).limit(20).offset(40)` with
-  `limit: 20` returns the third page however many records match, and reads
-  history only as far as that page. A grouped relation, and one without a
-  `limit`, still read every match.
-- `max_filter_versions:` limits how many versions the filter loads, including
-  the one version after the window it reads for each record, and the versions
-  of deleted records. The default is 10,000. Going over raises
-  `FilterLimitExceededError` before the extra batch is checked. It does not
-  limit queries inside a callable.
-- `version_scope:` narrows which changes are reported, not which states are
-  tested here.
-- It is accepted by `analyze_scope` and `report`, which select records from a
-  relation.
 
 ### Association scopes
 
@@ -994,7 +930,7 @@ record that points at such a class raises `UnsupportedAssociationError`. A
 scope on the polymorphic `belongs_to` itself is rejected.
 
 This check covers known association cases only. Your model callbacks, custom
-attribute types, and callable filters can still run queries. See the
+attribute types can still run queries. See the
 [performance guide](performance.md) for measurements.
 
 ## Associations
@@ -1716,10 +1652,7 @@ of your own that wraps the JSON one included, so the legacy JSON format,
 which writes whole seconds, keeps whole seconds. For those histories the gem
 compares all times at that precision, so an
 unchanged timestamp is not reported as changed. A change smaller than that
-precision was never recorded and cannot be reported. For the same reason
-`historical_filter:` compares a time at that precision too: a filter for
-`12:00:00.123456` also matches a version that stored `12:00:00.123`, since
-the history cannot tell them apart. A `json` or `jsonb`
+precision was never recorded and cannot be reported. A `json` or `jsonb`
 column also returns times and dates as strings, which PaperTrail leaves as
 they are; the gem casts them back to the attribute's type.
 
@@ -1805,7 +1738,6 @@ All errors inherit from `PaperTrailDiff::Error`.
 | `IncompleteTimeRangeError` | A window's last change has no later version and the record has no saved row to read instead |
 | `AmbiguousVersionOrderError` | Versions cannot be ordered (see [version order](#version-order)) |
 | `BatchLimitExceededError` | More records are selected than `limit:` allows |
-| `FilterLimitExceededError` | `historical_filter:` needs more than `max_filter_versions:` |
 | `AssociationTrackingUnavailableError` | Association history is requested without PT-AT |
 | `UnknownAssociationError` | An association name does not exist |
 | `UnsupportedAssociationError` | An association's macro is not supported, a path continues past a polymorphic `belongs_to`, an association is a `has_and_belongs_to_many` or a `has_many :through` that goes through one, an association is keyed on a column other than a primary key, the target of a `has_one` or `has_many` declares no `belongs_to` on its foreign key, an association has a composite foreign key, or history cannot read an [association's scope](#association-scopes) |
@@ -1826,8 +1758,7 @@ Results can only be as complete as the history PaperTrail and PT-AT recorded.
 - With PaperTrail's default YAML serializer, PaperTrail 16 and 17 decode a
   `time` (time of day) column as `nil`, in `reify` and `changeset` alike,
   unless the column is time-zone aware, as a Rails app's are, and the time
-  zone is UTC. The gem reads the time each version recorded, including in
-  the records it passes to a callable `historical_filter:`, but your own
+  zone is UTC. The gem reads the time each version recorded, but your own
   calls to those PaperTrail methods still return `nil`. PaperTrail's JSON
   serializer, and SQL Server, whose adapter stores a time its own way, are
   not affected. Snapshots and diffs show every time of day on 2000-01-01 in

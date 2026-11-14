@@ -49,14 +49,4 @@ RSpec.describe 'An attribute declared without a column' do
     expect(rows.filter_map(&:attribute)).not_to include('note', 'notify')
     expect(rows.select(&:unversioned?)).to be_empty
   end
-
-  it 'is refused by historical_filter, as where refuses it' do
-    history
-
-    expect do
-      PaperTrailDiff.report(FormedOrder.all, since: started, limit: 5,
-                                             historical_filter: { notify: true })
-    end
-      .to raise_error(PaperTrailDiff::ConfigurationError, /unknown historical attributes: notify/)
-  end
 end

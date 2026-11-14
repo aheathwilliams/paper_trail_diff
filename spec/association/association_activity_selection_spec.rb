@@ -290,7 +290,7 @@ RSpec.describe PaperTrailDiff::AssociationActivitySelection do
     expect(report.roots).to eq([page])
   end
 
-  it 'applies the relation, historical_filter:, and limit: to the records it adds' do
+  it 'applies the relation and limit: to the records it adds' do
     kept = TrackedArticle.create!(title: 'Kept')
     dropped = TrackedArticle.create!(title: 'Dropped')
     comments = [kept, dropped].map { |article| article.comments.create!(body: 'one') }
@@ -302,10 +302,8 @@ RSpec.describe PaperTrailDiff::AssociationActivitySelection do
       TrackedArticle.where(title: 'Kept'), within: window, associations: [:comments],
                                            activity: true, limit: 10
     )
-    historical = scope_ids([:comments], window, historical_filter: { 'title' => 'Dropped' })
 
     expect(ids(filtered)).to eq([kept.id])
-    expect(historical).to eq([dropped.id])
     expect do
       PaperTrailDiff.report(TrackedArticle, since: window_start, associations: [:comments],
                                             limit: 1)

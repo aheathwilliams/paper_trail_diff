@@ -99,13 +99,10 @@ require_relative 'paper_trail_diff/batched_root_analyses'
 require_relative 'paper_trail_diff/analysis_batch'
 require_relative 'paper_trail_diff/deleted_analysis_batch'
 require_relative 'paper_trail_diff/scoped_analysis'
-require_relative 'paper_trail_diff/historical_filter_values'
-require_relative 'paper_trail_diff/historical_filter'
 require_relative 'paper_trail_diff/association_activity_edge'
 require_relative 'paper_trail_diff/association_activity_selection'
 require_relative 'paper_trail_diff/total_order'
 require_relative 'paper_trail_diff/candidate_table'
-require_relative 'paper_trail_diff/filtered_candidates'
 require_relative 'paper_trail_diff/scoped_root_selection'
 require_relative 'paper_trail_diff/deleted_root_filter'
 require_relative 'paper_trail_diff/scoped_analysis_builder'
@@ -274,7 +271,7 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
     # Note also that a relation selects on current state, not on state during
     # the window: `where(status: 'published')` means published *now*, which is a
     # different set from what was published while the window was open.
-    #: (untyped, limit: Integer?, ?within: untyped, ?associations: association_option, ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?, ?historical_filter: untyped, ?max_filter_versions: Integer, ?include_deleted: bool, ?recorded_changes: bool) -> ScopedAnalysis
+    #: (untyped, limit: Integer?, ?within: untyped, ?associations: association_option, ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?, ?include_deleted: bool, ?recorded_changes: bool) -> ScopedAnalysis
     def analyze_scope( # rubocop:disable Metrics/ParameterLists
       scope,
       limit:,
@@ -285,8 +282,6 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
       version_scope: nil,
       snapshots: false,
       group: nil,
-      historical_filter: nil,
-      max_filter_versions: HistoricalFilter::DEFAULT_VERSION_LIMIT,
       include_deleted: false,
       recorded_changes: false
     )
@@ -295,9 +290,7 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
       adapter.analyze_scope(
         scope, limit: limit, within: within, activity: activity,
                version_scope: VersionScopeFilter.checked(version_scope),
-               snapshots: snapshots, group: group,
-               historical_filter: historical_filter, max_filter_versions: max_filter_versions,
-               include_deleted: include_deleted
+               snapshots: snapshots, group: group, include_deleted: include_deleted
       )
     end
 
@@ -305,11 +298,10 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
     # for every root that changed or whose requested associations did.
     # Historical windows remain explicit on analyze_scope; this entry point is
     # deliberately named for a report through now rather than an as-of query.
-    #: (untyped, since: untyped, limit: Integer, ?associations: association_option, ?ignore: ignore_option, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?, ?include_deleted: bool, ?historical_filter: untyped, ?max_filter_versions: Integer, ?recorded_changes: bool) -> ScopedAnalysis
+    #: (untyped, since: untyped, limit: Integer, ?associations: association_option, ?ignore: ignore_option, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?, ?include_deleted: bool, ?recorded_changes: bool) -> ScopedAnalysis
     def report( # rubocop:disable Metrics/ParameterLists
       scope, since:, limit:, associations: [], ignore: DEFAULT_IGNORED_ATTRIBUTES,
       version_scope: nil, snapshots: false, group: nil, include_deleted: false,
-      historical_filter: nil, max_filter_versions: HistoricalFilter::DEFAULT_VERSION_LIMIT,
       recorded_changes: false
     )
       TimeRange.check_since!(since)
@@ -319,8 +311,7 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
         within: (since..), limit: limit, associations: associations,
         ignore: ignore, activity: true, version_scope: version_scope, snapshots: snapshots,
         group: group,
-        include_deleted: include_deleted, historical_filter: historical_filter,
-        max_filter_versions: max_filter_versions,
+        include_deleted: include_deleted,
         recorded_changes: recorded_changes
       )
     end

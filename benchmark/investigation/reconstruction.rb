@@ -8,7 +8,7 @@ require 'paper_trail'
 require_relative '../../lib/paper_trail_diff'
 
 scenarios = %w[scalar comments checkpoints belongs_to limited owner default_scope scoped
-               through_has_many callback callable without_changes comments_without_changes
+               through_has_many callback without_changes comments_without_changes
                polymorphic_belongs_to source_type_through]
 scenario = ARGV.fetch(0)
 size = Integer(ARGV.fetch(1))
@@ -100,7 +100,6 @@ association = { 'comments' => :comments, 'comments_without_changes' => :comments
                 'source_type_through' => :linked_authors }[scenario]
 options = { since: Time.now.utc - 3600, limit: size, snapshots: true,
             associations: Array(association) }
-options[:historical_filter] = ->(state) { state.comments.exists? } if scenario == 'callable'
 model = case scenario
         when 'through_has_many' then TrackedAuthor
         when 'source_type_through' then SourceTypeHolder

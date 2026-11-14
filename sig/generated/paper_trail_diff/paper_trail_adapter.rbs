@@ -28,8 +28,8 @@ module PaperTrailDiff
     # caller reporting on a population does not have to rediscover which of its
     # members changed. The roots the relation could not reach come back named
     # rather than dropped -- see `PaperTrailDiff.analyze_scope`.
-    # : (untyped, limit: Integer?, within: untyped, ?activity: bool, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?, ?historical_filter: untyped, ?max_filter_versions: Integer, ?include_deleted: bool) -> ScopedAnalysis
-    def analyze_scope: (untyped, limit: Integer?, within: untyped, ?activity: bool, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?, ?historical_filter: untyped, ?max_filter_versions: Integer, ?include_deleted: bool) -> ScopedAnalysis
+    # : (untyped, limit: Integer?, within: untyped, ?activity: bool, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?, ?include_deleted: bool) -> ScopedAnalysis
+    def analyze_scope: (untyped, limit: Integer?, within: untyped, ?activity: bool, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?, ?include_deleted: bool) -> ScopedAnalysis
 
     private
 
@@ -71,8 +71,8 @@ module PaperTrailDiff
     # : (untyped, Array[Array[String]], Hash[Symbol, untyped]) -> Hash[Array[String], Analysis?]
     def analyze_deleted: (untyped, Array[Array[String]], Hash[Symbol, untyped]) -> Hash[Array[String], Analysis?]
 
-    # : (untyped, limit: Integer?, within: untyped, activity: bool, version_scope: untyped, historical_filter: untyped, max_filter_versions: Integer, include_deleted: bool, view: ActivityView) -> ScopedAnalysisBuilder
-    def scoped_builder: (untyped, limit: Integer?, within: untyped, activity: bool, version_scope: untyped, historical_filter: untyped, max_filter_versions: Integer, include_deleted: bool, view: ActivityView) -> ScopedAnalysisBuilder
+    # : (untyped, limit: Integer?, within: untyped, activity: bool, version_scope: untyped, include_deleted: bool, view: ActivityView) -> ScopedAnalysisBuilder
+    def scoped_builder: (untyped, limit: Integer?, within: untyped, activity: bool, version_scope: untyped, include_deleted: bool, view: ActivityView) -> ScopedAnalysisBuilder
 
     @activity_snapshotter: ActivitySnapshotProvider
 
