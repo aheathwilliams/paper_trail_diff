@@ -8,9 +8,11 @@ RSpec.describe PaperTrailDiff::DatabaseTime do
   end
 
   # Ruby reads TZ again when it changes, so local time is told from UTC.
+  # A POSIX zone four hours behind UTC, with no daylight saving, which
+  # Windows reads as well (it knows no IANA names).
   around do |example|
     zone = ENV.fetch('TZ', nil)
-    ENV['TZ'] = 'America/New_York'
+    ENV['TZ'] = 'XYZ4'
     example.run
   ensure
     ENV['TZ'] = zone
