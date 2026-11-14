@@ -65,4 +65,42 @@ RSpec.describe PaperTrailDiff::StoredTimePrecision do
   ensure
     PaperTrail.serializer = original
   end
+
+  # Read from what the serializer writes, so a serializer that wraps the JSON
+  # one, and Active Support's legacy format, which keeps whole seconds, are
+  # read as they store.
+  it 'reads the digits a serializer writes rather than its name' do
+    original = PaperTrail.serializer
+    precision = ActiveSupport::JSON::Encoding.time_precision
+    wrapper = Module.new do
+      def self.load(text) = PaperTrail::Serializers::JSON.load(text)
+      def self.dump(object) = PaperTrail::Serializers::JSON.dump(object)
+    end
+    failing = Module.new do
+      def self.dump(_object) = raise(ArgumentError, 'cannot write')
+    end
+    untimed = Module.new do
+      def self.load(_text) = { 'at' => 'not a time' }
+      def self.dump(_object) = ''
+    end
+
+    PaperTrail.serializer = wrapper
+    expect(described_class.digits(model_with_history)).to eq(precision)
+    PaperTrail.serializer = failing
+    expect(described_class.digits(model_with_history)).to be_nil
+    PaperTrail.serializer = untimed
+    expect(described_class.digits(model_with_history)).to be_nil
+
+    PaperTrail.serializer = PaperTrail::Serializers::JSON
+    ActiveSupport::JSON::Encoding.use_standard_json_time_format = false
+    expect(described_class.digits(model_with_history)).to eq(0)
+    ActiveSupport::JSON::Encoding.use_standard_json_time_format = true
+    ActiveSupport::JSON::Encoding.time_precision = 6
+    expect(described_class.digits(model_with_history)).to eq(6)
+    expect(described_class.digits(model_with_history(object_type: :json))).to eq(6)
+  ensure
+    ActiveSupport::JSON::Encoding.use_standard_json_time_format = true
+    ActiveSupport::JSON::Encoding.time_precision = precision
+    PaperTrail.serializer = original
+  end
 end
