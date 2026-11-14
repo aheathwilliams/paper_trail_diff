@@ -90,14 +90,24 @@ module PaperTrailDiff
 
     # Where the root's destruction takes effect, its tree is gone, so what a
     # transaction that ended later saved there is no change of the root's,
-    # until the root is created again.
+    # until the root is created again. The transaction that creates it again
+    # is the root's, from its first event, as for a root created afresh.
     #: (Array[ActivityEvent]) -> Array[ActivityEvent]
     def self.until_destroyed(events)
       gone = false
+      restoring = restoring_transactions(events)
       events.reject do |event|
         gone = event.version.event == 'destroy' if event.root?
-        gone && !event.root?
+        gone && !event.root? && !restoring.include?(transaction_key(event.version))
       end.freeze
+    end
+
+    # The transactions of the root's versions that leave it in place.
+    #: (Array[ActivityEvent]) -> Array[Array[untyped]?]
+    def self.restoring_transactions(events)
+      events.filter_map do |event|
+        transaction_key(event.version) if event.root? && event.version.event != 'destroy'
+      end
     end
 
     # A version without a transaction shares one with nothing.

@@ -27,6 +27,21 @@ module PaperTrailDiff
       for_model(model_class).where(item_id: ids)
     end
 
+    # The versions of the version's item saved after it, ids breaking a tie.
+    #: (untyped, untyped) -> untyped
+    def self.after(model_class, version)
+      saved = version.class.arel_table[:created_at]
+      at = version.created_at
+      later = saved.gt(at).or(saved.eq(at).and(later_id(version)))
+      for_items(model_class, [version.item_id]).where(later)
+    end
+
+    #: (untyped) -> untyped
+    def self.later_id(version)
+      version.class.arel_table[version.class.primary_key].gt(version.id)
+    end
+    private_class_method :later_id
+
     # Keeps each item's earliest version among those the block also accepts:
     # no other version of the same item that the block accepts is earlier. A
     # correlated NOT EXISTS stays portable where window functions are not.
