@@ -55,7 +55,8 @@ module PaperTrailDiff
         object.each_value.any? { |value| value.instance_of?(String) && DATE_TEXT.match?(value) }
     end
 
-    #: (Date) -> Time
+    # A Date; the packaged signatures name only core types.
+    #: (untyped) -> Time
     def self.midnight(date)
       clock = Time #: untyped
       if local?
@@ -73,7 +74,7 @@ module PaperTrailDiff
     end
     private_class_method :local?
 
-    #: (String) -> Date?
+    #: (String) -> untyped
     def self.written_date(text)
       Date.iso8601(text) if DATE_TEXT.match?(text)
     rescue ArgumentError
