@@ -54,6 +54,7 @@ matcher:
     - PaperTrailDiff::HistoricalFilterValues*
     - PaperTrailDiff::VersionScopeFilter*
     - PaperTrailDiff::TimeRange*
+    - PaperTrailDiff::SelectionWindow*
     - PaperTrailDiff::TransactionCut*
     - PaperTrailDiff::CrossingTransactions*
     - PaperTrailDiff::VersionBoundary*

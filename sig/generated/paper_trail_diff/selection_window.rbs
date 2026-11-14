@@ -1,0 +1,19 @@
+# Generated from lib/paper_trail_diff/selection_window.rb with RBS::Inline
+
+module PaperTrailDiff
+  # A window that selects records by activity, widened to where the earliest
+  # transaction open at its start began, as its history is read (see
+  # AssociationTraversal#reach_before). Associations are followed over all of
+  # it, but before the start only the versions of the transactions open there
+  # select a record: the window reports those transactions, and none of the
+  # others, which ended before it.
+  class SelectionWindow < TimeRange
+    # : (TimeRange, untyped) -> void
+    def initialize: (TimeRange, untyped) -> void
+
+    # : (untyped) -> untyped
+    def scope: (untyped) -> untyped
+
+    @window: TimeRange
+  end
+end

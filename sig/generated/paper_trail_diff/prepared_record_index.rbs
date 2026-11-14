@@ -362,8 +362,18 @@ module PaperTrailDiff
     # : () -> Array[untyped]
     def self.every_version_class: () -> Array[untyped]
 
+    # The versions of this table saved before `start` by the transactions
+    # open at it.
+    # : (untyped, untyped) -> untyped
+    def self.saved_before: (untyped, untyped) -> untyped
+
     # : () -> untyped
     def call: () -> untyped
+
+    # The versions saved before the start by a transaction that saved one
+    # from it onward.
+    # : (untyped) -> untyped
+    def earlier: (untyped) -> untyped
 
     private
 
@@ -374,11 +384,6 @@ module PaperTrailDiff
     # When the earliest transaction open at the start began in this table.
     # : (untyped) -> untyped
     def open_at_start: (untyped) -> untyped
-
-    # The versions saved before the start by a transaction that saved one
-    # from it onward.
-    # : (untyped) -> untyped
-    def earlier: (untyped) -> untyped
 
     # The versions saved from the start onward that were not the first of
     # their transaction, of the transactions no anchor separates from it.

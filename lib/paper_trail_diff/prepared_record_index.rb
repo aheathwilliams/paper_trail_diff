@@ -663,9 +663,25 @@ module PaperTrailDiff
     end
     private_class_method :every_version_class
 
+    # The versions of this table saved before `start` by the transactions
+    # open at it.
+    #: (untyped, untyped) -> untyped
+    def self.saved_before(version_class, start)
+      new([version_class], start).earlier(version_class)
+    end
+
     #: () -> untyped
     def call
       @version_classes.filter_map { |version_class| open_at_start(version_class) }.min
+    end
+
+    # The versions saved before the start by a transaction that saved one
+    # from it onward.
+    #: (untyped) -> untyped
+    def earlier(version_class)
+      saved = version_class.where(version_class.arel_table[:created_at].lt(@start))
+      TransactionAnchors.scope(saved, version_class, @start)
+                        .where(transaction_id: later(version_class).select(:transaction_id))
     end
 
     private
@@ -679,15 +695,6 @@ module PaperTrailDiff
       return unless version_class.column_names.include?('transaction_id')
 
       earlier(version_class).minimum(:created_at)
-    end
-
-    # The versions saved before the start by a transaction that saved one
-    # from it onward.
-    #: (untyped) -> untyped
-    def earlier(version_class)
-      saved = version_class.where(version_class.arel_table[:created_at].lt(@start))
-      TransactionAnchors.scope(saved, version_class, @start)
-                        .where(transaction_id: later(version_class).select(:transaction_id))
     end
 
     # The versions saved from the start onward that were not the first of

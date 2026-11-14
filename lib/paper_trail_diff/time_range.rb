@@ -14,6 +14,8 @@ module PaperTrailDiff
 
     attr_reader :begin_time #: Time
     attr_reader :end_time #: Time?
+    # The fractional digits its edges are cut to.
+    attr_reader :digits #: Integer
 
     # A window over the versions of `models`, its edges cut to the digits
     # their version tables keep. Active Record cuts a time it binds to the
