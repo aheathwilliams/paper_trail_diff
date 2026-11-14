@@ -35,13 +35,14 @@ module PaperTrailDiff
     # : (untyped, untyped) -> bool
     def self.stored_date?: (untyped, untyped) -> bool
 
-    # : (Date) -> Time
-    def self.midnight: (Date) -> Time
+    # A Date; the packaged signatures name only core types.
+    # : (untyped) -> Time
+    def self.midnight: (untyped) -> Time
 
     # : () -> bool
     def self.local?: () -> bool
 
-    # : (String) -> Date?
-    def self.written_date: (String) -> Date?
+    # : (String) -> untyped
+    def self.written_date: (String) -> untyped
   end
 end

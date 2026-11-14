@@ -423,6 +423,8 @@ RSpec.describe PaperTrailDiff::ChangeAttribution do
         .to eq([[:removed, nil, nil, nil, 8]])
       expect(credited(attribution([destroy]), left)).to eq([[:removed, 'body', 'a', nil, 8]])
       expect(credited(attribution([edit]), left)).to eq([[:removed, 'body', 'a', nil, 9]])
+      prior = version('AttributedComment', 7, 7, changes: {})
+      expect(credited(attribution([prior, destroy]), left)).to eq([[:removed, 'body', 'a', nil, 8]])
     end
   end
 end

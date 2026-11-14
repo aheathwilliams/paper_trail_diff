@@ -37,8 +37,7 @@ module PaperTrailDiff
         record, root_ids: [record.id], root_versions: root_versions,
                 start_at: start_at || root_versions.first.created_at,
                 end_at: end_at || range_end(root_versions), tree: @tree,
-                traversal: @traversal, live_records: [], window: !start_at.nil?,
-                crossing: start_at.nil?
+                traversal: @traversal, live_records: [], window: !start_at.nil?
       ).call
     end
 
@@ -196,7 +195,7 @@ module PaperTrailDiff
                        start_at: start_at || root_versions.map(&:created_at).min,
                        end_at: end_at || range_end(root_versions),
                        tree: @tree, traversal: @traversal, live_records: live_records,
-                       window: !start_at.nil?, crossing: start_at.nil?
+                       window: !start_at.nil?
       ).call
       register(history, records, root_versions)
       history

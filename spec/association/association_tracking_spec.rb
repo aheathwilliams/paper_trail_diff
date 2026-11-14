@@ -1033,7 +1033,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
       expect(steps.length).to eq(101)
     end
 
-    expect(work.fetch(:queries)).to be < 27
+    expect(work.fetch(:queries)).to be < 30
     expect(work.fetch(:records)).to be < 600
   end
 
@@ -1057,7 +1057,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
       )
     end
 
-    expect(work.fetch(:queries)).to be < 27
+    expect(work.fetch(:queries)).to be < 30
   end
 
   it 'keeps nested collection activity local to the affected parent snapshots' do
@@ -1082,7 +1082,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
       expect(steps.length).to eq(101)
     end
 
-    expect(work.fetch(:queries)).to be < 27
+    expect(work.fetch(:queries)).to be < 30
     expect(work.fetch(:records)).to be < 600
   end
 

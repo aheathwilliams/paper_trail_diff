@@ -34,7 +34,7 @@ RSpec.describe PaperTrailDiff::PreparedHistoryLoader do
   def load_history(record, paths, root_versions: versions_of(record), **options)
     tree = PaperTrailDiff::AssociationTree.build(paths)
     defaults = { root_ids: [record.id], start_at: root_versions.first.created_at, end_at: nil,
-                 live_records: [] }
+                 live_records: [], window: false }
     described_class.new(record, root_versions: root_versions, tree: tree,
                                 traversal: PaperTrailDiff::AssociationTraversal.new(tree),
                                 **defaults, **options).call
@@ -327,13 +327,13 @@ RSpec.describe PaperTrailDiff::PreparedHistoryLoader do
     expect(PaperTrailDiff::TransactionCut).to have_received(:range_start).once
   end
 
-  it 'reads from where a crossing transaction began only when asked' do
+  it 'reads a range of versions from where a transaction open at its start began' do
     article = TrackedArticle.create!(title: 'Root')
     allow(PaperTrailDiff::TransactionCut).to receive(:crossing_start).and_call_original
 
-    load_history(article, [])
+    load_history(article, [], window: true)
     expect(PaperTrailDiff::TransactionCut).not_to have_received(:crossing_start)
-    load_history(article, [], crossing: true)
+    load_history(article, [])
     expect(PaperTrailDiff::TransactionCut).to have_received(:crossing_start).once
   end
 end

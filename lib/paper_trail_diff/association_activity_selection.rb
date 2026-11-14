@@ -65,8 +65,10 @@ module PaperTrailDiff
     # saved a root's tree only before it.
     #: (untyped, AssociationTraversal?, TimeRange?) -> TimeRange?
     def self.window(model, traversal, range)
-      reach = (traversal.reach_before(model, range.begin_time) if range && traversal)
-      reach && range ? SelectionWindow.new(range, reach) : range
+      return range unless range && traversal
+
+      reach = traversal.reach_before(model, range.begin_time)
+      reach ? SelectionWindow.new(range, reach) : range
     end
 
     # Only the versions `version_scope` keeps select a root, on its

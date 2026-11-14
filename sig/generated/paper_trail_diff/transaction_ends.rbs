@@ -114,7 +114,8 @@ module PaperTrailDiff
     # : (untyped) -> untyped
     def newest: (untyped) -> untyped
 
-    # The last versions not held, read only for what places them.
+    # The last versions not held, read only for what places them. With
+    # none missing, the relation reads nothing.
     # : (untyped, Hash[untyped, untyped], Hash[untyped, Array[untyped]]) -> Array[untyped]
     def other: (untyped, Hash[untyped, untyped], Hash[untyped, Array[untyped]]) -> Array[untyped]
   end

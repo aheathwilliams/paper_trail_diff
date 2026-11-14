@@ -102,7 +102,7 @@ module PaperTrailDiff
         type = @reflection.type
         held = { type => @owner.polymorphic_name } #: Hash[untyped, untyped]
         rows = rows.where(held) if type
-        comparable? ? rows.where(versioned.not) : rows.where.not(@key => versioned_ids(filter))
+        comparable? ? rows.where(versioned.not) : rows.where.not(@key => versioned_ids(rows))
       end
 
       private
@@ -124,11 +124,11 @@ module PaperTrailDiff
                     .arel.exists
       end
 
+      # The keys of the rows that have versions, read as values; a database
+      # casts them back to the key's type.
       #: (untyped) -> Array[untyped]
-      def versioned_ids(filter)
-        ids = filter.respond_to?(:arel) ? filter.distinct.pluck(*filter.select_values) : filter
-        key = @target.type_for_attribute(@key)
-        VersionQuery.for_items(@target, ids).distinct.pluck(:item_id).map { |id| key.cast(id) }
+      def versioned_ids(rows)
+        VersionQuery.for_items(@target, rows.pluck(@key)).distinct.pluck(:item_id)
       end
     end
 

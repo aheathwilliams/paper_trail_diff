@@ -80,6 +80,8 @@ module PaperTrailDiff
       # : () -> untyped
       def versioned: () -> untyped
 
+      # The keys of the rows that have versions, read as values; a database
+      # casts them back to the key's type.
       # : (untyped) -> Array[untyped]
       def versioned_ids: (untyped) -> Array[untyped]
     end

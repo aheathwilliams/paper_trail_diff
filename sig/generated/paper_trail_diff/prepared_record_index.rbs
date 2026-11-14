@@ -355,13 +355,15 @@ module PaperTrailDiff
     # : (untyped, untyped) -> untyped
     def self.saved_before: (untyped, untyped) -> untyped
 
+    # The versions saved from the start onward, of the transactions no anchor
+    # separates from it. A transaction's versions can be dated out of the
+    # order they were saved in, as when a callback saves other records before
+    # its own version, dated as its save began, so each is judged by its date.
+    # : (untyped, untyped) -> untyped
+    def self.later: (untyped, untyped) -> untyped
+
     # : () -> untyped
     def call: () -> untyped
-
-    # The versions saved before the start by a transaction that saved one
-    # from it onward.
-    # : (untyped) -> untyped
-    def earlier: (untyped) -> untyped
 
     private
 
@@ -372,12 +374,5 @@ module PaperTrailDiff
     # When the earliest transaction open at the start began in this table.
     # : (untyped) -> untyped
     def open_at_start: (untyped) -> untyped
-
-    # The versions saved from the start onward, of the transactions no anchor
-    # separates from it. A transaction's versions can be dated out of the
-    # order they were saved in, as when a callback saves other records before
-    # its own version, dated as its save began, so each is judged by its date.
-    # : (untyped) -> untyped
-    def later: (untyped) -> untyped
   end
 end

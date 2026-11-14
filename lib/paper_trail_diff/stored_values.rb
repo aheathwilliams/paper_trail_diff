@@ -18,22 +18,13 @@ module PaperTrailDiff
 
     #: (untyped, Hash[untyped, untyped]) -> Hash[untyped, untyped]
     def self.apply(model_class, attributes)
-      attributes = stored_only(model_class, attributes)
+      attributes = attributes.except(*unstored(model_class))
       attributes = StoredForm.apply(model_class, TimeOfDay.apply(model_class, attributes))
       digits = StoredTimePrecision.digits(model_class)
       return attributes unless digits
 
       StoredTimePrecision.apply(StoredJsonValues.apply(model_class, attributes), digits)
     end
-
-    #: (untyped, Hash[untyped, untyped]) -> Hash[untyped, untyped]
-    def self.stored_only(model_class, attributes)
-      unstored = unstored(model_class)
-      return attributes if unstored.empty?
-
-      attributes.reject { |name, _value| unstored.include?(name.to_s) }
-    end
-    private_class_method :stored_only
 
     # The model's attributes without a column, which a model keeps as it was
     # defined, as TimeOfDay.columns does.

@@ -444,6 +444,7 @@ RSpec.describe PaperTrailDiff::ScopeCondition do
         .to eq([{ 'id' => 9 }])
       pair = build(scoped, macro: :has_one, name: :pair, target: 'ScopeConditionPair')
       expect(first.call(pair, pairs)).to eq([{ 'owner_id' => 1, 'position' => 9 }])
+      expect(pair.first(pairs, in_order: true)).to eq(pairs.first(1))
     end
 
     # A has_many through keeps only its parts' conditions, so a part is read
@@ -661,9 +662,11 @@ RSpec.describe PaperTrailDiff::ScopeCondition do
 
     # SQLite compares the date with the stored text, which no time equals.
     it 'reads a date bound on a datetime column as midnight, except on SQLite' do
-      # The column types each adapter lists are read as SQLite's.
+      # The column types are read as the database in use lists them, under
+      # whichever adapter the example names.
+      adapter = ScopeConditionItem.connection_db_config.adapter
       allow(PaperTrailDiff::ExactColumnType).to(receive(:sql_kind)
-        .and_wrap_original { |original, _adapter, sql_type| original.call('sqlite3', sql_type) })
+        .and_wrap_original { |original, _adapter, sql_type| original.call(adapter, sql_type) })
       read = lambda do |adapter, bound|
         allow(ScopeConditionItem.connection_db_config).to receive(:adapter).and_return(adapter)
         described_class.for_relation(ScopeConditionItem.where(seen_at: bound), ScopeConditionItem)
@@ -683,7 +686,9 @@ RSpec.describe PaperTrailDiff::ScopeCondition do
       stub_const('ScopeConditionSkipping', Class.new(ScopeConditionItem))
       ScopeConditionSkipping.has_paper_trail skip: %i[note due]
       stub_const('ScopeConditionSkippingDefault', Class.new(ScopeConditionSkipping))
-      ScopeConditionSkippingDefault.class_eval { default_scope { where(note: 'kept') } }
+      # A date, which every database compares as Ruby does, unlike text.
+      kept = Date.new(2025, 6, 1)
+      ScopeConditionSkippingDefault.class_eval { default_scope { where(due: kept) } }
       skipping = [ScopeConditionSkipping, ScopeConditionSkippingDefault]
       refused = ->(model, condition) { described_class.for_relation(model.where(condition), model) }
 
@@ -694,9 +699,9 @@ RSpec.describe PaperTrailDiff::ScopeCondition do
       expect(relation_matches(ScopeConditionSkipping.where(rank: 1), { rank: 1, note: 'x' }))
         .to eq([true])
       expect(relation_matches(ScopeConditionSkippingDefault.where(rank: 1),
-                              { rank: 1, note: 'kept' }, { rank: 1, note: 'other' }))
+                              { rank: 1, due: kept }, { rank: 1, due: day }))
         .to eq([true, false])
-      expect(relation_matches(ScopeConditionItem.where(note: 'x'), { note: 'x' })).to eq([true])
+      expect(relation_matches(ScopeConditionItem.where(due: day), { due: day })).to eq([true])
     end
 
     it 'declines a relation that joins, groups, or that it cannot read' do
@@ -707,6 +712,30 @@ RSpec.describe PaperTrailDiff::ScopeCondition do
         .each do |relation|
           expect(described_class.for_relation(relation, relation.model)).to be_nil
         end
+    end
+  end
+
+  describe '.in_key_order' do
+    def row(**attributes) = Struct.new(:attributes).new(attributes.transform_keys(&:to_s))
+
+    def model(key) = Struct.new(:primary_key).new(key)
+
+    # A row with no key yet, as one built but not saved, comes last.
+    it 'orders rows by their key, and rows without a key last, as given' do
+      rows = [row(id: 3), row(id: nil), row(id: 1), row(id: nil), row(id: 2)]
+
+      expect(described_class.in_key_order(rows) do
+        model('id')
+      end).to eq(rows.values_at(2, 4, 0, 1, 3))
+    end
+
+    # The last row's model is keyed by `code` alone, which it has.
+    it "reads each row's key, part by part, by the model the block names for it" do
+      rows = [row(a: 1, b: nil, code: 5), row(a: 2, b: 1, code: 0), row(a: 1, b: 5, code: 9),
+              row(a: 1, b: 2, code: 8), row(a: nil, b: nil, code: 1)]
+      keyed = ->(each) { each.attributes['code'] == 1 ? model('code') : model(%w[a b]) }
+
+      expect(described_class.in_key_order(rows, &keyed)).to eq(rows.values_at(4, 3, 2, 1, 0))
     end
   end
 

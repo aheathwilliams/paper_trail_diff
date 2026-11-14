@@ -147,9 +147,9 @@ module PaperTrailDiff
     private_class_method :recorded_value
 
     # JSON writes a time of day as text.
-    #: (untyped, untyped, Array[String]) -> bool
+    #: (untyped, String, Array[String]) -> bool
     def self.written_time?(value, name, times)
-      value.is_a?(String) && times.include?(name.to_s)
+      value.is_a?(String) && times.include?(name)
     end
     private_class_method :written_time?
 

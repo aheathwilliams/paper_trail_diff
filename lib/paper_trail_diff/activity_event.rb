@@ -106,7 +106,9 @@ module PaperTrailDiff
     #: (Array[ActivityEvent]) -> Array[Array[untyped]?]
     def self.restoring_transactions(events)
       events.filter_map do |event|
-        transaction_key(event.version) if event.root? && event.version.event != 'destroy'
+        next unless event.root?
+
+        transaction_key(event.version) unless event.version.event == 'destroy'
       end
     end
 

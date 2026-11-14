@@ -32,7 +32,7 @@ module PaperTrailDiff
 
       version_class = model_class.paper_trail.version_class
       json_column = %w[object object_changes].any? { |name| json_column?(version_class, name) }
-      written_digits(json_column ? :json_column : Object.const_get(:PaperTrail).serializer)
+      written_digits(json_column ? :json_column : Support.constant('PaperTrail').serializer)
     end
 
     #: (Hash[untyped, untyped], Integer?) -> Hash[untyped, untyped]
@@ -78,7 +78,7 @@ module PaperTrailDiff
     def self.written_back(writer)
       stored = { 'at' => PROBE }
       if writer == :json_column
-        json = Object.const_get(:ActiveSupport).const_get(:JSON) #: untyped
+        json = Support.constant('ActiveSupport::JSON') #: untyped
         json.decode(json.encode(stored)).fetch('at')
       else
         writer.load(writer.dump(stored)).fetch('at')
@@ -96,7 +96,7 @@ module PaperTrailDiff
 
       parser = Time #: untyped
       time = parser.parse(stored).to_r
-      (0..NANOSECOND_DIGITS).find { |digits| truncate(PROBE, digits).to_r == time }
+      0.upto(NANOSECOND_DIGITS).find { |digits| truncate(PROBE, digits).to_r == time }
     rescue ArgumentError
       nil
     end

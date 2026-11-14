@@ -21,9 +21,8 @@ module PaperTrailDiff
       version_class = relation.klass
       return in_window unless version_class.column_names.include?('transaction_id')
 
-      key = version_class.primary_key
       crossing = CrossingTransactions.saved_before(version_class, @window.begin_time)
-      saved = { key => crossing.select(key) } #: Hash[untyped, untyped]
+      saved = { version_class.primary_key => crossing } #: Hash[untyped, untyped]
       in_window.or(relation.where(saved))
     end
 

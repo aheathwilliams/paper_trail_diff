@@ -96,20 +96,19 @@ module PaperTrailDiff
     def version_replay
       plan = select_plan
       history = history_until(plan)
-      closing = (closing_step(history, plan) unless restored?(history.last_event))
+      closing = closing_step(history, plan)
+      last = history.last_event #: ActivityEvent
+      closing = nil if closing && restored?(last)
       replayed(plan, history, closing, history.last_snapshot)
     end
 
-    # Whether a range that ends at the root's destroy ends before the record
-    # was restored, saving it again under its id. The range from that
-    # destroy then reports the removal, in its step to the restoring
-    # version, so a range meeting it there leaves the removal to it.
-    #: (ActivityEvent?) -> bool
-    def restored?(event)
-      version = event&.version
-      return false unless version&.event == 'destroy' && event&.root?
-
-      VersionQuery.after(@record.class, version).exists?
+    # Whether the root, whose destroy a range closes on, was restored after
+    # it, saved again under its id. The range from that destroy then reports
+    # the removal, in its step to the restoring version, so a range meeting
+    # it there leaves the removal to it.
+    #: (ActivityEvent) -> bool
+    def restored?(destroy)
+      VersionQuery.after(@record.class, destroy.version).exists?
     end
 
     # Activity replays every root version in the range, even those a version

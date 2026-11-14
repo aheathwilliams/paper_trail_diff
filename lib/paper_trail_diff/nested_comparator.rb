@@ -80,8 +80,7 @@ module PaperTrailDiff
 
     #: (Numeric) -> untyped
     def self.number_key(number)
-      key = rational(number)
-      key.equal?(NAN) ? key : [number.instance_of?(Float), key].freeze
+      [number.instance_of?(Float), rational(number)]
     end
     private_class_method :number_key
 

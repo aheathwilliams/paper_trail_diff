@@ -33,7 +33,7 @@ module PaperTrailDiff
       saved = version.class.arel_table[:created_at]
       at = version.created_at
       later = saved.gt(at).or(saved.eq(at).and(later_id(version)))
-      for_items(model_class, [version.item_id]).where(later)
+      for_items(model_class, version.item_id).where(later)
     end
 
     #: (untyped) -> untyped

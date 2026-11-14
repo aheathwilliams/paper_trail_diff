@@ -88,6 +88,17 @@ RSpec.describe PaperTrailDiff::Support do
                               'title' => '2032-06-01T18:00:00.000-04:00')
     end
 
+    it 'reads a date stored for a datetime column as midnight, under either kind of name' do
+      types = { 'starts_at' => ActiveModel::Type::DateTime.new, 'title' => ActiveModel::Type::String.new }
+      dated = Class.new { define_singleton_method(:attribute_types) { types } }
+      title = '2032-03-02'
+
+      decodable = described_class.decodable({ starts_at: '2032-03-02', 'title' => title }, dated)
+
+      expect(decodable.fetch('starts_at')).to be_an_instance_of(Time).and eq(Time.utc(2032, 3, 2))
+      expect(decodable.fetch('title')).to equal(title)
+    end
+
     it 'reads a plain time by its local clock when Active Record keeps local times' do
       allow(ActiveRecord).to receive(:default_timezone).and_return(:local)
       summer = Time.new(2032, 7, 1, 18, 0, 0, '-04:00')
@@ -211,6 +222,53 @@ RSpec.describe PaperTrailDiff::Support do
 
       expect(described_class.reify(version, dup: true, has_many: false)).to equal(record)
       expect(record.assigned).to eq(rings_at: Time.utc(2000, 1, 1, 12))
+    end
+  end
+
+  describe '.with_recorded_times of a date stored for a datetime column' do
+    # A rebuilt record of a model with a datetime column and no time of day.
+    let(:model) do
+      Class.new do
+        attr_reader :version, :assigned
+
+        def self.version_association_name = :version
+
+        def self.attribute_types
+          { 'starts_at' => ActiveModel::Type::DateTime.new,
+            'title' => ActiveModel::Type::String.new }
+        end
+
+        def initialize(version)
+          @version = version
+          @assigned = {}
+        end
+
+        def has_attribute?(name) = self.class.attribute_types.key?(name)
+
+        def []=(name, value)
+          @assigned[name] = value
+        end
+      end
+    end
+
+    it 'assigns the date as midnight, where the database keeps it, under either kind of name' do
+      version = double(object: "starts_at: 2032-03-02\ntitle: '2032-03-02'\n",
+                       object_deserialized: { starts_at: Date.new(2032, 3, 2),
+                                              'title' => '2032-03-02' })
+      record = model.new(version)
+
+      expect(described_class.with_recorded_times(record)).to equal(record)
+      expect(record.assigned).to eq(starts_at: Time.utc(2032, 3, 2))
+      expect(record.assigned.fetch(:starts_at)).to be_an_instance_of(Time)
+    end
+
+    it 'decodes nothing again when no date is stored without a time' do
+      version = double(object: "starts_at: 2032-03-02 10:00:00.000000000 Z\n",
+                       object_deserialized: {})
+      record = model.new(version)
+
+      expect(described_class.with_recorded_times(record)).to equal(record)
+      expect(version).not_to have_received(:object_deserialized)
     end
   end
 

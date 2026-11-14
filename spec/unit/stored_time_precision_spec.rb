@@ -103,4 +103,27 @@ RSpec.describe PaperTrailDiff::StoredTimePrecision do
     ActiveSupport::JSON::Encoding.time_precision = precision
     PaperTrail.serializer = original
   end
+
+  # A writer that keeps the time's text, under its own name and digits.
+  def writer(text)
+    Module.new do
+      define_singleton_method(:dump) { |_object| text }
+      define_singleton_method(:load) { |dumped| { 'at' => dumped } }
+    end
+  end
+
+  it 'reads the digits each writer keeps, writing once for each' do
+    original = PaperTrail.serializer
+    nanoseconds = writer(ActiveSupport::SafeBuffer.new('2001-02-03T04:05:06.123456789Z'))
+    rounded = writer('2001-02-03T04:05:06.1235Z')
+    allow(nanoseconds).to receive(:dump).and_call_original
+
+    PaperTrail.serializer = nanoseconds
+    2.times { expect(described_class.digits(model_with_history)).to eq(9) }
+    expect(nanoseconds).to have_received(:dump).once
+    PaperTrail.serializer = rounded
+    expect(described_class.digits(model_with_history)).to be_nil
+  ensure
+    PaperTrail.serializer = original
+  end
 end

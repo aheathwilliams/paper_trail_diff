@@ -34,6 +34,16 @@ class EdgeHolder < ActiveRecord::Base
   self.table_name = 'tracked_articles'
   has_many :stickers, class_name: 'EdgeSticker', as: :holder
   has_many :special_stickers, class_name: 'EdgeSpecialSticker', as: :holder
+  has_many :quiet_stickers, class_name: 'EdgeQuietSticker', as: :holder
+  has_paper_trail
+end
+
+# Stickers a default scope hides, which an analysis reads all the same.
+class EdgeQuietSticker < ActiveRecord::Base
+  self.table_name = 'edge_stickers'
+  self.inheritance_column = nil
+  default_scope { where.not(label: 'hidden') }
+  belongs_to :holder, polymorphic: true, optional: true
   has_paper_trail
 end
 
@@ -76,6 +86,13 @@ RSpec.describe PaperTrailDiff::AssociationActivityEdge do
 
   def owners(edge, filter)
     edge.relation(filter).distinct.pluck(edge.column).map(&:to_i).sort
+  end
+
+  def statements(&)
+    queries = []
+    counter = ->(*, payload) { queries << payload[:sql] unless payload[:name] == 'SCHEMA' }
+    ActiveSupport::Notifications.subscribed(counter, 'sql.active_record', &)
+    queries
   end
 
   describe 'the base edge' do
@@ -204,15 +221,45 @@ RSpec.describe PaperTrailDiff::AssociationActivityEdge do
       expect(edge.column).to eq(TrackedComment.arel_table[:article_id])
     end
 
+    it 'reads only the children in the filter' do
+      article = TrackedArticle.create!(title: 'Owner')
+      quiet = unversioned { article.comments.create!(body: 'never versioned') }
+      unversioned { TrackedArticle.create!(title: 'Other').comments.create!(body: 'not asked') }
+      edge = described_class::Unversioned.new(reflection(TrackedArticle, :comments), nil)
+
+      expect(owners(edge, [quiet.id])).to eq([article.id])
+      expect(owners(edge, [])).to eq([])
+    end
+
+    # The quiet row's key is the versioned row's version id, which only the
+    # versioned row's item_id may be told from.
     it 'compares a string item_id with the key as values' do
       post = StringItemPost.create!(title: 'Owner')
-      quiet = unversioned { post.notes.create!(body: 'never versioned') }
       other = StringItemPost.create!(title: 'Other')
-      versioned = other.notes.create!(body: 'versioned')
+      versioned = other.notes.create!(id: 900, body: 'versioned')
+      quiet = unversioned do
+        post.notes.create!(id: versioned.versions.last.id, body: 'never versioned')
+      end
       edge = described_class::Unversioned.new(reflection(StringItemPost, :notes), nil)
 
       expect(owners(edge, [quiet.id, versioned.id])).to eq([post.id])
       expect(owners(edge, StringItemNote.select(:id))).to eq([post.id])
+    end
+
+    # Where the types match, the database compares them in one statement;
+    # otherwise the ids of the versioned rows are read first, each once.
+    it 'compares the key with item_id in the database only where they share a type' do
+      integer_edge = described_class::Unversioned.new(reflection(TrackedArticle, :comments), nil)
+      string_edge = described_class::Unversioned.new(reflection(StringItemPost, :notes), nil)
+      post = StringItemPost.create!(title: 'Owner')
+      2.times { |index| post.notes.first_or_create!(body: 'versioned').update!(body: index.to_s) }
+
+      expect(integer_edge.relation([1]).to_sql).to include('EXISTS')
+      sql = statements do
+        expect(string_edge.relation(StringItemNote.select(:id)).to_sql).not_to include('EXISTS')
+      end
+      expect(sql.grep(/DISTINCT/).length).to eq(1)
+      expect(sql.grep(/DISTINCT/).first.scan('SELECT').length).to eq(1)
     end
 
     it 'reads only children held under the polymorphic owner type' do
@@ -226,6 +273,16 @@ RSpec.describe PaperTrailDiff::AssociationActivityEdge do
 
       expect(owners(edge, [held.id, other.id])).to eq([holder.id])
       expect(owners(documents, [held.id, other.id])).to eq([holder.id])
+      expect(owners(edge, [other.id])).to eq([])
+      expect(owners(documents, [held.id])).to eq([])
+    end
+
+    it 'reads children past their default scope' do
+      holder = EdgeHolder.create!(title: 'Holder')
+      hidden = unversioned { EdgeQuietSticker.create!(label: 'hidden', holder: holder) }
+      edge = described_class::Unversioned.new(reflection(EdgeHolder, :quiet_stickers), nil)
+
+      expect(owners(edge, [hidden.id])).to eq([holder.id])
     end
   end
 
