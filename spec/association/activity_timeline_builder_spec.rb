@@ -312,6 +312,21 @@ RSpec.describe PaperTrailDiff::ActivityTimelineBuilder do
     expect(comment_bodies(result)).to eq([{ from: 'one', to: 'two' }])
   end
 
+  # A left-out event moves the reported end past it only when no version
+  # filter chooses the steps (see ActivityHistoryBuilder).
+  it 'tells the history whether a version filter chooses its steps' do
+    article, _comment, from, to = edited_history
+    allow(PaperTrailDiff::ActivityHistoryBuilder).to receive(:new).and_call_original
+
+    timeline(article, from: from, to: to)
+    timeline(article, from: from, to: to, version_scope: ->(versions) { versions })
+
+    expect(PaperTrailDiff::ActivityHistoryBuilder)
+      .to have_received(:new).with(any_args, hash_including(filtered: false)).once
+    expect(PaperTrailDiff::ActivityHistoryBuilder)
+      .to have_received(:new).with(any_args, hash_including(filtered: true)).once
+  end
+
   describe 'built directly' do
     let(:adapter) do
       PaperTrailDiff::PaperTrailAdapter.new(associations: [:comments],

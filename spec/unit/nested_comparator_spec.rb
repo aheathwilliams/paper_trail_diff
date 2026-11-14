@@ -249,6 +249,12 @@ RSpec.describe PaperTrailDiff::NestedComparator do
 
   # A number retyped inside a list is a change wherever it sits, as it is
   # under a key.
+  it 'reads every NaN as one inside an array, as under a key' do
+    expect(described_class.call({ 'a' => Float::NAN }, { 'a' => BigDecimal('NaN') }).keys).to eq([])
+    expect(described_class.call({ 'a' => [Float::NAN] }, { 'a' => [BigDecimal('NaN')] }).keys)
+      .to eq([])
+  end
+
   it 'reports 1 to 1.0 inside an array as it does under a key' do
     expect(described_class.call({ 'a' => 1 }, { 'a' => 1.0 }).keys).to eq([['a']])
     expect(described_class.call({ 'a' => [1] }, { 'a' => [1.0] }).keys).to eq([['a']])
