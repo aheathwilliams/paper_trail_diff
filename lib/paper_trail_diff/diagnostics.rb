@@ -117,7 +117,6 @@ module PaperTrailDiff
       inspect_polymorphic_targets(selected)
       inspect_approximate_paths(model_class) if @allow_approximate
       inspect_checkpoint_timestamp(model_class)
-      inspect_habtm(model_class, selected)
     end
 
     # @rbs @versions: Array[untyped]
@@ -161,32 +160,6 @@ module PaperTrailDiff
       end
     end
 
-    #: (untyped, Array[Array[untyped]]) -> void
-    def inspect_habtm(model_class, selected)
-      habtm = selected.select { |_, reflection| reflection.macro == :has_and_belongs_to_many }
-      return if habtm.empty?
-
-      inspect_transaction_metadata(habtm.map(&:first))
-      inspect_shared_transactions(model_class, habtm)
-    end
-
-    # PT-AT does not record which owner a HABTM member belongs to, so a
-    # transaction that more than one owner recorded members in cannot be read.
-    #: (untyped, Array[Array[untyped]]) -> void
-    def inspect_shared_transactions(model_class, habtm)
-      versions = @versions.select { |version| VersionBoundary.transaction_id(version) }
-      habtm.each do |path, reflection|
-        owners = HabtmTransactionOwners.new(model_class, reflection)
-        versions.each do |version|
-          next unless owners.ambiguous?(version.transaction_id)
-
-          add_error(:habtm_transaction_shared,
-                    'HABTM endpoint shares its transaction with another owner of the association',
-                    path, version.id)
-        end
-      end
-    end
-
     # With the current record as one endpoint there is one version, and the
     # sequence runs on from it.
     #: (untyped) -> void
@@ -216,24 +189,6 @@ module PaperTrailDiff
 
       message = 'manual checkpoints should set synchronize_version_creation_timestamp: false'
       add_warning(:synchronized_version_timestamp, message)
-    end
-
-    #: (Array[String]) -> void
-    def inspect_transaction_metadata(paths)
-      @versions.each do |version|
-        if !version.respond_to?(:transaction_id)
-          add_error(:transaction_id_column_missing, 'version has no transaction_id column')
-        elsif version.transaction_id.nil?
-          paths.each do |path|
-            add_error(
-              :transaction_id_missing,
-              'HABTM endpoint has no transaction-backed association snapshot',
-              path,
-              version.id
-            )
-          end
-        end
-      end
     end
 
     #: (untyped) -> bool

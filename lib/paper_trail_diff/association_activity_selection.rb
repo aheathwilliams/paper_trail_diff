@@ -149,11 +149,10 @@ module PaperTrailDiff
 
     #: (untyped) -> Array[AssociationActivityEdge]
     def edges(reflection)
-      kinds = case reflection.macro
-              when :belongs_to then [AssociationActivityEdge::BelongsTo]
-              when :has_and_belongs_to_many
-                [AssociationActivityEdge::LiveHabtm, AssociationActivityEdge::RecordedHabtm]
-              else [AssociationActivityEdge::Child, AssociationActivityEdge::Unversioned]
+      kinds = if reflection.belongs_to?
+                [AssociationActivityEdge::BelongsTo]
+              else
+                [AssociationActivityEdge::Child, AssociationActivityEdge::Unversioned]
               end
       kinds.map { |kind| kind.new(reflection, @time_range) }.select(&:available?)
     end

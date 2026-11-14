@@ -155,19 +155,6 @@ RSpec.describe PaperTrailDiff::PreparedHistoryLoader do
     expect(supported?(history, TrackedArticle, :comments)).to be(true)
   end
 
-  it 'records the HABTM membership of each root transaction' do
-    article = TrackedArticle.create!(title: 'Article')
-    tag = TrackedTag.create!(name: 'ruby')
-    article.tags << tag
-    tagged = checkpoint(article)
-
-    history = load_history(article, [:tags], root_versions: [tagged])
-
-    expect(ids(history, TrackedArticle, :tags, 'TrackedTag')).to eq([tag.id])
-    expect(history.instance_variable_get(:@habtm))
-      .to eq(%w[TrackedArticle tags] => { tagged.transaction_id.to_s => [tag.id] })
-  end
-
   it 'loads the owners of a belongs_to edge before reading their keys' do
     article = TrackedArticle.create!(title: 'Article')
     reviewer = TrackedAuthor.create!(name: 'Reviewer')
@@ -332,8 +319,7 @@ RSpec.describe PaperTrailDiff::PreparedHistoryLoader do
     # Each edge loader reads children into its activity index's.
     activities.each do |activity|
       expect(PaperTrailDiff::PreparedEdgeLoader).to have_received(:new)
-        .with(instance_of(PaperTrailDiff::PreparedRecordIndex), versions,
-              children: equal(activity.children))
+        .with(instance_of(PaperTrailDiff::PreparedRecordIndex), children: equal(activity.children))
     end
   end
 

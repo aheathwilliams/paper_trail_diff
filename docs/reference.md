@@ -515,7 +515,7 @@ a version in, on the record or on its associations:
 ```ruby
 priya = ->(versions) { versions.where(whodunnit: "Priya Shah") }
 steps = PaperTrailDiff.analyze(
-  article, within: window, associations: %i[comments tags], activity: true,
+  article, within: window, associations: %i[comments], activity: true,
            version_scope: priya
 ).activity_timeline
 
@@ -528,7 +528,7 @@ To count everyone's changes from one read, group the steps in Ruby by
 <!-- executable:readme-person-changes -->
 ```ruby
 steps = PaperTrailDiff.analyze(
-  article, within: window, associations: %i[comments tags], activity: true
+  article, within: window, associations: %i[comments], activity: true
 ).activity_timeline
 
 attributed = steps.reject(&:empty?)
@@ -682,43 +682,6 @@ ends before the deletion, as at any other version, and the range from the
 `destroy` reports the removal, in its step to the version that restored it,
 so the two report it once. The transaction that restored it is the root's
 from its first event, as for a record created afresh.
-
-### HABTM limitation
-
-`has_and_belongs_to_many` join rows have no versions, so the gem cannot split
-their changes into separate events once a range runs past the last root version
-into the current record. That case raises `UnsupportedLiveActivityError`. End
-the range at a version instead (see the
-[checkpoint recipe](#saving-a-checkpoint)), or use a join model with
-`has_many :through`.
-
-PT-AT records HABTM members under the transaction a version was saved in, and
-does not say which record they belong to. If another record with a HABTM of the
-same name, such as a second article, also saved a version in that transaction
-and members were recorded there, reading the root's membership at that version
-raises `IncompleteAssociationHistoryError` instead of mixing both records'
-members. Save each HABTM owner's versions in a transaction of its own.
-
-PT-AT records membership only when the owner saves a version, so the gem knows
-it only at root versions. A change made between two root versions is reported
-in the first step after the earlier one, and credited to that step's source:
-usually the earlier root version, which someone else may have saved. A member
-created between them is reported in the step that starts with its creation
-instead. A change attached before a checkpoint is therefore credited to
-whoever saved the version before the checkpoint, not to the checkpoint's
-author. To credit a change to the person who made it, save a checkpoint just
-before the change as well as after it: the step between the two checkpoints is
-theirs.
-
-PT-AT works out the membership a version records from the instance that saves
-it: the instance's current members, with the changes that instance made undone,
-so that the version holds the membership from before its own event. It never
-forgets those changes, not even on `reload`. Only the first version an instance
-saves after changing a HABTM is right; each later save from it records the
-membership from before that change again. The gem then reports the change late,
-or reports a member that never left as removed and added again. Load the record
-again, with `find`, before saving it a second time, and save checkpoints from a
-freshly loaded record, as the [checkpoint recipe](#saving-a-checkpoint) does.
 
 ## Reports for many records
 
@@ -1055,8 +1018,10 @@ diff = PaperTrailDiff.compare(from, to, associations: [:author, "comments.replie
 (`associations: :comments`) or hashes of names to what to include below them
 (`associations: [:author, { comments: :replies }]`).
 
-Supported: `belongs_to`, `has_one`, `has_many` (including `:through`), and
-`has_and_belongs_to_many`. Associated models must use `has_paper_trail`, the
+Supported: `belongs_to`, `has_one`, and `has_many` (including `:through`).
+A `has_and_belongs_to_many` is not: see
+[replacing a has_and_belongs_to_many](#replacing-a-has_and_belongs_to_many).
+Associated models must use `has_paper_trail`, the
 target of a `has_one` or `has_many` must declare the `belongs_to` back, and
 historical states need PT-AT installed and enabled
 (`PaperTrail.config.track_associations = true`). The gem never follows
@@ -1073,7 +1038,7 @@ How each kind is reported:
 | Association | Record replaced, added, or removed | Same record, fields changed |
 | --- | --- | --- |
 | `belongs_to`, `has_one` | `relationship` (a `ValueChange` of snapshots) | `changed` |
-| `has_many`, HABTM | `added`, `removed` (snapshots) | `changed` (`RecordChange`) |
+| `has_many` | `added`, `removed` (snapshots) | `changed` (`RecordChange`) |
 
 ```ruby
 diff.associations["author"].relationship  # from one author to another
@@ -1100,8 +1065,7 @@ comments.changed.first.associations["replies"].added
   names no class, such as one a renamed model left in its versions, raises
   `IncompleteAssociationHistoryError` naming the record.
 - `has_many :through` uses the versioned join model's history, so join-model
-  attributes are available. HABTM reports membership and the target's
-  attributes; it has no join model, so it has no join attributes.
+  attributes are available.
 - A `has_many :through` holds, at each point, the records the owner reached
   through the join records it had then. A record that moves to another join
   record leaves one owner and joins the other, and so does every record under
@@ -1117,24 +1081,11 @@ comments.changed.first.associations["replies"].added
   model with no versions, so the through cannot be rebuilt from history.
   Replace the HABTM with a `has_many :through` a versioned join model to
   compare it. `association_paths` leaves such a through out.
-- A HABTM can only be rebuilt on the root record. PT-AT records membership
-  when the record that owns it saves a version, in rows that name the
-  transaction and the association but not the owner, so a root checkpoint
-  holds the root's membership and no one else's. A HABTM later in a path, such
-  as `"tags.articles"` or `"author.articles.tags"`, raises
-  `UnsupportedAssociationError` up front in every method, even when the path
-  leads back to the root, as `"comments.article.tags"` does.
-  `association_paths` leaves such a path out. To follow another record's
-  memberships, compare that record's own checkpoints, or replace the HABTM
-  with a `has_many :through` a versioned join model.
-- A HABTM with a scope, such as `-> { where(active: true) }`, or whose target
-  has a default scope, raises `UnsupportedAssociationError` up front in every
-  method. PT-AT records a HABTM's members by loading the association through
-  its scope when the owner saves, so a target outside the scope then is never
-  recorded, and one that enters the scope before the owner's next save is a
-  member history cannot show. Replace it with a `has_many :through` a
-  versioned join model, which can be scoped. `association_paths` leaves it
-  out.
+- A `has_and_belongs_to_many` raises `UnsupportedAssociationError` up front
+  in every method, wherever it is in a path, and `association_paths` leaves
+  it out. Its join rows have no versions, so nothing records when a member
+  joined or left. See
+  [replacing a has_and_belongs_to_many](#replacing-a-has_and_belongs_to_many).
 - An association keyed on a column other than a primary key, such as
   `has_many :comments, primary_key: :legacy_id`, raises
   `UnsupportedAssociationError` up front in every method, and so does a
@@ -1165,10 +1116,52 @@ comments.changed.first.associations["replies"].added
   `UnknownAssociationError`; unsupported macros raise
   `UnsupportedAssociationError`.
 
+### Replacing a has_and_belongs_to_many
+
+A `has_and_belongs_to_many` keeps its members in a join table with no model,
+so PaperTrail saves no version when one joins or leaves. Give the join table
+a model with `has_paper_trail`, and read the association with
+`has_many :through`:
+
+```ruby
+class AddIdToArticlesTags < ActiveRecord::Migration[7.1]
+  def change
+    add_column :articles_tags, :id, :primary_key # a version names its row by id
+  end
+end
+
+class Tagging < ApplicationRecord
+  self.table_name = "articles_tags"
+  belongs_to :article
+  belongs_to :tag
+  has_paper_trail
+end
+
+class Article < ApplicationRecord
+  has_many :taggings, dependent: :destroy
+  has_many :tags, through: :taggings, dependent: :destroy
+  has_paper_trail
+end
+```
+
+`article.tags`, `article.tags << tag`, and `article.tag_ids = ids` work as
+before. Two things differ:
+
+- `dependent: :destroy` on the `has_many :through` is what records a member
+  leaving. Without it, `article.tags.delete(tag)` and `tag_ids=` delete the
+  join row without callbacks, so no version is saved and history cannot
+  show when the member left.
+- Members that joined before the change have no `create` version, so they
+  read as members from before history began, like any
+  [record created without a version](#how-papertrail-stores-history).
+
+Request `associations: [:tags]` for the members, or `["taggings.tag"]` to
+read the join rows' own attributes too.
+
 ### Saving a checkpoint
 
 Sometimes you want a version of the root record without changing it, for
-example to fix the end of a report or to capture HABTM membership. Save one
+example to fix the end of a report. Save one
 inside a transaction on a freshly loaded record, and turn off PaperTrail's
 timestamp synchronization for that model so the version records the time it
 was saved:
@@ -1186,17 +1179,7 @@ end
 ```
 
 Without `synchronize_version_creation_timestamp: false`, the checkpoint takes the
-record's old `updated_at` as its time and lands in the past. Save one record per
-transaction: HABTM membership cannot be read from a transaction in which
-another record with the same HABTM also saved a version (see the
-[HABTM limitation](#habtm-limitation)). A checkpoint records membership as it
-is when saved, including a member attached or created earlier in the same
-transaction. A change it captures is credited to the step before it, so its
-author is whoever saved the version before the checkpoint, unless that is a
-checkpoint the same person saved just before the change. A member created in
-the checkpoint's transaction is reported in the step of its creation instead,
-or, when the range ends at the checkpoint, in the step before it. Don't save
-the instance that made the HABTM change again; it records the old membership.
+record's old `updated_at` as its time and lands in the past.
 
 ### Files from ActiveStorage
 
@@ -1389,8 +1372,8 @@ Which version a row names:
   the same step. A record that joined or left by its own update, such as a
   comment moved to another article, names the last of its versions in the
   step's transaction. A record that joined or left through another record's
-  change, such as a new `belongs_to` target or a `has_and_belongs_to_many`
-  member, names the step's `source_boundary`.
+  change, such as a new `belongs_to` target, names the step's
+  `source_boundary`.
 
 With `recorded_changes: true`, a change PaperTrail did not record gets a row of
 its own: a write [saved without a version](#how-papertrail-stores-history),
@@ -1581,8 +1564,8 @@ Each descriptor has `path`, `kind`, `target_type`, `through`, `polymorphic`,
 and `cycle`. Cycles are marked and not followed.
 
 Only associations a request accepts are listed, so each path can be passed to
-`associations:`. The PaperTrail versions association, a `has_many :through`
-that goes through a HABTM, a scoped HABTM, a HABTM below the root, an
+`associations:`. The PaperTrail versions association, a
+`has_and_belongs_to_many`, a `has_many :through` that goes through one, an
 association keyed on a column other than a primary key, one whose ends keep
 their versions in different tables, and one whose target, or a model its
 `has_many :through` goes through, has no `has_paper_trail` are left out. A path
@@ -1598,7 +1581,7 @@ association history. They are what `compare` takes: two versions, or a version
 and the current record.
 
 ```ruby
-report = PaperTrailDiff.diagnose(from_version, article, associations: [:tags, "comments.replies"])
+report = PaperTrailDiff.diagnose(from_version, article, associations: [:author, "comments.replies"])
 
 report.ok?                  # no errors among the checks that ran
 report.errors.map(&:code)
@@ -1849,10 +1832,9 @@ All errors inherit from `PaperTrailDiff::Error`.
 | `FilterLimitExceededError` | `historical_filter:` needs more than `max_filter_versions:` |
 | `AssociationTrackingUnavailableError` | Association history is requested without PT-AT |
 | `UnknownAssociationError` | An association name does not exist |
-| `UnsupportedAssociationError` | An association's macro is not supported, a path continues past a polymorphic `belongs_to`, a `has_many :through` goes through a HABTM, a HABTM is scoped or below the root, an association is keyed on a column other than a primary key, the target of a `has_one` or `has_many` declares no `belongs_to` on its foreign key, or history cannot read a [costly association](#costly-associations) and `allow_approximate: true` was not passed |
+| `UnsupportedAssociationError` | An association's macro is not supported, a path continues past a polymorphic `belongs_to`, an association is a `has_and_belongs_to_many` or a `has_many :through` that goes through one, an association is keyed on a column other than a primary key, the target of a `has_one` or `has_many` declares no `belongs_to` on its foreign key, or history cannot read a [costly association](#costly-associations) and `allow_approximate: true` was not passed |
 | `UnversionedAssociationError` | An association's target model, or a model a `has_many :through` goes through, has no `has_paper_trail`, including the class a polymorphic `belongs_to` names |
-| `IncompleteAssociationHistoryError` | PT-AT did not record enough to rebuild an association, such as HABTM without a transaction or in a transaction another record with that HABTM also saved a version in, or a polymorphic type names no class |
-| `UnsupportedLiveActivityError` | A HABTM activity range ends at the current record |
+| `IncompleteAssociationHistoryError` | PT-AT did not record enough to rebuild an association, such as a polymorphic type that names no class |
 | `AmbiguousNestedKeyError` | `nested_changes` finds keys like `:a` and `"a"` together |
 
 ## Limitations
@@ -1897,11 +1879,8 @@ Results can only be as complete as the history PaperTrail and PT-AT recorded.
   see [one step per transaction group](#one-step-per-transaction-group-transaction).
 - A transaction that saves in two version tables is read in each as far as
   its versions there: where it ends is read from one version table at a time.
-- HABTM membership history exists only where PT-AT recorded it in a
-  transaction, and only for the root record without a scope: a scoped HABTM,
-  or one below the root, raises `UnsupportedAssociationError`, and a transaction that another record with
-  that HABTM also saved a version in raises `IncompleteAssociationHistoryError`. HABTM changes cannot become their own
-  activity steps.
+- A `has_and_belongs_to_many` has no history to read; see
+  [replacing a has_and_belongs_to_many](#replacing-a-has_and_belongs_to_many).
 - PT-AT has its own
   [limitations](https://github.com/westonganger/paper_trail-association_tracking#limitations),
   especially for some `has_one` histories. The gem follows PT-AT's configured

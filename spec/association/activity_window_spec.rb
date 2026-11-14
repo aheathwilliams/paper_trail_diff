@@ -270,20 +270,6 @@ RSpec.describe 'Activity over a window',
       .to eq([%w[TrackedComment TrackedComment]])
   end
 
-  it 'refuses HABTM activity only when it has to close on the live row' do
-    article = TrackedArticle.create!(title: 'one')
-    start = now
-    article.update!(title: 'two')
-    finish = now
-    options = { within: start..finish, associations: [:tags] }
-
-    expect { SpecTimelines.activity_timeline(article, **options) }
-      .to raise_error(PaperTrailDiff::UnsupportedLiveActivityError, /tags/)
-    checkpoint(article)
-    expect(titles(SpecTimelines.activity_timeline(article, **options)))
-      .to eq([{ from: 'one', to: 'two' }])
-  end
-
   # A row of a comment saved after the window names its reviewer, but no state
   # the history loaded does, so the history never prepared the reviewer's own
   # comments. The reviewer is loaded anyway, as the article's author, and the

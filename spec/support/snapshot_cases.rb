@@ -28,7 +28,7 @@ module SnapshotCases
         'author' => [:belongs_to, %w[Author]],
         'profile' => [:has_one, %w[Profile]],
         'comments' => [:has_many, %w[Comment]],
-        'tags' => [:has_and_belongs_to_many, %w[Tag]],
+        'tags' => [:has_many, %w[Tag]],
         'items' => [:has_many, %w[Comment Note]]
       },
       'Comment' => {

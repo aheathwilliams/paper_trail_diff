@@ -72,7 +72,6 @@ module PaperTrailDiff
     )
       return full_snapshot(root_endpoint, context_endpoint) unless previous_snapshot
 
-      branches = with_habtm(root_endpoint, context_endpoint, branches)
       if isolated && event && branches.length > 1
         return refresh_independent_branches(root_endpoint, context_endpoint, previous_snapshot,
                                             branches, event)
@@ -93,22 +92,14 @@ module PaperTrailDiff
     # when the root is among the records it saved (`branches` is nil).
     #: (untyped, untyped, RecordSnapshot, Array[String]?, Array[ActivityEvent]) -> RecordSnapshot?
     def apply_transaction(root_endpoint, context_endpoint, previous_snapshot, branches, events)
-      recorded = with_habtm(root_endpoint, context_endpoint, [])
       snapshot = @applier.call(root_endpoint, context_endpoint, previous_snapshot, events)
-      return carried(root_endpoint, context_endpoint, snapshot, recorded) if snapshot
+      return snapshot if snapshot
       return full_snapshot(root_endpoint, context_endpoint) unless branches
 
-      refreshed(root_endpoint, context_endpoint, previous_snapshot, recorded | branches)
+      refreshed(root_endpoint, context_endpoint, previous_snapshot, branches)
     end
 
     private
-
-    # The snapshot, with the branches a root version itself records read
-    # again where the context is one.
-    #: (untyped, untyped, RecordSnapshot, Array[String]) -> RecordSnapshot?
-    def carried(root_endpoint, context_endpoint, snapshot, recorded)
-      recorded.empty? ? snapshot : refreshed(root_endpoint, context_endpoint, snapshot, recorded)
-    end
 
     # @rbs @tree: AssociationTree
     # @rbs @ignore_policy: IgnorePolicy
@@ -120,16 +111,6 @@ module PaperTrailDiff
     # @rbs @event_refresher: ActivityEventSnapshotRefresher
     # @rbs @root_refresher: ActivityRootSnapshotRefresher
     # @rbs @applier: ActivityTransactionApplier
-
-    # A root version's HABTM members include any created earlier in its
-    # transaction. A range ending at that version leaves those creations out
-    # as events, so the branch is read again there, whatever event led to it.
-    #: (untyped, untyped, Array[String]) -> Array[String]
-    def with_habtm(root_endpoint, context_endpoint, branches)
-      root = Endpoint.version?(root_endpoint) &&
-             VersionBoundary.same_version?(root_endpoint, context_endpoint)
-      root ? branches | @traversal.habtm_paths(RecordedClass.for(root_endpoint)) : branches
-    end
 
     #: (untyped, untyped, RecordSnapshot, Array[String], ActivityEvent) -> RecordSnapshot?
     def refresh_independent_branches( # rubocop:disable Metrics/MethodLength

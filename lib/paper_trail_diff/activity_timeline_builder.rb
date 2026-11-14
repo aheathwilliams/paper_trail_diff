@@ -221,7 +221,6 @@ module PaperTrailDiff
       end
 
       Endpoint.validate_pair!(@range.from, @to)
-      reject_live_habtm!
     end
 
     # A window with no selected event reports nothing, and so does one whose
@@ -274,7 +273,6 @@ module PaperTrailDiff
     #: (RootVersionPlan, **untyped) -> [Array[ActivityEvent], untyped, untyped]
     def events_through(wide, **options)
       live = wide.closing_record
-      reject_live_habtm! if live
       captured_at = (Time.now.utc if live)
       events, snapshots = range_events(wide, captured_at, **options)
       [events, snapshots, captured_at]
@@ -318,11 +316,6 @@ module PaperTrailDiff
       elsif event.version.event == 'destroy'
         ActivityBoundary.destroyed(event.version, recorded: root_recorded)
       end
-    end
-
-    #: () -> void
-    def reject_live_habtm!
-      @traversal.reject_live_habtm_activity!(@record.class)
     end
 
     #: () -> RecordedChangesReader?

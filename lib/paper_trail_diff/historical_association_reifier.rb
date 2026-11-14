@@ -4,10 +4,9 @@
 module PaperTrailDiff
   # Reconstructs selected nested edges at one root PaperTrail endpoint.
   class HistoricalAssociationReifier
-    #: (untyped, ?habtm_version: untyped) -> void
-    def initialize(version, habtm_version: version)
+    #: (untyped) -> void
+    def initialize(version)
       @transaction_id = VersionBoundary.transaction_id(version)
-      @habtm_transaction_id = VersionBoundary.transaction_id(habtm_version)
       @version_at = version.created_at
       # Keyed on record identity rather than `object_id`, which Ruby may reuse
       # once an earlier record in the same pass has been collected.
@@ -23,7 +22,6 @@ module PaperTrailDiff
     private
 
     # @rbs @transaction_id: untyped
-    # @rbs @habtm_transaction_id: untyped
     # @rbs @version_at: untyped
     # @rbs @reified_associations: Hash[untyped, Hash[untyped, bool]]
 
@@ -40,8 +38,6 @@ module PaperTrailDiff
         reifier(:HasOne).reify(reflection, record, options, @transaction_id)
       when :has_many
         reify_has_many(record, reflection)
-      when :has_and_belongs_to_many
-        reify_habtm(record, reflection)
       end
     end
 
@@ -116,26 +112,6 @@ module PaperTrailDiff
         reify_association(join, source)
         Array(join.public_send(source.name))
       end
-    end
-
-    #: (untyped, untyped) -> void
-    def reify_habtm(record, reflection)
-      unless @habtm_transaction_id
-        message = 'HABTM reconstruction requires a transaction-backed endpoint version'
-        raise IncompleteAssociationHistoryError, message
-      end
-      HabtmTransactionOwners.new(record.class, reflection)
-                            .ensure_single_owner!(@habtm_transaction_id)
-
-      paper_trail = Object.const_get(:PaperTrail) #: untyped
-      target_versioned = paper_trail.request.enabled_for_model?(reflection.klass)
-      reifier(:HasAndBelongsToMany).reify(
-        target_versioned,
-        reflection,
-        record,
-        options,
-        @habtm_transaction_id
-      )
     end
 
     #: () -> Hash[Symbol, untyped]

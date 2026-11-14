@@ -143,9 +143,9 @@ RSpec.describe PaperTrailDiff::RecordedOwner do
 
         %i[loose_comments loose_comment_replies].each do |name|
           reflection = OwnerSpecArticle.reflect_on_association(name)
-          expect(PaperTrailDiff::AssociationTraversal.unsupported_reason(
-                   OwnerSpecArticle, reflection, root: true
-                 )).to eq(expected)
+          expect(PaperTrailDiff::AssociationTraversal.unsupported_reason(OwnerSpecArticle,
+                                                                         reflection))
+            .to eq(expected)
         end
       end
     end

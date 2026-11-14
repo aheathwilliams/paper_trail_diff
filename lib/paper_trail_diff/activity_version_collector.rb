@@ -87,11 +87,8 @@ module PaperTrailDiff
     def edge_groups(parent, reflection, branch)
       return through_groups(parent, reflection, branch) if reflection.through_reflection?
 
-      case reflection.macro
-      when :belongs_to
+      if reflection.belongs_to?
         belongs_to_groups(parent.fetch(:model), parent.fetch(:ids), reflection)
-      when :has_and_belongs_to_many
-        habtm_groups(parent.fetch(:model), parent.fetch(:versions), reflection)
       else
         direct_child_groups(parent.fetch(:model), parent.fetch(:ids), reflection)
       end
@@ -138,11 +135,6 @@ module PaperTrailDiff
     def direct_child_groups(parent_class, parent_ids, reflection)
       item_ids = @prepared.child_ids(parent_class, parent_ids, reflection, @range)
       item_ids.empty? ? [] : [group(reflection.klass, item_ids)]
-    end
-
-    #: (untyped, Array[untyped], untyped) -> Array[Hash[Symbol, untyped]]
-    def habtm_groups(parent_class, parent_versions, reflection)
-      identity_groups(@prepared.habtm_rows(parent_class, parent_versions, reflection), reflection)
     end
 
     # A type a polymorphic row stored that names no class has no versions to

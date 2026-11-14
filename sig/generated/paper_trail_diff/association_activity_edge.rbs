@@ -39,10 +39,6 @@ module PaperTrailDiff
     # : (untyped, String) -> Symbol?
     def column_type: (untyped, String) -> Symbol?
 
-    # A relation is compared as its SQL; ids are compared as values.
-    # : (untyped) -> untyped
-    def arel_value: (untyped) -> untyped
-
     # The owners a child pointed at when the window opened or after a change
     # inside it, as PT-AT recorded them on the child's own versions.
     class Child < AssociationActivityEdge
@@ -119,46 +115,6 @@ module PaperTrailDiff
 
       # : (Hash[Symbol, untyped]) -> untyped
       def owner_rows: (Hash[Symbol, untyped]) -> untyped
-    end
-
-    # The owners a HABTM join row links to a target now. A join table has no
-    # model to type its columns, so the owner column is read by quoted name.
-    class LiveHabtm < AssociationActivityEdge
-      # : (untyped, TimeRange?) -> void
-      def initialize: (untyped, TimeRange?) -> void
-
-      # : (untyped) -> untyped
-      def relation: (untyped) -> untyped
-
-      private
-
-      @table: untyped
-
-      # : () -> Hash[String, Symbol?]
-      def join_columns: () -> Hash[String, Symbol?]
-
-      # Some adapters take the quoted name as a plain string too, but a raw SQL
-      # check may not, so it is marked as SQL; no SQLite spec can tell.
-      # mutant:disable
-      # : () -> untyped
-      def quoted_owner_column: () -> untyped
-    end
-
-    # The owners whose versions PT-AT recorded a HABTM target with, keyed by
-    # the transaction each version was saved in.
-    class RecordedHabtm < AssociationActivityEdge
-      # : (untyped, TimeRange?) -> void
-      def initialize: (untyped, TimeRange?) -> void
-
-      # : () -> bool
-      def available?: () -> bool
-
-      # : (untyped) -> untyped
-      def relation: (untyped) -> untyped
-
-      @associations: untyped
-
-      @versions: untyped
     end
   end
 end

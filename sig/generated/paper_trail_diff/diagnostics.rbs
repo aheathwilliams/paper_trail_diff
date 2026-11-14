@@ -86,14 +86,6 @@ module PaperTrailDiff
     # : (untyped) -> void
     def inspect_approximate_paths: (untyped) -> void
 
-    # : (untyped, Array[Array[untyped]]) -> void
-    def inspect_habtm: (untyped, Array[Array[untyped]]) -> void
-
-    # PT-AT does not record which owner a HABTM member belongs to, so a
-    # transaction that more than one owner recorded members in cannot be read.
-    # : (untyped, Array[Array[untyped]]) -> void
-    def inspect_shared_transactions: (untyped, Array[Array[untyped]]) -> void
-
     # With the current record as one endpoint there is one version, and the
     # sequence runs on from it.
     # : (untyped) -> void
@@ -106,9 +98,6 @@ module PaperTrailDiff
 
     # : (untyped) -> void
     def inspect_checkpoint_timestamp: (untyped) -> void
-
-    # : (Array[String]) -> void
-    def inspect_transaction_metadata: (Array[String]) -> void
 
     # : (untyped) -> bool
     def synchronized_timestamp_disabled?: (untyped) -> bool

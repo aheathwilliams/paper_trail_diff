@@ -64,8 +64,7 @@ RSpec.describe PaperTrailDiff::PreparedEdgeLoader do
 
   # Candidates read from the start, as a history reads them, with no end.
   def loader(records, root_versions, start_at: root_versions.first&.created_at)
-    described_class.new(records, root_versions,
-                        children: PaperTrailDiff::PreparedChildCandidates.new(start_at))
+    described_class.new(records, children: PaperTrailDiff::PreparedChildCandidates.new(start_at))
   end
 
   def load_edge(owner_class, owner_ids, association, root_versions, **options)
@@ -85,10 +84,9 @@ RSpec.describe PaperTrailDiff::PreparedEdgeLoader do
       article.update!(author: second)
       article.update!(author: first)
 
-      groups, memberships = load_edge(TrackedArticle, [article.id], :author, versions)
+      groups = load_edge(TrackedArticle, [article.id], :author, versions)
 
       expect(groups).to eq('TrackedAuthor' => { model: TrackedAuthor, ids: [first.id, second.id] })
-      expect(memberships).to be_nil
     end
 
     it 'reads a plain key without building a record for each state' do
@@ -97,8 +95,8 @@ RSpec.describe PaperTrailDiff::PreparedEdgeLoader do
       records = index(versions.first.created_at, [TrackedArticle, [article.id]])
       expect_any_instance_of(PaperTrailDiff::PreparedRecordState).not_to receive(:instantiate)
 
-      groups, = loader(records, versions).call(TrackedArticle, [article.id],
-                                               TrackedArticle.reflect_on_association(:author))
+      groups = loader(records, versions).call(TrackedArticle, [article.id],
+                                              TrackedArticle.reflect_on_association(:author))
 
       expect(groups.fetch('TrackedAuthor').fetch(:ids)).to eq([article.author_id])
     end
@@ -107,7 +105,7 @@ RSpec.describe PaperTrailDiff::PreparedEdgeLoader do
       article = TrackedArticle.create!(title: 'Alone')
 
       expect(load_edge(TrackedArticle, [article.id], :author, versions_of(article)))
-        .to eq([{}, nil])
+        .to eq({})
     end
 
     it 'groups a polymorphic key by the class each owner named' do
@@ -124,7 +122,7 @@ RSpec.describe PaperTrailDiff::PreparedEdgeLoader do
       untargeted = EdgeLoaderBadge.create!(label: 'untargeted', holder_type: 'TrackedTag')
       ids = [badge.id, loose.id, unknown.id, untargeted.id]
 
-      groups, = load_edge(EdgeLoaderBadge, ids, :holder, versions)
+      groups = load_edge(EdgeLoaderBadge, ids, :holder, versions)
 
       expect(groups).to eq(
         'TrackedArticle' => { model: TrackedArticle, ids: [400] },
@@ -147,14 +145,13 @@ RSpec.describe PaperTrailDiff::PreparedEdgeLoader do
       live = article.comments.create!(body: 'live only')
       PaperTrail::Version.where(item_type: 'TrackedComment', item_id: live.id).delete_all
 
-      groups, memberships = load_edge(TrackedArticle, [article.id], :comments, versions,
-                                      start_at: start_at)
+      groups = load_edge(TrackedArticle, [article.id], :comments, versions,
+                         start_at: start_at)
 
       expect(groups).to eq('TrackedComment' => {
                              model: TrackedComment, ids: [kept.id, moved.id, live.id],
                              owners: { article.id.to_s => [kept.id, moved.id, live.id] }
                            })
-      expect(memberships).to be_nil
     end
 
     it 'keeps owners apart and lists a child once per owner' do
@@ -164,8 +161,8 @@ RSpec.describe PaperTrailDiff::PreparedEdgeLoader do
       comment.update!(body: 'two')
       other = second.comments.create!(body: 'other')
 
-      groups, = load_edge(TrackedArticle, [first.id, second.id], :comments,
-                          versions_of(first), start_at: Time.now.utc - 60)
+      groups = load_edge(TrackedArticle, [first.id, second.id], :comments,
+                         versions_of(first), start_at: Time.now.utc - 60)
 
       expect(groups.fetch('TrackedComment')).to eq(
         model: TrackedComment, ids: [comment.id, other.id],
@@ -188,8 +185,8 @@ RSpec.describe PaperTrailDiff::PreparedEdgeLoader do
                                     .update_all(foreign_key_name: 'source_article_id')
       TrackedComment.where(id: renamed.id).delete_all
 
-      groups, = load_edge(TrackedArticle, [article.id], :comments, versions_of(article),
-                          start_at: Time.now.utc - 60)
+      groups = load_edge(TrackedArticle, [article.id], :comments, versions_of(article),
+                         start_at: Time.now.utc - 60)
 
       expect(groups).to eq({})
     end
@@ -200,8 +197,8 @@ RSpec.describe PaperTrailDiff::PreparedEdgeLoader do
       plain = EdgeLoaderBadge.create!(label: 'plain', holder: article)
       PaperTrail::Version.where(item_type: 'EdgeLoaderBadge').delete_all
 
-      groups, = load_edge(EdgeLoaderArticle, [article.id], :pinned_badges, versions_of(article),
-                          start_at: Time.now.utc - 60)
+      groups = load_edge(EdgeLoaderArticle, [article.id], :pinned_badges, versions_of(article),
+                         start_at: Time.now.utc - 60)
       pinned.update!(label: 'pinned again')
       EdgeLoaderPinnedBadge.where(id: pinned.id).delete_all
       historical, = load_edge(EdgeLoaderArticle, [article.id], :pinned_badges,
@@ -216,8 +213,8 @@ RSpec.describe PaperTrailDiff::PreparedEdgeLoader do
       hidden = EdgeLoaderVisibleBadge.create!(label: 'hidden', holder: article)
       PaperTrail::Version.where(item_type: 'EdgeLoaderVisibleBadge').delete_all
 
-      groups, = load_edge(EdgeLoaderArticle, [article.id], :visible_badges, versions_of(article),
-                          start_at: Time.now.utc - 60)
+      groups = load_edge(EdgeLoaderArticle, [article.id], :visible_badges, versions_of(article),
+                         start_at: Time.now.utc - 60)
 
       expect(groups.fetch('EdgeLoaderVisibleBadge').fetch(:ids)).to eq([hidden.id])
     end
@@ -228,8 +225,8 @@ RSpec.describe PaperTrailDiff::PreparedEdgeLoader do
       EdgeLoaderBadge.create!(label: 'other', holder: TrackedAuthor.create!(id: 210, name: 'A'))
       PaperTrail::Version.where(item_type: 'EdgeLoaderBadge').delete_all
 
-      groups, = load_edge(EdgeLoaderArticle, [article.id], :badges, versions_of(article),
-                          start_at: Time.now.utc - 60)
+      groups = load_edge(EdgeLoaderArticle, [article.id], :badges, versions_of(article),
+                         start_at: Time.now.utc - 60)
 
       expect(groups.fetch('EdgeLoaderBadge').fetch(:ids)).to eq([mine.id])
     end
@@ -248,8 +245,8 @@ RSpec.describe PaperTrailDiff::PreparedEdgeLoader do
       live_only = EdgeLoaderBadge.create!(label: 'live', holder: document)
       PaperTrail::Version.where(item_type: 'EdgeLoaderBadge', item_id: live_only.id).delete_all
 
-      groups, = load_edge(EdgeLoaderDocument, [document.id], :badges,
-                          document.versions.reorder(:id).to_a, start_at: Time.now.utc - 60)
+      groups = load_edge(EdgeLoaderDocument, [document.id], :badges,
+                         document.versions.reorder(:id).to_a, start_at: Time.now.utc - 60)
 
       expect(groups.fetch('EdgeLoaderBadge').fetch(:ids))
         .to contain_exactly(*badges.map(&:id), live_only.id)
@@ -260,8 +257,8 @@ RSpec.describe PaperTrailDiff::PreparedEdgeLoader do
       note = post.notes.create!(body: 'one')
       StringItemNote.where(id: note.id).delete_all
 
-      groups, = load_edge(StringItemPost, [post.id], :notes, post.versions.to_a,
-                          start_at: Time.now.utc - 60)
+      groups = load_edge(StringItemPost, [post.id], :notes, post.versions.to_a,
+                         start_at: Time.now.utc - 60)
 
       expect(groups).to eq('StringItemNote' => {
                              model: StringItemNote, ids: [note.id],
@@ -289,107 +286,23 @@ RSpec.describe PaperTrailDiff::PreparedEdgeLoader do
                                     .update_all(foreign_type: '')
       EdgeLoaderBadge.where(id: blank.id).delete_all
 
-      groups, = load_edge(EdgeLoaderArticle, [article.id], :badges, versions_of(article),
-                          start_at: Time.now.utc - 60)
+      groups = load_edge(EdgeLoaderArticle, [article.id], :badges, versions_of(article),
+                         start_at: Time.now.utc - 60)
 
       expect(groups.fetch('EdgeLoaderBadge').fetch(:ids))
         .to contain_exactly(recorded.id, untyped.id, blank.id)
     end
   end
 
-  describe 'has_and_belongs_to_many' do
-    def tag_version(article, *tags)
-      article.tags << tags
-      TrackedArticle.transaction { TrackedArticle.find(article.id).paper_trail.save_with_version }
-      versions_of(article).last
-    end
-
-    it 'groups the tags recorded in the root transactions and keys membership by transaction' do
-      article = TrackedArticle.create!(title: 'Tagged')
-      ruby = TrackedTag.create!(name: 'ruby')
-      rails = TrackedTag.create!(name: 'rails')
-      first = tag_version(article, ruby)
-      second = tag_version(article, rails)
-      ignored = tag_version(TrackedArticle.create!(title: 'Other'), TrackedTag.create!(name: 'x'))
-      untracked = versions_of(article).first
-      PaperTrail::VersionAssociation.create!(version_id: second.transaction_id,
-                                             foreign_key_name: 'labels', foreign_key_id: 9_999)
-
-      groups, memberships = load_edge(TrackedArticle, [article.id], :tags,
-                                      [untracked, first, second].sort_by(&:created_at))
-
-      expect(groups).to eq('TrackedTag' => { model: TrackedTag, ids: [ruby.id, rails.id] })
-      expect(memberships).to eq(
-        untracked.transaction_id.to_s => [],
-        first.transaction_id.to_s => [ruby.id],
-        second.transaction_id.to_s => [ruby.id, rails.id]
-      )
-      expect(ignored.transaction_id).not_to eq(second.transaction_id)
-    end
-
-    # The members of a shared transaction cannot be told apart, so its read is
-    # left to HistoricalAssociationReifier, which raises.
-    it 'leaves out a transaction that another owner recorded members in' do
-      article = TrackedArticle.create!(title: 'Tagged')
-      other = TrackedArticle.create!(title: 'Other')
-      ruby = TrackedTag.create!(name: 'ruby')
-      article.tags << ruby
-      other.tags << TrackedTag.create!(name: 'rails')
-      TrackedArticle.transaction do
-        [article, other].each do |owner|
-          TrackedArticle.find(owner.id).paper_trail.save_with_version
-        end
-      end
-      shared = versions_of(article).last
-      own = tag_version(article)
-
-      groups, memberships = load_edge(TrackedArticle, [article.id], :tags, [shared, own])
-
-      expect(groups.fetch('TrackedTag').fetch(:ids)).to include(ruby.id)
-      expect(memberships).to eq(own.transaction_id.to_s => [ruby.id])
-    end
-
-    # SQL Server compiles a long list of ids slowly.
-    it 'reads the members of 500 transactions per statement, each transaction once' do
-      article = TrackedArticle.create!(title: 'Tagged')
-      ruby = TrackedTag.create!(name: 'ruby')
-      first = tag_version(article, ruby)
-      second = tag_version(article)
-      third = tag_version(article)
-      stub_const('PaperTrailDiff::Support::IDS_PER_STATEMENT', 2)
-      sql = []
-      callback = ->(*, payload) { sql << payload[:sql] }
-
-      # The second transaction saved two root versions.
-      edge = ActiveSupport::Notifications.subscribed(callback, 'sql.active_record') do
-        load_edge(TrackedArticle, [article.id], :tags, [first, second, second, third])
-      end
-
-      memberships = [first, second, third].to_h do |version|
-        [version.transaction_id.to_s, [ruby.id]]
-      end
-      expect(edge).to eq([{ 'TrackedTag' => { model: TrackedTag, ids: [ruby.id] } }, memberships])
-      expect(sql.grep(/version_associations/).length).to eq(2)
-    end
-
-    it 'skips root versions saved outside a transaction' do
-      article = TrackedArticle.create!(title: 'Tagged')
-      version = tag_version(article, TrackedTag.create!(name: 'ruby'))
-      allow(version).to receive(:transaction_id).and_return(nil)
-
-      expect(load_edge(TrackedArticle, [article.id], :tags, [version])).to eq([{}, {}])
-    end
-  end
-
   it 'reads nothing for a composite foreign key' do
     reflection = instance_double(ActiveRecord::Reflection::HasManyReflection,
-                                 macro: :has_many, klass: TrackedComment,
+                                 belongs_to?: false, klass: TrackedComment,
                                  foreign_key: Class.new(Array).new(%w[article_id body]))
     article = TrackedArticle.create!(title: 'Owner')
     edges = loader(index(nil), versions_of(article))
 
-    expect(edges.call(TrackedArticle, [article.id], reflection)).to eq([{}, nil])
-    allow(reflection).to receive(:macro).and_return(:belongs_to)
-    expect(edges.call(TrackedArticle, [article.id], reflection)).to eq([{}, nil])
+    expect(edges.call(TrackedArticle, [article.id], reflection)).to eq({})
+    allow(reflection).to receive(:belongs_to?).and_return(true)
+    expect(edges.call(TrackedArticle, [article.id], reflection)).to eq({})
   end
 end

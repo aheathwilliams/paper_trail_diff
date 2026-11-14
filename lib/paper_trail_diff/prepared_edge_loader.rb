@@ -6,27 +6,22 @@ module PaperTrailDiff
   class PreparedEdgeLoader
     # A history shares `children` with its activity index, which reads the
     # children this finds again.
-    #: (PreparedRecordIndex, Array[untyped], children: PreparedChildCandidates) -> void
-    def initialize(records, root_versions, children:)
+    #: (PreparedRecordIndex, children: PreparedChildCandidates) -> void
+    def initialize(records, children:)
       @records = records
-      @transaction_ids = root_versions.filter_map(&:transaction_id)
       @children = children
     end
 
-    # HABTM alone also returns each root transaction's members.
-    #: (untyped, Array[untyped], untyped) -> [Hash[String, Hash[Symbol, untyped]], Hash[String, Array[untyped]]?]
+    #: (untyped, Array[untyped], untyped) -> Hash[String, Hash[Symbol, untyped]]
     def call(owner_class, owner_ids, reflection)
-      case reflection.macro
-      when :belongs_to then [belongs_to_groups(owner_class, owner_ids, reflection), nil]
-      when :has_and_belongs_to_many then habtm_groups(owner_class, reflection)
-      else [child_groups(owner_class, owner_ids, reflection), nil]
-      end
+      return belongs_to_groups(owner_class, owner_ids, reflection) if reflection.belongs_to?
+
+      child_groups(owner_class, owner_ids, reflection)
     end
 
     private
 
     # @rbs @records: PreparedRecordIndex
-    # @rbs @transaction_ids: Array[untyped]
     # @rbs @children: PreparedChildCandidates
 
     #: (untyped, Array[untyped], untyped) -> Hash[String, Hash[Symbol, untyped]]
@@ -62,37 +57,6 @@ module PaperTrailDiff
         [key, historical.fetch(key, empty).map { |row| row.fetch(1) } | live.fetch(key, empty)]
       end
       group_for(reflection.klass, owners.values.flatten, owners: owners)
-    end
-
-    # A transaction more than one owner recorded members in is left out, so
-    # its read falls back to HistoricalAssociationReifier, which raises.
-    #: (untyped, untyped) -> [Hash[String, Hash[Symbol, untyped]], Hash[String, Array[untyped]]]
-    def habtm_groups(owner_class, reflection)
-      rows = habtm_rows(owner_class, reflection)
-      recorded = rows.group_by { |row| row.version_id.to_s }
-      shared = HabtmTransactionOwners.new(owner_class, reflection).shared(recorded.keys)
-      [group_for(reflection.klass, rows.map(&:foreign_key_id)),
-       memberships(recorded).except(*shared)]
-    end
-
-    # Each root transaction's members, from its rows grouped by transaction.
-    #: (Hash[String, Array[untyped]]) -> Hash[String, Array[untyped]]
-    def memberships(recorded)
-      empty = [] #: Array[untyped]
-      @transaction_ids.to_h do |transaction_id|
-        key = transaction_id.to_s
-        [key, recorded.fetch(key, empty).map(&:foreign_key_id)]
-      end
-    end
-
-    # Each statement reads up to 500 of the root transactions: SQL Server
-    # compiles a long list of ids slowly.
-    #: (untyped, untyped) -> Array[untyped]
-    def habtm_rows(owner_class, reflection)
-      associations = owner_class.paper_trail.version_association_class
-      @transaction_ids.uniq.each_slice(Support::IDS_PER_STATEMENT).flat_map do |slice|
-        associations.where(version_id: slice, foreign_key_name: reflection.name)
-      end
     end
 
     #: (Hash[String, Hash[Symbol, untyped]], untyped, untyped) -> void

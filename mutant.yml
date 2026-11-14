@@ -108,7 +108,6 @@ matcher:
     - PaperTrailDiff::ExactColumnType*
     - PaperTrailDiff::AssociationTraversal*
     - PaperTrailDiff::AssociationKey*
-    - PaperTrailDiff::HabtmTransactionOwners*
     - PaperTrailDiff::ActivityRange*
     - PaperTrailDiff::VersionAssociationCandidateScope*
     - PaperTrailDiff::PreparedActivityIndex*

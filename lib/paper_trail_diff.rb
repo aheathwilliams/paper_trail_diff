@@ -46,7 +46,6 @@ require_relative 'paper_trail_diff/change_row'
 require_relative 'paper_trail_diff/collection_comparator'
 require_relative 'paper_trail_diff/nested_comparator'
 require_relative 'paper_trail_diff/engine'
-require_relative 'paper_trail_diff/habtm_transaction_owners'
 require_relative 'paper_trail_diff/historical_association_reifier'
 require_relative 'paper_trail_diff/prepared_record_index'
 require_relative 'paper_trail_diff/direct_record_state_loader'
@@ -169,7 +168,6 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
     belongs_to
     has_one
     has_many
-    has_and_belongs_to_many
   ].freeze
 
   class << self

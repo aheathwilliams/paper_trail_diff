@@ -6,14 +6,14 @@ module PaperTrailDiff
     # : (?association_reader: untyped) -> void
     def initialize: (?association_reader: untyped) -> void
 
-    # : (untyped, reflection: untyped, subtree: AssociationTree, path: String, normalizer: SnapshotNormalizer, root_endpoint: untyped, context_endpoint: untyped) -> RecordSnapshot?
-    def call: (untyped, reflection: untyped, subtree: AssociationTree, path: String, normalizer: SnapshotNormalizer, root_endpoint: untyped, context_endpoint: untyped) -> RecordSnapshot?
+    # : (untyped, reflection: untyped, subtree: AssociationTree, path: String, normalizer: SnapshotNormalizer, context_endpoint: untyped) -> RecordSnapshot?
+    def call: (untyped, reflection: untyped, subtree: AssociationTree, path: String, normalizer: SnapshotNormalizer, context_endpoint: untyped) -> RecordSnapshot?
 
     private
 
     @association_reader: untyped
 
-    # : (untyped, habtm_version: untyped) -> HistoricalAssociationReifier
-    def historical_reader: (untyped, habtm_version: untyped) -> HistoricalAssociationReifier
+    # : (untyped) -> HistoricalAssociationReifier
+    def historical_reader: (untyped) -> HistoricalAssociationReifier
   end
 end

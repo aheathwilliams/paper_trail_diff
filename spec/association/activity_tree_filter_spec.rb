@@ -173,61 +173,6 @@ RSpec.describe PaperTrailDiff::ActivityTreeFilter do
     end
   end
 
-  # A tag created and attached in the transaction that saves the article, and
-  # detached before the next save, is in the tree only at that save: the
-  # version records it, and the next one does not.
-  context 'with a tag detached before the next version' do
-    def tag_history
-      article = TrackedArticle.create!(title: 'Root')
-      start = Time.now.utc
-      fleeting = TrackedArticle.transaction do
-        attach(article, 'Fleeting').tap { checkpoint(article) }
-      end
-      TrackedArticle.find(article.id).tags.delete(fleeting)
-      kept = TrackedArticle.transaction { attach(article, 'Kept') }
-      finish = Time.now.utc
-      TrackedArticle.transaction { checkpoint(article) }
-      [article.reload, start..finish,
-       named('article' => article, 'fleeting' => fleeting, 'kept' => kept)]
-    end
-
-    # A new tag, attached through a fresh copy of the article.
-    def attach(article, name)
-      TrackedTag.create!(name: name).tap { |tag| TrackedArticle.find(article.id).tags << tag }
-    end
-
-    def checkpoint(article) = TrackedArticle.find(article.id).paper_trail.save_with_version
-
-    let(:history) { tag_history }
-    let(:article) { history.first }
-    let(:names) { history.last }
-    let(:fleeting) { names.key('fleeting').last }
-    let(:kept) { names.key('kept').last }
-
-    it 'credits the tag to its own creation' do
-      steps = SpecTimelines.activity_timeline(article, from: first_version(article),
-                                                       to: article.versions.last,
-                                                       associations: [:tags])
-
-      expect(summary(steps, names)).to eq(
-        [[['article create'], ['presence']],
-         [['fleeting create'], ["tags +#{fleeting}"]],
-         [['article update'], ["tags -#{fleeting}"]],
-         [['kept create'], ["tags +#{kept}"]]]
-      )
-    end
-
-    it 'starts a window that the tag\'s creation opens before the tag' do
-      analysis = PaperTrailDiff.analyze(article, within: history.fetch(1), associations: [:tags],
-                                                 activity: true, snapshots: true)
-
-      expect(analysis.from_snapshot.associations.fetch('tags').records).to be_empty
-      expect(changes(analysis.diff)).to eq(["tags +#{kept}"])
-      expect(summary(analysis.activity_timeline, names).first)
-        .to eq([['fleeting create'], ["tags +#{fleeting}"]])
-    end
-  end
-
   # The other way round: a comment that left, edited in the article's last
   # save. Only the current record shows it is not there afterwards.
   it 'leaves out a departed comment\'s edit in the last transaction' do

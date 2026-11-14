@@ -5,20 +5,17 @@ module PaperTrailDiff
   class PreparedEdgeLoader
     # A history shares `children` with its activity index, which reads the
     # children this finds again.
-    # : (PreparedRecordIndex, Array[untyped], children: PreparedChildCandidates) -> void
-    def initialize: (PreparedRecordIndex, Array[untyped], children: PreparedChildCandidates) -> void
+    # : (PreparedRecordIndex, children: PreparedChildCandidates) -> void
+    def initialize: (PreparedRecordIndex, children: PreparedChildCandidates) -> void
 
-    # HABTM alone also returns each root transaction's members.
-    # : (untyped, Array[untyped], untyped) -> [Hash[String, Hash[Symbol, untyped]], Hash[String, Array[untyped]]?]
-    def call: (untyped, Array[untyped], untyped) -> [ Hash[String, Hash[Symbol, untyped]], Hash[String, Array[untyped]]? ]
+    # : (untyped, Array[untyped], untyped) -> Hash[String, Hash[Symbol, untyped]]
+    def call: (untyped, Array[untyped], untyped) -> Hash[String, Hash[Symbol, untyped]]
 
     private
 
     @children: PreparedChildCandidates
 
     @records: PreparedRecordIndex
-
-    @transaction_ids: Array[untyped]
 
     # : (untyped, Array[untyped], untyped) -> Hash[String, Hash[Symbol, untyped]]
     def belongs_to_groups: (untyped, Array[untyped], untyped) -> Hash[String, Hash[Symbol, untyped]]
@@ -31,20 +28,6 @@ module PaperTrailDiff
     # Each owner's children, recorded or live, each once.
     # : (untyped, Array[untyped], untyped) -> Hash[String, Hash[Symbol, untyped]]
     def child_groups: (untyped, Array[untyped], untyped) -> Hash[String, Hash[Symbol, untyped]]
-
-    # A transaction more than one owner recorded members in is left out, so
-    # its read falls back to HistoricalAssociationReifier, which raises.
-    # : (untyped, untyped) -> [Hash[String, Hash[Symbol, untyped]], Hash[String, Array[untyped]]]
-    def habtm_groups: (untyped, untyped) -> [ Hash[String, Hash[Symbol, untyped]], Hash[String, Array[untyped]] ]
-
-    # Each root transaction's members, from its rows grouped by transaction.
-    # : (Hash[String, Array[untyped]]) -> Hash[String, Array[untyped]]
-    def memberships: (Hash[String, Array[untyped]]) -> Hash[String, Array[untyped]]
-
-    # Each statement reads up to 500 of the root transactions: SQL Server
-    # compiles a long list of ids slowly.
-    # : (untyped, untyped) -> Array[untyped]
-    def habtm_rows: (untyped, untyped) -> Array[untyped]
 
     # : (Hash[String, Hash[Symbol, untyped]], untyped, untyped) -> void
     def add_identity: (Hash[String, Hash[Symbol, untyped]], untyped, untyped) -> void

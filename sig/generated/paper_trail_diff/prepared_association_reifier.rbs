@@ -3,8 +3,8 @@
 module PaperTrailDiff
   # Resolves indexed associations and delegates unsupported reflections to PT-AT.
   class PreparedAssociationReifier
-    # : (PreparedHistory, untyped, habtm_boundary: untyped, fallback: HistoricalAssociationReifier) -> void
-    def initialize: (PreparedHistory, untyped, habtm_boundary: untyped, fallback: HistoricalAssociationReifier) -> void
+    # : (PreparedHistory, untyped, fallback: HistoricalAssociationReifier) -> void
+    def initialize: (PreparedHistory, untyped, fallback: HistoricalAssociationReifier) -> void
 
     # : (untyped, Array[untyped]) -> void
     def reify: (untyped, Array[untyped]) -> void
@@ -14,8 +14,6 @@ module PaperTrailDiff
     @boundary: untyped
 
     @fallback: HistoricalAssociationReifier
-
-    @habtm_boundary: untyped
 
     @history: PreparedHistory
 

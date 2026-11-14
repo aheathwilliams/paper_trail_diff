@@ -216,18 +216,6 @@ RSpec.describe PaperTrailDiff::ActivityVersionCollector do
       .to eq(%w[TrackedArticle TrackedArticle])
   end
 
-  it 'collects the members each root version recorded' do
-    article = TrackedArticle.create!(title: 'Draft')
-    tag = TrackedTag.create!(name: 'ruby')
-    article.tags << tag
-    TrackedArticle.transaction { TrackedArticle.find(article.id).paper_trail.save_with_version }
-    tag.update!(name: 'Ruby')
-    save_again(article, 'Final')
-
-    expect(described(collect(article, [:tags])).select { |type,| type == 'TrackedTag' })
-      .to eq([['TrackedTag', 'create', ['tags'], []], ['TrackedTag', 'update', ['tags'], []]])
-  end
-
   it "collects a through's join rows as joins, then its targets" do
     article = TrackedArticle.create!(title: 'Draft')
     author = TrackedAuthor.create!(name: 'Ann')

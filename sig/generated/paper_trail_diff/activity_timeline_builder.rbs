@@ -187,9 +187,6 @@ module PaperTrailDiff
     # : (ActivityEvent?, RootVersionPlan, untyped, untyped) -> ActivityBoundary?
     def closing_boundary: (ActivityEvent?, RootVersionPlan, untyped, untyped) -> ActivityBoundary?
 
-    # : () -> void
-    def reject_live_habtm!: () -> void
-
     # : () -> RecordedChangesReader?
     def root_recorded: () -> RecordedChangesReader?
 

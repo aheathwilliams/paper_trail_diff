@@ -136,21 +136,6 @@ module PaperTrailDiff
       state_before(boundary, ends)&.instantiate
     end
 
-    # A record created in the boundary's own transaction has no state before
-    # it, yet a HABTM checkpoint saved later in that transaction records it as
-    # a member. Such a member is read as it was created, at a boundary after
-    # its creation; before it, the record did not exist yet.
-    #: (untyped) -> untyped
-    def record_created_in(boundary)
-      index = transaction_index(boundary)
-      return unless index
-
-      version = versions.fetch(index)
-      return unless version.event == 'create' && !VersionBoundary.at_or_after?(version, boundary)
-
-      state_after(index)&.instantiate
-    end
-
     #: (untyped, ?TransactionEnds?) -> PreparedRecordState?
     def state_before(boundary, ends = nil)
       index = ends ? effective_index(boundary, ends) : boundary_index(boundary)
@@ -407,11 +392,6 @@ module PaperTrailDiff
     # What a read is made with now, if a timeline is being read.
     #: () -> TransactionEnds?
     def reading_ends = @ends
-
-    #: (untyped, untyped, untyped) -> untyped
-    def record_created_in(model_class, id, boundary)
-      @series.fetch(identity(model_class, id)).record_created_in(boundary)
-    end
 
     #: (untyped, untyped, untyped) -> [bool, PreparedRecordState?]
     def snapshot_state_before(model_class, id, boundary)

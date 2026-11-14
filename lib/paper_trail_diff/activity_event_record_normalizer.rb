@@ -9,22 +9,20 @@ module PaperTrailDiff
       @association_reader = association_reader || method(:historical_reader)
     end
 
-    #: (untyped, reflection: untyped, subtree: AssociationTree, path: String, normalizer: SnapshotNormalizer, root_endpoint: untyped, context_endpoint: untyped) -> RecordSnapshot?
+    #: (untyped, reflection: untyped, subtree: AssociationTree, path: String, normalizer: SnapshotNormalizer, context_endpoint: untyped) -> RecordSnapshot?
     def call( # rubocop:disable Metrics/ParameterLists
       record,
       reflection:,
       subtree:,
       path:,
       normalizer:,
-      root_endpoint:,
       context_endpoint:
     )
       if record.is_a?(PreparedRecordState)
         return normalizer.from_state(record, tree: subtree, path: path, incoming: reflection)
       end
 
-      boundary = Endpoint.version?(root_endpoint) ? root_endpoint : context_endpoint
-      reifier = @association_reader.call(context_endpoint, habtm_version: boundary)
+      reifier = @association_reader.call(context_endpoint)
       normalizer.call_child(
         record,
         tree: subtree,
@@ -38,9 +36,9 @@ module PaperTrailDiff
 
     # @rbs @association_reader: untyped
 
-    #: (untyped, habtm_version: untyped) -> HistoricalAssociationReifier
-    def historical_reader(context_endpoint, habtm_version:)
-      HistoricalAssociationReifier.new(context_endpoint, habtm_version: habtm_version)
+    #: (untyped) -> HistoricalAssociationReifier
+    def historical_reader(context_endpoint)
+      HistoricalAssociationReifier.new(context_endpoint)
     end
   end
 end

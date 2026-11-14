@@ -25,6 +25,20 @@ project follows [Semantic Versioning](https://semver.org/).
   notification is replaced by `analyze.paper_trail_diff`, which every
   `analyze` emits, with the same payload; its `step_count` counts the
   activity timeline with `activity: true` and the root timeline without.
+- `has_and_belongs_to_many` associations are no longer read. Naming one in
+  `associations:`, at the root or below it, raises
+  `UnsupportedAssociationError`, `association_paths` leaves it out, and
+  `supported_association_macros` no longer lists it. A join table has no
+  versions, so its history could only be read at the root's own
+  transaction-backed versions, never up to the current record, and not at
+  all with a scope or below the root. Replace it with a `has_many :through`
+  a join model that has `has_paper_trail`, as
+  [the reference shows](docs/reference.md#replacing-a-has_and_belongs_to_many):
+  add an `id` to the join table, and put `dependent: :destroy` on the
+  through association so that a member leaving saves a version. With it go
+  `UnsupportedLiveActivityError`, which only a `has_and_belongs_to_many`
+  raised, and the `habtm_transaction_shared`, `transaction_id_missing`, and
+  `transaction_id_column_missing` codes of `diagnose`.
 
 ### Changed
 

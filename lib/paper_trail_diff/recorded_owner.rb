@@ -33,7 +33,7 @@ module PaperTrailDiff
         "record the #{owner} that held it, and one that left #{owner}##{part.name} cannot be found"
     end
 
-    # A belongs_to and a HABTM are recorded on the owner's own versions, and
+    # A belongs_to is recorded on the owner's own versions, and
     # a through by its parts. PT-AT cannot record a composite key, which is
     # read another way (see FallbackPaths), and a target without versions is
     # refused for that.

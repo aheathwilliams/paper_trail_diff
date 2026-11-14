@@ -238,15 +238,6 @@ RSpec.describe PaperTrailDiff::ActivityTimelineBuilder do
       expect { timeline(other, from: version_of(article), to: article) }
         .to raise_error(PaperTrailDiff::VersionMismatchError)
     end
-
-    it 'refuses HABTM activity that runs into live state' do
-      article = TrackedArticle.create!(title: 'Article')
-      from = checkpoint(article)
-
-      expect do
-        SpecTimelines.activity_timeline(article, from: from, to: article, associations: [:tags])
-      end.to raise_error(PaperTrailDiff::UnsupportedLiveActivityError, /tags/)
-    end
   end
 
   describe 'group: :transaction' do

@@ -4,11 +4,10 @@
 module PaperTrailDiff
   # Resolves indexed associations and delegates unsupported reflections to PT-AT.
   class PreparedAssociationReifier
-    #: (PreparedHistory, untyped, habtm_boundary: untyped, fallback: HistoricalAssociationReifier) -> void
-    def initialize(history, boundary, habtm_boundary:, fallback:)
+    #: (PreparedHistory, untyped, fallback: HistoricalAssociationReifier) -> void
+    def initialize(history, boundary, fallback:)
       @history = history
       @boundary = boundary
-      @habtm_boundary = habtm_boundary
       @fallback = fallback
       # Keyed on record identity rather than `object_id`, which Ruby may reuse
       # once an earlier record in the same pass has been collected.
@@ -25,7 +24,6 @@ module PaperTrailDiff
 
     # @rbs @history: PreparedHistory
     # @rbs @boundary: untyped
-    # @rbs @habtm_boundary: untyped
     # @rbs @fallback: HistoricalAssociationReifier
     # @rbs @reified: Hash[untyped, Hash[untyped, bool]]
 
@@ -35,12 +33,7 @@ module PaperTrailDiff
       return if reified[reflection.name]
 
       reified[reflection.name] = true
-      handled, records = @history.resolve(
-        record,
-        reflection,
-        @boundary,
-        habtm_boundary: @habtm_boundary
-      )
+      handled, records = @history.resolve(record, reflection, @boundary)
       return @fallback.reify(record, [reflection]) unless handled
 
       association = record.association(reflection.name)

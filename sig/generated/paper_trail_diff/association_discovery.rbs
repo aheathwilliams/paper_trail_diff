@@ -46,8 +46,8 @@ module PaperTrailDiff
     def descriptor_for: (untyped, String, untyped, bool) -> AssociationDescriptor
 
     # Only what a request accepts, so every listed path can be requested.
-    # : (untyped, root: bool) -> Array[untyped]
-    def supported_reflections: (untyped, root: bool) -> Array[untyped]
+    # : (untyped) -> Array[untyped]
+    def supported_reflections: (untyped) -> Array[untyped]
 
     # Every request that reads history refuses a path whose target, or a
     # model its has_many :through goes through, has no versions.

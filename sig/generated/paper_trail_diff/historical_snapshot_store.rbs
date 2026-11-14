@@ -64,8 +64,8 @@ module PaperTrailDiff
     # : (untyped) -> PreparedRecordState?
     def root_state: (untyped) -> PreparedRecordState?
 
-    # : (untyped, habtm_version: untyped, ?history: PreparedHistory?) -> untyped
-    def association_reader: (untyped, habtm_version: untyped, ?history: PreparedHistory?) -> untyped
+    # : (untyped, ?history: PreparedHistory?) -> untyped
+    def association_reader: (untyped, ?history: PreparedHistory?) -> untyped
 
     private
 
@@ -141,8 +141,8 @@ module PaperTrailDiff
     # : (untyped, identity) -> untyped
     def loaded_root: (untyped, identity) -> untyped
 
-    # : (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer, habtm_version: untyped, history: PreparedHistory?) -> RecordSnapshot?
-    def normalize: (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer, habtm_version: untyped, history: PreparedHistory?) -> RecordSnapshot?
+    # : (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer, history: PreparedHistory?) -> RecordSnapshot?
+    def normalize: (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer, history: PreparedHistory?) -> RecordSnapshot?
 
     # : (untyped, untyped) -> Array[untyped]
     def snapshot_key: (untyped, untyped) -> Array[untyped]

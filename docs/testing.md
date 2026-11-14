@@ -110,12 +110,8 @@ serialized, enums stored as strings, custom types, decimals, and JSON.
 `through_history_spec.rb` edits two teams' join records and the records they
 reach, through every kind of `has_many :through`: to a `belongs_to`, through a
 scoped part, ranked with a limit, to a `has_many`, through another through, a
-`has_one` through, and with `source_type:`. `habtm_history_spec.rb` attaches,
-detaches, creates, renames, and destroys tags between checkpoints. HABTM
-membership is known only at root versions, so it expects what the
-[reference](reference.md#habtm-limitation) describes: at each point, the
-members the next root version recorded, as each was then, and only once it
-exists. `shapes_history_spec.rb` edits two boards and the records around them:
+`has_one` through, and with `source_type:`. `shapes_history_spec.rb` edits two
+boards and the records around them:
 a polymorphic owner, cards that use single-table inheritance and change type,
 comments that move between boards and cards (`as:`), labels with a default
 scope, and scoped and ranked associations to the cards. Its checks, in
@@ -313,8 +309,6 @@ passes is behavior nothing checks. `mutant.yml` lists the classes it mutates:
 - where in a carried snapshot an event's record sits: `ActivityEventRouteFinder`;
 - which association paths a request accepts: `AssociationTraversal`,
   `AssociationKey`, and `VersionTable`;
-- whether a transaction's HABTM members are one record's:
-  `HabtmTransactionOwners`;
 - which association paths history cannot read exactly, and whether a request
   reads one with PT-AT: `ApproximatePaths` and `FallbackPaths`;
 - which records an association scope admits, and how it ranks them:

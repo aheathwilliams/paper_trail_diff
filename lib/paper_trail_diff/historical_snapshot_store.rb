@@ -145,22 +145,14 @@ module PaperTrailDiff
       live_state(root_endpoint)
     end
 
-    #: (untyped, habtm_version: untyped, ?history: PreparedHistory?) -> untyped
-    def association_reader(context_version, habtm_version:, history: nil)
-      fallback = HistoricalAssociationReifier.new(
-        context_version,
-        habtm_version: habtm_version
-      )
+    #: (untyped, ?history: PreparedHistory?) -> untyped
+    def association_reader(context_version, history: nil)
+      fallback = HistoricalAssociationReifier.new(context_version)
       # Callers pass the root's history; a batch's for the version is the rest.
       history ||= @prepared_histories[Support.row_key(context_version)]
       return fallback unless history
 
-      PreparedAssociationReifier.new(
-        history,
-        context_version,
-        habtm_boundary: habtm_version,
-        fallback: fallback
-      )
+      PreparedAssociationReifier.new(history, context_version, fallback: fallback)
     end
 
     private
@@ -224,15 +216,13 @@ module PaperTrailDiff
     def snapshot_from_version(root_version, context_version, tree:, normalizer:, history:)
       model_class = RecordedClass.for(root_version)
       @preparer.call(model_class, historical: true)
-      @traversal.ensure_habtm_history!(model_class, root_version)
       handled, snapshot = @prepared_snapshotter.call(
         root_version, context_version, tree: tree, normalizer: normalizer, history: history
       )
       return snapshot if handled
 
       record = Support.reify(root_version, dup: true)
-      normalize(record, context_version, tree: tree, normalizer: normalizer,
-                                         habtm_version: root_version, history: history)
+      normalize(record, context_version, tree: tree, normalizer: normalizer, history: history)
     end
 
     # Read from prepared history where it can be, as a version is, without
@@ -248,7 +238,6 @@ module PaperTrailDiff
       return snapshot if handled
 
       normalize(live_root(root_record), context_version, tree: tree, normalizer: normalizer,
-                                                         habtm_version: context_version,
                                                          history: history)
     end
 
@@ -278,9 +267,9 @@ module PaperTrailDiff
       @live_roots[identity] ||= Endpoint.reload_record(root_record)
     end
 
-    #: (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer, habtm_version: untyped, history: PreparedHistory?) -> RecordSnapshot?
-    def normalize(record, context_version, tree:, normalizer:, habtm_version:, history:) # rubocop:disable Metrics/ParameterLists
-      reifier = association_reader(context_version, habtm_version: habtm_version, history: history)
+    #: (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer, history: PreparedHistory?) -> RecordSnapshot?
+    def normalize(record, context_version, tree:, normalizer:, history:)
+      reifier = association_reader(context_version, history: history)
       reflections = [] #: Array[untyped]
       reflections = @traversal.reflections_for(record.class, tree, path: '') if record
       reifier.reify(record, reflections) if record && !reflections.empty?

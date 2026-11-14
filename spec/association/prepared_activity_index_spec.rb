@@ -431,60 +431,6 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
     article.versions.reorder(:id).last
   end
 
-  # A transaction's id is its first version's, which here is a comment's, and
-  # the comment's own `belongs_to` rows share it.
-  it 'reads the tags each selected transaction recorded, for registered articles only' do
-    origin = Time.now.utc
-    article, other = %w[Tagged Other].map { |title| TrackedArticle.create!(title: title) }
-    ruby, rails = %w[ruby rails].map { |name| TrackedTag.create!(name: name) }
-    article.tags << ruby
-    TrackedArticle.transaction do
-      article.comments.create!(body: 'First in the transaction')
-      TrackedArticle.find(article.id).paper_trail.save_with_version
-    end
-    tagged = article.versions.reorder(:id).last
-    other.tags << rails
-    other_tagged = checkpoint(other)
-    ruby.articles << other
-    TrackedTag.transaction { TrackedTag.find(ruby.id).paper_trail.save_with_version }
-    retagged = ruby.versions.reorder(:id).last
-    untracked = Struct.new(:id).new(tagged.id)
-    index = index_for(origin, { TrackedArticle => [article.id, other.id], TrackedTag => [ruby.id] })
-    index.register(TrackedArticle, [article.id])
-    index.register(TrackedTag, [ruby.id])
-    rows = lambda do |model, selected, name|
-      index.habtm_rows(model, selected, model.reflect_on_association(name)).map(&:foreign_key_id)
-    end
-
-    expect(rows.call(TrackedArticle, [tagged, tagged, untracked], :tags)).to eq([ruby.id])
-    queries = statements { expect(rows.call(TrackedArticle, [other_tagged], :tags)).to eq([]) }
-    expect(queries).to eq(0)
-    expect(rows.call(TrackedTag, [retagged], :articles)).to contain_exactly(article.id, other.id)
-  end
-
-  it 'reads the tags Support::IDS_PER_STATEMENT transactions to a statement' do
-    stub_const('PaperTrailDiff::Support::IDS_PER_STATEMENT', 2)
-    origin = Time.now.utc
-    articles = Array.new(3) { |index| TrackedArticle.create!(title: "Tagged #{index}") }
-    tags = articles.map do |article|
-      TrackedTag.create!(name: article.title).tap { |tag| article.tags << tag }
-    end
-    tagged = articles.map { |article| checkpoint(article) }
-    index = index_for(origin, { TrackedArticle => articles.map(&:id) })
-    index.register(TrackedArticle, articles.map(&:id))
-    transactions = PaperTrail::Version.where(item_type: 'TrackedArticle').distinct
-                                      .pluck(:transaction_id)
-
-    found = nil
-    queries = statements do
-      found = index.habtm_rows(TrackedArticle, tagged, TrackedArticle.reflect_on_association(:tags))
-    end
-
-    expect(found.map(&:foreign_key_id)).to match_array(tags.map(&:id))
-    expect(transactions.length).to be > 2
-    expect(queries).to eq(transactions.each_slice(2).count)
-  end
-
   describe '#join_versions',
            mutant_expression: %w[PaperTrailDiff::PreparedActivityIndex#join_versions PaperTrailDiff::JoinRunJudge
                                  PaperTrailDiff::ThroughPath PaperTrailDiff::ThroughLead] do
