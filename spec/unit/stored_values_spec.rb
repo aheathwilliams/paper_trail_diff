@@ -51,6 +51,19 @@ RSpec.describe PaperTrailDiff::StoredValues do
     expect(read.fetch('blob')).to eq('x'.b)
   end
 
+  it 'leaves out an attribute without a column, reading what the model declares once' do
+    form = model
+    allow(form).to receive(:attribute_names).and_return([*values.keys, 'confirmation'])
+    stored = values.merge('confirmation' => 'yes')
+
+    2.times do
+      read = with_serializer(PaperTrail::Serializers::YAML) { described_class.apply(form, stored) }
+      expect(read.keys).to eq(%w[rings_at at blob])
+    end
+    expect(form).to have_received(:attribute_names).once
+    expect(described_class.unstored(form)).to be_frozen
+  end
+
   describe '.record' do
     let(:article) { FilterArticle.new(id: 7, title: 'Title', views: 3) }
 

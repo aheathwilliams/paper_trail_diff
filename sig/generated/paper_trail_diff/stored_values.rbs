@@ -16,9 +16,6 @@ module PaperTrailDiff
     # : (untyped, Hash[untyped, untyped]) -> Hash[untyped, untyped]
     def self.apply: (untyped, Hash[untyped, untyped]) -> Hash[untyped, untyped]
 
-    # : (untyped, Hash[untyped, untyped]) -> Hash[untyped, untyped]
-    def self.stored_only: (untyped, Hash[untyped, untyped]) -> Hash[untyped, untyped]
-
     # The model's attributes without a column, which a model keeps as it was
     # defined, as TimeOfDay.columns does.
     # : (untyped) -> Array[String]

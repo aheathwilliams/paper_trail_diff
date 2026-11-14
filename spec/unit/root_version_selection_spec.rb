@@ -243,6 +243,17 @@ RSpec.describe PaperTrailDiff::RootVersionSelection do
         .to raise_error(PaperTrailDiff::IncompleteTimeRangeError, described_class::INCOMPLETE)
     end
 
+    # As for a root read alone, a whole history with no versions has none to
+    # report, while a window with none in it still closes on the live record.
+    it 'reads nothing for a range of no versions, a context needed or not' do
+      article, = history
+
+      expect(described(select([], context_required: true)))
+        .to eq(described(PaperTrailDiff::RootVersionPlan.empty))
+      expect(select([], context_required: true, windowed: true, live_endpoint: article)
+               .closing_record).to equal(article)
+    end
+
     # The root was gone before the window began.
     it 'reads nothing for a window with no version after it and no live record' do
       _article, created, = history

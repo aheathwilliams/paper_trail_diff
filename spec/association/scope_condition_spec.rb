@@ -444,6 +444,7 @@ RSpec.describe PaperTrailDiff::ScopeCondition do
         .to eq([{ 'id' => 9 }])
       pair = build(scoped, macro: :has_one, name: :pair, target: 'ScopeConditionPair')
       expect(first.call(pair, pairs)).to eq([{ 'owner_id' => 1, 'position' => 9 }])
+      expect(pair.first(pairs, in_order: true)).to eq(pairs.first(1))
     end
 
     # A has_many through keeps only its parts' conditions, so a part is read
@@ -707,6 +708,30 @@ RSpec.describe PaperTrailDiff::ScopeCondition do
         .each do |relation|
           expect(described_class.for_relation(relation, relation.model)).to be_nil
         end
+    end
+  end
+
+  describe '.in_key_order' do
+    def row(**attributes) = Struct.new(:attributes).new(attributes.transform_keys(&:to_s))
+
+    def model(key) = Struct.new(:primary_key).new(key)
+
+    # A row with no key yet, as one built but not saved, comes last.
+    it 'orders rows by their key, and rows without a key last, as given' do
+      rows = [row(id: 3), row(id: nil), row(id: 1), row(id: nil), row(id: 2)]
+
+      expect(described_class.in_key_order(rows) do
+        model('id')
+      end).to eq(rows.values_at(2, 4, 0, 1, 3))
+    end
+
+    # The last row's model is keyed by `code` alone, which it has.
+    it "reads each row's key, part by part, by the model the block names for it" do
+      rows = [row(a: 1, b: nil, code: 5), row(a: 2, b: 1, code: 0), row(a: 1, b: 5, code: 9),
+              row(a: 1, b: 2, code: 8), row(a: nil, b: nil, code: 1)]
+      keyed = ->(each) { each.attributes['code'] == 1 ? model('code') : model(%w[a b]) }
+
+      expect(described_class.in_key_order(rows, &keyed)).to eq(rows.values_at(4, 3, 2, 1, 0))
     end
   end
 

@@ -31,6 +31,17 @@ RSpec.describe PaperTrailDiff::TimeOfDay do
     expect(described_class.apply(alarm, attributes)).to equal(attributes)
   end
 
+  it "names a model's datetime columns, read once" do
+    clock = model
+    allow(clock).to receive(:attribute_types).and_call_original
+
+    2.times { expect(described_class.datetime_columns(clock)).to eq(['alarm_set_at']) }
+
+    expect(clock).to have_received(:attribute_types).once
+    expect(described_class.datetime_columns(model('rings_at' => ActiveModel::Type::Time.new)))
+      .to eq([])
+  end
+
   it "reads a model's time columns once" do
     clock = model
     allow(clock).to receive(:attribute_types).and_call_original

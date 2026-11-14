@@ -153,13 +153,15 @@ module PaperTrailDiff
 
     # Join rows in primary key order, the order whose first target an
     # unordered has_one through reads (see #first). The block names a row's
-    # model; a row with no key yet comes last.
+    # model; rows with no key yet come last, as given. Saved rows' keys
+    # differ.
     #: (Array[untyped]) { (untyped) -> untyped } -> Array[untyped]
     def self.in_key_order(rows)
-      rows.each_with_index.sort_by do |row, index|
-        keys = Array(yield(row).primary_key).map { |key| row.attributes[key] }
-        keys.any?(&:nil?) ? [1, index] : [0, keys, index]
-      end.map(&:first)
+      keyed = rows.map do |row|
+        [Array(yield(row).primary_key).map { |key| row.attributes.fetch(key) }, row]
+      end
+      saved, unsaved = keyed.partition { |keys, _row| keys.none?(&:nil?) }
+      (saved.sort_by(&:first) + unsaved).map(&:last)
     end
 
     #: (untyped, Array[untyped], ?ScopeRanking?) -> void

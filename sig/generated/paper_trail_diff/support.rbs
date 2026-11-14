@@ -86,8 +86,8 @@ module PaperTrailDiff
     def self.recorded_value: (untyped, String, Array[String], Array[String]) -> untyped
 
     # JSON writes a time of day as text.
-    # : (untyped, untyped, Array[String]) -> bool
-    def self.written_time?: (untyped, untyped, Array[String]) -> bool
+    # : (untyped, String, Array[String]) -> bool
+    def self.written_time?: (untyped, String, Array[String]) -> bool
 
     # : (untyped) -> untyped
     def self.rebuilt_from: (untyped) -> untyped

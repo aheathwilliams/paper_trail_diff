@@ -90,7 +90,8 @@ module PaperTrailDiff
 
     # Join rows in primary key order, the order whose first target an
     # unordered has_one through reads (see #first). The block names a row's
-    # model; a row with no key yet comes last.
+    # model; rows with no key yet come last, as given. Saved rows' keys
+    # differ.
     # : (Array[untyped]) { (untyped) -> untyped } -> Array[untyped]
     def self.in_key_order: (Array[untyped]) { (untyped) -> untyped } -> Array[untyped]
 

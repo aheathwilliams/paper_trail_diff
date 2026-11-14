@@ -36,7 +36,7 @@ module PaperTrailDiff
     #: (untyped) -> untyped
     def self.cast(value)
       return midnight(value) if value.instance_of?(Date)
-      return value unless value.is_a?(String)
+      return value unless value.instance_of?(String)
 
       parsed = local? ? Time.parse(value) : Support.constant('ActiveSupport::TimeZone')['UTC'].parse(value)
       parsed || value
@@ -49,10 +49,10 @@ module PaperTrailDiff
     #: (untyped, untyped) -> bool
     def self.stored_date?(object, model)
       return false if TimeOfDay.datetime_columns(model).empty?
-      return STORED_DATE.match?(object) if object.is_a?(String)
+      return STORED_DATE.match?(object) if object.instance_of?(String)
 
       object.respond_to?(:each_value) &&
-        object.each_value.any? { |value| value.is_a?(String) && DATE_TEXT.match?(value) }
+        object.each_value.any? { |value| value.instance_of?(String) && DATE_TEXT.match?(value) }
     end
 
     #: (Date) -> Time
