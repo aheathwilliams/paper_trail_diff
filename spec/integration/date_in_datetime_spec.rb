@@ -40,6 +40,14 @@ RSpec.describe 'A date stored for a datetime column' do
     PaperTrail.serializer = previous
   end
 
+  # Active Record 8 keeps the date on the instance, and PaperTrail stores it;
+  # before 8.0 the instance casts it to nil instead, and the version holds
+  # that nil. The version is given the date as Active Record 8 has it stored.
+  def stored_as_given(version, values)
+    stored = version.object_deserialized.merge(values)
+    version.update_columns(object: PaperTrail.serializer.dump(stored))
+  end
+
   [PaperTrail::Serializers::YAML, PaperTrail::Serializers::JSON].each do |serializer|
     context "with #{serializer.name.demodulize} history" do
       around { |example| with_serializer(serializer) { example.run } }
@@ -50,6 +58,7 @@ RSpec.describe 'A date stored for a datetime column' do
           event.update_columns(starts_at: Date.new(2026, 3, 1))
           event.update!(title: 'b') # the same instance, which still holds the date
           row = ZonedDatedEvent.find(event.id)
+          stored_as_given(row.versions.last, 'starts_at' => Date.new(2026, 3, 1))
 
           expect(PaperTrailDiff.compare(row.versions.last, row).attributes.keys).to eq(['title'])
           starts = PaperTrailDiff.analyze(row).timeline.map do |step|
