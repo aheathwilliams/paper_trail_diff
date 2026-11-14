@@ -18,6 +18,8 @@ RSpec.describe PaperTrailDiff::StoredValues do
     paper_trail = Struct.new(:version_class).new(Struct.new(:columns_hash).new(columns))
     Class.new do
       define_singleton_method(:attribute_types) { types }
+      define_singleton_method(:attribute_names) { types.keys }
+      define_singleton_method(:column_names) { types.keys }
       define_singleton_method(:type_for_attribute) { |name| types.fetch(name) }
       define_singleton_method(:paper_trail_options) { {} }
       define_singleton_method(:paper_trail) { paper_trail }

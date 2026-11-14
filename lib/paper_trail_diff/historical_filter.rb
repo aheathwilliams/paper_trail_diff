@@ -100,7 +100,9 @@ module PaperTrailDiff
               'historical_filter: names an attribute twice, as a string and a symbol'
       end
 
-      unknown = attributes.keys - @model.attribute_names
+      # An attribute without a column is not stored, and `where` cannot
+      # name it either (see StoredValues).
+      unknown = attributes.keys - @model.column_names
       return attributes if unknown.empty?
 
       raise ConfigurationError, "unknown historical attributes: #{unknown.join(', ')}"
