@@ -92,6 +92,57 @@ module PaperTrailDiff
       end
     end
 
+    # The owners of children no version was ever saved for, such as rows from
+    # before PaperTrail: such a child has held its live key throughout, as an
+    # analysis reads it, and so leads to a change further down.
+    class Unversioned < AssociationActivityEdge
+      #: (untyped, TimeRange?) -> void
+      def initialize(reflection, time_range)
+        super
+        @target = reflection.klass
+        @versions = @target.paper_trail.version_class
+        @key = @target.primary_key
+        @column = @target.arel_table[reflection.foreign_key]
+        @type = column_type(@target, reflection.foreign_key)
+        @filter_type = column_type(@target, @key)
+      end
+
+      #: (untyped) -> untyped
+      def relation(filter)
+        rows = @target.unscoped.where(@key => filter)
+        type = @reflection.type
+        held = { type => @owner.polymorphic_name } #: Hash[untyped, untyped]
+        rows = rows.where(held) if type
+        comparable? ? rows.where(versioned.not) : rows.where.not(@key => versioned_ids(filter))
+      end
+
+      private
+
+      # @rbs @target: untyped
+      # @rbs @versions: untyped
+      # @rbs @key: String
+
+      # A database compares the key with item_id only when they share a type.
+      #: () -> bool
+      def comparable?
+        column_type(@versions, 'item_id') == @filter_type
+      end
+
+      #: () -> untyped
+      def versioned
+        table = @versions.arel_table
+        VersionQuery.for_model(@target).where(table[:item_id].eq(@target.arel_table[@key]))
+                    .arel.exists
+      end
+
+      #: (untyped) -> Array[untyped]
+      def versioned_ids(filter)
+        ids = filter.respond_to?(:arel) ? filter.distinct.pluck(*filter.select_values) : filter
+        key = @target.type_for_attribute(@key)
+        VersionQuery.for_items(@target, ids).distinct.pluck(:item_id).map { |id| key.cast(id) }
+      end
+    end
+
     # The owners that pointed at a target when the window opened or after a
     # change inside it, as PT-AT recorded them on the owners' versions.
     class BelongsTo < AssociationActivityEdge

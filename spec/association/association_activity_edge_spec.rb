@@ -199,6 +199,48 @@ RSpec.describe PaperTrailDiff::AssociationActivityEdge do
     end
   end
 
+  describe described_class::Unversioned do
+    def unversioned(&block)
+      PaperTrail.request(enabled: false, &block)
+    end
+
+    it 'finds the live owners of the children that have no version' do
+      article = TrackedArticle.create!(title: 'Owner')
+      quiet = unversioned { article.comments.create!(body: 'never versioned') }
+      versioned = TrackedArticle.create!(title: 'Other').comments.create!(body: 'versioned')
+      edge = described_class::Unversioned.new(reflection(TrackedArticle, :comments), nil)
+
+      expect(owners(edge, [quiet.id, versioned.id])).to eq([article.id])
+      expect(owners(edge, TrackedComment.select(:id))).to eq([article.id])
+      expect([edge.type, edge.filter_type]).to eq(%i[integer integer])
+      expect(edge.column).to eq(TrackedComment.arel_table[:article_id])
+    end
+
+    it 'compares a string item_id with the key as values' do
+      post = StringItemPost.create!(title: 'Owner')
+      quiet = unversioned { post.notes.create!(body: 'never versioned') }
+      other = StringItemPost.create!(title: 'Other')
+      versioned = other.notes.create!(body: 'versioned')
+      edge = described_class::Unversioned.new(reflection(StringItemPost, :notes), nil)
+
+      expect(owners(edge, [quiet.id, versioned.id])).to eq([post.id])
+      expect(owners(edge, StringItemNote.select(:id))).to eq([post.id])
+    end
+
+    it 'reads only children held under the polymorphic owner type' do
+      holder = EdgeHolder.create!(title: 'Holder')
+      document = EdgeSpecialDocument.create!(name: 'Document')
+      held = unversioned { EdgeSticker.create!(label: 'held', holder: holder) }
+      other = unversioned { EdgeSticker.create!(label: 'other', holder: document) }
+      EdgeSticker.where(id: other.id).update_all(holder_id: holder.id)
+      edge = described_class::Unversioned.new(reflection(EdgeHolder, :stickers), nil)
+      documents = described_class::Unversioned.new(reflection(EdgeSpecialDocument, :stickers), nil)
+
+      expect(owners(edge, [held.id, other.id])).to eq([holder.id])
+      expect(owners(documents, [held.id, other.id])).to eq([holder.id])
+    end
+  end
+
   describe described_class::BelongsTo do
     it 'finds the owners that pointed at a target when the window opened or after' do
       author = TrackedAuthor.create!(name: 'Ann')

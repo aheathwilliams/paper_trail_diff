@@ -439,8 +439,8 @@ RSpec.describe PaperTrailDiff::AssociationActivitySelection do
 
       found = sources(TrackedArticle, [:comments], window: since(start))
 
-      expect(found.map(&:class)).to eq([described_class::Query])
-      expect(found.first.type).to eq(:integer)
+      expect(found.map(&:class)).to eq([described_class::Query] * 2)
+      expect(found.map(&:type)).to eq(%i[integer integer])
       expect(selected(found)).to eq([article.id])
     end
 
