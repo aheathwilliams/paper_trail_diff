@@ -41,12 +41,14 @@ module PaperTrailDiff
     # after a window whose steps are not reported, so nothing reads it.
     # `include_step` says whether an event's step is reported. `root` names
     # the root, whose steps credit each change row to the version that made
-    # it (see ChangeAttribution).
-    #: (Array[untyped], Array[ActivityEvent], untyped, view: ActivityView, include_step: untyped, root: RecordReference, ends: TransactionEnds, ?current: untyped, ?closing: RecordSnapshot?) -> void
+    # it (see ChangeAttribution). `filtered` says a version filter chooses the
+    # reported steps, so that the history ends after the last change it keeps.
+    #: (Array[untyped], Array[ActivityEvent], untyped, view: ActivityView, include_step: untyped, root: RecordReference, ends: TransactionEnds, ?current: untyped, ?closing: RecordSnapshot?, ?filtered: bool) -> void
     def initialize( # rubocop:disable Metrics/ParameterLists
       root_versions, events, snapshotter,
-      view:, include_step:, root:, ends:, current: nil, closing: nil
+      view:, include_step:, root:, ends:, current: nil, closing: nil, filtered: false
     )
+      @filtered = filtered
       @ends = ends
       @root_versions = root_versions
       @events = events
@@ -97,6 +99,7 @@ module PaperTrailDiff
     # @rbs @previous_event: ActivityEvent?
     # @rbs @previous_attribution: ChangeAttribution?
     # @rbs @passed_reported: bool?
+    # @rbs @filtered: bool
     # @rbs @root: RecordReference
     # @rbs @ends: TransactionEnds
     # @rbs @transactions: Hash[Array[untyped], ChangeAttribution::Transaction]
@@ -118,7 +121,9 @@ module PaperTrailDiff
     end
 
     # A left-out event bounds nothing. A reported step it would have opened
-    # still moves the reported range's end past it, to the next boundary.
+    # still moves the reported range's end past it, to the next boundary,
+    # unless a version filter chooses the steps: the event changed nothing
+    # the root shows, so the last change the filter keeps is still the end.
     #
     # The history starts at the first kept event whose step is reported. The
     # events left out before it are of records outside the root's tree, and
@@ -166,7 +171,7 @@ module PaperTrailDiff
 
     #: (ActivityEvent) -> void
     def pass(event)
-      @passed_reported = true if reported?(event)
+      @passed_reported = true if !@filtered && reported?(event)
     end
 
     #: (ActivityEvent, RecordSnapshot?) -> void

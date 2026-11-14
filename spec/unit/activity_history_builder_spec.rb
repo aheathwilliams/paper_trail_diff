@@ -100,6 +100,20 @@ RSpec.describe PaperTrailDiff::ActivityHistoryBuilder do
     expect(unmoved.last_snapshot).to be_nil
   end
 
+  # Under a version filter the history ends after the last change it keeps,
+  # and a left-out event changed nothing the root shows.
+  it 'leaves the end where it was past a left-out event under a version filter' do
+    events, snapshots = history
+    stream([events[0], snapshots[0], true], [events[1], snapshots[1], true],
+           [events[2], snapshots[2], false], [events[3], snapshots[3], true])
+
+    result = build(events, reported: ->(event) { !event.equal?(events[1]) }, filtered: true)
+    moved = build(events, reported: ->(event) { !event.equal?(events[1]) })
+
+    expect(result.last_snapshot).to equal(snapshots[1])
+    expect(moved.last_snapshot).to equal(snapshots[3])
+  end
+
   it 'keeps the snapshots on steps only when the view retains them' do
     events, snapshots = history
     stream([events[0], snapshots[0], true], [events[1], snapshots[1], true])

@@ -363,7 +363,8 @@ module PaperTrailDiff
         view: @view,
         closing: closing,
         root: root_reference,
-        ends: ends
+        ends: ends,
+        filtered: !@filter.nil?
       ).call
     end
 
