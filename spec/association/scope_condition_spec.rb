@@ -662,9 +662,11 @@ RSpec.describe PaperTrailDiff::ScopeCondition do
 
     # SQLite compares the date with the stored text, which no time equals.
     it 'reads a date bound on a datetime column as midnight, except on SQLite' do
-      # The column types each adapter lists are read as SQLite's.
+      # The column types are read as the database in use lists them, under
+      # whichever adapter the example names.
+      adapter = ScopeConditionItem.connection_db_config.adapter
       allow(PaperTrailDiff::ExactColumnType).to(receive(:sql_kind)
-        .and_wrap_original { |original, _adapter, sql_type| original.call('sqlite3', sql_type) })
+        .and_wrap_original { |original, _adapter, sql_type| original.call(adapter, sql_type) })
       read = lambda do |adapter, bound|
         allow(ScopeConditionItem.connection_db_config).to receive(:adapter).and_return(adapter)
         described_class.for_relation(ScopeConditionItem.where(seen_at: bound), ScopeConditionItem)
@@ -684,7 +686,9 @@ RSpec.describe PaperTrailDiff::ScopeCondition do
       stub_const('ScopeConditionSkipping', Class.new(ScopeConditionItem))
       ScopeConditionSkipping.has_paper_trail skip: %i[note due]
       stub_const('ScopeConditionSkippingDefault', Class.new(ScopeConditionSkipping))
-      ScopeConditionSkippingDefault.class_eval { default_scope { where(note: 'kept') } }
+      # A date, which every database compares as Ruby does, unlike text.
+      kept = Date.new(2025, 6, 1)
+      ScopeConditionSkippingDefault.class_eval { default_scope { where(due: kept) } }
       skipping = [ScopeConditionSkipping, ScopeConditionSkippingDefault]
       refused = ->(model, condition) { described_class.for_relation(model.where(condition), model) }
 
@@ -695,9 +699,9 @@ RSpec.describe PaperTrailDiff::ScopeCondition do
       expect(relation_matches(ScopeConditionSkipping.where(rank: 1), { rank: 1, note: 'x' }))
         .to eq([true])
       expect(relation_matches(ScopeConditionSkippingDefault.where(rank: 1),
-                              { rank: 1, note: 'kept' }, { rank: 1, note: 'other' }))
+                              { rank: 1, due: kept }, { rank: 1, due: day }))
         .to eq([true, false])
-      expect(relation_matches(ScopeConditionItem.where(note: 'x'), { note: 'x' })).to eq([true])
+      expect(relation_matches(ScopeConditionItem.where(due: day), { due: day })).to eq([true])
     end
 
     it 'declines a relation that joins, groups, or that it cannot read' do
