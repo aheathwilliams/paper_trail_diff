@@ -151,6 +151,17 @@ module PaperTrailDiff
     end
     private_class_method :plain_relation?
 
+    # Join rows in primary key order, the order whose first target an
+    # unordered has_one through reads (see #first). The block names a row's
+    # model; a row with no key yet comes last.
+    #: (Array[untyped]) { (untyped) -> untyped } -> Array[untyped]
+    def self.in_key_order(rows)
+      rows.each_with_index.sort_by do |row, index|
+        keys = Array(yield(row).primary_key).map { |key| row.attributes[key] }
+        keys.any?(&:nil?) ? [1, index] : [0, keys, index]
+      end.map(&:first)
+    end
+
     #: (untyped, Array[untyped], ?ScopeRanking?) -> void
     def initialize(model_class, predicate, ranking = nil)
       @model_class = model_class
@@ -192,10 +203,12 @@ module PaperTrailDiff
     # lowest primary key. Active Record reads an unordered has_one with
     # LIMIT 1, which SQLite, MySQL and SQL Server answer in key order for a
     # clustered or indexed key; reading any other row would differ from the
-    # current record where nothing changed. PostgreSQL promises no order.
-    #: (Array[untyped]) -> Array[untyped]
-    def first(records)
-      return records.first(1) if @ranking
+    # current record where nothing changed. PostgreSQL promises no order. A
+    # has_one through gives its records in the order of its join rows, whose
+    # first target is the one Active Record reads.
+    #: (Array[untyped], ?in_order: bool) -> Array[untyped]
+    def first(records, in_order: false)
+      return records.first(1) if @ranking || in_order
 
       keys = Array(@model_class.primary_key)
       records.min_by(1) do |record|

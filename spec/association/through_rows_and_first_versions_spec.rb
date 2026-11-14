@@ -149,6 +149,26 @@ RSpec.describe 'Through rows and first versions',
       expect(bob).not_to be_empty
     end
 
+    # Active Record reads the first join row's user, which the database
+    # gives in key order, not the user with the lowest id.
+    it 'reads the user of the first pin when two pins name one' do
+      second_user, first_user = %w[later earlier].map { |name| TfUser.create!(name: name) }
+      project = TfProject.create!(name: 'p')
+      TfPin.create!(tf_project: project, tf_user: first_user, label: 'first')
+      TfPin.create!(tf_project: project, tf_user: second_user, label: 'second')
+      project.update!(name: 'p2')
+      project.reload
+
+      expect(project.pin_user).to eq(first_user)
+      analysis = PaperTrailDiff.analyze(project, from: project.versions.last, to: project,
+                                                 associations: %w[pin pin_user])
+      expect(ids(analysis.from_snapshot, 'pin_user')).to eq([first_user.id])
+      expect(analysis.diff.associations).to be_empty
+      expect(ids(PaperTrailDiff.analyze(project, associations: %w[pin_user]).to_snapshot,
+                 'pin_user'))
+        .to eq([first_user.id])
+    end
+
     it 'makes no step of a pin that leads to no user' do
       user = TfUser.create!(name: 'u')
       project = TfProject.create!(name: 'p')

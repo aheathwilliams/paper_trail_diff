@@ -155,7 +155,7 @@ module PaperTrailDiff
       return records unless ranked && reflection.has_one?
 
       condition = @conditions.call(reflection, ranked: ranked) #: ScopeCondition
-      condition.first(records)
+      condition.first(records, in_order: reflection.through_reflection?)
     end
 
     #: (Hash[Symbol, untyped], untyped) -> Array[untyped]
@@ -215,7 +215,9 @@ module PaperTrailDiff
       return unless handled
 
       joins = joins.select { |join| AssociationTraversal.source_type_join?(reflection, join) }
-      resolved = joins.map { |join| read.call(join, reflection.source_reflection) }
+      resolved = ScopeCondition.in_key_order(joins, &:class).map do |join|
+        read.call(join, reflection.source_reflection)
+      end
       resolved.flat_map(&:last) if resolved.all?(&:first)
     end
 
