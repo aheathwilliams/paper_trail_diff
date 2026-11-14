@@ -218,10 +218,11 @@ project follows [Semantic Versioning](https://semver.org/).
 - `analyze_many` with associations and `activity: true` gives a root with
   no versions an empty analysis over its whole history, as `analyze` does.
   It raised `IncompleteTimeRangeError`.
-- A `has_one :through` with no order reads, in history, the target of its
-  first join row by key, as Active Record does, not the target with the
-  lowest id. With two join rows, a diff from a past version to the
-  unchanged record reported it replaced.
+- A `has_one :through` with no order reads, in history, the target Active
+  Record reads: that of its first join row by key on SQLite, PostgreSQL and
+  MySQL, and the target with the lowest id on SQL Server. It read the
+  lowest id everywhere. With two join rows, a diff from a past version to
+  the unchanged record reported it replaced.
 - Activity on a path below an association to an STI subclass no longer
   raises `UnknownAssociationError` when a child is retyped to its base class
   and back.

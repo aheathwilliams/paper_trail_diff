@@ -155,7 +155,7 @@ module PaperTrailDiff
       return records unless ranked && reflection.has_one?
 
       condition = @conditions.call(reflection, ranked: ranked) #: ScopeCondition
-      condition.first(records, in_order: reflection.through_reflection?)
+      condition.first(records, in_order: AssociationTraversal.join_order?(reflection))
     end
 
     #: (Hash[Symbol, untyped], untyped) -> Array[untyped]

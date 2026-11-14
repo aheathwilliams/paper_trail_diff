@@ -14,6 +14,16 @@ module PaperTrailDiff
       polymorphic_target(reflection, record, type) unless type.empty?
     end
 
+    # Whether an unordered has_one through reads the target of its first
+    # join row. SQL Server plans the join from the target's table instead, so
+    # its LIMIT reads the target with the lowest key, as a plain has_one does.
+    #: (untyped) -> bool
+    def self.join_order?(reflection)
+      return false if reflection.active_record.connection_db_config.adapter == 'sqlserver'
+
+      reflection.through_reflection?
+    end
+
     # A through with `source_type:` reaches only the join records whose type
     # column names that class, as Active Record's `where(type => source_type)`.
     # A through's `foreign_type` is its polymorphic source's.
