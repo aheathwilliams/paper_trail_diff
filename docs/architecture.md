@@ -103,31 +103,26 @@ associations no other record is read, so each of the record's versions takes
 effect where it was saved: row locks keep two transactions from interleaving
 one record's versions.
 
-## When the gem falls back to PT-AT
+## What history cannot read
 
-These association shapes cannot be read from the loaded history. The gem asks
-PT-AT to rebuild them at each point instead, which costs queries per record and
-resolves association membership by timestamp only. PT-AT starts from the
-association's current members and swaps in their older versions, without
-checking a scope against them, so its membership is approximate:
+Every association is read from the loaded history, or not at all. These
+shapes are refused, since who was in one at a past point cannot be told from
+stored versions:
 
 - associations with a scope the gem cannot read as plain conditions and an
   exact ranking, including owner-dependent scopes and a `limit` without a
   total integer order;
-- targets with such a default scope, including a polymorphic `belongs_to`
-  target, whose class and scope are known only from each record;
+- targets with such a default scope. A polymorphic `belongs_to` names its
+  target's class only in each record, so one that points at such a class is
+  refused when that record is read;
 - composite foreign keys.
 
-Every method that reads history rejects the scoped cases unless you pass
-`allow_approximate: true`; see [costly associations](reference.md#costly-associations).
+See [association scopes](reference.md#association-scopes).
 
-HABTM membership comes from the snapshots PT-AT records with each transaction,
-so it is only known at root versions saved in a transaction. Those snapshots
-name the transaction and the association but not the owner, so they give only
-the root's own membership, and a HABTM below the root is rejected before any
-history is read. Even at the root, a transaction in which another record with a
-HABTM of the same name saved a version holds both records' members;
-`HabtmTransactionOwners` finds those transactions, and reading one raises.
+A `has_and_belongs_to_many` is refused before any history is read: its join
+rows have no versions. The reference shows how to
+[replace one](reference.md#replacing-a-has_and_belongs_to_many) with a
+`has_many :through` a versioned join model.
 
 ## Database indexes
 

@@ -144,7 +144,6 @@ module PaperTrailDiff
         subtree: subtree,
         path: path,
         normalizer: normalizer,
-        root_endpoint: endpoints.fetch(0),
         context_endpoint: endpoints.fetch(1)
       )
     end

@@ -224,19 +224,6 @@ RSpec.describe 'A has_many :through with source_type' do
         renamed = { 'name' => { from: 'Ada', to: 'Ada renamed' } }
         expect(report(since)).to eq(holder.id => empty.merge(changed: [renamed]))
       end
-
-      # Prepared history reads a through itself; this is the PT-AT path a
-      # record falls back to when it cannot. The tag shares Bea's id.
-      it 'keeps only links of the type when PT-AT reifies the through' do
-        link(holder, ada)
-        link(holder, SourceTypeTag.create!(name: 'same id', id: bea.id))
-        from = checkpoint(holder)
-
-        record = from.reify(dup: true)
-        reflection = SourceTypeHolder.reflect_on_association(association)
-        PaperTrailDiff::HistoricalAssociationReifier.new(from).reify(record, [reflection])
-        expect(record.public_send(association).map(&:name)).to eq(['Ada'])
-      end
     end
   end
 end

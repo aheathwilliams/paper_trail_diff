@@ -279,16 +279,6 @@ RSpec.describe PaperTrailDiff::ActivityChildCandidateLoader do
     expect(statements.length).to eq(5)
   end
 
-  it 'reads nothing for a composite foreign key' do
-    article = TrackedArticle.create!(title: 'Article')
-    TrackedComment.create!(article: article, body: 'Comment')
-    reflection = instance_double(ActiveRecord::Reflection::HasManyReflection,
-                                 foreign_key: %w[article_id reviewer_id])
-    composite = described_class.new(TrackedArticle, [article.id], reflection, nil)
-
-    expect([composite.historical_rows, composite.current_pairs]).to eq([[], []])
-  end
-
   # PT-AT names only the owner a version saved, so a child made without a
   # version names the owner it had before its first one only in that
   # version's state.

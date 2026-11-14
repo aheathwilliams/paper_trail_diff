@@ -4,22 +4,21 @@
 module PaperTrailDiff
   # Loads the children of a has_many or has_one that its owners had from a
   # start onward, from PT-AT's version associations and the live rows.
-  # Prepared history and activity both read children through it. A composite
-  # foreign key reads none, as loaded history cannot index it.
+  # Prepared history and activity both read children through it.
   #
   # A history that ends leaves out the children created after its end (see
   # VersionQuery.created_after), which no state up to the end holds: read
   # with the rest, each would bring its versions and its row, and a range
   # long past would cost more with every child its owners have gained since.
   class ActivityChildCandidateLoader
-    #: (untyped, Array[untyped], untyped, untyped, ?untyped) -> void
-    def initialize(parent_class, parent_ids, reflection, start_at, end_at = nil)
+    #: (untyped, Array[untyped], untyped, untyped, untyped) -> void
+    def initialize(parent_class, parent_ids, reflection, start_at, end_at)
       @parent_class = parent_class
       @parent_ids = parent_ids
       @reflection = reflection
       @start_at = start_at
       @end_at = end_at
-      @foreign_key = AssociationKey.scalar_foreign_key(reflection)
+      @foreign_key = reflection.foreign_key
     end
 
     # Queries shared by a batch's roots keep the owner and timestamp needed to
@@ -27,8 +26,6 @@ module PaperTrailDiff
     #: () -> Array[Array[untyped]]
     def historical_rows
       foreign_key = @foreign_key
-      return [] unless foreign_key
-
       version_class = @parent_class.paper_trail.version_class
       scope = VersionAssociationCandidateScope.new(version_class, @start_at)
       recorded = owner_slices.flat_map do |owners|
@@ -42,8 +39,6 @@ module PaperTrailDiff
     #: () -> Array[Array[untyped]]
     def current_pairs
       foreign_key = @foreign_key
-      return [] unless foreign_key
-
       owner_slices.flat_map do |owners|
         live_relation(foreign_key, owners).pluck(foreign_key, @reflection.klass.primary_key)
       end
@@ -56,7 +51,7 @@ module PaperTrailDiff
     # @rbs @reflection: untyped
     # @rbs @start_at: untyped
     # @rbs @end_at: untyped
-    # @rbs @foreign_key: String?
+    # @rbs @foreign_key: String
 
     # Every row of the table, as history reads them: an STI subclass's
     # siblings are left out where children are resolved.

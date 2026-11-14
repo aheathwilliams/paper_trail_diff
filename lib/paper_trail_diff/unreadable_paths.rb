@@ -2,14 +2,13 @@
 # rbs_inline: enabled
 
 module PaperTrailDiff
-  # The requested paths prepared history cannot read exactly, each with why.
-  # PT-AT reads such a path instead, one record at a time, when the caller
-  # passes `allow_approximate: true`.
-  module ApproximatePaths
+  # The requested paths history cannot read, each with why: who was in one
+  # at a past point cannot be told, so a request that reads history refuses it.
+  module UnreadablePaths
     #: (AssociationTraversal, untyped) -> Array[[String, String]]
     def self.call(traversal, model)
       traversal.selected_reflections(model).filter_map do |path, reflection|
-        reason = fallback_reason(reflection, ranked: true)
+        reason = path_reason(reflection, ranked: true)
         [path, reason] if reason
       end
     end
@@ -18,13 +17,13 @@ module PaperTrailDiff
     # has_one through over a ranked part is refused whole, so its parts, too,
     # are checked for conditions alone.
     #: (untyped, ranked: bool) -> String?
-    def self.fallback_reason(reflection, ranked:)
+    def self.path_reason(reflection, ranked:)
       reason_for(reflection, ranked) ||
         AssociationTraversal.through_parts(reflection).filter_map do |part|
           reason_for(part, false)
         end.first
     end
-    private_class_method :fallback_reason
+    private_class_method :path_reason
 
     # A scope prepared history can read as conditions on stored attributes
     # is batched like any other path. A polymorphic target's class, and so

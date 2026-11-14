@@ -45,7 +45,7 @@ module PaperTrailDiff
       @records = PreparedRecordIndex.new(start_at, end_at: end_at, live_records: live_records)
       @activity = PreparedActivityIndex.new(@records, start_at: start_at)
       @history = PreparedHistory.new(@records, activity_index: @activity)
-      @edges = PreparedEdgeLoader.new(@records, root_versions, children: @activity.children)
+      @edges = PreparedEdgeLoader.new(@records, children: @activity.children)
       @prepared = {} #: Hash[untyped, Set[String]]
     end
 
@@ -117,11 +117,9 @@ module PaperTrailDiff
       missing = unprepared_ids(owner_ids, reflection)
       return @history.edge(owner_class, reflection) if missing.empty?
 
-      groups, memberships = @edges.call(owner_class, missing, reflection)
+      groups = @edges.call(owner_class, missing, reflection)
       @history.merge_edge(owner_class, reflection, groups)
-      @history.register_habtm(owner_class, reflection, memberships) if memberships
       mark_prepared(missing, reflection)
-      mark_unsupported(owner_class, reflection, groups)
       load_groups(groups)
       @history.edge(owner_class, reflection)
     end
@@ -137,13 +135,6 @@ module PaperTrailDiff
     #: (Array[untyped], untyped) -> void
     def mark_prepared(ids, reflection)
       (@prepared[reflection] ||= Set.new).merge(ids.map(&:to_s))
-    end
-
-    #: (untyped, untyped, Hash[String, Hash[Symbol, untyped]]) -> void
-    def mark_unsupported(owner_class, reflection, groups)
-      unsupported = reflection.foreign_key.is_a?(Array) ||
-                    groups.values.any? { |group| !versioned?(group.fetch(:model)) }
-      @history.mark_unsupported(owner_class, reflection) if unsupported
     end
 
     #: (Hash[String, Hash[Symbol, untyped]]) -> void

@@ -238,15 +238,6 @@ RSpec.describe PaperTrailDiff::ActivityTimelineBuilder do
       expect { timeline(other, from: version_of(article), to: article) }
         .to raise_error(PaperTrailDiff::VersionMismatchError)
     end
-
-    it 'refuses HABTM activity that runs into live state' do
-      article = TrackedArticle.create!(title: 'Article')
-      from = checkpoint(article)
-
-      expect do
-        SpecTimelines.activity_timeline(article, from: from, to: article, associations: [:tags])
-      end.to raise_error(PaperTrailDiff::UnsupportedLiveActivityError, /tags/)
-    end
   end
 
   describe 'group: :transaction' do
@@ -418,7 +409,7 @@ RSpec.describe PaperTrailDiff::ActivityTimelineBuilder do
     it 'reads the same activity from a snapshotter that rebuilds every state' do
       article, comment, from, to = edited_history
       comment.update!(body: 'live')
-      plain = FullSnapshotter.new(adapter.method(:snapshot_at), provider)
+      plain = FullSnapshotter.new(FullSnapshotter.pt_at(adapter).method(:snapshot_at), provider)
 
       activity = ->(**options) { builder(article, from: from, **options).analyze.activity_timeline }
       expected = [activity.call(to: to), activity.call(to: article, live: article)]
@@ -566,12 +557,14 @@ RSpec.describe PaperTrailDiff::ActivityTimelineBuilder do
       expect(recorded(steps.last.source_boundary)).to eq('body' => { from: 'two', to: 'three' })
     end
 
-    it 'does not read them unless asked' do
+    it 'reads them unless told not to' do
       article, _comment, from, to = edited_history
 
-      steps = timeline(article, from: from, to: to)
+      read = timeline(article, from: from, to: to)
+      unread = timeline(article, from: from, to: to, recorded_changes: false)
 
-      expect(steps.map { |step| step.from_boundary.recorded_changes? }).to all(be(false))
+      expect(read.map { |step| step.from_boundary.recorded_changes? }).to all(be(true))
+      expect(unread.map { |step| step.from_boundary.recorded_changes? }).to all(be(false))
     end
 
     it 'reads the destroy that closes a deleted root, at both of its boundaries' do

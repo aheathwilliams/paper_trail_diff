@@ -7,17 +7,16 @@ module PaperTrailDiff
   # the only place allowed to know about both PaperTrail and the pure engine.
   # Reconstruction logic lives in the collaborators it wires together.
   class PaperTrailAdapter # rubocop:disable Metrics/ClassLength
-    # `recorded_changes:` reads what each activity boundary's version recorded.
-    # `allow_approximate:` accepts association paths read with PT-AT.
-    #: (associations: association_option, ignore: ignore_option, ?recorded_changes: bool, ?allow_approximate: bool) -> void
-    def initialize(associations:, ignore:, recorded_changes: false, allow_approximate: false)
-      Support.boolean!(:recorded_changes, recorded_changes)
+    # `recorded_changes:` reads what each activity boundary's version
+    # recorded, as activity does unless told not to.
+    #: (associations: association_option, ignore: ignore_option, ?recorded_changes: bool?) -> void
+    def initialize(associations:, ignore:, recorded_changes: nil)
+      Support.boolean!(:recorded_changes, recorded_changes) unless recorded_changes.nil?
       @association_tree = AssociationTree.build(associations)
       @ignore_policy = IgnorePolicy.build(ignore, association_paths: @association_tree.paths)
-      @recorded = (@ignore_policy if recorded_changes)
+      @recorded_changes = recorded_changes
       @traversal = AssociationTraversal.new(@association_tree)
-      @traversal_preparer = TraversalPreparer.new(traversal: @traversal,
-                                                  allow_approximate: allow_approximate)
+      @traversal_preparer = TraversalPreparer.new(traversal: @traversal)
       @live_endpoints = LiveEndpointProvider.new(tree: @association_tree)
       @instrumentation_payload = { association_paths: @association_tree.paths }.freeze
       @snapshot_pool = SnapshotPool.new
@@ -33,7 +32,6 @@ module PaperTrailDiff
       payload = @instrumentation_payload.merge(comparison_count: 1)
       Instrumentation.instrument('compare', payload) do
         Endpoint.validate_pair!(from_endpoint, to_endpoint)
-        notify_ambiguous_association_boundary(from_endpoint, to_endpoint)
         ReadSnapshot.call([from_endpoint, to_endpoint]) do
           if @association_tree.empty?
             Engine.compare(snapshot_for_endpoint(from_endpoint), snapshot_for_endpoint(to_endpoint))
@@ -88,14 +86,13 @@ module PaperTrailDiff
     # caller reporting on a population does not have to rediscover which of its
     # members changed. The roots the relation could not reach come back named
     # rather than dropped -- see `PaperTrailDiff.analyze_scope`.
-    #: (untyped, limit: Integer?, within: untyped, ?activity: bool, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?, ?historical_filter: untyped, ?max_filter_versions: Integer, ?include_deleted: bool) -> ScopedAnalysis
-    def analyze_scope(scope, limit:, within:, activity: false, version_scope: nil, snapshots: false, group: nil, historical_filter: nil, max_filter_versions: HistoricalFilter::DEFAULT_VERSION_LIMIT, include_deleted: false) # rubocop:disable Metrics/ParameterLists, Layout/LineLength
+    #: (untyped, limit: Integer?, within: untyped, ?activity: bool, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?, ?include_deleted: bool) -> ScopedAnalysis
+    def analyze_scope(scope, limit:, within:, activity: false, version_scope: nil, snapshots: false, group: nil, include_deleted: false) # rubocop:disable Metrics/ParameterLists, Layout/LineLength
       view = activity_view(activity, snapshots, group, version_scope)
       ReadSnapshot.call([scope]) do
         check_scope(scope)
         scoped_builder(scope, limit: limit, within: within, activity: activity,
-                              version_scope: version_scope, historical_filter: historical_filter,
-                              max_filter_versions: max_filter_versions,
+                              version_scope: version_scope,
                               include_deleted: include_deleted, view: view).call
       end
     end
@@ -104,8 +101,9 @@ module PaperTrailDiff
 
     #: (bool, bool, Symbol?, untyped) -> ActivityView
     def activity_view(activity, snapshots, group, version_scope)
+      recorded = @recorded_changes.nil? ? activity : @recorded_changes
       ActivityView.build(activity: activity, snapshots: snapshots, group: group,
-                         recorded: @recorded, version_scope: version_scope)
+                         recorded: (@ignore_policy if recorded), version_scope: version_scope)
     end
 
     #: (untyped) -> Hash[Symbol, untyped]
@@ -212,13 +210,12 @@ module PaperTrailDiff
       ).call
     end
 
-    #: (untyped, limit: Integer?, within: untyped, activity: bool, version_scope: untyped, historical_filter: untyped, max_filter_versions: Integer, include_deleted: bool, view: ActivityView) -> ScopedAnalysisBuilder
-    def scoped_builder(scope, limit:, within:, activity:, version_scope:, historical_filter:, max_filter_versions:, include_deleted:, view:) # rubocop:disable Metrics/ParameterLists, Layout/LineLength
+    #: (untyped, limit: Integer?, within: untyped, activity: bool, version_scope: untyped, include_deleted: bool, view: ActivityView) -> ScopedAnalysisBuilder
+    def scoped_builder(scope, limit:, within:, activity:, version_scope:, include_deleted:, view:) # rubocop:disable Metrics/ParameterLists
       # @type var options: report_options
       options = { within: within, activity: activity, version_scope: version_scope, view: view }
       ScopedAnalysisBuilder.new(
-        scope, limit: limit, within: within, historical_filter: historical_filter,
-               max_filter_versions: max_filter_versions, include_deleted: include_deleted,
+        scope, limit: limit, within: within, include_deleted: include_deleted,
                analyzer: lambda { |records|
                  analyze_batch(records, within: within, activity: activity,
                                         version_scope: version_scope, view: view)
@@ -236,7 +233,7 @@ module PaperTrailDiff
     # @rbs @live_endpoints: LiveEndpointProvider
     # @rbs @instrumentation_payload: Hash[Symbol, untyped]
     # @rbs @ignore_policy: IgnorePolicy
-    # @rbs @recorded: IgnorePolicy?
+    # @rbs @recorded_changes: bool?
     # @rbs @traversal: AssociationTraversal
     # @rbs @traversal_preparer: TraversalPreparer
     # @rbs @snapshot_pool: SnapshotPool
@@ -244,39 +241,6 @@ module PaperTrailDiff
     # @rbs @historical_store: HistoricalSnapshotStore
     # @rbs @timeline_snapshotter: TimelineSnapshotProvider
     # @rbs @activity_snapshotter: ActivitySnapshotProvider
-
-    # The result may still be correct -- nothing the path reaches may have
-    # changed -- and the gem cannot tell which, since not seeing the change is
-    # the symptom. So it reports the condition and leaves the judgement to the
-    # application.
-    #: (untyped, untyped) -> void
-    def notify_ambiguous_association_boundary(from_endpoint, to_endpoint)
-      return unless ambiguous_association_boundary?(from_endpoint, to_endpoint)
-
-      Instrumentation.notify(
-        'ambiguous_association_boundary',
-        @instrumentation_payload.merge(
-          item_type: from_endpoint.item_type.to_s,
-          version_ids: [from_endpoint.id, to_endpoint.id].freeze,
-          recorded_at: from_endpoint.created_at
-        )
-      )
-    end
-
-    # Loaded history orders two versions that share a timestamp by id, but
-    # PT-AT places association changes by timestamp alone, so only a path it
-    # reads can lose a change between them. A request the preparer refuses
-    # raises here, before anything is reported.
-    #: (untyped, untyped) -> bool
-    def ambiguous_association_boundary?(from_endpoint, to_endpoint)
-      return false if @association_tree.empty?
-      return false unless Endpoint.version?(from_endpoint) && Endpoint.version?(to_endpoint)
-      return false unless from_endpoint.created_at == to_endpoint.created_at
-
-      model_class = RecordedClass.for(from_endpoint)
-      @traversal_preparer.call(model_class, historical: true)
-      FallbackPaths.any?(@traversal, model_class, approximate: true)
-    end
 
     # With neither a window nor endpoints, a range is the record's whole
     # history through its current saved state; a missing endpoint takes that

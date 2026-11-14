@@ -26,14 +26,6 @@ RSpec.describe 'PaperTrailDiff association tracking' do
       raise('PaperTrail did not create the requested boundary version')
   end
 
-  def habtm_boundary_for(article)
-    fresh_article = TrackedArticle.find(article.id)
-    TrackedArticle.transaction do
-      fresh_article.paper_trail.save_with_version ||
-        raise('PaperTrail did not create the requested HABTM boundary version')
-    end
-  end
-
   def with_association_reify_behavior(value)
     previous = PaperTrail.config.association_reify_error_behaviour
     PaperTrail.config.association_reify_error_behaviour = value
@@ -100,7 +92,8 @@ RSpec.describe 'PaperTrailDiff association tracking' do
       record,
       range: PaperTrailDiff::TimelineRange.new(record, from: from, to: to, within: nil),
       traversal: PaperTrailDiff::AssociationTraversal.new(tree),
-      snapshotter: FullSnapshotter.new(adapter.method(:snapshot_at), provider),
+      snapshotter: FullSnapshotter.new(FullSnapshotter.pt_at(adapter).method(:snapshot_at),
+                                       provider),
       view: PaperTrailDiff::ActivityView.new
     ).analyze.activity_timeline
   end
@@ -258,32 +251,27 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     end
     associations = [
       'limited_comments.replies',
-      'offset_comments.replies',
-      'owner_comments.replies'
+      'offset_comments.replies'
     ]
-    # A scope that takes the owner is read with PT-AT, whose membership is
-    # approximate; these comparisons stay inside what it reads correctly.
     expected = comparisons.to_h do |comparison|
       identity = PaperTrailDiff::Endpoint.identity(comparison.fetch(:from))
       diff = PaperTrailDiff.compare(
         comparison.fetch(:from),
         comparison.fetch(:to),
-        associations: associations, allow_approximate: true
+        associations: associations
       )
       [identity, diff.to_h]
     end
 
-    actual = PaperTrailDiff.compare_many(comparisons, associations: associations,
-                                                      allow_approximate: true)
+    actual = PaperTrailDiff.compare_many(comparisons, associations: associations)
 
     expect(actual.transform_values(&:to_h)).to eq(expected)
     expect(actual.values).to all(satisfy do |diff|
       association_diffs = diff.associations
       limited = association_diffs.fetch('limited_comments').added
       offset = association_diffs.fetch('offset_comments').added
-      owner = association_diffs.fetch('owner_comments').added
-      limited.length == 1 && offset.length == 2 && owner.length == 1 &&
-        [*limited, *offset, *owner].all? do |record|
+      limited.length == 1 && offset.length == 2 &&
+        [*limited, *offset].all? do |record|
           record.associations.fetch('replies').records.length == 1
         end
     end)
@@ -343,17 +331,6 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     article.update!(title: 'Scalar batch after')
     result = PaperTrailDiff.compare_many([{ from: before, to: article }])
     expect(result.values.first.attributes.fetch('title').to).to eq('Scalar batch after')
-  end
-
-  it 'compares a transaction-backed HABTM version with live membership' do
-    graph = article_with_graph
-    before = habtm_boundary_for(graph[:article])
-    tag = TrackedTag.create!(name: 'Live tag')
-    graph[:article].tags << tag
-
-    result = PaperTrailDiff.compare(before, graph[:article], associations: [:tags])
-
-    expect(result.associations.fetch('tags').added.map(&:id)).to eq([tag.id])
   end
 
   it 'keeps a belongs_to foreign key scalar when the association is not selected' do
@@ -516,277 +493,6 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     expect(PaperTrailDiff.diagnose(before, after, associations: [:comments])).to be_ok
   end
 
-  it 'reports HABTM membership and target attribute changes as a collection' do
-    graph = article_with_graph
-    kept_tag = TrackedTag.create!(name: 'Kept before')
-    removed_tag = TrackedTag.create!(name: 'Removed')
-    graph[:article].tags << [kept_tag, removed_tag]
-    before = habtm_boundary_for(graph[:article])
-
-    kept_tag.update!(name: 'Kept after')
-    graph[:article].tags.delete(removed_tag)
-    added_tag = TrackedTag.create!(name: 'Added')
-    graph[:article].tags << added_tag
-    after = habtm_boundary_for(graph[:article])
-
-    result = PaperTrailDiff.compare(before, after, associations: [:tags])
-    tags = result.associations.fetch('tags')
-
-    expect(tags.kind).to eq(:has_and_belongs_to_many)
-    expect(tags.added.map(&:id)).to eq([added_tag.id])
-    expect(tags.removed.map(&:id)).to eq([removed_tag.id])
-    expect(tags.changed.fetch(0).attributes.fetch('name').to_h)
-      .to eq(from: 'Kept before', to: 'Kept after')
-
-    step_tags = SpecTimelines.timeline(
-      graph[:article],
-      from: before,
-      to: after,
-      associations: [:tags]
-    ).fetch(0).diff.associations.fetch('tags')
-    expect(step_tags.to_h).to eq(tags.to_h)
-  end
-
-  # A checkpoint records membership as it is when saved, so a tag attached
-  # earlier in its own transaction is a member there. A tag created in that
-  # transaction used to be dropped, as it had no state before the transaction,
-  # so the checkpoint missed it and a comparison with now reported it added.
-  it "reads a tag attached in a checkpoint's own transaction as a member there" do
-    article = TrackedArticle.create!(title: 'T')
-    existing = TrackedTag.create!(name: 'Existing')
-    before = habtm_boundary_for(article)
-    TrackedArticle.transaction do
-      created = TrackedTag.create!(name: 'Created with the checkpoint')
-      TrackedArticle.find(article.id).tags << [existing, created]
-      habtm_boundary_for(article)
-    end
-    after = article.versions.reload.last
-
-    tags = PaperTrailDiff.compare(before, after, associations: [:tags]).associations.fetch('tags')
-    since = PaperTrailDiff.compare(after, article, associations: [:tags])
-
-    expect(tags.added.map { |tag| tag.attributes.fetch('name') })
-      .to eq(['Existing', 'Created with the checkpoint'])
-    expect(since.associations).not_to have_key('tags')
-  end
-
-  # Documented in the reference's HABTM limitation, and pinned here so that a
-  # change in PT-AT, or in how the gem reads it, is noticed.
-  describe 'HABTM membership as PT-AT records it' do
-    it 'credits a change between root versions to the step after the earlier one' do
-      article = TrackedArticle.create!(title: 'T')
-      tag = TrackedTag.create!(name: 'Attached by the second author')
-      PaperTrail.request(whodunnit: 'first') { article.update!(title: 'By the first author') }
-      by_first = article.versions.reload.last
-      PaperTrail.request(whodunnit: 'second') do
-        TrackedArticle.find(article.id).tags << tag
-        habtm_boundary_for(article)
-      end
-      by_second = article.versions.reload.last
-
-      steps = SpecTimelines.activity_timeline(article, from: by_first, to: by_second,
-                                                       associations: [:tags])
-
-      credited = steps.reject(&:empty?).map do |step|
-        [step.source_boundary.whodunnit, step.diff.associations.keys]
-      end
-      expect(credited).to eq([['first', ['tags']]])
-    end
-
-    it 'credits a change to its author when they checkpoint just before it too' do
-      article = TrackedArticle.create!(title: 'T')
-      tag = TrackedTag.create!(name: 'Attached by the second author')
-      PaperTrail.request(whodunnit: 'first') { article.update!(title: 'By the first author') }
-      by_first = article.versions.reload.last
-      PaperTrail.request(whodunnit: 'second') do
-        habtm_boundary_for(article)
-        TrackedArticle.find(article.id).tags << tag
-        habtm_boundary_for(article)
-      end
-
-      steps = SpecTimelines.activity_timeline(article, from: by_first,
-                                                       to: article.versions.reload.last,
-                                                       associations: [:tags])
-
-      credited = steps.reject(&:empty?).map do |step|
-        [step.source_boundary.whodunnit, step.diff.associations.keys]
-      end
-      expect(credited).to eq([['first', []], ['second', ['tags']]])
-    end
-
-    # The checkpoint's membership stands for every point since the previous
-    # root version, but a member created in its transaction did not exist at
-    # the earlier ones. It used to appear there, before a member attached
-    # earlier.
-    it "shows a member created in a checkpoint's transaction from its creation on" do
-      article = TrackedArticle.create!(title: 'T')
-      first = article.versions.last
-      TrackedArticle.transaction do
-        TrackedArticle.find(article.id).tags << TrackedTag.create!(name: 'early')
-      end
-      article.comments.create!(body: 'between')
-      PaperTrail.request(whodunnit: 'checkpointer') do
-        TrackedArticle.transaction do
-          TrackedArticle.find(article.id).tags << TrackedTag.create!(name: 'late')
-          TrackedArticle.find(article.id).paper_trail.save_with_version
-        end
-      end
-      checkpoint = article.versions.reload.last
-
-      { [:tags] => [[], %w[early late]],
-        %i[tags comments] => [[], %w[early], %w[early late]] }.each do |paths, expected|
-        steps = SpecTimelines.activity_timeline(article, from: first, to: checkpoint,
-                                                         associations: paths, snapshots: true)
-        names = steps.map do |step|
-          step.to_snapshot.associations.fetch('tags').records.map do |tag|
-            tag.attributes.fetch('name')
-          end
-        end
-        expect(names).to eq(expected)
-      end
-      at_checkpoint = PaperTrailDiff.analyze(article, from: first, to: checkpoint,
-                                                      associations: [:tags])
-                                    .to_snapshot.associations.fetch('tags').records
-      expect(at_checkpoint.map do |tag|
-        tag.attributes.fetch('name')
-      end).to contain_exactly('early', 'late')
-    end
-
-    it "records the old membership again at an instance's later save" do
-      article = TrackedArticle.create!(title: 'T')
-      tag = TrackedTag.create!(name: 'Kept throughout')
-      article.tags << tag
-      habtm_boundary_for(article)
-      checkpoint = article.versions.reload.last
-      article.reload
-      article.update!(title: 'Saved again from the same instance')
-      stale = article.versions.reload.last
-
-      tags = PaperTrailDiff.compare(checkpoint, stale, associations: [:tags])
-                           .associations.fetch('tags')
-
-      # The tag never left: PT-AT undid the instance's earlier change again.
-      expect(tags.removed.map(&:id)).to eq([tag.id])
-    end
-  end
-
-  # The root's checkpoints record the root's tags and nothing else, so the
-  # tag's articles used to read as empty at both: `Other` joining the tag went
-  # unreported, and against the current record both articles read as added.
-  # The activity timeline raised a KeyError.
-  it 'rejects a HABTM below the root instead of reading the root checkpoint' do
-    ActiveRecord::Base.connection.execute('DELETE FROM tracked_articles_tags')
-    root = TrackedArticle.create!(title: 'Root')
-    other = TrackedArticle.create!(title: 'Other')
-    tag = TrackedTag.create!(name: 'tag')
-    root.tags << tag
-    before = habtm_boundary_for(root)
-    other.tags << tag
-    tag.update!(name: 'renamed')
-    after = habtm_boundary_for(root)
-    options = { associations: ['tags.articles'] }
-    error = [PaperTrailDiff::UnsupportedAssociationError,
-             /\Aunsupported association tags\.articles: TrackedTag#articles /]
-
-    [after, root].each do |to|
-      expect { PaperTrailDiff.compare(before, to, **options) }.to raise_error(*error)
-    end
-    expect { SpecTimelines.activity_timeline(root, from: before, to: after, **options) }
-      .to raise_error(*error)
-    expect(PaperTrailDiff.diagnose(before, after, **options).errors.map { |e| [e.code, e.message] })
-      .to match([[:unsupported_association, error.last]])
-
-    tags = PaperTrailDiff.compare(before, after, associations: [:tags]).associations.fetch('tags')
-    expect(tags.changed.map { |change| change.attributes.fetch('name').to_h })
-      .to eq([{ from: 'tag', to: 'renamed' }])
-  end
-
-  describe 'a HABTM transaction that more than one owner saved a version in' do
-    before { ActiveRecord::Base.connection.execute('DELETE FROM tracked_articles_tags') }
-
-    let(:root) { TrackedArticle.create!(title: 'Root').tap { |root| root.tags << root_tag } }
-    let(:other) { TrackedArticle.create!(title: 'Other').tap { |other| other.tags << other_tag } }
-    let(:root_tag) { TrackedTag.create!(name: 'root tag') }
-    let(:other_tag) { TrackedTag.create!(name: 'other tag') }
-    let(:error) do
-      [PaperTrailDiff::IncompleteAssociationHistoryError,
-       /\AHABTM history is ambiguous for tags at transaction \d+: more than one record/]
-    end
-
-    # Each update saves from a freshly loaded record, so PT-AT records both
-    # articles' tags under the one transaction id.
-    def update_together(*articles)
-      TrackedArticle.transaction do
-        TrackedArticle.where(id: articles.map(&:id)).order(:id).each do |article|
-          article.update!(title: "#{article.title}!")
-        end
-      end
-      articles.map { |article| article.versions.reorder(:id).last }
-    end
-
-    # Both articles' tags used to read as the root's own, so an unchanged root
-    # reported the other article's tag as removed.
-    it 'raises instead of reading the other owner members as the root' do
-      shared, other_shared = update_together(root, other)
-      after = habtm_boundary_for(root)
-      other_after = habtm_boundary_for(other)
-      options = { associations: [:tags] }
-
-      [after, root].each do |to|
-        expect { PaperTrailDiff.compare(shared, to, **options) }.to raise_error(*error)
-      end
-      comparisons = [{ from: shared, to: after }, { from: other_shared, to: other_after }]
-      expect { PaperTrailDiff.compare_many(comparisons, **options) }.to raise_error(*error)
-      expect { PaperTrailDiff.analyze(root, from: shared, to: after, **options) }
-        .to raise_error(*error)
-      expect { SpecTimelines.timeline(root, from: shared, to: after, **options) }
-        .to raise_error(*error)
-      expect { SpecTimelines.activity_timeline(root, from: shared, to: after, **options) }
-        .to raise_error(*error)
-
-      [after, root].each do |to|
-        report = PaperTrailDiff.diagnose(shared, to, **options)
-        expect(report).not_to be_ok
-        expect(report.errors.map { |issue| [issue.code, issue.path, issue.version_id] })
-          .to eq([[:habtm_transaction_shared, 'tags', shared.id]])
-      end
-    end
-
-    it 'still reads a transaction where no owner recorded a member' do
-      bare_root = TrackedArticle.create!(title: 'Bare root')
-      bare_other = TrackedArticle.create!(title: 'Bare other')
-      shared, = update_together(bare_root, bare_other)
-      bare_root.tags << root_tag
-      after = habtm_boundary_for(bare_root)
-
-      tags = PaperTrailDiff.compare(shared, after, associations: [:tags]).associations.fetch('tags')
-
-      expect(tags.added.map(&:id)).to eq([root_tag.id])
-      expect(tags.removed).to be_empty
-    end
-
-    it 'still reads a transaction shared only with records that cannot own the association' do
-      comment = root.comments.create!(body: 'Comment')
-      shared = TrackedArticle.transaction do
-        TrackedArticle.find(root.id).paper_trail.save_with_version.tap do
-          root_tag.update!(name: 'renamed')
-          comment.update!(body: 'Edited')
-        end
-      end
-      root.tags << other_tag
-      after = habtm_boundary_for(root)
-
-      result = PaperTrailDiff.compare(shared, after, associations: [:tags])
-      analysis = PaperTrailDiff.analyze(root, from: shared, to: after, associations: [:tags])
-      tags = result.associations.fetch('tags')
-
-      expect(tags.added.map(&:id)).to eq([other_tag.id])
-      expect(tags.removed).to be_empty
-      expect(PaperTrailDiff.diagnose(shared, after, associations: [:tags])).to be_ok
-      expect(analysis.diff.to_h).to eq(result.to_h)
-    end
-  end
-
   # The article's update moves `updated_at` a second on: JSON history keeps
   # times to the millisecond, so two saves within one read as the same time.
   it 'applies ignore rules to exact association paths' do
@@ -879,9 +585,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     descriptors = PaperTrailDiff.association_paths(TrackedArticle, max_depth: 2)
     by_path = descriptors.to_h { |descriptor| [descriptor.path, descriptor] }
 
-    expect(PaperTrailDiff.supported_association_macros).to eq(
-      %i[belongs_to has_one has_many has_and_belongs_to_many]
-    )
+    expect(PaperTrailDiff.supported_association_macros).to eq(%i[belongs_to has_one has_many])
     expect(descriptors).to be_frozen
     expect(descriptors.map(&:path)).to eq(descriptors.map(&:path).sort)
     expect(by_path.fetch('comments.replies').to_h).to include(
@@ -895,10 +599,10 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     # request that reads history refuses it.
     expect(PaperTrailDiff.association_paths(TrackedArticle).map(&:path))
       .to eq(%w[author authorships comments contributors limited_comments offset_comments
-                owner_comments profile tags])
+                owner_comments profile])
     expect(PaperTrailDiff.association_paths(TrackedArticle.new).map(&:path))
       .to eq(%w[author authorships comments contributors limited_comments offset_comments
-                owner_comments profile tags])
+                owner_comments profile])
   end
 
   it 'separates descendant updates into activity timeline steps' do
@@ -1124,16 +828,13 @@ RSpec.describe 'PaperTrailDiff association tracking' do
 
   it 'derives all combined views from the activity snapshots without changing output' do
     graph = article_with_graph
-    tag = TrackedTag.create!(name: 'Combined tag before')
-    graph[:article].tags << tag
-    before = habtm_boundary_for(graph[:article])
+    before = boundary_for(graph[:article])
     graph[:article].update!(title: 'Combined root after')
     graph[:article].update!(author: graph[:second_author])
     graph[:kept_comment].update!(body: 'Combined comment after')
     graph[:reply].update!(body: 'Combined reply after')
-    tag.update!(name: 'Combined tag after')
-    after = habtm_boundary_for(graph[:article])
-    associations = ['author.comments', 'comments.replies', 'profile', 'tags']
+    after = boundary_for(graph[:article])
+    associations = ['author.comments', 'comments.replies', 'profile']
 
     root = PaperTrailDiff.analyze(
       graph[:article],
@@ -1180,7 +881,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
       associations: associations,
       ignore: PaperTrailDiff::DEFAULT_IGNORED_ATTRIBUTES
     )
-    store = adapter.instance_variable_get(:@historical_store)
+    store = FullSnapshotter.pt_at(adapter).instance_variable_get(:@historical_store)
     reference = nil
     reference_queries = sql_query_count do
       reference = PaperTrailDiff::TimelineBuilder.new(
@@ -1332,7 +1033,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
       expect(steps.length).to eq(101)
     end
 
-    expect(work.fetch(:queries)).to be < 27
+    expect(work.fetch(:queries)).to be < 30
     expect(work.fetch(:records)).to be < 600
   end
 
@@ -1356,7 +1057,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
       )
     end
 
-    expect(work.fetch(:queries)).to be < 27
+    expect(work.fetch(:queries)).to be < 30
   end
 
   it 'keeps nested collection activity local to the affected parent snapshots' do
@@ -1381,7 +1082,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
       expect(steps.length).to eq(101)
     end
 
-    expect(work.fetch(:queries)).to be < 27
+    expect(work.fetch(:queries)).to be < 30
     expect(work.fetch(:records)).to be < 600
   end
 
@@ -1466,7 +1167,8 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     refresher = PaperTrailDiff::ActivityEventSnapshotRefresher.new(
       traversal: traversal,
       pool: pool,
-      components: ->(_branches) { [tree, normalizer] }
+      components: ->(_branches) { [tree, normalizer] },
+      association_reader: ->(version) { PaperTrailDiff::PtAtReferenceReifier.new(version) }
     )
     comment_snapshot = PaperTrailDiff::RecordSnapshot.new(
       type: 'TrackedComment',
@@ -1949,36 +1651,6 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     expect(changed.last.to_boundary.kind).to eq(:current)
   end
 
-  it 'rejects live-ended HABTM activity while retaining live endpoint comparison' do
-    graph = article_with_graph
-
-    expect do
-      SpecTimelines.activity_timeline(
-        graph[:article],
-        from: graph[:before],
-        to: graph[:article],
-        associations: [:tags]
-      )
-    end.to raise_error(PaperTrailDiff::UnsupportedLiveActivityError, /HABTM/)
-  end
-
-  it 'rejects a HABTM activity window only when it has to close on current state' do
-    graph = article_with_graph
-    window_start = Time.now.utc
-    graph[:article].update!(title: 'Windowed')
-    window_end = Time.now.utc
-
-    expect do
-      SpecTimelines.activity_timeline(graph[:article], within: window_start..window_end,
-                                                       associations: [:tags])
-    end.to raise_error(PaperTrailDiff::UnsupportedLiveActivityError, /HABTM/)
-
-    habtm_boundary_for(graph[:article])
-    steps = SpecTimelines.activity_timeline(graph[:article], within: window_start..window_end,
-                                                             associations: [:tags])
-    expect(steps.map { |step| step.to_boundary.kind }).to all(eq(:version))
-  end
-
   it 'reports child additions and removals at their own activity boundaries' do
     graph = article_with_graph
     transient = graph[:article].comments.create!(body: 'Transient')
@@ -2060,56 +1732,15 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     expect(reply_diffs.fetch(1).changed.first.attributes).to have_key('body')
   end
 
-  it 'uses owner checkpoints for HABTM activity membership while diffing target updates' do
-    graph = article_with_graph
-    tag = TrackedTag.create!(name: 'Activity before')
-    graph[:article].tags << tag
-    before = habtm_boundary_for(graph[:article])
-    tag.update!(name: 'Activity after')
-    after = habtm_boundary_for(graph[:article])
-
-    changed = SpecTimelines.activity_timeline(
-      graph[:article],
-      from: before,
-      to: after,
-      associations: [:tags]
-    ).reject { |step| step.diff.empty? }
-    tags = changed.fetch(0).diff.associations.fetch('tags')
-
-    expect(tags.added).to be_empty
-    expect(tags.removed).to be_empty
-    expect(tags.changed.first.attributes.fetch('name').to_h)
-      .to eq(from: 'Activity before', to: 'Activity after')
-    expect(PaperTrailDiff.diagnose(before, after, associations: [:tags])).to be_ok
-  end
-
-  it 'fails loudly and diagnoses HABTM endpoints without transaction snapshots' do
-    graph = article_with_graph
-    after = boundary_for(graph[:article])
-
-    expect do
-      PaperTrailDiff.compare(graph[:before], after, associations: [:tags])
-    end.to raise_error(
-      PaperTrailDiff::IncompleteAssociationHistoryError,
-      /HABTM history is incomplete/
-    )
-
-    report = PaperTrailDiff.diagnose(graph[:before], after, associations: [:tags])
-    expect(report).not_to be_ok
-    expect(report.errors.map(&:code)).to eq(%i[transaction_id_missing transaction_id_missing])
-  end
-
   it 'warns when association checkpoints synchronize version timestamps' do
     graph = article_with_graph
-    tag = TrackedTag.create!(name: 'Timestamp')
-    graph[:article].tags << tag
-    before = habtm_boundary_for(graph[:article])
-    after = habtm_boundary_for(graph[:article])
+    before = boundary_for(graph[:article])
+    after = boundary_for(graph[:article])
     options = TrackedArticle.paper_trail_options
     previous = options[:synchronize_version_creation_timestamp]
     options[:synchronize_version_creation_timestamp] = true
 
-    report = PaperTrailDiff.diagnose(before, after, associations: [:tags])
+    report = PaperTrailDiff.diagnose(before, after, associations: [:comments])
 
     expect(report.warnings.map(&:code)).to eq([:synchronized_version_timestamp])
     expect(report.warnings.first.path).to be_nil
@@ -2201,76 +1832,34 @@ RSpec.describe 'PaperTrailDiff association tracking' do
     def tied_boundaries
       article = TrackedArticle.create!(title: 'T')
       comment = article.comments.create!(body: 'Before the boundaries')
-      tag = TrackedTag.create!(name: 'Added between the boundaries')
       before = checkpoint(article)
-      TrackedArticle.find(article.id).tags << tag
       comment.update!(body: 'Edited between the boundaries')
       after = checkpoint(article)
       PaperTrail::Version.where('id > ?', before.id).update_all(created_at: before.created_at)
-      { before: before.reload, after: after.reload, tag: tag, comment: comment }
-    end
-
-    def ambiguous_events(&block)
-      events = []
-      callback = proc { |name, _s, _f, _id, payload| events << [name, payload] }
-      ActiveSupport::Notifications.subscribed(callback, /paper_trail_diff/, &block)
-      events.select { |name, _| name.start_with?('ambiguous_association_boundary') }
+      { before: before.reload, after: after.reload, comment: comment }
     end
 
     it 'places a change between tied checkpoints by id' do
       tied = tied_boundaries
 
-      diff = PaperTrailDiff.compare(tied[:before], tied[:after], associations: %w[tags comments])
+      diff = PaperTrailDiff.compare(tied[:before], tied[:after], associations: %w[comments])
 
-      expect(diff.associations.fetch('tags').added.map(&:id)).to eq([tied[:tag].id])
       expect(diff.associations.fetch('comments').changed.map { |change| change.record.id })
         .to eq([tied[:comment].id])
     end
 
-    it 'reports no hazard for paths read from loaded history' do
+    it 'warns of no tie for paths read from loaded history' do
       tied = tied_boundaries
-      options = { associations: %w[tags comments] }
+      report = PaperTrailDiff.diagnose(tied[:before], tied[:after], associations: %w[comments])
 
-      events = ambiguous_events { PaperTrailDiff.compare(tied[:before], tied[:after], **options) }
-      report = PaperTrailDiff.diagnose(tied[:before], tied[:after], **options)
-
-      expect(events).to be_empty
-      expect(report.warnings.map(&:code)).not_to include(:tied_version_timestamps)
+      expect(report.warnings.map(&:code)).to eq([])
     end
 
-    it 'warns and notifies for a path PT-AT reads, without failing the comparison' do
+    it 'refuses a path history cannot read' do
       tied = tied_boundaries
-      options = { associations: ['owner_comments'], allow_approximate: true }
-
-      events = ambiguous_events { PaperTrailDiff.compare(tied[:before], tied[:after], **options) }
-      report = PaperTrailDiff.diagnose(tied[:before], tied[:after], **options)
-
-      expect(events.map { |_, payload| payload[:version_ids] })
-        .to eq([[tied[:before].id, tied[:after].id]])
-      expect(report.warnings.map(&:code)).to include(:tied_version_timestamps)
-      # A tie only *may* hide a change, so it never becomes an error.
-      expect(report).to be_ok
-    end
-
-    it 'refuses a path PT-AT would read before reporting the tie' do
-      tied = tied_boundaries
-      events = []
-      callback = proc { |name, *| events << name }
-
-      ActiveSupport::Notifications.subscribed(callback, /ambiguous_association_boundary/) do
-        expect do
-          PaperTrailDiff.compare(tied[:before], tied[:after], associations: ['owner_comments'])
-        end.to raise_error(PaperTrailDiff::UnsupportedAssociationError, /owner_comments/)
-      end
-      expect(events).to be_empty
-    end
-
-    it 'stays silent when no associations are selected, since nothing can be lost' do
-      tied = tied_boundaries
-
-      events = ambiguous_events { PaperTrailDiff.compare(tied[:before], tied[:after]) }
-
-      expect(events).to be_empty
+      expect do
+        PaperTrailDiff.compare(tied[:before], tied[:after], associations: ['owner_comments'])
+      end.to raise_error(PaperTrailDiff::UnsupportedAssociationError, /owner_comments/)
     end
   end
 

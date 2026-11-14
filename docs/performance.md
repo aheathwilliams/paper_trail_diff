@@ -26,9 +26,7 @@ for one association, at 1, 5, and 20 records:
 | Polymorphic `belongs_to` | 17 / 17 / 17 | 0 |
 | `has_many :through` with `source_type:` | 21 / 21 / 21 | 0 |
 | A `has_many` with `order(:id).limit(1)` | 14 / 18 / 33 | 0 |
-| A scope that takes the owner, read with PT-AT | 25 / 73 / 253 | 9 / 45 / 180 |
 | None, with a querying `after_initialize` | 10 / 26 / 86 | 2 / 10 / 40 |
-| None, with a callable `historical_filter:` that queries | 11 / 15 / 30 | 2 / 10 / 40 |
 
 The last four rows grow with the number of records, for the reasons in
 [what costs a query per record](#what-costs-a-query-per-record).
@@ -101,8 +99,16 @@ Flat query counts do not make a report's cost flat:
   article with `author.articles` and 400 events on the author's articles
   took 0.3 s when the author had 10 articles, 0.5 s with 100, and 3.4 s with
   1,000; with `associations: ["author"]`, 0.1 s for each.
-- **`snapshots: true` and `recorded_changes: true` cost memory and time.** Ask
-  for them only when you use them. Records that did not change are shared
+- **Change rows decode what each version recorded.** Activity keeps each
+  version until its rows are read, then decodes its `object_changes` to
+  credit each change to the version that recorded it. On SQLite, a `report`
+  of 2,000 articles with three comments each (16,000 versions) took 5.6 s
+  with or without them and held 77 MB against 55 MB; listing its 32,000
+  change rows then took 3.0 s against 0.4 s. `recorded_changes: false`
+  skips both, and credits a field's whole change to its record's last
+  version.
+- **`snapshots: true` costs memory.** Ask for it only when you use the
+  snapshots. Records that did not change are shared
   between steps, so the cost is modest: an activity `report` of 10,000
   articles with their 57,000 comments (114,000 versions, 49,000 steps) took
   about 40 s and held 372 MB, and 411 MB with snapshots, at the same
@@ -162,38 +168,19 @@ articles.
 
 ## What costs a query per record
 
-- **A path PT-AT reads.** History cannot read a few scopes, such as one that
-  takes the owner, SQL text, or a `limit` ordered by a string. PT-AT reads
-  those, one record at a time and only approximately, so every method refuses
-  them unless you pass `allow_approximate: true`. See
-  [costly associations](reference.md#costly-associations).
 - **A limited association on the current record.** Active Record's `preload`
   applies a `limit` or `offset` across all the records it loads, so each
   record's limited association is loaded on its own: one query per record.
 - **Your own code.** Model callbacks that query, such as an `after_initialize`,
-  custom attribute types, and a callable `historical_filter:` run for each
-  state they are given.
+  and custom attribute types run for each state they are given.
 
-## Selecting by past values
+## Selecting records when key types differ
 
-`historical_filter:` reads the window's history of the records the relation
-selects, and of deleted records, which a relation cannot test. A hash of
-attributes is read straight from stored history. A callable is given a model
-instance for each state, so it costs a `reify` per version, plus its own
-queries. `max_filter_versions:` (10,000 by default) caps the versions it loads.
-Either way, every version of every candidate in the window is decoded: with
-1,000 candidates and no match, a hash and a callable each took about 0.8 s.
-A relation with a `limit` reads candidates in its own order and stops when
-its page is full: of 5,000 matching records with three versions each, the
-first page of 20 took 0.09 s and the page at offset 2,000 took 0.4 s, where
-reading every match took 1.0 s.
-Finding the relation's records among the candidates takes up to two queries
-per 500 of them.
-
-The relation then reads the records that matched in pages of up to 2,000, and
-each page lists every matching id, so the relation keeps its own order,
-`limit`, and `offset`. A version table whose `item_id` does not share the key's
-type selects records the same way. On SQL Server, more than 500 matching
+A version table whose `item_id` does not share the model's key type, such as
+a string `item_id` beside an integer key, cannot be compared with the key in
+SQL. The changed ids are then read first, and the relation reads its records
+among them in pages of up to 2,000, each page listing every id, so the
+relation keeps its own order, `limit`, and `offset`. On SQL Server, more than 500 matching
 records are first written to a temporary table, in statements of 1,000 rows,
 and each page selects from it instead of listing them, since SQL Server
 compiles a statement with its ids written in afresh. The table is dropped
@@ -207,9 +194,8 @@ cache cleared before each run:
 | 10,000, selection only | 5.0 s | 0.6 s |
 | 20,000, selection only | 29.7 s | 1.1 s |
 | 40,000, selection only | not run | 2.2 s |
-| 10,000, `analyze_scope` with `historical_filter:` | 11.5 s, 4.3 s of it in pages | 7.4 s, 0.1 s in pages |
 
-The `analyze_scope` row is the mean of three runs; the rest are one run each.
+Each is one run.
 Other databases still list the ids on each page, which they parse quickly.
 
 ## Large reports
@@ -231,8 +217,7 @@ mise exec -- bundle exec ruby benchmark/reporting.rb --case many_roots --samples
 
 `reconstruction.rb` prints the queries, `reify` calls, and model instances
 one `report` makes for a scenario and a number of records; the table above
-comes from its scenarios. `PTD_PROBE_ALLOW_APPROXIMATE=1` passes
-`allow_approximate: true`.
+comes from its scenarios.
 `reporting.rb` times `analyze_scope` over articles with no associations and,
 as `association_window`, a `report` over articles with their comments read
 through PT-AT, each in a fresh process, and records memory; `--output` keeps

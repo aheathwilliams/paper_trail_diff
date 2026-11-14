@@ -184,7 +184,7 @@ RSpec.describe PaperTrailDiff::PreparedStateAssociationReader do
       SourceTypeTag.default_scopes = []
     end
 
-    it 'leaves a type naming no class, and a target scope it cannot read, to the record path' do
+    it 'refuses a type naming no class, and a target scope it cannot read' do
       holder, start, links, = history
       SourceTypeLink.where(id: links.first.id).update_all(target_type: 'RenamedModel')
       SourceTypeTag.class_eval { default_scope { where("name <> 'hidden'") } }
@@ -192,7 +192,9 @@ RSpec.describe PaperTrailDiff::PreparedStateAssociationReader do
 
       expect { PaperTrailDiff.analyze(links.first, within: window, associations: [:target]) }
         .to raise_error(PaperTrailDiff::IncompleteAssociationHistoryError, /RenamedModel/)
-      expect_same_results([links.last], [], window, [:target], reify: true)
+      expect { PaperTrailDiff.analyze(links.last, within: window, associations: [:target]) }
+        .to raise_error(PaperTrailDiff::UnsupportedAssociationError,
+                        /SourceTypeLink#target cannot be read from history/)
       expect(holder).to be_persisted
     ensure
       SourceTypeTag.default_scopes = []

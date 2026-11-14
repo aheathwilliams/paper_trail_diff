@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative '../support/association_database'
+require_relative '../support/pt_at_reference_reifier'
 
 RSpec.describe PaperTrailDiff::PreparedHistory do
   before do
@@ -36,21 +37,15 @@ RSpec.describe PaperTrailDiff::PreparedHistory do
 
   def normalize_version(version, tree, traversal, history: nil)
     record = version.reify(dup: true)
-    fallback = PaperTrailDiff::HistoricalAssociationReifier.new(version)
     reifier = if history
-                PaperTrailDiff::PreparedAssociationReifier.new(
-                  history,
-                  version,
-                  habtm_boundary: version,
-                  fallback: fallback
-                )
+                PaperTrailDiff::PreparedAssociationReifier.new(history, version)
               else
-                fallback
+                PaperTrailDiff::PtAtReferenceReifier.new(version)
               end
     normalizer(tree, traversal).call(record, reifier: reifier)
   end
 
-  it 'matches PT-AT across direct, nested, through, and HABTM relationships' do
+  it 'matches PT-AT across direct, nested, and through relationships' do
     first_author = TrackedAuthor.create!(name: 'Ada before')
     second_author = TrackedAuthor.create!(name: 'Grace before')
     article = TrackedArticle.create!(title: 'Prepared graph', author: first_author)
@@ -58,13 +53,11 @@ RSpec.describe PaperTrailDiff::PreparedHistory do
     comment = article.comments.create!(body: 'Comment before')
     removed = article.comments.create!(body: 'Removed comment')
     reply = comment.replies.create!(body: 'Reply before')
-    old_tag = TrackedTag.create!(name: 'Old tag')
     first_authorship = TrackedAuthorship.create!(
       article: article,
       author: first_author,
       role: 'lead'
     )
-    article.tags << old_tag
     before = boundary_for(article)
 
     first_author.update!(name: 'Ada after')
@@ -76,9 +69,6 @@ RSpec.describe PaperTrailDiff::PreparedHistory do
     first_authorship.destroy!
     TrackedAuthorship.create!(article: article, author: second_author, role: 'contributor')
     article.comments.create!(body: 'Added comment')
-    article.tags.delete(old_tag)
-    new_tag = TrackedTag.create!(name: 'New tag')
-    article.tags << new_tag
     after = boundary_for(article)
 
     associations = [
@@ -86,8 +76,7 @@ RSpec.describe PaperTrailDiff::PreparedHistory do
       'authorships.author',
       'contributors',
       'profile',
-      'comments.replies',
-      'tags'
+      'comments.replies'
     ]
     tree = PaperTrailDiff::AssociationTree.build(associations)
     traversal = PaperTrailDiff::AssociationTraversal.new(tree)
@@ -111,30 +100,9 @@ RSpec.describe PaperTrailDiff::PreparedHistory do
 
     root = before.reify(dup: true)
     contributors = TrackedArticle.reflect_on_association(:contributors)
-    tags = TrackedArticle.reflect_on_association(:tags)
-    contributor_result = history.resolve(root, contributors, before, habtm_boundary: before)
-    tag_result = history.resolve(root, tags, before, habtm_boundary: before)
+    contributor_result = history.resolve(root, contributors, before)
     expect(contributor_result.first).to be(true)
     expect(contributor_result.last.map(&:id)).to eq([first_author.id])
-    expect(tag_result.first).to be(true)
-    expect(tag_result.last.map(&:id)).to eq([old_tag.id])
-    missing_transaction = Struct.new(:transaction_id)
-    expect(
-      history.resolve(
-        root,
-        tags,
-        before,
-        habtm_boundary: missing_transaction.new(nil)
-      ).first
-    ).to be(false)
-    expect(
-      history.resolve(
-        root,
-        tags,
-        before,
-        habtm_boundary: missing_transaction.new(-1)
-      ).first
-    ).to be(false)
 
     parity_tree = PaperTrailDiff::AssociationTree.build(associations - ['author.comments'])
     parity = PaperTrailDiff::AssociationTraversal.new(parity_tree)
@@ -159,33 +127,28 @@ RSpec.describe PaperTrailDiff::PreparedHistory do
                            [second_author.id, ['Comment after', 'Added comment']]])
   end
 
-  it 'delegates a reflection when prepared resolution is unavailable' do
-    article = TrackedArticle.create!(title: 'Prepared fallback')
+  it 'refuses a reflection history cannot resolve' do
+    article = TrackedArticle.create!(title: 'Prepared refusal')
     version = article.versions.last
     reflection = TrackedArticle.reflect_on_association(:comments)
     history = instance_double(described_class)
-    fallback = instance_double(PaperTrailDiff::HistoricalAssociationReifier)
     allow(history).to receive(:resolve).and_return([false, []])
-    allow(fallback).to receive(:reify)
-    reifier = PaperTrailDiff::PreparedAssociationReifier.new(
-      history,
-      version,
-      habtm_boundary: version,
-      fallback: fallback
-    )
+    message = 'association TrackedArticle#comments cannot be read from history for ' \
+              "TrackedArticle #{article.id}: who was in it at a past point cannot be told"
 
-    reifier.reify(article, [reflection])
-    reifier.reify(article, [reflection])
-
-    expect(fallback).to have_received(:reify).once.with(article, [reflection])
+    [history, nil].each do |source|
+      reifier = PaperTrailDiff::PreparedAssociationReifier.new(source, version)
+      expect { reifier.reify(article, [reflection]) }
+        .to raise_error(PaperTrailDiff::UnsupportedAssociationError, message)
+    end
   end
 
-  it 'reconstructs empty optional, singular, collection, and HABTM edges' do
+  it 'reconstructs empty optional, singular, and collection edges' do
     article = TrackedArticle.create!(title: 'Prepared empty graph')
     before = boundary_for(article)
     article.update!(title: 'Prepared empty graph after')
     after = boundary_for(article)
-    associations = %w[author profile comments tags]
+    associations = %w[author profile comments]
     tree = PaperTrailDiff::AssociationTree.build(associations)
     traversal = PaperTrailDiff::AssociationTraversal.new(tree)
     root_versions = PaperTrailDiff::VersionRange.new(
@@ -259,7 +222,7 @@ RSpec.describe PaperTrailDiff::PreparedHistory do
     expect(history.send(:child_ids_for, { ids: [1], owners: {} }, owner)).to eq([])
 
     loader = PaperTrailDiff::PreparedEdgeLoader.new(
-      instance_double(PaperTrailDiff::PreparedRecordIndex), [],
+      instance_double(PaperTrailDiff::PreparedRecordIndex),
       children: instance_double(PaperTrailDiff::PreparedChildCandidates)
     )
     expect(loader.send(:group_for, TrackedComment, [], owners: {})).to eq({})

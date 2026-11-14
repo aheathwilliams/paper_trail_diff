@@ -4,19 +4,17 @@
 module PaperTrailDiff
   # Selects both populations and checks their shared ceiling before analysis.
   class ScopedAnalysisBuilder
-    #: (untyped, limit: Integer?, within: untyped, historical_filter: untyped, max_filter_versions: Integer, include_deleted: bool, analyzer: untyped, deleted_analyzer: untyped, ?activity_traversal: AssociationTraversal?, ?version_scope: untyped) -> void
+    #: (untyped, limit: Integer?, within: untyped, include_deleted: bool, analyzer: untyped, deleted_analyzer: untyped, ?activity_traversal: AssociationTraversal?, ?version_scope: untyped) -> void
     def initialize( # rubocop:disable Metrics/ParameterLists
-      scope, limit:, within:, historical_filter:, max_filter_versions:, include_deleted:,
+      scope, limit:, within:, include_deleted:,
       analyzer:, deleted_analyzer:, activity_traversal: nil, version_scope: nil
     )
       raise ConfigurationError, 'limit: is required when selecting roots by scope' if limit.nil?
 
       Support.boolean!(:include_deleted, include_deleted)
-      HistoricalFilter.budget(max_filter_versions)
 
       @selection = ScopedRootSelection.new(
         scope, limit: limit, time_range: time_range(within, scope),
-               historical_filter: historical_filter, max_filter_versions: max_filter_versions,
                activity_traversal: activity_traversal, version_scope: version_scope
       )
       @deleted_filter = deleted_filter(scope, include_deleted)

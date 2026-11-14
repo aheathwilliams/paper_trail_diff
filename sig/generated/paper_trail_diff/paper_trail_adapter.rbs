@@ -6,10 +6,10 @@ module PaperTrailDiff
   # the only place allowed to know about both PaperTrail and the pure engine.
   # Reconstruction logic lives in the collaborators it wires together.
   class PaperTrailAdapter
-    # `recorded_changes:` reads what each activity boundary's version recorded.
-    # `allow_approximate:` accepts association paths read with PT-AT.
-    # : (associations: association_option, ignore: ignore_option, ?recorded_changes: bool, ?allow_approximate: bool) -> void
-    def initialize: (associations: association_option, ignore: ignore_option, ?recorded_changes: bool, ?allow_approximate: bool) -> void
+    # `recorded_changes:` reads what each activity boundary's version
+    # recorded, as activity does unless told not to.
+    # : (associations: association_option, ignore: ignore_option, ?recorded_changes: bool?) -> void
+    def initialize: (associations: association_option, ignore: ignore_option, ?recorded_changes: bool?) -> void
 
     # : (untyped, untyped) -> Diff
     def compare: (untyped, untyped) -> Diff
@@ -29,8 +29,8 @@ module PaperTrailDiff
     # caller reporting on a population does not have to rediscover which of its
     # members changed. The roots the relation could not reach come back named
     # rather than dropped -- see `PaperTrailDiff.analyze_scope`.
-    # : (untyped, limit: Integer?, within: untyped, ?activity: bool, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?, ?historical_filter: untyped, ?max_filter_versions: Integer, ?include_deleted: bool) -> ScopedAnalysis
-    def analyze_scope: (untyped, limit: Integer?, within: untyped, ?activity: bool, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?, ?historical_filter: untyped, ?max_filter_versions: Integer, ?include_deleted: bool) -> ScopedAnalysis
+    # : (untyped, limit: Integer?, within: untyped, ?activity: bool, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?, ?include_deleted: bool) -> ScopedAnalysis
+    def analyze_scope: (untyped, limit: Integer?, within: untyped, ?activity: bool, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?, ?include_deleted: bool) -> ScopedAnalysis
 
     private
 
@@ -72,8 +72,8 @@ module PaperTrailDiff
     # : (untyped, Array[Array[String]], Hash[Symbol, untyped]) -> Hash[Array[String], Analysis?]
     def analyze_deleted: (untyped, Array[Array[String]], Hash[Symbol, untyped]) -> Hash[Array[String], Analysis?]
 
-    # : (untyped, limit: Integer?, within: untyped, activity: bool, version_scope: untyped, historical_filter: untyped, max_filter_versions: Integer, include_deleted: bool, view: ActivityView) -> ScopedAnalysisBuilder
-    def scoped_builder: (untyped, limit: Integer?, within: untyped, activity: bool, version_scope: untyped, historical_filter: untyped, max_filter_versions: Integer, include_deleted: bool, view: ActivityView) -> ScopedAnalysisBuilder
+    # : (untyped, limit: Integer?, within: untyped, activity: bool, version_scope: untyped, include_deleted: bool, view: ActivityView) -> ScopedAnalysisBuilder
+    def scoped_builder: (untyped, limit: Integer?, within: untyped, activity: bool, version_scope: untyped, include_deleted: bool, view: ActivityView) -> ScopedAnalysisBuilder
 
     @activity_snapshotter: ActivitySnapshotProvider
 
@@ -89,7 +89,7 @@ module PaperTrailDiff
 
     @normalizer: SnapshotNormalizer
 
-    @recorded: IgnorePolicy?
+    @recorded_changes: bool?
 
     @snapshot_pool: SnapshotPool
 
@@ -98,20 +98,6 @@ module PaperTrailDiff
     @traversal: AssociationTraversal
 
     @traversal_preparer: TraversalPreparer
-
-    # The result may still be correct -- nothing the path reaches may have
-    # changed -- and the gem cannot tell which, since not seeing the change is
-    # the symptom. So it reports the condition and leaves the judgement to the
-    # application.
-    # : (untyped, untyped) -> void
-    def notify_ambiguous_association_boundary: (untyped, untyped) -> void
-
-    # Loaded history orders two versions that share a timestamp by id, but
-    # PT-AT places association changes by timestamp alone, so only a path it
-    # reads can lose a change between them. A request the preparer refuses
-    # raises here, before anything is reported.
-    # : (untyped, untyped) -> bool
-    def ambiguous_association_boundary?: (untyped, untyped) -> bool
 
     # With neither a window nor endpoints, a range is the record's whole
     # history through its current saved state; a missing endpoint takes that

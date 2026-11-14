@@ -34,8 +34,8 @@ module PaperTrailDiff
     # : (untyped) -> Array[untyped]
     def self.through_models: (untyped) -> Array[untyped]
 
-    # : (traversal: AssociationTraversal, ?allow_approximate: bool) -> void
-    def initialize: (traversal: AssociationTraversal, ?allow_approximate: bool) -> void
+    # : (traversal: AssociationTraversal) -> void
+    def initialize: (traversal: AssociationTraversal) -> void
 
     # : (untyped, historical: bool) -> void
     def call: (untyped, historical: bool) -> void
@@ -47,8 +47,6 @@ module PaperTrailDiff
     def refusals: (untyped, historical: bool) -> Array[Refusal]
 
     private
-
-    @allow_approximate: bool
 
     @refusals: Hash[Array[untyped], Array[Refusal]]
 
@@ -62,14 +60,11 @@ module PaperTrailDiff
     # : (untyped) -> Refusal?
     def traversal_refusal: (untyped) -> Refusal?
 
-    # A path prepared history cannot read is read with PT-AT, which rebuilds
-    # an association from its current members, swapping in older versions of
-    # them. A record that entered the association since, such as one moved
-    # into a scope or restored from a soft delete, then reads as a member it
-    # was not, and one that left reads as missing. Only a caller who accepts
-    # that may read such a path.
+    # History tells who was in an association at a past point by testing each
+    # record's stored values against its scope, so it reads only a scope made
+    # of plain conditions on the target's own columns.
     # : (untyped) -> Array[Refusal]
-    def approximate_refusals: (untyped) -> Array[Refusal]
+    def unreadable_refusals: (untyped) -> Array[Refusal]
 
     # A model PaperTrail never versioned has no history to reconstruct, so a
     # comparison over it can only ever answer "nothing changed" -- which is a

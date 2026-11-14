@@ -48,10 +48,6 @@ RSpec.describe PaperTrailDiff::PreparedHistoryLoader do
     history.edge(model, reflection(model, name)).fetch(group, {}).fetch(:ids, [])
   end
 
-  def supported?(history, model, name)
-    history.send(:supported?, model, reflection(model, name), true)
-  end
-
   def nodes(history, model)
     history.activity_index.send(:node_ids, model)
   end
@@ -123,8 +119,6 @@ RSpec.describe PaperTrailDiff::PreparedHistoryLoader do
       .to eq(authorships.map(&:id))
     expect(history.activity_index.loaded?(TrackedAuthorship, authorships.first.id)).to be(true)
     expect(history.activity_index.loaded?(TrackedAuthor, writer.id)).to be(true)
-    expect(supported?(history, TrackedArticle, :contributors))
-      .to be(true)
   end
 
   it 'reads a through whose source is a has_many like any other through' do
@@ -136,11 +130,9 @@ RSpec.describe PaperTrailDiff::PreparedHistoryLoader do
 
     expect(ids(history, TrackedAuthor, :comments, 'TrackedComment')).to eq([comment.id])
     expect(ids(history, TrackedArticle, :comments, 'TrackedComment')).to eq([comment.id])
-    expect(supported?(history, TrackedAuthor, :comments)).to be(true)
   end
 
-  # The comment gives the versioned edge a group of its own to check.
-  it 'marks an edge into an unversioned model as unsupported, without loading it' do
+  it 'finds the records of an unversioned model without loading them' do
     article = TrackedArticle.create!(title: 'Article')
     attachment = UnversionedAttachment.create!(article: article, filename: 'a.txt')
     comment = article.comments.create!(body: 'comment')
@@ -150,22 +142,8 @@ RSpec.describe PaperTrailDiff::PreparedHistoryLoader do
     expect(ids(history, TrackedArticle, :unversioned_attachments, 'UnversionedAttachment'))
       .to eq([attachment.id])
     expect(ids(history, TrackedArticle, :comments, 'TrackedComment')).to eq([comment.id])
-    expect(supported?(history, TrackedArticle, :unversioned_attachments))
-      .to be(false)
-    expect(supported?(history, TrackedArticle, :comments)).to be(true)
-  end
-
-  it 'records the HABTM membership of each root transaction' do
-    article = TrackedArticle.create!(title: 'Article')
-    tag = TrackedTag.create!(name: 'ruby')
-    article.tags << tag
-    tagged = checkpoint(article)
-
-    history = load_history(article, [:tags], root_versions: [tagged])
-
-    expect(ids(history, TrackedArticle, :tags, 'TrackedTag')).to eq([tag.id])
-    expect(history.instance_variable_get(:@habtm))
-      .to eq(%w[TrackedArticle tags] => { tagged.transaction_id.to_s => [tag.id] })
+    expect(history.activity_index.loaded?(UnversionedAttachment, attachment.id)).to be(false)
+    expect(history.activity_index.loaded?(TrackedComment, comment.id)).to be(true)
   end
 
   it 'loads the owners of a belongs_to edge before reading their keys' do
@@ -332,8 +310,7 @@ RSpec.describe PaperTrailDiff::PreparedHistoryLoader do
     # Each edge loader reads children into its activity index's.
     activities.each do |activity|
       expect(PaperTrailDiff::PreparedEdgeLoader).to have_received(:new)
-        .with(instance_of(PaperTrailDiff::PreparedRecordIndex), versions,
-              children: equal(activity.children))
+        .with(instance_of(PaperTrailDiff::PreparedRecordIndex), children: equal(activity.children))
     end
   end
 
@@ -350,29 +327,13 @@ RSpec.describe PaperTrailDiff::PreparedHistoryLoader do
     expect(PaperTrailDiff::TransactionCut).to have_received(:range_start).once
   end
 
-  it 'marks an edge with a composite foreign key as unsupported' do
+  it 'reads a range of versions from where a transaction open at its start began' do
     article = TrackedArticle.create!(title: 'Root')
-    tree = PaperTrailDiff::AssociationTree.build([])
-    loader = described_class.new(article, root_ids: [article.id],
-                                          root_versions: versions_of(article), tree: tree,
-                                          traversal: PaperTrailDiff::AssociationTraversal.new(tree),
-                                          start_at: nil, end_at: nil, live_records: [],
-                                          window: true)
-    history = loader.call
-    composite = instance_double(ActiveRecord::Reflection::HasManyReflection,
-                                name: :composite,
-                                foreign_key: Class.new(Array).new(%w[article_id body]),
-                                scope: nil, klass: TrackedComment, polymorphic?: false,
-                                through_reflection?: false)
-    plain = instance_double(ActiveRecord::Reflection::HasManyReflection,
-                            name: :plain, foreign_key: 'article_id', scope: nil,
-                            klass: TrackedComment, polymorphic?: false, collection?: true,
-                            has_one?: false, through_reflection?: false)
+    allow(PaperTrailDiff::TransactionCut).to receive(:crossing_start).and_call_original
 
-    loader.send(:mark_unsupported, TrackedArticle, composite, {})
-    loader.send(:mark_unsupported, TrackedArticle, plain, {})
-
-    expect(history.send(:supported?, TrackedArticle, composite, true)).to be(false)
-    expect(history.send(:supported?, TrackedArticle, plain, true)).to be(true)
+    load_history(article, [], window: true)
+    expect(PaperTrailDiff::TransactionCut).not_to have_received(:crossing_start)
+    load_history(article, [])
+    expect(PaperTrailDiff::TransactionCut).to have_received(:crossing_start).once
   end
 end

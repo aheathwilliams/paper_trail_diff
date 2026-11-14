@@ -25,9 +25,54 @@ project follows [Semantic Versioning](https://semver.org/).
   notification is replaced by `analyze.paper_trail_diff`, which every
   `analyze` emits, with the same payload; its `step_count` counts the
   activity timeline with `activity: true` and the root timeline without.
+- `has_and_belongs_to_many` associations are no longer read. Naming one in
+  `associations:`, at the root or below it, raises
+  `UnsupportedAssociationError`, `association_paths` leaves it out, and
+  `supported_association_macros` no longer lists it. A join table has no
+  versions, so its history could only be read at the root's own
+  transaction-backed versions, never up to the current record, and not at
+  all with a scope or below the root. Replace it with a `has_many :through`
+  a join model that has `has_paper_trail`, as
+  [the reference shows](docs/reference.md#replacing-a-has_and_belongs_to_many):
+  add an `id` to the join table, and put `dependent: :destroy` on the
+  through association so that a member leaving saves a version. With it go
+  `UnsupportedLiveActivityError`, which only a `has_and_belongs_to_many`
+  raised, and the `habtm_transaction_shared`, `transaction_id_missing`, and
+  `transaction_id_column_missing` codes of `diagnose`.
+- `allow_approximate:` is removed from every method, and no association is
+  read with PT-AT's reifier any more. An association whose scope history
+  cannot read, such as one that takes the owner or is written as SQL text,
+  raises `UnsupportedAssociationError` in every method that reads history:
+  PT-AT rebuilt it from its current members without checking the scope, so
+  a record that entered the scope since was reported as a member it was
+  not. Remove the path, or rewrite its scope as plain conditions on the
+  target's own columns. `diagnose` reports it as `unreadable_association`,
+  formerly `approximate_association`.
+- `historical_filter:` and `max_filter_versions:` are removed from
+  `analyze_scope` and `report`, and `FilterLimitExceededError` with them.
+  Select records with the relation, which tests current values, and narrow
+  the changes reported with `version_scope:`.
+- An association with a composite foreign key, or a `has_many :through`
+  that goes through one, raises `UnsupportedAssociationError`. It was read
+  with PT-AT's reifier, one record at a time and by timestamp alone.
+- A polymorphic `belongs_to` whose record points at a class with a default
+  scope history cannot read raises `UnsupportedAssociationError` when that
+  record is read, instead of being read with PT-AT's reifier.
+- The `ambiguous_association_boundary.paper_trail_diff` notification and
+  the `tied_version_timestamps` warning of `diagnose` are removed. Both
+  reported versions sharing a timestamp on a path PT-AT's reifier read;
+  every path is now read from loaded history, which orders such versions
+  by id.
 
 ### Changed
 
+- Activity reads what each version recorded unless `recorded_changes: false`
+  is passed; `recorded_changes: true` was needed before. Change rows
+  therefore credit each field's change to the version that recorded it, and
+  a write saved without a version, such as `update_columns`, gets a row of
+  its own with `unversioned?` true, instead of being credited to the
+  record's last version. `to_h(metadata: true)` on an activity step
+  includes each boundary's recorded changes.
 - A transaction now takes effect where it saved its last version, in every
   activity timeline. A window from `within:` or `since:` reports the
   transactions that end inside it, each whole and under its own versions,

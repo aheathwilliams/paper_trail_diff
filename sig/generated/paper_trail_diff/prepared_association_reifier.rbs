@@ -1,10 +1,10 @@
 # Generated from lib/paper_trail_diff/prepared_association_reifier.rb with RBS::Inline
 
 module PaperTrailDiff
-  # Resolves indexed associations and delegates unsupported reflections to PT-AT.
+  # Sets a rebuilt record's associations to their members in loaded history.
   class PreparedAssociationReifier
-    # : (PreparedHistory, untyped, habtm_boundary: untyped, fallback: HistoricalAssociationReifier) -> void
-    def initialize: (PreparedHistory, untyped, habtm_boundary: untyped, fallback: HistoricalAssociationReifier) -> void
+    # : (PreparedHistory?, untyped) -> void
+    def initialize: (PreparedHistory?, untyped) -> void
 
     # : (untyped, Array[untyped]) -> void
     def reify: (untyped, Array[untyped]) -> void
@@ -13,15 +13,17 @@ module PaperTrailDiff
 
     @boundary: untyped
 
-    @fallback: HistoricalAssociationReifier
-
-    @habtm_boundary: untyped
-
-    @history: PreparedHistory
+    @history: PreparedHistory?
 
     @reified: Hash[untyped, Hash[untyped, bool]]
 
     # : (untyped, untyped) -> void
     def reify_association: (untyped, untyped) -> void
+
+    # A polymorphic target's class is known only from the record's type
+    # column, so TraversalPreparer cannot check it up front: it may have no
+    # versions, or a default scope history cannot read.
+    # : (untyped, untyped) -> bot
+    def unreadable!: (untyped, untyped) -> bot
   end
 end

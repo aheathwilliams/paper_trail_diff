@@ -33,9 +33,7 @@ module PaperTrailDiff
     # `target` reads its scope for each record instead.
     #: (untyped, bool) -> bool
     def supported?(reflection, ranked)
-      !reflection.foreign_key.is_a?(Array) &&
-        %i[belongs_to has_one has_many].include?(reflection.macro) &&
-        (reflection.polymorphic? || !@conditions.call(reflection, ranked: ranked).nil?)
+      reflection.polymorphic? || !@conditions.call(reflection, ranked: ranked).nil?
     end
 
     #: (PreparedRecordState, untyped, bool, ?untyped) -> bool

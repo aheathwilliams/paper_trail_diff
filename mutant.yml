@@ -50,8 +50,6 @@ matcher:
     - PaperTrailDiff::TimelineRange*
     - PaperTrailDiff::RootVersionPlan*
     - PaperTrailDiff::RootVersionSelection*
-    - PaperTrailDiff::HistoricalFilter*
-    - PaperTrailDiff::HistoricalFilterValues*
     - PaperTrailDiff::VersionScopeFilter*
     - PaperTrailDiff::TimeRange*
     - PaperTrailDiff::SelectionWindow*
@@ -101,14 +99,12 @@ matcher:
     - PaperTrailDiff::ActivityView*
     - PaperTrailDiff::ActivityScopeFilter*
     - PaperTrailDiff::ActivitySnapshotDelta*
-    - PaperTrailDiff::ApproximatePaths*
-    - PaperTrailDiff::FallbackPaths*
+    - PaperTrailDiff::UnreadablePaths*
     - PaperTrailDiff::ScopeCondition*
     - PaperTrailDiff::ScopeRanking*
     - PaperTrailDiff::ExactColumnType*
     - PaperTrailDiff::AssociationTraversal*
     - PaperTrailDiff::AssociationKey*
-    - PaperTrailDiff::HabtmTransactionOwners*
     - PaperTrailDiff::ActivityRange*
     - PaperTrailDiff::VersionAssociationCandidateScope*
     - PaperTrailDiff::PreparedActivityIndex*

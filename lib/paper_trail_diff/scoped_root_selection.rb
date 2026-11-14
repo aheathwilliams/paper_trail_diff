@@ -55,20 +55,16 @@ module PaperTrailDiff
     # open at the window's start is reported in it, though it may have saved
     # the root's tree only before it, so with associations the roots are
     # selected from where the earliest such transaction began.
-    #: (untyped, time_range: TimeRange?, limit: Integer, ?historical_filter: untyped, ?max_filter_versions: Integer, ?activity_traversal: AssociationTraversal?, ?version_scope: untyped) -> void
-    def initialize(scope, time_range:, limit:, historical_filter: nil, # rubocop:disable Metrics/ParameterLists
-                   max_filter_versions: HistoricalFilter::DEFAULT_VERSION_LIMIT,
-                   activity_traversal: nil, version_scope: nil)
+    #: (untyped, time_range: TimeRange?, limit: Integer, ?activity_traversal: AssociationTraversal?, ?version_scope: untyped) -> void
+    def initialize(scope, time_range:, limit:, activity_traversal: nil, version_scope: nil)
       @scope = normalize_scope(scope)
       reject_unversioned!
-      @time_range = time_range
       @version_scope = version_scope
       @limit = validate_limit(limit)
       @selecting = AssociationActivitySelection.window(model, activity_traversal, time_range)
       @related = activity_traversal && AssociationActivitySelection.new(
         model, traversal: activity_traversal, time_range: @selecting, version_scope: @version_scope
       )
-      @historical_filter = historical_filter_for(historical_filter, max_filter_versions)
     end
 
     #: () -> Result
@@ -83,10 +79,8 @@ module PaperTrailDiff
     private
 
     # @rbs @scope: untyped
-    # @rbs @time_range: TimeRange?
     # @rbs @selecting: TimeRange?
     # @rbs @limit: Integer
-    # @rbs @historical_filter: FilteredCandidates?
     # @rbs @related: AssociationActivitySelection?
     # @rbs @version_scope: untyped
 
@@ -118,7 +112,7 @@ module PaperTrailDiff
     # Comparing in SQL needs every subquery's column to share the key's type.
     #: (Array[AssociationActivitySelection::source]) -> Array[AssociationActivitySelection::Query]?
     def subqueries(related)
-      return unless @historical_filter.nil? && comparable_keys?
+      return unless comparable_keys?
 
       queries = related.grep(AssociationActivitySelection::Query) #: Array[AssociationActivitySelection::Query]
       matching = queries.select { |ids| ids.type == key_type }
@@ -127,13 +121,11 @@ module PaperTrailDiff
 
     # Which candidates still have a row is asked without the relation's
     # conditions, so that "filtered out" and "no longer exists" stay
-    # separable. A filter then keeps those it matches (FilteredCandidates).
+    # separable.
     #: (Array[String]) -> Result
     def plucked_selection(candidates)
       live = ids_in(base_class.unscoped, candidates)
       missing = candidates - live
-      filter = @historical_filter
-      live, missing = filter.call(live, missing) if filter
       Result.new(records: CandidateTable.with(base_class, live) { |ids| selected_records([ids]) },
                  unreachable: Support.sort_ids(missing).map { |id| identity(id) }.freeze)
     end
@@ -164,15 +156,6 @@ module PaperTrailDiff
       return scope.call(relation) unless @related
 
       VersionScopeFilter.whole_transactions(scope, relation)
-    end
-
-    #: (untyped, Integer) -> FilteredCandidates?
-    def historical_filter_for(predicate, max_versions)
-      return if predicate.nil?
-
-      filter = HistoricalFilter.new(base_class, predicate: predicate, time_range: @time_range,
-                                                limit: @limit, max_versions: max_versions)
-      FilteredCandidates.new(@scope, filter, ordered: ->(ids) { candidate_relation(ids) })
     end
 
     # Accepts a model class as readily as a relation: `Article` and

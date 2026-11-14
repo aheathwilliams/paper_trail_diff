@@ -13,8 +13,6 @@ module PaperTrailDiff
       @state_reader = PreparedStateAssociationReader.new(records, method(:edge), @conditions)
       @activity_index = activity_index
       @edges = {} #: Hash[Array[String], Hash[String, Hash[Symbol, untyped]]]
-      @unsupported = {} #: Hash[Array[String], bool]
-      @habtm = {} #: Hash[Array[String], Hash[String, Array[untyped]]]
     end
 
     # When the history was read from.
@@ -51,16 +49,6 @@ module PaperTrailDiff
       @edges.fetch(edge_key(owner_class, reflection), empty)
     end
 
-    #: (untyped, untyped) -> void
-    def mark_unsupported(owner_class, reflection)
-      @unsupported[edge_key(owner_class, reflection)] = true
-    end
-
-    #: (untyped, untyped, Hash[String, Array[untyped]]) -> void
-    def register_habtm(owner_class, reflection, memberships)
-      @habtm[edge_key(owner_class, reflection)] = memberships.transform_keys(&:to_s)
-    end
-
     #: (untyped, untyped, untyped) -> [Hash[untyped, untyped], Hash[untyped, untyped]]?
     def record_transition(model_class, id, version)
       @records.transition(model_class, id, version)
@@ -78,14 +66,14 @@ module PaperTrailDiff
 
     # Unranked, as a part of a has_many through is read, it returns every row
     # the part's conditions admit, a record reached twice appearing twice.
-    #: (untyped, untyped, untyped, habtm_boundary: untyped, ?ranked: bool) -> [bool, Array[untyped]]
-    def resolve(record, reflection, boundary, habtm_boundary:, ranked: true)
-      return [false, []] unless supported?(record.class, reflection, ranked)
+    #: (untyped, untyped, untyped, ?ranked: bool) -> [bool, Array[untyped]]
+    def resolve(record, reflection, boundary, ranked: true)
+      return [false, []] unless supported?(reflection, ranked)
 
       records = if reflection.options[:through]
-                  through_records(record, reflection, boundary, habtm_boundary, ranked)
+                  through_records(record, reflection, boundary, ranked)
                 else
-                  direct_records(record, reflection, boundary, habtm_boundary, ranked)
+                  direct_records(record, reflection, boundary, ranked)
                 end
       records ? [true, records] : [false, []]
     end
@@ -95,34 +83,25 @@ module PaperTrailDiff
     # @rbs @records: PreparedRecordIndex
     # @rbs @state_reader: PreparedStateAssociationReader
     # @rbs @edges: Hash[Array[String], Hash[String, Hash[Symbol, untyped]]]
-    # @rbs @unsupported: Hash[Array[String], bool]
-    # @rbs @habtm: Hash[Array[String], Hash[String, Array[untyped]]]
     # @rbs @conditions: ScopeCondition::Cache
 
     # A polymorphic target's class is known only once a record names it, so
     # belongs_to_records reads its scope for each record instead.
-    #: (untyped, untyped, bool) -> bool
-    def supported?(owner_class, reflection, ranked)
-      !@unsupported[edge_key(owner_class, reflection)] &&
-        (reflection.polymorphic? || !@conditions.call(reflection, ranked: ranked).nil?)
+    #: (untyped, bool) -> bool
+    def supported?(reflection, ranked)
+      reflection.polymorphic? || !@conditions.call(reflection, ranked: ranked).nil?
     end
 
-    #: (untyped, untyped, untyped, untyped, bool) -> Array[untyped]?
-    def direct_records(record, reflection, boundary, habtm_boundary, ranked)
-      case reflection.macro
-      when :belongs_to then belongs_to_records(record, reflection, boundary, ranked)
-      when :has_one, :has_many then child_records(record, reflection, boundary, ranked)
-      when :has_and_belongs_to_many
-        habtm_records(record, reflection, boundary, habtm_boundary, ranked)
-      end
+    #: (untyped, untyped, untyped, bool) -> Array[untyped]?
+    def direct_records(record, reflection, boundary, ranked)
+      return belongs_to_records(record, reflection, boundary, ranked) if reflection.belongs_to?
+
+      child_records(record, reflection, boundary, ranked)
     end
 
     #: (untyped, untyped, untyped, bool) -> Array[untyped]?
     def belongs_to_records(record, reflection, boundary, ranked)
-      foreign_key = AssociationKey.scalar_foreign_key(reflection)
-      return unless foreign_key
-
-      id = record.public_send(foreign_key)
+      id = record.public_send(reflection.foreign_key)
       return [] if id.nil?
 
       model_class = AssociationTraversal.belongs_to_target(reflection, record)
@@ -165,42 +144,13 @@ module PaperTrailDiff
       owners ? owners.fetch(owner.id.to_s, empty) : group.fetch(:ids)
     end
 
-    # PT-AT records a checkpoint's membership as it is when the checkpoint is
-    # saved, so a tag attached earlier in the checkpoint's own transaction is a
-    # member there, unlike other associations, which a version reads as they
-    # were before its transaction. A member created in that transaction has no
-    # earlier state, so it is read as it was created, from its creation on.
-    # The checkpoint's membership also stands for earlier points, since the
-    # previous root version; the member did not exist at those yet.
-    #: (untyped, untyped, untyped, untyped, bool) -> Array[untyped]?
-    def habtm_records(record, reflection, boundary, habtm_boundary, ranked)
-      transaction_id = habtm_boundary.transaction_id
-      return unless transaction_id
-
-      empty = {} #: Hash[String, Array[untyped]]
-      ids = @habtm.fetch(edge_key(record.class, reflection), empty)[transaction_id.to_s]
-      return unless ids
-
-      created = VersionBoundary.transaction_id(boundary).to_s == transaction_id.to_s
-      members = ids.filter_map { |id| habtm_member(reflection.klass, id, boundary, created) }
-      @conditions.select(reflection, members, ranked: ranked)
-    end
-
-    #: (untyped, untyped, untyped, bool) -> untyped
-    def habtm_member(model_class, id, boundary, created)
-      @records.record_before(model_class, id, boundary) ||
-        (@records.record_created_in(model_class, id, boundary) if created)
-    end
-
     # A through reads its parts unranked, as its one query joins every row of
     # each: a has_one part keeps no single row there. Its own scope applies to
     # each row, and a ranked read then keeps a record reached twice as one
     # member, or a has_one through its first.
-    #: (untyped, untyped, untyped, untyped, bool) -> Array[untyped]?
-    def through_records(record, reflection, boundary, habtm_boundary, ranked)
-      read = lambda do |owner, part|
-        resolve(owner, part, boundary, habtm_boundary: habtm_boundary, ranked: false)
-      end
+    #: (untyped, untyped, untyped, bool) -> Array[untyped]?
+    def through_records(record, reflection, boundary, ranked)
+      read = ->(owner, part) { resolve(owner, part, boundary, ranked: false) }
       rows = through_rows(record, reflection, read)
       return unless rows
 
@@ -223,9 +173,7 @@ module PaperTrailDiff
 
     #: (untyped, untyped, untyped) -> bool
     def member_of?(child, reflection, owner)
-      foreign_key = AssociationKey.scalar_foreign_key(reflection)
-      return false unless foreign_key
-      return false unless child.public_send(foreign_key).to_s == owner.id.to_s
+      return false unless child.public_send(reflection.foreign_key).to_s == owner.id.to_s
       return false unless AssociationTraversal.sti_member?(reflection.klass, child.attributes)
       return true unless reflection.options[:as]
 

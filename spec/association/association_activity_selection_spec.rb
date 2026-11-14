@@ -290,55 +290,7 @@ RSpec.describe PaperTrailDiff::AssociationActivitySelection do
     expect(report.roots).to eq([page])
   end
 
-  it 'selects an article whose tag was renamed in a window a later version closes' do
-    article = TrackedArticle.create!(title: 'Tagged')
-    tag = TrackedTag.create!(name: 'ruby')
-    TrackedArticle.transaction do
-      article.tags << tag
-      article.paper_trail.save_with_version
-    end
-    TrackedArticle.create!(title: 'Untagged')
-    window_start = Time.now.utc
-    tag.update!(name: 'rails')
-    window_end = Time.now.utc
-    TrackedArticle.transaction { TrackedArticle.find(article.id).paper_trail.save_with_version }
-
-    expect(scope_ids([:tags], window_start..window_end)).to eq([article.id])
-  end
-
-  # Only the tag changes in the window. The article's next version, after the
-  # window, records that it held the tag; the join row is gone by selection.
-  it 'selects an article that held a renamed tag in the window but no longer does' do
-    article = TrackedArticle.create!(title: 'Was tagged')
-    tag = TrackedTag.create!(name: 'ruby')
-    article.tags << tag
-    window_start = Time.now.utc
-    tag.update!(name: 'rails')
-    window_end = Time.now.utc
-    TrackedArticle.transaction { TrackedArticle.find(article.id).paper_trail.save_with_version }
-    article.tags.delete(tag)
-
-    expect(scope_ids([:tags], window_start..window_end)).to eq([article.id])
-  end
-
-  # HABTM membership after the article's last version lives only in the join
-  # table, and a window ending at the current record cannot split HABTM
-  # activity into events. The article is still selected, so that says so.
-  it 'raises rather than omit an article whose tag changed after its last version' do
-    article = TrackedArticle.create!(title: 'Tagged')
-    tag = TrackedTag.create!(name: 'ruby')
-    TrackedArticle.transaction do
-      article.tags << tag
-      article.paper_trail.save_with_version
-    end
-    window_start = Time.now.utc
-    tag.update!(name: 'rails')
-
-    expect { scope_ids([:tags], window_start..Time.now.utc) }
-      .to raise_error(PaperTrailDiff::UnsupportedLiveActivityError, /tags/)
-  end
-
-  it 'applies the relation, historical_filter:, and limit: to the records it adds' do
+  it 'applies the relation and limit: to the records it adds' do
     kept = TrackedArticle.create!(title: 'Kept')
     dropped = TrackedArticle.create!(title: 'Dropped')
     comments = [kept, dropped].map { |article| article.comments.create!(body: 'one') }
@@ -350,10 +302,8 @@ RSpec.describe PaperTrailDiff::AssociationActivitySelection do
       TrackedArticle.where(title: 'Kept'), within: window, associations: [:comments],
                                            activity: true, limit: 10
     )
-    historical = scope_ids([:comments], window, historical_filter: { 'title' => 'Dropped' })
 
     expect(ids(filtered)).to eq([kept.id])
-    expect(historical).to eq([dropped.id])
     expect do
       PaperTrailDiff.report(TrackedArticle, since: window_start, associations: [:comments],
                                             limit: 1)
@@ -551,26 +501,6 @@ RSpec.describe PaperTrailDiff::AssociationActivitySelection do
       expect { sources(TrackedArticle, ['comments.nope']) }
         .to raise_error(PaperTrailDiff::UnknownAssociationError,
                         'unknown association: comments.nope')
-    end
-
-    it 'skips the recorded HABTM edge without a transaction_id column' do
-      article = TrackedArticle.create!(title: 'Tagged')
-      tag = TrackedTag.create!(name: 'ruby')
-      article.tags << tag
-      start = Time.now.utc
-      tag.update!(name: 'rails')
-      allow(PaperTrail::Version).to receive(:column_names)
-        .and_return(PaperTrail::Version.column_names - ['transaction_id'])
-      sql = []
-      callback = ->(*, payload) { sql << payload[:sql] }
-      found = nil
-
-      ActiveSupport::Notifications.subscribed(callback, 'sql.active_record') do
-        found = selected(sources(TrackedArticle, [:tags], window: since(start)))
-      end
-
-      expect(found).to eq([article.id])
-      expect(sql.grep(/transaction_id/)).to eq([])
     end
 
     describe 'a polymorphic belongs_to' do

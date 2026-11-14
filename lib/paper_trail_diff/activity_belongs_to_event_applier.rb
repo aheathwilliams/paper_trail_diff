@@ -33,9 +33,7 @@ module PaperTrailDiff
 
       snapshot = previous
       routes.each do |route|
-        replacement = normalized_route_record(
-          route, version, normalizer, root_endpoint, context_endpoint
-        )
+        replacement = normalized_route_record(route, version, normalizer, context_endpoint)
         snapshot, = replace_route(snapshot, route, version, replacement)
       end
       [true, snapshot]
@@ -69,8 +67,8 @@ module PaperTrailDiff
       association.records.any? { |record| vacant?(record, route, depth + 1) }
     end
 
-    #: (Array[untyped], untyped, SnapshotNormalizer, untyped, untyped) -> RecordSnapshot?
-    def normalized_route_record(route, version, normalizer, root_endpoint, context_endpoint)
+    #: (Array[untyped], untyped, SnapshotNormalizer, untyped) -> RecordSnapshot?
+    def normalized_route_record(route, version, normalizer, context_endpoint)
       record = @record_resolver.record_after(version, direct: route.last.fetch(2).empty?)
       return unless record
 
@@ -81,7 +79,6 @@ module PaperTrailDiff
         subtree: subtree,
         path: path,
         normalizer: normalizer,
-        root_endpoint: root_endpoint,
         context_endpoint: context_endpoint
       )
     end

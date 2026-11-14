@@ -3,6 +3,9 @@
 module PaperTrailDiff
   # Resolves and validates ActiveRecord reflections for a bounded association tree.
   class AssociationTraversal
+    # A join table has no versions, so its rows' history cannot be read.
+    HABTM_REASON: ::String
+
     # The class a `belongs_to` points at for this record, reading a polymorphic
     # type column when there is one. Nil when the record points at nothing.
     # : (untyped, untyped) -> untyped
@@ -55,31 +58,16 @@ module PaperTrailDiff
     def self.polymorphic_target: (untyped, untyped, String) -> untyped
 
     # Why a request cannot name this association of the model, or nil when it
-    # can; `root` says whether the model is the record the request compares.
-    # Discovery lists only the associations this accepts, so every path it
-    # lists can be requested. A has_many :through Active Record cannot follow
-    # raises Active Record's own error.
-    # : (untyped, untyped, root: bool) -> String?
-    def self.unsupported_reason: (untyped, untyped, root: bool) -> String?
+    # can. Discovery lists only the associations this accepts, so every path
+    # it lists can be requested. A has_many :through Active Record cannot
+    # follow raises Active Record's own error.
+    # : (untyped, untyped) -> String?
+    def self.unsupported_reason: (untyped, untyped) -> String?
 
     # History matches records by primary key, within one set of version
     # tables, and finds a child's owner where the child's versions recorded it.
     # : (untyped) -> String?
     def self.storage_reason: (untyped) -> String?
-
-    # PT-AT records a HABTM's membership only when its owner saves a version,
-    # in rows keyed by transaction and association name, not by owner. A root
-    # checkpoint so holds the root's membership and no one else's: another
-    # record's HABTM would read the root's rows, or none.
-    # : (untyped) -> String
-    def self.habtm_below_root: (untyped) -> String
-
-    # PT-AT records a HABTM's membership by loading the association, scope and
-    # target default scope applied, so a target outside the scope when the
-    # owner saved is never recorded. One that enters it before the next save
-    # is a member then that history cannot hold.
-    # : (untyped, bool) -> String?
-    def self.habtm_reason: (untyped, bool) -> String?
 
     # : (untyped, untyped) -> bool
     def self.paper_trail_versions?: (untyped, untyped) -> bool
@@ -137,22 +125,6 @@ module PaperTrailDiff
     # : (untyped) -> Array[untyped]
     def path_parts: (untyped) -> Array[untyped]
 
-    # : (untyped, untyped) -> void
-    def ensure_habtm_history!: (untyped, untyped) -> void
-
-    # Every snapshot of a version asks, so each class's answer is kept; the
-    # tree and the class decide it. Reading it again each time answers the
-    # same, which is why mutant leaves the cache alone.
-    # mutant:disable
-    # : (untyped) -> Array[String]
-    def habtm_paths: (untyped) -> Array[String]
-
-    # HABTM join rows have no versions of their own, so membership changes
-    # cannot be split into events once a range runs past the last root version
-    # into live state.
-    # : (untyped) -> void
-    def reject_live_habtm_activity!: (untyped) -> void
-
     # A model and a tree resolve to the same reflections wherever they are
     # read: a tree is only ever walked from one place, the root tree at the
     # root and a subtree below it. Beyond that, the path only names a failure,
@@ -167,8 +139,6 @@ module PaperTrailDiff
     def incoming_relationship_columns: (untyped) -> Array[String]
 
     private
-
-    @habtm_paths: Hash[untyped, Array[String]]
 
     @reflection_cache: Hash[AssociationTree, Hash[untyped, Array[untyped]]]
 
@@ -188,10 +158,7 @@ module PaperTrailDiff
     # : (untyped, AssociationTree, String) -> Array[untyped]
     def requested_reflections: (untyped, AssociationTree, String) -> Array[untyped]
 
-    # : (untyped, String, String, root: bool) -> untyped
-    def resolve_reflection: (untyped, String, String, root: bool) -> untyped
-
-    # : (untyped) -> bool
-    def habtm_reflection?: (untyped) -> bool
+    # : (untyped, String, String) -> untyped
+    def resolve_reflection: (untyped, String, String) -> untyped
   end
 end

@@ -33,12 +33,6 @@ module PaperTrailDiff
     # : (untyped, untyped) -> Hash[String, Hash[Symbol, untyped]]
     def edge: (untyped, untyped) -> Hash[String, Hash[Symbol, untyped]]
 
-    # : (untyped, untyped) -> void
-    def mark_unsupported: (untyped, untyped) -> void
-
-    # : (untyped, untyped, Hash[String, Array[untyped]]) -> void
-    def register_habtm: (untyped, untyped, Hash[String, Array[untyped]]) -> void
-
     # : (untyped, untyped, untyped) -> [Hash[untyped, untyped], Hash[untyped, untyped]]?
     def record_transition: (untyped, untyped, untyped) -> [ Hash[untyped, untyped], Hash[untyped, untyped] ]?
 
@@ -50,8 +44,8 @@ module PaperTrailDiff
 
     # Unranked, as a part of a has_many through is read, it returns every row
     # the part's conditions admit, a record reached twice appearing twice.
-    # : (untyped, untyped, untyped, habtm_boundary: untyped, ?ranked: bool) -> [bool, Array[untyped]]
-    def resolve: (untyped, untyped, untyped, habtm_boundary: untyped, ?ranked: bool) -> [ bool, Array[untyped] ]
+    # : (untyped, untyped, untyped, ?ranked: bool) -> [bool, Array[untyped]]
+    def resolve: (untyped, untyped, untyped, ?ranked: bool) -> [ bool, Array[untyped] ]
 
     private
 
@@ -59,21 +53,17 @@ module PaperTrailDiff
 
     @edges: Hash[Array[String], Hash[String, Hash[Symbol, untyped]]]
 
-    @habtm: Hash[Array[String], Hash[String, Array[untyped]]]
-
     @records: PreparedRecordIndex
 
     @state_reader: PreparedStateAssociationReader
 
-    @unsupported: Hash[Array[String], bool]
-
     # A polymorphic target's class is known only once a record names it, so
     # belongs_to_records reads its scope for each record instead.
-    # : (untyped, untyped, bool) -> bool
-    def supported?: (untyped, untyped, bool) -> bool
+    # : (untyped, bool) -> bool
+    def supported?: (untyped, bool) -> bool
 
-    # : (untyped, untyped, untyped, untyped, bool) -> Array[untyped]?
-    def direct_records: (untyped, untyped, untyped, untyped, bool) -> Array[untyped]?
+    # : (untyped, untyped, untyped, bool) -> Array[untyped]?
+    def direct_records: (untyped, untyped, untyped, bool) -> Array[untyped]?
 
     # : (untyped, untyped, untyped, bool) -> Array[untyped]?
     def belongs_to_records: (untyped, untyped, untyped, bool) -> Array[untyped]?
@@ -90,25 +80,12 @@ module PaperTrailDiff
     # : (Hash[Symbol, untyped], untyped) -> Array[untyped]
     def child_ids_for: (Hash[Symbol, untyped], untyped) -> Array[untyped]
 
-    # PT-AT records a checkpoint's membership as it is when the checkpoint is
-    # saved, so a tag attached earlier in the checkpoint's own transaction is a
-    # member there, unlike other associations, which a version reads as they
-    # were before its transaction. A member created in that transaction has no
-    # earlier state, so it is read as it was created, from its creation on.
-    # The checkpoint's membership also stands for earlier points, since the
-    # previous root version; the member did not exist at those yet.
-    # : (untyped, untyped, untyped, untyped, bool) -> Array[untyped]?
-    def habtm_records: (untyped, untyped, untyped, untyped, bool) -> Array[untyped]?
-
-    # : (untyped, untyped, untyped, bool) -> untyped
-    def habtm_member: (untyped, untyped, untyped, bool) -> untyped
-
     # A through reads its parts unranked, as its one query joins every row of
     # each: a has_one part keeps no single row there. Its own scope applies to
     # each row, and a ranked read then keeps a record reached twice as one
     # member, or a has_one through its first.
-    # : (untyped, untyped, untyped, untyped, bool) -> Array[untyped]?
-    def through_records: (untyped, untyped, untyped, untyped, bool) -> Array[untyped]?
+    # : (untyped, untyped, untyped, bool) -> Array[untyped]?
+    def through_records: (untyped, untyped, untyped, bool) -> Array[untyped]?
 
     # The source records of each join record, once for each join.
     # : (untyped, untyped, ^(untyped, untyped) -> [bool, Array[untyped]]) -> Array[untyped]?

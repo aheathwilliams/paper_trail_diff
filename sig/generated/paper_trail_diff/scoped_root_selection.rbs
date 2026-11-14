@@ -51,15 +51,13 @@ module PaperTrailDiff
     # open at the window's start is reported in it, though it may have saved
     # the root's tree only before it, so with associations the roots are
     # selected from where the earliest such transaction began.
-    # : (untyped, time_range: TimeRange?, limit: Integer, ?historical_filter: untyped, ?max_filter_versions: Integer, ?activity_traversal: AssociationTraversal?, ?version_scope: untyped) -> void
-    def initialize: (untyped, time_range: TimeRange?, limit: Integer, ?historical_filter: untyped, ?max_filter_versions: Integer, ?activity_traversal: AssociationTraversal?, ?version_scope: untyped) -> void
+    # : (untyped, time_range: TimeRange?, limit: Integer, ?activity_traversal: AssociationTraversal?, ?version_scope: untyped) -> void
+    def initialize: (untyped, time_range: TimeRange?, limit: Integer, ?activity_traversal: AssociationTraversal?, ?version_scope: untyped) -> void
 
     # : () -> Result
     def call: () -> Result
 
     private
-
-    @historical_filter: FilteredCandidates?
 
     @limit: Integer
 
@@ -68,8 +66,6 @@ module PaperTrailDiff
     @scope: untyped
 
     @selecting: TimeRange?
-
-    @time_range: TimeRange?
 
     @version_scope: untyped
 
@@ -94,7 +90,7 @@ module PaperTrailDiff
 
     # Which candidates still have a row is asked without the relation's
     # conditions, so that "filtered out" and "no longer exists" stay
-    # separable. A filter then keeps those it matches (FilteredCandidates).
+    # separable.
     # : (Array[String]) -> Result
     def plucked_selection: (Array[String]) -> Result
 
@@ -112,9 +108,6 @@ module PaperTrailDiff
     # it keeps whole transactions, as their activity reports them.
     # : () -> untyped
     def window_versions: () -> untyped
-
-    # : (untyped, Integer) -> FilteredCandidates?
-    def historical_filter_for: (untyped, Integer) -> FilteredCandidates?
 
     # Accepts a model class as readily as a relation: `Article` and
     # `Article.where(...)` both name a population, and `all` is what makes them

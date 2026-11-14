@@ -177,7 +177,6 @@ module PaperTrailDiff
     def direct_versioned_reflection?(reflection)
       return true if reflection.polymorphic?
       return false if reflection.options[:through]
-      return false if reflection.macro == :has_and_belongs_to_many
 
       paper_trail = Object.const_get(:PaperTrail) #: untyped
       paper_trail.request.enabled_for_model?(reflection.klass)

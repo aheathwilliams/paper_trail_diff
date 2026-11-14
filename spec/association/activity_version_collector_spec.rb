@@ -208,24 +208,25 @@ RSpec.describe PaperTrailDiff::ActivityVersionCollector do
     expect(events.map(&:version)).to include(first.versions.last)
   end
 
+  it 'collects the targets a polymorphic key named, and none for a type that names no class' do
+    author = TrackedAuthor.create!(name: 'Ann')
+    article = CollectorArticle.create!(title: 'Draft')
+    pin = CollectorPin.create!(article: article, pinnable: author)
+    author.update!(name: 'Ann B.')
+    2.times { pin.touch }
+    stale = versions_of(pin).fetch(1)
+    stale.update_columns(object: stale.object.sub('TrackedAuthor', 'CollectorGone'))
+
+    expect(described(collect(pin, [:pinnable])).map(&:first))
+      .to eq(%w[CollectorPin TrackedAuthor CollectorPin CollectorPin])
+  end
+
   it 'reads nothing past an association with no records in the range' do
     article = TrackedArticle.create!(title: 'Draft')
     save_again(article, 'Final')
 
     expect(described(collect(article, [:contributors, { comments: :replies }])).map(&:first))
       .to eq(%w[TrackedArticle TrackedArticle])
-  end
-
-  it 'collects the members each root version recorded' do
-    article = TrackedArticle.create!(title: 'Draft')
-    tag = TrackedTag.create!(name: 'ruby')
-    article.tags << tag
-    TrackedArticle.transaction { TrackedArticle.find(article.id).paper_trail.save_with_version }
-    tag.update!(name: 'Ruby')
-    save_again(article, 'Final')
-
-    expect(described(collect(article, [:tags])).select { |type,| type == 'TrackedTag' })
-      .to eq([['TrackedTag', 'create', ['tags'], []], ['TrackedTag', 'update', ['tags'], []]])
   end
 
   it "collects a through's join rows as joins, then its targets" do

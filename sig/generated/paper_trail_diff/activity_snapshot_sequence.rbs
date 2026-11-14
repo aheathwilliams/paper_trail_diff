@@ -76,8 +76,8 @@ module PaperTrailDiff
     # : (untyped) -> PreparedRecordState?
     def root_state: (untyped) -> PreparedRecordState?
 
-    # : (untyped, habtm_version: untyped) -> untyped
-    def association_reader: (untyped, habtm_version: untyped) -> untyped
+    # : (untyped) -> untyped
+    def association_reader: (untyped) -> untyped
 
     # : (untyped) -> [Hash[untyped, untyped], Hash[untyped, untyped]]?
     def record_transition: (untyped) -> [ Hash[untyped, untyped], Hash[untyped, untyped] ]?

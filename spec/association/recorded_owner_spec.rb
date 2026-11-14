@@ -52,8 +52,6 @@ class OwnerSpecArticle < ActiveRecord::Base
   has_many :loose_comments, class_name: 'OwnerSpecLooseComment', foreign_key: :article_id
   has_one :loose_comment, class_name: 'OwnerSpecLooseComment', foreign_key: :article_id
   has_many :plain_comments, class_name: 'OwnerSpecPlainComment', foreign_key: :article_id
-  has_many :paired_comments, class_name: 'OwnerSpecLooseComment',
-                             foreign_key: %i[article_id reviewer_id], primary_key: %i[id author_id]
   has_many :stickers, class_name: 'OwnerSpecSticker', as: :holder
   has_many :loose_comment_replies, through: :loose_comments, source: :replies
   has_many :comment_replies, through: :comments, source: :replies
@@ -116,13 +114,10 @@ RSpec.describe PaperTrailDiff::RecordedOwner do
       expect(reason(OwnerSpecArticle, :stickers)).to be_nil
     end
 
-    # A belongs_to and a HABTM are recorded on the owner's own versions.
-    # PT-AT cannot record a composite key, which is read another way, and a
-    # target without versions is refused for that.
+    # A belongs_to is recorded on the owner's own versions, and a target
+    # without versions is refused for that.
     it 'accepts what is not read from a belongs_to back' do
       expect(reason(TrackedComment, :article)).to be_nil
-      expect(reason(TrackedArticle, :tags)).to be_nil
-      expect(reason(OwnerSpecArticle, :paired_comments)).to be_nil
       expect(reason(OwnerSpecArticle, :plain_comments)).to be_nil
     end
 
@@ -143,9 +138,9 @@ RSpec.describe PaperTrailDiff::RecordedOwner do
 
         %i[loose_comments loose_comment_replies].each do |name|
           reflection = OwnerSpecArticle.reflect_on_association(name)
-          expect(PaperTrailDiff::AssociationTraversal.unsupported_reason(
-                   OwnerSpecArticle, reflection, root: true
-                 )).to eq(expected)
+          expect(PaperTrailDiff::AssociationTraversal.unsupported_reason(OwnerSpecArticle,
+                                                                         reflection))
+            .to eq(expected)
         end
       end
     end

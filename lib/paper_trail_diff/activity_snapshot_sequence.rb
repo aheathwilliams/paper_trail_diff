@@ -112,9 +112,9 @@ module PaperTrailDiff
       @store.root_state(root_endpoint) if @history
     end
 
-    #: (untyped, habtm_version: untyped) -> untyped
-    def association_reader(context_version, habtm_version:)
-      @store.association_reader(context_version, habtm_version: habtm_version, history: @history)
+    #: (untyped) -> untyped
+    def association_reader(context_version)
+      @store.association_reader(context_version, history: @history)
     end
 
     #: (untyped) -> [Hash[untyped, untyped], Hash[untyped, untyped]]?

@@ -586,16 +586,6 @@ RSpec.describe PaperTrailDiff::Support do
     end
   end
 
-  describe '.tied_timestamp_pair' do
-    it 'finds the first two versions saved in one instant, orderable or not' do
-      versions = [version.new(noon, 1), version.new(noon + 1, 2), version.new(noon + 1, 3),
-                  version.new(noon + 1, 4)]
-
-      expect(described_class.tied_timestamp_pair(versions)).to eq(versions[1, 2])
-      expect(described_class.tied_timestamp_pair(versions.first(2))).to be_nil
-    end
-  end
-
   describe '.versioned?' do
     it 'is true only for a model that records history' do
       model = Class.new(ActiveRecord::Base) { self.table_name = 'filter_articles' }

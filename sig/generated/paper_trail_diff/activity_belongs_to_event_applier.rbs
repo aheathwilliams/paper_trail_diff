@@ -32,8 +32,8 @@ module PaperTrailDiff
     # : (RecordSnapshot, Array[untyped], Integer) -> bool
     def vacant?: (RecordSnapshot, Array[untyped], Integer) -> bool
 
-    # : (Array[untyped], untyped, SnapshotNormalizer, untyped, untyped) -> RecordSnapshot?
-    def normalized_route_record: (Array[untyped], untyped, SnapshotNormalizer, untyped, untyped) -> RecordSnapshot?
+    # : (Array[untyped], untyped, SnapshotNormalizer, untyped) -> RecordSnapshot?
+    def normalized_route_record: (Array[untyped], untyped, SnapshotNormalizer, untyped) -> RecordSnapshot?
 
     # : (RecordSnapshot, Array[untyped], untyped, RecordSnapshot?, ?depth: Integer) -> [RecordSnapshot, bool]
     def replace_route: (RecordSnapshot, Array[untyped], untyped, RecordSnapshot?, ?depth: Integer) -> [ RecordSnapshot, bool ]

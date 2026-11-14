@@ -93,11 +93,6 @@ module PaperTrailDiff
     # : (untyped, untyped) -> bool
     def loaded?: (untyped, untyped) -> bool
 
-    # PT-AT records HABTM membership once per transaction, under the
-    # association's name, so the rows are keyed by transaction id.
-    # : (untyped, Array[untyped], untyped) -> Array[untyped]
-    def habtm_rows: (untyped, Array[untyped], untyped) -> Array[untyped]
-
     private
 
     @conditions: ScopeCondition::Cache
@@ -107,8 +102,6 @@ module PaperTrailDiff
     @nodes: Hash[String, Array[untyped]]
 
     @records: PreparedRecordIndex
-
-    @rows: Hash[untyped, Hash[String, Array[untyped]]]
 
     # : (untyped, Array[untyped]) -> bool
     def member_class?: (untyped, Array[untyped]) -> bool
@@ -147,14 +140,6 @@ module PaperTrailDiff
     # comment where it stood before the transaction.
     # : (Array[untyped], Integer, untyped) -> bool
     def crossed_start?: (Array[untyped], Integer, untyped) -> bool
-
-    # Each statement reads the rows of 500 transactions.
-    # : (untyped, untyped) -> Hash[String, Array[untyped]]
-    def load_habtm_rows: (untyped, untyped) -> Hash[String, Array[untyped]]
-
-    # A version without a transaction id names no rows, so it can stay in.
-    # : (Array[untyped]) -> Array[untyped]
-    def transaction_ids: (Array[untyped]) -> Array[untyped]
   end
 
   # Whether one state of a through's join row puts it on the through's path.

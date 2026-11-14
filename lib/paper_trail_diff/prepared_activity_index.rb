@@ -37,8 +37,6 @@ module PaperTrailDiff
       @records = records
       @children = PreparedChildCandidates.new(start_at, records.end_time)
       @nodes = {} #: Hash[String, Array[untyped]]
-      # Rows are cached by reflection, which a subclass shares with its base.
-      @rows = {} #: Hash[untyped, Hash[String, Array[untyped]]]
       @conditions = ScopeCondition::Cache.new
       @judge = JoinRunJudge.new(records, @conditions)
     end
@@ -149,19 +147,10 @@ module PaperTrailDiff
       @records.loaded?(model, id)
     end
 
-    # PT-AT records HABTM membership once per transaction, under the
-    # association's name, so the rows are keyed by transaction id.
-    #: (untyped, Array[untyped], untyped) -> Array[untyped]
-    def habtm_rows(model, selected_versions, reflection)
-      rows = @rows[reflection] ||= load_habtm_rows(model, reflection)
-      transaction_ids(selected_versions).flat_map { |id| rows.fetch(id.to_s, []) }
-    end
-
     private
 
     # @rbs @records: PreparedRecordIndex
     # @rbs @nodes: Hash[String, Array[untyped]]
-    # @rbs @rows: Hash[untyped, Hash[String, Array[untyped]]]
     # @rbs @conditions: ScopeCondition::Cache
     # @rbs @judge: JoinRunJudge
 
@@ -235,22 +224,6 @@ module PaperTrailDiff
         !key.nil? && later.include?(key)
       end
     end
-
-    # Each statement reads the rows of 500 transactions.
-    #: (untyped, untyped) -> Hash[String, Array[untyped]]
-    def load_habtm_rows(model, reflection)
-      rows = model.paper_trail.version_association_class.where(foreign_key_name: reflection.name)
-      transaction_ids(versions(model, node_ids(model)))
-        .each_slice(Support::IDS_PER_STATEMENT)
-        .flat_map { |slice| rows.where(version_id: slice) }
-        .group_by { |row| row.version_id.to_s }
-    end
-
-    # A version without a transaction id names no rows, so it can stay in.
-    #: (Array[untyped]) -> Array[untyped]
-    def transaction_ids(versions)
-      versions.map { |version| VersionBoundary.transaction_id(version) }.uniq
-    end
   end
 
   # Whether one state of a through's join row puts it on the through's path.
@@ -295,8 +268,7 @@ module PaperTrailDiff
 
     #: () -> bool
     def keyed?
-      !@through.through_reflection? && !@through.belongs_to? &&
-        !@through.foreign_key.is_a?(Array)
+      !@through.through_reflection? && !@through.belongs_to?
     end
 
     #: (Hash[untyped, untyped]) -> bool

@@ -14,8 +14,7 @@ module ReportingBenchmark
   class Workload
     include AssociationWindow
 
-    CASES = %w[many_roots retained_activity long_history sparse_matches no_matches
-               limit_refusal attribute_no_matches attribute_sparse_matches deleted_roots
+    CASES = %w[many_roots retained_activity long_history limit_refusal deleted_roots
                association_window].freeze
 
     attr_reader :name, :size
@@ -54,10 +53,7 @@ module ReportingBenchmark
     end
 
     def expected_roots
-      return 0 if %w[no_matches attribute_no_matches deleted_roots].include?(name)
-      return (size + 99) / 100 if name.end_with?('sparse_matches')
-
-      root_count
+      name == 'deleted_roots' ? 0 : root_count
     end
 
     def limit
@@ -86,8 +82,7 @@ module ReportingBenchmark
     end
 
     def seed_root(index)
-      status = name.end_with?('sparse_matches') && (index % 100).zero? ? 'review' : 'draft'
-      root = BenchmarkArticle.create!(title: "Article #{index}", status: status, body: 'x' * 1024)
+      root = BenchmarkArticle.create!(title: "Article #{index}", status: 'draft', body: 'x' * 1024)
       updates_per_root.times { |update| root.update!(title: "Article #{index} v#{update}") }
       root.destroy! if name == 'deleted_roots'
     end
@@ -102,16 +97,7 @@ module ReportingBenchmark
         result.merge!(activity: true, snapshots: true,
                       include_deleted: true)
       end
-      result[:historical_filter] = predicate if predicate
       result
-    end
-
-    def predicate
-      return ->(_state) { true } if name == 'limit_refusal'
-      return { status: 'review' } if name.start_with?('attribute_')
-      return unless %w[sparse_matches no_matches].include?(name)
-
-      ->(state) { state.status == 'review' }
     end
   end
 end

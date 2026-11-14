@@ -38,7 +38,7 @@ module PaperTrailDiff
 
   # A normalized association in a bounded record snapshot tree.
   class AssociationSnapshot
-    COLLECTION_KINDS = %i[has_many has_and_belongs_to_many].freeze
+    COLLECTION_KINDS = %i[has_many].freeze
     private_constant :COLLECTION_KINDS
 
     # Whether a collection's identities were found distinct. The snapshots a

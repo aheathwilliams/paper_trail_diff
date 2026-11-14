@@ -26,11 +26,6 @@ module PaperTrailDiff
 
     private
 
-    # The snapshot, with the branches a root version itself records read
-    # again where the context is one.
-    # : (untyped, untyped, RecordSnapshot, Array[String]) -> RecordSnapshot?
-    def carried: (untyped, untyped, RecordSnapshot, Array[String]) -> RecordSnapshot?
-
     @applier: ActivityTransactionApplier
 
     @components: Hash[Array[String], [ AssociationTree, SnapshotNormalizer ]]
@@ -50,12 +45,6 @@ module PaperTrailDiff
     @traversal: AssociationTraversal
 
     @tree: AssociationTree
-
-    # A root version's HABTM members include any created earlier in its
-    # transaction. A range ending at that version leaves those creations out
-    # as events, so the branch is read again there, whatever event led to it.
-    # : (untyped, untyped, Array[String]) -> Array[String]
-    def with_habtm: (untyped, untyped, Array[String]) -> Array[String]
 
     # : (untyped, untyped, RecordSnapshot, Array[String], ActivityEvent) -> RecordSnapshot?
     def refresh_independent_branches: (untyped, untyped, RecordSnapshot, Array[String], ActivityEvent) -> RecordSnapshot?
