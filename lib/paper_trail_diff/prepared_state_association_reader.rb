@@ -104,7 +104,7 @@ module PaperTrailDiff
     def first_if_one(reflection, condition, states)
       return states if reflection.collection?
 
-      condition.first(states, in_order: reflection.through_reflection?)
+      condition.first(states, in_order: AssociationTraversal.join_order?(reflection))
     end
 
     #: (untyped, PreparedRecordState) -> bool

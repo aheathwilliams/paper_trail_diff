@@ -207,7 +207,7 @@ module PaperTrailDiff
     # clustered or indexed key; reading any other row would differ from the
     # current record where nothing changed. PostgreSQL promises no order. A
     # has_one through gives its records in the order of its join rows, whose
-    # first target is the one Active Record reads.
+    # first target is the one Active Record reads (see AssociationTraversal.join_order?).
     #: (Array[untyped], ?in_order: bool) -> Array[untyped]
     def first(records, in_order: false)
       return records.first(1) if @ranking || in_order
