@@ -18,6 +18,8 @@ RSpec.describe PaperTrailDiff::StoredValues do
     paper_trail = Struct.new(:version_class).new(Struct.new(:columns_hash).new(columns))
     Class.new do
       define_singleton_method(:attribute_types) { types }
+      define_singleton_method(:attribute_names) { types.keys }
+      define_singleton_method(:column_names) { types.keys }
       define_singleton_method(:type_for_attribute) { |name| types.fetch(name) }
       define_singleton_method(:paper_trail_options) { {} }
       define_singleton_method(:paper_trail) { paper_trail }
@@ -47,6 +49,19 @@ RSpec.describe PaperTrailDiff::StoredValues do
     expect(read.fetch('rings_at')).to eq(Time.utc(2000, 1, 1, 7, 30))
     expect(read.fetch('at').nsec).to eq(123_000_000)
     expect(read.fetch('blob')).to eq('x'.b)
+  end
+
+  it 'leaves out an attribute without a column, reading what the model declares once' do
+    form = model
+    allow(form).to receive(:attribute_names).and_return([*values.keys, 'confirmation'])
+    stored = values.merge('confirmation' => 'yes')
+
+    2.times do
+      read = with_serializer(PaperTrail::Serializers::YAML) { described_class.apply(form, stored) }
+      expect(read.keys).to eq(%w[rings_at at blob])
+    end
+    expect(form).to have_received(:attribute_names).once
+    expect(described_class.unstored(form)).to be_frozen
   end
 
   describe '.record' do

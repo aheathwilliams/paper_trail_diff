@@ -66,10 +66,12 @@ module PaperTrailDiff
   # did would be reported in neither or in both.
   #
   # The versions held are asked about together, a statement for 500
-  # transactions, and one more for those whose last version is not held. Ids
-  # that count up name the last version; otherwise the time it was saved
-  # does. A number that transactions of two version tables took is not read
-  # (see TransactionAnchors), and its versions are placed at the last held.
+  # transactions, and one more for those whose last version is not held.
+  # The last version is the latest dated, ids breaking a tie, as every
+  # window compares versions by date: a callback that saves other records
+  # before its own version dates that one first, as its save began. A number
+  # that transactions of two version tables took is not read (see
+  # TransactionAnchors), and its versions are placed at the last held.
   class RecordedTransactionEnds
     # : () -> void
     def initialize: () -> void
@@ -77,6 +79,9 @@ module PaperTrailDiff
     # The last version of each transaction asked about so far, by transaction
     # key, once those of `versions` are among them. They are asked about along
     # with every version the block returns, so that a history is read at once.
+    # A version saved outside a transaction is read beside the history's
+    # others, wherever their transactions end, so it asks about them all; a
+    # live record asks nothing.
     # : (Array[untyped]) { () -> Array[untyped] } -> Hash[Array[untyped], untyped]
     def call: (Array[untyped]) { () -> Array[untyped] } -> Hash[Array[untyped], untyped]
 
@@ -85,6 +90,9 @@ module PaperTrailDiff
     @asked: Set[Array[untyped]]
 
     @ends: Hash[Array[untyped], untyped]
+
+    # : (untyped) -> bool
+    def answered?: (untyped) -> bool
 
     # : (untyped) -> bool
     def asked?: (untyped) -> bool
@@ -97,20 +105,18 @@ module PaperTrailDiff
     # : (untyped, Array[untyped], Hash[untyped, Array[untyped]]) -> void
     def read: (untyped, Array[untyped], Hash[untyped, Array[untyped]]) -> void
 
-    # Of the versions with the id or the time of their transaction's last,
-    # the last of each transaction.
-    # : (untyped, Array[untyped]) -> void
-    def note: (untyped, Array[untyped]) -> void
+    # The id of each transaction's last version: of those dated latest, the
+    # one versions sort last by id.
+    # : (untyped, Array[untyped]) -> Hash[untyped, untyped]
+    def latest: (untyped, Array[untyped]) -> Hash[untyped, untyped]
 
-    # The versions not held that may be the last of their transactions:
-    # those with the id or the time of the last of one that holds no such
-    # version.
-    # : (untyped, String, Hash[untyped, untyped], Hash[untyped, Array[untyped]]) -> untyped
-    def other: (untyped, String, Hash[untyped, untyped], Hash[untyped, Array[untyped]]) -> untyped
+    # When the transaction of a version of `table` saved its latest dated.
+    # : (untyped) -> untyped
+    def newest: (untyped) -> untyped
 
-    # What names a transaction's last version: its id where ids count up,
-    # and the time it was saved otherwise.
-    # : (untyped) -> String
-    def last_column: (untyped) -> String
+    # The last versions not held, read only for what places them. With
+    # none missing, the relation reads nothing.
+    # : (untyped, Hash[untyped, untyped], Hash[untyped, Array[untyped]]) -> Array[untyped]
+    def other: (untyped, Hash[untyped, untyped], Hash[untyped, Array[untyped]]) -> Array[untyped]
   end
 end

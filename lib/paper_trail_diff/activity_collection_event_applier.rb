@@ -130,9 +130,14 @@ module PaperTrailDiff
       [record, normalized_event_record(record, route, normalizer, endpoints)]
     end
 
+    # A record the event took out of the association's class, such as an
+    # STI row retyped to its base class, is no member to read a subtree for:
+    # the subtree can name associations only that class has.
     #: (untyped, Array[untyped], SnapshotNormalizer, Array[untyped]) -> RecordSnapshot?
     def normalized_event_record(record, route, normalizer, endpoints)
       _name, reflection, subtree, path = route.last
+      return unless AssociationTraversal.sti_member?(reflection.klass, record.attributes)
+
       @record_normalizer.call(
         record,
         reflection: reflection,

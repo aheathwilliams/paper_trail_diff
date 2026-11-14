@@ -131,6 +131,27 @@ RSpec.describe 'version_scope: in activity on associations',
       .to eq([{ from: 'Draft', to: 'Titled' }])
   end
 
+  # A comment that left the tree changes nothing the article shows, so its
+  # destruction is no change to end at, though the filter keeps it.
+  it 'ends after the last change it keeps, not at a kept version outside the tree' do
+    article = TrackedArticle.create!(title: 'one')
+    stays = article.comments.create!(body: 'stays')
+    leaves = article.comments.create!(body: 'leaves')
+    leaves.update!(article: TrackedArticle.create!(title: 'other'))
+    by('bob') { article.update!(title: 'two') }
+    stays.update!(body: 'edited')
+    by('bob') { leaves.destroy! }
+    stays.update!(body: 'edited again')
+    bob = ->(versions) { versions.where(whodunnit: 'bob') }
+
+    analysis = PaperTrailDiff.analyze(article.reload, activity: true, associations: paths,
+                                                      version_scope: bob)
+
+    expect(bodies(analysis.to_snapshot.associations.fetch('comments').records)).to eq(['stays'])
+    expect(analysis.diff.associations).to be_empty
+    expect(analysis.diff.attributes.fetch('title').to_h).to eq(from: 'one', to: 'two')
+  end
+
   # A range's last version opens no step, so a filter that keeps only that
   # version reports nothing, and neither does a range from a version to
   # itself.

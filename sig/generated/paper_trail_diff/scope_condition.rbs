@@ -88,6 +88,13 @@ module PaperTrailDiff
     # : (untyped) -> bool
     def self.plain_relation?: (untyped) -> bool
 
+    # Join rows in primary key order, the order whose first target an
+    # unordered has_one through reads (see #first). The block names a row's
+    # model; rows with no key yet come last, as given. Saved rows' keys
+    # differ.
+    # : (Array[untyped]) { (untyped) -> untyped } -> Array[untyped]
+    def self.in_key_order: (Array[untyped]) { (untyped) -> untyped } -> Array[untyped]
+
     # : (untyped, Array[untyped], ?ScopeRanking?) -> void
     def initialize: (untyped, Array[untyped], ?ScopeRanking?) -> void
 
@@ -114,9 +121,11 @@ module PaperTrailDiff
     # lowest primary key. Active Record reads an unordered has_one with
     # LIMIT 1, which SQLite, MySQL and SQL Server answer in key order for a
     # clustered or indexed key; reading any other row would differ from the
-    # current record where nothing changed. PostgreSQL promises no order.
-    # : (Array[untyped]) -> Array[untyped]
-    def first: (Array[untyped]) -> Array[untyped]
+    # current record where nothing changed. PostgreSQL promises no order. A
+    # has_one through gives its records in the order of its join rows, whose
+    # first target is the one Active Record reads (see AssociationTraversal.join_order?).
+    # : (Array[untyped], ?in_order: bool) -> Array[untyped]
+    def first: (Array[untyped], ?in_order: bool) -> Array[untyped]
 
     # Records that meet the conditions, as ranked; unchanged without a
     # ranking.

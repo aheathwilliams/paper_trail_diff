@@ -92,6 +92,57 @@ module PaperTrailDiff
       end
     end
 
+    # The owners of children no version was ever saved for, such as rows from
+    # before PaperTrail: such a child has held its live key throughout, as an
+    # analysis reads it, and so leads to a change further down.
+    class Unversioned < AssociationActivityEdge
+      #: (untyped, TimeRange?) -> void
+      def initialize(reflection, time_range)
+        super
+        @target = reflection.klass
+        @versions = @target.paper_trail.version_class
+        @key = @target.primary_key
+        @column = @target.arel_table[reflection.foreign_key]
+        @type = column_type(@target, reflection.foreign_key)
+        @filter_type = column_type(@target, @key)
+      end
+
+      #: (untyped) -> untyped
+      def relation(filter)
+        rows = @target.unscoped.where(@key => filter)
+        type = @reflection.type
+        held = { type => @owner.polymorphic_name } #: Hash[untyped, untyped]
+        rows = rows.where(held) if type
+        comparable? ? rows.where(versioned.not) : rows.where.not(@key => versioned_ids(rows))
+      end
+
+      private
+
+      # @rbs @target: untyped
+      # @rbs @versions: untyped
+      # @rbs @key: String
+
+      # A database compares the key with item_id only when they share a type.
+      #: () -> bool
+      def comparable?
+        column_type(@versions, 'item_id') == @filter_type
+      end
+
+      #: () -> untyped
+      def versioned
+        table = @versions.arel_table
+        VersionQuery.for_model(@target).where(table[:item_id].eq(@target.arel_table[@key]))
+                    .arel.exists
+      end
+
+      # The keys of the rows that have versions, read as values; a database
+      # casts them back to the key's type.
+      #: (untyped) -> Array[untyped]
+      def versioned_ids(rows)
+        VersionQuery.for_items(@target, rows.pluck(@key)).distinct.pluck(:item_id)
+      end
+    end
+
     # The owners that pointed at a target when the window opened or after a
     # change inside it, as PT-AT recorded them on the owners' versions.
     class BelongsTo < AssociationActivityEdge

@@ -62,6 +62,37 @@ module PaperTrailDiff
       def owner_types: () -> Array[String?]
     end
 
+    # The owners of children no version was ever saved for, such as rows from
+    # before PaperTrail: such a child has held its live key throughout, as an
+    # analysis reads it, and so leads to a change further down.
+    class Unversioned < AssociationActivityEdge
+      # : (untyped, TimeRange?) -> void
+      def initialize: (untyped, TimeRange?) -> void
+
+      # : (untyped) -> untyped
+      def relation: (untyped) -> untyped
+
+      private
+
+      @key: String
+
+      @target: untyped
+
+      @versions: untyped
+
+      # A database compares the key with item_id only when they share a type.
+      # : () -> bool
+      def comparable?: () -> bool
+
+      # : () -> untyped
+      def versioned: () -> untyped
+
+      # The keys of the rows that have versions, read as values; a database
+      # casts them back to the key's type.
+      # : (untyped) -> Array[untyped]
+      def versioned_ids: (untyped) -> Array[untyped]
+    end
+
     # The owners that pointed at a target when the window opened or after a
     # change inside it, as PT-AT recorded them on the owners' versions.
     class BelongsTo < AssociationActivityEdge

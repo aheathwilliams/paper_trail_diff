@@ -79,7 +79,7 @@ module PaperTrailDiff
       return [false, []] unless handled
 
       rows = [] #: Array[PreparedRecordState]
-      joins.each do |join|
+      ScopeCondition.in_key_order(joins, &:model_class).each do |join|
         next unless typed_join?(reflection, join)
 
         handled, states = call(join, reflection.source_reflection, boundary, ranked: false)
@@ -104,7 +104,9 @@ module PaperTrailDiff
     # A has_one keeps one of its records (see ScopeCondition#first).
     #: (untyped, ScopeCondition, Array[PreparedRecordState]) -> Array[PreparedRecordState]
     def first_if_one(reflection, condition, states)
-      reflection.collection? ? states : condition.first(states)
+      return states if reflection.collection?
+
+      condition.first(states, in_order: AssociationTraversal.join_order?(reflection))
     end
 
     #: (untyped, PreparedRecordState) -> bool

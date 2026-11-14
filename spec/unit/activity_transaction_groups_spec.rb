@@ -53,6 +53,23 @@ RSpec.describe PaperTrailDiff::ActivityTransactionGroups do
       expect(kept).to eq([*events.first(2), before, destroyed, created, after])
       expect(kept).to be_frozen
     end
+
+    # The restoring transaction's descendant versions may come before the
+    # root's own. The destroy's transaction, and another, restore nothing.
+    it 'keeps what the transaction that creates the root again saved, from its first event' do
+      stub_const('GroupsEventVersion', Struct.new(:id, :transaction_id, :event))
+      saved = lambda do |transaction_id, event, root: false|
+        PaperTrailDiff::ActivityEvent.new(version: GroupsEventVersion.new(1, transaction_id, event),
+                                          branches: root ? nil : ['comments'])
+      end
+      restoring = saved.call(9, 'update')
+      events = [saved.call(4, 'update', root: true), saved.call(5, +'destroy', root: true),
+                saved.call(5, 'update'), saved.call(8, 'update'), saved.call(nil, 'update'),
+                restoring,
+                saved.call(9, 'create', root: true)]
+
+      expect(described_class.until_destroyed(events)).to eq([*events.first(2), *events.last(2)])
+    end
   end
 
   describe '#events_for' do

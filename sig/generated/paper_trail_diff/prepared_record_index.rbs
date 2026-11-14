@@ -327,9 +327,7 @@ module PaperTrailDiff
   # from it onward. Either can be of a record the history does not hold, such
   # as one the transaction moved out of the tree before the window and never
   # saved again, so every such transaction of the tree's version tables is
-  # read, not only those of the versions held: one statement per table. A
-  # transaction's first version in a table cannot follow another of its own
-  # there, so only the others are looked up.
+  # read, not only those of the versions held: one statement per table.
   #
   # Another version table can number a transaction as this one numbered an
   # earlier one, so versions an anchor separates from the start are not read
@@ -362,6 +360,18 @@ module PaperTrailDiff
     # : () -> Array[untyped]
     def self.every_version_class: () -> Array[untyped]
 
+    # The versions of this table saved before `start` by the transactions
+    # open at it.
+    # : (untyped, untyped) -> untyped
+    def self.saved_before: (untyped, untyped) -> untyped
+
+    # The versions saved from the start onward, of the transactions no anchor
+    # separates from it. A transaction's versions can be dated out of the
+    # order they were saved in, as when a callback saves other records before
+    # its own version, dated as its save began, so each is judged by its date.
+    # : (untyped, untyped) -> untyped
+    def self.later: (untyped, untyped) -> untyped
+
     # : () -> untyped
     def call: () -> untyped
 
@@ -374,20 +384,5 @@ module PaperTrailDiff
     # When the earliest transaction open at the start began in this table.
     # : (untyped) -> untyped
     def open_at_start: (untyped) -> untyped
-
-    # The versions saved before the start by a transaction that saved one
-    # from it onward.
-    # : (untyped) -> untyped
-    def earlier: (untyped) -> untyped
-
-    # The versions saved from the start onward that were not the first of
-    # their transaction, of the transactions no anchor separates from it.
-    # : (untyped) -> untyped
-    def later: (untyped) -> untyped
-
-    # Whether the table's ids can number its transactions, as they do unless
-    # the two columns differ in type.
-    # : (untyped) -> bool
-    def own_numbers?: (untyped) -> bool
   end
 end

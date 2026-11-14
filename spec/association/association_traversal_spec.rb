@@ -109,6 +109,22 @@ RSpec.describe PaperTrailDiff::AssociationTraversal do
       'HABTM membership for the root alone'
   end
 
+  describe '.join_order?' do
+    # Reflections made apart from the model, which discovery would list.
+    def join_order?(options, adapter)
+      allow(TraversalArticle.connection_db_config).to receive(:adapter).and_return(adapter)
+      reflection = ActiveRecord::Reflection.create(:has_one, :lead, nil, options, TraversalArticle)
+      described_class.join_order?(reflection)
+    end
+
+    it 'reads a has_one through by its join rows except on SQL Server' do
+      adapters = %w[sqlite3 postgresql mysql2 sqlserver]
+      expect(adapters.map { |adapter| join_order?({ through: :comments }, adapter) })
+        .to eq([true, true, true, false])
+      expect(join_order?({ class_name: 'TrackedComment' }, 'sqlite3')).to be(false)
+    end
+  end
+
   describe '.belongs_to_target' do
     let(:reflection) { TraversalNote.reflect_on_association(:holder) }
 

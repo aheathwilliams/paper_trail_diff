@@ -141,6 +141,27 @@ RSpec.describe PaperTrailDiff::AssociationActivitySelection do
         .to all(equal(window))
       expect(widened.call([:comments], nil)).to be_nil
     end
+
+    # Only the transactions open at the start are reported before it, so the
+    # versions of any other there select nothing, a root's own or a child's.
+    it 'selects no record that only a transaction ended before the start changed' do
+      edited = TrackedArticle.create!(title: 'Edited before')
+      commented = TrackedArticle.create!(title: 'Commented before')
+      gone = TrackedArticle.create!(title: 'Destroyed before')
+      job = TrackedTag.create!(name: 'job starts')
+      edited.update!(title: 'Edited')
+      commented.comments.create!(body: 'before the window')
+      gone.destroy!
+      window_start = Time.now.utc
+      job.update!(name: 'job ends')
+      job.versions.update_all(transaction_id: 9_000_000)
+      window = window_start..Time.now.utc
+
+      expect(scope_ids([:comments], window)).to eq([])
+      expect(PaperTrailDiff.report(TrackedArticle, since: window_start, limit: 1,
+                                                   associations: [:comments], include_deleted: true)
+                           .unreachable).to eq([])
+    end
   end
 
   it 'keeps selecting by own versions only for checkpoint analyses, which cannot see the rest' do
@@ -439,8 +460,8 @@ RSpec.describe PaperTrailDiff::AssociationActivitySelection do
 
       found = sources(TrackedArticle, [:comments], window: since(start))
 
-      expect(found.map(&:class)).to eq([described_class::Query])
-      expect(found.first.type).to eq(:integer)
+      expect(found.map(&:class)).to eq([described_class::Query] * 2)
+      expect(found.map(&:type)).to eq(%i[integer integer])
       expect(selected(found)).to eq([article.id])
     end
 

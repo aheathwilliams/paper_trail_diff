@@ -308,7 +308,8 @@ class or an array of IDs, raises `ConfigurationError`.
   saved outside a transaction is reported when the filter keeps it. Every
   version is still read, so each step shows what its own change did, and an
   analysis starts at the first change the filter keeps and ends after the
-  last. Without associations, the steps are the root's versions the filter
+  last, a kept version of a record outside the root's tree being no change
+  of the root's. Without associations, the steps are the root's versions the filter
   keeps, as `timeline` reports them.
 - In `analyze_scope` and `report`, it also chooses which records are selected:
   a record is selected only when the filter keeps one of its own versions in
@@ -675,6 +676,13 @@ window its transaction ends in, like any other change. So a window after the
 other records, and a window after that transaction's end reports nothing: an
 empty timeline and an empty diff.
 
+A record restored afterwards under its id, as saving `version.reify` does,
+is the same root before and after. A range that ends at its `destroy` then
+ends before the deletion, as at any other version, and the range from the
+`destroy` reports the removal, in its step to the version that restored it,
+so the two report it once. The transaction that restored it is the root's
+from its first event, as for a record created afresh.
+
 ### HABTM limitation
 
 `has_and_belongs_to_many` join rows have no versions, so the gem cannot split
@@ -824,7 +832,13 @@ and `allow_approximate:`.
   `version_associations`, so history recorded before PT-AT was installed selects
   nothing, and neither does a `belongs_to` target's change for a record that
   has no version of its own, such as one created with PaperTrail turned off:
-  `analyze` on that record reports the change, but no selection finds it.
+  `analyze` on that record reports the change, but no selection finds it. A
+  change below a `has_many` or `has_one` child that has no version selects
+  the owner its row names now, since such a child has held that key
+  throughout, as an analysis reads it.
+- **A window with associations reads from where the transactions open at
+  its start began**, and selects by the versions those transactions saved
+  before it, but by no other version saved before the start.
 
 ### Deleted records
 
@@ -885,11 +899,15 @@ any of those states match. With a
 hash, every key must be equal (`==`) once both sides are cast to the
 attribute's type, as `where` casts its values: `{ status: :published }` matches
 an enum, and a date or time matches whether the history stored it as YAML or
-as a string in a `json` column. Values are read from the stored history
+as a string in a `json` column. Text or a date given for a datetime
+attribute is read as `where` sends it, in Active Record's default time zone
+rather than `Time.zone`, and a value the attribute cannot take, such as a
+hash for a time, raises `ConfigurationError`. Values are read from the stored history
 without calling `reify`, except for a model whose stored values only a record
 can read, such as one with an encrypted attribute, whose versions are rebuilt
 with `reify` and compared by their decrypted values. Unknown or unrecorded
-attributes raise an error instead of matching `nil`. So does a list or a
+attributes raise an error instead of matching `nil`, and so does an
+attribute the model declares without a column, which `where` cannot name. So does a list or a
 range as a value, such as `{ status: %i[published archived] }`, which `where`
 would read as any of them, unless the attribute itself holds one. For other
 checks, pass a callable such as
@@ -992,7 +1010,8 @@ comment that meets the part's conditions, not only the latest. Its own `limit`
 or `offset` ranks the rows the join yields, so a record reached through two
 join records fills two places, as in the query. A `has_one :through` whose
 own scope or whose parts have a limit, an offset, or a `has_one` order is not
-read.
+read. One without an order reads, as Active Record does, the target of its
+first join row by key.
 
 The gem cannot read the rest: a `limit` or `offset` whose order is not total or
 sorts by another column type (strings follow a collation) or by a datetime
@@ -1367,7 +1386,9 @@ Which version a row names:
   the change, so the row names the last of them.
 - A record created or destroyed names its `create` or `destroy`. Its fields
   name the version that recorded each value: the `create`, or a later save in
-  the same step. A record that joined or left through another record's
+  the same step. A record that joined or left by its own update, such as a
+  comment moved to another article, names the last of its versions in the
+  step's transaction. A record that joined or left through another record's
   change, such as a new `belongs_to` target or a `has_and_belongs_to_many`
   member, names the step's `source_boundary`.
 
@@ -1480,7 +1501,8 @@ PaperTrailDiff.nested_changes(from_value, to_value) # also accepts two values
   are strings. Values are reported as they were given.
 - Arrays are compared by their elements, not positions. An `ArrayChange` has
   `added`, `removed`, and `reordered?`, plus the whole `from` and `to`. Objects
-  inside arrays are compared whole.
+  inside arrays are compared whole. Elements match as values under a key do,
+  so `1` and `1.0` are different elements.
 - A missing key is `PaperTrailDiff::NestedComparator::ABSENT`, not `nil`, because
   `{"a": null}` and `{}` are different.
 - Two arrays at the top, as a `json` column can hold, return one `ArrayChange`
@@ -1621,7 +1643,14 @@ the error `compare` raises. `ok?` does not prove the history is complete.
   has been deleted, or when both ran at the same time. Within the history
   of one record and its associations, versions are still grouped by number
   alone, so where two transactions of one number both saved them, their
-  versions are read as one transaction's.
+  versions are read as one transaction's: one step, or one group, runs from
+  the first of them to the last, and the changes of every step between are
+  reported inside it. In a young database both tables count from 1, so
+  such numbers are common there. The version a transaction began with also
+  marks where it began only when it is dated first: with a second version
+  table, a callback that saves other records before its own version (see
+  [version order](#version-order)) can make a window read that transaction
+  as two.
 - **A scoped versions association** (`has_paper_trail versions: { scope: }`)
   does not change what is read: every method reads all of a record's
   versions, because a history replayed without some of them would credit
@@ -1634,9 +1663,15 @@ the error `compare` raises. `ok?` does not prove the history is complete.
   `float` to single precision, a SQLite decimal as the number SQLite returns,
   and a fixed-width `char` column padded (PostgreSQL, SQL Server) or with its
   trailing spaces stripped (MySQL). So saving `12:00:00.1234567` to a column
-  that keeps microseconds is not reported as a change. A `serialize`d hash in
-  a `json` or `jsonb` history keeps string keys only (see
-  [history stored as JSON](#history-stored-as-json)).
+  that keeps microseconds is not reported as a change. A date assigned to a
+  datetime column, which Active Record leaves on the instance when time zone
+  aware attributes are off or `update_columns` writes it, is read as
+  midnight in Active Record's default time zone, as the database stores it.
+  A `serialize`d hash in a `json` or `jsonb` history keeps string keys only
+  (see [history stored as JSON](#history-stored-as-json)).
+- **Attributes without a column**, such as one declared with `attribute` for
+  a form, are left out of every diff, snapshot and change row. PaperTrail
+  stores whatever the instance held for one, but no row holds it.
 
 ### Version order
 
@@ -1663,6 +1698,14 @@ with `inverted_version_order`. Set the option on models whose `updated_at`
 your application sets, and correct the stored `created_at` of versions
 already saved.
 
+The versions of different records in one transaction can be dated out of
+the order they were saved in too: a callback or nested save that a model
+declares before `has_paper_trail` saves other records' versions first and
+the model's own last, dated as its save began. A transaction takes effect at
+its latest dated version, ids breaking a tie, and a window reads it as open
+across its start when it has versions dated on both sides, so its changes
+are reported once whichever version it saved last.
+
 `created_at` comes from your application server's clock. A clock that jumps
 backwards, or servers whose clocks disagree, can record a later change with an
 earlier time. Keep server clocks synchronized.
@@ -1684,8 +1727,8 @@ last version, in a step it opens, so a record it changed and changed back,
 such as a comment it created and deleted again, appears in no step and in no
 window's starting state or diff. A transaction is open from its first
 version on the requested paths in the range, or from the range's start when
-it began before it, to the last version it saved of any record in the same
-version table. Row locks keep the two from saving the same
+it began before it, to the latest dated version it saved of any record in
+the same version table. Row locks keep the two from saving the same
 record. The association shapes below that fall back to PT-AT's own reifier
 still read by time.
 
@@ -1708,7 +1751,10 @@ order.
 
 PaperTrail's JSON serializer, and a `json` or `jsonb` `object` column, store
 times to milliseconds by default (`ActiveSupport::JSON::Encoding.time_precision`).
-For those histories the gem compares all times at that precision, so an
+The gem reads the digits from what the history's writer writes, a serializer
+of your own that wraps the JSON one included, so the legacy JSON format,
+which writes whole seconds, keeps whole seconds. For those histories the gem
+compares all times at that precision, so an
 unchanged timestamp is not reported as changed. A change smaller than that
 precision was never recorded and cannot be reported. For the same reason
 `historical_filter:` compares a time at that precision too: a filter for

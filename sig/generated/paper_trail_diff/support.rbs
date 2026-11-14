@@ -80,12 +80,22 @@ module PaperTrailDiff
     # : [T] (T) -> T
     def self.with_recorded_times: [T] (T) -> T
 
+    # The value PaperTrail would assign had it read the stored one as the
+    # row does, or the stored value itself.
+    # : (untyped, String, Array[String], Array[String]) -> untyped
+    def self.recorded_value: (untyped, String, Array[String], Array[String]) -> untyped
+
     # JSON writes a time of day as text.
-    # : (untyped, untyped, Array[String]) -> bool
-    def self.written_time?: (untyped, untyped, Array[String]) -> bool
+    # : (untyped, String, Array[String]) -> bool
+    def self.written_time?: (untyped, String, Array[String]) -> bool
 
     # : (untyped) -> untyped
     def self.rebuilt_from: (untyped) -> untyped
+
+    # Whether PaperTrail decodes some stored value of this object otherwise
+    # than the row reads it.
+    # : (untyped, untyped) -> bool
+    def self.read_again?: (untyped, untyped) -> bool
 
     # As PaperTrail assigns a stored attribute.
     # : (untyped, String, untyped) -> void

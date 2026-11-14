@@ -144,4 +144,24 @@ RSpec.describe 'Interleaved transactions',
     expect(timeline.flat_map(&:change_rows).map { |row| describe_row(row) })
       .to eq(rows(article, within: within))
   end
+
+  # A version saved outside a transaction, while one was open, reads that
+  # transaction as not yet ended, from a comparison as from a range.
+  it 'compares from a version saved outside a transaction as the range from it reads' do
+    article = InterleavedArticle.create!(title: 'one')
+    comment = article.comments.create!(body: 'before')
+    in_transaction(100, 'alice') { comment.update!(body: 'after') }
+    in_transaction(200, 'bob') { article.update!(title: 'two') }
+    article.versions.reorder(:id).last.update_columns(transaction_id: nil)
+    in_transaction(100, 'alice') { InterleavedComment.create!(article: article, body: 'late') }
+    version = article.versions.reorder(:id).last
+
+    compared = PaperTrailDiff.compare(version, article.reload, associations: paths)
+    ranged = PaperTrailDiff.analyze(article, from: version, associations: paths, activity: true)
+
+    changed = compared.associations.fetch('comments').changed
+    expect(compared.to_h).to eq(ranged.diff.to_h)
+    expect(changed.map { |change| change.attributes['body'].to_h })
+      .to eq([{ from: 'before', to: 'after' }])
+  end
 end

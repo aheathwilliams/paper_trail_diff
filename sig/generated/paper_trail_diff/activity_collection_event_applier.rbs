@@ -47,6 +47,9 @@ module PaperTrailDiff
     # : (RecordSnapshot, Array[untyped], untyped, ActivitySnapshotDelta?, Array[untyped], SnapshotNormalizer, Array[untyped], ?direct: bool) -> [untyped, RecordSnapshot?]
     def route_event_state: (RecordSnapshot, Array[untyped], untyped, ActivitySnapshotDelta?, Array[untyped], SnapshotNormalizer, Array[untyped], ?direct: bool) -> [ untyped, RecordSnapshot? ]
 
+    # A record the event took out of the association's class, such as an
+    # STI row retyped to its base class, is no member to read a subtree for:
+    # the subtree can name associations only that class has.
     # : (untyped, Array[untyped], SnapshotNormalizer, Array[untyped]) -> RecordSnapshot?
     def normalized_event_record: (untyped, Array[untyped], SnapshotNormalizer, Array[untyped]) -> RecordSnapshot?
 

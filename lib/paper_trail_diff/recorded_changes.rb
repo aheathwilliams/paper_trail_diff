@@ -94,7 +94,7 @@ module PaperTrailDiff
 
     #: (untyped, untyped, Array[String]) -> Hash[String, ValueChange]
     def value_changes(model_class, changes, excluded)
-      kept = named(changes).slice(*model_class.attribute_names).except(*excluded)
+      kept = named(changes).slice(*model_class.column_names).except(*excluded)
       from, to = stored_sides(model_class, kept)
       kept.keys.sort.filter_map do |key|
         before = from.fetch(key)

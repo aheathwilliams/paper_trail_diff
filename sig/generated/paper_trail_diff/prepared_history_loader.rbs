@@ -21,8 +21,8 @@ module PaperTrailDiff
     # A range of versions reads the same way from its first version's
     # transaction (see TransactionCut), and from where a transaction open
     # there began (`crossing`).
-    # : (untyped, root_ids: Array[untyped], root_versions: Array[untyped], tree: AssociationTree, traversal: AssociationTraversal, start_at: untyped, end_at: untyped, live_records: Array[untyped], ?window: bool, ?crossing: bool) -> void
-    def initialize: (untyped, root_ids: Array[untyped], root_versions: Array[untyped], tree: AssociationTree, traversal: AssociationTraversal, start_at: untyped, end_at: untyped, live_records: Array[untyped], ?window: bool, ?crossing: bool) -> void
+    # : (untyped, root_ids: Array[untyped], root_versions: Array[untyped], tree: AssociationTree, traversal: AssociationTraversal, start_at: untyped, end_at: untyped, live_records: Array[untyped], window: bool) -> void
+    def initialize: (untyped, root_ids: Array[untyped], root_versions: Array[untyped], tree: AssociationTree, traversal: AssociationTraversal, start_at: untyped, end_at: untyped, live_records: Array[untyped], window: bool) -> void
 
     # : () -> PreparedHistory
     def call: () -> PreparedHistory
@@ -46,8 +46,6 @@ module PaperTrailDiff
     @traversal: AssociationTraversal
 
     @tree: AssociationTree
-
-    @window: bool
 
     # : (untyped, Array[untyped], AssociationTree, path: String) -> void
     def load_node: (untyped, Array[untyped], AssociationTree, path: String) -> void

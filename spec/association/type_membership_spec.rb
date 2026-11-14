@@ -87,7 +87,8 @@ RSpec.describe 'Membership by type',
     history = PaperTrailDiff::PreparedHistoryLoader.new(
       record, root_ids: [record.id], root_versions: versions, tree: tree,
               traversal: PaperTrailDiff::AssociationTraversal.new(tree),
-              start_at: versions.first.created_at, end_at: nil, live_records: []
+              start_at: versions.first.created_at, end_at: nil, live_records: [],
+              window: false
     ).call
     history.edge(record.class, record.class.reflect_on_association(name))
   end

@@ -12,9 +12,10 @@ module PaperTrailDiff
   # recorded of it: each run of recorded changes is credited to the version
   # that ended it, or the whole change to the last of the record's versions
   # when what they recorded was not read. A record that appeared or
-  # disappeared is credited to its own create or destroy. Any other row keeps
-  # the step's source: a record that joined a collection or became a to-one
-  # target through another record's change, for one.
+  # disappeared is credited to its own create or destroy, or else to the
+  # last of its versions there, as a record that moved by its own update.
+  # Any other row keeps the step's source: a record that joined a collection
+  # or became a to-one target through another record's change, for one.
   #
   # With recorded changes read, the part of a field's change that those
   # versions did not record is split off and credited to an unversioned
@@ -171,7 +172,7 @@ module PaperTrailDiff
     #: (ChangeRow, Array[ActivityBoundary]) -> Array[ChangeRow]
     def added(row, versions)
       index = versions.index { |version| version.event == 'create' }
-      return [row] unless index
+      return [credit(row, versions.last)] unless index
 
       created = versions.drop(index)
       touched = recorded_changes(created, row.attribute)
@@ -237,7 +238,7 @@ module PaperTrailDiff
     #: (ChangeRow, Array[ActivityBoundary]) -> ChangeRow
     def removed(row, versions)
       destroy = versions.find { |version| version.event == 'destroy' }
-      destroy ? credit(row, destroy) : row
+      credit(row, destroy || versions.last)
     end
 
     # The changes the versions recorded of a field, each with its version:

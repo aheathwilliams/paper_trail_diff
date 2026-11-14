@@ -105,7 +105,8 @@ RSpec.describe PaperTrailDiff::PreparedHistory do
       traversal: traversal,
       start_at: root_versions.first.created_at,
       end_at: nil,
-      live_records: []
+      live_records: [],
+      window: false
     ).call
 
     root = before.reify(dup: true)
@@ -201,7 +202,8 @@ RSpec.describe PaperTrailDiff::PreparedHistory do
       traversal: traversal,
       start_at: root_versions.first.created_at,
       end_at: nil,
-      live_records: []
+      live_records: [],
+      window: false
     ).call
 
     root_versions.each do |version|

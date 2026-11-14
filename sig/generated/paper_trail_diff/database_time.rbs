@@ -1,0 +1,48 @@
+# Generated from lib/paper_trail_diff/database_time.rb with RBS::Inline
+
+module PaperTrailDiff
+  # Reads a date, or text, given for a datetime column as the database keeps
+  # it: in Active Record's default time zone, not Time.zone.
+  #
+  # Active Record leaves a date assigned to a datetime column on the instance
+  # as it was given when time zone aware attributes are off, or when
+  # `update_columns` writes it, and PaperTrail stores it from there. The
+  # database keeps midnight in its own zone, and `where` sends text or a date
+  # to the database as it is. Read through the attribute instead, a date
+  # would be midnight in Time.zone, or not a time at all.
+  module DatabaseTime
+    # A date as JSON writes one, with no time.
+    DATE_TEXT: ::Regexp
+
+    # The same date in stored text: YAML writes it as a bare value at the
+    # end of its line, JSON as quoted text.
+    STORED_DATE: ::Regexp
+
+    # A stored value of a datetime column, with a date in it read as
+    # midnight where the database keeps it. A change's values are a pair.
+    # : (untyped) -> untyped
+    def self.stored: (untyped) -> untyped
+
+    # A date or text given for a datetime column, as the database reads it
+    # when `where` sends it: in its own time zone, unless the text names its
+    # offset. Anything else, and text that names no time, is returned as it
+    # is.
+    # : (untyped) -> untyped
+    def self.cast: (untyped) -> untyped
+
+    # Whether a version's stored attributes hold a date with no time for a
+    # model with a datetime column, which only then is read again.
+    # : (untyped, untyped) -> bool
+    def self.stored_date?: (untyped, untyped) -> bool
+
+    # A Date; the packaged signatures name only core types.
+    # : (untyped) -> Time
+    def self.midnight: (untyped) -> Time
+
+    # : () -> bool
+    def self.local?: () -> bool
+
+    # : (String) -> untyped
+    def self.written_date: (String) -> untyped
+  end
+end

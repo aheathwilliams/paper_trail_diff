@@ -70,6 +70,13 @@ module PaperTrailDiff
     # : () -> [RootVersionPlan, ActivityHistory, Array[ActivityStep], RecordSnapshot?, RecordSnapshot?, untyped]?
     def version_replay: () -> [ RootVersionPlan, ActivityHistory, Array[ActivityStep], RecordSnapshot?, RecordSnapshot?, untyped ]?
 
+    # Whether the root, whose destroy a range closes on, was restored after
+    # it, saved again under its id. The range from that destroy then reports
+    # the removal, in its step to the restoring version, so a range meeting
+    # it there leaves the removal to it.
+    # : (ActivityEvent) -> bool
+    def restored?: (ActivityEvent) -> bool
+
     # Activity replays every root version in the range, even those a version
     # filter leaves out, so that each change it keeps is read as the whole
     # history shows it. Only a window reads a context: an explicit range

@@ -34,7 +34,7 @@ RSpec.describe PaperTrailDiff::PreparedHistoryLoader do
   def load_history(record, paths, root_versions: versions_of(record), **options)
     tree = PaperTrailDiff::AssociationTree.build(paths)
     defaults = { root_ids: [record.id], start_at: root_versions.first.created_at, end_at: nil,
-                 live_records: [] }
+                 live_records: [], window: false }
     described_class.new(record, root_versions: root_versions, tree: tree,
                                 traversal: PaperTrailDiff::AssociationTraversal.new(tree),
                                 **defaults, **options).call
@@ -328,8 +328,7 @@ RSpec.describe PaperTrailDiff::PreparedHistoryLoader do
     expect(PaperTrailDiff::PreparedRecordIndex).to have_received(:new)
       .with(start_at, end_at: end_at, live_records: live)
     expect(PaperTrailDiff::PreparedActivityIndex).to have_received(:new)
-      .with(instance_of(PaperTrailDiff::PreparedRecordIndex), versions,
-            start_at: start_at).twice
+      .with(instance_of(PaperTrailDiff::PreparedRecordIndex), start_at: start_at).twice
     # Each edge loader reads children into its activity index's.
     activities.each do |activity|
       expect(PaperTrailDiff::PreparedEdgeLoader).to have_received(:new)
@@ -357,7 +356,8 @@ RSpec.describe PaperTrailDiff::PreparedHistoryLoader do
     loader = described_class.new(article, root_ids: [article.id],
                                           root_versions: versions_of(article), tree: tree,
                                           traversal: PaperTrailDiff::AssociationTraversal.new(tree),
-                                          start_at: nil, end_at: nil, live_records: [])
+                                          start_at: nil, end_at: nil, live_records: [],
+                                          window: true)
     history = loader.call
     composite = instance_double(ActiveRecord::Reflection::HasManyReflection,
                                 name: :composite,

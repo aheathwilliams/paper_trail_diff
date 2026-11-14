@@ -7,9 +7,19 @@ module PaperTrailDiff
   # TimeOfDay puts a time of day on one date, StoredForm reads a value as its
   # column keeps it, and for JSON history, StoredJsonValues and
   # StoredTimePrecision read values as JSON stored them.
+  #
+  # An attribute the model declares without a column, such as a form field,
+  # is left out: PaperTrail stores whatever the instance held in memory, but
+  # no row ever holds it, so it would read as values and changes the
+  # database never had.
   module StoredValues
     # : (untyped, Hash[untyped, untyped]) -> Hash[untyped, untyped]
     def self.apply: (untyped, Hash[untyped, untyped]) -> Hash[untyped, untyped]
+
+    # The model's attributes without a column, which a model keeps as it was
+    # defined, as TimeOfDay.columns does.
+    # : (untyped) -> Array[String]
+    def self.unstored: (untyped) -> Array[String]
 
     # A copy of the record holding `stored`, its attributes as `apply` read
     # them, or the record itself where it already holds them.

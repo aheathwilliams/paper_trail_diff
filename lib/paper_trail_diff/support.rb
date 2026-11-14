@@ -50,8 +50,10 @@ module PaperTrailDiff
     #: (Hash[untyped, untyped], untyped) -> Hash[String, untyped]
     def self.decodable(stored, model_class)
       times = TimeOfDay.columns(model_class)
+      datetimes = TimeOfDay.datetime_columns(model_class)
       stored.to_h do |name, value|
         name = name.to_s
+        value = DatabaseTime.stored(value) if datetimes.include?(name)
         [name, unwrapped_time(value, times.include?(name))]
       end
     end
@@ -120,20 +122,34 @@ module PaperTrailDiff
 
       rebuilt = record #: untyped
       times = TimeOfDay.columns(rebuilt.class)
+      datetimes = TimeOfDay.datetime_columns(rebuilt.class)
       version.object_deserialized.each do |name, value|
-        if TIME_VALUE.eql?(value.class.name)
-          assign_recorded(record, name.to_s, recorded_time(value))
-        elsif written_time?(value, name, times)
-          assign_recorded(record, name.to_s, written_time(value))
-        end
+        recorded = recorded_value(value, name.to_s, times, datetimes)
+        assign_recorded(record, name.to_s, recorded) unless recorded.equal?(value)
       end
       record
     end
 
+    # The value PaperTrail would assign had it read the stored one as the
+    # row does, or the stored value itself.
+    #: (untyped, String, Array[String], Array[String]) -> untyped
+    def self.recorded_value(value, name, times, datetimes)
+      if TIME_VALUE.eql?(value.class.name)
+        recorded_time(value)
+      elsif written_time?(value, name, times)
+        written_time(value)
+      elsif datetimes.include?(name)
+        DatabaseTime.stored(value)
+      else
+        value
+      end
+    end
+    private_class_method :recorded_value
+
     # JSON writes a time of day as text.
-    #: (untyped, untyped, Array[String]) -> bool
+    #: (untyped, String, Array[String]) -> bool
     def self.written_time?(value, name, times)
-      value.is_a?(String) && times.include?(name.to_s)
+      value.is_a?(String) && times.include?(name)
     end
     private_class_method :written_time?
 
@@ -144,13 +160,19 @@ module PaperTrailDiff
 
       version = record.public_send(model.version_association_name)
       object = version&.object
-      return unless object
-
-      # A JSON column's Hash is keyed by attribute names, never this one.
-      json_times = TimeOfDay.columns(model).any? && StoredTimePrecision.digits(model)
-      version if json_times || object.include?(TIME_VALUE)
+      version if object && read_again?(object, model)
     end
     private_class_method :rebuilt_from
+
+    # Whether PaperTrail decodes some stored value of this object otherwise
+    # than the row reads it.
+    #: (untyped, untyped) -> bool
+    def self.read_again?(object, model)
+      # A JSON column's Hash is keyed by attribute names, never this one.
+      json_times = TimeOfDay.columns(model).any? && StoredTimePrecision.digits(model)
+      json_times || object.include?(TIME_VALUE) || DatabaseTime.stored_date?(object, model)
+    end
+    private_class_method :read_again?
 
     # As PaperTrail assigns a stored attribute.
     #: (untyped, String, untyped) -> void

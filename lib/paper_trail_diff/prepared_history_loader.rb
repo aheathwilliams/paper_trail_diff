@@ -22,7 +22,7 @@ module PaperTrailDiff
     # A range of versions reads the same way from its first version's
     # transaction (see TransactionCut), and from where a transaction open
     # there began (`crossing`).
-    #: (untyped, root_ids: Array[untyped], root_versions: Array[untyped], tree: AssociationTree, traversal: AssociationTraversal, start_at: untyped, end_at: untyped, live_records: Array[untyped], ?window: bool, ?crossing: bool) -> void
+    #: (untyped, root_ids: Array[untyped], root_versions: Array[untyped], tree: AssociationTree, traversal: AssociationTraversal, start_at: untyped, end_at: untyped, live_records: Array[untyped], window: bool) -> void
     def initialize( # rubocop:disable Metrics/ParameterLists
       record,
       root_ids:,
@@ -32,18 +32,18 @@ module PaperTrailDiff
       start_at:,
       end_at:,
       live_records:,
-      window: false,
-      crossing: false
+      window:
     )
-      @window = window
       @record = record
       @root_ids = root_ids
       @tree = tree
       @traversal = traversal
-      start_at = TransactionCut.range_start(root_versions, start_at) unless window
-      start_at = TransactionCut.crossing_start(record.class, traversal, start_at) if crossing
+      unless window
+        start_at = TransactionCut.range_start(root_versions, start_at)
+        start_at = TransactionCut.crossing_start(record.class, traversal, start_at)
+      end
       @records = PreparedRecordIndex.new(start_at, end_at: end_at, live_records: live_records)
-      @activity = PreparedActivityIndex.new(@records, root_versions, start_at: start_at)
+      @activity = PreparedActivityIndex.new(@records, start_at: start_at)
       @history = PreparedHistory.new(@records, activity_index: @activity)
       @edges = PreparedEdgeLoader.new(@records, root_versions, children: @activity.children)
       @prepared = {} #: Hash[untyped, Set[String]]
@@ -58,7 +58,6 @@ module PaperTrailDiff
 
     private
 
-    # @rbs @window: bool
     # @rbs @record: untyped
     # @rbs @root_ids: Array[untyped]
     # @rbs @tree: AssociationTree
