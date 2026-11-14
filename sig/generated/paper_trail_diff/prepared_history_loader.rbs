@@ -47,8 +47,6 @@ module PaperTrailDiff
 
     @tree: AssociationTree
 
-    @window: bool
-
     # : (untyped, Array[untyped], AssociationTree, path: String) -> void
     def load_node: (untyped, Array[untyped], AssociationTree, path: String) -> void
 
@@ -76,9 +74,6 @@ module PaperTrailDiff
 
     # : (Array[untyped], untyped) -> void
     def mark_prepared: (Array[untyped], untyped) -> void
-
-    # : (untyped, untyped, Hash[String, Hash[Symbol, untyped]]) -> void
-    def mark_unsupported: (untyped, untyped, Hash[String, Hash[Symbol, untyped]]) -> void
 
     # : (Hash[String, Hash[Symbol, untyped]]) -> void
     def load_groups: (Hash[String, Hash[Symbol, untyped]]) -> void

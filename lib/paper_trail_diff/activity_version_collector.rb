@@ -126,30 +126,20 @@ module PaperTrailDiff
     #: (untyped, Array[untyped], untyped) -> Array[Hash[Symbol, untyped]]
     def belongs_to_groups(parent_class, parent_ids, reflection)
       rows = @prepared.target_rows(parent_class, parent_ids, reflection)
-      identity_groups(rows, reflection) { |model_class, id| @prepared.loaded?(model_class, id) }
-    end
-
-    # With no children, nothing below them is read: prepared history registers
-    # only the classes it loaded records of.
-    #: (untyped, Array[untyped], untyped) -> Array[Hash[Symbol, untyped]]
-    def direct_child_groups(parent_class, parent_ids, reflection)
-      item_ids = @prepared.child_ids(parent_class, parent_ids, reflection, @range)
-      item_ids.empty? ? [] : [group(reflection.klass, item_ids)]
-    end
-
-    # A type a polymorphic row stored that names no class has no versions to
-    # read.
-    #: (Array[untyped], untyped) ?{ (untyped, untyped) -> bool } -> Array[Hash[Symbol, untyped]]
-    def identity_groups(rows, reflection)
       identities = rows.group_by do |row|
         AssociationTraversal.stored_target(reflection, row.foreign_type)
       end
       identities.filter_map do |model_class, class_rows|
         next unless model_class
 
-        ids = target_ids(class_rows)
-        group(model_class, block_given? ? ids.select { |id| yield(model_class, id) } : ids)
+        ids = target_ids(class_rows).select { |id| @prepared.loaded?(model_class, id) }
+        group(model_class, ids)
       end
+    end
+
+    #: (untyped, Array[untyped], untyped) -> Array[Hash[Symbol, untyped]]
+    def direct_child_groups(parent_class, parent_ids, reflection)
+      [group(reflection.klass, @prepared.child_ids(parent_class, parent_ids, reflection, @range))]
     end
 
     # Each target once, however many rows name it, and none for a row that

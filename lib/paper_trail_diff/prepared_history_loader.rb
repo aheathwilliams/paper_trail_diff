@@ -35,7 +35,6 @@ module PaperTrailDiff
       window: false,
       crossing: false
     )
-      @window = window
       @record = record
       @root_ids = root_ids
       @tree = tree
@@ -58,7 +57,6 @@ module PaperTrailDiff
 
     private
 
-    # @rbs @window: bool
     # @rbs @record: untyped
     # @rbs @root_ids: Array[untyped]
     # @rbs @tree: AssociationTree
@@ -121,7 +119,6 @@ module PaperTrailDiff
       groups = @edges.call(owner_class, missing, reflection)
       @history.merge_edge(owner_class, reflection, groups)
       mark_prepared(missing, reflection)
-      mark_unsupported(owner_class, reflection, groups)
       load_groups(groups)
       @history.edge(owner_class, reflection)
     end
@@ -137,12 +134,6 @@ module PaperTrailDiff
     #: (Array[untyped], untyped) -> void
     def mark_prepared(ids, reflection)
       (@prepared[reflection] ||= Set.new).merge(ids.map(&:to_s))
-    end
-
-    #: (untyped, untyped, Hash[String, Hash[Symbol, untyped]]) -> void
-    def mark_unsupported(owner_class, reflection, groups)
-      unsupported = groups.values.any? { |group| !versioned?(group.fetch(:model)) }
-      @history.mark_unsupported(owner_class, reflection) if unsupported
     end
 
     #: (Hash[String, Hash[Symbol, untyped]]) -> void

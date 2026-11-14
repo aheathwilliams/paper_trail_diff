@@ -67,8 +67,6 @@ module PaperTrailDiff
 
     @selecting: TimeRange?
 
-    @time_range: TimeRange?
-
     @version_scope: untyped
 
     # Leaves the candidate set in the database. Plucking every root changed in

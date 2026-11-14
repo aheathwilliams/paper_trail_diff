@@ -11,8 +11,8 @@ module PaperTrailDiff
   # with the rest, each would bring its versions and its row, and a range
   # long past would cost more with every child its owners have gained since.
   class ActivityChildCandidateLoader
-    #: (untyped, Array[untyped], untyped, untyped, ?untyped) -> void
-    def initialize(parent_class, parent_ids, reflection, start_at, end_at = nil)
+    #: (untyped, Array[untyped], untyped, untyped, untyped) -> void
+    def initialize(parent_class, parent_ids, reflection, start_at, end_at)
       @parent_class = parent_class
       @parent_ids = parent_ids
       @reflection = reflection

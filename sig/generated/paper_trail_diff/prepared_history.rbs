@@ -33,9 +33,6 @@ module PaperTrailDiff
     # : (untyped, untyped) -> Hash[String, Hash[Symbol, untyped]]
     def edge: (untyped, untyped) -> Hash[String, Hash[Symbol, untyped]]
 
-    # : (untyped, untyped) -> void
-    def mark_unsupported: (untyped, untyped) -> void
-
     # : (untyped, untyped, untyped) -> [Hash[untyped, untyped], Hash[untyped, untyped]]?
     def record_transition: (untyped, untyped, untyped) -> [ Hash[untyped, untyped], Hash[untyped, untyped] ]?
 
@@ -60,12 +57,10 @@ module PaperTrailDiff
 
     @state_reader: PreparedStateAssociationReader
 
-    @unsupported: Hash[Array[String], bool]
-
     # A polymorphic target's class is known only once a record names it, so
     # belongs_to_records reads its scope for each record instead.
-    # : (untyped, untyped, bool) -> bool
-    def supported?: (untyped, untyped, bool) -> bool
+    # : (untyped, bool) -> bool
+    def supported?: (untyped, bool) -> bool
 
     # : (untyped, untyped, untyped, bool) -> Array[untyped]?
     def direct_records: (untyped, untyped, untyped, bool) -> Array[untyped]?

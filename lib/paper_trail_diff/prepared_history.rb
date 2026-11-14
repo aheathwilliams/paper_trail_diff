@@ -13,7 +13,6 @@ module PaperTrailDiff
       @state_reader = PreparedStateAssociationReader.new(records, method(:edge), @conditions)
       @activity_index = activity_index
       @edges = {} #: Hash[Array[String], Hash[String, Hash[Symbol, untyped]]]
-      @unsupported = {} #: Hash[Array[String], bool]
     end
 
     # When the history was read from.
@@ -50,11 +49,6 @@ module PaperTrailDiff
       @edges.fetch(edge_key(owner_class, reflection), empty)
     end
 
-    #: (untyped, untyped) -> void
-    def mark_unsupported(owner_class, reflection)
-      @unsupported[edge_key(owner_class, reflection)] = true
-    end
-
     #: (untyped, untyped, untyped) -> [Hash[untyped, untyped], Hash[untyped, untyped]]?
     def record_transition(model_class, id, version)
       @records.transition(model_class, id, version)
@@ -74,7 +68,7 @@ module PaperTrailDiff
     # the part's conditions admit, a record reached twice appearing twice.
     #: (untyped, untyped, untyped, ?ranked: bool) -> [bool, Array[untyped]]
     def resolve(record, reflection, boundary, ranked: true)
-      return [false, []] unless supported?(record.class, reflection, ranked)
+      return [false, []] unless supported?(reflection, ranked)
 
       records = if reflection.options[:through]
                   through_records(record, reflection, boundary, ranked)
@@ -89,15 +83,13 @@ module PaperTrailDiff
     # @rbs @records: PreparedRecordIndex
     # @rbs @state_reader: PreparedStateAssociationReader
     # @rbs @edges: Hash[Array[String], Hash[String, Hash[Symbol, untyped]]]
-    # @rbs @unsupported: Hash[Array[String], bool]
     # @rbs @conditions: ScopeCondition::Cache
 
     # A polymorphic target's class is known only once a record names it, so
     # belongs_to_records reads its scope for each record instead.
-    #: (untyped, untyped, bool) -> bool
-    def supported?(owner_class, reflection, ranked)
-      !@unsupported[edge_key(owner_class, reflection)] &&
-        (reflection.polymorphic? || !@conditions.call(reflection, ranked: ranked).nil?)
+    #: (untyped, bool) -> bool
+    def supported?(reflection, ranked)
+      reflection.polymorphic? || !@conditions.call(reflection, ranked: ranked).nil?
     end
 
     #: (untyped, untyped, untyped, bool) -> Array[untyped]?

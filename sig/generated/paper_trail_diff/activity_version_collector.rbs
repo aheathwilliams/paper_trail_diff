@@ -72,15 +72,8 @@ module PaperTrailDiff
     # : (untyped, Array[untyped], untyped) -> Array[Hash[Symbol, untyped]]
     def belongs_to_groups: (untyped, Array[untyped], untyped) -> Array[Hash[Symbol, untyped]]
 
-    # With no children, nothing below them is read: prepared history registers
-    # only the classes it loaded records of.
     # : (untyped, Array[untyped], untyped) -> Array[Hash[Symbol, untyped]]
     def direct_child_groups: (untyped, Array[untyped], untyped) -> Array[Hash[Symbol, untyped]]
-
-    # A type a polymorphic row stored that names no class has no versions to
-    # read.
-    # : (Array[untyped], untyped) ?{ (untyped, untyped) -> bool } -> Array[Hash[Symbol, untyped]]
-    def identity_groups: (Array[untyped], untyped) ?{ (untyped, untyped) -> bool } -> Array[Hash[Symbol, untyped]]
 
     # Each target once, however many rows name it, and none for a row that
     # names none. The registry keeps a version once, and a missing target has

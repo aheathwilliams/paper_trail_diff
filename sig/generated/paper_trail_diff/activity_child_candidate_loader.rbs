@@ -10,8 +10,8 @@ module PaperTrailDiff
   # with the rest, each would bring its versions and its row, and a range
   # long past would cost more with every child its owners have gained since.
   class ActivityChildCandidateLoader
-    # : (untyped, Array[untyped], untyped, untyped, ?untyped) -> void
-    def initialize: (untyped, Array[untyped], untyped, untyped, ?untyped) -> void
+    # : (untyped, Array[untyped], untyped, untyped, untyped) -> void
+    def initialize: (untyped, Array[untyped], untyped, untyped, untyped) -> void
 
     # Queries shared by a batch's roots keep the owner and timestamp needed to
     # partition its candidates back into each root's exact activity range.

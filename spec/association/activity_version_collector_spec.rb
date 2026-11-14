@@ -208,6 +208,19 @@ RSpec.describe PaperTrailDiff::ActivityVersionCollector do
     expect(events.map(&:version)).to include(first.versions.last)
   end
 
+  it 'collects the targets a polymorphic key named, and none for a type that names no class' do
+    author = TrackedAuthor.create!(name: 'Ann')
+    article = CollectorArticle.create!(title: 'Draft')
+    pin = CollectorPin.create!(article: article, pinnable: author)
+    author.update!(name: 'Ann B.')
+    2.times { pin.touch }
+    stale = versions_of(pin).fetch(1)
+    stale.update_columns(object: stale.object.sub('TrackedAuthor', 'CollectorGone'))
+
+    expect(described(collect(pin, [:pinnable])).map(&:first))
+      .to eq(%w[CollectorPin TrackedAuthor CollectorPin CollectorPin])
+  end
+
   it 'reads nothing past an association with no records in the range' do
     article = TrackedArticle.create!(title: 'Draft')
     save_again(article, 'Final')

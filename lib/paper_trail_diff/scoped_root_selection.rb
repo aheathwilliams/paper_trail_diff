@@ -59,7 +59,6 @@ module PaperTrailDiff
     def initialize(scope, time_range:, limit:, activity_traversal: nil, version_scope: nil)
       @scope = normalize_scope(scope)
       reject_unversioned!
-      @time_range = time_range
       @version_scope = version_scope
       @limit = validate_limit(limit)
       @selecting = AssociationActivitySelection.window(model, activity_traversal, time_range)
@@ -80,7 +79,6 @@ module PaperTrailDiff
     private
 
     # @rbs @scope: untyped
-    # @rbs @time_range: TimeRange?
     # @rbs @selecting: TimeRange?
     # @rbs @limit: Integer
     # @rbs @related: AssociationActivitySelection?
