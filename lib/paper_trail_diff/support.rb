@@ -21,10 +21,6 @@ module PaperTrailDiff
     SERIALIZED_TYPE = 'ActiveRecord::Type::Serialized'
     ENUM_TYPE = 'ActiveRecord::Enum::EnumType'
 
-    # A date written as JSON writes one, with no time.
-    DATE_TEXT = /\A\d{4}-\d{2}-\d{2}\z/
-    STORED_DATE = /[ "]\d{4}-\d{2}-\d{2}(?:"|$)/
-
     # The date a database gives a time of day it reads back.
     TIME_OF_DAY_DATE = { year: 2000, month: 1, day: 1 }.freeze #: Hash[Symbol, Integer]
 
@@ -57,55 +53,10 @@ module PaperTrailDiff
       datetimes = TimeOfDay.datetime_columns(model_class)
       stored.to_h do |name, value|
         name = name.to_s
-        value = midnight(value) if datetimes.include?(name)
+        value = DatabaseTime.stored(value) if datetimes.include?(name)
         [name, unwrapped_time(value, times.include?(name))]
       end
     end
-
-    # A date stored for a datetime column, as the database keeps it: midnight
-    # in Active Record's default time zone. Active Record leaves a date on
-    # the instance as it was assigned when time zone aware attributes are off,
-    # or when `update_columns` writes it, and PaperTrail stores it from there;
-    # decoded as it is, it would be read as midnight in Time.zone, or not as a
-    # time at all. JSON writes the date as its text. A change's values are a
-    # pair.
-    #: (untyped) -> untyped
-    def self.midnight(value)
-      return value.map { |item| midnight(item) } if value.instance_of?(Array)
-
-      date = value.instance_of?(String) ? written_date(value) : value
-      date.instance_of?(Date) ? database_time(date) : value
-    end
-    private_class_method :midnight
-
-    # A date, or text, given for a datetime column, as the database reads it
-    # when `where` sends it: in Active Record's default time zone, unless the
-    # text names its own offset. Anything else, and text that names no time,
-    # is returned as it is.
-    #: (untyped) -> untyped
-    def self.database_time(value)
-      return value unless value.instance_of?(Date) || value.is_a?(String)
-
-      clock = Time #: untyped
-      local = constant('ActiveRecord').default_timezone == :local
-      if value.instance_of?(Date)
-        local ? clock.local(value.year, value.month, value.day) : clock.utc(value.year, value.month, value.day)
-      elsif local
-        clock.parse(value)
-      else
-        constant('ActiveSupport::TimeZone')['UTC'].parse(value) || value
-      end
-    rescue ArgumentError
-      value
-    end
-
-    #: (String) -> Date?
-    def self.written_date(text)
-      Date.iso8601(text) if DATE_TEXT.match?(text)
-    rescue ArgumentError
-      nil
-    end
-    private_class_method :written_date
 
     #: (untyped, bool) -> untyped
     def self.unwrapped_time(value, time_of_day)
@@ -173,16 +124,27 @@ module PaperTrailDiff
       times = TimeOfDay.columns(rebuilt.class)
       datetimes = TimeOfDay.datetime_columns(rebuilt.class)
       version.object_deserialized.each do |name, value|
-        if TIME_VALUE.eql?(value.class.name)
-          assign_recorded(record, name.to_s, recorded_time(value))
-        elsif written_time?(value, name, times)
-          assign_recorded(record, name.to_s, written_time(value))
-        elsif datetimes.include?(name.to_s) && !midnight(value).equal?(value)
-          assign_recorded(record, name.to_s, midnight(value))
-        end
+        recorded = recorded_value(value, name.to_s, times, datetimes)
+        assign_recorded(record, name.to_s, recorded) unless recorded.equal?(value)
       end
       record
     end
+
+    # The value PaperTrail would assign had it read the stored one as the
+    # row does, or the stored value itself.
+    #: (untyped, String, Array[String], Array[String]) -> untyped
+    def self.recorded_value(value, name, times, datetimes)
+      if TIME_VALUE.eql?(value.class.name)
+        recorded_time(value)
+      elsif written_time?(value, name, times)
+        written_time(value)
+      elsif datetimes.include?(name)
+        DatabaseTime.stored(value)
+      else
+        value
+      end
+    end
+    private_class_method :recorded_value
 
     # JSON writes a time of day as text.
     #: (untyped, untyped, Array[String]) -> bool
@@ -198,26 +160,19 @@ module PaperTrailDiff
 
       version = record.public_send(model.version_association_name)
       object = version&.object
-      return unless object
-
-      # A JSON column's Hash is keyed by attribute names, never this one.
-      json_times = TimeOfDay.columns(model).any? && StoredTimePrecision.digits(model)
-      version if json_times || object.include?(TIME_VALUE) || stored_date?(object, model)
+      version if object && read_again?(object, model)
     end
     private_class_method :rebuilt_from
 
-    # Whether the stored text holds a date with no time, which only a
-    # datetime column given a date needs read again (see .midnight). YAML
-    # writes one as a bare value at the end of its line, JSON as quoted text.
+    # Whether PaperTrail decodes some stored value of this object otherwise
+    # than the row reads it.
     #: (untyped, untyped) -> bool
-    def self.stored_date?(object, model)
-      return false if TimeOfDay.datetime_columns(model).empty?
-      return STORED_DATE.match?(object) if object.is_a?(String)
-
-      object.respond_to?(:each_value) &&
-        object.each_value.any? { |value| value.is_a?(String) && DATE_TEXT.match?(value) }
+    def self.read_again?(object, model)
+      # A JSON column's Hash is keyed by attribute names, never this one.
+      json_times = TimeOfDay.columns(model).any? && StoredTimePrecision.digits(model)
+      json_times || object.include?(TIME_VALUE) || DatabaseTime.stored_date?(object, model)
     end
-    private_class_method :stored_date?
+    private_class_method :read_again?
 
     # As PaperTrail assigns a stored attribute.
     #: (untyped, String, untyped) -> void

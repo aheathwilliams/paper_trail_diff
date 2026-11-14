@@ -31,8 +31,12 @@ RSpec.describe 'historical_filter given text or a date for a datetime' do
   def selected(value)
     { 'noon UTC' => Time.utc(2026, 3, 1, 12), 'noon Tokyo' => Time.utc(2026, 3, 1, 3),
       'midnight UTC' => Time.utc(2026, 3, 1), 'midnight Tokyo' => Time.utc(2026, 2, 28, 15) }
-      .each { |title, at| FilteredEvent.create!(title: title, starts_at: at).update!(title: "#{title}!") }
-    PaperTrailDiff.report(FilteredEvent.all, since: started, limit: 5, historical_filter: { starts_at: value })
+      .each do |title, at|
+      FilteredEvent.create!(title: title,
+                            starts_at: at).update!(title: "#{title}!")
+    end
+    PaperTrailDiff.report(FilteredEvent.all, since: started, limit: 5,
+                                             historical_filter: { starts_at: value })
                   .roots.map(&:title)
   end
 

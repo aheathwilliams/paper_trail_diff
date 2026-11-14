@@ -22,7 +22,10 @@ module WrappedJsonSerializer
   def load(text) = PaperTrail::Serializers::JSON.load(text)
   def dump(object) = PaperTrail::Serializers::JSON.dump(object)
   def where_object_condition(...) = PaperTrail::Serializers::JSON.where_object_condition(...)
-  def where_object_changes_condition(...) = PaperTrail::Serializers::JSON.where_object_changes_condition(...)
+
+  def where_object_changes_condition(...)
+    PaperTrail::Serializers::JSON.where_object_changes_condition(...)
+  end
 end
 
 # JSON history keeps the digits of a time its encoder writes, and an

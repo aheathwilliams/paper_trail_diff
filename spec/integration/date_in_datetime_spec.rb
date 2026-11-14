@@ -52,7 +52,9 @@ RSpec.describe 'A date stored for a datetime column' do
           row = ZonedDatedEvent.find(event.id)
 
           expect(PaperTrailDiff.compare(row.versions.last, row).attributes.keys).to eq(['title'])
-          starts = PaperTrailDiff.analyze(row).timeline.map { |step| step.diff.attributes['starts_at'] }
+          starts = PaperTrailDiff.analyze(row).timeline.map do |step|
+            step.diff.attributes['starts_at']
+          end
           expect(starts.compact).to be_empty
         end
       end

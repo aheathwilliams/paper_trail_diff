@@ -140,15 +140,12 @@ module PaperTrailDiff
     # `where` reads its values: an enum's symbol names its stored value, and a
     # `json` or `jsonb` version column, which PaperTrail does not cast, holds
     # dates and times as strings. Casting also copies a mutable value, so the
-    # filter keeps its own.
-    #
-    # `where` sends a date or text given for a datetime column to the
-    # database as it is, which reads it in its own time zone, not Time.zone.
+    # filter keeps its own. A date or text for a datetime column is read as
+    # the database reads it (see DatabaseTime).
     #: (String, untyped) -> untyped
     def cast(name, value)
       type = @model.type_for_attribute(name)
-      value = Support.database_time(value) if type.type == :datetime
-      type.cast(value)
+      type.cast(type.type == :datetime ? DatabaseTime.cast(value) : value)
     end
 
     # A value cast, then read as history can hold it (see StoredValues), so

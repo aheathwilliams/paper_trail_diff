@@ -53,7 +53,10 @@ RSpec.describe 'An attribute declared without a column' do
   it 'is refused by historical_filter, as where refuses it' do
     history
 
-    expect { PaperTrailDiff.report(FormedOrder.all, since: started, limit: 5, historical_filter: { notify: true }) }
+    expect do
+      PaperTrailDiff.report(FormedOrder.all, since: started, limit: 5,
+                                             historical_filter: { notify: true })
+    end
       .to raise_error(PaperTrailDiff::ConfigurationError, /unknown historical attributes: notify/)
   end
 end
