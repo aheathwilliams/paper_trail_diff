@@ -186,9 +186,9 @@ module PaperTrailDiff
       return if @tree.empty? || start.nil?
 
       key = [model_class, start] #: [untyped, untyped]
-      return @reaches[key] if @reaches.key?(key)
-
-      @reaches[key] = CrossingTransactions.open_around(model_class, self, start)
+      @reaches.fetch(key) do
+        @reaches[key] = CrossingTransactions.open_around(model_class, self, start)
+      end
     end
 
     #: (untyped) -> void

@@ -476,6 +476,18 @@ RSpec.describe PaperTrailDiff::AssociationTraversal do
       expect(PaperTrailDiff::CrossingTransactions).to have_received(:open_around).twice
     end
 
+    it 'asks for each model it is read from' do
+      reading = traversal(:author)
+      start = Time.now.utc
+      allow(PaperTrailDiff::CrossingTransactions).to receive(:open_around).and_return(start - 1,
+                                                                                      nil)
+
+      expect([TrackedArticle, TrackedAuthorship, TrackedArticle].map do |model|
+        reading.reach_before(model, start)
+      end).to eq([start - 1, nil, start - 1])
+      expect(PaperTrailDiff::CrossingTransactions).to have_received(:open_around).twice
+    end
+
     it 'asks nothing without paths or a start' do
       allow(PaperTrailDiff::CrossingTransactions).to receive(:open_around)
 

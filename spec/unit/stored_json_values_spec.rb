@@ -36,4 +36,13 @@ RSpec.describe PaperTrailDiff::StoredJsonValues do
     expect(apply(:text, 'blob' => { 'value' => 'x', 'size' => 1 }))
       .to eq('blob' => { 'value' => 'x', 'size' => 1 })
   end
+
+  it 'leaves out an attribute the state does not hold, and leaves the state it was given alone' do
+    attributes = { 'meta' => meta, 'title' => 'One' }
+
+    expect(apply(:json, 'title' => 'One')).to eq('title' => 'One')
+    expect(apply(:text, 'title' => 'One')).to eq('title' => 'One')
+    expect(apply(:json, attributes)).to eq('meta' => written, 'title' => 'One')
+    expect(attributes).to eq('meta' => meta, 'title' => 'One')
+  end
 end

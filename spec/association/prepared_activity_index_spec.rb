@@ -279,6 +279,19 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
       .to eq([version])
   end
 
+  # A row deleted without a destroy leaves its create with no state on
+  # either side, so no class to read.
+  it 'keeps a version of a base class that has no state before or after it' do
+    origin = Time.now.utc
+    page = IndexSpecPage.create!(title: 'Deleted')
+    version = page.versions.last
+    IndexSpecPage.where(id: page.id).delete_all
+    index = index_for(origin, { IndexSpecPage => [page.id] })
+
+    expect(index.member_versions(IndexSpecPage, [page.id], range(origin, Time.now.utc)))
+      .to eq([version])
+  end
+
   # PT-AT records a version's foreign keys after its change: the latest one
   # before the range names the children at its start. A section moved away
   # before the index's own start is outside it. One saved after the range's
@@ -397,6 +410,7 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
       found = index.target_rows(IndexSpecPage, [page.id, gone.id, unversioned.id], author)
     end
 
+    expect(found).to all(be_frozen)
     expect(fields.call(found)).to contain_exactly(
       [page.id, first.id], [page.id, second.id], [page.id, third.id], [gone.id, first.id],
       [unversioned.id, first.id]

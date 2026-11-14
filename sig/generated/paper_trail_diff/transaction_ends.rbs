@@ -39,8 +39,10 @@ module PaperTrailDiff
     def last: (untyped) -> untyped
 
     # Where a boundary takes effect, and when: at the last version of a
-    # version's transaction, or where a live record was read. Every record of
-    # a snapshot is read at one boundary, so the last answer is kept.
+    # version's transaction, or where a live record was read, since no
+    # transaction is keyed by a model that is not a version class. Every
+    # record of a snapshot is read at one boundary, so the last answer is
+    # kept.
     # : (untyped) -> [untyped, untyped]
     def target: (untyped) -> [ untyped, untyped ]
 

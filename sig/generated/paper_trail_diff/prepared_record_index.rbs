@@ -346,7 +346,8 @@ module PaperTrailDiff
     # : (untyped, AssociationTraversal, untyped) -> untyped
     def self.open_around: (untyped, AssociationTraversal, untyped) -> untyped
 
-    # One version class for each version table the application defines.
+    # One version class for each version table the application defines. An
+    # abstract class has no table of its own.
     # : () -> Array[untyped]
     def self.every_version_class: () -> Array[untyped]
 

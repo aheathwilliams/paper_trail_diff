@@ -41,10 +41,6 @@ module PaperTrailDiff
     private_constant :Absent
 
     ABSENT = Absent.new.freeze
-    # Every NaN, as a key.
-    NAN = Object.new.freeze
-    private_constant :NAN
-
     #: (untyped, untyped) -> nested_changes
     def self.call(from_value, to_value)
       new(from_value, to_value).call
@@ -85,10 +81,10 @@ module PaperTrailDiff
     private_class_method :number_key
 
     # The number as a rational, or as it is when it has none: a complex
-    # number, or one that is not finite, such as a Float or BigDecimal NaN.
+    # number or an infinity. A NaN, which equals nothing, reads as nil.
     #: (untyped) -> untyped
     def self.rational(number)
-      return NAN if Support.nan?(number)
+      return if Support.nan?(number)
 
       number.real? && number.finite? ? number.to_r : number
     end

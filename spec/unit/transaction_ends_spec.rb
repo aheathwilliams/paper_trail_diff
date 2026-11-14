@@ -6,6 +6,14 @@ RSpec.describe PaperTrailDiff::TransactionEnds do
   before do
     stub_const('EndsVersion', Struct.new(:id, :transaction_id, :created_at))
     stub_const('EndsOtherVersion', Class.new(EndsVersion))
+    stub_const('EndsRow', Class.new(Struct.new(:id, :transaction_id, :created_at, :item_type)) do
+      def self.table_name = 'versions'
+    end)
+  end
+
+  # A version row, as a boundary is told from a live record.
+  def row(id, transaction_id)
+    EndsRow.new(id, transaction_id, base + id, 'Shape')
   end
 
   # A version saved `id` seconds in, so ids order as times do.
@@ -85,5 +93,46 @@ RSpec.describe PaperTrailDiff::TransactionEnds do
     expect(ends.sort_key(first)).to eq([PaperTrailDiff::Support.chronological_version_key(recorded),
                                         PaperTrailDiff::Support.chronological_version_key(first)])
     expect([last, other, first].sort_by { |each| ends.sort_key(each) }).to eq([other, first, last])
+  end
+
+  describe '#target' do
+    it 'places a version boundary at the last version of its transaction, and when it was saved' do
+      first = row(1, 7)
+      last = row(3, 7)
+      ends = described_class.new([first, row(2, 8), last], {})
+
+      expect(ends.target(first)).to eq([last, base + 3])
+      expect(ends.target(first).first).to equal(last)
+    end
+
+    it 'places a live record where it was read, whatever transaction number it carries' do
+      record = version(1, 7)
+      ends = described_class.new([row(1, 7), row(3, 7)], {})
+
+      expect(ends.target(record)).to eq([record, base + 1])
+      expect(ends.target(record).first).to equal(record)
+    end
+
+    it 'keeps the answer of the boundary asked last, and of no other' do
+      first = row(1, 7)
+      other = row(2, 8)
+      ends = described_class.new([first, other, row(3, 7)], {})
+      answer = ends.target(first)
+
+      expect(ends.target(first)).to equal(answer)
+      expect(ends.target(other)).to eq([other, base + 2])
+      expect(ends.target(other)).to equal(ends.target(other))
+      expect(ends.target(first)).to eq(answer)
+      expect(ends.target(first)).not_to equal(answer)
+    end
+
+    it 'tells two live records that compare equal apart' do
+      record = version(1, nil)
+      twin = version(1, nil)
+      ends = described_class.new([], {})
+
+      expect(ends.target(record).first).to equal(record)
+      expect(ends.target(twin).first).to equal(twin)
+    end
   end
 end

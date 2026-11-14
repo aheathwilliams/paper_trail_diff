@@ -140,6 +140,30 @@ RSpec.describe PaperTrailDiff::CrossingTransactions do
     expect(described_class.open_around(FilterFeature, traversal, start)).to eq(at(-3))
   end
 
+  # An application's version classes can share a table, as subclasses do,
+  # stand for no table, or name one that is not there yet.
+  it 'reads one class for each version table there is, and nothing else' do
+    traversal = instance_double(PaperTrailDiff::AssociationTraversal, polymorphic_paths?: true)
+    stub_const('CrossingTwinVersion', Class.new(FilterVersion))
+    stub_const('CrossingAbstractVersion', Class.new(ActiveRecord::Base) do
+      include PaperTrail::VersionConcern
+
+      self.abstract_class = true
+    end)
+    stub_const('CrossingAbsentVersion', Class.new(CrossingAbstractVersion) do
+      self.table_name = 'crossing_absent_versions'
+    end)
+    read = nil
+    allow(described_class).to receive(:reach) { |classes, _| read = classes }
+
+    described_class.open_around(FilterFeature, traversal, start)
+
+    expect(read.map(&:table_name)).to include('filter_versions', FilterJsonVersion.table_name)
+    expect(read.map(&:table_name)).to eq(read.map(&:table_name).uniq)
+    expect(read.reject { |each| each.include?(PaperTrail::VersionConcern) }).to eq([])
+    expect(read).not_to include(CrossingAbstractVersion, CrossingAbsentVersion)
+  end
+
   # A transaction's first version carries its own id as its number, in
   # whichever table saved it, so another table can number a transaction as
   # this one numbered an earlier one (see TransactionAnchors).

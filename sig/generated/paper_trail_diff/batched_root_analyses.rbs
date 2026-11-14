@@ -43,6 +43,9 @@ module PaperTrailDiff
     # : (Array[untyped], Hash[Array[String], untyped]) -> Hash[Array[String], RootVersionPlan]
     def prepare: (Array[untyped], Hash[Array[String], untyped]) -> Hash[Array[String], RootVersionPlan]
 
+    # : (untyped, TimeRange) -> TimeRange
+    def widened: (untyped, TimeRange) -> TimeRange
+
     # Roots that close on their current state are prepared even without a
     # version in the window, since their descendants may have changed there.
     # : (Array[untyped], Hash[Array[String], RootVersionPlan], Hash[Array[String], untyped], TimeRange?) -> void

@@ -282,6 +282,8 @@ RSpec.describe PaperTrailDiff::PreparedHistoryLoader do
 
     expect { load_history(article, ['comments.nope']) }
       .to raise_error(PaperTrailDiff::UnknownAssociationError, 'unknown association: comments.nope')
+    expect { load_history(article, ['comments.nope'], window: true) }
+      .to raise_error(PaperTrailDiff::UnknownAssociationError, 'unknown association: comments.nope')
   end
 
   it 'builds its indexes over the range and live records it was given' do

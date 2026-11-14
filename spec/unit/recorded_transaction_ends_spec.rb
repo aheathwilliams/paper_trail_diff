@@ -116,7 +116,10 @@ RSpec.describe PaperTrailDiff::RecordedTransactionEnds do
     expect(found.keys).to contain_exactly(['FilterVersion', 7], ['FilterVersion', 8])
     expect(statements { recorded.call([first, second]) { raise 'asked again' } }).to eq([])
     third = version(103, 9)
-    expect(recorded.call([first, third]) { [] }.keys).to include(['FilterVersion', 9])
+    again = statements { found = recorded.call([first, third]) { [] } }
+    expect(found.keys).to include(['FilterVersion', 9])
+    expect(again.length).to eq(1)
+    expect(again.first).not_to include(' IN ')
   end
 
   it 'asks nothing about versions outside a transaction' do

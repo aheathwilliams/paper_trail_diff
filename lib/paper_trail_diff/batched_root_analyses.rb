@@ -53,11 +53,16 @@ module PaperTrailDiff
     #: (Array[untyped], Hash[Array[String], untyped]) -> Hash[Array[String], RootVersionPlan]
     def prepare(records, loaded)
       window = @time_range
-      reach = (@reach.call(records.first.class, window.begin_time) if window)
-      range = reach && window ? window.widened(reach) : window
+      range = window && widened(records.first.class, window)
       plans = @planner.call(records, @activity ? range : window)
       prepare_history(records, plans, loaded, range)
       plans
+    end
+
+    #: (untyped, TimeRange) -> TimeRange
+    def widened(model, window)
+      reach = @reach.call(model, window.begin_time)
+      reach ? window.widened(reach) : window
     end
 
     # Roots that close on their current state are prepared even without a

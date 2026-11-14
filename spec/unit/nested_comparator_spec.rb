@@ -214,6 +214,10 @@ RSpec.describe PaperTrailDiff::NestedComparator do
       expect(change.to_h).to include(added: [], removed: [], reordered: true)
       expect(array_change([Float::INFINITY], [nil]).to_h)
         .to include(added: [nil], removed: [Float::INFINITY])
+      expect(array_change([Float::INFINITY], [-Float::INFINITY]).to_h)
+        .to include(added: [-Float::INFINITY], removed: [Float::INFINITY])
+      expect(array_change([Complex(1, 2)], [Complex(1, 3)]).to_h)
+        .to include(added: [Complex(1, 3)], removed: [Complex(1, 2)])
     end
 
     # Ruby has NaN unequal to itself, but a database stores every NaN as one.

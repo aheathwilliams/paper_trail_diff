@@ -79,7 +79,7 @@ module PaperTrailDiff
         diff: Engine.compare(history.first_snapshot, final),
         timeline: ActivityRootSteps.call(plan, history.root_snapshots, closing_snapshot: snapshot,
                                                                        captured_at: captured_at),
-        activity_timeline: present(steps),
+        activity_timeline: @view.present(steps),
         from_snapshot: history.first_snapshot,
         to_snapshot: final
       )
@@ -197,9 +197,9 @@ module PaperTrailDiff
     # The range's events up to its last root version, or to the instant the
     # live record it closes on was read, with the history they are read from.
     # A window is read from where the earliest transaction open at its start
-    # began.
+    # began; a range of versions names no start.
     #: (RootVersionPlan, untyped, ?start_at: untyped) -> [Array[ActivityEvent], untyped]
-    def range_events(plan, captured_at, start_at: @range.begin_time)
+    def range_events(plan, captured_at, start_at: nil)
       versions = plan.reconstruction_versions
       range_end = captured_at || @snapshotter.range_end(@record, versions.last)
       end_at = captured_at || range_end.created_at
@@ -381,11 +381,6 @@ module PaperTrailDiff
     #: () -> RecordReference
     def root_reference
       RecordReference.new(type: @record.class.name, id: @record.id)
-    end
-
-    #: (Array[ActivityStep]) -> Array[ActivityStep]
-    def present(steps)
-      @view.present(steps).freeze
     end
   end
 end

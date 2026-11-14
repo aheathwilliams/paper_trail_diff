@@ -107,7 +107,7 @@ module PaperTrailDiff
         live_records.key?(Endpoint.identity(version))
       end
       loaded.group_by { |version| RecordedClass.for(version) }.each_value do |versions|
-        records = versions.map { |version| live_records.fetch(Endpoint.identity(version)) }.uniq
+        records = versions.map { |version| live_records.fetch(Endpoint.identity(version)) }
         @history_preparer.call(records, versions)
       end
       prepare_version_roots!(unloaded)
@@ -145,8 +145,7 @@ module PaperTrailDiff
 
     #: (Array[[untyped, untyped]]) -> Array[untyped]
     def historical_versions(pairs)
-      selected = pairs.flatten.select { |endpoint| Endpoint.version?(endpoint) }
-      selected.uniq { |version| Support.row_key(version) }
+      pairs.flatten.select { |endpoint| Endpoint.version?(endpoint) }.uniq
     end
 
     #: () -> Array[[untyped, untyped]]
@@ -170,7 +169,7 @@ module PaperTrailDiff
     def valid_comparison!(comparison, index)
       if comparison.is_a?(Hash)
         keys = comparison.keys.map(&:to_s)
-        return if keys.sort == %w[from to] && keys.length == 2
+        return if keys.sort == %w[from to]
       end
 
       message = "comparisons[#{index}]: must contain exactly from: and to:"

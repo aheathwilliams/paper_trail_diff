@@ -631,12 +631,13 @@ module PaperTrailDiff
       open_among([model.name, *traversal.path_types(model)], start)
     end
 
-    # One version class for each version table the application defines.
+    # One version class for each version table the application defines. An
+    # abstract class has no table of its own.
     #: () -> Array[untyped]
     def self.every_version_class
       concern = Support.constant('PaperTrail::VersionConcern')
       Support.constant('ActiveRecord::Base').descendants.select do |candidate|
-        candidate.include?(concern) && !candidate.abstract_class? && candidate.table_exists?
+        candidate.include?(concern) && candidate.table_exists?
       end.uniq(&:table_name)
     end
     private_class_method :every_version_class

@@ -126,7 +126,7 @@ module PaperTrailDiff
     # The range's events up to its last root version, or to the instant the
     # live record it closes on was read, with the history they are read from.
     # A window is read from where the earliest transaction open at its start
-    # began.
+    # began; a range of versions names no start.
     # : (RootVersionPlan, untyped, ?start_at: untyped) -> [Array[ActivityEvent], untyped]
     def range_events: (RootVersionPlan, untyped, ?start_at: untyped) -> [ Array[ActivityEvent], untyped ]
 
@@ -219,8 +219,5 @@ module PaperTrailDiff
     # mutant:disable
     # : () -> RecordReference
     def root_reference: () -> RecordReference
-
-    # : (Array[ActivityStep]) -> Array[ActivityStep]
-    def present: (Array[ActivityStep]) -> Array[ActivityStep]
   end
 end

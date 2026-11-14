@@ -172,12 +172,11 @@ module PaperTrailDiff
       end
     end
 
-    # The records of a model the history holds. None is an answer too: a
-    # path past a belongs_to that named no record, as `post.owner` under
-    # notes without a post, reaches a model no record of which was loaded.
+    # The records of a model the history holds, which every owner whose
+    # children are asked for is among.
     #: (untyped) -> Array[untyped]
     def node_ids(model)
-      @nodes.fetch(model.base_class.name) { [] }
+      @nodes.fetch(model.base_class.name)
     end
 
     # Mirrors VersionAssociationCandidateScope's before-window rule. The loaded

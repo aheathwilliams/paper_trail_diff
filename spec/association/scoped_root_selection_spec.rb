@@ -495,6 +495,22 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
       expect(result.unreachable).to eq([])
     end
 
+    # An association source that is read names ids, so the roots are plucked.
+    it 'merges plucked association ids with the roots of an integer item_id' do
+      named, gone = %w[Named Gone].map { |title| TrackedArticle.create!(title: title) }
+      start = Time.now.utc
+      edited = TrackedArticle.create!(title: 'Edited')
+      gone.update!(title: 'Gone, edited')
+      TrackedArticle.where(id: gone.id).delete_all
+      allow_any_instance_of(PaperTrailDiff::AssociationActivitySelection)
+        .to receive(:call).and_return([[named.id, edited.id]])
+
+      result = select(TrackedArticle, time_range: since(start), activity_traversal: tree(:comments))
+
+      expect(result.records).to eq([named, edited])
+      expect(result.unreachable).to eq([['TrackedArticle', gone.id.to_s]])
+    end
+
     it 'names a root destroyed in the window once, however it was found' do
       article = TrackedArticle.create!(title: 'Gone')
       comment = article.comments.create!(body: 'one')

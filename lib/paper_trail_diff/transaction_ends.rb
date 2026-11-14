@@ -55,14 +55,16 @@ module PaperTrailDiff
     end
 
     # Where a boundary takes effect, and when: at the last version of a
-    # version's transaction, or where a live record was read. Every record of
-    # a snapshot is read at one boundary, so the last answer is kept.
+    # version's transaction, or where a live record was read, since no
+    # transaction is keyed by a model that is not a version class. Every
+    # record of a snapshot is read at one boundary, so the last answer is
+    # kept.
     #: (untyped) -> [untyped, untyped]
     def target(boundary)
       held = @held
       return held.fetch(1) if !held.empty? && held.fetch(0).equal?(boundary)
 
-      target = VersionBoundary.version_record?(boundary) ? last(boundary) : boundary
+      target = last(boundary)
       answer = [target, target.created_at] #: [untyped, untyped]
       held.replace([boundary, answer])
       answer
