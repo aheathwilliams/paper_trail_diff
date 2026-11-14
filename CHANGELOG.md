@@ -189,6 +189,74 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- A date assigned to a datetime column, which Active Record leaves on the
+  instance when time zone aware attributes are off or `update_columns`
+  writes it, and PaperTrail stores from there, is read as midnight in
+  Active Record's default time zone, as the database keeps it. It was read
+  in `Time.zone`, or kept as a Date, so a version and the unchanged row
+  differed.
+- The digits JSON history keeps for a time are read from what its writer
+  writes, a custom serializer that wraps PaperTrail's JSON one included.
+  They were assumed from Active Support's setting, so such a serializer, or
+  the legacy JSON format that writes whole seconds, read every unchanged
+  time as changed.
+- An attribute a model declares without a column, such as a form field, is
+  left out of every diff, change row and snapshot, as no row holds it.
+  PaperTrail stores whatever the instance held for it. `historical_filter:`
+  refuses it as an unknown attribute, as `where` cannot name it.
+- `historical_filter:` reads text or a date given for a datetime attribute
+  as `where` does, in the database's time zone. In any zone but UTC the two
+  selected different records. A value its attribute cannot take, such as a
+  Hash for a time, raises `ConfigurationError` instead of Active Record's
+  own error.
+- `nested_changes` tells 1 from 1.0 inside arrays, as under a hash key and
+  as the attribute diff does.
+- In `analyze_many` and `report`, a root that sits in another root's tree
+  is read there from the versions loaded for it. Its window's versions were
+  used instead, so the other root could report a record that joined it
+  only after the window, with the values it got then.
+- `analyze_many` with associations and `activity: true` gives a root with
+  no versions an empty analysis over its whole history, as `analyze` does.
+  It raised `IncompleteTimeRangeError`.
+- A `has_one :through` with no order reads, in history, the target of its
+  first join row by key, as Active Record does, not the target with the
+  lowest id. With two join rows, a diff from a past version to the
+  unchanged record reported it replaced.
+- Activity on a path below an association to an STI subclass no longer
+  raises `UnknownAssociationError` when a child is retyped to its base class
+  and back.
+- `report` and `analyze_scope` select a root whose change sits below a row
+  saved without versions, such as one from before PaperTrail, as `analyze`
+  reports it. Such a row holds its live key throughout.
+- With `version_scope:`, an analysis ends after the last change the filter
+  keeps. A kept version of a record that had left the tree moved its end to
+  the next event, so its `diff` and `to_snapshot` held a change the filter
+  drops.
+- A record moved by its own update is credited, in `change_rows`, to that
+  version. Two records moved in one transaction were both credited to the
+  last version the step read.
+- `compare` from a version saved outside a transaction, as
+  `save_with_version` saves one, reads a transaction still open there as
+  open, as the range from that version does. Such a comparison runs one more
+  statement, to find where the history's transactions end.
+- `report` and `analyze_scope` with associations no longer select a record
+  that changed only before the window while an unrelated transaction was
+  open across its start. Before the start, only the versions of the
+  transactions open there select a record. Such records came back with
+  nothing to report, counted toward `limit:`, and a destroyed one was listed
+  in `unreachable`.
+- A transaction takes effect at its latest dated version, ids breaking a
+  tie, and is open across a window's start when it has versions dated on
+  both sides. A callback or nested save declared before `has_paper_trail`
+  saves other records' versions first and its own last, dated as its save
+  began. The transaction was placed at its last version by id, so another
+  transaction's edit of the same record was reported by no step, and two
+  windows cut between its dates reported its change in neither.
+- Two ranges that meet at the destroy version of a record restored later
+  under its id report its removal once, in the range from the destroy. A
+  window over the record's earlier life credits the transaction that
+  restored it as a window that begins after the destruction does.
+
 - Comparing a JSON array that holds a BigDecimal NaN or infinity no longer
   raises `FloatDomainError`; it compares as a Float NaN or infinity did.
 - An activity timeline no longer leaves a record as it was at one of two
