@@ -11,9 +11,10 @@ module PaperTrailDiff
   # recorded of it: each run of recorded changes is credited to the version
   # that ended it, or the whole change to the last of the record's versions
   # when what they recorded was not read. A record that appeared or
-  # disappeared is credited to its own create or destroy. Any other row keeps
-  # the step's source: a record that joined a collection or became a to-one
-  # target through another record's change, for one.
+  # disappeared is credited to its own create or destroy, or else to the
+  # last of its versions there, as a record that moved by its own update.
+  # Any other row keeps the step's source: a record that joined a collection
+  # or became a to-one target through another record's change, for one.
   #
   # With recorded changes read, the part of a field's change that those
   # versions did not record is split off and credited to an unversioned

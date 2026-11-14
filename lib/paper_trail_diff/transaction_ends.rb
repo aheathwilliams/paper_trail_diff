@@ -105,9 +105,11 @@ module PaperTrailDiff
     # The last version of each transaction asked about so far, by transaction
     # key, once those of `versions` are among them. They are asked about along
     # with every version the block returns, so that a history is read at once.
+    # A version saved outside a transaction is read beside the history's
+    # others, wherever their transactions end, so it asks about them all.
     #: (Array[untyped]) { () -> Array[untyped] } -> Hash[Array[untyped], untyped]
     def call(versions)
-      ask(versions + yield) unless versions.all? { |version| asked?(version) }
+      ask(versions + yield) unless versions.all? { |version| answered?(version) }
       @ends
     end
 
@@ -115,6 +117,12 @@ module PaperTrailDiff
 
     # @rbs @ends: Hash[Array[untyped], untyped]
     # @rbs @asked: Set[Array[untyped]]
+
+    #: (untyped) -> bool
+    def answered?(version)
+      key = ActivityTransactionGroups.transaction_key(version)
+      !key.nil? && @asked.include?(key)
+    end
 
     #: (untyped) -> bool
     def asked?(version)
