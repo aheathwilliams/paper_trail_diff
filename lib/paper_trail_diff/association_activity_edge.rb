@@ -161,7 +161,7 @@ module PaperTrailDiff
       #: (untyped) -> Array[untyped]
       def owners(filter)
         types = RecordedOwner.types(@reflection, @owner)
-        relation(filter).where.not(object: nil).select(:object).filter_map do |version|
+        relation(filter).select(:object).filter_map do |version|
           state = version.object_deserialized
           state[@reflection.foreign_key] if types.include?(state[@reflection.type])
         end

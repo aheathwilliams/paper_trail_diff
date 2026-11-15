@@ -415,6 +415,73 @@ RSpec.describe PaperTrailDiff::AssociationActivitySelection do
       expect(selected(found)).to eq([article.id])
     end
 
+    def object_reads(&)
+      sql = []
+      callback = lambda { |*, payload|
+        sql << payload[:sql] if payload[:sql].match?(/\ASELECT \S*object\S* FROM/)
+      }
+      ActiveSupport::Notifications.subscribed(callback, 'sql.active_record', &)
+      sql
+    end
+
+    def quietly(&block)
+      PaperTrail.request(enabled: false, &block)
+    end
+
+    # PT-AT's row for a child's first version names the owner it moved to,
+    # and only the version's stored state the owner it left.
+    it 'reads the owner a child left with its first version from that version' do
+      left = TrackedArticle.create!(title: 'Left')
+      joined = TrackedArticle.create!(title: 'Joined')
+      comment = quietly { left.comments.create!(body: 'quiet') }
+      start = Time.now.utc
+      comment.update!(article: joined)
+
+      found = nil
+      reads = object_reads { found = sources(TrackedArticle, [:comments], window: since(start)) }
+
+      expect(found.grep(Array)).to eq([[left.id]])
+      expect(selected(found)).to eq([left.id, joined.id].sort)
+      expect(reads.length).to eq(1)
+      expect(reads.first).to include('IN (SELECT')
+    end
+
+    it 'reads the owner a child left at every level, as ids below the root' do
+      left = TrackedArticle.create!(title: 'Left')
+      joined = TrackedArticle.create!(title: 'Joined')
+      from = quietly { left.comments.create!(body: 'from') }
+      to = joined.comments.create!(body: 'to')
+      reply = quietly { from.replies.create!(body: 'quiet') }
+      start = Time.now.utc
+      reply.update!(comment: to)
+
+      found = nil
+      reads = object_reads do
+        found = sources(TrackedArticle, ['comments.replies'], window: since(start))
+      end
+
+      expect(selected(found)).to eq([left.id, joined.id].sort)
+      # The comments the reply left are read as ids, and every other source
+      # as a subquery.
+      expect(reads.grep_v(/IN \(SELECT/).length).to eq(1)
+      expect(reads.length).to be > 1
+    end
+
+    it 'reads no stored state for a belongs_to or a child without versions' do
+      article = TrackedArticle.create!(title: 'Article')
+      comment = article.comments.create!(body: 'one')
+      start = Time.now.utc
+      article.update!(title: 'Renamed')
+      comment.update!(body: 'two')
+
+      reads = object_reads do
+        sources(TrackedComment, [:article], window: since(start))
+        sources(TrackedArticle, [:unversioned_attachments], window: since(start))
+      end
+
+      expect(reads).to eq([])
+    end
+
     it 'reads ids, in slices, where a string item_id meets an integer key' do
       posts = Array.new(2) { |index| StringItemPost.create!(title: "Post #{index}") }
       note = posts.first.notes.create!(body: 'moving')

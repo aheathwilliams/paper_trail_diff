@@ -264,8 +264,9 @@ project follows [Semantic Versioning](https://semver.org/).
   child's first version is the update that moved or detached it, such as a
   row from before PaperTrail was installed. They read the old owner from
   that version's stored state, as an activity analysis does, at every level
-  of a path and for the join rows of a `has_many :through`. This costs one
-  statement per `has_many` or `has_one` edge.
+  of a path and for the join rows of a `has_many :through`. Each `has_many`
+  or `has_one` edge on a path runs one more statement for each source of
+  changes below it.
 - `report(associations: nil)` raises `ConfigurationError` naming the option,
   as `analyze_scope` does, instead of `NoMethodError`.
 

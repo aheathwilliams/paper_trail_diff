@@ -286,6 +286,99 @@ RSpec.describe PaperTrailDiff::AssociationActivityEdge do
     end
   end
 
+  describe described_class::FirstVersion do
+    def unversioned(&block)
+      PaperTrail.request(enabled: false, &block)
+    end
+
+    def first_owners(edge, filter)
+      edge.owners(filter).map(&:to_i).sort
+    end
+
+    # A child's first version that moved it names the new owner in PT-AT's
+    # row, and only its stored state names the owner it left.
+    it 'reads the owner each child held until a first version that did not create it' do
+      left = TrackedArticle.create!(title: 'Left')
+      detached = TrackedArticle.create!(title: 'Detached')
+      moved = unversioned { left.comments.create!(body: 'moved') }
+      quiet = unversioned { detached.comments.create!(body: 'detached') }
+      start = Time.now.utc
+      moved.update!(article: TrackedArticle.create!(title: 'New'))
+      quiet.update!(body: 'edited')
+      edge = described_class::FirstVersion.new(reflection(TrackedArticle, :comments), window(start))
+
+      expect(first_owners(edge, [moved.id, quiet.id])).to eq([left.id, detached.id].sort)
+      expect(first_owners(edge, TrackedComment.select(:id))).to eq([left.id, detached.id].sort)
+      expect(first_owners(edge, [moved.id])).to eq([left.id])
+      expect(edge.filter_type).to eq(:integer)
+    end
+
+    it 'reads no create, and no version after the first of a child' do
+      article = TrackedArticle.create!(title: 'Owner')
+      created = article.comments.create!(body: 'created')
+      quiet = unversioned { article.comments.create!(body: 'quiet') }
+      quiet.update!(body: 'first')
+      other = TrackedArticle.create!(title: 'Other')
+      start = Time.now.utc
+      created.update!(article: other)
+      quiet.update!(article: other)
+      edge = described_class::FirstVersion.new(reflection(TrackedArticle, :comments), window(start))
+      everything = described_class::FirstVersion.new(reflection(TrackedArticle, :comments), nil)
+
+      expect(first_owners(edge, [created.id, quiet.id])).to eq([])
+      expect(first_owners(everything, [created.id, quiet.id])).to eq([article.id])
+    end
+
+    it 'reads a first version saved after the window, which held the owner through it' do
+      article = TrackedArticle.create!(title: 'Owner')
+      quiet = unversioned { article.comments.create!(body: 'quiet') }
+      start = Time.now.utc
+      range = PaperTrailDiff::TimeRange.new(start..Time.now.utc)
+      quiet.update!(article: TrackedArticle.create!(title: 'Later'))
+      edge = described_class::FirstVersion.new(reflection(TrackedArticle, :comments), range)
+
+      expect(first_owners(edge, [quiet.id])).to eq([article.id])
+    end
+
+    it 'reads only children held under one of the owner types' do
+      holder = EdgeHolder.create!(title: 'Holder')
+      document = EdgeSpecialDocument.create!(name: 'Document')
+      held = unversioned { EdgeSticker.create!(label: 'held', holder: holder) }
+      other = unversioned { EdgeSticker.create!(label: 'other', holder: document) }
+      EdgeSticker.where(id: other.id).update_all(holder_id: holder.id)
+      start = Time.now.utc
+      [held, other].each { |sticker| sticker.reload.update!(holder: nil) }
+      edge = described_class::FirstVersion.new(reflection(EdgeHolder, :stickers), window(start))
+      documents = described_class::FirstVersion.new(reflection(EdgeSpecialDocument, :stickers),
+                                                    window(start))
+
+      expect(first_owners(edge, [held.id, other.id])).to eq([holder.id])
+      expect(first_owners(documents, [held.id, other.id])).to eq([holder.id])
+      expect(first_owners(documents, [held.id])).to eq([])
+    end
+
+    it 'reads ids given as values in slices of one statement each' do
+      article = TrackedArticle.create!(title: 'Owner')
+      quiet = unversioned { article.comments.create!(body: 'quiet') }
+      start = Time.now.utc
+      quiet.update!(article: TrackedArticle.create!(title: 'New'))
+      edge = described_class::FirstVersion.new(reflection(TrackedArticle, :comments), window(start))
+      ids = Array.new(PaperTrailDiff::Support::IDS_PER_STATEMENT) do |index|
+        -index - 1
+      end + [quiet.id]
+
+      sql = statements { expect(edge.owners_of(ids).map(&:to_i)).to eq([article.id]) }
+      expect(sql.length).to eq(2)
+      expect(edge.owners_of([])).to eq([])
+    end
+
+    it 'takes the item_id type of the version table of the child' do
+      edge = described_class::FirstVersion.new(reflection(StringItemPost, :notes), nil)
+
+      expect(edge.filter_type).to eq(:string)
+    end
+  end
+
   describe described_class::BelongsTo do
     it 'finds the owners that pointed at a target when the window opened or after' do
       author = TrackedAuthor.create!(name: 'Ann')
