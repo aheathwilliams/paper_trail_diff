@@ -78,6 +78,20 @@ RSpec.describe PaperTrailDiff::CandidateTable do
         expect(selected).to eq(ids.map(&:to_s))
       end
 
+      it 'reads no catalog' do
+        statements = []
+        subscriber = ActiveSupport::Notifications.subscribe('sql.active_record') do |*, payload|
+          statements << payload[:name]
+        end
+        begin
+          described_class.union(CoreArticle, relations) { |sources| selected(sources.first) }
+        ensure
+          ActiveSupport::Notifications.unsubscribe(subscriber)
+        end
+
+        expect(statements).not_to include('SCHEMA')
+      end
+
       it 'drops the table when the block returns' do
         name = described_class.union(CoreArticle, relations) do |sources|
           sources.first.to_sql[/#paper_trail_diff_candidates_\h+/]
@@ -135,7 +149,7 @@ RSpec.describe PaperTrailDiff::CandidateTable do
       connection = CoreArticle.connection
       allow(connection).to receive(:execute).and_wrap_original do |original, sql, *rest|
         name ||= sql[/#paper_trail_diff_candidates_\h+/]
-        raise ArgumentError, 'stop' if sql.start_with?('INSERT')
+        raise ArgumentError, 'stop' if sql.include?('INSERT INTO')
 
         original.call(sql, *rest)
       end
@@ -145,13 +159,22 @@ RSpec.describe PaperTrailDiff::CandidateTable do
       expect(connection.select_value("SELECT OBJECT_ID('tempdb..#{name}')")).to be_nil
     end
 
-    # The adapter reads an INSERT's table into the schema cache, which a
-    # name used once would otherwise keep for the life of the pool.
-    it 'leaves no entry for the table in the schema cache' do
-      name = described_class.with(CoreArticle, many) do |source|
-        source.to_sql[/#paper_trail_diff_candidates_\h+/]
+    # The adapter reads the table of a statement that starts with INSERT from
+    # tempdb's catalog, where another selection's DROP TABLE can deadlock it.
+    it 'reads no catalog and leaves no entry for the table in the schema cache' do
+      statements = []
+      subscriber = ActiveSupport::Notifications.subscribe('sql.active_record') do |*, payload|
+        statements << payload[:name]
+      end
+      name = begin
+        described_class.with(CoreArticle, many) do |source|
+          source.to_sql[/#paper_trail_diff_candidates_\h+/]
+        end
+      ensure
+        ActiveSupport::Notifications.unsubscribe(subscriber)
       end
 
+      expect(statements).not_to include('SCHEMA')
       expect(CoreArticle.connection.schema_cache.cached?(name)).to be(false)
     end
 

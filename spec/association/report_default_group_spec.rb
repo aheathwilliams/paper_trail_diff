@@ -88,4 +88,16 @@ RSpec.describe 'Report grouping by default' do
 
     expect(steps(order, start).length).to eq(2)
   end
+
+  it 'groups a report that names its association alone' do
+    order, start = order_saved_with_line
+
+    expect(steps(order, start, associations: :lines).length).to eq(1)
+  end
+
+  it 'names the option when associations: is nil' do
+    expect do
+      PaperTrailDiff.report(GroupedReportOrder.all, since: Time.now, limit: 5, associations: nil)
+    end.to raise_error(PaperTrailDiff::ConfigurationError, /associations: must be names/)
+  end
 end

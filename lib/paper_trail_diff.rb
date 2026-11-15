@@ -302,7 +302,7 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
     #: (untyped, since: untyped, limit: Integer, ?associations: association_option, ?ignore: ignore_option, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?, ?include_deleted: bool, ?recorded_changes: bool?) -> ScopedAnalysis
     def report( # rubocop:disable Metrics/ParameterLists
       scope, since:, limit:, associations: [], ignore: DEFAULT_IGNORED_ATTRIBUTES,
-      version_scope: nil, snapshots: false, group: (:transaction unless associations.empty?),
+      version_scope: nil, snapshots: false, group: default_group(associations),
       include_deleted: false, recorded_changes: nil
     )
       TimeRange.check_since!(since)
@@ -384,6 +384,16 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
     #: (untyped, ?ignore: Array[String | Symbol]) -> Hash[String, ValueChange]?
     def recorded_changes(version, ignore: DEFAULT_IGNORED_ATTRIBUTES)
       RecordedChanges.call(version, ignore: ignore)
+    end
+
+    private
+
+    # `report` groups by transaction unless it reads no associations. A value
+    # that is not a list, such as nil, groups too, and the option's own check
+    # then refuses it, naming the option.
+    #: (untyped) -> Symbol?
+    def default_group(associations)
+      :transaction unless associations.respond_to?(:empty?) && associations.empty?
     end
   end
 end

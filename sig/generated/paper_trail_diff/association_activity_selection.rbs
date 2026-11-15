@@ -80,6 +80,12 @@ module PaperTrailDiff
     # : (untyped, Array[source]) -> Array[source]
     def owners: (untyped, Array[source]) -> Array[source]
 
+    # The owners children held until a first version that did not create
+    # them, read from those versions' stored states (see
+    # AssociationActivityEdge::FirstVersion).
+    # : (untyped, Array[source]) -> Array[source]
+    def first_owners: (untyped, Array[source]) -> Array[source]
+
     # A join row that changes moves membership as surely as a target that does.
     # : (untyped, Array[source]) -> Array[source]
     def through_owners: (untyped, Array[source]) -> Array[source]
