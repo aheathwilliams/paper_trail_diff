@@ -57,7 +57,7 @@ leave it out there.
 build seeded, generated histories: root edits, checkpoints, and child creates,
 edits, and deletes. For each one they check that every route to the same answer
 agrees: `analyze`, `analyze_many`, and `analyze_scope`; checkpoint and activity
-modes; `compare` and `timeline` against `analyze`; and that activity steps
+modes; `compare` against `analyze`; and that activity steps
 chain into the final state. They run over random windows as well as the whole
 history, with integer and string `versions.item_id`, YAML and JSON history, and
 a `has_paper_trail skip:` column. When one fails, its seed reproduces it, and
@@ -96,7 +96,7 @@ share passes. `spec/oracle` compares them with the truth instead:
    not), and windows through `analyze`, `analyze_many`, and `analyze_scope`
    are compared with the recorded states. Two windows that meet between
    transactions, or inside one, must report each step once, as the window
-   spanning both does, through both `activity_timeline` and `analyze_many`.
+   spanning both does, through both `analyze` and `analyze_many`.
    The transactions take turns between no author, `alice`, and `bob`, and
    the same windows filtered to alice's versions must report exactly the
    unfiltered steps of the transactions she saved a version in.
@@ -110,12 +110,8 @@ serialized, enums stored as strings, custom types, decimals, and JSON.
 `through_history_spec.rb` edits two teams' join records and the records they
 reach, through every kind of `has_many :through`: to a `belongs_to`, through a
 scoped part, ranked with a limit, to a `has_many`, through another through, a
-`has_one` through, and with `source_type:`. `habtm_history_spec.rb` attaches,
-detaches, creates, renames, and destroys tags between checkpoints. HABTM
-membership is known only at root versions, so it expects what the
-[reference](reference.md#habtm-limitation) describes: at each point, the
-members the next root version recorded, as each was then, and only once it
-exists. `shapes_history_spec.rb` edits two boards and the records around them:
+`has_one` through, and with `source_type:`. `shapes_history_spec.rb` edits two
+boards and the records around them:
 a polymorphic owner, cards that use single-table inheritance and change type,
 comments that move between boards and cards (`as:`), labels with a default
 scope, and scoped and ranked associations to the cards. Its checks, in
@@ -313,10 +309,7 @@ passes is behavior nothing checks. `mutant.yml` lists the classes it mutates:
 - where in a carried snapshot an event's record sits: `ActivityEventRouteFinder`;
 - which association paths a request accepts: `AssociationTraversal`,
   `AssociationKey`, and `VersionTable`;
-- whether a transaction's HABTM members are one record's:
-  `HabtmTransactionOwners`;
-- which association paths history cannot read exactly, and whether a request
-  reads one with PT-AT: `ApproximatePaths` and `FallbackPaths`;
+- which association paths history cannot read: `UnreadablePaths`;
 - which records an association scope admits, and how it ranks them:
   `ScopeCondition`, `ScopeRanking`, and `ExactColumnType`;
 - the helpers these share, which order versions, name records, and copy

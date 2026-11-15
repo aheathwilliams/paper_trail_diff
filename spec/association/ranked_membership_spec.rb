@@ -139,9 +139,9 @@ RSpec.describe 'A ranked association over time' do
 
     ranges.each do |(from_versions, from_live), (to_versions, to_live)|
       lists.each do |list|
-        steps = PaperTrailDiff.activity_timeline(list, from: from_versions.fetch(list.id),
-                                                       to: to_versions.fetch(list.id),
-                                                       associations: paths, snapshots: true)
+        steps = SpecTimelines.activity_timeline(list, from: from_versions.fetch(list.id),
+                                                      to: to_versions.fetch(list.id),
+                                                      associations: paths, snapshots: true)
         expect([members(steps.first.from_snapshot), members(steps.last.to_snapshot)])
           .to eq([from_live.fetch(list.id), to_live.fetch(list.id)])
       end

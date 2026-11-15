@@ -37,9 +37,6 @@ module PaperTrailDiff
   # Truncating instead would hand back a report that is short without saying so.
   class BatchLimitExceededError < Error; end
 
-  # Historical candidate loading exceeded its explicitly bounded work budget.
-  class FilterLimitExceededError < Error; end
-
   # Raised when a requested ActiveRecord association does not exist.
   class UnknownAssociationError < Error; end
 
@@ -56,7 +53,4 @@ module PaperTrailDiff
   # Raised when recorded PT-AT metadata cannot reliably reconstruct a selected association,
   # or a polymorphic type names no class.
   class IncompleteAssociationHistoryError < Error; end
-
-  # Raised when current-ended activity cannot be reconstructed for a selected association.
-  class UnsupportedLiveActivityError < Error; end
 end

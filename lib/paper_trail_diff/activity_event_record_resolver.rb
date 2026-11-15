@@ -11,22 +11,14 @@ module PaperTrailDiff
     end
 
     # The record as the version left it: the state recorded next, which holds
-    # any change saved after the version without one of its own. Prepared
-    # history answers without a query; without it, the next version or the
-    # live row does.
-    #: (untyped, ?direct: bool) -> untyped
-    def record_after(version, direct: false)
+    # any change saved after the version without one of its own. Every event
+    # comes from versions the prepared history loaded, so it answers without
+    # a query.
+    #: (untyped) -> PreparedRecordState?
+    def record_after(version)
       return if version.event.to_s == 'destroy'
 
-      if direct
-        handled, state = @prepared_record_after&.call(version, direct: true)
-        return state if handled
-      end
-
-      handled, prepared = @prepared_record_after&.call(version)
-      return prepared if handled
-
-      recorded_after(version)
+      @prepared_record_after.call(version).last
     end
 
     #: (untyped) -> ActivitySnapshotDelta?
@@ -61,17 +53,6 @@ module PaperTrailDiff
 
     # @rbs @record_transition: untyped
     # @rbs @prepared_record_after: untyped
-
-    #: (untyped) -> untyped
-    def recorded_after(version)
-      successor = version.next
-      record = successor && Support.reify(successor, dup: true)
-      return record if record
-
-      model_class = Endpoint.model_class(version)
-      criteria = { model_class.primary_key => version.item_id } #: Hash[untyped, untyped]
-      model_class.unscoped.find_by(criteria)
-    end
 
     #: (untyped) -> untyped
     def prepared_changeset(version)

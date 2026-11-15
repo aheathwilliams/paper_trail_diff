@@ -7,11 +7,16 @@ module PaperTrailDiff
     attr_reader :version #: untyped
     attr_reader :branches #: Array[String]?
 
-    #: (version: untyped, branches: Array[String]?, ?join: bool) -> void
-    def initialize(version:, branches:, join: false)
+    # The branches under which the version is of a through's join row, which
+    # links the root to a target without being one. A record can be a join
+    # row under one branch and a member of another.
+    attr_reader :joins #: Array[String]
+
+    #: (version: untyped, branches: Array[String]?, ?joins: Array[String]) -> void
+    def initialize(version:, branches:, joins: [])
       @version = version
-      @branches = branches ? branches.uniq.sort.freeze : nil
-      @join = join
+      @branches = (branches.uniq.sort.freeze if branches)
+      @joins = joins.uniq.sort.freeze
       freeze
     end
 
@@ -19,15 +24,6 @@ module PaperTrailDiff
     def root?
       branches.nil?
     end
-
-    # Whether the version is of a through's join row, which links the root to
-    # a target without being one.
-    #: () -> bool
-    def join?
-      @join
-    end
-
-    # @rbs @join: bool
   end
 
   # Accumulates each version once while retaining every selected root branch.
@@ -41,10 +37,11 @@ module PaperTrailDiff
       versions.each do |version|
         key = Support.row_key(version)
         existing = @events[key]
+        joins = existing ? existing.fetch(:joins) : [] #: Array[String]
         @events[key] = {
           version: version,
           branches: merged_branches(existing, branch),
-          join: join || existing&.fetch(:join) || false
+          joins: join && branch ? joins | [branch] : joins
         }
       end
     end
@@ -55,7 +52,7 @@ module PaperTrailDiff
         ActivityEvent.new(
           version: event.fetch(:version),
           branches: event.fetch(:branches),
-          join: event.fetch(:join)
+          joins: event.fetch(:joins)
         )
       end
     end
@@ -93,14 +90,26 @@ module PaperTrailDiff
 
     # Where the root's destruction takes effect, its tree is gone, so what a
     # transaction that ended later saved there is no change of the root's,
-    # until the root is created again.
+    # until the root is created again. The transaction that creates it again
+    # is the root's, from its first event, as for a root created afresh.
     #: (Array[ActivityEvent]) -> Array[ActivityEvent]
     def self.until_destroyed(events)
       gone = false
+      restoring = restoring_transactions(events)
       events.reject do |event|
         gone = event.version.event == 'destroy' if event.root?
-        gone && !event.root?
+        gone && !event.root? && !restoring.include?(transaction_key(event.version))
       end.freeze
+    end
+
+    # The transactions of the root's versions that leave it in place.
+    #: (Array[ActivityEvent]) -> Array[Array[untyped]?]
+    def self.restoring_transactions(events)
+      events.filter_map do |event|
+        next unless event.root?
+
+        transaction_key(event.version) unless event.version.event == 'destroy'
+      end
     end
 
     # A version without a transaction shares one with nothing.

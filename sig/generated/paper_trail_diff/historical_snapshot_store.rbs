@@ -9,11 +9,10 @@ module PaperTrailDiff
     # : (traversal: AssociationTraversal, normalizer: SnapshotNormalizer, preparer: untyped) -> void
     def initialize: (traversal: AssociationTraversal, normalizer: SnapshotNormalizer, preparer: untyped) -> void
 
-    # A `start_at` is a window's (see PreparedHistoryLoader); a range of
-    # versions starts at its first. A window's history says how far back the
-    # transactions open at its start `reach`, unless it was read from there.
-    # : (untyped, Array[untyped], ?start_at: untyped, ?end_at: untyped, ?reach: bool) -> PreparedHistory?
-    def prepare: (untyped, Array[untyped], ?start_at: untyped, ?end_at: untyped, ?reach: bool) -> PreparedHistory?
+    # A `start_at` is a window's, already moved back to its reach (see
+    # PreparedHistoryLoader); a range of versions starts at its first.
+    # : (untyped, Array[untyped], ?start_at: untyped, ?end_at: untyped) -> PreparedHistory?
+    def prepare: (untyped, Array[untyped], ?start_at: untyped, ?end_at: untyped) -> PreparedHistory?
 
     # Where a range of the record's ending at the version ends (see
     # TransactionCut.range_end). A batch's history has asked already, and a
@@ -23,25 +22,20 @@ module PaperTrailDiff
     def range_end_of: (untyped, untyped) -> untyped
 
     # A `start_at` is a window's, as for `prepare`. A window's roots may have
-    # no version in it, when only their descendants changed there. Returns
-    # where the earliest transaction open at the window's start began, if one
-    # was, for the batch to read it again from there, with `reach` false.
-    # : (Array[untyped], Array[untyped], ?start_at: untyped, ?end_at: untyped, ?reach: bool) -> untyped
-    def prepare_batch: (Array[untyped], Array[untyped], ?start_at: untyped, ?end_at: untyped, ?reach: bool) -> untyped
+    # no version in it, when only their descendants changed there.
+    # : (Array[untyped], Array[untyped], ?start_at: untyped, ?end_at: untyped) -> void
+    def prepare_batch: (Array[untyped], Array[untyped], ?start_at: untyped, ?end_at: untyped) -> void
 
     # Missing roots, and roots compared only between versions, have no live
     # graph to collect. Reading their associations here would issue a query
     # per root and seed nonexistent rows as live state.
-    #
-    # Roots with no version in a window are asked only how far the
-    # transactions open at its start reach (see #reach_before).
-    # : (Array[untyped], Array[untyped], ?start_at: untyped, ?end_at: untyped, ?reach: bool) -> untyped
-    def prepare_deleted_batch: (Array[untyped], Array[untyped], ?start_at: untyped, ?end_at: untyped, ?reach: bool) -> untyped
+    # : (Array[untyped], Array[untyped], ?start_at: untyped, ?end_at: untyped) -> void
+    def prepare_deleted_batch: (Array[untyped], Array[untyped], ?start_at: untyped, ?end_at: untyped) -> void
 
-    # Where the earliest transaction open at a window's start began, for a
-    # root with no version in the window and no row: one destroyed just
-    # before it, by a transaction that went on to save its tree inside, is
-    # reported in the window.
+    # Where the earliest transaction open at a window's start began (see
+    # AssociationTraversal#reach_before). A window is read from there: a root
+    # destroyed just before it, by a transaction that went on to save its
+    # tree inside, is reported in the window.
     # : (untyped, untyped) -> untyped
     def reach_before: (untyped, untyped) -> untyped
 
@@ -70,8 +64,11 @@ module PaperTrailDiff
     # : (untyped) -> PreparedRecordState?
     def root_state: (untyped) -> PreparedRecordState?
 
-    # : (untyped, habtm_version: untyped, ?history: PreparedHistory?) -> untyped
-    def association_reader: (untyped, habtm_version: untyped, ?history: PreparedHistory?) -> untyped
+    # A member's snapshot at `path`, with the associations `tree` selects
+    # below it as the version reads them. Callers pass the root's history; a
+    # batch's for the version is the rest.
+    # : (PreparedRecordState, untyped, tree: AssociationTree, path: String, incoming: untyped, normalizer: SnapshotNormalizer, ?history: PreparedHistory?) -> RecordSnapshot
+    def member: (PreparedRecordState, untyped, tree: AssociationTree, path: String, incoming: untyped, normalizer: SnapshotNormalizer, ?history: PreparedHistory?) -> RecordSnapshot
 
     private
 
@@ -113,8 +110,8 @@ module PaperTrailDiff
     # : (Array[untyped], Array[untyped]) -> Hash[Symbol, untyped]
     def batch_payload: (Array[untyped], Array[untyped]) -> Hash[Symbol, untyped]
 
-    # : (Array[untyped], Array[untyped], ?live_records: Array[untyped], ?start_at: untyped, ?end_at: untyped, ?reach: bool) -> PreparedHistory
-    def register_batch: (Array[untyped], Array[untyped], ?live_records: Array[untyped], ?start_at: untyped, ?end_at: untyped, ?reach: bool) -> PreparedHistory
+    # : (Array[untyped], Array[untyped], ?live_records: Array[untyped], ?start_at: untyped, ?end_at: untyped) -> PreparedHistory
+    def register_batch: (Array[untyped], Array[untyped], ?live_records: Array[untyped], ?start_at: untyped, ?end_at: untyped) -> PreparedHistory
 
     # Snapshot reads find the history by root version, and `prepare` by root.
     # : (PreparedHistory, Array[untyped], Array[untyped]) -> void
@@ -123,32 +120,17 @@ module PaperTrailDiff
     # : (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer, history: PreparedHistory?) -> RecordSnapshot?
     def snapshot_from_version: (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer, history: PreparedHistory?) -> RecordSnapshot?
 
-    # Read from prepared history where it can be, as a version is, without
-    # instantiating the root's members. Only the fallback, which writes the
-    # members it rebuilds onto the root, needs a record of its own.
-    # : (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer, history: PreparedHistory?) -> RecordSnapshot?
-    def snapshot_from_live_root: (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer, history: PreparedHistory?) -> RecordSnapshot?
+    # Read from prepared history, as a version is, without instantiating the
+    # root's members.
+    # : (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer, history: PreparedHistory?) -> RecordSnapshot
+    def snapshot_from_live_root: (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer, history: PreparedHistory?) -> RecordSnapshot
 
     # The state of the root's row, read once for the call: every snapshot
-    # that starts from the row starts from the same state. Reading it writes
-    # nothing to the row, so it is read from the loaded record itself, whose
-    # columns the current snapshot reads too.
+    # that starts from the row starts from the same state. A batch loaded the
+    # row already; otherwise it is read here, from the record whose columns
+    # the current snapshot reads too.
     # : (untyped) -> PreparedRecordState
     def live_state: (untyped) -> PreparedRecordState
-
-    # Rebuilding a version's associations writes them onto the record, so each
-    # snapshot that does gets its own copy of the root's row, built from the
-    # row's stored values without a query.
-    # : (untyped) -> untyped
-    def live_root: (untyped) -> untyped
-
-    # A batch loaded the row already; otherwise it is read once, so every
-    # snapshot of the call starts from the same row.
-    # : (untyped, identity) -> untyped
-    def loaded_root: (untyped, identity) -> untyped
-
-    # : (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer, habtm_version: untyped, history: PreparedHistory?) -> RecordSnapshot?
-    def normalize: (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer, habtm_version: untyped, history: PreparedHistory?) -> RecordSnapshot?
 
     # : (untyped, untyped) -> Array[untyped]
     def snapshot_key: (untyped, untyped) -> Array[untyped]

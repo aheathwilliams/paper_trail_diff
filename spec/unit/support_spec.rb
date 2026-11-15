@@ -88,6 +88,17 @@ RSpec.describe PaperTrailDiff::Support do
                               'title' => '2032-06-01T18:00:00.000-04:00')
     end
 
+    it 'reads a date stored for a datetime column as midnight, under either kind of name' do
+      types = { 'starts_at' => ActiveModel::Type::DateTime.new, 'title' => ActiveModel::Type::String.new }
+      dated = Class.new { define_singleton_method(:attribute_types) { types } }
+      title = '2032-03-02'
+
+      decodable = described_class.decodable({ starts_at: '2032-03-02', 'title' => title }, dated)
+
+      expect(decodable.fetch('starts_at')).to be_an_instance_of(Time).and eq(Time.utc(2032, 3, 2))
+      expect(decodable.fetch('title')).to equal(title)
+    end
+
     it 'reads a plain time by its local clock when Active Record keeps local times' do
       allow(ActiveRecord).to receive(:default_timezone).and_return(:local)
       summer = Time.new(2032, 7, 1, 18, 0, 0, '-04:00')
@@ -214,6 +225,53 @@ RSpec.describe PaperTrailDiff::Support do
     end
   end
 
+  describe '.with_recorded_times of a date stored for a datetime column' do
+    # A rebuilt record of a model with a datetime column and no time of day.
+    let(:model) do
+      Class.new do
+        attr_reader :version, :assigned
+
+        def self.version_association_name = :version
+
+        def self.attribute_types
+          { 'starts_at' => ActiveModel::Type::DateTime.new,
+            'title' => ActiveModel::Type::String.new }
+        end
+
+        def initialize(version)
+          @version = version
+          @assigned = {}
+        end
+
+        def has_attribute?(name) = self.class.attribute_types.key?(name)
+
+        def []=(name, value)
+          @assigned[name] = value
+        end
+      end
+    end
+
+    it 'assigns the date as midnight, where the database keeps it, under either kind of name' do
+      version = double(object: "starts_at: 2032-03-02\ntitle: '2032-03-02'\n",
+                       object_deserialized: { starts_at: Date.new(2032, 3, 2),
+                                              'title' => '2032-03-02' })
+      record = model.new(version)
+
+      expect(described_class.with_recorded_times(record)).to equal(record)
+      expect(record.assigned).to eq(starts_at: Time.utc(2032, 3, 2))
+      expect(record.assigned.fetch(:starts_at)).to be_an_instance_of(Time)
+    end
+
+    it 'decodes nothing again when no date is stored without a time' do
+      version = double(object: "starts_at: 2032-03-02 10:00:00.000000000 Z\n",
+                       object_deserialized: {})
+      record = model.new(version)
+
+      expect(described_class.with_recorded_times(record)).to equal(record)
+      expect(version).not_to have_received(:object_deserialized)
+    end
+  end
+
   describe '.with_recorded_times of JSON history' do
     # A rebuilt record of a model whose versions keep JSON, as a json object
     # column holds it, with the times of day it has.
@@ -277,12 +335,26 @@ RSpec.describe PaperTrailDiff::Support do
   end
 
   describe '.same? and .nan?' do
-    it 'reads values as == does, but every NaN as one' do
+    it 'reads values as == does both ways, a Float apart from an Integer, and every NaN as one' do
       nans = [Float::NAN, 0.0 / 0.0, BigDecimal('NaN')]
+      time = Time.utc(2026, 1, 1)
 
       expect(nans.product(nans).map { |left, right| described_class.same?(left, right) })
         .to all(be(true))
-      expect([[1, 1.0], %w[a a]].map { |pair| described_class.same?(*pair) }).to eq([true, true])
+      list = Class.new(Array)
+      loose = ActiveSupport::HashWithIndifferentAccess
+      same = [[1, BigDecimal(1)], [1.0, 1.0], %w[a a], [time, time.in_time_zone('Tokyo')],
+              [[Float::NAN], [Float::NAN]], [{ 'n' => [1] }, { 'n' => [1] }],
+              [[1], list.new([1])], [{ 'n' => 1 }, loose.new('n' => 1)]]
+      different = [[1, 1.0], [time, time.iso8601], [time.iso8601, time],
+                   [{ 'n' => 1 }, { 'n' => 1.0 }], [[1], [1.0]], [[1], [1, 2]], [[1, 2], [1, 3]],
+                   [{ 'n' => 1 }, { 'm' => 1 }], [{ 'n' => 1 }, { 'n' => 1, 'm' => 2 }],
+                   [{ 'n' => nil }, { 'm' => nil }],
+                   [{ 'a' => 1, 'b' => 2 }, { 'a' => 1, 'b' => 3 }],
+                   [{ 'n' => 1 }, [['n', 1]]], [[1], 1], [loose.new('n' => 1), { 'n' => 1.0 }],
+                   [list.new([1]), [1.0]]]
+      expect(same.map { |pair| described_class.same?(*pair) }).to all(be(true))
+      expect(different.map { |pair| described_class.same?(*pair) }).to eq([false] * 15)
       expect([[Float::NAN, 1], [1, Float::NAN], [1, 2], ['NaN', Float::NAN]]
         .map { |pair| described_class.same?(*pair) }).to eq([false] * 4)
     end
@@ -292,6 +364,13 @@ RSpec.describe PaperTrailDiff::Support do
         .to eq([true, true])
       expect([1.0, Float::INFINITY, 1, 'NaN', nil].map { |value| described_class.nan?(value) })
         .to eq([false] * 5)
+    end
+  end
+
+  describe '.sort_ids' do
+    it 'lists ids once each as strings, integers by value and others by text after them' do
+      expect(described_class.sort_ids([10, 'b', '9', 100, 2, 'a', 10, '010', '20', 'a1']))
+        .to eq(%w[2 9 010 10 20 100 a a1 b])
     end
   end
 
@@ -350,13 +429,15 @@ RSpec.describe PaperTrailDiff::Support do
     it 'keeps a frozen tree of plain hashes and arrays as it is' do
       tree = { 'key' => ['a', { 'deep' => 1 }.freeze].freeze }.freeze
 
+      list = ['a', 1].freeze
+
       expect(described_class.immutable_copy(tree)).to equal(tree)
-      expect(described_class.immutable_copy([].freeze)).to be_frozen
+      expect(described_class.immutable_copy(list)).to equal(list)
     end
 
-    it 'copies a frozen tree that holds a mutable value, or a subclass, at any depth' do
+    it 'copies a frozen tree that holds a mutable value at any depth, or is a subclass' do
       trees = [{ [1] => 1 }.freeze, { 'key' => [+'a'].freeze }.freeze,
-               [[+'a'].freeze].freeze, [{ 'k' => 1 }.with_indifferent_access.freeze].freeze,
+               [[+'a'].freeze].freeze, [{ 'k' => +'v' }.with_indifferent_access.freeze].freeze,
                Class.new(Array).new([1]).freeze,
                { 'k' => 1 }.with_indifferent_access.freeze]
 
@@ -504,16 +585,6 @@ RSpec.describe PaperTrailDiff::Support do
 
       expect(pairs.map { |left, right| described_class.orderable_tie?(left, right) })
         .to eq([true, false, false, false, true, false])
-    end
-  end
-
-  describe '.tied_timestamp_pair' do
-    it 'finds the first two versions saved in one instant, orderable or not' do
-      versions = [version.new(noon, 1), version.new(noon + 1, 2), version.new(noon + 1, 3),
-                  version.new(noon + 1, 4)]
-
-      expect(described_class.tied_timestamp_pair(versions)).to eq(versions[1, 2])
-      expect(described_class.tied_timestamp_pair(versions.first(2))).to be_nil
     end
   end
 

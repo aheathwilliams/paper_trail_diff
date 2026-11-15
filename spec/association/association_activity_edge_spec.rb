@@ -34,6 +34,16 @@ class EdgeHolder < ActiveRecord::Base
   self.table_name = 'tracked_articles'
   has_many :stickers, class_name: 'EdgeSticker', as: :holder
   has_many :special_stickers, class_name: 'EdgeSpecialSticker', as: :holder
+  has_many :quiet_stickers, class_name: 'EdgeQuietSticker', as: :holder
+  has_paper_trail
+end
+
+# Stickers a default scope hides, which an analysis reads all the same.
+class EdgeQuietSticker < ActiveRecord::Base
+  self.table_name = 'edge_stickers'
+  self.inheritance_column = nil
+  default_scope { where.not(label: 'hidden') }
+  belongs_to :holder, polymorphic: true, optional: true
   has_paper_trail
 end
 
@@ -78,19 +88,14 @@ RSpec.describe PaperTrailDiff::AssociationActivityEdge do
     edge.relation(filter).distinct.pluck(edge.column).map(&:to_i).sort
   end
 
+  def statements(&)
+    queries = []
+    counter = ->(*, payload) { queries << payload[:sql] unless payload[:name] == 'SCHEMA' }
+    ActiveSupport::Notifications.subscribed(counter, 'sql.active_record', &)
+    queries
+  end
+
   describe 'the base edge' do
-    it 'is available for a scalar foreign key only' do
-      scalar = described_class.new(reflection(TrackedComment, :article), nil)
-      composite = described_class.new(
-        instance_double(ActiveRecord::Reflection::BelongsToReflection,
-                        foreign_key: Class.new(Array).new(%w[article_id body]),
-                        active_record: TrackedComment), nil
-      )
-
-      expect(scalar.available?).to be(true)
-      expect(composite.available?).to be(false)
-    end
-
     it 'leaves the relation to each kind of edge' do
       edge = described_class.new(reflection(TrackedComment, :article), nil)
 
@@ -196,6 +201,88 @@ RSpec.describe PaperTrailDiff::AssociationActivityEdge do
       edge = described_class::Child.new(reflection(EdgeHolder, :special_stickers), nil)
 
       expect(owners(edge, [sticker.id])).to eq([holder.id])
+    end
+  end
+
+  describe described_class::Unversioned do
+    def unversioned(&block)
+      PaperTrail.request(enabled: false, &block)
+    end
+
+    it 'finds the live owners of the children that have no version' do
+      article = TrackedArticle.create!(title: 'Owner')
+      quiet = unversioned { article.comments.create!(body: 'never versioned') }
+      versioned = TrackedArticle.create!(title: 'Other').comments.create!(body: 'versioned')
+      edge = described_class::Unversioned.new(reflection(TrackedArticle, :comments), nil)
+
+      expect(owners(edge, [quiet.id, versioned.id])).to eq([article.id])
+      expect(owners(edge, TrackedComment.select(:id))).to eq([article.id])
+      expect([edge.type, edge.filter_type]).to eq(%i[integer integer])
+      expect(edge.column).to eq(TrackedComment.arel_table[:article_id])
+    end
+
+    it 'reads only the children in the filter' do
+      article = TrackedArticle.create!(title: 'Owner')
+      quiet = unversioned { article.comments.create!(body: 'never versioned') }
+      unversioned { TrackedArticle.create!(title: 'Other').comments.create!(body: 'not asked') }
+      edge = described_class::Unversioned.new(reflection(TrackedArticle, :comments), nil)
+
+      expect(owners(edge, [quiet.id])).to eq([article.id])
+      expect(owners(edge, [])).to eq([])
+    end
+
+    # The quiet row's key is the versioned row's version id, which only the
+    # versioned row's item_id may be told from.
+    it 'compares a string item_id with the key as values' do
+      post = StringItemPost.create!(title: 'Owner')
+      other = StringItemPost.create!(title: 'Other')
+      versioned = other.notes.create!(id: 900, body: 'versioned')
+      quiet = unversioned do
+        post.notes.create!(id: versioned.versions.last.id, body: 'never versioned')
+      end
+      edge = described_class::Unversioned.new(reflection(StringItemPost, :notes), nil)
+
+      expect(owners(edge, [quiet.id, versioned.id])).to eq([post.id])
+      expect(owners(edge, StringItemNote.select(:id))).to eq([post.id])
+    end
+
+    # Where the types match, the database compares them in one statement;
+    # otherwise the ids of the versioned rows are read first, each once.
+    it 'compares the key with item_id in the database only where they share a type' do
+      integer_edge = described_class::Unversioned.new(reflection(TrackedArticle, :comments), nil)
+      string_edge = described_class::Unversioned.new(reflection(StringItemPost, :notes), nil)
+      post = StringItemPost.create!(title: 'Owner')
+      2.times { |index| post.notes.first_or_create!(body: 'versioned').update!(body: index.to_s) }
+
+      expect(integer_edge.relation([1]).to_sql).to include('EXISTS')
+      sql = statements do
+        expect(string_edge.relation(StringItemNote.select(:id)).to_sql).not_to include('EXISTS')
+      end
+      expect(sql.grep(/DISTINCT/).length).to eq(1)
+      expect(sql.grep(/DISTINCT/).first.scan('SELECT').length).to eq(1)
+    end
+
+    it 'reads only children held under the polymorphic owner type' do
+      holder = EdgeHolder.create!(title: 'Holder')
+      document = EdgeSpecialDocument.create!(name: 'Document')
+      held = unversioned { EdgeSticker.create!(label: 'held', holder: holder) }
+      other = unversioned { EdgeSticker.create!(label: 'other', holder: document) }
+      EdgeSticker.where(id: other.id).update_all(holder_id: holder.id)
+      edge = described_class::Unversioned.new(reflection(EdgeHolder, :stickers), nil)
+      documents = described_class::Unversioned.new(reflection(EdgeSpecialDocument, :stickers), nil)
+
+      expect(owners(edge, [held.id, other.id])).to eq([holder.id])
+      expect(owners(documents, [held.id, other.id])).to eq([holder.id])
+      expect(owners(edge, [other.id])).to eq([])
+      expect(owners(documents, [held.id])).to eq([])
+    end
+
+    it 'reads children past their default scope' do
+      holder = EdgeHolder.create!(title: 'Holder')
+      hidden = unversioned { EdgeQuietSticker.create!(label: 'hidden', holder: holder) }
+      edge = described_class::Unversioned.new(reflection(EdgeHolder, :quiet_stickers), nil)
+
+      expect(owners(edge, [hidden.id])).to eq([holder.id])
     end
   end
 
@@ -305,93 +392,6 @@ RSpec.describe PaperTrailDiff::AssociationActivityEdge do
 
       owners = PaperTrail::Version.where(item_id: edge.typed_owners).distinct.pluck(:item_id)
       expect(owners.sort).to eq([kept.id, joined.id, left.id])
-    end
-  end
-
-  describe described_class::LiveHabtm do
-    it 'finds the owners a join row links a target to now' do
-      tag = TrackedTag.create!(name: 'ruby')
-      tagged = TrackedArticle.create!(title: 'Tagged')
-      tagged.tags << tag
-      TrackedArticle.create!(title: 'Other').tags << TrackedTag.create!(name: 'rails')
-      edge = described_class::LiveHabtm.new(reflection(TrackedArticle, :tags), nil)
-
-      expect(edge.available?).to be(true)
-      expect(owners(edge, [tag.id])).to eq([tagged.id])
-      expect(owners(edge, TrackedTag.where(id: tag.id).select(:id))).to eq([tagged.id])
-      expect([edge.type, edge.filter_type]).to eq(%i[integer integer])
-      connection = ActiveRecord::Base.connection
-      expect(edge.column.to_s).to eq(
-        "#{connection.quote_table_name('tracked_articles_tags')}." \
-        "#{connection.quote_column_name('tracked_article_id')}"
-      )
-    end
-
-    it 'reads the join table past the owner default scope and STI condition' do
-      tag = TrackedTag.create!(name: 'ruby')
-      hidden = EdgeHiddenArticle.create!(title: 'Hidden')
-      hidden.tags << tag
-      document = EdgeSpecialDocument.create!(name: 'Tagged')
-      document.tags << tag
-      articles = described_class::LiveHabtm.new(reflection(EdgeHiddenArticle, :tags), nil)
-      documents = described_class::LiveHabtm.new(reflection(EdgeSpecialDocument, :tags), nil)
-
-      expect(owners(articles, [tag.id])).to eq([hidden.id])
-      expect(owners(documents, [tag.id])).to eq([document.id])
-    end
-  end
-
-  describe described_class::RecordedHabtm do
-    # PT-AT records HABTM membership on a version saved from a fresh record.
-    def tag_with_version(article, tag)
-      article.tags << tag
-      TrackedArticle.transaction { TrackedArticle.find(article.id).paper_trail.save_with_version }
-    end
-
-    it 'finds owners whose versions recorded the target, from the window start on' do
-      tag = TrackedTag.create!(name: 'ruby')
-      before = TrackedArticle.create!(title: 'Before')
-      tag_with_version(before, tag)
-      start = Time.now.utc
-      inside = TrackedArticle.create!(title: 'Inside')
-      tag_with_version(inside, tag)
-      tag_with_version(TrackedArticle.create!(title: 'Other'), TrackedTag.create!(name: 'rails'))
-      tags = reflection(TrackedArticle, :tags)
-
-      edge = described_class::RecordedHabtm.new(tags, nil)
-      expect(edge.available?).to be(true)
-      expect([edge.type, edge.filter_type]).to eq(%i[integer integer])
-      expect(edge.column).to eq(PaperTrail::Version.arel_table[:item_id])
-      expect(owners(described_class::RecordedHabtm.new(tags, window(start)), [tag.id]))
-        .to eq([inside.id])
-      expect(owners(described_class::RecordedHabtm.new(tags, nil), [tag.id]))
-        .to eq([before.id, inside.id].sort)
-    end
-
-    it 'reads only its own association name and owner model' do
-      tag = TrackedTag.create!(name: 'ruby')
-      article = TrackedArticle.create!(title: 'Labelled')
-      version = article.versions.reorder(:id).last
-      PaperTrail::VersionAssociation.create!(version_id: version.transaction_id,
-                                             foreign_key_name: 'labels', foreign_key_id: tag.id)
-      document = EdgeSpecialDocument.create!(name: 'Tagged')
-      document.tags << tag
-      PreparedDocument.transaction do
-        PreparedDocument.find(document.id).paper_trail.save_with_version
-      end
-
-      expect(owners(described_class::RecordedHabtm.new(reflection(TrackedArticle, :tags), nil),
-                    [tag.id])).to eq([])
-      expect(owners(described_class::RecordedHabtm.new(reflection(EdgeSpecialDocument, :tags),
-                                                       nil), [tag.id])).to eq([document.id])
-    end
-
-    it 'is unavailable when versions have no transaction_id' do
-      tags = reflection(TrackedArticle, :tags)
-      allow(PaperTrail::Version).to receive(:column_names)
-        .and_return(PaperTrail::Version.column_names - ['transaction_id'])
-
-      expect(described_class::RecordedHabtm.new(tags, nil).available?).to be(false)
     end
   end
 end

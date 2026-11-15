@@ -75,9 +75,10 @@ module PaperTrailDiff
     # : (untyped) -> void
     def self.check_model!: (untyped) -> void
 
-    # A version read with `select` can lack the column its state is in.
-    # : (untyped) -> void
-    def self.check_version!: (untyped) -> void
+    # A version read with `select` can lack the column its state, or its
+    # changes, are in.
+    # : (untyped, ?String) -> void
+    def self.check_version!: (untyped, ?String) -> void
   end
 
   # Whether a value is a version, a record, or neither, answered once for

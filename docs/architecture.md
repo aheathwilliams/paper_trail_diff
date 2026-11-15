@@ -5,12 +5,12 @@ rebuilds history and what that costs. You do not need it to use the gem.
 
 ## Two ways to rebuild a timeline
 
-`timeline` and `analyze(activity: true)` return the same root-record steps for
-the same range, except where a transaction crosses a window's edge: `timeline`
-reports each root version where it was saved, and activity on associations
-reports a transaction in the window it ends in. They build them differently:
+`analyze` returns the same root-record steps for the same range with
+`activity: true` or without, except where a transaction crosses a window's
+edge: without it, each root version is reported where it was saved, and with
+it, activity on associations reports a transaction in the window it ends in. They build them differently:
 
-- `timeline` rebuilds the root record and every chosen association separately
+- Without `activity:`, `analyze` rebuilds the root record and every chosen association separately
   at each root version. Its cost grows with *root versions × size of the chosen
   associations*. It does not depend on how often the associations changed.
 - `analyze(activity: true)` rebuilds the state once, then applies each recorded
@@ -20,7 +20,7 @@ reports a transaction in the window it ends in. They build them differently:
 Neither is always faster. Choose by the output you need. If performance matters,
 measure on real history with the [instrumentation events](reference.md#instrumentation).
 As a rough guide, `analyze(activity: true)` suits wide associations with modest
-activity, and `timeline` suits a few root versions with many child events
+activity, and `analyze` without it suits a few root versions with many child events
 between them.
 
 ## Loading history
@@ -103,31 +103,26 @@ associations no other record is read, so each of the record's versions takes
 effect where it was saved: row locks keep two transactions from interleaving
 one record's versions.
 
-## When the gem falls back to PT-AT
+## What history cannot read
 
-These association shapes cannot be read from the loaded history. The gem asks
-PT-AT to rebuild them at each point instead, which costs queries per record and
-resolves association membership by timestamp only. PT-AT starts from the
-association's current members and swaps in their older versions, without
-checking a scope against them, so its membership is approximate:
+Every association is read from the loaded history, or not at all. These
+shapes are refused, since who was in one at a past point cannot be told from
+stored versions:
 
 - associations with a scope the gem cannot read as plain conditions and an
   exact ranking, including owner-dependent scopes and a `limit` without a
   total integer order;
-- targets with such a default scope, including a polymorphic `belongs_to`
-  target, whose class and scope are known only from each record;
+- targets with such a default scope. A polymorphic `belongs_to` names its
+  target's class only in each record, so one that points at such a class is
+  refused when that record is read;
 - composite foreign keys.
 
-Every method that reads history rejects the scoped cases unless you pass
-`allow_approximate: true`; see [costly associations](reference.md#costly-associations).
+See [association scopes](reference.md#association-scopes).
 
-HABTM membership comes from the snapshots PT-AT records with each transaction,
-so it is only known at root versions saved in a transaction. Those snapshots
-name the transaction and the association but not the owner, so they give only
-the root's own membership, and a HABTM below the root is rejected before any
-history is read. Even at the root, a transaction in which another record with a
-HABTM of the same name saved a version holds both records' members;
-`HabtmTransactionOwners` finds those transactions, and reading one raises.
+A `has_and_belongs_to_many` is refused before any history is read: its join
+rows have no versions. The reference shows how to
+[replace one](reference.md#replacing-a-has_and_belongs_to_many) with a
+`has_many :through` a versioned join model.
 
 ## Database indexes
 

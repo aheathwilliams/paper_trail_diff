@@ -23,7 +23,7 @@ RSpec.describe PaperTrailDiff::ActivityTimelineBuilder do
   end
 
   def timeline(article, **options)
-    PaperTrailDiff.activity_timeline(article, associations: [:comments], **options)
+    SpecTimelines.activity_timeline(article, associations: [:comments], **options)
   end
 
   def analysis(article, **options)
@@ -238,15 +238,6 @@ RSpec.describe PaperTrailDiff::ActivityTimelineBuilder do
       expect { timeline(other, from: version_of(article), to: article) }
         .to raise_error(PaperTrailDiff::VersionMismatchError)
     end
-
-    it 'refuses HABTM activity that runs into live state' do
-      article = TrackedArticle.create!(title: 'Article')
-      from = checkpoint(article)
-
-      expect do
-        PaperTrailDiff.activity_timeline(article, from: from, to: article, associations: [:tags])
-      end.to raise_error(PaperTrailDiff::UnsupportedLiveActivityError, /tags/)
-    end
   end
 
   describe 'group: :transaction' do
@@ -312,6 +303,21 @@ RSpec.describe PaperTrailDiff::ActivityTimelineBuilder do
     expect(comment_bodies(result)).to eq([{ from: 'one', to: 'two' }])
   end
 
+  # A left-out event moves the reported end past it only when no version
+  # filter chooses the steps (see ActivityHistoryBuilder).
+  it 'tells the history whether a version filter chooses its steps' do
+    article, _comment, from, to = edited_history
+    allow(PaperTrailDiff::ActivityHistoryBuilder).to receive(:new).and_call_original
+
+    timeline(article, from: from, to: to)
+    timeline(article, from: from, to: to, version_scope: ->(versions) { versions })
+
+    expect(PaperTrailDiff::ActivityHistoryBuilder)
+      .to have_received(:new).with(any_args, hash_including(filtered: false)).once
+    expect(PaperTrailDiff::ActivityHistoryBuilder)
+      .to have_received(:new).with(any_args, hash_including(filtered: true)).once
+  end
+
   describe 'built directly' do
     let(:adapter) do
       PaperTrailDiff::PaperTrailAdapter.new(associations: [:comments],
@@ -349,13 +355,13 @@ RSpec.describe PaperTrailDiff::ActivityTimelineBuilder do
       end
       calls = collector_calls
 
-      builder(article, from: from, to: to).build
+      builder(article, from: from, to: to).analyze.activity_timeline
       builder(article, from: from, to: to).analyze
 
       versions = [from, to]
       expect(provider).to have_received(:prepare).twice
-      expect(provider).to have_received(:prepare).with(article, versions,
-                                                       end_at: to.created_at).twice
+      expect(provider).to have_received(:prepare)
+        .with(article, versions, start_at: nil, end_at: to.created_at).twice
       expect(calls.map { |call| call.slice(:root_versions, :range_start, :range_end) })
         .to eq([{ root_versions: versions, range_start: from.created_at, range_end: to }] * 2)
       expect(calls.map { |call| call[:prepared] }).to all(be_a(PaperTrailDiff::PreparedActivityIndex))
@@ -368,12 +374,13 @@ RSpec.describe PaperTrailDiff::ActivityTimelineBuilder do
       calls = collector_calls
       before = Time.now.utc
 
-      steps = builder(article, from: from, to: article, live: article).build
+      steps = builder(article, from: from, to: article, live: article).analyze.activity_timeline
 
       captured = steps.last.to_boundary.recorded_at
       expect(captured).to be >= before
       expect(captured).to be_utc
-      expect(provider).to have_received(:prepare).with(article, [from, to], end_at: captured)
+      expect(provider).to have_received(:prepare)
+        .with(article, [from, to], start_at: nil, end_at: captured)
       expect(calls.first.slice(:range_start, :range_end))
         .to eq(range_start: from.created_at, range_end: captured)
       expect(steps.last.from_boundary.version_id).to eq(to.id)
@@ -395,19 +402,19 @@ RSpec.describe PaperTrailDiff::ActivityTimelineBuilder do
       built = described_class.new(article, range: range, snapshotter: provider, view: view,
                                            traversal: PaperTrailDiff::AssociationTraversal.new(tree))
 
-      expect([built.build, built.analyze.activity_timeline]).to eq([[], []])
+      expect(built.analyze.activity_timeline).to eq([])
       expect(provider).not_to have_received(:call)
     end
 
     it 'reads the same activity from a snapshotter that rebuilds every state' do
       article, comment, from, to = edited_history
       comment.update!(body: 'live')
-      plain = FullSnapshotter.new(adapter.method(:snapshot_at), provider)
+      plain = FullSnapshotter.new(FullSnapshotter.pt_at(adapter).method(:snapshot_at), provider)
 
-      expected = [builder(article, from: from, to: to).build,
-                  builder(article, from: from, to: article, live: article).build]
-      found = [builder(article, from: from, to: to, snapshotter: plain).build,
-               builder(article, from: from, to: article, live: article, snapshotter: plain).build]
+      activity = ->(**options) { builder(article, from: from, **options).analyze.activity_timeline }
+      expected = [activity.call(to: to), activity.call(to: article, live: article)]
+      found = [activity.call(to: to, snapshotter: plain),
+               activity.call(to: article, live: article, snapshotter: plain)]
 
       strip = lambda { |steps|
         steps.map do |step|
@@ -420,22 +427,20 @@ RSpec.describe PaperTrailDiff::ActivityTimelineBuilder do
     it 'returns nothing for a record with no versions' do
       article = PaperTrail.request(enabled: false) { TrackedArticle.create!(title: 'Unversioned') }
 
-      steps = builder(article, from: :first, to: article, live: article).build
       result = builder(article, from: :first, to: article, live: article).analyze
 
-      expect(steps).to eq([])
-      expect(steps).to be_frozen
       expect(result.activity_timeline).to eq([])
+      expect(result.activity_timeline).to be_frozen
       expect(result.timeline).to eq([])
       expect(result.diff).to be_empty
     end
 
-    it 'rejects a to that is neither a version nor a record' do
+    it 'rejects a to that is neither a version nor a record as outside the history' do
       article, _comment, from, = edited_history
 
-      expect { builder(article, from: from, to: 'nope').build }
-        .to raise_error(PaperTrailDiff::InvalidEndpointError,
-                        'expected a PaperTrail version or persisted record endpoint')
+      expect { builder(article, from: from, to: 'nope').analyze }
+        .to raise_error(PaperTrailDiff::InvalidTimelineRangeError,
+                        '`to` version is not in the record history')
     end
   end
 
@@ -552,12 +557,14 @@ RSpec.describe PaperTrailDiff::ActivityTimelineBuilder do
       expect(recorded(steps.last.source_boundary)).to eq('body' => { from: 'two', to: 'three' })
     end
 
-    it 'does not read them unless asked' do
+    it 'reads them unless told not to' do
       article, _comment, from, to = edited_history
 
-      steps = timeline(article, from: from, to: to)
+      read = timeline(article, from: from, to: to)
+      unread = timeline(article, from: from, to: to, recorded_changes: false)
 
-      expect(steps.map { |step| step.from_boundary.recorded_changes? }).to all(be(false))
+      expect(read.map { |step| step.from_boundary.recorded_changes? }).to all(be(true))
+      expect(unread.map { |step| step.from_boundary.recorded_changes? }).to all(be(false))
     end
 
     it 'reads the destroy that closes a deleted root, at both of its boundaries' do

@@ -67,17 +67,6 @@ module PaperTrailDiff
       normalize_record(record, @tree, '', reifier, reflections)
     end
 
-    # Normalizes one member of an already selected association branch.
-    #: (untyped, tree: AssociationTree, path: String, incoming: untyped, reifier: untyped) -> RecordSnapshot?
-    def call_child(record, tree:, path:, incoming:, reifier:)
-      return unless record
-
-      @structural_columns[path] ||= @traversal.incoming_relationship_columns(incoming)
-      reflections = reflections_for(record, tree, path)
-      reifier.reify(record, reflections) unless reflections.empty?
-      normalize_record(record, tree, path, reifier, reflections)
-    end
-
     # Normalizes scalar attributes without traversing or loading associations.
     #: (untyped, tree: AssociationTree, path: String) -> snapshot_attributes
     def attributes_for(record, tree:, path:)

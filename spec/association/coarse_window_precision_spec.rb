@@ -46,7 +46,7 @@ RSpec.describe 'a window edge finer than the version table keeps times' do
   end
 
   it 'agrees with timeline about the window a root change is in' do
-    steps = PaperTrailDiff.timeline(folder, within: edge..).length
+    steps = SpecTimelines.timeline(folder, within: edge..).length
 
     expect(activity(edge.., associations: []).length).to eq(steps)
   end

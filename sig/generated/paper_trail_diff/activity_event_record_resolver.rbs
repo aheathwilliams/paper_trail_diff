@@ -7,11 +7,11 @@ module PaperTrailDiff
     def initialize: (?record_transition: untyped, ?prepared_record_after: untyped) -> void
 
     # The record as the version left it: the state recorded next, which holds
-    # any change saved after the version without one of its own. Prepared
-    # history answers without a query; without it, the next version or the
-    # live row does.
-    # : (untyped, ?direct: bool) -> untyped
-    def record_after: (untyped, ?direct: bool) -> untyped
+    # any change saved after the version without one of its own. Every event
+    # comes from versions the prepared history loaded, so it answers without
+    # a query.
+    # : (untyped) -> PreparedRecordState?
+    def record_after: (untyped) -> PreparedRecordState?
 
     # : (untyped) -> ActivitySnapshotDelta?
     def snapshot_delta: (untyped) -> ActivitySnapshotDelta?
@@ -26,9 +26,6 @@ module PaperTrailDiff
     @prepared_record_after: untyped
 
     @record_transition: untyped
-
-    # : (untyped) -> untyped
-    def recorded_after: (untyped) -> untyped
 
     # : (untyped) -> untyped
     def prepared_changeset: (untyped) -> untyped

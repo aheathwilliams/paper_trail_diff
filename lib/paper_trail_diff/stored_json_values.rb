@@ -34,9 +34,13 @@ module PaperTrailDiff
     #: (untyped, Hash[untyped, untyped], String) { (untyped) -> untyped } -> Hash[untyped, untyped]
     def self.convert(model_class, attributes, type_name)
       type = Support.constant(type_name)
-      attributes.to_h do |name, value|
-        [name, model_class.type_for_attribute(name).is_a?(type) ? yield(value) : value]
+      converted = attributes.dup
+      model_class.attribute_types.each do |name, attribute_type|
+        next unless attribute_type.is_a?(type) && attributes.key?(name)
+
+        converted[name] = yield(attributes.fetch(name))
       end
+      converted
     end
     private_class_method :convert
 

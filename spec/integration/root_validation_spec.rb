@@ -15,8 +15,8 @@ RSpec.describe 'Checking the records a method reads the history of' do
 
   def single_record_methods
     {
-      timeline: ->(value) { PaperTrailDiff.timeline(value) },
-      activity_timeline: ->(value) { PaperTrailDiff.activity_timeline(value) },
+      timeline: ->(value) { SpecTimelines.timeline(value) },
+      activity_timeline: ->(value) { SpecTimelines.activity_timeline(value) },
       analyze: ->(value) { PaperTrailDiff.analyze(value) },
       analyze_many: ->(value) { PaperTrailDiff.analyze_many([article, value]) }
     }
@@ -44,7 +44,7 @@ RSpec.describe 'Checking the records a method reads the history of' do
   it 'still reads a versioned record' do
     article.update!(title: 'Final')
 
-    steps = PaperTrailDiff.timeline(article)
+    steps = SpecTimelines.timeline(article)
 
     expect(steps.map { |step| step.diff.attributes.keys }).to include(['title'])
   end

@@ -131,26 +131,6 @@ module PaperTrailDiff
     # effect. A record then reads as it stood before every transaction that
     # ends at or after the boundary's own (see TransactionEnds); without it,
     # as it stood before the boundary's transaction.
-    #: (untyped, ?TransactionEnds?) -> untyped
-    def record_before(boundary, ends = nil)
-      state_before(boundary, ends)&.instantiate
-    end
-
-    # A record created in the boundary's own transaction has no state before
-    # it, yet a HABTM checkpoint saved later in that transaction records it as
-    # a member. Such a member is read as it was created, at a boundary after
-    # its creation; before it, the record did not exist yet.
-    #: (untyped) -> untyped
-    def record_created_in(boundary)
-      index = transaction_index(boundary)
-      return unless index
-
-      version = versions.fetch(index)
-      return unless version.event == 'create' && !VersionBoundary.at_or_after?(version, boundary)
-
-      state_after(index)&.instantiate
-    end
-
     #: (untyped, ?TransactionEnds?) -> PreparedRecordState?
     def state_before(boundary, ends = nil)
       index = ends ? effective_index(boundary, ends) : boundary_index(boundary)
@@ -160,18 +140,12 @@ module PaperTrailDiff
     end
 
     # A handled nil is known absence, not permission to query the current row.
-    #: (untyped, ?direct: bool) -> [bool, untyped]
-    def record_after(version, direct: false)
+    #: (untyped) -> [bool, PreparedRecordState?]
+    def record_after(version)
       index = @version_positions[version.id.to_s]
       return [false, nil] unless index
 
-      state = state_after(index)
-      [true, direct ? state : state&.instantiate]
-    end
-
-    #: () -> Array[untyped]
-    def records
-      states.map(&:instantiate)
+      [true, state_after(index)]
     end
 
     #: () -> Array[PreparedRecordState]
@@ -196,6 +170,14 @@ module PaperTrailDiff
       [state_for(first), state_after(@version_positions.fetch(last.id.to_s))].compact
     end
 
+    # The states before the transaction of another record's version `first`
+    # and after the transaction of its version `last`: what this record was
+    # while that record's transaction began and once it had ended.
+    #: (untyped, untyped) -> Array[PreparedRecordState]
+    def states_around(first, last)
+      [state_before(first), state_after_transaction(last)].compact
+    end
+
     #: (untyped) -> [PreparedRecordState, PreparedRecordState]?
     def transition(version)
       index = @version_positions[version.id.to_s]
@@ -218,6 +200,18 @@ module PaperTrailDiff
     # @rbs @version_positions: Hash[String, Integer]
     # @rbs @transaction_positions: Hash[untyped, Integer]
     # @rbs @effective: [TransactionEnds, Array[untyped]]?
+
+    # The state before this record's first version past `boundary` and its
+    # transaction, or the live one.
+    #: (untyped) -> PreparedRecordState?
+    def state_after_transaction(boundary)
+      key = VersionBoundary.transaction_id(boundary)
+      later = versions.find do |version|
+        VersionBoundary.at_or_after?(version, boundary) &&
+          (key.nil? || VersionBoundary.transaction_id(version) != key)
+      end
+      later ? state_for(later) : live
+    end
 
     #: (Integer) -> PreparedRecordState?
     def state_after(index)
@@ -261,8 +255,7 @@ module PaperTrailDiff
     # than those before it.
     #: (untyped, TransactionEnds) -> Integer?
     def effective_index(boundary, ends)
-      target = VersionBoundary.version_record?(boundary) ? ends.last(boundary) : boundary
-      target_time = target.created_at
+      target, target_time = ends.target(boundary)
       effective = effective_versions(ends)
       (0...effective.length).bsearch do |index|
         VersionBoundary.at_or_after?(effective.fetch(index), target, boundary_time: target_time)
@@ -338,15 +331,13 @@ module PaperTrailDiff
       @seeded_live_records = live_records.to_h { |row| [identity(row.class, row.id), row] }
       @state_loader = PreparedVersionStateLoader.new
       @series = {} #: Hash[Array[String], PreparedRecordSeries]
-      @version_classes = Set.new #: Set[untyped]
       @recorded_ends = RecordedTransactionEnds.new
       @direct_loader = DirectRecordStateLoader.new
-      @direct_states = {} #: Hash[PreparedRecordState, PreparedRecordState?]
+      @direct_states = {} #: Hash[PreparedRecordState, PreparedRecordState]
     end
 
     #: (untyped, Array[untyped]) -> void
     def load(model_class, ids)
-      @version_classes << model_class.paper_trail.version_class
       missing = missing_ids(model_class, ids)
       return if missing.empty?
 
@@ -354,12 +345,6 @@ module PaperTrailDiff
       live = available_live_records(model_class, missing).to_h { |record| [record.id.to_s, record] }
       missing.each { |id| add_series(model_class, id, versions, live) }
     end
-
-    # Where the earliest transaction open at the range's start began, in the
-    # version tables of the records held; nil when none was open. See
-    # PreparedHistoryLoader.
-    #: () -> untyped
-    def reach = CrossingTransactions.reach(@version_classes, @start_time)
 
     # When the history was read from.
     #: () -> untyped
@@ -374,11 +359,6 @@ module PaperTrailDiff
     #: (Array[untyped]) -> TransactionEnds
     def transaction_ends(versions)
       TransactionEnds.new(versions, @recorded_ends.call(versions) { self.versions })
-    end
-
-    #: (untyped, untyped, untyped) -> untyped
-    def record_before(model_class, id, boundary)
-      @series.fetch(identity(model_class, id)).record_before(boundary, @ends)
     end
 
     # Reads for a root's timeline, each record as it stood before every
@@ -397,21 +377,12 @@ module PaperTrailDiff
     #: () -> TransactionEnds?
     def reading_ends = @ends
 
-    #: (untyped, untyped, untyped) -> untyped
-    def record_created_in(model_class, id, boundary)
-      @series.fetch(identity(model_class, id)).record_created_in(boundary)
-    end
-
-    #: (untyped, untyped, untyped) -> [bool, PreparedRecordState?]
+    # The record's state at the boundary, as a record of its class would
+    # hold it. The record must be loaded.
+    #: (untyped, untyped, untyped) -> PreparedRecordState?
     def snapshot_state_before(model_class, id, boundary)
-      series = @series[identity(model_class, id)]
-      return [false, nil] unless series
-
-      state = series.state_before(boundary, @ends)
-      return [true, nil] unless state
-
-      prepared = direct_state(state)
-      [!prepared.nil?, prepared]
+      state = @series.fetch(identity(model_class, id)).state_before(boundary, @ends)
+      direct_state(state) if state
     end
 
     # Typed as a reified record's attributes are. A JSON or JSONB `object`
@@ -425,19 +396,14 @@ module PaperTrailDiff
       [typed_attributes(states.fetch(0)), typed_attributes(states.fetch(1))]
     end
 
-    #: (untyped, untyped, untyped, ?direct: bool) -> [bool, untyped]
-    def record_after(model_class, id, version, direct: false)
-      handled, state = @series[identity(model_class, id)]&.record_after(version, direct: direct)
+    # The record as the version left it, completed as snapshot_state_before's
+    # state is. A handled nil is known absence: the version destroyed it.
+    #: (untyped, untyped, untyped) -> [bool, PreparedRecordState?]
+    def record_after(model_class, id, version)
+      handled, state = @series[identity(model_class, id)]&.record_after(version)
       return [false, nil] unless handled
-      return [true, state] unless direct && state
 
-      prepared = direct_state(state)
-      [!prepared.nil?, prepared]
-    end
-
-    #: (untyped, Array[untyped]) -> Array[untyped]
-    def records_for(model_class, ids)
-      ids.flat_map { |id| @series.fetch(identity(model_class, id)).records }
+      [true, state && direct_state(state)]
     end
 
     #: (untyped, Array[untyped], String) -> Array[untyped]
@@ -445,8 +411,7 @@ module PaperTrailDiff
       plain_reader = generated_reader?(model_class, name)
       ids.flat_map do |id|
         @series.fetch(identity(model_class, id)).states.map do |state|
-          direct = direct_state(state) if plain_reader
-          direct ? direct.attributes[name] : state.instantiate.public_send(name)
+          plain_reader ? direct_state(state).attributes[name] : state.instantiate.public_send(name)
         end
       end
     end
@@ -474,6 +439,14 @@ module PaperTrailDiff
              .map { |state| typed_attributes(state) }
     end
 
+    # A record's attributes around another record's transaction (see
+    # PreparedRecordSeries#states_around), typed as typed_states_across's.
+    #: (untyped, untyped, untyped, untyped) -> Array[Hash[untyped, untyped]]
+    def typed_states_around(model_class, id, first, last)
+      @series.fetch(identity(model_class, id)).states_around(first, last)
+             .map { |state| typed_attributes(state) }
+    end
+
     #: (untyped, untyped) -> bool
     def loaded?(model_class, id)
       @series.key?(identity(model_class, id))
@@ -481,21 +454,18 @@ module PaperTrailDiff
 
     private
 
-    # A model whose records need their own initialization is cast by
-    # instantiating it, as reify does.
     #: (PreparedRecordState) -> Hash[untyped, untyped]
-    def typed_attributes(state)
-      typed = direct_state(state)
-      return typed.attributes if typed
+    def typed_attributes(state) = direct_state(state).attributes
 
-      PreparedRecordState.new(state.instantiate).attributes
-    end
-
-    # A state completed as a record of its class would hold it, or nil where
-    # only instantiating can tell; each state is completed once.
-    #: (PreparedRecordState) -> PreparedRecordState?
+    # A state completed as a record of its class would hold it; each state is
+    # completed once. A model whose records need their own initialization is
+    # completed by instantiating it, as reify does.
+    #: (PreparedRecordState) -> PreparedRecordState
     def direct_state(state)
-      @direct_states.fetch(state) { @direct_states[state] = @direct_loader.complete(state) }
+      @direct_states.fetch(state) do
+        @direct_states[state] = @direct_loader.complete(state) ||
+                                PreparedRecordState.new(state.instantiate)
+      end
     end
 
     #: (untyped, String) -> bool
@@ -510,9 +480,8 @@ module PaperTrailDiff
     # @rbs @state_loader: PreparedVersionStateLoader
     # @rbs @series: Hash[Array[String], PreparedRecordSeries]
     # @rbs @direct_loader: DirectRecordStateLoader
-    # @rbs @direct_states: Hash[PreparedRecordState, PreparedRecordState?]
+    # @rbs @direct_states: Hash[PreparedRecordState, PreparedRecordState]
     # @rbs @ends: TransactionEnds?
-    # @rbs @version_classes: Set[untyped]
     # @rbs @recorded_ends: RecordedTransactionEnds
 
     # Callers bound the range with either a version or a bare timestamp.
@@ -591,9 +560,7 @@ module PaperTrailDiff
   # from it onward. Either can be of a record the history does not hold, such
   # as one the transaction moved out of the tree before the window and never
   # saved again, so every such transaction of the tree's version tables is
-  # read, not only those of the versions held: one statement per table. A
-  # transaction's first version in a table cannot follow another of its own
-  # there, so only the others are looked up.
+  # read, not only those of the versions held: one statement per table.
   #
   # Another version table can number a transaction as this one numbered an
   # earlier one, so versions an anchor separates from the start are not read
@@ -626,11 +593,46 @@ module PaperTrailDiff
     end
 
     # The same, in the version tables of a root model and of the records on
-    # its requested paths.
+    # its requested paths. A polymorphic belongs_to may reach a record of any
+    # class, so with one every version table is read.
     #: (untyped, AssociationTraversal, untyped) -> untyped
     def self.open_around(model, traversal, start)
+      return reach(every_version_class, start) if traversal.polymorphic_paths?(model)
+
       open_among([model.name, *traversal.path_types(model)], start)
     end
+
+    # One version class for each version table the application defines. An
+    # abstract class has no table of its own.
+    #: () -> Array[untyped]
+    def self.every_version_class
+      concern = Support.constant('PaperTrail::VersionConcern')
+      Support.constant('ActiveRecord::Base').descendants.select do |candidate|
+        candidate.include?(concern) && candidate.table_exists?
+      end.uniq(&:table_name)
+    end
+    private_class_method :every_version_class
+
+    # The versions of this table saved before `start` by the transactions
+    # open at it.
+    #: (untyped, untyped) -> untyped
+    def self.saved_before(version_class, start)
+      saved = version_class.where(version_class.arel_table[:created_at].lt(start))
+      TransactionAnchors.scope(saved, version_class, start)
+                        .where(transaction_id: later(version_class, start).select(:transaction_id))
+    end
+
+    # The versions saved from the start onward, of the transactions no anchor
+    # separates from it. A transaction's versions can be dated out of the
+    # order they were saved in, as when a callback saves other records before
+    # its own version, dated as its save began, so each is judged by its date.
+    #: (untyped, untyped) -> untyped
+    def self.later(version_class, start)
+      table = version_class.arel_table
+      saved = version_class.where(table[:created_at].gteq(start)).where.not(transaction_id: nil)
+      TransactionAnchors.scope(saved, version_class, start)
+    end
+    private_class_method :later
 
     #: () -> untyped
     def call
@@ -647,36 +649,7 @@ module PaperTrailDiff
     def open_at_start(version_class)
       return unless version_class.column_names.include?('transaction_id')
 
-      earlier(version_class).minimum(:created_at)
-    end
-
-    # The versions saved before the start by a transaction that saved one
-    # from it onward.
-    #: (untyped) -> untyped
-    def earlier(version_class)
-      saved = version_class.where(version_class.arel_table[:created_at].lt(@start))
-      TransactionAnchors.scope(saved, version_class, @start)
-                        .where(transaction_id: later(version_class).select(:transaction_id))
-    end
-
-    # The versions saved from the start onward that were not the first of
-    # their transaction, of the transactions no anchor separates from it.
-    #: (untyped) -> untyped
-    def later(version_class)
-      table = version_class.arel_table
-      saved = version_class.where(table[:created_at].gteq(@start)).where.not(transaction_id: nil)
-      if own_numbers?(version_class)
-        saved = saved.where(table[version_class.primary_key].not_eq(table[:transaction_id]))
-      end
-      TransactionAnchors.scope(saved, version_class, @start)
-    end
-
-    # Whether the table's ids can number its transactions, as they do unless
-    # the two columns differ in type.
-    #: (untyped) -> bool
-    def own_numbers?(version_class)
-      version_class.type_for_attribute(version_class.primary_key).type ==
-        version_class.type_for_attribute('transaction_id').type
+      self.class.saved_before(version_class, @start).minimum(:created_at)
     end
   end
 end

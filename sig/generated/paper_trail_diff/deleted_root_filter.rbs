@@ -33,6 +33,10 @@ module PaperTrailDiff
     # : () -> untyped
     def model: () -> untyped
 
+    # Whether the relation selects each root its destroy recorded, by id.
+    # : (Array[String]) -> Hash[String, bool]
+    def selected: (Array[String]) -> Hash[String, bool]
+
     # : (Hash[String, untyped]?) -> bool
     def selected?: (Hash[String, untyped]?) -> bool
 

@@ -33,14 +33,12 @@ module PaperTrailDiff
         "record the #{owner} that held it, and one that left #{owner}##{part.name} cannot be found"
     end
 
-    # A belongs_to and a HABTM are recorded on the owner's own versions, and
-    # a through by its parts. PT-AT cannot record a composite key, which is
-    # read another way (see FallbackPaths), and a target without versions is
-    # refused for that.
+    # A belongs_to is recorded on the owner's own versions, and
+    # a through by its parts. A target without versions is refused for that.
     #: (untyped) -> bool
     def self.unrecorded?(part)
       return false unless %i[has_many has_one].include?(part.macro)
-      return false if part.through_reflection? || part.foreign_key.is_a?(Array)
+      return false if part.through_reflection?
 
       Support.versioned?(part.klass) && inverses(part.klass, part).empty?
     end

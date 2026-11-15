@@ -18,13 +18,5 @@ module PaperTrailDiff
         &block
       )
     end
-
-    # Reports a condition rather than timing work: nothing failed, but the
-    # result may be incomplete and only the application can judge that.
-    #: (String | Symbol, Hash[Symbol, untyped]) -> void
-    def notify(event, payload)
-      instrument(event, payload) { nil }
-      nil
-    end
   end
 end

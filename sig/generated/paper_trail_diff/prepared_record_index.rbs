@@ -69,25 +69,12 @@ module PaperTrailDiff
     # effect. A record then reads as it stood before every transaction that
     # ends at or after the boundary's own (see TransactionEnds); without it,
     # as it stood before the boundary's transaction.
-    # : (untyped, ?TransactionEnds?) -> untyped
-    def record_before: (untyped, ?TransactionEnds?) -> untyped
-
-    # A record created in the boundary's own transaction has no state before
-    # it, yet a HABTM checkpoint saved later in that transaction records it as
-    # a member. Such a member is read as it was created, at a boundary after
-    # its creation; before it, the record did not exist yet.
-    # : (untyped) -> untyped
-    def record_created_in: (untyped) -> untyped
-
     # : (untyped, ?TransactionEnds?) -> PreparedRecordState?
     def state_before: (untyped, ?TransactionEnds?) -> PreparedRecordState?
 
     # A handled nil is known absence, not permission to query the current row.
-    # : (untyped, ?direct: bool) -> [bool, untyped]
-    def record_after: (untyped, ?direct: bool) -> [ bool, untyped ]
-
-    # : () -> Array[untyped]
-    def records: () -> Array[untyped]
+    # : (untyped) -> [bool, PreparedRecordState?]
+    def record_after: (untyped) -> [ bool, PreparedRecordState? ]
 
     # : () -> Array[PreparedRecordState]
     def states: () -> Array[PreparedRecordState]
@@ -100,6 +87,12 @@ module PaperTrailDiff
     # The states before `first` and after `last`, where they exist.
     # : (untyped, untyped) -> Array[PreparedRecordState]
     def states_across: (untyped, untyped) -> Array[PreparedRecordState]
+
+    # The states before the transaction of another record's version `first`
+    # and after the transaction of its version `last`: what this record was
+    # while that record's transaction began and once it had ended.
+    # : (untyped, untyped) -> Array[PreparedRecordState]
+    def states_around: (untyped, untyped) -> Array[PreparedRecordState]
 
     # : (untyped) -> [PreparedRecordState, PreparedRecordState]?
     def transition: (untyped) -> [ PreparedRecordState, PreparedRecordState ]?
@@ -121,6 +114,11 @@ module PaperTrailDiff
     @transaction_positions: Hash[untyped, Integer]
 
     @version_positions: Hash[String, Integer]
+
+    # The state before this record's first version past `boundary` and its
+    # transaction, or the live one.
+    # : (untyped) -> PreparedRecordState?
+    def state_after_transaction: (untyped) -> PreparedRecordState?
 
     # : (Integer) -> PreparedRecordState?
     def state_after: (Integer) -> PreparedRecordState?
@@ -175,12 +173,6 @@ module PaperTrailDiff
     # : (untyped, Array[untyped]) -> void
     def load: (untyped, Array[untyped]) -> void
 
-    # Where the earliest transaction open at the range's start began, in the
-    # version tables of the records held; nil when none was open. See
-    # PreparedHistoryLoader.
-    # : () -> untyped
-    def reach: () -> untyped
-
     # When the history was read from.
     # : () -> untyped
     attr_reader start_time: untyped
@@ -194,9 +186,6 @@ module PaperTrailDiff
     # : (Array[untyped]) -> TransactionEnds
     def transaction_ends: (Array[untyped]) -> TransactionEnds
 
-    # : (untyped, untyped, untyped) -> untyped
-    def record_before: (untyped, untyped, untyped) -> untyped
-
     # Reads for a root's timeline, each record as it stood before every
     # transaction that had not ended at the boundary it is read at (see
     # TransactionEnds).
@@ -207,11 +196,10 @@ module PaperTrailDiff
     # : () -> TransactionEnds?
     def reading_ends: () -> TransactionEnds?
 
-    # : (untyped, untyped, untyped) -> untyped
-    def record_created_in: (untyped, untyped, untyped) -> untyped
-
-    # : (untyped, untyped, untyped) -> [bool, PreparedRecordState?]
-    def snapshot_state_before: (untyped, untyped, untyped) -> [ bool, PreparedRecordState? ]
+    # The record's state at the boundary, as a record of its class would
+    # hold it. The record must be loaded.
+    # : (untyped, untyped, untyped) -> PreparedRecordState?
+    def snapshot_state_before: (untyped, untyped, untyped) -> PreparedRecordState?
 
     # Typed as a reified record's attributes are. A JSON or JSONB `object`
     # column stores times and dates as strings, which PaperTrail does not cast
@@ -219,11 +207,10 @@ module PaperTrailDiff
     # : (untyped, untyped, untyped) -> [Hash[untyped, untyped], Hash[untyped, untyped]]?
     def transition: (untyped, untyped, untyped) -> [ Hash[untyped, untyped], Hash[untyped, untyped] ]?
 
-    # : (untyped, untyped, untyped, ?direct: bool) -> [bool, untyped]
-    def record_after: (untyped, untyped, untyped, ?direct: bool) -> [ bool, untyped ]
-
-    # : (untyped, Array[untyped]) -> Array[untyped]
-    def records_for: (untyped, Array[untyped]) -> Array[untyped]
+    # The record as the version left it, completed as snapshot_state_before's
+    # state is. A handled nil is known absence: the version destroyed it.
+    # : (untyped, untyped, untyped) -> [bool, PreparedRecordState?]
+    def record_after: (untyped, untyped, untyped) -> [ bool, PreparedRecordState? ]
 
     # : (untyped, Array[untyped], String) -> Array[untyped]
     def attribute_values_for: (untyped, Array[untyped], String) -> Array[untyped]
@@ -242,27 +229,31 @@ module PaperTrailDiff
     # : (untyped, untyped, untyped, untyped) -> Array[Hash[untyped, untyped]]
     def typed_states_across: (untyped, untyped, untyped, untyped) -> Array[Hash[untyped, untyped]]
 
+    # A record's attributes around another record's transaction (see
+    # PreparedRecordSeries#states_around), typed as typed_states_across's.
+    # : (untyped, untyped, untyped, untyped) -> Array[Hash[untyped, untyped]]
+    def typed_states_around: (untyped, untyped, untyped, untyped) -> Array[Hash[untyped, untyped]]
+
     # : (untyped, untyped) -> bool
     def loaded?: (untyped, untyped) -> bool
 
     private
 
-    # A model whose records need their own initialization is cast by
-    # instantiating it, as reify does.
     # : (PreparedRecordState) -> Hash[untyped, untyped]
     def typed_attributes: (PreparedRecordState) -> Hash[untyped, untyped]
 
-    # A state completed as a record of its class would hold it, or nil where
-    # only instantiating can tell; each state is completed once.
-    # : (PreparedRecordState) -> PreparedRecordState?
-    def direct_state: (PreparedRecordState) -> PreparedRecordState?
+    # A state completed as a record of its class would hold it; each state is
+    # completed once. A model whose records need their own initialization is
+    # completed by instantiating it, as reify does.
+    # : (PreparedRecordState) -> PreparedRecordState
+    def direct_state: (PreparedRecordState) -> PreparedRecordState
 
     # : (untyped, String) -> bool
     def generated_reader?: (untyped, String) -> bool
 
     @direct_loader: DirectRecordStateLoader
 
-    @direct_states: Hash[PreparedRecordState, PreparedRecordState?]
+    @direct_states: Hash[PreparedRecordState, PreparedRecordState]
 
     @end_time: untyped
 
@@ -277,8 +268,6 @@ module PaperTrailDiff
     @start_time: untyped
 
     @state_loader: PreparedVersionStateLoader
-
-    @version_classes: Set[untyped]
 
     # Callers bound the range with either a version or a bare timestamp.
     # : (untyped) -> untyped
@@ -319,9 +308,7 @@ module PaperTrailDiff
   # from it onward. Either can be of a record the history does not hold, such
   # as one the transaction moved out of the tree before the window and never
   # saved again, so every such transaction of the tree's version tables is
-  # read, not only those of the versions held: one statement per table. A
-  # transaction's first version in a table cannot follow another of its own
-  # there, so only the others are looked up.
+  # read, not only those of the versions held: one statement per table.
   #
   # Another version table can number a transaction as this one numbered an
   # earlier one, so versions an anchor separates from the start are not read
@@ -345,9 +332,27 @@ module PaperTrailDiff
     def self.open_among: (Array[String], untyped) -> untyped
 
     # The same, in the version tables of a root model and of the records on
-    # its requested paths.
+    # its requested paths. A polymorphic belongs_to may reach a record of any
+    # class, so with one every version table is read.
     # : (untyped, AssociationTraversal, untyped) -> untyped
     def self.open_around: (untyped, AssociationTraversal, untyped) -> untyped
+
+    # One version class for each version table the application defines. An
+    # abstract class has no table of its own.
+    # : () -> Array[untyped]
+    def self.every_version_class: () -> Array[untyped]
+
+    # The versions of this table saved before `start` by the transactions
+    # open at it.
+    # : (untyped, untyped) -> untyped
+    def self.saved_before: (untyped, untyped) -> untyped
+
+    # The versions saved from the start onward, of the transactions no anchor
+    # separates from it. A transaction's versions can be dated out of the
+    # order they were saved in, as when a callback saves other records before
+    # its own version, dated as its save began, so each is judged by its date.
+    # : (untyped, untyped) -> untyped
+    def self.later: (untyped, untyped) -> untyped
 
     # : () -> untyped
     def call: () -> untyped
@@ -361,20 +366,5 @@ module PaperTrailDiff
     # When the earliest transaction open at the start began in this table.
     # : (untyped) -> untyped
     def open_at_start: (untyped) -> untyped
-
-    # The versions saved before the start by a transaction that saved one
-    # from it onward.
-    # : (untyped) -> untyped
-    def earlier: (untyped) -> untyped
-
-    # The versions saved from the start onward that were not the first of
-    # their transaction, of the transactions no anchor separates from it.
-    # : (untyped) -> untyped
-    def later: (untyped) -> untyped
-
-    # Whether the table's ids can number its transactions, as they do unless
-    # the two columns differ in type.
-    # : (untyped) -> bool
-    def own_numbers?: (untyped) -> bool
   end
 end

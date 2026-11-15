@@ -89,9 +89,9 @@ RSpec.describe 'History stored as JSON' do
 
       expect(changed_names(PaperTrailDiff.compare(article.versions.last, article)))
         .to eq(['title'])
-      expect(PaperTrailDiff.timeline(article, from: :first, to: article)
+      expect(SpecTimelines.timeline(article, from: :first, to: article)
         .map { |step| changed_names(step.diff) }).to eq([[], ['title'], ['title']])
-      expect(PaperTrailDiff.activity_timeline(article, from: :first, to: article)
+      expect(SpecTimelines.activity_timeline(article, from: :first, to: article)
         .map { |step| changed_names(step.diff) }).to eq([[], ['title'], ['title']])
 
       report = PaperTrailDiff.report(model.all, since: Time.utc(2000), limit: 5)
@@ -161,7 +161,7 @@ RSpec.describe 'History stored as JSON' do
 
     # Each version, and the current row, as the gem reads them.
     def states(file)
-      steps = PaperTrailDiff.timeline(file, from: :first, to: file)
+      steps = SpecTimelines.timeline(file, from: :first, to: file)
       [changed_names(PaperTrailDiff.compare(file.versions.last, file)),
        steps.map { |step| changed_names(step.diff) },
        PaperTrailDiff.analyze(file, from: file.versions.last, to: file, activity: true,

@@ -17,7 +17,7 @@ RSpec.describe 'Activity for a record at two places in the tree',
   end
 
   def steps(root, path, **options)
-    PaperTrailDiff.activity_timeline(root, associations: [path], snapshots: true, **options)
+    SpecTimelines.activity_timeline(root, associations: [path], snapshots: true, **options)
   end
 
   def step_by(steps, name)

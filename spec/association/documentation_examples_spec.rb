@@ -75,7 +75,7 @@ RSpec.describe 'association documentation examples' do
     expect(scoped.map { |step| step.source_boundary.whodunnit }).to eq(['Priya Shah'])
 
     # The claim the section rests on: the root's own versions show none of it.
-    root_steps = PaperTrailDiff.timeline(
+    root_steps = SpecTimelines.timeline(
       article,
       within: start_at..cutoff,
       version_scope: ->(scope) { scope.where(whodunnit: 'Priya Shah') }

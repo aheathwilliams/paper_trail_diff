@@ -3,16 +3,15 @@
 module PaperTrailDiff
   # Loads the children of a has_many or has_one that its owners had from a
   # start onward, from PT-AT's version associations and the live rows.
-  # Prepared history and activity both read children through it. A composite
-  # foreign key reads none, as loaded history cannot index it.
+  # Prepared history and activity both read children through it.
   #
   # A history that ends leaves out the children created after its end (see
   # VersionQuery.created_after), which no state up to the end holds: read
   # with the rest, each would bring its versions and its row, and a range
   # long past would cost more with every child its owners have gained since.
   class ActivityChildCandidateLoader
-    # : (untyped, Array[untyped], untyped, untyped, ?untyped) -> void
-    def initialize: (untyped, Array[untyped], untyped, untyped, ?untyped) -> void
+    # : (untyped, Array[untyped], untyped, untyped, untyped) -> void
+    def initialize: (untyped, Array[untyped], untyped, untyped, untyped) -> void
 
     # Queries shared by a batch's roots keep the owner and timestamp needed to
     # partition its candidates back into each root's exact activity range.
@@ -26,7 +25,7 @@ module PaperTrailDiff
 
     @end_at: untyped
 
-    @foreign_key: String?
+    @foreign_key: String
 
     @parent_class: untyped
 
@@ -65,6 +64,21 @@ module PaperTrailDiff
 
     # : (untyped, String, Array[untyped]) -> untyped
     def historical_relation: (untyped, String, Array[untyped]) -> untyped
+
+    # PT-AT stores the keys a version saved, so the owner a child held before
+    # its first version is in no row when that version is not a create: the
+    # child was made without one, and its first version's state, which holds
+    # that owner, is read instead.
+    # : (String) -> Array[Array[untyped]]
+    def first_owner_rows: (String) -> Array[Array[untyped]]
+
+    # The first version of each child since the start, unless it created its
+    # child: a create holds no state, and every child created after the
+    # range would be read for nothing. One saved after the end holds the
+    # state the child had there too. A model PaperTrail does not version has
+    # none.
+    # : () -> untyped
+    def first_versions: () -> untyped
 
     # : (untyped, untyped) -> Array[Array[untyped]]
     def pluck_rows: (untyped, untyped) -> Array[Array[untyped]]

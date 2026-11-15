@@ -16,7 +16,7 @@ RSpec.describe 'Activity over a window',
   end
 
   def timeline(article, **options)
-    PaperTrailDiff.activity_timeline(article, associations: [:comments], **options)
+    SpecTimelines.activity_timeline(article, associations: [:comments], **options)
   end
 
   def analysis(article, **options)
@@ -81,7 +81,7 @@ RSpec.describe 'Activity over a window',
     article.comments.create!(body: 'second')
     options = { associations: [:limited_comments], within: start..now }
 
-    expect(PaperTrailDiff.activity_timeline(article, **options)).to eq([])
+    expect(SpecTimelines.activity_timeline(article, **options)).to eq([])
     closed = PaperTrailDiff.analyze(article, activity: true, **options)
     article.update!(title: 'two')
     followed = PaperTrailDiff.analyze(article, activity: true, **options)
@@ -98,7 +98,7 @@ RSpec.describe 'Activity over a window',
     finish = now
     article.update!(title: 'two')
 
-    steps = PaperTrailDiff.activity_timeline(article, within: start..finish)
+    steps = SpecTimelines.activity_timeline(article, within: start..finish)
     result = PaperTrailDiff.analyze(article, within: start..finish, activity: true)
 
     expect(steps).to eq([])
@@ -111,8 +111,8 @@ RSpec.describe 'Activity over a window',
     article = TrackedArticle.create!(title: 'one')
     window = now..now
 
-    PaperTrailDiff.activity_timeline(article, within: window)
-    PaperTrailDiff.activity_timeline(article, within: window, associations: [:comments])
+    SpecTimelines.activity_timeline(article, within: window)
+    SpecTimelines.activity_timeline(article, within: window, associations: [:comments])
 
     expect(PaperTrailDiff::RootVersionSelection).to have_received(:new)
       .with(hash_including(context_required: false)).once
@@ -232,7 +232,7 @@ RSpec.describe 'Activity over a window',
 
     readings = [
       timeline(article, within: window, version_scope: editors),
-      PaperTrailDiff.activity_timeline(article, within: window, version_scope: editors),
+      SpecTimelines.activity_timeline(article, within: window, version_scope: editors),
       PaperTrailDiff.analyze_many([article], within: window, activity: true,
                                              version_scope: editors).values.sole.activity_timeline
     ]
@@ -268,20 +268,6 @@ RSpec.describe 'Activity over a window',
 
     expect(steps.map { |step| [step.from_boundary.item_type, step.to_boundary.item_type] })
       .to eq([%w[TrackedComment TrackedComment]])
-  end
-
-  it 'refuses HABTM activity only when it has to close on the live row' do
-    article = TrackedArticle.create!(title: 'one')
-    start = now
-    article.update!(title: 'two')
-    finish = now
-    options = { within: start..finish, associations: [:tags] }
-
-    expect { PaperTrailDiff.activity_timeline(article, **options) }
-      .to raise_error(PaperTrailDiff::UnsupportedLiveActivityError, /tags/)
-    checkpoint(article)
-    expect(titles(PaperTrailDiff.activity_timeline(article, **options)))
-      .to eq([{ from: 'one', to: 'two' }])
   end
 
   # A row of a comment saved after the window names its reviewer, but no state

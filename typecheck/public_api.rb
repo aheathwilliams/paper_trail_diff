@@ -4,30 +4,25 @@
 # that checking only the implementation can overlook.
 record = Object.new
 window = Time.now..Time.now
-PaperTrailDiff.activity_timeline(record, from: :first, to: record,
-                                         group: :transaction, snapshots: true).each do |step|
+activity = PaperTrailDiff.analyze(record, from: :first, to: record, activity: true,
+                                          group: :transaction, snapshots: true)
+activity.activity_timeline&.each do |step|
   step.source_boundary.whodunnit
   step.to_h(metadata: true, snapshots: true)
 end
-PaperTrailDiff.timeline(record, from: :first, to: record).each do |step|
+PaperTrailDiff.analyze(record, from: :first, to: record).timeline.each do |step|
   step.source_boundary.record
   step.to_h(metadata: true)
 end
 PaperTrailDiff.analyze(record, from: :first, to: record, activity: true,
                                group: :transaction, snapshots: true).to_h(metadata: true)
 PaperTrailDiff.analyze_many([record], within: window, activity: true, group: :transaction,
-                                      snapshots: true, allow_approximate: false)
+                                      snapshots: true)
 PaperTrailDiff.analyze_scope(record, limit: 10, within: window,
                                      activity: true, group: :transaction, snapshots: true,
-                                     historical_filter: { status: 'published' },
-                                     max_filter_versions: 500, include_deleted: true,
-                                     allow_approximate: false)
-PaperTrailDiff.compare_many([{ from: :first, to: record }], allow_approximate: true)
+                                     include_deleted: true)
+PaperTrailDiff.compare_many([{ from: :first, to: record }])
 PaperTrailDiff.report(record, since: window.begin, limit: 10,
-                              historical_filter: { status: 'published' },
-                              max_filter_versions: 500, include_deleted: true,
-                              allow_approximate: false).deleted
-PaperTrailDiff.report(record, since: window.begin, limit: 10,
-                              historical_filter: ->(_state) { true },
-                              allow_approximate: true).analyses
+                              include_deleted: true).deleted
+PaperTrailDiff.report(record, since: window.begin, limit: 10).analyses
 PaperTrailDiff.recorded_changes(record, ignore: [:updated_at, 'lock_version'])&.each_value(&:to_h)

@@ -61,23 +61,22 @@ module PaperTrailDiff
 
     # The window roots are selected over: the one asked for, and with a tree,
     # from where the earliest transaction open at its start began (see
-    # CrossingTransactions). A window reports such a transaction, which may
-    # have saved a root's tree only before it.
-    #: (untyped, AssociationTree?, TimeRange?) -> TimeRange?
-    def self.window(model, tree, range)
-      return range unless range && tree && !tree.empty?
+    # SelectionWindow). A window reports such a transaction, which may have
+    # saved a root's tree only before it.
+    #: (untyped, AssociationTraversal?, TimeRange?) -> TimeRange?
+    def self.window(model, traversal, range)
+      return range unless range && traversal
 
-      traversal = AssociationTraversal.new(tree)
-      reach = CrossingTransactions.open_around(model, traversal, range.begin_time)
-      reach ? range.widened(reach) : range
+      reach = traversal.reach_before(model, range.begin_time)
+      reach ? SelectionWindow.new(range, reach) : range
     end
 
     # Only the versions `version_scope` keeps select a root, on its
     # associations as on its own versions.
-    #: (untyped, tree: AssociationTree, time_range: TimeRange?, ?version_scope: untyped) -> void
-    def initialize(model, tree:, time_range:, version_scope: nil)
+    #: (untyped, traversal: AssociationTraversal, time_range: TimeRange?, ?version_scope: untyped) -> void
+    def initialize(model, traversal:, time_range:, version_scope: nil)
       @model = model
-      @traversal = AssociationTraversal.new(tree)
+      @traversal = traversal
       @time_range = time_range
       @version_scope = version_scope
     end
@@ -152,13 +151,12 @@ module PaperTrailDiff
 
     #: (untyped) -> Array[AssociationActivityEdge]
     def edges(reflection)
-      kinds = case reflection.macro
-              when :belongs_to then [AssociationActivityEdge::BelongsTo]
-              when :has_and_belongs_to_many
-                [AssociationActivityEdge::LiveHabtm, AssociationActivityEdge::RecordedHabtm]
-              else [AssociationActivityEdge::Child]
+      kinds = if reflection.belongs_to?
+                [AssociationActivityEdge::BelongsTo]
+              else
+                [AssociationActivityEdge::Child, AssociationActivityEdge::Unversioned]
               end
-      kinds.map { |kind| kind.new(reflection, @time_range) }.select(&:available?)
+      kinds.map { |kind| kind.new(reflection, @time_range) }
     end
 
     # Records with a version in the window, or only those of them `item_ids`

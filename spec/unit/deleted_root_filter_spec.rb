@@ -50,7 +50,17 @@ RSpec.describe PaperTrailDiff::DeletedRootFilter do
     expect(kept(FilterArticle.where(views: 2), [article])).to eq([identity(article)])
     expect([1, 3, 4].map { |views| kept(FilterArticle.where(views: views), [article]) })
       .to eq([[], [], []])
-    expect(kept(FilterArticle.unscoped.where(hidden: 1), [article])).to eq([])
+  end
+
+  # History leaves out a skipped column, so a destroyed record's state holds
+  # only its default: a default scope is read with it, a condition is refused.
+  it 'refuses a condition on a column history skips' do
+    article = destroyed(views: 1)
+
+    expect(kept(FilterArticle.where(views: 1), [article])).to eq([identity(article)])
+    expect { kept(FilterArticle.unscoped.where(hidden: 1), [article]) }
+      .to raise_error(PaperTrailDiff::ConfigurationError, /columns that its history records/)
+    expect(described_class.readable(FilterArticle.where(hidden: 1))).to be_nil
   end
 
   it 'reads a destroy naming a removed column, and leaves out one with no state' do
@@ -102,6 +112,18 @@ RSpec.describe PaperTrailDiff::DeletedRootFilter do
     filtered = described_class.new(FilterEvent.where(status: :published))
                               .call(events.map { |event| ['FilterEvent', event.id.to_s] })
     expect(filtered).to eq([['FilterEvent', events.first.id.to_s]])
+  end
+
+  it 'keeps every root whose destroy stored a state for a relation with no conditions' do
+    kept, emptied = Array.new(2) { FilterEvent.create!(status: :draft).tap(&:destroy!) }
+    record_destroy('FilterEvent', emptied.id, nil, created_at: Time.now + 60)
+    unrecorded = FilterEvent.create!(status: :draft)
+    FilterEvent.where(id: unrecorded.id).delete_all
+
+    identities = [kept, emptied, unrecorded].map { |event| ['FilterEvent', event.id.to_s] }
+    filtered = described_class.new(FilterEvent.all).call(identities)
+
+    expect(filtered).to eq([['FilterEvent', kept.id.to_s], ['FilterEvent', unrecorded.id.to_s]])
   end
 
   it 'keeps a root whose destroy was not recorded, which has no state to test' do

@@ -53,7 +53,12 @@ RSpec.describe PaperTrailDiff::TransactionCut do
 
   describe '.crossing_start' do
     let(:traversal) do
-      instance_double(PaperTrailDiff::AssociationTraversal, path_types: [])
+      double = instance_double(PaperTrailDiff::AssociationTraversal,
+                               path_types: [], polymorphic_paths?: false)
+      allow(double).to receive(:reach_before) do |model, start|
+        PaperTrailDiff::CrossingTransactions.open_around(model, double, start)
+      end
+      double
     end
 
     it 'moves the start back to where a transaction open there began' do

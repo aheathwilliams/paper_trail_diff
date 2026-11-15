@@ -60,7 +60,7 @@ RSpec.describe 'Association history with tied version timestamps' do
       article = create_history
 
       expect(PaperTrail::Version.distinct.count(:created_at)).to eq(1)
-      expect(PaperTrailDiff.timeline(article, from: :first, to: article, associations: [:comments])
+      expect(SpecTimelines.timeline(article, from: :first, to: article, associations: [:comments])
         .map { |step| summary(step.diff) }).to eq(expected_steps)
     end
 

@@ -20,10 +20,9 @@ module PaperTrailDiff
     # nothing but the history.
     #
     # A `start_at` is a window's; a range of versions starts at its first.
-    #: (untyped, Array[untyped], ?start_at: untyped, ?end_at: untyped, ?reach: bool) -> PreparedActivitySnapshots
-    def prepare(record, root_versions, start_at: nil, end_at: nil, reach: true)
-      history = @store.prepare(record, root_versions, start_at: start_at, end_at: end_at,
-                                                      reach: reach)
+    #: (untyped, Array[untyped], ?start_at: untyped, ?end_at: untyped) -> PreparedActivitySnapshots
+    def prepare(record, root_versions, start_at: nil, end_at: nil)
+      history = @store.prepare(record, root_versions, start_at: start_at, end_at: end_at)
       last = @last
       return last if last && last.history.equal?(history)
 
@@ -77,16 +76,6 @@ module PaperTrailDiff
       history ? history.reading(ends, &block) : yield
     end
 
-    # Where the transactions of these versions take effect: as recorded,
-    # with a history to read it from.
-    #: (Array[untyped]) -> TransactionEnds
-    def transaction_ends(versions)
-      history = @history
-      return TransactionEnds.new(versions) unless history
-
-      history.transaction_ends(versions)
-    end
-
     #: (untyped, untyped) -> RecordSnapshot?
     def call(root_endpoint, context_endpoint)
       @snapshotter.call(root_endpoint, context_endpoint, history: @history)
@@ -123,9 +112,11 @@ module PaperTrailDiff
       @store.root_state(root_endpoint) if @history
     end
 
-    #: (untyped, habtm_version: untyped) -> untyped
-    def association_reader(context_version, habtm_version:)
-      @store.association_reader(context_version, habtm_version: habtm_version, history: @history)
+    # See HistoricalSnapshotStore#member.
+    #: (PreparedRecordState, untyped, tree: AssociationTree, path: String, incoming: untyped, normalizer: SnapshotNormalizer) -> RecordSnapshot
+    def member(state, context_version, tree:, path:, incoming:, normalizer:) # rubocop:disable Metrics/ParameterLists
+      @store.member(state, context_version, tree: tree, path: path, incoming: incoming,
+                                            normalizer: normalizer, history: @history)
     end
 
     #: (untyped) -> [Hash[untyped, untyped], Hash[untyped, untyped]]?
@@ -133,10 +124,10 @@ module PaperTrailDiff
       @history&.record_transition(Endpoint.model_class(version), version.item_id, version)
     end
 
-    #: (untyped, ?direct: bool) -> [bool, untyped]
-    def record_after(version, direct: false)
-      @history&.record_after(Endpoint.model_class(version), version.item_id, version,
-                             direct: direct) || [false, nil]
+    #: (untyped) -> [bool, PreparedRecordState?]
+    def record_after(version)
+      @history&.record_after(Endpoint.model_class(version), version.item_id, version) ||
+        [false, nil]
     end
 
     # @rbs @store: HistoricalSnapshotStore
@@ -146,13 +137,14 @@ module PaperTrailDiff
 
   # Builds chronological snapshots, refreshing only branches affected by prior events.
   class ActivitySnapshotSequence
-    #: (Array[untyped], Array[ActivityEvent], untyped, ?current: untyped) -> void
-    def initialize(root_versions, events, snapshotter, current: nil)
+    # `ends` places the events' transactions, as the events were ordered by.
+    #: (Array[untyped], Array[ActivityEvent], untyped, ends: TransactionEnds, ?current: untyped) -> void
+    def initialize(root_versions, events, snapshotter, ends:, current: nil)
       @root_versions = root_versions
       @events = events
       @snapshotter = snapshotter
       @current = current
-      @ends = snapshotter.transaction_ends(events.map(&:version))
+      @ends = ends
       @transaction_groups = ActivityTransactionGroups.new(events)
       @root_endpoints = build_root_endpoints
     end

@@ -83,10 +83,12 @@ module PaperTrailDiff
     # no later version, a window closing on current state reads the root from
     # the live record, which is then its state throughout the window. With
     # neither, the root was gone before the window began, and it reports
-    # nothing.
+    # nothing. Over a whole history, a root with no versions at all has none
+    # to report either, as when it is read alone (see TimelineRange#unresolved?).
     #: () -> RootVersionPlan
     def without_selection
       return RootVersionPlan.empty unless @context_required
+      return RootVersionPlan.empty if @in_range.empty? && !@windowed
       if @after_range
         return RootVersionPlan.contiguous([@after_range], context_version: @after_range)
       end

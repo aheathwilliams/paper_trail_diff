@@ -3,21 +3,27 @@
 module PaperTrailDiff
   # Matches time values to the precision PaperTrail actually stored.
   #
-  # PaperTrail's JSON serializer, and a `json` or `jsonb` object column, write
-  # times through ActiveSupport's JSON encoder, which keeps only
-  # `ActiveSupport::JSON::Encoding.time_precision` fractional digits
-  # (milliseconds by default). The live row keeps the database's precision, so
-  # comparing the two would report every timestamp as changed even though
-  # nothing was edited. Truncating every side to the stored precision is
-  # idempotent, so values that came from history are unaffected and only the
-  # digits history could never have held are dropped.
+  # PaperTrail's JSON serializer, a custom serializer that writes JSON, and a
+  # `json` or `jsonb` object column write times as text, which keeps only as
+  # many fractional digits as the encoder writes: milliseconds by default,
+  # whole seconds in Active Support's legacy format. The live row keeps the
+  # database's precision, so comparing the two would report every timestamp
+  # as changed even though nothing was edited. Truncating every side to the
+  # stored precision is idempotent, so values that came from history are
+  # unaffected and only the digits history could never have held are dropped.
+  #
+  # The digits are read by storing a time the way history does and reading
+  # it back, rather than assumed from the serializer's name, so a wrapper of
+  # the JSON serializer and the legacy format are read as they write.
   module StoredTimePrecision
     NANOSECOND_DIGITS: ::Integer
 
     JSON_COLUMN_TYPES: untyped
 
+    PROBE: untyped
+
     # Fractional digits a model's history keeps for times, or nil when the
-    # history is stored losslessly.
+    # history stores them whole.
     # : (untyped) -> Integer?
     def self.digits: (untyped) -> Integer?
 
@@ -29,23 +35,29 @@ module PaperTrailDiff
     # : (untyped, Integer) -> untyped
     def self.truncate: (untyped, Integer) -> untyped
 
-    # : (untyped) -> bool
-    def self.json_history?: (untyped) -> bool
-
     # Whether the version table keeps this column as `json` or `jsonb`, which
     # PaperTrail writes without its serializer. A version that is not an
     # Active Record model has no table.
     # : (untyped, String) -> bool
     def self.json_column?: (untyped, String) -> bool
 
+    # The digits a time keeps when written as `writer` writes history, which
+    # can change with Active Support's JSON settings. A writer that gives a
+    # time back as a time keeps it whole.
+    # : (untyped) -> Integer?
+    def self.written_digits: (untyped) -> Integer?
+
+    # : (untyped) -> untyped
+    def self.written_back: (untyped) -> untyped
+
+    # The fewest digits that read the probe back, or none when it came back
+    # whole. Text that names no time keeps nothing to truncate to.
+    # : (untyped) -> Integer?
+    def self.read_digits: (untyped) -> Integer?
+
     # mutant:disable - Every mutation that survives here reads the same
     # constant another way: from this module rather than Object, or with `::`.
-    # : () -> Integer
-    def self.json_time_precision: () -> Integer
-
-    # Whether PaperTrail writes history with its JSON serializer.
-    # mutant:disable - As for json_time_precision.
-    # : () -> bool
-    def self.json_serializer?: () -> bool
+    # : () -> untyped
+    def self.json_encoding: () -> untyped
   end
 end

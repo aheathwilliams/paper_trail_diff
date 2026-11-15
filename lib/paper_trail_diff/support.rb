@@ -24,6 +24,10 @@ module PaperTrailDiff
     # The date a database gives a time of day it reads back.
     TIME_OF_DAY_DATE = { year: 2000, month: 1, day: 1 }.freeze #: Hash[Symbol, Integer]
 
+    # Where a hash has no value for a key the other has (see .same?).
+    MISSING = Object.new.freeze
+    private_constant :MISSING
+
     # Answers a question about `value` once for each Active Record class, in
     # `answers`: its respond_to? also looks through the instance's attributes,
     # which costs more than most of what reading a version does, and every
@@ -46,8 +50,10 @@ module PaperTrailDiff
     #: (Hash[untyped, untyped], untyped) -> Hash[String, untyped]
     def self.decodable(stored, model_class)
       times = TimeOfDay.columns(model_class)
+      datetimes = TimeOfDay.datetime_columns(model_class)
       stored.to_h do |name, value|
         name = name.to_s
+        value = DatabaseTime.stored(value) if datetimes.include?(name)
         [name, unwrapped_time(value, times.include?(name))]
       end
     end
@@ -116,20 +122,34 @@ module PaperTrailDiff
 
       rebuilt = record #: untyped
       times = TimeOfDay.columns(rebuilt.class)
+      datetimes = TimeOfDay.datetime_columns(rebuilt.class)
       version.object_deserialized.each do |name, value|
-        if TIME_VALUE.eql?(value.class.name)
-          assign_recorded(record, name.to_s, recorded_time(value))
-        elsif written_time?(value, name, times)
-          assign_recorded(record, name.to_s, written_time(value))
-        end
+        recorded = recorded_value(value, name.to_s, times, datetimes)
+        assign_recorded(record, name.to_s, recorded) unless recorded.equal?(value)
       end
       record
     end
 
+    # The value PaperTrail would assign had it read the stored one as the
+    # row does, or the stored value itself.
+    #: (untyped, String, Array[String], Array[String]) -> untyped
+    def self.recorded_value(value, name, times, datetimes)
+      if TIME_VALUE.eql?(value.class.name)
+        recorded_time(value)
+      elsif written_time?(value, name, times)
+        written_time(value)
+      elsif datetimes.include?(name)
+        DatabaseTime.stored(value)
+      else
+        value
+      end
+    end
+    private_class_method :recorded_value
+
     # JSON writes a time of day as text.
-    #: (untyped, untyped, Array[String]) -> bool
+    #: (untyped, String, Array[String]) -> bool
     def self.written_time?(value, name, times)
-      value.is_a?(String) && times.include?(name.to_s)
+      value.is_a?(String) && times.include?(name)
     end
     private_class_method :written_time?
 
@@ -140,13 +160,19 @@ module PaperTrailDiff
 
       version = record.public_send(model.version_association_name)
       object = version&.object
-      return unless object
-
-      # A JSON column's Hash is keyed by attribute names, never this one.
-      json_times = TimeOfDay.columns(model).any? && StoredTimePrecision.digits(model)
-      version if json_times || object.include?(TIME_VALUE)
+      version if object && read_again?(object, model)
     end
     private_class_method :rebuilt_from
+
+    # Whether PaperTrail decodes some stored value of this object otherwise
+    # than the row reads it.
+    #: (untyped, untyped) -> bool
+    def self.read_again?(object, model)
+      # A JSON column's Hash is keyed by attribute names, never this one.
+      json_times = TimeOfDay.columns(model).any? && StoredTimePrecision.digits(model)
+      json_times || object.include?(TIME_VALUE) || DatabaseTime.stored_date?(object, model)
+    end
+    private_class_method :read_again?
 
     # As PaperTrail assigns a stored attribute.
     #: (untyped, String, untyped) -> void
@@ -159,50 +185,32 @@ module PaperTrailDiff
     end
     private_class_method :assign_recorded
 
+    # A frozen plain Hash or Array whose contents are all frozen is returned as
+    # it is rather than copied again, as each value object that holds it would.
+    # Ractor.shareable? answers that and remembers a yes on the object, so a
+    # tree passed from one value object to the next is not walked again.
     #: (untyped) -> untyped
     def self.immutable_copy(value)
-      return value if deeply_frozen?(value)
-
       case value
-      when Hash
-        immutable_hash(value)
-      when Array
-        value.map { |item| immutable_copy(item) }.freeze
+      when Hash, Array
+        plain = value.instance_of?(Hash) || value.instance_of?(Array)
+        plain && Ractor.shareable?(value) ? value : copy_tree(value)
       else
-        duplicate_and_freeze(value)
+        value.frozen? ? value : duplicate_and_freeze(value)
       end
     end
 
-    # A frozen tree is returned as it is rather than copied again, as each
-    # value object that holds it would.
-    #: (untyped) -> bool
-    def self.deeply_frozen?(value)
-      members = frozen_members(value)
-      !members.nil? && members.all? { |item| deeply_frozen?(item) }
-    end
-    private_class_method :deeply_frozen?
-
-    # What a frozen plain Hash or Array holds, keys too, and nothing for any
-    # other frozen value; nil when the value is not frozen or is a subclass.
-    #: (untyped) -> Array[untyped]?
-    def self.frozen_members(value)
-      return unless value.frozen?
-      return value.flatten if value.instance_of?(Hash)
-      return value if value.instance_of?(Array)
-
-      [] unless value.is_a?(Hash) || value.is_a?(Array)
-    end
-    private_class_method :frozen_members
-
-    #: (Hash[untyped, untyped]) -> Hash[untyped, untyped]
-    def self.immutable_hash(value)
-      copy = {} #: Hash[untyped, untyped]
-      value.each do |key, item|
-        copy[immutable_copy(key)] = immutable_copy(item)
+    #: (Hash[untyped, untyped] | Array[untyped]) -> (Hash[untyped, untyped] | Array[untyped])
+    def self.copy_tree(value)
+      if value.is_a?(Hash)
+        copy = {} #: Hash[untyped, untyped]
+        value.each { |key, item| copy[immutable_copy(key)] = immutable_copy(item) }
+        copy.freeze
+      else
+        value.map { |item| immutable_copy(item) }.freeze
       end
-      copy.freeze
     end
-    private_class_method :immutable_hash
+    private_class_method :copy_tree
 
     #: (untyped) -> untyped
     def self.serialize(value)
@@ -218,6 +226,13 @@ module PaperTrailDiff
       else
         paper_trail_diff_value?(value) ? value.to_h : value
       end
+    end
+
+    # Ids as strings, once each, in the order their records' ids take: an
+    # integer id by its value, so 2 comes before 10, and any other by its text.
+    #: (Array[untyped]) -> Array[String]
+    def self.sort_ids(ids)
+      ids.map(&:to_s).uniq.sort_by { |id| id.match?(/\A\d+\z/) ? [id.to_i, id] : [Float::INFINITY, id] }
     end
 
     # Records sort by type first so that mixed id types stay comparable, then
@@ -328,15 +343,6 @@ module PaperTrailDiff
     end
     private_class_method :version_table
 
-    # Versions sharing a timestamp, whether or not their ids order them. PT-AT
-    # indexes association membership per version but resolves it by timestamp,
-    # so association state cannot be told apart across such a pair even when the
-    # scalar sequence is perfectly recoverable.
-    #: (Array[untyped]) -> Array[untyped]?
-    def self.tied_timestamp_pair(versions)
-      versions.each_cons(2).find { |left, right| left.created_at == right.created_at }
-    end
-
     # Whether a model records history at all.
     #
     # PaperTrail defines `paper_trail` on every ActiveRecord model, so asking
@@ -352,11 +358,33 @@ module PaperTrailDiff
 
     # Whether two values are one, as a diff reads them: `==`, but a NaN is the
     # same as a NaN, as PostgreSQL stores and compares it, though Ruby has
-    # NaN unequal to everything.
+    # NaN unequal to everything. A value a serialized attribute holds can be
+    # of any class, so `==` must hold both ways, which Active Support's
+    # Time == String does not, and a Float is not the Integer it equals: each
+    # is written differently, so the change is real. Hashes and arrays are
+    # compared by their members.
     #: (untyped, untyped) -> bool
     def self.same?(left, right)
-      left == right || (nan?(left) && nan?(right))
+      return nan?(right) if nan?(left)
+      return same_hash?(left, right) if left.is_a?(Hash)
+      return same_array?(left, right) if left.is_a?(Array)
+
+      left == right && right == left && left.instance_of?(Float) == right.instance_of?(Float)
     end
+
+    # A key the right side lacks reads as a value nothing else is.
+    #: (Hash[untyped, untyped], untyped) -> bool
+    def self.same_hash?(left, right)
+      right.is_a?(Hash) && left.length == right.length &&
+        left.all? { |key, value| same?(value, right.fetch(key, MISSING)) }
+    end
+
+    #: (Array[untyped], untyped) -> bool
+    def self.same_array?(left, right)
+      right.is_a?(Array) && left.length == right.length &&
+        left.zip(right).all? { |pair| same?(*pair) }
+    end
+    private_class_method :same_hash?, :same_array?
 
     # A Float or BigDecimal NaN.
     #: (untyped) -> bool

@@ -42,7 +42,8 @@ RSpec.describe PaperTrailDiff::ActivityHistoryBuilder do
     root = PaperTrailDiff::RecordReference.new(type: 'FilterArticle',
                                                id: events.first.version.item_id)
     builder = described_class.new(events.map(&:version), events, :snapshotter,
-                                  view: view, include_step: reported, root: root, **options)
+                                  view: view, include_step: reported, root: root, ends: :ends,
+                                  **options)
     builder.call
   end
 
@@ -99,6 +100,20 @@ RSpec.describe PaperTrailDiff::ActivityHistoryBuilder do
     expect(unmoved.last_snapshot).to be_nil
   end
 
+  # Under a version filter the history ends after the last change it keeps,
+  # and a left-out event changed nothing the root shows.
+  it 'leaves the end where it was past a left-out event under a version filter' do
+    events, snapshots = history
+    stream([events[0], snapshots[0], true], [events[1], snapshots[1], true],
+           [events[2], snapshots[2], false], [events[3], snapshots[3], true])
+
+    result = build(events, reported: ->(event) { !event.equal?(events[1]) }, filtered: true)
+    moved = build(events, reported: ->(event) { !event.equal?(events[1]) })
+
+    expect(result.last_snapshot).to equal(snapshots[1])
+    expect(moved.last_snapshot).to equal(snapshots[3])
+  end
+
   it 'keeps the snapshots on steps only when the view retains them' do
     events, snapshots = history
     stream([events[0], snapshots[0], true], [events[1], snapshots[1], true])
@@ -133,7 +148,7 @@ RSpec.describe PaperTrailDiff::ActivityHistoryBuilder do
       .to have_received(:new).with(events, closing: :closing)
     expect(PaperTrailDiff::ActivitySnapshotSequence)
       .to have_received(:new).with(events.map(&:version), events, :snapshotter,
-                                   current: :current)
+                                   ends: :ends, current: :current)
     expect([result.steps, result.first_snapshot, result.last_boundary]).to eq([[], nil, nil])
   end
 end

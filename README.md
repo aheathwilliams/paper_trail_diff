@@ -61,8 +61,8 @@ historical states.
 PaperTrail's `version.changeset` describes one recorded change. `compare`
 describes the net difference between the two states you choose. If a field
 changes and then changes back, there is no net difference for that field. To
-see every change instead, use `PaperTrailDiff.timeline(article)`, which covers
-the article's whole history through its current saved values.
+see every change instead, use `PaperTrailDiff.analyze(article).timeline`, which
+covers the article's whole history through its current saved values.
 
 An attribute appears in `diff.attributes` only when it changed. `diff.empty?`
 tells you whether anything changed. A PaperTrail `create` version has no earlier
@@ -102,9 +102,9 @@ PaperTrail.request(whodunnit: "alice") do
   end
 end
 
-steps = PaperTrailDiff.activity_timeline(
-  article, associations: [:comments], group: :transaction, snapshots: true
-)
+steps = PaperTrailDiff.analyze(
+  article, associations: [:comments], activity: true, group: :transaction, snapshots: true
+).activity_timeline
 
 feed = steps.reject(&:empty?).map do |step|
   {
@@ -123,10 +123,9 @@ and `item_id`. Its `recorded_at` is the version's `created_at`.
 Use this source information for attribution: the version used to read the
 resulting state, exposed as `to_boundary`, may have been saved by someone else.
 A change saved without a version, such as with `update_columns`, appears in the
-step for that record's previous recorded change. To also read only what each
-version recorded, pass `recorded_changes: true` and read
-`step.source_boundary.recorded_changes`; see
-[what each event recorded](docs/reference.md#what-each-event-recorded-recorded_changes-true).
+step for that record's previous recorded change. To read only what each
+version recorded, read `step.source_boundary.recorded_changes`; see
+[what each event recorded](docs/reference.md#what-each-event-recorded).
 
 `group: :transaction` combines changes from one database transaction. Its source
 information comes from the first event in that group, and `step.sources` lists
@@ -164,6 +163,10 @@ end
 report.unreachable # Model names and IDs of selected records no longer in the database
 report.deleted     # Reports for those records, or nil when destroy history is missing
 ```
+
+With `associations:`, `report` combines each save of a record and its
+associated records into one step, as `group: :transaction` does above. Pass
+`group: nil` for a step per version.
 
 `report.analyses` is a hash of reports for records that still exist. Each key is
 `[model_name, id_as_a_string]`. Each value has the net `diff` and an
@@ -209,10 +212,10 @@ Three selection rules matter:
   or deliberately raise the ceiling.
 
 Use the relation's `order`, `offset`, and `limit` to choose a page, for example
-`Article.order(:id).limit(20)`. Joined rows can repeat a record; each record is
+`Article.order(:id).limit(20)`. `report.total` counts the records on every page, for
+"page 2 of 6". Joined rows can repeat a record; each record is
 analyzed once. See the [reporting reference](docs/reference.md#which-records-are-selected)
-for pagination, deleted records, and selecting by past values with
-`historical_filter:`.
+for pagination and deleted records.
 
 For a fixed past window, use `analyze_scope(Article.all, within: start_time...end_time,
 activity: true, limit: 100)`. Without `activity: true`, `analyze_scope` compares
@@ -261,10 +264,11 @@ article's new author, names the step's first event. `row.source` is the
 `ActivityBoundary` itself.
 
 A write made without a version, such as `update_columns`, shows up in the
-step of the record's previous change. Pass `recorded_changes: true` to
-`report` to tell it apart: the part of a change PaperTrail did not record
-gets a row of its own, with `row.unversioned?` true and no `version_id`,
-`event`, `whodunnit`, or `recorded_at`. To list only what versions recorded:
+step of the record's previous change. Its rows tell it apart: the part of a
+change PaperTrail did not record gets a row of its own, with
+`row.unversioned?` true and no `version_id`, `event`, `whodunnit`, or
+`recorded_at`, so it is never credited to whoever saved next. To list only
+what versions recorded:
 
 ```ruby
 recorded = report.change_rows.transform_values { |rows| rows.reject(&:unversioned?) }
@@ -282,7 +286,7 @@ author:
 ```ruby
 report = PaperTrailDiff.report(
   Article.all, since: 1.day.ago, limit: 100, associations: [:comments],
-  snapshots: true, recorded_changes: true
+  snapshots: true
 )
 
 changes = report.net_changes { |row| row.source.whodunnit }
@@ -301,16 +305,14 @@ activity step. Labels, grouping, and formatting are left to your application.
 | --- | --- |
 | Net difference between two versions, or a version and the current record | `compare(from, to)` |
 | The same for a list of `{ from:, to: }` pairs, one per record | `compare_many(pairs)` |
-| Each change to one record, version by version | `timeline(record)` |
-| Each change to one record and its chosen associations, with who made it | `activity_timeline(record, associations: ...)` |
-| Net difference and timeline together | `analyze(record)` |
-| The same, plus the activity timeline | `analyze(record, activity: true)` |
+| Net difference and each change to one record, version by version | `analyze(record)`, then `diff` and `timeline` |
+| The same, plus each change to its chosen associations, with who made it | `analyze(record, associations: ..., activity: true)`, then `activity_timeline` |
 | Analyses for an array of records | `analyze_many(records)` |
 | Analyses for the records a relation selects, over a time window | `analyze_scope(scope, within:, limit:)` |
 | Recent activity through now, for the records a relation selects | `report(scope, since:, limit:)` |
 
-`timeline`, `activity_timeline`, and `analyze` cover the whole history through
-the current saved record by default. Narrow them with `from:` and `to:`
+`analyze` covers the whole history through the current saved record by
+default. Narrow them with `from:` and `to:`
 (versions) or `within:` (a time range). See
 [choosing a range](docs/reference.md#choosing-a-range).
 
@@ -327,12 +329,11 @@ Scopes and default scopes made of plain conditions, such as
 primary key, such as `-> { order(:position, :id).limit(3) }`, on a direct
 association or a `has_many :through`. History cannot read a few scopes, such
 as a `limit` ordered by a string, a scope that takes the owner, or SQL text.
-PT-AT reads those instead, one record at a time and only approximately, so
-every method raises `UnsupportedAssociationError` naming the association.
-Remove it from `associations:`, or pass `allow_approximate: true` to accept
-PT-AT's answer and its cost. See
-[costly associations](docs/reference.md#costly-associations).
-Callbacks and callable historical filters can also issue queries. See the
+Who was in such an association at a past point cannot be told, so every
+method that reads history raises `UnsupportedAssociationError` naming the
+association. Remove it from `associations:`, or rewrite its scope. See
+[association scopes](docs/reference.md#association-scopes).
+Callbacks can also issue queries. See the
 [performance guide](docs/performance.md) for measured behavior and limitations.
 
 On a large version table, add these indexes, or every `since:` or `within:`

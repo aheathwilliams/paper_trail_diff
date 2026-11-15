@@ -86,7 +86,8 @@ RSpec.describe 'activity attribution and serialization' do
       expect(source.recorded_changes?).to be(false)
       expect { source.recorded_changes }
         .to raise_error(PaperTrailDiff::ConfigurationError,
-                        'recorded changes were not read; pass recorded_changes: true')
+                        'recorded changes were not read; pass recorded_changes: true to the ' \
+                        'method that takes it, or call PaperTrailDiff.recorded_changes(version)')
       expect(source.to_h(metadata: true)).not_to have_key(:recorded_changes)
     end
 

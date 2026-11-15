@@ -4,6 +4,10 @@
 module PaperTrailDiff
   # Resolves and validates ActiveRecord reflections for a bounded association tree.
   class AssociationTraversal # rubocop:disable Metrics/ClassLength
+    # A join table has no versions, so its rows' history cannot be read.
+    HABTM_REASON = 'a has_and_belongs_to_many keeps no history of its join rows; ' \
+                   'replace it with a has_many :through a join model that has has_paper_trail'
+
     # The class a `belongs_to` points at for this record, reading a polymorphic
     # type column when there is one. Nil when the record points at nothing.
     #: (untyped, untyped) -> untyped
@@ -12,6 +16,16 @@ module PaperTrailDiff
 
       type = record.public_send(reflection.foreign_type).to_s
       polymorphic_target(reflection, record, type) unless type.empty?
+    end
+
+    # Whether an unordered has_one through reads the target of its first
+    # join row. SQL Server plans the join from the target's table instead, so
+    # its LIMIT reads the target with the lowest key, as a plain has_one does.
+    #: (untyped) -> bool
+    def self.join_order?(reflection)
+      return false if reflection.active_record.connection_db_config.adapter == 'sqlserver'
+
+      reflection.through_reflection?
     end
 
     # A through with `source_type:` reaches only the join records whose type
@@ -75,29 +89,28 @@ module PaperTrailDiff
     # and PT-AT raise a bare NameError for it, which does not say where it is.
     #: (untyped, untyped, String) -> untyped
     def self.polymorphic_target(reflection, record, type)
-      model_class = named_class(type)
-      return model_class if model_class
-
-      raise IncompleteAssociationHistoryError,
-            "association #{record.class.name}##{reflection.name} cannot be read: " \
-            "#{record.class.name} #{record.id} has #{reflection.foreign_type} #{type}, which " \
-            'names no class. If the model was renamed, replace the old name in that column ' \
-            'and in the versions that recorded it.'
+      named_class(type) || unnamed_target!(reflection, record.class, record.id, type)
     end
     private_class_method :polymorphic_target
 
+    #: (untyped, untyped, untyped, untyped) -> bot
+    def self.unnamed_target!(reflection, owner_class, id, type)
+      raise IncompleteAssociationHistoryError,
+            "association #{owner_class.name}##{reflection.name} cannot be read: " \
+            "#{owner_class.name} #{id} has #{reflection.foreign_type} #{type}, which " \
+            'names no class. If the model was renamed, replace the old name in that column ' \
+            'and in the versions that recorded it.'
+    end
+
     # Why a request cannot name this association of the model, or nil when it
-    # can; `root` says whether the model is the record the request compares.
-    # Discovery lists only the associations this accepts, so every path it
-    # lists can be requested. A has_many :through Active Record cannot follow
-    # raises Active Record's own error.
-    #: (untyped, untyped, root: bool) -> String?
-    def self.unsupported_reason(model_class, reflection, root:)
+    # can. Discovery lists only the associations this accepts, so every path
+    # it lists can be requested. A has_many :through Active Record cannot
+    # follow raises Active Record's own error.
+    #: (untyped, untyped) -> String?
+    def self.unsupported_reason(model_class, reflection)
       return 'PaperTrail versions' if paper_trail_versions?(model_class, reflection)
+      return HABTM_REASON if reflection.macro == :has_and_belongs_to_many
       return reflection.macro.to_s unless SUPPORTED_ASSOCIATION_MACROS.include?(reflection.macro)
-      if reflection.macro == :has_and_belongs_to_many
-        return habtm_reason(reflection, root) || VersionTable.unsupported_reason(reflection)
-      end
 
       habtm = habtm_in_chain(reflection)
       return storage_reason(reflection) unless habtm
@@ -114,33 +127,6 @@ module PaperTrailDiff
         VersionTable.unsupported_reason(reflection) || RecordedOwner.unsupported_reason(reflection)
     end
     private_class_method :storage_reason
-
-    # PT-AT records a HABTM's membership only when its owner saves a version,
-    # in rows keyed by transaction and association name, not by owner. A root
-    # checkpoint so holds the root's membership and no one else's: another
-    # record's HABTM would read the root's rows, or none.
-    #: (untyped) -> String
-    def self.habtm_below_root(reflection)
-      "#{reflection.active_record.name}##{reflection.name} is a has_and_belongs_to_many " \
-        'below the root, and a root checkpoint records HABTM membership for the root alone'
-    end
-    private_class_method :habtm_below_root
-
-    # PT-AT records a HABTM's membership by loading the association, scope and
-    # target default scope applied, so a target outside the scope when the
-    # owner saved is never recorded. One that enters it before the next save
-    # is a member then that history cannot hold.
-    #: (untyped, bool) -> String?
-    def self.habtm_reason(reflection, root)
-      return habtm_below_root(reflection) unless root
-      return unless ScopeCondition.scoped?(reflection)
-
-      "#{reflection.active_record.name}##{reflection.name} is a scoped " \
-        'has_and_belongs_to_many, and PaperTrail records only the members its scope ' \
-        'admitted when the owner saved, so membership between saves cannot be rebuilt; ' \
-        'replace it with a has_many :through a versioned join model'
-    end
-    private_class_method :habtm_reason
 
     #: (untyped, untyped) -> bool
     def self.paper_trail_versions?(model_class, reflection)
@@ -190,7 +176,21 @@ module PaperTrailDiff
     def initialize(tree)
       @tree = tree
       @reflection_cache = {}
-      @habtm_paths = {} #: Hash[untyped, Array[String]]
+      @reaches = {} #: Hash[[untyped, untyped], untyped]
+    end
+
+    # Where the earliest transaction open at `start` began, in the version
+    # tables of the model and of the records on its paths; nil when none was
+    # open, without a start, or without paths (see CrossingTransactions). A
+    # call reads every root of a model from one answer, so it is asked once.
+    #: (untyped, untyped) -> untyped
+    def reach_before(model_class, start)
+      return if @tree.empty? || start.nil?
+
+      key = [model_class, start] #: [untyped, untyped]
+      @reaches.fetch(key) do
+        @reaches[key] = CrossingTransactions.open_around(model_class, self, start)
+      end
     end
 
     #: (untyped) -> void
@@ -206,50 +206,26 @@ module PaperTrailDiff
     # The names the versions of the records on the requested paths are stored
     # under: each association's class and every part a through passes. A
     # polymorphic belongs_to names its target's class only in each record, so
-    # it adds none.
+    # it adds none (see #polymorphic_paths?).
     #: (untyped) -> Array[String]
     def path_types(model_class)
+      path_parts(model_class).reject(&:polymorphic?).map { |part| part.klass.base_class.name }.uniq
+    end
+
+    # Whether a path passes a polymorphic belongs_to, whose targets may be of
+    # any class.
+    #: (untyped) -> bool
+    def polymorphic_paths?(model_class)
+      path_parts(model_class).any?(&:polymorphic?)
+    end
+
+    #: (untyped) -> Array[untyped]
+    def path_parts(model_class)
       selected_reflections(model_class).flat_map do |_path, reflection|
-        parts = [reflection, *self.class.through_parts(reflection)].reject(&:polymorphic?)
-        parts.map { |part| part.klass.base_class.name }
-      end.uniq
-    end
-
-    #: (untyped, untyped) -> void
-    def ensure_habtm_history!(model_class, version)
-      paths = habtm_paths(model_class)
-      return if paths.empty?
-      return if VersionBoundary.transaction_id(version)
-
-      message = "HABTM history is incomplete at version #{version.id}: #{paths.join(', ')}"
-      raise IncompleteAssociationHistoryError, message
-    end
-
-    # Every snapshot of a version asks, so each class's answer is kept; the
-    # tree and the class decide it. Reading it again each time answers the
-    # same, which is why mutant leaves the cache alone.
-    # mutant:disable
-    #: (untyped) -> Array[String]
-    def habtm_paths(model_class)
-      @habtm_paths.fetch(model_class) do
-        selected = selected_reflections(model_class)
-        @habtm_paths[model_class] = selected.filter_map do |path, reflection|
-          path if habtm_reflection?(reflection)
-        end.freeze
+        [reflection, *self.class.through_parts(reflection)]
       end
     end
-
-    # HABTM join rows have no versions of their own, so membership changes
-    # cannot be split into events once a range runs past the last root version
-    # into live state.
-    #: (untyped) -> void
-    def reject_live_habtm_activity!(model_class)
-      paths = habtm_paths(model_class)
-      return if paths.empty?
-
-      message = "live-ended activity cannot reconstruct HABTM event boundaries: #{paths.join(', ')}"
-      raise UnsupportedLiveActivityError, message
-    end
+    private :path_parts
 
     # A model and a tree resolve to the same reflections wherever they are
     # read: a tree is only ever walked from one place, the root tree at the
@@ -269,14 +245,13 @@ module PaperTrailDiff
       direct = %i[has_one has_many].include?(reflection.macro) && !reflection.through_reflection?
       return [] unless direct
 
-      Array(reflection.foreign_key) + Array(reflection.type)
+      [reflection.foreign_key, *reflection.type]
     end
 
     private
 
     # @rbs @tree: AssociationTree
     # @rbs @reflection_cache: Hash[AssociationTree, Hash[untyped, Array[untyped]]]
-    # @rbs @habtm_paths: Hash[untyped, Array[String]]
 
     #: (untyped, AssociationTree, path: String) -> Array[Array[untyped]]
     def collect_reflections(model_class, tree, path:)
@@ -317,25 +292,19 @@ module PaperTrailDiff
     #: (untyped, AssociationTree, String) -> Array[untyped]
     def requested_reflections(model_class, tree, path)
       tree.children.map do |name, _subtree|
-        resolve_reflection(model_class, name, Support.association_path(path, name),
-                           root: path.empty?)
+        resolve_reflection(model_class, name, Support.association_path(path, name))
       end.freeze
     end
 
-    #: (untyped, String, String, root: bool) -> untyped
-    def resolve_reflection(model_class, name, full_path, root:)
+    #: (untyped, String, String) -> untyped
+    def resolve_reflection(model_class, name, full_path)
       reflection = model_class.reflect_on_association(name)
       raise UnknownAssociationError, "unknown association: #{full_path}" unless reflection
 
-      reason = self.class.unsupported_reason(model_class, reflection, root: root)
+      reason = self.class.unsupported_reason(model_class, reflection)
       raise UnsupportedAssociationError, "unsupported association #{full_path}: #{reason}" if reason
 
       reflection
-    end
-
-    #: (untyped) -> bool
-    def habtm_reflection?(reflection)
-      reflection.macro == :has_and_belongs_to_many
     end
   end
 end

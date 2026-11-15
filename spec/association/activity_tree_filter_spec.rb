@@ -93,7 +93,7 @@ RSpec.describe PaperTrailDiff::ActivityTreeFilter do
   end
 
   def comment_steps(article, **options)
-    PaperTrailDiff.activity_timeline(article, associations: [:comments], **options)
+    SpecTimelines.activity_timeline(article, associations: [:comments], **options)
   end
 
   context 'with a comment edited elsewhere before it moved in' do
@@ -173,61 +173,6 @@ RSpec.describe PaperTrailDiff::ActivityTreeFilter do
     end
   end
 
-  # A tag created and attached in the transaction that saves the article, and
-  # detached before the next save, is in the tree only at that save: the
-  # version records it, and the next one does not.
-  context 'with a tag detached before the next version' do
-    def tag_history
-      article = TrackedArticle.create!(title: 'Root')
-      start = Time.now.utc
-      fleeting = TrackedArticle.transaction do
-        attach(article, 'Fleeting').tap { checkpoint(article) }
-      end
-      TrackedArticle.find(article.id).tags.delete(fleeting)
-      kept = TrackedArticle.transaction { attach(article, 'Kept') }
-      finish = Time.now.utc
-      TrackedArticle.transaction { checkpoint(article) }
-      [article.reload, start..finish,
-       named('article' => article, 'fleeting' => fleeting, 'kept' => kept)]
-    end
-
-    # A new tag, attached through a fresh copy of the article.
-    def attach(article, name)
-      TrackedTag.create!(name: name).tap { |tag| TrackedArticle.find(article.id).tags << tag }
-    end
-
-    def checkpoint(article) = TrackedArticle.find(article.id).paper_trail.save_with_version
-
-    let(:history) { tag_history }
-    let(:article) { history.first }
-    let(:names) { history.last }
-    let(:fleeting) { names.key('fleeting').last }
-    let(:kept) { names.key('kept').last }
-
-    it 'credits the tag to its own creation' do
-      steps = PaperTrailDiff.activity_timeline(article, from: first_version(article),
-                                                        to: article.versions.last,
-                                                        associations: [:tags])
-
-      expect(summary(steps, names)).to eq(
-        [[['article create'], ['presence']],
-         [['fleeting create'], ["tags +#{fleeting}"]],
-         [['article update'], ["tags -#{fleeting}"]],
-         [['kept create'], ["tags +#{kept}"]]]
-      )
-    end
-
-    it 'starts a window that the tag\'s creation opens before the tag' do
-      analysis = PaperTrailDiff.analyze(article, within: history.fetch(1), associations: [:tags],
-                                                 activity: true, snapshots: true)
-
-      expect(analysis.from_snapshot.associations.fetch('tags').records).to be_empty
-      expect(changes(analysis.diff)).to eq(["tags +#{kept}"])
-      expect(summary(analysis.activity_timeline, names).first)
-        .to eq([['fleeting create'], ["tags +#{fleeting}"]])
-    end
-  end
-
   # The other way round: a comment that left, edited in the article's last
   # save. Only the current record shows it is not there afterwards.
   it 'leaves out a departed comment\'s edit in the last transaction' do
@@ -255,8 +200,8 @@ RSpec.describe PaperTrailDiff::ActivityTreeFilter do
     first.update!(name: 'First, renamed')
     article.update!(title: 'Renamed')
 
-    steps = PaperTrailDiff.activity_timeline(article.reload, from: first_version(article),
-                                                             to: article, associations: [:author])
+    steps = SpecTimelines.activity_timeline(article.reload, from: first_version(article),
+                                                            to: article, associations: [:author])
 
     expect(steps.map { |step| [step.source_boundary.item_type, step.source_boundary.event] })
       .to eq([%w[TrackedArticle create], %w[TrackedArticle update], %w[TrackedArticle update]])
@@ -270,8 +215,8 @@ RSpec.describe PaperTrailDiff::ActivityTreeFilter do
     card.update!(title: 'Edited while archived')
     board.update!(name: 'Renamed')
 
-    steps = PaperTrailDiff.activity_timeline(board.reload, from: first_version(board),
-                                                           to: board, associations: [:active_cards])
+    steps = SpecTimelines.activity_timeline(board.reload, from: first_version(board),
+                                                          to: board, associations: [:active_cards])
     events = steps.map { |step| [step.source_boundary.item_type, step.source_boundary.event] }
 
     expect(events).to eq([%w[TreeBoard create], %w[TreeCard create], %w[TreeCard update],
@@ -281,9 +226,9 @@ RSpec.describe PaperTrailDiff::ActivityTreeFilter do
   describe 'deciding each event' do
     def event(id, item_id, transaction_id, type: 'TrackedComment', **flags)
       version = TreeFilterVersion.new(id, type, item_id, transaction_id)
-      PaperTrailDiff::ActivityEvent.new(version: version,
-                                        branches: flags.fetch(:branches, ['comments']),
-                                        join: flags.fetch(:join, false))
+      branches = flags.fetch(:branches, ['comments'])
+      joins = flags.fetch(:joins) { flags.fetch(:join, false) ? branches : [] }
+      PaperTrailDiff::ActivityEvent.new(version: version, branches: branches, joins: joins)
     end
 
     def root_event(id, transaction_id)
@@ -334,9 +279,48 @@ RSpec.describe PaperTrailDiff::ActivityTreeFilter do
 
     it 'keeps the root\'s events and join rows, and judges every other' do
       pairs = [[root_event(1, 1), holding], [event(2, 5, 2, join: true), holding],
-               [event(3, 6, 3), holding], [event(4, 7, 4), holding(7)], [root_event(5, 5), holding]]
+               [event(3, 6, 3), holding(9)], [event(4, 7, 4), holding(7)],
+               [root_event(5, 5), holding]]
 
       expect(kept(pairs)).to eq([1, 2, 4, 5])
+    end
+
+    # A snapshot holds no join rows, so one whose transaction left the
+    # snapshot as it found it led nowhere the root shows.
+    it 'keeps a join row only where its transaction changed the snapshot' do
+      pairs = [[root_event(1, 1), holding], [event(2, 5, 2, join: true), holding],
+               [event(3, 6, 3, join: true), holding], [event(4, 7, 3), holding(7)],
+               [root_event(5, 5), holding(7)]]
+
+      expect(kept(pairs)).to eq([1, 3, 4, 5])
+      expect(kept(pairs.first(2), closing: holding(5))).to eq([1, 2])
+    end
+
+    it 'judges a join row by its transaction only under the branches it joins' do
+      changed = { comments: collection(record('TrackedComment', 9)) }
+      pairs = [[root_event(1, 1), holding], [event(2, 5, 2, branches: %w[comments other],
+                                                            joins: ['other']), holding],
+               [root_event(3, 3), record('TrackedArticle', 1, **changed)]]
+
+      expect(kept(pairs)).to eq([1, 3])
+    end
+
+    # Before the root was created there is no snapshot, and it held nothing.
+    it 'reads a missing snapshot, or a branch it does not hold, as holding nothing' do
+      pairs = [[event(1, 5, 1, join: true), nil], [root_event(2, 2), holding]]
+      bare = [[event(1, 5, 1, join: true), record('TrackedArticle', 1)],
+              [root_event(2, 2), holding]]
+
+      expect(kept(pairs)).to eq([2])
+      expect(kept(bare)).to eq([2])
+      expect(kept(pairs.first(1), closing: holding(9))).to eq([1])
+    end
+
+    it 'compares the snapshot at the start of a join row\'s transaction with the one after it' do
+      pairs = [[event(1, 6, 1), holding], [event(2, 5, 1, join: true), holding(9)],
+               [root_event(3, 2), holding(9)]]
+
+      expect(kept(pairs)).to eq([2, 3])
     end
 
     it 'judges the last transaction by what the range closes on' do
@@ -425,8 +409,8 @@ RSpec.describe PaperTrailDiff::ActivityTreeFilter do
     authorship = TrackedAuthorship.create!(article: article, author: author, role: 'writer')
     authorship.update!(role: 'editor')
 
-    steps = PaperTrailDiff.activity_timeline(article, from: first_version(article), to: article,
-                                                      associations: [:contributors])
+    steps = SpecTimelines.activity_timeline(article, from: first_version(article), to: article,
+                                                     associations: [:contributors])
 
     expect(every_source(steps)).to include(['TrackedAuthorship', authorship.id])
   end

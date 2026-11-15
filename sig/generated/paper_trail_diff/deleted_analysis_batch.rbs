@@ -5,8 +5,8 @@ module PaperTrailDiff
   class DeletedAnalysisBatch
     # `context_required` reads a root that did not change in the window from
     # the version after it, so its associations' activity can be reported.
-    # : (untyped, identities: Array[Array[String]], time_range: TimeRange?, analyzer: untyped, history_preparer: untyped, version_scope: untyped, context_required: bool) -> void
-    def initialize: (untyped, identities: Array[Array[String]], time_range: TimeRange?, analyzer: untyped, history_preparer: untyped, version_scope: untyped, context_required: bool) -> void
+    # : (untyped, identities: Array[Array[String]], time_range: TimeRange?, analyzer: untyped, history_preparer: untyped, version_scope: untyped, context_required: bool, reach: untyped) -> void
+    def initialize: (untyped, identities: Array[Array[String]], time_range: TimeRange?, analyzer: untyped, history_preparer: untyped, version_scope: untyped, context_required: bool, reach: untyped) -> void
 
     # : () -> Hash[Array[String], Analysis?]
     def call: () -> Hash[Array[String], Analysis?]
@@ -25,6 +25,8 @@ module PaperTrailDiff
     @identities: Array[Array[String]]
 
     @model: untyped
+
+    @reach: untyped
 
     @time_range: TimeRange?
 

@@ -36,6 +36,29 @@ RSpec.describe 'scoped root selection' do
     expect(analyze(CoreArticle.limit(0)).analyses).to be_empty
   end
 
+  it 'counts every record the relation selects before its limit and offset' do
+    articles = Array.new(3) do |index|
+      CoreArticle.create!(title: "Article #{index}", internal_note: 'stable')
+    end
+    PaperTrail.request(enabled: false) do
+      CoreArticle.create!(title: 'Unchanged', internal_note: 'stable')
+    end
+    articles.first(2).each { |article| 2.times { article.comments.create!(body: 'Match') } }
+
+    expect(analyze(CoreArticle.all).total).to eq(3)
+    expect(analyze(CoreArticle.order(:id).offset(1).limit(1)).total).to eq(3)
+    expect(analyze(CoreArticle.joins(:comments).limit(1)).total).to eq(2)
+    expect(analyze(CoreArticle.where(title: 'Article 0').offset(1)).total).to eq(1)
+  end
+
+  it 'counts a grouped relation by its groups' do
+    2.times { CoreArticle.create!(title: 'Same', internal_note: 'stable') }
+    CoreArticle.create!(title: 'Other', internal_note: 'stable')
+    scope = CoreArticle.select('MAX(id) AS id').group(:title).order(:title)
+
+    expect(analyze(scope.limit(1)).total).to eq(2)
+  end
+
   it 'still rejects more distinct roots than the safety limit permits' do
     2.times { CoreArticle.create!(title: 'Article', internal_note: 'stable') }
 
@@ -98,5 +121,20 @@ RSpec.describe 'scoped root selection' do
 
     expect(result.analyses.length).to eq(2)
     expect(result.unreachable).to eq([PaperTrailDiff::Endpoint.identity(deleted)])
+  end
+
+  it 'lists unreachable roots in the order of their integer ids' do
+    [10, 9].each do |id|
+      CoreArticle.create!(id: id, title: 'Deleted', internal_note: 'stable').destroy!
+    end
+
+    expect(analyze(CoreArticle.all).unreachable.map(&:last)).to eq(%w[9 10])
+    expect(analyze(CoreArticle.where(title: 'Deleted')).unreachable.map(&:last)).to eq(%w[9 10])
+  end
+
+  it 'returns no roots for a page of none' do
+    CoreArticle.create!(title: 'Live', internal_note: 'stable')
+
+    expect(analyze(CoreArticle.limit(0)).roots).to eq([])
   end
 end

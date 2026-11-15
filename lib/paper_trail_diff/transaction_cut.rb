@@ -32,7 +32,7 @@ module PaperTrailDiff
     # the model and its paths.
     #: (untyped, AssociationTraversal, untyped) -> untyped
     def self.crossing_start(model, traversal, start_at)
-      CrossingTransactions.open_around(model, traversal, start_at) || start_at
+      traversal.reach_before(model, start_at) || start_at
     end
 
     # A range that ends at a version ends where that version's transaction

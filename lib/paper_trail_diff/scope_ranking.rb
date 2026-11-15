@@ -5,8 +5,8 @@ module PaperTrailDiff
   # The order, offset and limit by which a scope picks its members from the
   # records that meet its conditions, as the database would rank them. It is
   # read only when the order is total and every key compares in Ruby as SQL
-  # compares it; otherwise build returns nil and the caller keeps its slower
-  # path.
+  # compares it; otherwise build returns nil and the scope is unreadable
+  # (UnreadablePaths).
   class ScopeRanking
     DIRECTIONS = { 'Arel::Nodes::Ascending' => false, 'Arel::Nodes::Descending' => true }.freeze
     ATTRIBUTE = 'Arel::Attributes::Attribute'

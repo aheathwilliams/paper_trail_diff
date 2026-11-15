@@ -53,13 +53,10 @@ module PaperTrailDiff
     end
     private_class_method :through_models
 
-    #: (traversal: AssociationTraversal, ?allow_approximate: bool) -> void
-    def initialize(traversal:, allow_approximate: false)
-      Support.boolean!(:allow_approximate, allow_approximate)
-
+    #: (traversal: AssociationTraversal) -> void
+    def initialize(traversal:)
       @tree = traversal.tree
       @traversal = traversal
-      @allow_approximate = allow_approximate
       @refusals = {} #: Hash[Array[untyped], Array[Refusal]]
     end
 
@@ -83,7 +80,6 @@ module PaperTrailDiff
 
     # @rbs @tree: AssociationTree
     # @rbs @traversal: AssociationTraversal
-    # @rbs @allow_approximate: bool
     # @rbs @refusals: Hash[Array[untyped], Array[Refusal]]
 
     #: (untyped, bool) -> Array[Refusal]
@@ -94,7 +90,7 @@ module PaperTrailDiff
       return found << unresolved if unresolved
       return found unless historical
 
-      found.concat(unversioned_refusals(model_class), approximate_refusals(model_class))
+      found.concat(unversioned_refusals(model_class), unreadable_refusals(model_class))
     end
 
     #: (untyped) -> Refusal?
@@ -106,22 +102,16 @@ module PaperTrailDiff
       Refusal.new(e.class, code, e.message)
     end
 
-    # A path prepared history cannot read is read with PT-AT, which rebuilds
-    # an association from its current members, swapping in older versions of
-    # them. A record that entered the association since, such as one moved
-    # into a scope or restored from a soft delete, then reads as a member it
-    # was not, and one that left reads as missing. Only a caller who accepts
-    # that may read such a path.
+    # History tells who was in an association at a past point by testing each
+    # record's stored values against its scope, so it reads only a scope made
+    # of plain conditions on the target's own columns.
     #: (untyped) -> Array[Refusal]
-    def approximate_refusals(model_class)
-      return [] if @allow_approximate
-
-      ApproximatePaths.call(@traversal, model_class).map do |path, reason|
-        message = "association #{path} cannot be read exactly from history (#{reason}): " \
-                  'PT-AT rebuilds it from its current members, so a record that entered or ' \
-                  'left it since is reported wrongly; remove this path, make its scope plain ' \
-                  'conditions on the target\'s own columns, or pass allow_approximate: true'
-        Refusal.new(UnsupportedAssociationError, :approximate_association, message, path)
+    def unreadable_refusals(model_class)
+      UnreadablePaths.call(@traversal, model_class).map do |path, reason|
+        message = "association #{path} cannot be read from history (#{reason}): who was in " \
+                  'it at a past point cannot be told. Remove this path, or make its scope ' \
+                  'plain conditions on the target\'s own columns'
+        Refusal.new(UnsupportedAssociationError, :unreadable_association, message, path)
       end
     end
 

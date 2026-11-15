@@ -46,7 +46,7 @@ RSpec.describe 'A window edge inside a transaction that detached a record before
 
   def timeline(within, method)
     options = { within: within, associations: paths }
-    return PaperTrailDiff.activity_timeline(article.reload, **options) if method == :single
+    return SpecTimelines.activity_timeline(article.reload, **options) if method == :single
 
     PaperTrailDiff.analyze_many([article.reload], activity: true, **options)
                   .values.first.activity_timeline

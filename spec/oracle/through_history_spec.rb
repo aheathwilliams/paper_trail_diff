@@ -377,7 +377,7 @@ RSpec.describe 'Rebuilt has_many :through history against the recorded states' d
       end
     end
     check_timeline(failures, recorder, root, paths, versions)
-    steps = PaperTrailDiff.activity_timeline(root, associations: paths, group: :transaction)
+    steps = SpecTimelines.activity_timeline(root, associations: paths, group: :transaction)
     failures.check("activity #{key.inspect}", expected_steps(recorder, key, versions.first),
                    steps.reject(&:empty?).map { |step| step.diff.to_h })
     check_activity_states(failures, recorder, root, paths, versions.first)
@@ -393,7 +393,7 @@ RSpec.describe 'Rebuilt has_many :through history against the recorded states' d
 
   def check_timeline(failures, recorder, root, paths, versions)
     key = [root.id, paths]
-    steps = PaperTrailDiff.timeline(root, from: versions.first, to: root, associations: paths)
+    steps = SpecTimelines.timeline(root, from: versions.first, to: root, associations: paths)
     ends = [*versions.drop(1).map { |version| recorder.before(version.id) }, recorder.final]
     return failures.add("timeline #{key.inspect} step count", [steps.length, ends.length]) if
       steps.length != ends.length
@@ -408,8 +408,8 @@ RSpec.describe 'Rebuilt has_many :through history against the recorded states' d
   # transaction.
   def check_activity_states(failures, recorder, root, paths, from)
     key = [root.id, paths]
-    steps = PaperTrailDiff.activity_timeline(root, from: from, to: root, associations: paths,
-                                                   group: :transaction, snapshots: true)
+    steps = SpecTimelines.activity_timeline(root, from: from, to: root, associations: paths,
+                                                  group: :transaction, snapshots: true)
     NetChangesCheck.check(failures, "activity #{key.inspect}", steps)
     steps.each_with_index do |step, index|
       label = "activity #{key.inspect} step #{index} (#{step.source_boundary.version_id})"

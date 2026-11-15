@@ -18,9 +18,8 @@ module PaperTrailDiff
     # whole history begins at the root's first version instead.
     #: (untyped, Array[untyped], ?start_at: untyped) -> PreparedTimelineSnapshots
     def prepare(record, versions, start_at: nil)
+      start_at = @store.reach_before(record, start_at) || start_at
       history = @store.prepare(record, versions, start_at: start_at)
-      reach = history&.reach
-      history = @store.prepare(record, versions, start_at: reach, reach: false) if reach
       ends = history&.transaction_ends(versions)
       PreparedTimelineSnapshots.new(history, ends, store: @store,
                                                    live_snapshotter: @live_snapshotter)

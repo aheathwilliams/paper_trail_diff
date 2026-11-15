@@ -6,7 +6,7 @@ module PaperTrailDiff
   # configuration. It keeps the histories batches prepare, by root and by root
   # version; one prepared for a single root goes back to the caller, who
   # passes it to every read for that root.
-  class HistoricalSnapshotStore # rubocop:disable Metrics/ClassLength
+  class HistoricalSnapshotStore
     #: (traversal: AssociationTraversal, normalizer: SnapshotNormalizer, preparer: untyped) -> void
     def initialize(traversal:, normalizer:, preparer:)
       @tree = traversal.tree
@@ -22,11 +22,10 @@ module PaperTrailDiff
       @live_states = {} #: Hash[identity, PreparedRecordState]
     end
 
-    # A `start_at` is a window's (see PreparedHistoryLoader); a range of
-    # versions starts at its first. A window's history says how far back the
-    # transactions open at its start `reach`, unless it was read from there.
-    #: (untyped, Array[untyped], ?start_at: untyped, ?end_at: untyped, ?reach: bool) -> PreparedHistory?
-    def prepare(record, root_versions, start_at: nil, end_at: nil, reach: true)
+    # A `start_at` is a window's, already moved back to its reach (see
+    # PreparedHistoryLoader); a range of versions starts at its first.
+    #: (untyped, Array[untyped], ?start_at: untyped, ?end_at: untyped) -> PreparedHistory?
+    def prepare(record, root_versions, start_at: nil, end_at: nil)
       return if @tree.empty?
 
       # A batch prepared this root with the others, including a root with no
@@ -38,8 +37,7 @@ module PaperTrailDiff
         record, root_ids: [record.id], root_versions: root_versions,
                 start_at: start_at || root_versions.first.created_at,
                 end_at: end_at || range_end(root_versions), tree: @tree,
-                traversal: @traversal, live_records: [], window: reach && !start_at.nil?,
-                crossing: start_at.nil?
+                traversal: @traversal, live_records: [], window: !start_at.nil?
       ).call
     end
 
@@ -58,47 +56,35 @@ module PaperTrailDiff
     end
 
     # A `start_at` is a window's, as for `prepare`. A window's roots may have
-    # no version in it, when only their descendants changed there. Returns
-    # where the earliest transaction open at the window's start began, if one
-    # was, for the batch to read it again from there, with `reach` false.
-    #: (Array[untyped], Array[untyped], ?start_at: untyped, ?end_at: untyped, ?reach: bool) -> untyped
-    def prepare_batch(records, root_versions, start_at: nil, end_at: nil, reach: true)
+    # no version in it, when only their descendants changed there.
+    #: (Array[untyped], Array[untyped], ?start_at: untyped, ?end_at: untyped) -> void
+    def prepare_batch(records, root_versions, start_at: nil, end_at: nil)
       return if @tree.empty? || records.empty? || (root_versions.empty? && start_at.nil?)
 
-      history = Instrumentation.instrument('prepare_history',
-                                           batch_payload(records, root_versions)) do
-        register_batch(records, root_versions, start_at: start_at, end_at: end_at, reach: reach)
+      Instrumentation.instrument('prepare_history', batch_payload(records, root_versions)) do
+        register_batch(records, root_versions, start_at: start_at, end_at: end_at)
       end
       # A batch passes its roots as it just loaded them, so the current state
       # they close on is read from them rather than once more per root.
       records.each { |record| @live_roots[Endpoint.identity(record)] = record }
-      history.reach
     end
 
     # Missing roots, and roots compared only between versions, have no live
     # graph to collect. Reading their associations here would issue a query
     # per root and seed nonexistent rows as live state.
-    #
-    # Roots with no version in a window are asked only how far the
-    # transactions open at its start reach (see #reach_before).
-    #: (Array[untyped], Array[untyped], ?start_at: untyped, ?end_at: untyped, ?reach: bool) -> untyped
-    def prepare_deleted_batch(records, root_versions, start_at: nil, end_at: nil, reach: true)
-      return if @tree.empty? || records.empty?
+    #: (Array[untyped], Array[untyped], ?start_at: untyped, ?end_at: untyped) -> void
+    def prepare_deleted_batch(records, root_versions, start_at: nil, end_at: nil)
+      return if @tree.empty? || records.empty? || root_versions.empty?
 
-      return (reach_before(records.first, start_at) if reach) if root_versions.empty?
-
-      register_batch(records, root_versions, live_records: [], start_at: start_at, end_at: end_at,
-                                             reach: reach).reach
+      register_batch(records, root_versions, live_records: [], start_at: start_at, end_at: end_at)
     end
 
-    # Where the earliest transaction open at a window's start began, for a
-    # root with no version in the window and no row: one destroyed just
-    # before it, by a transaction that went on to save its tree inside, is
-    # reported in the window.
+    # Where the earliest transaction open at a window's start began (see
+    # AssociationTraversal#reach_before). A window is read from there: a root
+    # destroyed just before it, by a transaction that went on to save its
+    # tree inside, is reported in the window.
     #: (untyped, untyped) -> untyped
-    def reach_before(record, start_at)
-      CrossingTransactions.open_around(record.class, @traversal, start_at) unless @tree.empty?
-    end
+    def reach_before(record, start_at) = @traversal.reach_before(record.class, start_at)
 
     # `history` is the one `prepare` returned for this root, if any.
     # A snapshot read for a timeline whose transactions overlapped reads each
@@ -158,22 +144,14 @@ module PaperTrailDiff
       live_state(root_endpoint)
     end
 
-    #: (untyped, habtm_version: untyped, ?history: PreparedHistory?) -> untyped
-    def association_reader(context_version, habtm_version:, history: nil)
-      fallback = HistoricalAssociationReifier.new(
-        context_version,
-        habtm_version: habtm_version
-      )
-      # Callers pass the root's history; a batch's for the version is the rest.
+    # A member's snapshot at `path`, with the associations `tree` selects
+    # below it as the version reads them. Callers pass the root's history; a
+    # batch's for the version is the rest.
+    #: (PreparedRecordState, untyped, tree: AssociationTree, path: String, incoming: untyped, normalizer: SnapshotNormalizer, ?history: PreparedHistory?) -> RecordSnapshot
+    def member(state, context_version, tree:, path:, incoming:, normalizer:, history: nil) # rubocop:disable Metrics/ParameterLists
       history ||= @prepared_histories[Support.row_key(context_version)]
-      return fallback unless history
-
-      PreparedAssociationReifier.new(
-        history,
-        context_version,
-        habtm_boundary: habtm_version,
-        fallback: fallback
-      )
+      @prepared_snapshotter.build(state, context_version, tree, normalizer, history,
+                                  path: path, incoming: incoming)
     end
 
     private
@@ -212,15 +190,15 @@ module PaperTrailDiff
         model_type: records.first.class.base_class.name.to_s, batched: true }
     end
 
-    #: (Array[untyped], Array[untyped], ?live_records: Array[untyped], ?start_at: untyped, ?end_at: untyped, ?reach: bool) -> PreparedHistory
-    def register_batch(records, root_versions, live_records: @live_graph_collector.call(records), # rubocop:disable Metrics/ParameterLists
-                       start_at: nil, end_at: nil, reach: true)
+    #: (Array[untyped], Array[untyped], ?live_records: Array[untyped], ?start_at: untyped, ?end_at: untyped) -> PreparedHistory
+    def register_batch(records, root_versions, live_records: @live_graph_collector.call(records),
+                       start_at: nil, end_at: nil)
       history = PreparedHistoryLoader.new(
         records.first, root_ids: records.map(&:id), root_versions: root_versions,
                        start_at: start_at || root_versions.map(&:created_at).min,
                        end_at: end_at || range_end(root_versions),
                        tree: @tree, traversal: @traversal, live_records: live_records,
-                       window: reach && !start_at.nil?, crossing: start_at.nil?
+                       window: !start_at.nil?
       ).call
       register(history, records, root_versions)
       history
@@ -237,67 +215,30 @@ module PaperTrailDiff
     def snapshot_from_version(root_version, context_version, tree:, normalizer:, history:)
       model_class = RecordedClass.for(root_version)
       @preparer.call(model_class, historical: true)
-      @traversal.ensure_habtm_history!(model_class, root_version)
-      handled, snapshot = @prepared_snapshotter.call(
-        root_version, context_version, tree: tree, normalizer: normalizer, history: history
-      )
-      return snapshot if handled
-
-      record = Support.reify(root_version, dup: true)
-      normalize(record, context_version, tree: tree, normalizer: normalizer,
-                                         habtm_version: root_version, history: history)
+      @prepared_snapshotter.call(root_version, context_version, tree: tree, normalizer: normalizer,
+                                                                history: history)
     end
 
-    # Read from prepared history where it can be, as a version is, without
-    # instantiating the root's members. Only the fallback, which writes the
-    # members it rebuilds onto the root, needs a record of its own.
-    #: (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer, history: PreparedHistory?) -> RecordSnapshot?
+    # Read from prepared history, as a version is, without instantiating the
+    # root's members.
+    #: (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer, history: PreparedHistory?) -> RecordSnapshot
     def snapshot_from_live_root(root_record, context_version, tree:, normalizer:, history:)
       state = live_state(root_record)
       @preparer.call(state.model_class, historical: true)
-      handled, snapshot = @prepared_snapshotter.live(
-        state, context_version, tree: tree, normalizer: normalizer, history: history
-      )
-      return snapshot if handled
-
-      normalize(live_root(root_record), context_version, tree: tree, normalizer: normalizer,
-                                                         habtm_version: context_version,
+      @prepared_snapshotter.live(state, context_version, tree: tree, normalizer: normalizer,
                                                          history: history)
     end
 
     # The state of the root's row, read once for the call: every snapshot
-    # that starts from the row starts from the same state. Reading it writes
-    # nothing to the row, so it is read from the loaded record itself, whose
-    # columns the current snapshot reads too.
+    # that starts from the row starts from the same state. A batch loaded the
+    # row already; otherwise it is read here, from the record whose columns
+    # the current snapshot reads too.
     #: (untyped) -> PreparedRecordState
     def live_state(root_record)
       identity = Endpoint.identity(root_record)
-      @live_states[identity] ||= PreparedRecordState.new(loaded_root(root_record, identity))
-    end
-
-    # Rebuilding a version's associations writes them onto the record, so each
-    # snapshot that does gets its own copy of the root's row, built from the
-    # row's stored values without a query.
-    #: (untyped) -> untyped
-    def live_root(root_record)
-      loaded = loaded_root(root_record, Endpoint.identity(root_record))
-      loaded.class.instantiate(loaded.attributes_before_type_cast)
-    end
-
-    # A batch loaded the row already; otherwise it is read once, so every
-    # snapshot of the call starts from the same row.
-    #: (untyped, identity) -> untyped
-    def loaded_root(root_record, identity)
-      @live_roots[identity] ||= Endpoint.reload_record(root_record)
-    end
-
-    #: (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer, habtm_version: untyped, history: PreparedHistory?) -> RecordSnapshot?
-    def normalize(record, context_version, tree:, normalizer:, habtm_version:, history:) # rubocop:disable Metrics/ParameterLists
-      reifier = association_reader(context_version, habtm_version: habtm_version, history: history)
-      reflections = [] #: Array[untyped]
-      reflections = @traversal.reflections_for(record.class, tree, path: '') if record
-      reifier.reify(record, reflections) if record && !reflections.empty?
-      normalizer.call(record, reifier: reifier)
+      @live_states[identity] ||= PreparedRecordState.new(
+        @live_roots[identity] || Endpoint.reload_record(root_record)
+      )
     end
 
     #: (untyped, untyped) -> Array[untyped]

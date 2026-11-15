@@ -155,10 +155,10 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
 
   # An index over everything from `origin`, as a batch builds one for all its
   # roots, with each call narrowing to one root's range.
-  def index_for(origin, loads, root_versions: [])
+  def index_for(origin, loads)
     records = PaperTrailDiff::PreparedRecordIndex.new(origin)
     loads.each { |model, ids| records.load(model, ids) }
-    described_class.new(records, root_versions, start_at: origin)
+    described_class.new(records, start_at: origin)
   end
 
   def sections
@@ -173,7 +173,7 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
     finish = before.versions.last.created_at
     page.sections.create!(title: 'After')
     records = PaperTrailDiff::PreparedRecordIndex.new(origin, end_at: finish)
-    index = described_class.new(records, [], start_at: origin)
+    index = described_class.new(records, start_at: origin)
 
     historical, live = index.children.call(IndexSpecPage, [page.id], sections)
 
@@ -181,16 +181,17 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
     expect(live).to eq(page.id.to_s => [before.id])
   end
 
-  it 'reads root versions as given and every other record from the record index' do
+  # A root of a batch can sit in another root's tree, where its versions
+  # after the window are that tree's events too.
+  it 'reads every record from the record index, a root too' do
     origin = Time.now.utc
     root, other = %w[Root Other].map { |title| IndexSpecLandingPage.create!(title: title) }
-    given = [root.versions.reorder(:id).first]
     root.update!(title: 'Root again')
     other.update!(title: 'Other again')
-    index = index_for(origin, { IndexSpecPage => [root.id, other.id] }, root_versions: given)
+    index = index_for(origin, { IndexSpecPage => [root.id, other.id] })
 
     expect(index.versions(IndexSpecLandingPage, [root.id, other.id.to_s]))
-      .to eq(given + other.versions.reorder(:id).to_a)
+      .to eq(root.versions.reorder(:id).to_a + other.versions.reorder(:id).to_a)
     expect([index.loaded?(IndexSpecPage, other.id), index.loaded?(IndexSpecPage, 0)])
       .to eq([true, false])
   end
@@ -266,14 +267,27 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
       .to eq(pages.flat_map { |page| inside.call(page) })
   end
 
-  # A base class takes every row, so it reads nothing from the record index.
-  it 'keeps every record and version of a base class without reading their history' do
+  # A base class takes every row, so it reads no class from the record index.
+  it 'keeps every record and version of a base class without reading their classes' do
     origin = Time.now.utc
     page = IndexSpecPage.create!(title: 'Unloaded')
     version = page.versions.last
-    index = index_for(origin, {}, root_versions: [version])
+    index = index_for(origin, { IndexSpecPage => [page.id] })
 
     expect(index.member_ids(IndexSpecPage, [page.id, 0])).to eq([page.id, 0])
+    expect(index.member_versions(IndexSpecPage, [page.id], range(origin, Time.now.utc)))
+      .to eq([version])
+  end
+
+  # A row deleted without a destroy leaves its create with no state on
+  # either side, so no class to read.
+  it 'keeps a version of a base class that has no state before or after it' do
+    origin = Time.now.utc
+    page = IndexSpecPage.create!(title: 'Deleted')
+    version = page.versions.last
+    IndexSpecPage.where(id: page.id).delete_all
+    index = index_for(origin, { IndexSpecPage => [page.id] })
+
     expect(index.member_versions(IndexSpecPage, [page.id], range(origin, Time.now.utc)))
       .to eq([version])
   end
@@ -353,7 +367,7 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
     index.child_ids(IndexSpecLandingPage, [page.id], sections, window)
     owner = ->(name) { IndexSpecSection.reflect_on_association(name) }
     owners = lambda do |name|
-      index.target_rows(IndexSpecSection, [featured.id], owner.call(name), window)
+      index.target_rows(IndexSpecSection, [featured.id], owner.call(name))
            .map(&:foreign_key_id).uniq
     end
 
@@ -365,15 +379,14 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
     expect(index.child_ids(IndexSpecPage, [page.id],
                            IndexSpecPage.reflect_on_association(:featured_sections), window))
       .to eq([featured.id])
-    expect([owners.call(:page), owners.call(:featured_page)]).to eq([[nil], [page.id]])
+    expect([owners.call(:page), owners.call(:featured_page)]).to eq([[], [page.id]])
   end
 
-  # The version a range ends at names the author after it, which the range
-  # never reached, but a key written without a version is recorded only after
-  # it too, so every author from the start onward is a candidate, and the live
-  # one. So is every author a page's recorded states name, without an event,
-  # which a key PT-AT never saw reaches only that way.
-  it 'reads the authors a page pointed at from the range start onward, and its live one' do
+  # PT-AT records a version's keys as they stood after its change, which is
+  # the state the record's next version stores, or its live row. The history
+  # holds both, so its states name every author a page pointed at, a key
+  # PT-AT never saw included, with no statement of their own.
+  it 'reads the authors the states a page held name, its live one included' do
     origin = Time.now.utc
     first, second, third = %w[Ann Bea Cy].map { |name| TrackedAuthor.create!(name: name) }
     page, other, gone = %w[Page Other Gone].map do |title|
@@ -384,60 +397,31 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
     end
     other.update!(author: second)
     gone.destroy!
-    start = Time.now.utc
     page.update!(author: second)
     page.update!(author: third)
-    closing = page.versions.reorder(:id).last
     ids = [page, other, gone, unversioned].map(&:id)
     index = index_for(origin, { IndexSpecPage => ids })
     index.register(IndexSpecPage, ids)
     author = IndexSpecPage.reflect_on_association(:author)
-    fields = ->(rows) { rows.map { |row| [row.owner_id, row.foreign_key_id, row.event] } }
+    fields = ->(rows) { rows.map { |row| [row.owner_id, row.foreign_key_id] }.uniq }
 
-    closed = index.target_rows(IndexSpecLandingPage, [page.id, gone.id], author,
-                               range(start, closing))
-    current = index.target_rows(IndexSpecPage, [page.id, unversioned.id], author,
-                                range(start, Time.now.utc))
-
-    recorded = [[page.id, first.id, nil], [page.id, second.id, nil], [page.id, third.id, nil]]
-    expect(fields.call(closed)).to contain_exactly(
-      [page.id, first.id, 'create'], [page.id, second.id, 'update'],
-      [page.id, third.id, 'update'], [page.id, third.id, nil], *recorded, [gone.id, first.id, nil]
-    )
-    expect(fields.call(current)).to contain_exactly(
-      [page.id, first.id, 'create'], [page.id, second.id, 'update'],
-      [page.id, third.id, 'update'], [page.id, third.id, nil], [unversioned.id, first.id, nil],
-      *recorded, [unversioned.id, first.id, nil]
-    )
+    found = nil
     queries = statements do
-      found = index.target_rows(IndexSpecPage, [other.id], author, range(start, closing))
-      expect(fields.call(found))
-        .to eq([[other.id, second.id, 'update'], [other.id, second.id, nil],
-                [other.id, first.id, nil], [other.id, second.id, nil]])
+      found = index.target_rows(IndexSpecPage, [page.id, gone.id, unversioned.id], author)
     end
+
+    expect(found).to all(be_frozen)
+    expect(fields.call(found)).to contain_exactly(
+      [page.id, first.id], [page.id, second.id], [page.id, third.id], [gone.id, first.id],
+      [unversioned.id, first.id]
+    )
+    expect(fields.call(index.target_rows(IndexSpecLandingPage, [other.id], author)))
+      .to contain_exactly([other.id, first.id], [other.id, second.id])
     expect(queries).to eq(0)
   end
 
-  # The latest row before the start names the author a page had there, so the
-  # rows it replaced cannot matter, and are not read.
-  it 'reads no author row that a later one before the start replaced' do
-    first, second, third = %w[Ann Bea Cy].map { |name| TrackedAuthor.create!(name: name) }
-    page = IndexSpecPage.create!(title: 'Page', author: first)
-    page.update!(author: second)
-    origin = Time.now.utc
-    page.update!(author: third)
-    index = index_for(origin, { IndexSpecPage => [page.id] })
-    index.register(IndexSpecPage, [page.id])
-
-    historical, = index.send(:target_candidates, IndexSpecPage,
-                             IndexSpecPage.reflect_on_association(:author))
-
-    expect(historical.fetch(page.id.to_s).map(&:foreign_key_id))
-      .to contain_exactly(second.id, third.id)
-  end
-
   # Each state a link recorded names its target by type and id; one with no
-  # target names none, and a key of two columns is left to the record path.
+  # target names none.
   it "reads the targets an owner's recorded states name" do
     author = SourceTypeAuthor.create!(name: 'Author')
     tag = SourceTypeTag.create!(name: 'Tag')
@@ -445,16 +429,11 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
     [{ target: tag }, { target: nil }].each { |change| link.update!(change) }
     index = index_for(Time.now.utc - 60, { SourceTypeLink => [link.id] })
     fields = lambda do |name|
-      index.send(:recorded_target_rows, SourceTypeLink, [link.id],
-                 SourceTypeLink.reflect_on_association(name))
+      index.target_rows(SourceTypeLink, [link.id], SourceTypeLink.reflect_on_association(name))
            .map { |row| [row.owner_id, row.foreign_type, row.foreign_key_id] }
     end
-    composite = SourceTypeLink.reflect_on_association(:target).dup
-    allow(composite).to receive(:foreign_key).and_return(Class.new(Array).new(%w[target_id x]))
-
     expect(fields.call(:target)).to eq([[link.id, 'SourceTypeAuthor', author.id],
                                         [link.id, 'SourceTypeTag', tag.id]])
-    expect(index.send(:recorded_target_rows, SourceTypeLink, [link.id], composite)).to eq([])
   end
 
   def checkpoint(article)
@@ -462,61 +441,9 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
     article.versions.reorder(:id).last
   end
 
-  # A transaction's id is its first version's, which here is a comment's, and
-  # the comment's own `belongs_to` rows share it.
-  it 'reads the tags each selected transaction recorded, for registered articles only' do
-    origin = Time.now.utc
-    article, other = %w[Tagged Other].map { |title| TrackedArticle.create!(title: title) }
-    ruby, rails = %w[ruby rails].map { |name| TrackedTag.create!(name: name) }
-    article.tags << ruby
-    TrackedArticle.transaction do
-      article.comments.create!(body: 'First in the transaction')
-      TrackedArticle.find(article.id).paper_trail.save_with_version
-    end
-    tagged = article.versions.reorder(:id).last
-    other.tags << rails
-    other_tagged = checkpoint(other)
-    ruby.articles << other
-    TrackedTag.transaction { TrackedTag.find(ruby.id).paper_trail.save_with_version }
-    retagged = ruby.versions.reorder(:id).last
-    untracked = Struct.new(:id).new(tagged.id)
-    index = index_for(origin, { TrackedArticle => [article.id, other.id], TrackedTag => [ruby.id] })
-    index.register(TrackedArticle, [article.id])
-    index.register(TrackedTag, [ruby.id])
-    rows = lambda do |model, selected, name|
-      index.habtm_rows(model, selected, model.reflect_on_association(name)).map(&:foreign_key_id)
-    end
-
-    expect(rows.call(TrackedArticle, [tagged, tagged, untracked], :tags)).to eq([ruby.id])
-    queries = statements { expect(rows.call(TrackedArticle, [other_tagged], :tags)).to eq([]) }
-    expect(queries).to eq(0)
-    expect(rows.call(TrackedTag, [retagged], :articles)).to contain_exactly(article.id, other.id)
-  end
-
-  it 'reads the tags Support::IDS_PER_STATEMENT transactions to a statement' do
-    stub_const('PaperTrailDiff::Support::IDS_PER_STATEMENT', 2)
-    origin = Time.now.utc
-    articles = Array.new(3) { |index| TrackedArticle.create!(title: "Tagged #{index}") }
-    tags = articles.map do |article|
-      TrackedTag.create!(name: article.title).tap { |tag| article.tags << tag }
-    end
-    tagged = articles.map { |article| checkpoint(article) }
-    index = index_for(origin, { TrackedArticle => articles.map(&:id) })
-    index.register(TrackedArticle, articles.map(&:id))
-    transactions = PaperTrail::Version.where(item_type: 'TrackedArticle').distinct
-                                      .pluck(:transaction_id)
-
-    found = nil
-    queries = statements do
-      found = index.habtm_rows(TrackedArticle, tagged, TrackedArticle.reflect_on_association(:tags))
-    end
-
-    expect(found.map(&:foreign_key_id)).to match_array(tags.map(&:id))
-    expect(transactions.length).to be > 2
-    expect(queries).to eq(transactions.each_slice(2).count)
-  end
-
-  describe '#join_versions' do
+  describe '#join_versions',
+           mutant_expression: %w[PaperTrailDiff::PreparedActivityIndex#join_versions PaperTrailDiff::JoinRunJudge
+                                 PaperTrailDiff::ThroughPath PaperTrailDiff::ThroughLead] do
     let!(:origin) { Time.now.utc }
     let(:board) { IndexSpecBoard.create! }
     let(:owners) { { model: IndexSpecBoard, ids: [board.id] } }
@@ -633,20 +560,16 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
       expect(kept).to eq(versions)
     end
 
-    # The owner's key, rows further down, or a key of two columns joins them,
-    # so no state of the row is read.
+    # The owner's key, or rows further down, joins them, so no state of the
+    # row is read.
     it 'keeps every version of join rows a key on the row alone cannot place' do
       target = IndexSpecTarget.create!
       target.update!(name: 'renamed')
       other = IndexSpecBoard.create!
       link = IndexSpecLink.create!(board_id: other.id)
       link.update!(active: false)
-      # An Array subclass, as a composite key may be, so only `is_a?` sees it.
-      composite = through(:coded_targets)
-      key = Class.new(Array).new(%w[board_id board_code])
-      allow(composite.through_reflection).to receive(:foreign_key).and_return(key)
 
-      [[owners, target, through(:target_notes)], [owners, link, composite],
+      [[owners, target, through(:target_notes)],
        [{ model: IndexSpecLink, ids: [link.id] }, board, through(:sibling_links, IndexSpecLink)]]
         .each do |owners, record, reflection|
           kept, versions = join_versions(owners, record, reflection, load: false)
@@ -693,7 +616,7 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
   # history holds no record of (see empty_belongs_to_path_spec.rb).
   it 'finds no children for a model none of whose records were registered' do
     records = PaperTrailDiff::PreparedRecordIndex.new(Time.now.utc - 60)
-    index = described_class.new(records, [], start_at: Time.now.utc - 60)
+    index = described_class.new(records, start_at: Time.now.utc - 60)
 
     children = index.child_ids(
       TrackedArticle, [], TrackedArticle.reflect_on_association(:comments),
@@ -737,7 +660,7 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
     end
     records = PaperTrailDiff::PreparedRecordIndex.new(origin)
     records.load(TrackedComment, (1..14).to_a)
-    index = described_class.new(records, [], start_at: origin)
+    index = described_class.new(records, start_at: origin)
     relation = PaperTrail::Version.where(id: candidates.map(&:id))
 
     left_out = %w[2 10 11 14]

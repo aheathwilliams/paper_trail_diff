@@ -42,12 +42,33 @@ module PaperTrailDiff
       Support.with_connection(model) do |connection|
         next yield(ids) unless table?(connection)
 
-        name = "#paper_trail_diff_candidates_#{SecureRandom.hex(8)}"
-        begin
-          create(connection, model, name, ids)
-          yield model.unscoped.from("#{name} AS candidates").select('candidates.id')
-        ensure
-          drop(connection, name)
+        temporary(connection, model) do |name|
+          insert_values(connection, model, name, ids)
+          yield selection(model, name)
+        end
+      end
+    end
+
+    # Yields the subqueries as they were given, or, on SQL Server, one
+    # relation that selects their ids from a table each fills in turn.
+    #
+    # A page that matches its rows against several subqueries joined by OR
+    # has SQL Server plan them as one statement: with 1,600 orders and the
+    # subqueries for their line items, it ran a line items' subquery again
+    # for each order and took about 38 s, though each subquery alone took
+    # under 0.2 s. Filled one statement at a time, each subquery runs once,
+    # and every page then reads one keyed table. The ids stay in the
+    # database, so a busy window costs no list in Ruby.
+    #: [T] (untyped, Array[untyped]) { (Array[untyped]) -> T } -> T
+    def self.union(model, relations)
+      return yield(relations) unless relations.length > 1
+
+      Support.with_connection(model) do |connection|
+        next yield(relations) unless table?(connection)
+
+        temporary(connection, model) do |name|
+          relations.each { |relation| insert_selected(connection, name, relation) }
+          yield [selection(model, name)]
         end
       end
     end
@@ -57,17 +78,48 @@ module PaperTrailDiff
       connection.adapter_name == 'SQLServer' && !connection.preventing_writes?
     end
 
+    # The table is dropped even when making or filling it is what failed.
+    #: [T] (untyped, untyped) { (String) -> T } -> T
+    def self.temporary(connection, model)
+      name = "#paper_trail_diff_candidates_#{SecureRandom.hex(8)}"
+      begin
+        create(connection, model, name)
+        yield name
+      ensure
+        drop(connection, name)
+      end
+    end
+
+    # A condition such as `where(id: ...)` reads this as a subquery.
+    #: (untyped, String) -> untyped
+    def self.selection(model, name)
+      model.unscoped.from("#{name} AS candidates").select('candidates.id')
+    end
+
     # The column takes the key's type and collation, so that comparing the two
     # neither converts every row nor meets tempdb's collation.
-    #: (untyped, untyped, String, Array[String]) -> void
-    def self.create(connection, model, name, ids)
+    #: (untyped, untyped, String) -> void
+    def self.create(connection, model, name)
       column = model.columns_hash.fetch(model.primary_key)
       connection.execute("CREATE TABLE #{name} (id #{column_type(column)} PRIMARY KEY)")
+    end
+
+    #: (untyped, untyped, String, Array[String]) -> void
+    def self.insert_values(connection, model, name, ids)
       type = model.type_for_attribute(model.primary_key)
       ids.uniq.each_slice(ROWS_PER_INSERT) do |slice|
         values = slice.map { |id| "(#{connection.quote(type.serialize(type.cast(id)))})" }
         connection.execute("INSERT INTO #{name} (id) VALUES #{values.join(', ')}")
       end
+    end
+
+    # The relation selects one column. An id already in the table, or none,
+    # is left out, so the key holds each once.
+    #: (untyped, String, untyped) -> void
+    def self.insert_selected(connection, name, relation)
+      connection.execute("INSERT INTO #{name} (id) SELECT selected.id " \
+                         "FROM (#{relation.to_sql}) AS selected (id) " \
+                         "WHERE selected.id IS NOT NULL EXCEPT SELECT id FROM #{name}")
     end
 
     # The table can be gone already: a timeout that cost the connection,
@@ -95,6 +147,7 @@ module PaperTrailDiff
       collation ? "#{type} COLLATE #{collation}" : type
     end
 
-    private_class_method :table?, :create, :drop, :column_type
+    private_class_method :table?, :temporary, :selection, :create, :insert_values, :insert_selected,
+                         :drop, :column_type
   end
 end

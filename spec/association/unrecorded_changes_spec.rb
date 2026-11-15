@@ -51,7 +51,7 @@ RSpec.describe 'Changes saved without a version' do
   end
 
   it "reports each unrecorded write in the step for that record's previous recorded change" do
-    steps = steps_by_actor(PaperTrailDiff.activity_timeline(history, associations: [:comments]))
+    steps = steps_by_actor(SpecTimelines.activity_timeline(history, associations: [:comments]))
 
     expect(comment_diff(steps.fetch('bob')).added.map { |record| record.attributes.fetch('body') })
       .to eq(['Unrecorded body'])
@@ -70,7 +70,7 @@ RSpec.describe 'Changes saved without a version' do
     carol = article.versions.find_by!(whodunnit: 'carol')
 
     steps = steps_by_actor(
-      PaperTrailDiff.activity_timeline(article, from: :first, to: carol, associations: [:comments])
+      SpecTimelines.activity_timeline(article, from: :first, to: carol, associations: [:comments])
     )
 
     expect(comment_diff(steps.fetch('bob')).added.map { |record| record.attributes.fetch('body') })
@@ -78,7 +78,7 @@ RSpec.describe 'Changes saved without a version' do
   end
 
   it 'reports the same rule in the root timeline' do
-    steps = steps_by_actor(PaperTrailDiff.timeline(history))
+    steps = steps_by_actor(SpecTimelines.timeline(history))
 
     expect(steps.fetch('carol').diff.attributes.fetch('title').to_h)
       .to eq(from: 'Draft', to: 'Unrecorded title')
@@ -100,8 +100,8 @@ RSpec.describe 'Changes saved without a version' do
     # The next version's record is loaded already; no version asks for its own.
     expect_any_instance_of(PaperTrail::Version).not_to receive(:next)
 
-    expect(titles.call(PaperTrailDiff.timeline(article))).to eq(expected)
-    expect(titles.call(PaperTrailDiff.activity_timeline(article))).to eq(expected)
+    expect(titles.call(SpecTimelines.timeline(article))).to eq(expected)
+    expect(titles.call(SpecTimelines.activity_timeline(article))).to eq(expected)
     expect(titles.call(PaperTrailDiff.analyze(article, activity: true).timeline)).to eq(expected)
     report = PaperTrailDiff.report(TrackedArticle, since: Time.now.utc - 3600, limit: 10)
     expect(titles.call(report.analyses.values.first.activity_timeline)).to eq(expected)
@@ -129,7 +129,7 @@ RSpec.describe 'Changes saved without a version' do
       ActiveSupport::Notifications.subscribed(record_query, 'sql.active_record', &block)
     end
 
-    count.call(:plain) { PaperTrailDiff.activity_timeline(article, associations: [:comments]) }
+    count.call(:plain) { SpecTimelines.activity_timeline(article, associations: [:comments]) }
     results = count.call(:recorded) do
       DocumentationExamples.evaluate(
         File.expand_path('../../docs/reference.md', __dir__),
@@ -214,11 +214,11 @@ RSpec.describe 'Changes saved without a version' do
       finish = Time.now.utc
       paths = { associations: [:author] }
 
-      activity = PaperTrailDiff.activity_timeline(article, **paths)
+      activity = SpecTimelines.activity_timeline(article, **paths)
       expect(authors(activity)).to eq([['alice', nil], ['carol', %w[Ann Bea]], ['dave', nil]])
       expect(PaperTrailDiff.analyze(article, from: :first, to: article, activity: true, **paths)
                            .timeline.map { |step| step.diff.to_h })
-        .to eq(PaperTrailDiff.timeline(article, **paths).map { |step| step.diff.to_h })
+        .to eq(SpecTimelines.timeline(article, **paths).map { |step| step.diff.to_h })
       expect(authors(PaperTrailDiff.analyze(article, within: start...split, activity: true, **paths)
                                    .activity_timeline))
         .to eq([['alice', nil], ['carol', %w[Ann Bea]]])
@@ -236,7 +236,7 @@ RSpec.describe 'Changes saved without a version' do
       actor('erin') { bea.update!(name: 'Bea Renamed') }
       actor('carol') { article.update!(title: 'Published', author: ann) }
 
-      steps = PaperTrailDiff.activity_timeline(article, associations: [:author]).reject(&:empty?)
+      steps = SpecTimelines.activity_timeline(article, associations: [:author]).reject(&:empty?)
       renames = steps.filter_map do |step|
         changed = step.diff.associations['author']&.changed
         changed && [step.source_boundary.whodunnit, changed.attributes.fetch('name').to_h]
@@ -251,7 +251,7 @@ RSpec.describe 'Changes saved without a version' do
       article.update_columns(author_id: bea.id)
       actor('dave') { article.update!(title: 'Final') }
 
-      expect(authors(PaperTrailDiff.activity_timeline(article, associations: [:author])))
+      expect(authors(SpecTimelines.activity_timeline(article, associations: [:author])))
         .to eq([['alice', nil], ['carol', %w[Ann Bea]], ['dave', nil]])
     end
 
@@ -266,8 +266,8 @@ RSpec.describe 'Changes saved without a version' do
       dave = actor('dave') { article.update!(title: 'Final') } && article.versions.last
       actor('erin') { comment.update!(body: 'Edited') }
 
-      steps = PaperTrailDiff.activity_timeline(article, from: :first, to: dave,
-                                                        associations: [:comments])
+      steps = SpecTimelines.activity_timeline(article, from: :first, to: dave,
+                                                       associations: [:comments])
       added = steps.flat_map do |step|
         step.diff.associations.fetch('comments', nil)&.added.to_a.map do |record|
           [step.source_boundary.whodunnit, record.attributes.fetch('body')]
