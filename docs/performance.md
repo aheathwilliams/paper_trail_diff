@@ -55,6 +55,12 @@ Flat query counts do not make a report's cost flat:
   [history stored as JSON](reference.md#history-stored-as-json)). PaperTrail
   reads every stored version with the one serializer, so switching means
   converting the versions already saved.
+- **Grouping by transaction costs little.** `report` with `associations:`
+  groups by default. On the `association_window` benchmark (articles created
+  with two comments in one transaction, then edited with one of them in
+  another), 2,000 articles took 2.6 to 3.2 s grouped and 2.6 to 3.4 s with
+  `group: nil`, three samples each, with the same statements, about 4% more
+  allocations, and slightly less retained memory.
 - **Memory grows with the number of records.** A `report` of 1,000 articles
   with their comments, replies, and author peaked at about 100 KB per
   article. `limit:` is a safety ceiling, not a page size, so to bound memory,

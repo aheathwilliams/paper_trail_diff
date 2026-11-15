@@ -575,7 +575,8 @@ PaperTrailDiff.analyze(article, associations: [:comments], activity: true, group
   (see [version order](#version-order)), so they appear in the group of its
   last run; the changes its root versions record appear in their own runs.
 - Also accepted by `analyze_many` and `analyze_scope` with `activity: true`,
-  and by `report`.
+  and by `report`, which groups by default when given `associations:` (pass
+  `group: nil` to turn it off).
 
 Without grouping, a step inside a transaction can look empty. A child's new
 value is only visible at the next recorded event, and inside a transaction that
@@ -753,6 +754,12 @@ report = PaperTrailDiff.report(Article.all, since: 1.day.ago, limit: 100)
 
 It accepts `associations:`, `ignore:`, `version_scope:`, `snapshots:`, `group:`,
 `recorded_changes:`, and `include_deleted:`.
+
+With `associations:`, `report` groups by transaction unless told otherwise:
+each save of a record and its associated records is one step, as with
+[`group: :transaction`](#one-step-per-transaction-group-transaction). Pass
+`group: nil` for a step per version. A report without `associations:` is not
+grouped.
 
 ### Which records are selected
 

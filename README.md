@@ -164,6 +164,10 @@ report.unreachable # Model names and IDs of selected records no longer in the da
 report.deleted     # Reports for those records, or nil when destroy history is missing
 ```
 
+With `associations:`, `report` combines each save of a record and its
+associated records into one step, as `group: :transaction` does above. Pass
+`group: nil` for a step per version.
+
 `report.analyses` is a hash of reports for records that still exist. Each key is
 `[model_name, id_as_a_string]`. Each value has the net `diff` and an
 `activity_timeline`. `report.roots` returns the selected ActiveRecord objects,

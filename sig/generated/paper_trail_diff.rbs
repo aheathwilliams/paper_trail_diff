@@ -61,6 +61,8 @@ module PaperTrailDiff
   # for every root that changed or whose requested associations did.
   # Historical windows remain explicit on analyze_scope; this entry point is
   # deliberately named for a report through now rather than an as-of query.
+  # With associations, each saved transaction is one step unless `group:
+  # nil` asks for every version on its own.
   # : (untyped, since: untyped, limit: Integer, ?associations: association_option, ?ignore: ignore_option, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?, ?include_deleted: bool, ?recorded_changes: bool?) -> ScopedAnalysis
   def self.report: (untyped, since: untyped, limit: Integer, ?associations: association_option, ?ignore: ignore_option, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?, ?include_deleted: bool, ?recorded_changes: bool?) -> ScopedAnalysis
 

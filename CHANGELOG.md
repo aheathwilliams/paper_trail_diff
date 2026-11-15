@@ -7,6 +7,12 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Breaking changes
 
+- `report` with `associations:` now defaults to `group: :transaction`, so each
+  save of a record and its associated records is one activity step, with every
+  version of that save in `step.sources`. Pass `group: nil` for the previous
+  step per version. A `report` without `associations:`, and `analyze`,
+  `analyze_many`, and `analyze_scope`, are unchanged.
+
 - `PaperTrailDiff.timeline` and `PaperTrailDiff.activity_timeline` are
   removed. Each returned what `analyze` already returns alongside its diff,
   from the same read:

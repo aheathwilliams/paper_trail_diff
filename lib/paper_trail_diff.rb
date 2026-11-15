@@ -297,11 +297,13 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
     # for every root that changed or whose requested associations did.
     # Historical windows remain explicit on analyze_scope; this entry point is
     # deliberately named for a report through now rather than an as-of query.
+    # With associations, each saved transaction is one step unless `group:
+    # nil` asks for every version on its own.
     #: (untyped, since: untyped, limit: Integer, ?associations: association_option, ?ignore: ignore_option, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?, ?include_deleted: bool, ?recorded_changes: bool?) -> ScopedAnalysis
     def report( # rubocop:disable Metrics/ParameterLists
       scope, since:, limit:, associations: [], ignore: DEFAULT_IGNORED_ATTRIBUTES,
-      version_scope: nil, snapshots: false, group: nil, include_deleted: false,
-      recorded_changes: nil
+      version_scope: nil, snapshots: false, group: (:transaction unless associations.empty?),
+      include_deleted: false, recorded_changes: nil
     )
       TimeRange.check_since!(since)
       # Endless, so a version a server dated ahead of this one's clock is in it.
