@@ -96,13 +96,15 @@ module PaperTrailDiff
       # : (untyped, TimeRange?) -> void
       def initialize: (untyped, TimeRange?) -> void
 
+      # A create stores no state, so the first versions read are those that
+      # did not create their child.
       # : (untyped) -> untyped
       def relation: (untyped) -> untyped
 
       # The owners the first versions of the children `filter` selects name in
       # their stored states. An `as:` child's type must name one of the
       # owner's types, which take a child with no type, as any plain child has.
-      # A version with no state, or none for the key, names no owner.
+      # A version with no state for the key names no owner.
       # : (untyped) -> Array[untyped]
       def owners: (untyped) -> Array[untyped]
 

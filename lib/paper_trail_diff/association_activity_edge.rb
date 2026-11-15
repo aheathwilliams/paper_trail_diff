@@ -146,9 +146,11 @@ module PaperTrailDiff
         @filter_type = column_type(@target.paper_trail.version_class, 'item_id')
       end
 
+      # A create stores no state, so the first versions read are those that
+      # did not create their child.
       #: (untyped) -> untyped
       def relation(filter)
-        relation = VersionQuery.for_model(@target).where(item_id: filter).where.not(event: 'create')
+        relation = VersionQuery.for_model(@target).where(item_id: filter).where.not(object: nil)
         versions = relation.arel_table
         relation = relation.where(VersionQuery.no_earlier_version(versions))
         start = @time_range&.begin_time
@@ -158,11 +160,11 @@ module PaperTrailDiff
       # The owners the first versions of the children `filter` selects name in
       # their stored states. An `as:` child's type must name one of the
       # owner's types, which take a child with no type, as any plain child has.
-      # A version with no state, or none for the key, names no owner.
+      # A version with no state for the key names no owner.
       #: (untyped) -> Array[untyped]
       def owners(filter)
         types = RecordedOwner.types(@reflection, @owner)
-        relation(filter).where.not(object: nil).select(:object).filter_map do |version|
+        relation(filter).select(:object).filter_map do |version|
           state = version.object_deserialized
           state[@reflection.foreign_key] if types.include?(state[@reflection.type])
         end
