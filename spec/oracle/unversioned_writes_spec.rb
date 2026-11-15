@@ -30,7 +30,7 @@ RSpec.describe 'Change rows against unversioned writes' do
           history.article, associations: associations, recorded_changes: true, group: group,
                            snapshots: true, **options
         )
-        yield steps, "#{associations.inspect} group #{group.inspect}", structural
+        yield steps, "#{associations.inspect} group #{group.inspect}", structural, group
       end
     end
   end
@@ -39,9 +39,9 @@ RSpec.describe 'Change rows against unversioned writes' do
     it "accounts for every row of the whole history (seed #{seed})" do
       expect_rows_accounted_for(seed) do |history, failures|
         first = history.article.versions.reorder(:created_at, :id).first
-        each_timeline(history, from: first) do |steps, label, structural|
-          check = UnversionedWrites::RowCheck.new(history, failures, label,
-                                                  strict: true, structural: structural)
+        each_timeline(history, from: first) do |steps, label, structural, group|
+          checks = group ? UnversionedWrites::GroupedRowCheck : UnversionedWrites::RowCheck
+          check = checks.new(history, failures, label, strict: true, structural: structural)
           check.call(steps)
           check.complete(steps.flat_map(&:change_rows))
           UnversionedWrites::NetCheck.new(history, failures, label, strict: true,
@@ -57,7 +57,7 @@ RSpec.describe 'Change rows against unversioned writes' do
         random = Random.new(seed)
         4.times do |index|
           start, finish = times.sample(2, random: random).sort
-          each_timeline(history, within: start..finish) do |steps, label, _structural|
+          each_timeline(history, within: start..finish) do |steps, label, _structural, _group|
             window = "window #{index} #{label}"
             UnversionedWrites::RowCheck.new(history, failures, window, strict: false).call(steps)
             UnversionedWrites::NetCheck.new(history, failures, window, strict: false).call(steps)
