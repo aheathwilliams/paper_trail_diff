@@ -39,7 +39,7 @@ module PaperTrailDiff
       grouped = {} #: Hash[String, Hash[Symbol, untyped]]
       ids = @records.attribute_values_for(owner_class, owner_ids, key)
       types = @records.attribute_values_for(owner_class, owner_ids, reflection.foreign_type)
-      ids.zip(types).each do |id, type|
+      ids.zip(types) do |id, type|
         model_class = AssociationTraversal.named_class(type.to_s)
         add_identity(grouped, model_class, id) if model_class && id
       end

@@ -91,4 +91,13 @@ RSpec.describe PaperTrailDiff::ActivitySnapshotDelta do
 
     expect(delta.relationship_changed?(reflection('subject_id', as: :subject))).to be(true)
   end
+
+  it 'detects a polymorphic owner id change' do
+    delta = described_class.new(
+      before_attributes: { subject_id: 1, subject_type: 'Article' },
+      after_attributes: { subject_id: 2, subject_type: 'Article' }
+    )
+
+    expect(delta.relationship_changed?(reflection('subject_id', as: :subject))).to be(true)
+  end
 end
