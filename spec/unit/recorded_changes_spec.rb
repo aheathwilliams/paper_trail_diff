@@ -13,9 +13,11 @@ RSpec.describe PaperTrailDiff::RecordedChanges do
     RecordedVersion.where(item_id: note.id, event: event).order(:id).last
   end
 
+  # The update moves updated_at a second on, so that JSON history, which keeps
+  # milliseconds, records it changed even when both saves share a millisecond.
   def edited_note
     note = RecordedNote.create!(title: 'Draft', rank: 1, stage: :draft)
-    note.update!(title: 'Published', rank: 2, stage: :published)
+    note.update!(title: 'Published', rank: 2, stage: :published, updated_at: note.updated_at + 1)
     note
   end
 
