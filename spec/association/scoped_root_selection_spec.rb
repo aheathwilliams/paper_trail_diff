@@ -592,7 +592,7 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
 
       # SQL Server fills a table from the subqueries, which a page then reads.
       kept = if ActiveRecord::Base.connection.adapter_name == 'SQLServer'
-               /\AINSERT INTO #paper_trail_diff_candidates_\h+ .*\(SELECT "version_associations"/
+               /\AWITH selected \(id\) AS \(SELECT "version_associations".* INSERT INTO #/
              else
                /FROM "tracked_articles" WHERE .*IN \(SELECT "version_associations"/
              end

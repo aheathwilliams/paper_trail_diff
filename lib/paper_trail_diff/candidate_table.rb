@@ -109,33 +109,40 @@ module PaperTrailDiff
       type = model.type_for_attribute(model.primary_key)
       ids.uniq.each_slice(ROWS_PER_INSERT) do |slice|
         values = slice.map { |id| "(#{connection.quote(type.serialize(type.cast(id)))})" }
-        connection.execute("INSERT INTO #{name} (id) VALUES #{values.join(', ')}")
+        insert(connection, name, "SELECT id FROM (VALUES #{values.join(', ')}) AS listed (id)")
       end
     end
 
-    # The relation selects one column. An id already in the table, or none,
-    # is left out, so the key holds each once.
     #: (untyped, String, untyped) -> void
     def self.insert_selected(connection, name, relation)
-      connection.execute("INSERT INTO #{name} (id) SELECT selected.id " \
-                         "FROM (#{relation.to_sql}) AS selected (id) " \
-                         "WHERE selected.id IS NOT NULL EXCEPT SELECT id FROM #{name}")
+      insert(connection, name, relation.to_sql)
+    end
+
+    # The source selects one column. An id already in the table, or none, is
+    # left out, so the key holds each once.
+    #
+    # The statement starts with WITH rather than INSERT. The adapter reads the
+    # table of every statement that starts with INSERT from the catalog, to
+    # learn whether it has an identity column. For a temporary table that is a
+    # query on tempdb's catalog, which another report's DROP TABLE can hold
+    # locks on: two reports at the same time deadlocked there, and SQL Server
+    # killed one of them.
+    #: (untyped, String, String) -> void
+    def self.insert(connection, name, source)
+      connection.execute("WITH selected (id) AS (#{source}) " \
+                         "INSERT INTO #{name} (id) SELECT id FROM selected " \
+                         "WHERE id IS NOT NULL EXCEPT SELECT id FROM #{name}")
     end
 
     # The table can be gone already: a timeout that cost the connection,
     # which Active Record then reconnected, takes it along. A failed drop is
     # not raised, so that the error that ended the block is the one the caller
     # sees; a table left behind goes when its connection closes.
-    #
-    # The adapter reads each INSERT's table into the schema cache, which would
-    # keep every table's name for the life of the pool, so its entry goes too.
     #: (untyped, String) -> void
     def self.drop(connection, name)
       connection.execute("IF OBJECT_ID('tempdb..#{name}') IS NOT NULL DROP TABLE #{name}")
     rescue StandardError
       nil
-    ensure
-      connection.schema_cache.clear_data_source_cache!(name)
     end
 
     # The adapter writes an integer type with its size in bytes, as
@@ -148,6 +155,6 @@ module PaperTrailDiff
     end
 
     private_class_method :table?, :temporary, :selection, :create, :insert_values, :insert_selected,
-                         :drop, :column_type
+                         :insert, :drop, :column_type
   end
 end

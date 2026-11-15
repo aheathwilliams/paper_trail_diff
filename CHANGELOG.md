@@ -254,6 +254,22 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- On SQL Server, two `report` or `analyze_scope` calls with `associations:`
+  at the same time could deadlock in tempdb, and one raised
+  `ActiveRecord::DeadlockVictim`. The adapter read the candidate table's
+  columns from tempdb's catalog before each fill, which another call's
+  `DROP TABLE` held locks on. The table is now filled by statements the
+  adapter does not inspect, which also saves a catalog query per call.
+- `report` and `analyze_scope` now select the record a child left when the
+  child's first version is the update that moved or detached it, such as a
+  row from before PaperTrail was installed. They read the old owner from
+  that version's stored state, as an activity analysis does, at every level
+  of a path and for the join rows of a `has_many :through`. Each `has_many`
+  or `has_one` edge on a path runs one more statement for each source of
+  changes below it.
+- `report(associations: nil)` raises `ConfigurationError` naming the option,
+  as `analyze_scope` does, instead of `NoMethodError`.
+
 - On SQL Server, `analyze_scope` and `report` with `associations:` select
   their records from a temporary table that each candidate subquery fills
   in turn, rather than from one statement joining the subqueries with `OR`,

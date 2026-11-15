@@ -113,7 +113,22 @@ module PaperTrailDiff
       return [] if ids.empty?
       return through_owners(reflection, ids) if reflection.through_reflection?
 
-      edges(reflection).flat_map { |edge| follow(edge, ids) }
+      edges(reflection).flat_map { |edge| follow(edge, ids) } + first_owners(reflection, ids)
+    end
+
+    # The owners children held until a first version that did not create
+    # them, read from those versions' stored states (see
+    # AssociationActivityEdge::FirstVersion).
+    #: (untyped, Array[source]) -> Array[source]
+    def first_owners(reflection, ids)
+      return [] if reflection.belongs_to?
+
+      edge = AssociationActivityEdge::FirstVersion.new(reflection, @time_range)
+      found = ids.flat_map do |source|
+        query = subquery(source, edge.filter_type)
+        query ? edge.owners(query.relation) : edge.owners_of(self.class.values([source]))
+      end.uniq
+      found.empty? ? [] : [found]
     end
 
     # A join row that changes moves membership as surely as a target that does.

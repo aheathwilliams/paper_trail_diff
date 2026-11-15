@@ -91,11 +91,14 @@ Six things follow from this:
   `create` version, so history never reports it as added: its earliest
   version's stored values are its state from before history began, and an
   association includes it there. Rows from before PaperTrail was installed
-  are the same, which is usually what you want. One such row is missed: a
+  are the same, which is usually what you want. One such row needs care: a
   child whose first version moves it to another owner. That version stores
   the old owner's key, but PaperTrail-AssociationTracking records the new
-  one, and the gem finds a past owner's children by those records, so the
-  owner it left never held it. Every later move is found.
+  one. Activity steps, `report`, and `analyze_scope` read the old owner from
+  the version's stored state, so they report the child leaving it; `compare`
+  and `analyze` without `activity: true` find a past owner's children by
+  PaperTrail-AssociationTracking's records only, so there the owner it left
+  never held it. Every later move is found everywhere.
 - **Pruned history is gone.** With `has_paper_trail limit:`, PaperTrail
   deletes a record's oldest versions, and the earliest one left becomes its
   start: states before it cannot be read, and an older version passed in is
@@ -806,7 +809,12 @@ grouped.
   `version_associations`, so history recorded before PT-AT was installed selects
   nothing, and neither does a `belongs_to` target's change for a record that
   has no version of its own, such as one created with PaperTrail turned off:
-  `analyze` on that record reports the change, but no selection finds it. A
+  `analyze` on that record reports the change, but no selection finds it.
+  The same holds below the root: a product renamed does not select an order
+  whose line item has no version, over `line_items.product`, nor a tag
+  renamed an order whose join row has none, over a `has_many :through`. After
+  adding PaperTrail to existing data, every row is in this state until it is
+  next saved. A
   change below a `has_many` or `has_one` child that has no version selects
   the owner its row names now, since such a child has held that key
   throughout, as an analysis reads it.

@@ -118,6 +118,12 @@ module PaperTrailDiff
   # takes attribute names, as an array, and defaults to `updated_at`.
   # : (untyped, ?ignore: Array[String | Symbol]) -> Hash[String, ValueChange]?
   def self.recorded_changes: (untyped, ?ignore: Array[String | Symbol]) -> Hash[String, ValueChange]?
+
+  # `report` groups by transaction unless it reads no associations. A value
+  # that is not a list, such as nil, groups too, and the option's own check
+  # then refuses it, naming the option.
+  # : (untyped) -> Symbol?
+  private def self.default_group: (untyped) -> Symbol?
 end
 
 module PaperTrailDiff

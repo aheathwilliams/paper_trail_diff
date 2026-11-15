@@ -67,18 +67,25 @@ module PaperTrailDiff
     # : (untyped, untyped, String, Array[String]) -> void
     def self.insert_values: (untyped, untyped, String, Array[String]) -> void
 
-    # The relation selects one column. An id already in the table, or none,
-    # is left out, so the key holds each once.
     # : (untyped, String, untyped) -> void
     def self.insert_selected: (untyped, String, untyped) -> void
+
+    # The source selects one column. An id already in the table, or none, is
+    # left out, so the key holds each once.
+    #
+    # The statement starts with WITH rather than INSERT. The adapter reads the
+    # table of every statement that starts with INSERT from the catalog, to
+    # learn whether it has an identity column. For a temporary table that is a
+    # query on tempdb's catalog, which another report's DROP TABLE can hold
+    # locks on: two reports at the same time deadlocked there, and SQL Server
+    # killed one of them.
+    # : (untyped, String, String) -> void
+    def self.insert: (untyped, String, String) -> void
 
     # The table can be gone already: a timeout that cost the connection,
     # which Active Record then reconnected, takes it along. A failed drop is
     # not raised, so that the error that ended the block is the one the caller
     # sees; a table left behind goes when its connection closes.
-    #
-    # The adapter reads each INSERT's table into the schema cache, which would
-    # keep every table's name for the life of the pool, so its entry goes too.
     # : (untyped, String) -> void
     def self.drop: (untyped, String) -> void
 

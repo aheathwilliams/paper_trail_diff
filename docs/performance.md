@@ -231,6 +231,29 @@ the median of three. The rest of the report is unchanged: there, a page of
 100 of the week's orders, chosen with the relation's `order`, `limit`, and
 `offset`, took 0.9 to 1.3 s in all, counting the 540 for `total` included.
 
+## Selecting records whose children had no version
+
+A `has_many` or `has_one` child with no version yet, such as a row from
+before PaperTrail, holds the owner it leaves only in the stored state of its
+first version. `analyze_scope` and `report` read those first versions
+since the window's start for the children a path reaches, one statement per
+source of changes below each such edge, and decode each version's state in
+Ruby. The cost grows with the children whose first version falls in the
+window.
+
+A page of 25 from 3,000 orders with 15,000 line items saved without
+versions, after 3,000 of the items got their first version in the window
+(half moved to another order), `report(..., associations: [:line_items])`,
+median of five runs, plan cache cleared before each on SQL Server:
+
+| Database | Before | After |
+| --- | --- | --- |
+| SQLite | 0.31 s | 0.42 s |
+| SQL Server 2019 (local container) | 0.60 s | 0.74 s |
+
+Once those rows have versions, each later move is found from
+PaperTrail-AssociationTracking's rows, and no state is decoded.
+
 ## Large reports
 
 - Report on a window with `since:` or `within:`, not on all history.

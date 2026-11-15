@@ -132,6 +132,53 @@ module PaperTrailDiff
       end
     end
 
+    # The owners of children whose first version since the window opened did
+    # not create them, such as rows from before PaperTrail that the window
+    # moves or detaches. PT-AT stores the keys a version saved, so the owner
+    # such a child held until that version is in no row, only in the
+    # version's stored state, as ActivityChildCandidateLoader reads it. One
+    # saved after the window's end holds the owner the child had there too.
+    class FirstVersion < AssociationActivityEdge
+      #: (untyped, TimeRange?) -> void
+      def initialize(reflection, time_range)
+        super
+        @target = reflection.klass
+        @filter_type = column_type(@target.paper_trail.version_class, 'item_id')
+      end
+
+      # A create stores no state, so the first versions read are those that
+      # did not create their child.
+      #: (untyped) -> untyped
+      def relation(filter)
+        relation = VersionQuery.for_model(@target).where(item_id: filter).where.not(object: nil)
+        versions = relation.arel_table
+        relation = relation.where(VersionQuery.no_earlier_version(versions))
+        start = @time_range&.begin_time
+        start ? relation.where(versions[:created_at].gteq(start)) : relation
+      end
+
+      # The owners the first versions of the children `filter` selects name in
+      # their stored states. An `as:` child's type must name one of the
+      # owner's types, which take a child with no type, as any plain child has.
+      # A version with no state for the key names no owner.
+      #: (untyped) -> Array[untyped]
+      def owners(filter)
+        types = RecordedOwner.types(@reflection, @owner)
+        relation(filter).select(:object).filter_map do |version|
+          state = version.object_deserialized
+          state[@reflection.foreign_key] if types.include?(state[@reflection.type])
+        end
+      end
+
+      # The same for children's ids read as values, in slices.
+      #: (Array[untyped]) -> Array[untyped]
+      def owners_of(ids)
+        ids.each_slice(Support::IDS_PER_STATEMENT).flat_map { |slice| owners(slice) }
+      end
+
+      # @rbs @target: untyped
+    end
+
     # The owners that pointed at a target when the window opened or after a
     # change inside it, as PT-AT recorded them on the owners' versions.
     class BelongsTo < AssociationActivityEdge
