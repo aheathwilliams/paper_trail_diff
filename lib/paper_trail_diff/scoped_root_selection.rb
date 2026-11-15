@@ -213,9 +213,8 @@ module PaperTrailDiff
       paged = Support.limit(@scope) || Support.offset(@scope).positive?
       return [records, records.length] unless paged
 
-      counted = candidate_relation(*candidates).unscope(:limit, :offset, :order)
-                                               .distinct.count(primary_key)
-      [records, counted.is_a?(Hash) ? counted.length : counted]
+      counted = candidate_relation(*candidates).unscope(:limit, :offset).distinct.count(primary_key)
+      [records, counted.instance_of?(Hash) ? counted.length : counted]
     end
 
     # Deduplicate records rather than adding SQL DISTINCT: an otherwise valid

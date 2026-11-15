@@ -622,4 +622,60 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
       expect(result.records).to eq([quiet, edited])
     end
   end
+
+  # The count a pager shows: every record the relation selects, before its
+  # limit and offset.
+  describe 'total' do
+    it 'is the number of records an unpaged relation selects' do
+      articles = Array.new(2) { |index| TrackedArticle.create!(title: "Article #{index}") }
+
+      expect(select(TrackedArticle).total).to eq(articles.length)
+    end
+
+    it 'counts past the page a paged relation reads' do
+      Array.new(3) { |index| TrackedArticle.create!(title: "Article #{index}") }
+      result = select(TrackedArticle.order(:id).offset(1).limit(1))
+
+      expect([result.records.length, result.total]).to eq([1, 3])
+      expect(select(TrackedArticle.order(:id).offset(1)).total).to eq(3)
+    end
+
+    it 'counts the roots every source selects' do
+      quiet = TrackedArticle.create!(title: 'Quiet')
+      comment = quiet.comments.create!(body: 'one')
+      start = Time.now.utc
+      comment.update!(body: 'two')
+      TrackedArticle.create!(title: 'Edited')
+
+      result = select(TrackedArticle.order(:id).limit(1), time_range: since(start),
+                                                          activity_traversal: tree(:comments))
+      expect([result.records, result.total]).to eq([[quiet], 2])
+    end
+
+    it 'counts in no statement of its own for an unpaged relation' do
+      TrackedArticle.create!(title: 'Article')
+
+      expect(queries { select(TrackedArticle) }.grep(/COUNT/)).to eq([])
+    end
+
+    it 'counts each record a join repeats once' do
+      articles = Array.new(3) { |index| TrackedArticle.create!(title: "Article #{index}") }
+      articles.first(2).each { |article| 2.times { article.comments.create!(body: 'one') } }
+
+      expect(select(TrackedArticle.joins(:comments).order(:id).limit(1)).total).to eq(2)
+    end
+
+    it 'counts a relation grouped by another column by its groups' do
+      %w[a a b].each { |title| TrackedArticle.create!(title: title) }
+      scope = TrackedArticle.select('MAX(id) AS id').group(:title).order(:title)
+
+      expect(select(scope.limit(1)).total).to eq(2)
+    end
+
+    it 'counts the candidates of ids read first' do
+      Array.new(3) { |index| StringItemPost.create!(title: "Post #{index}") }
+
+      expect(select(StringItemPost.limit(1)).total).to eq(3)
+    end
+  end
 end
