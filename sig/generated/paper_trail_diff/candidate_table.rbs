@@ -35,13 +35,42 @@ module PaperTrailDiff
     # : [T] (untyped, Array[String]) { (untyped) -> T } -> T
     def self.with: [T] (untyped, Array[String]) { (untyped) -> T } -> T
 
+    # Yields the subqueries as they were given, or, on SQL Server, one
+    # relation that selects their ids from a table each fills in turn.
+    #
+    # A page that matches its rows against several subqueries joined by OR
+    # has SQL Server plan them as one statement: with 1,600 orders and the
+    # subqueries for their line items, it ran a line items' subquery again
+    # for each order and took about 38 s, though each subquery alone took
+    # under 0.2 s. Filled one statement at a time, each subquery runs once,
+    # and every page then reads one keyed table. The ids stay in the
+    # database, so a busy window costs no list in Ruby.
+    # : [T] (untyped, Array[untyped]) { (Array[untyped]) -> T } -> T
+    def self.union: [T] (untyped, Array[untyped]) { (Array[untyped]) -> T } -> T
+
     # : (untyped) -> bool
     def self.table?: (untyped) -> bool
 
+    # The table is dropped even when making or filling it is what failed.
+    # : [T] (untyped, untyped) { (String) -> T } -> T
+    def self.temporary: [T] (untyped, untyped) { (String) -> T } -> T
+
+    # A condition such as `where(id: ...)` reads this as a subquery.
+    # : (untyped, String) -> untyped
+    def self.selection: (untyped, String) -> untyped
+
     # The column takes the key's type and collation, so that comparing the two
     # neither converts every row nor meets tempdb's collation.
+    # : (untyped, untyped, String) -> void
+    def self.create: (untyped, untyped, String) -> void
+
     # : (untyped, untyped, String, Array[String]) -> void
-    def self.create: (untyped, untyped, String, Array[String]) -> void
+    def self.insert_values: (untyped, untyped, String, Array[String]) -> void
+
+    # The relation selects one column. An id already in the table, or none,
+    # is left out, so the key holds each once.
+    # : (untyped, String, untyped) -> void
+    def self.insert_selected: (untyped, String, untyped) -> void
 
     # The table can be gone already: a timeout that cost the connection,
     # which Active Record then reconnected, takes it along. A failed drop is

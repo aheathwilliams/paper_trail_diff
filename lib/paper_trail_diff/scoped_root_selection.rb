@@ -93,8 +93,11 @@ module PaperTrailDiff
     def database_selection(related)
       sources = [changed_roots, *related]
       missing = Support.sort_ids(sources.flat_map { |ids| ids.missing(base_class) })
+      records = CandidateTable.union(base_class, sources.map(&:relation)) do |relations|
+        selected_records(relations)
+      end
       Result.new(
-        records: selected_records(sources.map(&:relation)),
+        records: records,
         unreachable: missing.map { |id| identity(id) }.freeze
       )
     end

@@ -247,6 +247,19 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- On SQL Server, `analyze_scope` and `report` with `associations:` select
+  their records from a temporary table that each candidate subquery fills
+  in turn, rather than from one statement joining the subqueries with `OR`,
+  which SQL Server planned to run the associations' subqueries once per
+  record. Selecting the orders changed in a week, among 1,600 with line
+  items, took 35 s, past the adapter's default 5 s timeout, and now takes
+  0.4 s. A read that prevents writes still uses the single statement.
+- A `belongs_to` whose class is an STI subclass no longer keeps a target
+  that an update retyped out of the subclass, or misses one retyped into
+  it. The change was reported at the next event, under that event's author.
+- A polymorphic `belongs_to` with an id and no type reads as no target, as
+  Active Record reads it. History holding such a state raised
+  `UnsupportedAssociationError`.
 - A date assigned to a datetime column, which Active Record leaves on the
   instance when time zone aware attributes are off or `update_columns`
   writes it, and PaperTrail stores from there, is read as midnight in

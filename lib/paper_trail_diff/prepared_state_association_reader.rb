@@ -37,17 +37,28 @@ module PaperTrailDiff
     #: (PreparedRecordState, untyped, untyped, bool) -> Array[PreparedRecordState]
     def target(owner, reflection, boundary, ranked)
       id = owner.attributes[reflection.foreign_key.to_s]
-      return [] if id.nil?
+      return [] if id.nil? || untyped?(owner, reflection)
 
-      type = owner.attributes[reflection.foreign_type]
-      model_class = AssociationTraversal.stored_target(reflection, type)
-      unless model_class && @conditions.call(reflection, model_class, ranked: ranked) &&
-             @records.loaded?(model_class, id)
-        unreadable!(owner, reflection, type, model_class)
-      end
-
+      model_class = target_class(owner, reflection, id, ranked)
       state = @records.snapshot_state_before(model_class, id, boundary)
       state && target?(state, reflection, ranked, model_class) ? [state] : []
+    end
+
+    # A polymorphic key with no type names no target, as Active Record reads it.
+    #: (PreparedRecordState, untyped) -> bool
+    def untyped?(owner, reflection)
+      reflection.polymorphic? && owner.attributes[reflection.foreign_type].to_s.empty?
+    end
+
+    #: (PreparedRecordState, untyped, untyped, bool) -> untyped
+    def target_class(owner, reflection, id, ranked)
+      type = owner.attributes[reflection.foreign_type]
+      model_class = AssociationTraversal.stored_target(reflection, type)
+      readable = model_class && @conditions.call(reflection, model_class, ranked: ranked) &&
+                 @records.loaded?(model_class, id)
+      return model_class if readable
+
+      unreadable!(owner, reflection, type, model_class)
     end
 
     # A polymorphic target's class is known only from the owner's type

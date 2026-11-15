@@ -19,6 +19,13 @@ module PaperTrailDiff
 
     @route_finder: ActivityEventRouteFinder
 
+    # Whether the branch must be read again rather than patched. A target
+    # class that is an STI subclass holds a record only while its type names
+    # the subclass, so an update that retypes the record moves it in or out,
+    # which only the owner's key, read again, can tell.
+    # : (Array[Array[untyped]]) -> bool
+    def reread?: (Array[Array[untyped]]) -> bool
+
     # A created target is new to the snapshot unless an owner named it first.
     # A snapshot leaves out an owner's key, but an owner that names a record
     # holds one, and only an owner holding none can name a record that does

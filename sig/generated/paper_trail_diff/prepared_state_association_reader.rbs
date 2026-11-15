@@ -26,6 +26,13 @@ module PaperTrailDiff
     # : (PreparedRecordState, untyped, untyped, bool) -> Array[PreparedRecordState]
     def target: (PreparedRecordState, untyped, untyped, bool) -> Array[PreparedRecordState]
 
+    # A polymorphic key with no type names no target, as Active Record reads it.
+    # : (PreparedRecordState, untyped) -> bool
+    def untyped?: (PreparedRecordState, untyped) -> bool
+
+    # : (PreparedRecordState, untyped, untyped, bool) -> untyped
+    def target_class: (PreparedRecordState, untyped, untyped, bool) -> untyped
+
     # A polymorphic target's class is known only from the owner's type
     # column, so TraversalPreparer cannot check it up front: the type may name
     # no class, or one with no versions or a default scope history cannot read.

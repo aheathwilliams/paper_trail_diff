@@ -28,7 +28,7 @@ module PaperTrailDiff
       routes = @route_finder.belongs_to_routes(
         RecordedClass.of_endpoint(root_endpoint), tree, version.item_type.to_s
       )
-      return [false, nil] if routes.empty? || ActivityEventRouteFinder.scoped_route?(routes)
+      return [false, nil] if reread?(routes)
       return created(previous, routes) if event == 'create'
 
       snapshot = previous
@@ -44,6 +44,16 @@ module PaperTrailDiff
     # @rbs @route_finder: ActivityEventRouteFinder
     # @rbs @record_resolver: ActivityEventRecordResolver
     # @rbs @record_normalizer: ActivityEventRecordNormalizer
+
+    # Whether the branch must be read again rather than patched. A target
+    # class that is an STI subclass holds a record only while its type names
+    # the subclass, so an update that retypes the record moves it in or out,
+    # which only the owner's key, read again, can tell.
+    #: (Array[Array[untyped]]) -> bool
+    def reread?(routes)
+      routes.empty? || ActivityEventRouteFinder.scoped_route?(routes) ||
+        routes.any? { |route| !route.last.fetch(1).klass.descends_from_active_record? }
+    end
 
     # A created target is new to the snapshot unless an owner named it first.
     # A snapshot leaves out an owner's key, but an owner that names a record

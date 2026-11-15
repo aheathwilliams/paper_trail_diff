@@ -204,6 +204,33 @@ cache cleared before each run:
 Each is one run.
 Other databases still list the ids on each page, which they parse quickly.
 
+## Selecting records with associations on SQL Server
+
+`analyze_scope` and `report` with `associations:` select a record when any
+of several subqueries names it: its own versions in the window, or the
+versions of a record on one of its paths. A single statement that joins
+them with `OR`, as other databases run, SQL Server planned as one: it
+walked the records in order and ran an association's subquery again for
+each, though each subquery alone took under 0.2 s. On SQL Server the gem
+therefore fills a temporary table from the subqueries, one statement each,
+and every page selects from it. A read that prevents writes, as a replica
+read through Rails' automatic role switching does, still runs the single
+statement, since Active Record counts the table's statements as writes.
+
+Selecting the orders changed in a window, from 1,600 orders with their line
+items and 28,729 versions, `associations: [:line_items]`, on a local SQL
+Server 2019 container with the plan cache cleared before each run:
+
+| Window | Orders selected | One statement | Temporary table |
+| --- | --- | --- | --- |
+| A week | 540 | 35.1 s | 0.43 s |
+| A month | 1,201 | 20.0 s | 0.36 s |
+
+The one-statement times are one run each; the temporary-table times are
+the median of three. The rest of the report is unchanged: there, a page of
+100 of the week's orders, chosen with the relation's `order`, `limit`, and
+`offset`, took 1.1 to 1.3 s in all.
+
 ## Large reports
 
 - Report on a window with `since:` or `within:`, not on all history.

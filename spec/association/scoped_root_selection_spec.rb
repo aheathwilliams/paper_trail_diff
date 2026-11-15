@@ -590,8 +590,13 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
                  .records).to eq([article])
       end
 
-      expect(sql.grep(/FROM "tracked_articles" WHERE .*IN \(SELECT "version_associations"/).length)
-        .to eq(1)
+      # SQL Server fills a table from the subqueries, which a page then reads.
+      kept = if ActiveRecord::Base.connection.adapter_name == 'SQLServer'
+               /\AINSERT INTO #paper_trail_diff_candidates_\h+ .*\(SELECT "version_associations"/
+             else
+               /FROM "tracked_articles" WHERE .*IN \(SELECT "version_associations"/
+             end
+      expect(sql.grep(kept).length).to eq(1)
       plucked = sql.grep(/\ASELECT DISTINCT "version_associations"/)
       expect(plucked.reject { |query| query.include?('NOT (EXISTS (SELECT') }).to eq([])
     end
