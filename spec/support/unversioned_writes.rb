@@ -150,7 +150,9 @@ module UnversionedWrites
   #    unless `strict` is off.
   # 3. A row credited to no version ends at a value an `update_columns` wrote.
   # 4. A write without a version whose value is read again has a row of its
-  #    own (see #read_writes).
+  #    own (see #read_writes), unless the steps are grouped by transaction
+  #    and its transaction left the field as it found it (see
+  #    GroupedRowCheck).
   class RowCheck
     # `structural` names the columns the requested associations read as
     # relationships rather than fields, which have no rows.
@@ -264,11 +266,16 @@ module UnversionedWrites
     def read_writes
       writes = @history.writes
       writes.each_with_index.filter_map do |write, index|
-        next unless candidate?(write) && !hidden(writes.first(index), write).include?(write.after)
+        next unless candidate?(write) && shown?(writes, index)
 
         later = writes.drop(index + 1).find { |other| other.key == write.key }
         write if later.nil? ? !@history.destroyed?(write.key) : read?(write, later)
       end
+    end
+
+    def shown?(writes, index)
+      write = writes.fetch(index)
+      !hidden(writes.first(index), write).include?(write.after)
     end
 
     def candidate?(write)
@@ -295,6 +302,32 @@ module UnversionedWrites
 
     def read?(write, later)
       later.version && later.field == write.field && later.after != write.after
+    end
+  end
+
+  # Rows of steps grouped by transaction. A grouped step compares the state
+  # before its transaction with the state after it, so a field the
+  # transaction set and then restored shows nothing, though a write without a
+  # version set it in between. The step holds the write when one of the
+  # transaction's versions came before it; otherwise the write joins the step
+  # before the transaction, and shows there.
+  class GroupedRowCheck < RowCheck
+    private
+
+    def shown?(writes, index)
+      super && !restored?(writes, writes.fetch(index))
+    end
+
+    def restored?(writes, write)
+      own = writes.select { |other| write.transaction && other.transaction == write.transaction }
+      return false unless own.take_while { |other| !other.equal?(write) }.any?(&:version)
+
+      field = own.select { |other| same_field?(other, write) }
+      field.first.before == field.last.after
+    end
+
+    def same_field?(other, write)
+      other.key == write.key && other.field == write.field
     end
   end
 

@@ -107,6 +107,35 @@ RSpec.describe 'Changes saved without a version' do
     expect(titles.call(report.analyses.values.first.activity_timeline)).to eq(expected)
   end
 
+  # Found by the nightly oracle (seed 54500). Inside one transaction Bob
+  # retitles the article, an `update_columns` moves it to another author, and
+  # a save moves it back. Ungrouped, the write has a row of its own; grouped
+  # by transaction, the step compares the state before the transaction with
+  # the state after it, which hold the same author, so neither shows one.
+  it 'shows a write the rest of its transaction undid only in ungrouped steps' do
+    first, second = %w[Ann Ben].map { |name| TrackedAuthor.create!(name: name) }
+    article = actor('alice') { TrackedArticle.create!(title: 'Draft', author: first) }
+    actor('bob') do
+      ActiveRecord::Base.transaction do
+        article.update!(title: 'Published')
+        article.update_columns(author_id: second.id)
+        article.update!(author_id: first.id)
+      end
+    end
+    rows = lambda do |group|
+      steps = PaperTrailDiff.activity_timeline(article, associations: [:comments], group: group,
+                                                        recorded_changes: true)
+      steps.drop(1).map do |step|
+        step.change_rows.map { |row| [row.attribute, row.from, row.to, row.unversioned?] }
+      end
+    end
+
+    expect(rows.call(nil)).to eq([[['author_id', first.id, second.id, true],
+                                   ['title', 'Draft', 'Published', false]],
+                                  [['author_id', second.id, first.id, false]]])
+    expect(rows.call(:transaction)).to eq([[['title', 'Draft', 'Published', false]]])
+  end
+
   it "reads only the event's own edit from recorded_changes" do
     article = history
     carol = article.versions.find_by!(whodunnit: 'carol')
