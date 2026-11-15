@@ -70,6 +70,13 @@ project follows [Semantic Versioning](https://semver.org/).
   every path is now read from loaded history, which orders such versions
   by id.
 
+### Added
+
+- `ScopedAnalysis#total`, returned by `analyze_scope` and `report`, counts
+  the existing records the relation selects before its own `limit` and
+  `offset`, so a page of changed records can show how many pages there
+  are. A paged relation takes one more statement for it.
+
 ### Changed
 
 - Activity reads what each version recorded unless `recorded_changes: false`

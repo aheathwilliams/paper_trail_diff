@@ -212,7 +212,8 @@ Three selection rules matter:
   or deliberately raise the ceiling.
 
 Use the relation's `order`, `offset`, and `limit` to choose a page, for example
-`Article.order(:id).limit(20)`. Joined rows can repeat a record; each record is
+`Article.order(:id).limit(20)`. `report.total` counts the records on every page, for
+"page 2 of 6". Joined rows can repeat a record; each record is
 analyzed once. See the [reporting reference](docs/reference.md#which-records-are-selected)
 for pagination and deleted records.
 

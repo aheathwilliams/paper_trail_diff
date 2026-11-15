@@ -23,9 +23,13 @@ module PaperTrailDiff
     # Requested missing-root analyses, kept separate because live SQL conditions
     # cannot prove which deleted rows matched. nil means no destroy history.
     attr_reader :deleted #: Hash[Array[String], Analysis?]
+    # How many existing records the relation selects before its own `limit`
+    # and `offset`, for a pager's "page 2 of 6". Without either, it is
+    # `roots.length`. Deleted records are not counted; they are not paged.
+    attr_reader :total #: Integer
 
-    #: (analyses: Hash[Array[String], Analysis], unreachable: Array[Array[String]], ?roots: Array[untyped], ?deleted: Hash[Array[String], Analysis?]) -> void
-    def initialize(analyses:, unreachable:, roots: [], deleted: {})
+    #: (analyses: Hash[Array[String], Analysis], unreachable: Array[Array[String]], ?roots: Array[untyped], ?deleted: Hash[Array[String], Analysis?], ?total: Integer?) -> void
+    def initialize(analyses:, unreachable:, roots: [], deleted: {}, total: nil)
       @analyses = analyses
       @unreachable = Support.immutable_copy(unreachable)
       # Not deep-copied: these are the caller's own model instances, and
@@ -33,6 +37,7 @@ module PaperTrailDiff
       # fail. The array itself is frozen so the collection cannot be reshaped.
       @roots = roots.dup.freeze
       @deleted = Support.immutable_copy(deleted)
+      @total = total || @roots.length
       freeze
     end
 

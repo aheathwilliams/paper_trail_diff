@@ -36,8 +36,11 @@ module PaperTrailDiff
 
       attr_reader unreachable: Array[Array[String]]
 
-      # : (records: Array[untyped], unreachable: Array[Array[String]]) -> void
-      def initialize: (records: Array[untyped], unreachable: Array[Array[String]]) -> void
+      # How many records the relation selects before its limit and offset.
+      attr_reader total: Integer
+
+      # : (records: Array[untyped], unreachable: Array[Array[String]], total: Integer) -> void
+      def initialize: (records: Array[untyped], unreachable: Array[Array[String]], total: Integer) -> void
     end
 
     # `activity_traversal` names the association paths whose changes also select a
@@ -130,6 +133,13 @@ module PaperTrailDiff
 
     # : (untyped, Array[String]) -> Array[String]
     def ids_in: (untyped, Array[String]) -> Array[String]
+
+    # The records, and how many the relation selects before its limit and
+    # offset. An unpaged relation has read them all already; a paged one is
+    # counted in one more statement, with each record once, and a relation
+    # grouped by another column by its groups, each of which reads a record.
+    # : (Array[untyped]) -> [Array[untyped], Integer]
+    def page_and_total: (Array[untyped]) -> [ Array[untyped], Integer ]
 
     # Deduplicate records rather than adding SQL DISTINCT: an otherwise valid
     # relation may order by joined columns or select a PostgreSQL json column.

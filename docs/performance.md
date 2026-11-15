@@ -229,7 +229,7 @@ Server 2019 container with the plan cache cleared before each run:
 The one-statement times are one run each; the temporary-table times are
 the median of three. The rest of the report is unchanged: there, a page of
 100 of the week's orders, chosen with the relation's `order`, `limit`, and
-`offset`, took 1.1 to 1.3 s in all.
+`offset`, took 0.9 to 1.3 s in all, counting the 540 for `total` included.
 
 ## Large reports
 

@@ -60,7 +60,7 @@ module PaperTrailDiff
     #: (ScopedRootSelection::Result, Array[Array[String]], Hash[Array[String], Analysis?]) -> ScopedAnalysis
     def analysis(selection, unreachable, deleted)
       ScopedAnalysis.new(analyses: @analyzer.call(selection.records), roots: selection.records,
-                         unreachable: unreachable, deleted: deleted)
+                         unreachable: unreachable, deleted: deleted, total: selection.total)
     end
 
     # @rbs @selection: ScopedRootSelection

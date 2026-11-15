@@ -731,6 +731,7 @@ report.analyses    # { identity => Analysis } for records that still exist
 report.roots       # the selected records, in relation order
 report.unreachable # identities of selected records that no longer exist
 report.deleted     # { identity => Analysis or nil }, with include_deleted: true
+report.total       # how many existing records the relation selects, before its limit and offset
 
 report.roots.each do |order|
   report.analysis_for(order) # its Analysis, without building the identity
@@ -790,7 +791,10 @@ grouped.
   as sorting by the ID when it names the column, alone or after the table's
   name, as `order("title, id")` does. Give the queries that show the page the
   same tie-breaker, such as `order(:status, :id)`, so that they list the
-  records the report analyzed. If a join repeats a record, it is analyzed
+  records the report analyzed. `total` counts the records the relation selects before
+  its `limit` and `offset`, for a pager's "page 2 of 6"; a paged relation
+  takes one more statement for it. A relation grouped by another column
+  counts its groups. Deleted records are not counted. If a join repeats a record, it is analyzed
   once, in order of first appearance. A relation grouped by anything but the
   ID, such as `select("MAX(id) AS id").group(:author_id)`, keeps its own
   order, since a database sorts groups only by what they group or aggregate.

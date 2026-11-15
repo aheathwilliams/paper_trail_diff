@@ -35,11 +35,14 @@ module PaperTrailDiff
     class Result
       attr_reader :records #: Array[untyped]
       attr_reader :unreachable #: Array[Array[String]]
+      # How many records the relation selects before its limit and offset.
+      attr_reader :total #: Integer
 
-      #: (records: Array[untyped], unreachable: Array[Array[String]]) -> void
-      def initialize(records:, unreachable:)
+      #: (records: Array[untyped], unreachable: Array[Array[String]], total: Integer) -> void
+      def initialize(records:, unreachable:, total:)
         @records = records
         @unreachable = unreachable
+        @total = total
         freeze
       end
     end
@@ -93,13 +96,11 @@ module PaperTrailDiff
     def database_selection(related)
       sources = [changed_roots, *related]
       missing = Support.sort_ids(sources.flat_map { |ids| ids.missing(base_class) })
-      records = CandidateTable.union(base_class, sources.map(&:relation)) do |relations|
-        selected_records(relations)
+      records, total = CandidateTable.union(base_class, sources.map(&:relation)) do |relations|
+        page_and_total(relations)
       end
-      Result.new(
-        records: records,
-        unreachable: missing.map { |id| identity(id) }.freeze
-      )
+      Result.new(records: records, unreachable: missing.map { |id| identity(id) }.freeze,
+                 total: total)
     end
 
     # The roots with a version of their own in the window. Those without a
@@ -129,8 +130,9 @@ module PaperTrailDiff
     def plucked_selection(candidates)
       live = ids_in(base_class.unscoped, candidates)
       missing = candidates - live
-      Result.new(records: CandidateTable.with(base_class, live) { |ids| selected_records([ids]) },
-                 unreachable: Support.sort_ids(missing).map { |id| identity(id) }.freeze)
+      records, total = CandidateTable.with(base_class, live) { |ids| page_and_total([ids]) }
+      unreachable = Support.sort_ids(missing).map { |id| identity(id) }.freeze
+      Result.new(records: records, unreachable: unreachable, total: total)
     end
 
     # Comparing the two columns in SQL needs them to share a type: PostgreSQL
@@ -199,6 +201,21 @@ module PaperTrailDiff
       candidates.each_slice(Support::IDS_PER_STATEMENT).flat_map do |slice|
         relation.where(primary_key => slice).pluck(primary_key).map(&:to_s)
       end
+    end
+
+    # The records, and how many the relation selects before its limit and
+    # offset. An unpaged relation has read them all already; a paged one is
+    # counted in one more statement, with each record once, and a relation
+    # grouped by another column by its groups, each of which reads a record.
+    #: (Array[untyped]) -> [Array[untyped], Integer]
+    def page_and_total(candidates)
+      records = selected_records(candidates)
+      paged = Support.limit(@scope) || Support.offset(@scope).positive?
+      return [records, records.length] unless paged
+
+      counted = candidate_relation(*candidates).unscope(:limit, :offset, :order)
+                                               .distinct.count(primary_key)
+      [records, counted.is_a?(Hash) ? counted.length : counted]
     end
 
     # Deduplicate records rather than adding SQL DISTINCT: an otherwise valid

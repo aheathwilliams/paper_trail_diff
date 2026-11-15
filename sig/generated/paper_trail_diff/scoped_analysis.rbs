@@ -26,8 +26,13 @@ module PaperTrailDiff
     # cannot prove which deleted rows matched. nil means no destroy history.
     attr_reader deleted: Hash[Array[String], Analysis?]
 
-    # : (analyses: Hash[Array[String], Analysis], unreachable: Array[Array[String]], ?roots: Array[untyped], ?deleted: Hash[Array[String], Analysis?]) -> void
-    def initialize: (analyses: Hash[Array[String], Analysis], unreachable: Array[Array[String]], ?roots: Array[untyped], ?deleted: Hash[Array[String], Analysis?]) -> void
+    # How many existing records the relation selects before its own `limit`
+    # and `offset`, for a pager's "page 2 of 6". Without either, it is
+    # `roots.length`. Deleted records are not counted; they are not paged.
+    attr_reader total: Integer
+
+    # : (analyses: Hash[Array[String], Analysis], unreachable: Array[Array[String]], ?roots: Array[untyped], ?deleted: Hash[Array[String], Analysis?], ?total: Integer?) -> void
+    def initialize: (analyses: Hash[Array[String], Analysis], unreachable: Array[Array[String]], ?roots: Array[untyped], ?deleted: Hash[Array[String], Analysis?], ?total: Integer?) -> void
 
     # Each root's change rows, keyed as `analyses` is: the roots that still
     # exist, then the deleted ones that have history to report. A deleted root
