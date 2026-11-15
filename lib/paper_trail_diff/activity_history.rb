@@ -41,14 +41,12 @@ module PaperTrailDiff
     # after a window whose steps are not reported, so nothing reads it.
     # `include_step` says whether an event's step is reported. `root` names
     # the root, whose steps credit each change row to the version that made
-    # it (see ChangeAttribution). `floor` is the first version of a
-    # history read without a window (see TransactionEnds).
-    #: (Array[untyped], Array[ActivityEvent], untyped, view: ActivityView, include_step: untyped, ?current: untyped, ?closing: RecordSnapshot?, root: RecordReference, ?floor: untyped) -> void
+    # it (see ChangeAttribution).
+    #: (Array[untyped], Array[ActivityEvent], untyped, view: ActivityView, include_step: untyped, ?current: untyped, ?closing: RecordSnapshot?, root: RecordReference) -> void
     def initialize( # rubocop:disable Metrics/ParameterLists
       root_versions, events, snapshotter,
-      view:, include_step:, root:, current: nil, closing: nil, floor: nil
+      view:, include_step:, root:, current: nil, closing: nil
     )
-      @floor = floor
       @root_versions = root_versions
       @events = events
       @snapshotter = snapshotter
@@ -82,7 +80,6 @@ module PaperTrailDiff
     private
 
     # @rbs @root_versions: Array[untyped]
-    # @rbs @floor: untyped
     # @rbs @events: Array[ActivityEvent]
     # @rbs @snapshotter: untyped
     # @rbs @current: untyped
@@ -113,8 +110,7 @@ module PaperTrailDiff
         @root_versions,
         @events,
         @snapshotter,
-        current: @current,
-        floor: @floor
+        current: @current
       )
     end
 

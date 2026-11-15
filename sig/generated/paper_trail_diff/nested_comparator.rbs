@@ -38,6 +38,9 @@ module PaperTrailDiff
 
     ABSENT: untyped
 
+    # Every NaN, as a key.
+    NAN: untyped
+
     # : (untyped, untyped) -> nested_changes
     def self.call: (untyped, untyped) -> nested_changes
 
@@ -49,7 +52,8 @@ module PaperTrailDiff
     # The comparable value as a Hash key: two values that are `==` are one
     # key. A Hash looks its keys up with `eql?`, which tells 1 from 1.0, so
     # every number is read as a rational, at any depth. One that is not
-    # finite has none, and equals nothing but itself.
+    # finite has none: an infinity keeps its sign, and every NaN is one key,
+    # as a database stores it (see Support.same?).
     # : (untyped) -> untyped
     def self.countable: (untyped) -> untyped
 
@@ -92,6 +96,9 @@ module PaperTrailDiff
 
     # : (Hash[untyped, untyped], Hash[untyped, untyped], Array[String], nested_changes) -> void
     def walk: (Hash[untyped, untyped], Hash[untyped, untyped], Array[String], nested_changes) -> void
+
+    # : (untyped, untyped, Array[String], nested_changes) -> void
+    def visit: (untyped, untyped, Array[String], nested_changes) -> void
 
     # : (Hash[untyped, untyped]) -> Hash[String, untyped]
     def normalize_keys: (Hash[untyped, untyped]) -> Hash[String, untyped]

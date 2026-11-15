@@ -53,6 +53,16 @@ RSpec.describe PaperTrailDiff::RecordedChanges do
     expect(recorded(version).keys).to eq(%w[colour])
   end
 
+  # Rails records a value assigned in another form than the column keeps,
+  # though the row holds what it held.
+  it 'leaves out a change whose sides read alike' do
+    changes = { 'rank' => ['1', 1], 'title' => %w[Draft Published] }
+    version = RecordedVersion.create!(item_type: 'RecordedNote', item_id: 1, event: 'update',
+                                      object_changes: PaperTrail.serializer.dump(changes))
+
+    expect(recorded(version).keys).to eq(%w[title])
+  end
+
   it 'reports no change to an attribute has_paper_trail ignores, which a step still shows' do
     note = RankIgnoringNote.create!(title: 'Draft', rank: 1)
     note.update!(title: 'Published', rank: 2)

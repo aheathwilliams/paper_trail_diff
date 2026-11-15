@@ -15,7 +15,7 @@ module PaperTrailDiff
       @context_required = context_required
       @time_range = time_range
       # Checked up front rather than failing partway through a batch.
-      @version_scope = VersionScopeFilter.validated(version_scope)
+      @version_scope = version_scope
       @live_loader = live_loader
       @history_preparer = history_preparer
       @analyzer = analyzer

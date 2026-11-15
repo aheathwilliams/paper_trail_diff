@@ -132,7 +132,7 @@ RSpec.describe PaperTrailDiff do
       expect { described_class.compare_many([{ from: :first, to: :first }]) }
         .to raise_error(PaperTrailDiff::ConfigurationError, /name a record/)
       expect { described_class.compare_many([{ from: :beginning, to: article }]) }
-        .to raise_error(PaperTrailDiff::ConfigurationError, /unsupported boundary/)
+        .to raise_error(PaperTrailDiff::InvalidTimelineRangeError, /unsupported boundary/)
     end
 
     it 'rejects invalid and mismatched current record endpoints' do
@@ -1170,7 +1170,7 @@ RSpec.describe PaperTrailDiff do
       expect { described_class.analyze_scope(:nope, limit: 5) }
         .to raise_error(PaperTrailDiff::ConfigurationError, /relation or model class/)
       expect { described_class.analyze_scope(CoreComment, limit: 5) }
-        .to raise_error(PaperTrailDiff::UnversionedAssociationError, /not versioned/)
+        .to raise_error(PaperTrailDiff::InvalidEndpointError, /not versioned/)
     end
   end
 
@@ -1360,7 +1360,7 @@ RSpec.describe PaperTrailDiff do
       expect { described_class.timeline(article, from: :first, to: :last) }
         .to raise_error(PaperTrailDiff::InvalidTimelineRangeError, /omit `to:`/)
       expect { described_class.compare_many([{ from: :last, to: article }]) }
-        .to raise_error(PaperTrailDiff::ConfigurationError, /omit `to:`/)
+        .to raise_error(PaperTrailDiff::InvalidTimelineRangeError, /omit `to:`/)
     end
 
     it 'treats a record with no versions as an empty history rather than an error' do

@@ -10,7 +10,6 @@ module PaperTrailDiff
   class ScopeRanking
     DIRECTIONS = { 'Arel::Nodes::Ascending' => false, 'Arel::Nodes::Descending' => true }.freeze
     ATTRIBUTE = 'Arel::Attributes::Attribute'
-    ENUM_TYPE = 'ActiveRecord::Enum::EnumType'
     # Column kinds (ExactColumnType) that sort alike everywhere. Text follows
     # a collation, so it is not read. Times sort alike only at the precision
     # both the column and history keep.
@@ -108,7 +107,7 @@ module PaperTrailDiff
     def self.sort_value(model_class, name, value)
       type = model_class.type_for_attribute(name)
       cast = type.cast(value)
-      ENUM_TYPE.eql?(type.class.name) ? type.serialize(cast) : cast
+      Support::ENUM_TYPE.eql?(type.class.name) ? type.serialize(cast) : cast
     end
 
     # Active Record truncates a time to its column's precision before writing

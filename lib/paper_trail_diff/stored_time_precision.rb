@@ -54,10 +54,12 @@ module PaperTrailDiff
     private_class_method :json_history?
 
     # Whether the version table keeps this column as `json` or `jsonb`, which
-    # PaperTrail writes without its serializer.
+    # PaperTrail writes without its serializer. A version that is not an
+    # Active Record model has no table.
     #: (untyped, String) -> bool
     def self.json_column?(version_class, name)
-      JSON_COLUMN_TYPES.include?(version_class.columns_hash[name]&.type)
+      version_class.respond_to?(:columns_hash) &&
+        JSON_COLUMN_TYPES.include?(version_class.columns_hash[name]&.type)
     end
 
     # mutant:disable - Every mutation that survives here reads the same

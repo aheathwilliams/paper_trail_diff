@@ -6,7 +6,7 @@ module PaperTrailDiff
   # configuration. It keeps the histories batches prepare, by root and by root
   # version; one prepared for a single root goes back to the caller, who
   # passes it to every read for that root.
-  class HistoricalSnapshotStore
+  class HistoricalSnapshotStore # rubocop:disable Metrics/ClassLength
     #: (traversal: AssociationTraversal, normalizer: SnapshotNormalizer, preparer: untyped) -> void
     def initialize(traversal:, normalizer:, preparer:)
       @tree = traversal.tree
@@ -26,8 +26,7 @@ module PaperTrailDiff
     # versions starts at its first. A window's history says how far back the
     # transactions open at its start `reach`, unless it was read from there.
     #: (untyped, Array[untyped], ?start_at: untyped, ?end_at: untyped, ?reach: bool) -> PreparedHistory?
-    def prepare(record, root_versions, start_at: nil, end_at: root_versions.last.created_at,
-                reach: true)
+    def prepare(record, root_versions, start_at: nil, end_at: nil, reach: true)
       return if @tree.empty?
 
       # A batch prepared this root with the others, including a root with no
@@ -37,9 +36,25 @@ module PaperTrailDiff
 
       PreparedHistoryLoader.new(
         record, root_ids: [record.id], root_versions: root_versions,
-                start_at: start_at || root_versions.first.created_at, end_at: end_at, tree: @tree,
-                traversal: @traversal, live_records: [], window: reach && !start_at.nil?
+                start_at: start_at || root_versions.first.created_at,
+                end_at: end_at || range_end(root_versions), tree: @tree,
+                traversal: @traversal, live_records: [], window: reach && !start_at.nil?,
+                crossing: start_at.nil?
       ).call
+    end
+
+    # Where a range of the record's ending at the version ends (see
+    # TransactionCut.range_end). A batch's history has asked already, and a
+    # root read alone reads no other record whose saves could take effect
+    # before its transaction's.
+    #: (untyped, untyped) -> untyped
+    def range_end_of(record, version)
+      return version if @tree.empty?
+
+      batched = @batched_roots[Endpoint.identity(record)]
+      return TransactionCut.range_end(version) unless batched
+
+      batched.transaction_ends([version]).last(version)
     end
 
     # A `start_at` is a window's, as for `prepare`. A window's roots may have
@@ -92,11 +107,26 @@ module PaperTrailDiff
     #: (untyped, untyped, ?history: PreparedHistory?) -> RecordSnapshot?
     def call(root_endpoint, context_endpoint, history: nil)
       key = snapshot_key(root_endpoint, context_endpoint)
-      ends = history_for(context_endpoint, history)&.reading_ends
+      ends = history_for(root_endpoint, context_endpoint, history)&.reading_ends
       key += [ends] if ends
       return @snapshots[key] if @snapshots.key?(key)
 
       @snapshots[key] = uncached(root_endpoint, context_endpoint, history: history)
+    end
+
+    # A version compared alone reads as a timeline reads it: each record as
+    # it stood before every transaction that had not ended at the version
+    # (see TransactionEnds).
+    #: (untyped) -> RecordSnapshot?
+    def at_version(version)
+      history = history_for(version, version, nil)
+      return call(version, version) unless history && !history.reading_ends
+
+      snapshot = nil #: RecordSnapshot?
+      history.reading(history.transaction_ends([version])) do
+        snapshot = call(version, version, history: history)
+      end
+      snapshot
     end
 
     #: (untyped, untyped, ?history: PreparedHistory?) -> RecordSnapshot?
@@ -107,7 +137,7 @@ module PaperTrailDiff
 
     #: (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer, ?history: PreparedHistory?) -> RecordSnapshot?
     def custom(root_endpoint, context_endpoint, tree:, normalizer:, history: nil)
-      history = history_for(context_endpoint, history)
+      history = history_for(root_endpoint, context_endpoint, history)
       if Endpoint.version?(root_endpoint)
         return snapshot_from_version(
           root_endpoint, context_endpoint, tree: tree, normalizer: normalizer, history: history
@@ -134,7 +164,8 @@ module PaperTrailDiff
         context_version,
         habtm_version: habtm_version
       )
-      history = history_for(context_version, history)
+      # Callers pass the root's history; a batch's for the version is the rest.
+      history ||= @prepared_histories[Support.row_key(context_version)]
       return fallback unless history
 
       PreparedAssociationReifier.new(
@@ -159,11 +190,21 @@ module PaperTrailDiff
     # @rbs @live_roots: Hash[identity, untyped]
     # @rbs @live_states: Hash[identity, PreparedRecordState]
 
-    # A batch's history for the version wins over the one a caller passes.
-    #: (untyped, PreparedHistory?) -> PreparedHistory?
-    def history_for(context_endpoint, history)
-      @prepared_histories[Support.row_key(context_endpoint)] || history
+    # The history a root is read from: the one its batch prepared for it,
+    # then the one a caller passes, then a batch's for the version. A batch
+    # prepares one history per class of its roots, and a boundary can be a
+    # version of a root of another class that stands in this root's tree,
+    # whose history never loaded this root's associations.
+    #: (untyped, untyped, PreparedHistory?) -> PreparedHistory?
+    def history_for(root_endpoint, context_endpoint, history)
+      @batched_roots[Endpoint.identity(root_endpoint)] || history ||
+        @prepared_histories[Support.row_key(context_endpoint)]
     end
+
+    # A history read to its root versions is read to where their
+    # transactions take effect (see TransactionCut.range_end).
+    #: (Array[untyped]) -> untyped
+    def range_end(root_versions) = TransactionCut.ends_at(root_versions)
 
     #: (Array[untyped], Array[untyped]) -> Hash[Symbol, untyped]
     def batch_payload(records, root_versions)
@@ -177,9 +218,9 @@ module PaperTrailDiff
       history = PreparedHistoryLoader.new(
         records.first, root_ids: records.map(&:id), root_versions: root_versions,
                        start_at: start_at || root_versions.map(&:created_at).min,
-                       end_at: end_at || root_versions.map(&:created_at).max,
+                       end_at: end_at || range_end(root_versions),
                        tree: @tree, traversal: @traversal, live_records: live_records,
-                       window: reach && !start_at.nil?
+                       window: reach && !start_at.nil?, crossing: start_at.nil?
       ).call
       register(history, records, root_versions)
       history

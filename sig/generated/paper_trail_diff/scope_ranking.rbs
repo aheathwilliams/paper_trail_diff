@@ -11,8 +11,6 @@ module PaperTrailDiff
 
     ATTRIBUTE: ::String
 
-    ENUM_TYPE: ::String
-
     # Column kinds (ExactColumnType) that sort alike everywhere. Text follows
     # a collation, so it is not read. Times sort alike only at the precision
     # both the column and history keep.

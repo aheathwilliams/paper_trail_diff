@@ -20,7 +20,7 @@ module PaperTrailDiff
       return attributes if columns.empty?
 
       attributes.to_h do |name, value|
-        [name, columns.include?(name) && value ? value.change(**Support::TIME_OF_DAY_DATE) : value]
+        [name, columns.include?(name) && value ? Support.time_of_day(value) : value]
       end
     end
 
@@ -34,6 +34,5 @@ module PaperTrailDiff
         end
       end
     end
-    private_class_method :columns
   end
 end

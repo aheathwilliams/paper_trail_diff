@@ -315,11 +315,14 @@ RSpec.describe 'PaperTrailDiff association tracking' do
       diff.associations.fetch('comments').changed.length == 1
     end)
     # The read's transaction statements are constant too, so the totals match.
-    # The data statements, which are the ones this spec pins, stay at five.
+    # The data statements, which are the ones this spec pins, stay at seven:
+    # the roots' versions are read once to plan the batch and once more,
+    # with every other record's, for its history, and one statement asks
+    # where a transaction open at its start began.
     data_sql = large_sql.reject { |payload| payload[:name] == 'TRANSACTION' }
     expect(large_sql.length).to eq(small_sql.length)
-    expect(data_sql.length).to eq(5)
-    expect(large_sql.count { |payload| payload[:name] == 'PaperTrail::Version Load' }).to eq(1)
+    expect(data_sql.length).to eq(7)
+    expect(large_sql.count { |payload| payload[:name] == 'PaperTrail::Version Load' }).to eq(2)
     expect(large_sql.count { |payload| payload[:name] == 'TrackedArticle Load' }).to eq(1)
     expect(large_sql.count { |payload| payload[:name] == 'TrackedComment Load' }).to eq(1)
   end
@@ -1202,7 +1205,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
       expect(result.diff.attributes.fetch('title').to).to eq('Root sequence 19')
     end
 
-    expect(work.fetch(:queries)).to be < 15
+    expect(work.fetch(:queries)).to be < 17
     expect(work.fetch(:records)).to be < 75
   end
 
@@ -1316,7 +1319,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
       expect(steps.length).to eq(101)
     end
 
-    expect(work.fetch(:queries)).to be < 25
+    expect(work.fetch(:queries)).to be < 27
     expect(work.fetch(:records)).to be < 600
   end
 
@@ -1340,7 +1343,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
       )
     end
 
-    expect(work.fetch(:queries)).to be < 25
+    expect(work.fetch(:queries)).to be < 27
   end
 
   it 'keeps nested collection activity local to the affected parent snapshots' do
@@ -1365,7 +1368,7 @@ RSpec.describe 'PaperTrailDiff association tracking' do
       expect(steps.length).to eq(101)
     end
 
-    expect(work.fetch(:queries)).to be < 25
+    expect(work.fetch(:queries)).to be < 27
     expect(work.fetch(:records)).to be < 600
   end
 

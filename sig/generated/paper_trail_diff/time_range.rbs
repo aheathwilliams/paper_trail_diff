@@ -30,6 +30,12 @@ module PaperTrailDiff
     # : (untyped) -> Integer?
     def self.stored_digits: (untyped) -> Integer?
 
+    # Checks `report(since:)`, the start of the endless window it reads, as
+    # that window will read it, so that a message names `since`. A range
+    # there would become the start of another range.
+    # : (untyped) -> void
+    def self.check_since!: (untyped) -> void
+
     # : (untyped, ?digits: Integer) -> void
     def initialize: (untyped, ?digits: Integer) -> void
 

@@ -62,7 +62,7 @@ module PaperTrailDiff
       @scope = normalize_scope(scope)
       reject_unversioned!
       @time_range = time_range
-      @version_scope = VersionScopeFilter.validated(version_scope)
+      @version_scope = version_scope
       @limit = validate_limit(limit)
       @selecting = AssociationActivitySelection.window(model, activity_tree, time_range)
       @related = activity_tree && AssociationActivitySelection.new(
@@ -152,13 +152,18 @@ module PaperTrailDiff
     end
 
     # Only the versions `version_scope` keeps select a root: one whose versions
-    # in the window it drops would have nothing to report.
+    # in the window it drops would have nothing to report. With associations
+    # it keeps whole transactions, as their activity reports them.
     #: () -> untyped
     def window_versions
       range = @selecting
       relation = VersionQuery.for_model(model)
       relation = range.scope(relation) if range
-      @version_scope ? @version_scope.call(relation) : relation
+      scope = @version_scope
+      return relation unless scope
+      return scope.call(relation) unless @related
+
+      VersionScopeFilter.whole_transactions(scope, relation)
     end
 
     #: (untyped, Integer) -> FilteredCandidates?
@@ -184,10 +189,7 @@ module PaperTrailDiff
 
     #: () -> void
     def reject_unversioned!
-      return if Support.versioned?(model)
-
-      raise UnversionedAssociationError,
-            "scope: #{model} is not versioned, so it has no history to select from"
+      ReadableHistory.check_model!(model)
     end
 
     # No Integer subclass has instances, so this is `is_a?` by another name.
@@ -225,6 +227,7 @@ module PaperTrailDiff
       consumed = 0
       loop do
         page = record_page(relation, consumed)
+        reject_keyless!(page)
         page.each { |record| records[record.id] ||= record }
         reject_oversized!(records.length)
         break if page.length < page_size
@@ -233,6 +236,20 @@ module PaperTrailDiff
       end
       records.values.freeze
     end
+
+    # A relation that selects columns without the primary key reads rows that
+    # name no record.
+    #: (Array[untyped]) -> void
+    def reject_keyless!(page)
+      return if page.none? { |record| keyless?(record.id) }
+
+      raise ConfigurationError, "scope: selects columns without #{primary_key}, so its rows name " \
+                                'no record; select it too'
+    end
+
+    # A composite key names a record only when every part of it is read.
+    #: (untyped) -> bool
+    def keyless?(id) = [id].flatten.include?(nil)
 
     # Pages are read by offset, so under a total order.
     #: (*untyped) -> untyped

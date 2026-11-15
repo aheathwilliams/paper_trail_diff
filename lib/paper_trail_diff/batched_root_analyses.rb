@@ -87,11 +87,11 @@ module PaperTrailDiff
     end
 
     # A plan closing on the live record reads history up to now; the others
-    # stop at the window's end or at the last version they replay past it, so
-    # a past window does not load everything since.
+    # stop at the window's end or where the transactions of the versions they
+    # replay past it end, so a past window does not load everything since.
     #: (Array[untyped], TimeRange?, live: bool) -> Hash[Symbol, untyped]
     def preparation_range(versions, range, live:)
-      ends = [versions.map(&:created_at).max, range&.end_time, (Time.now.utc if live)]
+      ends = [TransactionCut.ends_at(versions), range&.end_time, (Time.now.utc if live)]
       { start_at: range&.begin_time, end_at: ends.compact.max }
     end
 

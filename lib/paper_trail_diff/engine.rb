@@ -28,7 +28,7 @@ module PaperTrailDiff
         (from_attributes.keys | to_attributes.keys).sort.each do |name|
           from_value = from_attributes[name]
           to_value = to_attributes[name]
-          next if from_value == to_value
+          next if Support.same?(from_value, to_value)
 
           changes[name] = ValueChange.new(from: from_value, to: to_value)
         end

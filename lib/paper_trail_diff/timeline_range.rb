@@ -10,6 +10,17 @@ module PaperTrailDiff
     LAST_REMOVED = '`:last` was removed because it left out the latest change: omit `to:` ' \
                    'to end at current state, or pass a version'
 
+    # The one symbol a boundary can be, for a timeline's range and for
+    # compare_many's endpoints alike.
+    #: (Symbol) -> void
+    def self.check_symbol!(boundary)
+      raise InvalidTimelineRangeError, LAST_REMOVED if boundary == :last
+      return if BOUNDARY_SYMBOLS.include?(boundary)
+
+      raise InvalidTimelineRangeError,
+            "unsupported boundary: #{boundary.inspect}; use :first, a version, or a record"
+    end
+
     attr_reader :from #: untyped
     attr_reader :to #: untyped
     attr_reader :time_range #: TimeRange?
@@ -148,13 +159,8 @@ module PaperTrailDiff
     #: (untyped) -> untyped
     def resolve(boundary)
       return boundary unless symbolic?(boundary)
-      raise InvalidTimelineRangeError, LAST_REMOVED if boundary == :last
 
-      unless BOUNDARY_SYMBOLS.include?(boundary)
-        raise InvalidTimelineRangeError,
-              "unsupported boundary: #{boundary.inspect}; use :first, a version, or a record"
-      end
-
+      self.class.check_symbol!(boundary)
       ordered_versions.first
     end
 

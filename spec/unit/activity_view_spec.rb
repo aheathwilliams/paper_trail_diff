@@ -23,6 +23,17 @@ RSpec.describe PaperTrailDiff::ActivityView do
       .to be_a(described_class)
   end
 
+  it 'takes only true or false for its switches' do
+    none = { activity: true, snapshots: false, group: nil, recorded: nil }
+    neither = ['yes', nil]
+    %i[activity snapshots].each do |name|
+      neither.each do |value|
+        expect { described_class.build(**none, name => value) }
+          .to raise_error(PaperTrailDiff::ConfigurationError, "#{name}: must be true or false")
+      end
+    end
+  end
+
   it 'builds a view of the options it was given' do
     view = described_class.build(activity: true, snapshots: true, group: nil, recorded: policy,
                                  version_scope: :all.to_proc)

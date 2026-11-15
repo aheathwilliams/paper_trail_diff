@@ -34,6 +34,11 @@ module PaperTrailDiff
     # : (PreparedRecordState, untyped, untyped, bool) -> [bool, Array[PreparedRecordState]]
     def target: (PreparedRecordState, untyped, untyped, bool) -> [ bool, Array[PreparedRecordState] ]
 
+    # A target class that is an STI subclass reads no sibling's row, as Active
+    # Record's type condition reads none.
+    # : (PreparedRecordState, untyped, bool, untyped) -> bool
+    def target?: (PreparedRecordState, untyped, bool, untyped) -> bool
+
     # The members of each join record the owner had at the boundary, as
     # PreparedHistory#through_records reads them from records. Under
     # `source_type:`, only join records of that type count. A has_many
@@ -65,13 +70,14 @@ module PaperTrailDiff
     # : (untyped, String) -> Array[untyped]
     def ids_for: (untyped, String) -> Array[untyped]
 
-    # : (PreparedRecordState, PreparedRecordState, String, untyped, ScopeCondition) -> bool
-    def member?: (PreparedRecordState, PreparedRecordState, String, untyped, ScopeCondition) -> bool
+    # : (PreparedRecordState, String, untyped, ScopeCondition) -> bool
+    def member?: (PreparedRecordState, String, untyped, ScopeCondition) -> bool
+
+    # An `as:` child names its owner by type as well.
+    # : (Hash[String, untyped], untyped) -> bool
+    def owner_typed?: (Hash[String, untyped], untyped) -> bool
 
     # : (PreparedRecordState) -> String
     def owner_id: (PreparedRecordState) -> String
-
-    # : (PreparedRecordState, untyped, untyped) -> bool
-    def matching_type?: (PreparedRecordState, untyped, untyped) -> bool
   end
 end

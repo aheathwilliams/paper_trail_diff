@@ -4,10 +4,21 @@ require_relative '../support/filter_database'
 
 RSpec.describe PaperTrailDiff::Support do
   let(:noon) { Time.utc(2032, 1, 1, 12) }
-
   # Versions of two tables, and of one whose ids do not count up.
   let(:version) { Struct.new(:created_at, :id) { def self.table_name = 'versions' } }
   let(:other_version) { Struct.new(:created_at, :id) { def self.table_name = 'other_versions' } }
+
+  # Runs the block with the process in New York, where summer time ends,
+  # named as POSIX writes it, which Windows reads too. Windows applies no
+  # summer time to some years, so it also yields the hour a time's local
+  # clock reads there, and the offset New York has on 2000-01-01.
+  def in_new_york(time)
+    zone = ENV.fetch('TZ', nil)
+    ENV['TZ'] = 'EST5EDT'
+    yield time.getlocal.hour, Time.local(2000).utc_offset
+  ensure
+    ENV['TZ'] = zone
+  end
 
   describe '.per_model' do
     it 'answers once for each Active Record class, and every time for anything else' do
@@ -28,6 +39,11 @@ RSpec.describe PaperTrailDiff::Support do
 
   describe '.decodable' do
     let(:time_of_day) { Time.utc(2000, 1, 1, 12) }
+    # A model whose `rings_at` is a time of day.
+    let(:clock) do
+      types = { 'rings_at' => ActiveModel::Type::Time.new, 'title' => ActiveModel::Type::String.new }
+      Class.new { define_singleton_method(:attribute_types) { types } }
+    end
 
     # The wrapper delegates ==, so only its class tells it from the time.
     it 'keys stored values by name, unwrapping each time of day, alone or in a pair' do
@@ -36,9 +52,9 @@ RSpec.describe PaperTrailDiff::Support do
       fields = ActiveRecord::Type::Time::Value.allocate
       fields.instance_variable_set(:@time, noon)
 
-      decodable = described_class.decodable(rings_at: wrapped, 'changed' => [nil, wrapped],
-                                            'title' => 'Draft', 'labels' => [1, 2],
-                                            'zoned' => fields)
+      decodable = described_class.decodable({ rings_at: wrapped, 'changed' => [nil, wrapped],
+                                              'title' => 'Draft', 'labels' => [1, 2],
+                                              'zoned' => fields }, clock)
 
       expect(decodable).to eq('rings_at' => time_of_day, 'changed' => [nil, time_of_day],
                               'title' => 'Draft', 'labels' => [1, 2], 'zoned' => time_of_day)
@@ -47,17 +63,77 @@ RSpec.describe PaperTrailDiff::Support do
     end
 
     # A time assigned in memory keeps its date there, and in its version, but
-    # the row keeps only the time, which reads back on 2000-01-01.
-    it 'reads a time of day on the date the database gives it, in its own zone' do
+    # the row keeps only the time as its clock read in the default time zone,
+    # which reads back on 2000-01-01 there.
+    it 'reads a time of day on the date the database gives it, in the default time zone' do
       assigned = Time.new(2032, 3, 4, 7, 30, Rational(31, 2), '+13:00')
       empty = ActiveRecord::Type::Time::Value.allocate
 
-      decodable = described_class.decodable('rings_at' => ActiveRecord::Type::Time::Value.new(assigned),
-                                            'unset' => empty)
+      decodable = described_class.decodable({ 'rings_at' => ActiveRecord::Type::Time::Value.new(assigned),
+                                              'unset' => empty }, clock)
 
-      expect(decodable).to eq('rings_at' => Time.new(2000, 1, 1, 7, 30, Rational(31, 2), '+13:00'),
+      expect(decodable).to eq('rings_at' => Time.utc(2000, 1, 1, 18, 30, Rational(31, 2)),
                               'unset' => nil)
-      expect(decodable.fetch('rings_at').utc_offset).to eq(13 * 3600)
+      expect(decodable.fetch('rings_at')).to be_utc
+    end
+
+    # JSON keeps a time of day as the text of the time assigned, date and
+    # offset included; its clock is read on that date.
+    it 'reads the text JSON wrote for a time of day as a time, and leaves other text' do
+      written = '2032-06-01T18:00:00.000-04:00'
+      stored = { 'rings_at' => [ActiveSupport::SafeBuffer.new(written), '09:30'], 'title' => written }
+      decodable = described_class.decodable(stored, clock)
+
+      expect(decodable).to eq('rings_at' => [Time.utc(2000, 1, 1, 22), '09:30'],
+                              'title' => '2032-06-01T18:00:00.000-04:00')
+    end
+
+    it 'reads a plain time by its local clock when Active Record keeps local times' do
+      allow(ActiveRecord).to receive(:default_timezone).and_return(:local)
+      summer = Time.new(2032, 7, 1, 18, 0, 0, '-04:00')
+
+      in_new_york(summer) do |hour, offset|
+        read = described_class.decodable(
+          { 'rings_at' => ActiveRecord::Type::Time::Value.new(summer) }, clock
+        ).fetch('rings_at')
+
+        expect([read.to_a.first(6), read.utc_offset]).to eq([[0, 0, hour, 1, 1, 2000], offset])
+      end
+    end
+  end
+
+  describe '.time_of_day' do
+    it 'keeps the zone of a time that has one' do
+      zoned = ActiveSupport::TimeZone['Asia/Tokyo'].local(2032, 3, 4, 7, 30, 15.5r)
+      read = described_class.time_of_day(zoned)
+
+      expect(read.to_a.first(6)).to eq([15, 30, 7, 1, 1, 2000])
+      expect([read.time_zone, read.subsec]).to eq([zoned.time_zone, 1/2r])
+    end
+
+    def read_in_new_york(time)
+      in_new_york(time) do
+        read = described_class.time_of_day(time)
+        [read.to_a.first(6), read.subsec, read.utc_offset]
+      end
+    end
+
+    it 'reads a plain time in the default time zone, fraction kept' do
+      assigned = Time.new(2032, 7, 4, 7, 30, 15.25r, '+13:00')
+
+      expect(read_in_new_york(assigned)).to eq([[15, 30, 18, 1, 1, 2000], 1/4r, 0])
+    end
+
+    it 'reads a plain time by its local clock when Active Record keeps local times' do
+      allow(ActiveRecord).to receive(:default_timezone).and_return(:local)
+      summer = Time.new(2032, 7, 1, 18, 0, 0.5r, '-04:00')
+
+      in_new_york(summer) do |hour, offset|
+        read = described_class.time_of_day(summer)
+
+        expect([read.to_a.first(6), read.subsec, read.utc_offset])
+          .to eq([[0, 0, hour, 1, 1, 2000], 1/2r, offset])
+      end
     end
   end
 
@@ -70,6 +146,8 @@ RSpec.describe PaperTrailDiff::Support do
         attr_accessor :alarm
 
         def self.version_association_name = :version
+
+        def self.attribute_types = { 'rings_at' => ActiveModel::Type::Time.new }
 
         def initialize(version)
           @version = version
@@ -136,6 +214,112 @@ RSpec.describe PaperTrailDiff::Support do
     end
   end
 
+  describe '.with_recorded_times of JSON history' do
+    # A rebuilt record of a model whose versions keep JSON, as a json object
+    # column holds it, with the times of day it has.
+    def json_record(object, times: %w[rings_at wakes_at], column: :json)
+      types = times.to_h { |name| [name, ActiveModel::Type::Time.new] }
+      versions = Struct.new(:columns_hash).new({ 'object' => Struct.new(:type).new(column) })
+      rebuilt_model(types, versions).new(double(object: object, object_deserialized: object))
+    end
+
+    def rebuilt_model(types, versions) # rubocop:disable Metrics/MethodLength
+      Class.new do
+        attr_reader :version, :assigned
+        attr_accessor :title
+
+        define_singleton_method(:attribute_types) { types }
+        define_singleton_method(:version_association_name) { :version }
+        define_singleton_method(:paper_trail_options) { {} }
+        define_singleton_method(:paper_trail) { Struct.new(:version_class).new(versions) }
+
+        def initialize(version)
+          @version = version
+          @assigned = {}
+        end
+
+        def has_attribute?(name) = self.class.attribute_types.key?(name)
+
+        def []=(name, value)
+          @assigned[name] = value
+        end
+      end
+    end
+
+    let(:written) { '2032-06-01T18:00:00.000-04:00' }
+
+    it 'reads the text JSON wrote for a time of day, under either kind of name' do
+      wrapped = ActiveRecord::Type::Time::Value.new(noon)
+      text = ActiveSupport::SafeBuffer.new(written)
+      record = json_record({ rings_at: text, wakes_at: wrapped, 'title' => written })
+
+      expect(described_class.with_recorded_times(record)).to equal(record)
+      expect(record.assigned).to eq(rings_at: Time.utc(2000, 1, 1, 22),
+                                    wakes_at: Time.utc(2000, 1, 1, 12))
+      expect(record.title).to be_nil
+    end
+
+    it 'leaves a time of day JSON did not write as text' do
+      record = json_record({ 'rings_at' => 5, 'wakes_at' => nil })
+      described_class.with_recorded_times(record)
+
+      expect(record.assigned).to be_empty
+    end
+
+    it 'decodes nothing again for a model without a time of day, or without JSON history' do
+      allow(PaperTrail).to receive(:serializer).and_return(PaperTrail::Serializers::YAML)
+      [json_record({ 'rings_at' => written }, times: []),
+       json_record({ 'rings_at' => written }, column: :text)].each do |record|
+        expect(described_class.with_recorded_times(record)).to equal(record)
+        expect(record.version).not_to have_received(:object_deserialized)
+      end
+    end
+  end
+
+  describe '.same? and .nan?' do
+    it 'reads values as == does, but every NaN as one' do
+      nans = [Float::NAN, 0.0 / 0.0, BigDecimal('NaN')]
+
+      expect(nans.product(nans).map { |left, right| described_class.same?(left, right) })
+        .to all(be(true))
+      expect([[1, 1.0], %w[a a]].map { |pair| described_class.same?(*pair) }).to eq([true, true])
+      expect([[Float::NAN, 1], [1, Float::NAN], [1, 2], ['NaN', Float::NAN]]
+        .map { |pair| described_class.same?(*pair) }).to eq([false] * 4)
+    end
+
+    it 'is true only for a Float or BigDecimal NaN' do
+      expect([Float::NAN, BigDecimal('NaN')].map { |value| described_class.nan?(value) })
+        .to eq([true, true])
+      expect([1.0, Float::INFINITY, 1, 'NaN', nil].map { |value| described_class.nan?(value) })
+        .to eq([false] * 5)
+    end
+  end
+
+  describe '.boolean!' do
+    it 'takes only true or false, naming the option' do
+      expect([true, false].map { |value| described_class.boolean!(:snapshots, value) })
+        .to eq([nil, nil])
+      [nil, 'true', 1].each do |value|
+        expect { described_class.boolean!(:snapshots, value) }
+          .to raise_error(PaperTrailDiff::ConfigurationError, 'snapshots: must be true or false')
+      end
+    end
+  end
+
+  describe '.stateless_reason' do
+    def model(columns)
+      versions = Struct.new(:name, :column_names).new('NoteVersion', columns)
+      Struct.new(:name, :paper_trail).new('Note', Struct.new(:version_class).new(versions))
+    end
+
+    it 'names a version table without an object column, and nothing for one with it' do
+      expect(described_class.stateless_reason(model(%w[id object]))).to be_nil
+      expect(described_class.stateless_reason(model(%w[id object_changes])))
+        .to eq('NoteVersion has no object column, so Note has no recorded states to rebuild ' \
+               'history from: add one to its version table')
+    end
+  end
+
   describe '.immutable_copy' do
     it 'copies hashes and arrays all the way down, keys too, and freezes the copy' do
       key = [+'key']
@@ -161,6 +345,27 @@ RSpec.describe PaperTrailDiff::Support do
       expect(described_class.immutable_copy(frozen)).to equal(frozen)
       expect([copy, copy.frozen?, copy.equal?(mutable), mutable.frozen?])
         .to eq(['text', true, false, false])
+    end
+
+    it 'keeps a frozen tree of plain hashes and arrays as it is' do
+      tree = { 'key' => ['a', { 'deep' => 1 }.freeze].freeze }.freeze
+
+      expect(described_class.immutable_copy(tree)).to equal(tree)
+      expect(described_class.immutable_copy([].freeze)).to be_frozen
+    end
+
+    it 'copies a frozen tree that holds a mutable value, or a subclass, at any depth' do
+      trees = [{ [1] => 1 }.freeze, { 'key' => [+'a'].freeze }.freeze,
+               [[+'a'].freeze].freeze, [{ 'k' => 1 }.with_indifferent_access.freeze].freeze,
+               Class.new(Array).new([1]).freeze,
+               { 'k' => 1 }.with_indifferent_access.freeze]
+
+      trees.each do |tree|
+        copy = described_class.immutable_copy(tree)
+
+        expect(copy).not_to equal(tree)
+        expect(copy).to eq(tree)
+      end
     end
 
     it 'keeps a value it cannot copy' do

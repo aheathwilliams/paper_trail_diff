@@ -3,8 +3,6 @@
 module PaperTrailDiff
   # Reconstructs an event's post-change record or immutable scalar delta.
   class ActivityEventRecordResolver
-    SERIALIZED_TYPE: ::String
-
     # : (?record_transition: untyped, ?prepared_record_after: untyped) -> void
     def initialize: (?record_transition: untyped, ?prepared_record_after: untyped) -> void
 
@@ -35,8 +33,17 @@ module PaperTrailDiff
     # : (untyped) -> untyped
     def prepared_changeset: (untyped) -> untyped
 
+    # PaperTrail's own changeset holds the changes in a
+    # HashWithIndifferentAccess, which turns every hash inside a value into
+    # one with string keys, so a `serialize`d hash edited from symbol keys to
+    # strings would read as no change. Keys are strings already here.
     # : (untyped, untyped, untyped) -> untyped
     def standard_changeset: (untyped, untyped, untyped) -> untyped
+
+    # PaperTrail's version model decodes its own column; a version that is
+    # not one holds the serializer's text.
+    # : (untyped) -> untyped
+    def stored_changes: (untyped) -> untyped
 
     # : (untyped) -> bool
     def json_column?: (untyped) -> bool

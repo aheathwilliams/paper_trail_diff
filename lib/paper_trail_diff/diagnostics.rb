@@ -87,6 +87,10 @@ module PaperTrailDiff
     def call
       unless @versions.empty?
         model_class = Endpoint.model_class(@versions.fetch(0))
+        # Nothing else can be read from a history without states.
+        stateless = Support.stateless_reason(model_class)
+        return report_stateless(stateless) if stateless
+
         ReadSnapshot.call([model_class]) do
           # Runs whether or not associations are selected: unorderable versions
           # corrupt a scalar timeline just as surely, and a report that inspected
@@ -235,6 +239,12 @@ module PaperTrailDiff
       options[:synchronize_version_creation_timestamp] == false
     rescue NoMethodError
       false
+    end
+
+    #: (String) -> DiagnosticReport
+    def report_stateless(reason)
+      add_error(:stateless_versions, reason)
+      DiagnosticReport.new(issues: @issues)
     end
 
     #: (Symbol, String, ?String?, ?untyped) -> void

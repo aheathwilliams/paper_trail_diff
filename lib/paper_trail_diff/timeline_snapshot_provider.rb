@@ -21,7 +21,7 @@ module PaperTrailDiff
       history = @store.prepare(record, versions, start_at: start_at)
       reach = history&.reach
       history = @store.prepare(record, versions, start_at: reach, reach: false) if reach
-      ends = history&.transaction_ends(versions, floor: (versions.first unless start_at))
+      ends = history&.transaction_ends(versions)
       PreparedTimelineSnapshots.new(history, ends, store: @store,
                                                    live_snapshotter: @live_snapshotter)
     end

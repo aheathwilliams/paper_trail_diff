@@ -41,6 +41,23 @@ RSpec.describe PaperTrailDiff::TimeRange do
     expect(described_class.new(start_time...end_time).to_range).to eq(start_time...end_time)
   end
 
+  describe '.check_since!' do
+    it 'accepts a time, date or string, and names since in its refusals' do
+      expect([start_time, Date.new(2032, 1, 1), '2032-01-01'].map do |since|
+        described_class.check_since!(since)
+      end).to all(be_a(described_class))
+      [nil, start_time..end_time, Class.new(Range).new(start_time, end_time)].each do |since|
+        expect { described_class.check_since!(since) }
+          .to invalid('`since` must be a time, date, or string; for a range, ' \
+                      'pass it as `within:` to analyze_scope')
+      end
+      [:soon, 'nonsense'].each do |since|
+        expect { described_class.check_since!(since) }
+          .to invalid('`since` must be a time, date, or string')
+      end
+    end
+  end
+
   it 'rejects ranges without a beginning, non-time, and reversed ranges' do
     expect { described_class.new(Range.new(nil, end_time)) }
       .to invalid('`within` must be a Range with a beginning')

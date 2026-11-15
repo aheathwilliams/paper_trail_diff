@@ -13,8 +13,6 @@ module PaperTrailDiff
   # side is read in one form: a `serialize`d value as JSON writes it, and a
   # binary value as its bytes. Both leave a value read from history as it is.
   module StoredJsonValues
-    SERIALIZED_TYPE: ::String
-
     BINARY_TYPE: ::String
 
     BINARY_KEYS: untyped

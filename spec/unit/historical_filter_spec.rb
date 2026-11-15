@@ -182,6 +182,17 @@ RSpec.describe PaperTrailDiff::HistoricalFilter do
       expect(cast.call({ due_on: Date.new(2026, 1, 3) })).to eq([])
     end
 
+    # JSON history keeps a time to the millisecond, so the live row is read
+    # to the millisecond too, and one filter value means the same in both.
+    it 'reads the live row as history keeps it' do
+      event = json_event
+      precise = Time.utc(2026, 1, 2, 3, 0, Rational(123_456, 1_000_000))
+      event.update_column(:starts_at, precise)
+      ids = [event.id.to_s]
+
+      expect(filter({ starts_at: precise }, model: FilterJsonEvent).call(ids)).to eq(ids)
+    end
+
     it 'keeps its own copy of a structured expected value' do
       event = structured_event
       details = { 'size' => 1 }
@@ -291,6 +302,13 @@ RSpec.describe PaperTrailDiff::HistoricalFilter do
       )
       expect { filter({ colour: 'red', size: 1, title: 'x' }) }.to raise_error(
         PaperTrailDiff::ConfigurationError, 'unknown historical attributes: colour, size'
+      )
+    end
+
+    it 'refuses an attribute named twice, as a string and a symbol' do
+      expect { filter({ title: 'x', 'title' => 'y' }) }.to raise_error(
+        PaperTrailDiff::ConfigurationError,
+        'historical_filter: names an attribute twice, as a string and a symbol'
       )
     end
 

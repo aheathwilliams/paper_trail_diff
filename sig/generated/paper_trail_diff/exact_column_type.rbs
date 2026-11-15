@@ -25,8 +25,6 @@ module PaperTrailDiff
     # such as one that serializes or encrypts the column, reads no kind.
     RUBY_TYPES: untyped
 
-    ENUM_TYPE: ::String
-
     # Rails wraps a time-zone-aware attribute's type, by default every
     # datetime's, in this delegator; the time it stores is the wrapped type's.
     TIME_ZONE_TYPE: ::String

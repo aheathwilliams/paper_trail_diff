@@ -15,7 +15,7 @@ module PaperTrailDiff
       return true unless reflection.options[:as]
 
       type = event_attribute(record, reflection.type, state: state).to_s
-      owner_types(reflection, owner).include?(type)
+      type == AssociationTraversal.owner_type(reflection)
     end
 
     #: (untyped, untyped, state: Symbol) -> untyped
@@ -55,15 +55,6 @@ module PaperTrailDiff
       end
 
       record.public_send(name)
-    end
-
-    #: (untyped, RecordSnapshot) -> Array[String]
-    def owner_types(reflection, owner)
-      [
-        owner.type.to_s,
-        reflection.active_record.name.to_s,
-        reflection.active_record.base_class.name.to_s
-      ]
     end
   end
 end

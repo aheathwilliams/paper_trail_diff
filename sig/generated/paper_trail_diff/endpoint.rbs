@@ -22,7 +22,9 @@ module PaperTrailDiff
     def self.validate!: (untyped) -> void
 
     # The record a method reads the history of: a record, saved or destroyed,
-    # of a model PaperTrail versions.
+    # of a model PaperTrail versions, or one PaperTrail rebuilt. A saved
+    # record's history ends at its row, so unsaved changes to it have no place
+    # in it, with or without a window.
     # : (untyped) -> void
     def self.validate_root!: (untyped) -> void
 
@@ -66,6 +68,16 @@ module PaperTrailDiff
 
     # : (untyped) -> void
     def self.validate_record!: (untyped) -> void
+  end
+
+  # Whether a history can be read: of a model, and from a version given.
+  module ReadableHistory
+    # : (untyped) -> void
+    def self.check_model!: (untyped) -> void
+
+    # A version read with `select` can lack the column its state is in.
+    # : (untyped) -> void
+    def self.check_version!: (untyped) -> void
   end
 
   # Whether a value is a version, a record, or neither, answered once for

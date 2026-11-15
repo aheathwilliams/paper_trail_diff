@@ -15,6 +15,13 @@ module PaperTrailDiff
     # : (untyped, Array[untyped], ?start_at: untyped, ?end_at: untyped, ?reach: bool) -> PreparedHistory?
     def prepare: (untyped, Array[untyped], ?start_at: untyped, ?end_at: untyped, ?reach: bool) -> PreparedHistory?
 
+    # Where a range of the record's ending at the version ends (see
+    # TransactionCut.range_end). A batch's history has asked already, and a
+    # root read alone reads no other record whose saves could take effect
+    # before its transaction's.
+    # : (untyped, untyped) -> untyped
+    def range_end_of: (untyped, untyped) -> untyped
+
     # A `start_at` is a window's, as for `prepare`. A window's roots may have
     # no version in it, when only their descendants changed there. Returns
     # where the earliest transaction open at the window's start began, if one
@@ -44,6 +51,12 @@ module PaperTrailDiff
     # PreparedRecordIndex#reading), so it is kept apart from one read without.
     # : (untyped, untyped, ?history: PreparedHistory?) -> RecordSnapshot?
     def call: (untyped, untyped, ?history: PreparedHistory?) -> RecordSnapshot?
+
+    # A version compared alone reads as a timeline reads it: each record as
+    # it stood before every transaction that had not ended at the version
+    # (see TransactionEnds).
+    # : (untyped) -> RecordSnapshot?
+    def at_version: (untyped) -> RecordSnapshot?
 
     # : (untyped, untyped, ?history: PreparedHistory?) -> RecordSnapshot?
     def uncached: (untyped, untyped, ?history: PreparedHistory?) -> RecordSnapshot?
@@ -84,9 +97,18 @@ module PaperTrailDiff
 
     @tree: AssociationTree
 
-    # A batch's history for the version wins over the one a caller passes.
-    # : (untyped, PreparedHistory?) -> PreparedHistory?
-    def history_for: (untyped, PreparedHistory?) -> PreparedHistory?
+    # The history a root is read from: the one its batch prepared for it,
+    # then the one a caller passes, then a batch's for the version. A batch
+    # prepares one history per class of its roots, and a boundary can be a
+    # version of a root of another class that stands in this root's tree,
+    # whose history never loaded this root's associations.
+    # : (untyped, untyped, PreparedHistory?) -> PreparedHistory?
+    def history_for: (untyped, untyped, PreparedHistory?) -> PreparedHistory?
+
+    # A history read to its root versions is read to where their
+    # transactions take effect (see TransactionCut.range_end).
+    # : (Array[untyped]) -> untyped
+    def range_end: (Array[untyped]) -> untyped
 
     # : (Array[untyped], Array[untyped]) -> Hash[Symbol, untyped]
     def batch_payload: (Array[untyped], Array[untyped]) -> Hash[Symbol, untyped]

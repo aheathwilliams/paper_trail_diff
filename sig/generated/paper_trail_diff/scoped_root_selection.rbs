@@ -108,7 +108,8 @@ module PaperTrailDiff
     def key_type: () -> Symbol?
 
     # Only the versions `version_scope` keeps select a root: one whose versions
-    # in the window it drops would have nothing to report.
+    # in the window it drops would have nothing to report. With associations
+    # it keeps whole transactions, as their activity reports them.
     # : () -> untyped
     def window_versions: () -> untyped
 
@@ -144,6 +145,15 @@ module PaperTrailDiff
     # CandidateTable's; a record matching any of them is selected.
     # : (Array[untyped]) -> Array[untyped]
     def selected_records: (Array[untyped]) -> Array[untyped]
+
+    # A relation that selects columns without the primary key reads rows that
+    # name no record.
+    # : (Array[untyped]) -> void
+    def reject_keyless!: (Array[untyped]) -> void
+
+    # A composite key names a record only when every part of it is read.
+    # : (untyped) -> bool
+    def keyless?: (untyped) -> bool
 
     # Pages are read by offset, so under a total order.
     # : (*untyped) -> untyped

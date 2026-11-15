@@ -171,7 +171,7 @@ module PaperTrailDiff
       relation = item_ids ? VersionQuery.for_items(model, item_ids) : VersionQuery.for_model(model)
       range = @time_range
       relation = range.scope(relation) if range
-      relation = @version_scope.call(relation) if @version_scope
+      relation = VersionScopeFilter.whole_transactions(@version_scope, relation) if @version_scope
       [Query.new(relation, versions.arel_table[:item_id],
                  versions.type_for_attribute('item_id').type)]
     end

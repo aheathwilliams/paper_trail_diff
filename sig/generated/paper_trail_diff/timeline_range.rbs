@@ -9,6 +9,11 @@ module PaperTrailDiff
     # *before* the latest change, so a range ending there silently dropped it.
     LAST_REMOVED: ::String
 
+    # The one symbol a boundary can be, for a timeline's range and for
+    # compare_many's endpoints alike.
+    # : (Symbol) -> void
+    def self.check_symbol!: (Symbol) -> void
+
     attr_reader from: untyped
 
     attr_reader to: untyped

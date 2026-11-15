@@ -55,9 +55,7 @@ module PaperTrailDiff
 
     #: (traversal: AssociationTraversal, ?allow_approximate: bool) -> void
     def initialize(traversal:, allow_approximate: false)
-      unless [true, false].include?(allow_approximate)
-        raise ConfigurationError, 'allow_approximate: must be true or false'
-      end
+      Support.boolean!(:allow_approximate, allow_approximate)
 
       @tree = traversal.tree
       @traversal = traversal

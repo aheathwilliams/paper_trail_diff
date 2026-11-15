@@ -199,7 +199,7 @@ module PaperTrailDiff
 
       @keyed: bool
 
-      @owner_types: Array[String]?
+      @owner_type: String?
 
       @reflection: untyped
 
@@ -211,10 +211,7 @@ module PaperTrailDiff
       # : (Hash[untyped, untyped]) -> bool
       def joined?: (Hash[untyped, untyped]) -> bool
 
-      # The names an `as:` row's type column may hold for an owner.
-      # : (untyped) -> Array[String]?
-      def owner_types: (untyped) -> Array[String]?
-
+      # An `as:` row's type column must hold its owner's polymorphic name.
       # : (Hash[untyped, untyped]) -> bool
       def owner_type?: (Hash[untyped, untyped]) -> bool
 

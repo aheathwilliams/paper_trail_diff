@@ -51,6 +51,10 @@ module PaperTrailDiff
     # : (untyped) -> untyped
     def validate_predicate: (untyped) -> untyped
 
+    # The attribute hash by name, each named once and on the model.
+    # : (Hash[untyped, untyped]) -> Hash[String, untyped]
+    def named_attributes: (Hash[untyped, untyped]) -> Hash[String, untyped]
+
     # `where` reads a list or a range as any of its values, which an
     # equality with one cast value cannot mean, so it is refused unless the
     # attribute itself holds one, as a serialized or an array column does.
@@ -64,6 +68,13 @@ module PaperTrailDiff
     # filter keeps its own.
     # : (String, untyped) -> untyped
     def cast: (String, untyped) -> untyped
+
+    # A value cast, then read as history can hold it (see StoredValues), so
+    # that one filter value means the same in a version and in the live row:
+    # JSON history keeps a time to the millisecond, and a column can keep a
+    # value less exactly than Ruby does.
+    # : (String, untyped) -> untyped
+    def stored: (String, untyped) -> untyped
 
     # : (untyped) -> Integer
     def validate_budget: (untyped) -> Integer
