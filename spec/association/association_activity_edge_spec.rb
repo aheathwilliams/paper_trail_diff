@@ -372,6 +372,28 @@ RSpec.describe PaperTrailDiff::AssociationActivityEdge do
       expect(edge.owners_of([])).to eq([])
     end
 
+    it 'reads only the stored state, and nothing from a version with none, or none for the key' do
+      article = TrackedArticle.create!(title: 'Owner')
+      stateless, keyless, kept = Array.new(3) do |index|
+        unversioned do
+          article.comments.create!(body: index.to_s)
+        end
+      end
+      start = Time.now.utc
+      other = TrackedArticle.create!(title: 'Other')
+      [stateless, keyless, kept].each { |comment| comment.update!(article: other) }
+      stateless.versions.last.update_column(:object, nil)
+      version = keyless.versions.last
+      keyless_state = version.object_deserialized.except('article_id')
+      version.update_column(:object, PaperTrail.serializer.dump(keyless_state))
+      edge = described_class::FirstVersion.new(reflection(TrackedArticle, :comments), window(start))
+
+      sql = statements do
+        expect(edge.owners([stateless.id, keyless.id, kept.id])).to eq([article.id])
+      end
+      expect(sql.grep(/\ASELECT \S+object\S* FROM/).length).to eq(1)
+    end
+
     it 'takes the item_id type of the version table of the child' do
       edge = described_class::FirstVersion.new(reflection(StringItemPost, :notes), nil)
 

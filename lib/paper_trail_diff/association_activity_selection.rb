@@ -121,7 +121,7 @@ module PaperTrailDiff
     # AssociationActivityEdge::FirstVersion).
     #: (untyped, Array[source]) -> Array[source]
     def first_owners(reflection, ids)
-      return [] if reflection.belongs_to? || !Support.versioned?(reflection.klass)
+      return [] if reflection.belongs_to?
 
       edge = AssociationActivityEdge::FirstVersion.new(reflection, @time_range)
       found = ids.flat_map do |source|

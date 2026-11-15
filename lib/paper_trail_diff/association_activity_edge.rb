@@ -158,10 +158,11 @@ module PaperTrailDiff
       # The owners the first versions of the children `filter` selects name in
       # their stored states. An `as:` child's type must name one of the
       # owner's types, which take a child with no type, as any plain child has.
+      # A version with no state, or none for the key, names no owner.
       #: (untyped) -> Array[untyped]
       def owners(filter)
         types = RecordedOwner.types(@reflection, @owner)
-        relation(filter).select(:object).filter_map do |version|
+        relation(filter).where.not(object: nil).select(:object).filter_map do |version|
           state = version.object_deserialized
           state[@reflection.foreign_key] if types.include?(state[@reflection.type])
         end

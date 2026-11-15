@@ -467,6 +467,55 @@ RSpec.describe PaperTrailDiff::AssociationActivitySelection do
       expect(reads.length).to be > 1
     end
 
+    it 'reads each owner a child left once, and none a child left before the window' do
+      left = TrackedArticle.create!(title: 'Left')
+      earlier = TrackedArticle.create!(title: 'Earlier')
+      joined = TrackedArticle.create!(title: 'Joined')
+      comments = Array.new(2) { |index| quietly { left.comments.create!(body: index.to_s) } }
+      before = quietly { earlier.comments.create!(body: 'before') }
+      before.update!(article: joined)
+      start = Time.now.utc
+      comments.each { |comment| comment.update!(article: joined) }
+      before.update!(body: 'edited')
+
+      found = sources(TrackedArticle, [:comments], window: since(start))
+
+      expect(found.grep(Array)).to eq([[left.id]])
+      expect(selected(found)).to eq([left.id, joined.id].sort)
+    end
+
+    # The comment the reply left is known only as an id, and held its article
+    # through the window: its own first version came after it.
+    it 'reads the owner a child read as an id held until a first version after the window' do
+      left = TrackedArticle.create!(title: 'Left')
+      joined = TrackedArticle.create!(title: 'Joined')
+      from = quietly { left.comments.create!(body: 'from') }
+      to = joined.comments.create!(body: 'to')
+      reply = quietly { from.replies.create!(body: 'quiet') }
+      start = Time.now.utc
+      reply.update!(comment: to)
+      window = start..Time.now.utc
+      from.update!(article: joined)
+
+      expect(selected(sources(TrackedArticle, ['comments.replies'], window: window)))
+        .to eq([left.id, joined.id].sort)
+    end
+
+    it 'reads a subquery of another type than item_id as ids' do
+      left = TrackedArticle.create!(title: 'Left')
+      comment = quietly { left.comments.create!(body: 'quiet') }
+      start = Time.now.utc
+      comment.update!(article: TrackedArticle.create!(title: 'Joined'))
+      allow_any_instance_of(PaperTrailDiff::AssociationActivityEdge::FirstVersion)
+        .to receive(:filter_type).and_return(:another)
+
+      found = nil
+      reads = object_reads { found = sources(TrackedArticle, [:comments], window: since(start)) }
+
+      expect(found.grep(Array)).to eq([[left.id]])
+      expect(reads.grep(/IN \(SELECT/)).to eq([])
+    end
+
     it 'reads no stored state for a belongs_to or a child without versions' do
       article = TrackedArticle.create!(title: 'Article')
       comment = article.comments.create!(body: 'one')
