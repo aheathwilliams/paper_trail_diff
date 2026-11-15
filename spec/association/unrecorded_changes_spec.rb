@@ -123,8 +123,9 @@ RSpec.describe 'Changes saved without a version' do
       end
     end
     rows = lambda do |group|
-      steps = PaperTrailDiff.activity_timeline(article, associations: [:comments], group: group,
-                                                        recorded_changes: true)
+      steps = PaperTrailDiff.analyze(article, associations: [:comments], activity: true,
+                                              group: group, recorded_changes: true)
+                            .activity_timeline
       steps.drop(1).map do |step|
         step.change_rows.map { |row| [row.attribute, row.from, row.to, row.unversioned?] }
       end
