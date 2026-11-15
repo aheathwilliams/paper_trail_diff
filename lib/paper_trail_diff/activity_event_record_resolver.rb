@@ -4,9 +4,6 @@
 module PaperTrailDiff
   # Reconstructs an event's post-change record or immutable scalar delta.
   class ActivityEventRecordResolver
-    SERIALIZED_TYPE = 'ActiveRecord::Type::Serialized'
-    private_constant :SERIALIZED_TYPE
-
     #: (?record_transition: untyped, ?prepared_record_after: untyped) -> void
     def initialize(record_transition: nil, prepared_record_after: nil)
       @record_transition = record_transition
@@ -14,22 +11,14 @@ module PaperTrailDiff
     end
 
     # The record as the version left it: the state recorded next, which holds
-    # any change saved after the version without one of its own. Prepared
-    # history answers without a query; without it, the next version or the
-    # live row does.
-    #: (untyped, ?direct: bool) -> untyped
-    def record_after(version, direct: false)
+    # any change saved after the version without one of its own. Every event
+    # comes from versions the prepared history loaded, so it answers without
+    # a query.
+    #: (untyped) -> PreparedRecordState?
+    def record_after(version)
       return if version.event.to_s == 'destroy'
 
-      if direct
-        handled, state = @prepared_record_after&.call(version, direct: true)
-        return state if handled
-      end
-
-      handled, prepared = @prepared_record_after&.call(version)
-      return prepared if handled
-
-      recorded_after(version)
+      @prepared_record_after.call(version).last
     end
 
     #: (untyped) -> ActivitySnapshotDelta?
@@ -50,9 +39,7 @@ module PaperTrailDiff
     #: (untyped, untyped) -> untyped
     def deserialized_changeset(version, model_class)
       return unless model_class
-      unless version.class.column_names.include?('object_changes')
-        return prepared_changeset(version)
-      end
+      return prepared_changeset(version) unless version.respond_to?(:object_changes)
 
       paper_trail = Object.const_get(:PaperTrail) #: untyped
       adapter = paper_trail.config.object_changes_adapter
@@ -68,17 +55,6 @@ module PaperTrailDiff
     # @rbs @prepared_record_after: untyped
 
     #: (untyped) -> untyped
-    def recorded_after(version)
-      successor = version.next
-      record = successor && Support.reify(successor, dup: true)
-      return record if record
-
-      model_class = Endpoint.model_class(version)
-      criteria = { model_class.primary_key => version.item_id } #: Hash[untyped, untyped]
-      model_class.unscoped.find_by(criteria)
-    end
-
-    #: (untyped) -> untyped
     def prepared_changeset(version)
       transition = @record_transition&.call(version)
       return {} unless transition
@@ -89,14 +65,27 @@ module PaperTrailDiff
       end.to_h
     end
 
+    # PaperTrail's own changeset holds the changes in a
+    # HashWithIndifferentAccess, which turns every hash inside a value into
+    # one with string keys, so a `serialize`d hash edited from symbol keys to
+    # strings would read as no change. Keys are strings already here.
     #: (untyped, untyped, untyped) -> untyped
     def standard_changeset(paper_trail, version, model_class)
-      raw_changes = Support.decodable(version.send(:object_changes_deserialized))
-      active_support = Object.const_get(:ActiveSupport) #: untyped
-      changes = active_support.const_get(:HashWithIndifferentAccess).new(raw_changes)
+      changes = Support.decodable(stored_changes(version), model_class)
       serializers = paper_trail.const_get(:AttributeSerializers)
       serializers.const_get(:ObjectChangesAttribute).new(model_class).deserialize(changes)
       json_column?(version) ? cast(model_class, changes) : changes
+    end
+
+    # PaperTrail's version model decodes its own column; a version that is
+    # not one holds the serializer's text.
+    #: (untyped) -> untyped
+    def stored_changes(version)
+      return version.send(:object_changes_deserialized) if version.respond_to?(
+        :object_changes_deserialized, true
+      )
+
+      Object.const_get(:PaperTrail).serializer.load(version.object_changes)
     end
 
     #: (untyped) -> bool
@@ -114,7 +103,7 @@ module PaperTrailDiff
     def cast(model_class, changes)
       changes.to_h do |name, values|
         type = model_class.type_for_attribute(name)
-        serialized = type.is_a?(Support.constant(SERIALIZED_TYPE))
+        serialized = type.is_a?(Support.constant(Support::SERIALIZED_TYPE))
         cast = serialized || !values.instance_of?(Array) ? values : values.map { |v| type.cast(v) }
         [name, cast]
       end

@@ -34,6 +34,44 @@ RSpec.describe PaperTrailDiff::ActivityTransactionGroups do
     end
   end
 
+  describe '.until_destroyed' do
+    def change(event, root: false)
+      version = Struct.new(:id, :transaction_id, :event).new(1, nil, event)
+      PaperTrailDiff::ActivityEvent.new(version: version, branches: root ? nil : ['comments'])
+    end
+
+    it "leaves out what the root's tree saw from its destruction until it is created again" do
+      before = change('update')
+      destroyed = change('destroy', root: true)
+      created = change('create', root: true)
+      after = change('create')
+      events = [change('create'), change('update', root: true), before, destroyed,
+                change('update'), change('destroy'), created, after]
+
+      kept = described_class.until_destroyed(events)
+
+      expect(kept).to eq([*events.first(2), before, destroyed, created, after])
+      expect(kept).to be_frozen
+    end
+
+    # The restoring transaction's descendant versions may come before the
+    # root's own. The destroy's transaction, and another, restore nothing.
+    it 'keeps what the transaction that creates the root again saved, from its first event' do
+      stub_const('GroupsEventVersion', Struct.new(:id, :transaction_id, :event))
+      saved = lambda do |transaction_id, event, root: false|
+        PaperTrailDiff::ActivityEvent.new(version: GroupsEventVersion.new(1, transaction_id, event),
+                                          branches: root ? nil : ['comments'])
+      end
+      restoring = saved.call(9, 'update')
+      events = [saved.call(4, 'update', root: true), saved.call(5, +'destroy', root: true),
+                saved.call(5, 'update'), saved.call(8, 'update'), saved.call(nil, 'update'),
+                restoring,
+                saved.call(9, 'create', root: true)]
+
+      expect(described_class.until_destroyed(events)).to eq([*events.first(2), *events.last(2)])
+    end
+  end
+
   describe '#events_for' do
     it "gives the events of an event's transaction, in the order given" do
       first = event(1, 7)

@@ -41,7 +41,6 @@ module PaperTrailDiff
     private_constant :Absent
 
     ABSENT = Absent.new.freeze
-
     #: (untyped, untyped) -> nested_changes
     def self.call(from_value, to_value)
       new(from_value, to_value).call
@@ -58,24 +57,35 @@ module PaperTrailDiff
       end
     end
 
-    # The comparable value as a Hash key: two values that are `==` are one
-    # key. A Hash looks its keys up with `eql?`, which tells 1 from 1.0, so
-    # every number is read as a rational, at any depth. One that is not
-    # finite has none, and equals nothing but itself.
+    # The comparable value as a Hash key: two values Support.same? reads
+    # alike are one key, as the attribute diff and the walk through a hash
+    # read them. A Hash looks its keys up with `eql?`, which also tells an
+    # Integer from a BigDecimal of the same value, so every number is read as
+    # a rational beside whether it is a Float, at any depth. One that is not
+    # finite has no rational: an infinity keeps its sign, and every NaN is one
+    # key, as a database stores it.
     #: (untyped) -> untyped
     def self.countable(value)
       case value
       when Hash then string_keyed(value) { |item| countable(item) }
       when Array then value.map { |item| countable(item) }
-      when Numeric then rational(value)
+      when Numeric then number_key(value)
       else value
       end
     end
 
+    #: (Numeric) -> untyped
+    def self.number_key(number)
+      [number.instance_of?(Float), rational(number)]
+    end
+    private_class_method :number_key
+
     # The number as a rational, or as it is when it has none: a complex
-    # number, or one that is not finite, such as a Float or BigDecimal NaN.
+    # number or an infinity. A NaN, which equals nothing, reads as nil.
     #: (untyped) -> untyped
     def self.rational(number)
+      return if Support.nan?(number)
+
       number.real? && number.finite? ? number.to_r : number
     end
 
@@ -150,16 +160,17 @@ module PaperTrailDiff
       keys(from_hash, to_hash).each do |key|
         from_item = from_hash.fetch(key, ABSENT)
         to_item = to_hash.fetch(key, ABSENT)
-        next if from_item == to_item
-
-        here = (path + [key]).freeze
-        if from_item.is_a?(Hash) && to_item.is_a?(Hash)
-          walk(from_item, to_item, here, changes)
-        else
-          change = change_for(from_item, to_item)
-          changes[here] = change if change
-        end
+        visit(from_item, to_item, (path + [key]).freeze, changes) unless Support.same?(from_item,
+                                                                                       to_item)
       end
+    end
+
+    #: (untyped, untyped, Array[String], nested_changes) -> void
+    def visit(from_item, to_item, here, changes)
+      return walk(from_item, to_item, here, changes) if from_item.is_a?(Hash) && to_item.is_a?(Hash)
+
+      change = change_for(from_item, to_item)
+      changes[here] = change if change
     end
 
     #: (Hash[untyped, untyped]) -> Hash[String, untyped]

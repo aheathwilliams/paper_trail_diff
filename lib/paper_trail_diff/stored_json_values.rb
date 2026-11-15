@@ -14,17 +14,16 @@ module PaperTrailDiff
   # side is read in one form: a `serialize`d value as JSON writes it, and a
   # binary value as its bytes. Both leave a value read from history as it is.
   module StoredJsonValues
-    SERIALIZED_TYPE = 'ActiveRecord::Type::Serialized'
     BINARY_TYPE = 'ActiveModel::Type::Binary'
     BINARY_KEYS = ['value'].freeze
-    private_constant :SERIALIZED_TYPE, :BINARY_TYPE, :BINARY_KEYS
+    private_constant :BINARY_TYPE, :BINARY_KEYS
 
     # For a model whose history is JSON, which StoredTimePrecision.digits
     # tells: a `json` or `jsonb` object column, or the JSON serializer.
     #: (untyped, Hash[untyped, untyped]) -> Hash[untyped, untyped]
     def self.apply(model_class, attributes)
       if StoredTimePrecision.json_column?(model_class.paper_trail.version_class, 'object')
-        convert(model_class, attributes, SERIALIZED_TYPE, &:as_json)
+        convert(model_class, attributes, Support::SERIALIZED_TYPE, &:as_json)
       else
         convert(model_class, attributes, BINARY_TYPE) { |value| bytes(value) }
       end
@@ -35,9 +34,13 @@ module PaperTrailDiff
     #: (untyped, Hash[untyped, untyped], String) { (untyped) -> untyped } -> Hash[untyped, untyped]
     def self.convert(model_class, attributes, type_name)
       type = Support.constant(type_name)
-      attributes.to_h do |name, value|
-        [name, model_class.type_for_attribute(name).is_a?(type) ? yield(value) : value]
+      converted = attributes.dup
+      model_class.attribute_types.each do |name, attribute_type|
+        next unless attribute_type.is_a?(type) && attributes.key?(name)
+
+        converted[name] = yield(attributes.fetch(name))
       end
+      converted
     end
     private_class_method :convert
 

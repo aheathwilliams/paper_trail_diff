@@ -38,10 +38,6 @@ module PaperTrailDiff
 
   # A normalized association in a bounded record snapshot tree.
   class AssociationSnapshot
-    COLLECTION_KINDS = %i[has_many has_and_belongs_to_many].freeze
-    SUPPORTED_KINDS = %i[belongs_to has_one has_many has_and_belongs_to_many].freeze
-    private_constant :COLLECTION_KINDS, :SUPPORTED_KINDS
-
     # Whether a collection's identities were found distinct. The snapshots a
     # transition derives from one another share the answer: a transition
     # replaces a record in its place, takes one out, or puts in one that was
@@ -65,47 +61,27 @@ module PaperTrailDiff
     end
     private_constant :IdentityCheck
 
-    # Identifies one snapshot for internal carry-forward. A transition cannot
-    # hold its origin without retaining every earlier snapshot at that path,
-    # and `object_id` is only guaranteed unique among live objects, so Ruby may
-    # hand a collected snapshot's id to a later one.
-    class SerialSequence
-      #: () -> void
-      def initialize
-        @mutex = Mutex.new
-        @counter = 0
-      end
-
-      #: () -> Integer
-      def next_serial
-        @mutex.synchronize { @counter += 1 }
-      end
-
-      # @rbs @mutex: Thread::Mutex
-      # @rbs @counter: Integer
-    end
-    private_constant :SerialSequence
-
-    SERIALS = SerialSequence.new
-    private_constant :SERIALS
-
     class << self
       #: (Symbol) -> bool
       def collection_kind?(kind)
-        COLLECTION_KINDS.include?(kind)
+        kind == :has_many
       end
     end
 
     attr_reader :kind #: Symbol
     attr_reader :records #: Array[RecordSnapshot]
-    attr_reader :serial #: Integer
+    # Identifies this snapshot for internal carry-forward (see
+    # CollectionTransition). A token of its own, as `object_id` is unique
+    # only among live objects: Ruby may hand a collected snapshot's id to a
+    # later one.
+    attr_reader :serial #: Object
 
     # `ordered` says the records are already in documented order, as a
     # transition's are: checking them again for each event made a replay's
     # time grow with its events times the size of the collection they changed.
     #: (kind: Symbol, records: Array[RecordSnapshot], ?identity_check: untyped, ?transition: CollectionTransition?, ?ordered: bool) -> void
     def initialize(kind:, records:, identity_check: nil, transition: nil, ordered: false)
-      unless SUPPORTED_KINDS.include?(kind)
+      unless SUPPORTED_ASSOCIATION_MACROS.include?(kind)
         raise ArgumentError, "unsupported association kind: #{kind.inspect}"
       end
       if !self.class.collection_kind?(kind) && records.length > 1
@@ -117,7 +93,7 @@ module PaperTrailDiff
       @identity_check = identity_check || IdentityCheck.new
       @identity_index = CollectionIdentityIndex.new(@records)
       @transition = transition
-      @serial = SERIALS.next_serial
+      @serial = Object.new
       freeze
     end
 

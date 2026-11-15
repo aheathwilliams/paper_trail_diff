@@ -7,18 +7,16 @@ module PaperTrailDiff
 
     attr_reader branches: Array[String]?
 
-    # : (version: untyped, branches: Array[String]?, ?join: bool) -> void
-    def initialize: (version: untyped, branches: Array[String]?, ?join: bool) -> void
+    # The branches under which the version is of a through's join row, which
+    # links the root to a target without being one. A record can be a join
+    # row under one branch and a member of another.
+    attr_reader joins: Array[String]
+
+    # : (version: untyped, branches: Array[String]?, ?joins: Array[String]) -> void
+    def initialize: (version: untyped, branches: Array[String]?, ?joins: Array[String]) -> void
 
     # : () -> bool
     def root?: () -> bool
-
-    # Whether the version is of a through's join row, which links the root to
-    # a target without being one.
-    # : () -> bool
-    def join?: () -> bool
-
-    @join: bool
   end
 
   # Accumulates each version once while retaining every selected root branch.
@@ -50,6 +48,17 @@ module PaperTrailDiff
     # has no transaction to stop before.
     # : (Array[ActivityEvent], untyped) -> Array[ActivityEvent]
     def self.before_closing: (Array[ActivityEvent], untyped) -> Array[ActivityEvent]
+
+    # Where the root's destruction takes effect, its tree is gone, so what a
+    # transaction that ended later saved there is no change of the root's,
+    # until the root is created again. The transaction that creates it again
+    # is the root's, from its first event, as for a root created afresh.
+    # : (Array[ActivityEvent]) -> Array[ActivityEvent]
+    def self.until_destroyed: (Array[ActivityEvent]) -> Array[ActivityEvent]
+
+    # The transactions of the root's versions that leave it in place.
+    # : (Array[ActivityEvent]) -> Array[Array[untyped]?]
+    def self.restoring_transactions: (Array[ActivityEvent]) -> Array[Array[untyped]?]
 
     # A version without a transaction shares one with nothing.
     # : (untyped) -> Array[untyped]?

@@ -13,7 +13,7 @@ RSpec.describe PaperTrailDiff::StoredJsonValues do
     # An adapter's binary type, as PostgreSQL's `bytea` is.
     types = { 'meta' => serialized, 'blob' => Class.new(ActiveModel::Type::Binary).new }
     model = Struct.new(:paper_trail) do
-      define_method(:type_for_attribute) { |name| types.fetch(name, ActiveModel::Type::Value.new) }
+      define_method(:attribute_types) { types.merge('title' => ActiveModel::Type::Value.new) }
     end
     described_class.apply(model.new(paper_trail), attributes)
   end
@@ -35,5 +35,14 @@ RSpec.describe PaperTrailDiff::StoredJsonValues do
     expect(apply(:text, 'blob' => 'bytes', 'meta' => meta)).to eq('blob' => 'bytes', 'meta' => meta)
     expect(apply(:text, 'blob' => { 'value' => 'x', 'size' => 1 }))
       .to eq('blob' => { 'value' => 'x', 'size' => 1 })
+  end
+
+  it 'leaves out an attribute the state does not hold, and leaves the state it was given alone' do
+    attributes = { 'meta' => meta, 'title' => 'One' }
+
+    expect(apply(:json, 'title' => 'One')).to eq('title' => 'One')
+    expect(apply(:text, 'title' => 'One')).to eq('title' => 'One')
+    expect(apply(:json, attributes)).to eq('meta' => written, 'title' => 'One')
+    expect(attributes).to eq('meta' => meta, 'title' => 'One')
   end
 end

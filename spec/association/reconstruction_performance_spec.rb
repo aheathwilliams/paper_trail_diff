@@ -269,8 +269,8 @@ RSpec.describe 'bounded event reconstruction' do
     expect_any_instance_of(PaperTrailDiff::PreparedActivitySnapshots)
       .to receive(:call).twice.and_call_original
 
-    steps = PaperTrailDiff.activity_timeline(article, from: first, to: article,
-                                                      associations: [:comments])
+    steps = SpecTimelines.activity_timeline(article, from: first, to: article,
+                                                     associations: [:comments])
 
     reported = steps.reject(&:empty?)
     expect(reported.map { |step| step.source_boundary.item_id })
@@ -316,8 +316,8 @@ RSpec.describe 'bounded event reconstruction' do
     three.update!(body: 'Three')
     reads = snapshot_reads
 
-    steps = PaperTrailDiff.activity_timeline(article, from: start, to: article.reload,
-                                                      associations: [:comments])
+    steps = SpecTimelines.activity_timeline(article, from: start, to: article.reload,
+                                                     associations: [:comments])
 
     expect(reads).to eq(whole: 2, branches: 0)
     expect(steps.reject(&:empty?).last(2).map { |step| edited_bodies(step) }).to eq(
@@ -343,8 +343,8 @@ RSpec.describe 'bounded event reconstruction' do
         count += 1
         key.call(*id)
       end
-      steps = PaperTrailDiff.activity_timeline(article, from: start, to: article.reload,
-                                                        associations: [:comments])
+      steps = SpecTimelines.activity_timeline(article, from: start, to: article.reload,
+                                                       associations: [:comments])
       expect(steps.size).to eq(comments + 2)
       count
     end
@@ -374,8 +374,8 @@ RSpec.describe 'bounded event reconstruction' do
     comment.update!(body: 'Fourth')
     reads = snapshot_reads
 
-    steps = PaperTrailDiff.activity_timeline(article, from: start, to: article.reload,
-                                                      associations: [:comments])
+    steps = SpecTimelines.activity_timeline(article, from: start, to: article.reload,
+                                                     associations: [:comments])
 
     expect(reads).to eq(whole: 2, branches: 0)
     reported = steps.reject(&:empty?).last(4)
@@ -408,8 +408,8 @@ RSpec.describe 'bounded event reconstruction' do
         original.call(*arguments).tap { |result| carried << result.first }
       end
 
-    steps = PaperTrailDiff.activity_timeline(article, from: first, to: article.reload,
-                                                      associations: [:comments])
+    steps = SpecTimelines.activity_timeline(article, from: first, to: article.reload,
+                                                     associations: [:comments])
 
     expect(carried).to eq([false, true])
     edit, comment_edit = steps.last(2)
@@ -432,8 +432,8 @@ RSpec.describe 'bounded event reconstruction' do
       .not_to receive(:deserialized_changeset)
     expect_any_instance_of(PaperTrailDiff::PreparedRecordIndex).not_to receive(:transition)
 
-    steps = PaperTrailDiff.activity_timeline(article, from: first, to: article.reload,
-                                                      associations: [:comments])
+    steps = SpecTimelines.activity_timeline(article, from: first, to: article.reload,
+                                                     associations: [:comments])
 
     titles = steps.filter_map { |step| step.diff.attributes['title']&.to_h }
     expect(titles).to eq([{ from: 'Draft', to: 'Edit 0' }, { from: 'Edit 0', to: 'Edit 1' },

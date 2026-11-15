@@ -26,9 +26,7 @@ for one association, at 1, 5, and 20 records:
 | Polymorphic `belongs_to` | 17 / 17 / 17 | 0 |
 | `has_many :through` with `source_type:` | 21 / 21 / 21 | 0 |
 | A `has_many` with `order(:id).limit(1)` | 14 / 18 / 33 | 0 |
-| A scope that takes the owner, read with PT-AT | 25 / 73 / 253 | 9 / 45 / 180 |
 | None, with a querying `after_initialize` | 10 / 26 / 86 | 2 / 10 / 40 |
-| None, with a callable `historical_filter:` that queries | 11 / 15 / 30 | 2 / 10 / 40 |
 
 The last four rows grow with the number of records, for the reasons in
 [what costs a query per record](#what-costs-a-query-per-record).
@@ -57,6 +55,12 @@ Flat query counts do not make a report's cost flat:
   [history stored as JSON](reference.md#history-stored-as-json)). PaperTrail
   reads every stored version with the one serializer, so switching means
   converting the versions already saved.
+- **Grouping by transaction costs little.** `report` with `associations:`
+  groups by default. On the `association_window` benchmark (articles created
+  with two comments in one transaction, then edited with one of them in
+  another), 2,000 articles took 2.6 to 3.2 s grouped and 2.6 to 3.4 s with
+  `group: nil`, three samples each, with the same statements, about 4% more
+  allocations, and slightly less retained memory.
 - **Memory grows with the number of records.** A `report` of 1,000 articles
   with their comments, replies, and author peaked at about 100 KB per
   article. `limit:` is a safety ceiling, not a page size, so to bound memory,
@@ -101,8 +105,16 @@ Flat query counts do not make a report's cost flat:
   article with `author.articles` and 400 events on the author's articles
   took 0.3 s when the author had 10 articles, 0.5 s with 100, and 3.4 s with
   1,000; with `associations: ["author"]`, 0.1 s for each.
-- **`snapshots: true` and `recorded_changes: true` cost memory and time.** Ask
-  for them only when you use them. Records that did not change are shared
+- **Change rows decode what each version recorded.** Activity keeps each
+  version until its rows are read, then decodes its `object_changes` to
+  credit each change to the version that recorded it. On SQLite, a `report`
+  of 2,000 articles with three comments each (16,000 versions) took 5.6 s
+  with or without them and held 77 MB against 55 MB; listing its 32,000
+  change rows then took 3.0 s against 0.4 s. `recorded_changes: false`
+  skips both, and credits a field's whole change to its record's last
+  version.
+- **`snapshots: true` costs memory.** Ask for it only when you use the
+  snapshots. Records that did not change are shared
   between steps, so the cost is modest: an activity `report` of 10,000
   articles with their 57,000 comments (114,000 versions, 49,000 steps) took
   about 40 s and held 372 MB, and 411 MB with snapshots, at the same
@@ -111,19 +123,21 @@ Flat query counts do not make a report's cost flat:
 - **A window with associations looks for the transactions open at its
   start.** A window reports the transactions that end inside it, so its
   history is asked where the earliest transaction open at its start began,
-  whatever records it saved. That takes one statement per version table, and
-  one per 500 transactions its history holds, to read where each ends. When
-  one was open, the window's history is read once more, from where the
-  earliest began. The
+  whatever records it saved. That takes one statement per version table the
+  tree's models use, or per version table of the application when a path
+  passes through a polymorphic `belongs_to`, and one per 500 transactions its
+  history holds, to read where each ends. It is asked before the window is
+  read, so the history is read once, from where the earliest began, and
+  `analyze_scope` and `report` ask it once for record selection and every
+  record of the model. A report on 100 articles with their comments and an
+  unrelated transaction open at the window's start ran 19 statements. The
   statement for the start reads the versions saved since the window began
   that were not the first of their transaction, and no index of the README
   serves that. On SQLite, in a table of a million versions with the README's
   indexes and PT-AT's on `transaction_id`, it took 0.06 s for a window that
   began 1% of the table ago, 0.18 s for one that began half of it ago, and
   0.27 s for one that began near its start. An index on `created_at` alone
-  took the first to 0.006 s and left the others as they were. `analyze_scope`
-  and `report` run it once more, to select the records such a transaction
-  saved before the window. A read without associations runs none of these
+  took the first to 0.006 s and left the others as they were. A read without associations runs none of these
   statements, with a window or not.
 - **A read with associations reads where its transactions end**, with
   `activity: true` or without. A
@@ -160,38 +174,19 @@ articles.
 
 ## What costs a query per record
 
-- **A path PT-AT reads.** History cannot read a few scopes, such as one that
-  takes the owner, SQL text, or a `limit` ordered by a string. PT-AT reads
-  those, one record at a time and only approximately, so every method refuses
-  them unless you pass `allow_approximate: true`. See
-  [costly associations](reference.md#costly-associations).
 - **A limited association on the current record.** Active Record's `preload`
   applies a `limit` or `offset` across all the records it loads, so each
   record's limited association is loaded on its own: one query per record.
 - **Your own code.** Model callbacks that query, such as an `after_initialize`,
-  custom attribute types, and a callable `historical_filter:` run for each
-  state they are given.
+  and custom attribute types run for each state they are given.
 
-## Selecting by past values
+## Selecting records when key types differ
 
-`historical_filter:` reads the window's history of the records the relation
-selects, and of deleted records, which a relation cannot test. A hash of
-attributes is read straight from stored history. A callable is given a model
-instance for each state, so it costs a `reify` per version, plus its own
-queries. `max_filter_versions:` (10,000 by default) caps the versions it loads.
-Either way, every version of every candidate in the window is decoded: with
-1,000 candidates and no match, a hash and a callable each took about 0.8 s.
-A relation with a `limit` reads candidates in its own order and stops when
-its page is full: of 5,000 matching records with three versions each, the
-first page of 20 took 0.09 s and the page at offset 2,000 took 0.4 s, where
-reading every match took 1.0 s.
-Finding the relation's records among the candidates takes up to two queries
-per 500 of them.
-
-The relation then reads the records that matched in pages of up to 2,000, and
-each page lists every matching id, so the relation keeps its own order,
-`limit`, and `offset`. A version table whose `item_id` does not share the key's
-type selects records the same way. On SQL Server, more than 500 matching
+A version table whose `item_id` does not share the model's key type, such as
+a string `item_id` beside an integer key, cannot be compared with the key in
+SQL. The changed ids are then read first, and the relation reads its records
+among them in pages of up to 2,000, each page listing every id, so the
+relation keeps its own order, `limit`, and `offset`. On SQL Server, more than 500 matching
 records are first written to a temporary table, in statements of 1,000 rows,
 and each page selects from it instead of listing them, since SQL Server
 compiles a statement with its ids written in afresh. The table is dropped
@@ -205,10 +200,36 @@ cache cleared before each run:
 | 10,000, selection only | 5.0 s | 0.6 s |
 | 20,000, selection only | 29.7 s | 1.1 s |
 | 40,000, selection only | not run | 2.2 s |
-| 10,000, `analyze_scope` with `historical_filter:` | 11.5 s, 4.3 s of it in pages | 7.4 s, 0.1 s in pages |
 
-The `analyze_scope` row is the mean of three runs; the rest are one run each.
+Each is one run.
 Other databases still list the ids on each page, which they parse quickly.
+
+## Selecting records with associations on SQL Server
+
+`analyze_scope` and `report` with `associations:` select a record when any
+of several subqueries names it: its own versions in the window, or the
+versions of a record on one of its paths. A single statement that joins
+them with `OR`, as other databases run, SQL Server planned as one: it
+walked the records in order and ran an association's subquery again for
+each, though each subquery alone took under 0.2 s. On SQL Server the gem
+therefore fills a temporary table from the subqueries, one statement each,
+and every page selects from it. A read that prevents writes, as a replica
+read through Rails' automatic role switching does, still runs the single
+statement, since Active Record counts the table's statements as writes.
+
+Selecting the orders changed in a window, from 1,600 orders with their line
+items and 28,729 versions, `associations: [:line_items]`, on a local SQL
+Server 2019 container with the plan cache cleared before each run:
+
+| Window | Orders selected | One statement | Temporary table |
+| --- | --- | --- | --- |
+| A week | 540 | 35.1 s | 0.43 s |
+| A month | 1,201 | 20.0 s | 0.36 s |
+
+The one-statement times are one run each; the temporary-table times are
+the median of three. The rest of the report is unchanged: there, a page of
+100 of the week's orders, chosen with the relation's `order`, `limit`, and
+`offset`, took 0.9 to 1.3 s in all, counting the 540 for `total` included.
 
 ## Large reports
 
@@ -229,8 +250,7 @@ mise exec -- bundle exec ruby benchmark/reporting.rb --case many_roots --samples
 
 `reconstruction.rb` prints the queries, `reify` calls, and model instances
 one `report` makes for a scenario and a number of records; the table above
-comes from its scenarios. `PTD_PROBE_ALLOW_APPROXIMATE=1` passes
-`allow_approximate: true`.
+comes from its scenarios.
 `reporting.rb` times `analyze_scope` over articles with no associations and,
 as `association_window`, a `report` over articles with their comments read
 through PT-AT, each in a fresh process, and records memory; `--output` keeps

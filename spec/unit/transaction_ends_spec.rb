@@ -6,6 +6,14 @@ RSpec.describe PaperTrailDiff::TransactionEnds do
   before do
     stub_const('EndsVersion', Struct.new(:id, :transaction_id, :created_at))
     stub_const('EndsOtherVersion', Class.new(EndsVersion))
+    stub_const('EndsRow', Class.new(Struct.new(:id, :transaction_id, :created_at, :item_type)) do
+      def self.table_name = 'versions'
+    end)
+  end
+
+  # A version row, as a boundary is told from a live record.
+  def row(id, transaction_id)
+    EndsRow.new(id, transaction_id, base + id, 'Shape')
   end
 
   # A version saved `id` seconds in, so ids order as times do.
@@ -14,24 +22,36 @@ RSpec.describe PaperTrailDiff::TransactionEnds do
   end
 
   def ordered(versions)
-    ends = described_class.new(versions)
+    ends = described_class.new(versions, {})
     versions.sort_by { |each| ends.sort_key(each) }.map(&:id)
   end
 
+  # With recorded ends, a transaction they do not name is placed among the
+  # versions held.
   it 'places each version at the last its transaction saved, whatever order they are given in' do
     first = version(1, 7)
     other = version(2, 8)
     last = version(3, 7)
-    ends = described_class.new([last, other, first])
+    ends = described_class.new([last, other, first], {})
 
     expect([first, other, last].map { |each| ends.last(each) }).to eq([last, other, last])
     expect(ends).to be_frozen
   end
 
+  # Read without recorded ends, as a root alone is, every version is where
+  # it was saved.
+  it 'keeps every version where it is without recorded ends' do
+    first = version(1, 7)
+    other = version(2, 8)
+    ends = described_class.new([first, other, version(3, 7)])
+
+    expect([ends.last(first), ends.last(other)]).to eq([first, other])
+  end
+
   it 'keeps a version outside a transaction, or of one it was not given, where it is' do
     alone = version(1, nil)
     unknown = version(2, 9)
-    ends = described_class.new([alone, version(3, 7), version(4, nil)])
+    ends = described_class.new([alone, version(3, 7), version(4, nil)], {})
 
     expect([ends.last(alone), ends.last(unknown)]).to eq([alone, unknown])
     expect(ends.sort_key(unknown).first).to eq(ends.sort_key(unknown).last)
@@ -49,14 +69,14 @@ RSpec.describe PaperTrailDiff::TransactionEnds do
     first = version(1, 7)
     tied = version(2, 7, at: 1)
 
-    expect(described_class.new([tied, first]).last(first)).to eq(tied)
-    expect(described_class.new([first, tied]).last(tied)).to eq(tied)
+    expect(described_class.new([tied, first], {}).last(first)).to eq(tied)
+    expect(described_class.new([first, tied], {}).last(tied)).to eq(tied)
   end
 
   it 'tells transactions numbered alike in two version tables apart' do
     here = version(1, 7)
     there = version(2, 7, table: EndsOtherVersion)
-    ends = described_class.new([here, there, version(3, 7)])
+    ends = described_class.new([here, there, version(3, 7)], {})
 
     expect(ends.last(here).id).to eq(3)
     expect(ends.last(there)).to eq(there)
@@ -75,73 +95,44 @@ RSpec.describe PaperTrailDiff::TransactionEnds do
     expect([last, other, first].sort_by { |each| ends.sort_key(each) }).to eq([other, first, last])
   end
 
-  # A whole history begins at its floor, whatever else a history holds.
-  describe 'with a floor' do
-    it 'keeps a version saved before the floor by another transaction where it is' do
-      before = version(1, 7)
-      floor = version(2, 8)
-      ends = described_class.new([floor, version(4, 8)], { ['EndsVersion', 7] => version(9, 7) },
-                                 floor: floor)
+  describe '#target' do
+    it 'places a version boundary at the last version of its transaction, and when it was saved' do
+      first = row(1, 7)
+      last = row(3, 7)
+      ends = described_class.new([first, row(2, 8), last], {})
 
-      expect(ends.last(before)).to eq(before)
-      expect(ends.last(version(3, 7)).id).to eq(9)
-      expect(ends.last(version(2, 7, at: 2)).id).to eq(9)
+      expect(ends.target(first)).to eq([last, base + 3])
+      expect(ends.target(first).first).to equal(last)
     end
 
-    it "places a version saved before the floor by the floor's transaction at its end" do
-      child = version(1, 8)
-      floor = version(2, 8)
-      last = version(4, 8)
+    it 'places a live record where it was read, whatever transaction number it carries' do
+      record = version(1, 7)
+      ends = described_class.new([row(1, 7), row(3, 7)], {})
 
-      expect(described_class.new([floor, last], floor: floor).last(child)).to eq(last)
+      expect(ends.target(record)).to eq([record, base + 1])
+      expect(ends.target(record).first).to equal(record)
     end
 
-    it 'keeps a version before a floor saved outside a transaction where it is' do
-      before = version(1, 7)
-      floor = version(2, nil)
-      ends = described_class.new([floor, version(3, 7)], floor: floor)
+    it 'keeps the answer of the boundary asked last, and of no other' do
+      first = row(1, 7)
+      other = row(2, 8)
+      ends = described_class.new([first, other, row(3, 7)], {})
+      answer = ends.target(first)
 
-      expect([ends.last(before), ends.last(version(1, nil))].map(&:id)).to eq([1, 1])
-    end
-  end
-
-  describe '#beyond?' do
-    it 'is true only for a version saved after every version given' do
-      ends = described_class.new([version(4, 7), version(2, 8)])
-
-      expect([1, 2, 4].map { |id| ends.beyond?(version(id, nil)) }).to eq([false, false, false])
-      expect(ends.beyond?(version(5, 7))).to be(true)
-      expect(ends.beyond?(version(5, nil, at: 4))).to be(true)
+      expect(ends.target(first)).to equal(answer)
+      expect(ends.target(other)).to eq([other, base + 2])
+      expect(ends.target(other)).to equal(ends.target(other))
+      expect(ends.target(first)).to eq(answer)
+      expect(ends.target(first)).not_to equal(answer)
     end
 
-    it 'does not move with where a transaction is recorded as ending, and is false of none' do
-      ends = described_class.new([version(1, 7)], { ['EndsVersion', 7] => version(9, 7) })
+    it 'tells two live records that compare equal apart' do
+      record = version(1, nil)
+      twin = version(1, nil)
+      ends = described_class.new([], {})
 
-      expect(ends.beyond?(version(2, 8))).to be(true)
-      expect(described_class.new([]).beyond?(version(1, nil))).to be(false)
-    end
-  end
-
-  describe '#interleaved?' do
-    it 'is true when a transaction saved between two versions of another' do
-      expect(described_class.new([version(1, 7), version(2, 8), version(3, 7)])).to be_interleaved
-      expect(described_class.new([version(1, 7), version(2, nil), version(3, 7)]))
-        .to be_interleaved
-    end
-
-    it 'is false when each transaction saved its versions together, in any order given' do
-      versions = [version(1, 7), version(2, 7), version(3, nil), version(4, 8)]
-
-      expect(described_class.new(versions)).not_to be_interleaved
-      expect(described_class.new(versions.reverse)).not_to be_interleaved
-      expect(described_class.new([])).not_to be_interleaved
-    end
-
-    it 'is true when a transaction is recorded as ending after a later one' do
-      versions = [version(1, 7), version(2, 8)]
-
-      expect(described_class.new(versions, { ['EndsVersion', 7] => version(3, 7) }))
-        .to be_interleaved
+      expect(ends.target(record).first).to equal(record)
+      expect(ends.target(twin).first).to equal(twin)
     end
   end
 end

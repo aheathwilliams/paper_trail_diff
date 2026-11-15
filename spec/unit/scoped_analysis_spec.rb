@@ -109,4 +109,18 @@ RSpec.describe PaperTrailDiff::ScopedAnalysis do
     expect([found, unreachable]).to eq([analyses, [key(feature)]])
     expect([scoped.roots, scoped.deleted]).to eq([[], {}])
   end
+
+  describe '#total' do
+    it 'is what the selection counted' do
+      scoped = described_class.new(analyses: {}, unreachable: [], roots: [article], total: 7)
+
+      expect(scoped.total).to eq(7)
+    end
+
+    it 'counts the roots when the selection counted none' do
+      scoped = described_class.new(analyses: {}, unreachable: [], roots: [article, feature])
+
+      expect(scoped.total).to eq(2)
+    end
+  end
 end

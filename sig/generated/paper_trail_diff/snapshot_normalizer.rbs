@@ -32,10 +32,6 @@ module PaperTrailDiff
     # : (untyped, reifier: untyped) -> RecordSnapshot?
     def call: (untyped, reifier: untyped) -> RecordSnapshot?
 
-    # Normalizes one member of an already selected association branch.
-    # : (untyped, tree: AssociationTree, path: String, incoming: untyped, reifier: untyped) -> RecordSnapshot?
-    def call_child: (untyped, tree: AssociationTree, path: String, incoming: untyped, reifier: untyped) -> RecordSnapshot?
-
     # Normalizes scalar attributes without traversing or loading associations.
     # : (untyped, tree: AssociationTree, path: String) -> snapshot_attributes
     def attributes_for: (untyped, tree: AssociationTree, path: String) -> snapshot_attributes

@@ -35,16 +35,19 @@ module PaperTrailDiff
     class Result
       attr_reader :records #: Array[untyped]
       attr_reader :unreachable #: Array[Array[String]]
+      # How many records the relation selects before its limit and offset.
+      attr_reader :total #: Integer
 
-      #: (records: Array[untyped], unreachable: Array[Array[String]]) -> void
-      def initialize(records:, unreachable:)
+      #: (records: Array[untyped], unreachable: Array[Array[String]], total: Integer) -> void
+      def initialize(records:, unreachable:, total:)
         @records = records
         @unreachable = unreachable
+        @total = total
         freeze
       end
     end
 
-    # `activity_tree` names the association paths whose changes also select a
+    # `activity_traversal` names the association paths whose changes also select a
     # root, as an activity analysis reports them. Without one, only a root's
     # own versions select it. `version_scope` narrows which of either count,
     # as it narrows which are reported.
@@ -55,20 +58,16 @@ module PaperTrailDiff
     # open at the window's start is reported in it, though it may have saved
     # the root's tree only before it, so with associations the roots are
     # selected from where the earliest such transaction began.
-    #: (untyped, time_range: TimeRange?, limit: Integer, ?historical_filter: untyped, ?max_filter_versions: Integer, ?activity_tree: AssociationTree?, ?version_scope: untyped) -> void
-    def initialize(scope, time_range:, limit:, historical_filter: nil, # rubocop:disable Metrics/ParameterLists
-                   max_filter_versions: HistoricalFilter::DEFAULT_VERSION_LIMIT, activity_tree: nil,
-                   version_scope: nil)
+    #: (untyped, time_range: TimeRange?, limit: Integer, ?activity_traversal: AssociationTraversal?, ?version_scope: untyped) -> void
+    def initialize(scope, time_range:, limit:, activity_traversal: nil, version_scope: nil)
       @scope = normalize_scope(scope)
       reject_unversioned!
-      @time_range = time_range
-      @version_scope = VersionScopeFilter.validated(version_scope)
+      @version_scope = version_scope
       @limit = validate_limit(limit)
-      @selecting = AssociationActivitySelection.window(model, activity_tree, time_range)
-      @related = activity_tree && AssociationActivitySelection.new(
-        model, tree: activity_tree, time_range: @selecting, version_scope: @version_scope
+      @selecting = AssociationActivitySelection.window(model, activity_traversal, time_range)
+      @related = activity_traversal && AssociationActivitySelection.new(
+        model, traversal: activity_traversal, time_range: @selecting, version_scope: @version_scope
       )
-      @historical_filter = historical_filter_for(historical_filter, max_filter_versions)
     end
 
     #: () -> Result
@@ -83,10 +82,8 @@ module PaperTrailDiff
     private
 
     # @rbs @scope: untyped
-    # @rbs @time_range: TimeRange?
     # @rbs @selecting: TimeRange?
     # @rbs @limit: Integer
-    # @rbs @historical_filter: FilteredCandidates?
     # @rbs @related: AssociationActivitySelection?
     # @rbs @version_scope: untyped
 
@@ -98,11 +95,12 @@ module PaperTrailDiff
     #: (Array[AssociationActivitySelection::Query]) -> Result
     def database_selection(related)
       sources = [changed_roots, *related]
-      missing = sources.flat_map { |ids| ids.missing(base_class) }.map(&:to_s).uniq.sort
-      Result.new(
-        records: selected_records(sources.map(&:relation)),
-        unreachable: missing.map { |id| identity(id) }.freeze
-      )
+      missing = Support.sort_ids(sources.flat_map { |ids| ids.missing(base_class) })
+      records, total = CandidateTable.union(base_class, sources.map(&:relation)) do |relations|
+        page_and_total(relations)
+      end
+      Result.new(records: records, unreachable: missing.map { |id| identity(id) }.freeze,
+                 total: total)
     end
 
     # The roots with a version of their own in the window. Those without a
@@ -118,7 +116,7 @@ module PaperTrailDiff
     # Comparing in SQL needs every subquery's column to share the key's type.
     #: (Array[AssociationActivitySelection::source]) -> Array[AssociationActivitySelection::Query]?
     def subqueries(related)
-      return unless @historical_filter.nil? && comparable_keys?
+      return unless comparable_keys?
 
       queries = related.grep(AssociationActivitySelection::Query) #: Array[AssociationActivitySelection::Query]
       matching = queries.select { |ids| ids.type == key_type }
@@ -127,15 +125,14 @@ module PaperTrailDiff
 
     # Which candidates still have a row is asked without the relation's
     # conditions, so that "filtered out" and "no longer exists" stay
-    # separable. A filter then keeps those it matches (FilteredCandidates).
+    # separable.
     #: (Array[String]) -> Result
     def plucked_selection(candidates)
       live = ids_in(base_class.unscoped, candidates)
       missing = candidates - live
-      filter = @historical_filter
-      live, missing = filter.call(live, missing) if filter
-      Result.new(records: CandidateTable.with(base_class, live) { |ids| selected_records([ids]) },
-                 unreachable: missing.sort.map { |id| identity(id) }.freeze)
+      records, total = CandidateTable.with(base_class, live) { |ids| page_and_total([ids]) }
+      unreachable = Support.sort_ids(missing).map { |id| identity(id) }.freeze
+      Result.new(records: records, unreachable: unreachable, total: total)
     end
 
     # Comparing the two columns in SQL needs them to share a type: PostgreSQL
@@ -152,22 +149,18 @@ module PaperTrailDiff
     end
 
     # Only the versions `version_scope` keeps select a root: one whose versions
-    # in the window it drops would have nothing to report.
+    # in the window it drops would have nothing to report. With associations
+    # it keeps whole transactions, as their activity reports them.
     #: () -> untyped
     def window_versions
       range = @selecting
       relation = VersionQuery.for_model(model)
       relation = range.scope(relation) if range
-      @version_scope ? @version_scope.call(relation) : relation
-    end
+      scope = @version_scope
+      return relation unless scope
+      return scope.call(relation) unless @related
 
-    #: (untyped, Integer) -> FilteredCandidates?
-    def historical_filter_for(predicate, max_versions)
-      return if predicate.nil?
-
-      filter = HistoricalFilter.new(base_class, predicate: predicate, time_range: @time_range,
-                                                limit: @limit, max_versions: max_versions)
-      FilteredCandidates.new(@scope, filter, ordered: ->(ids) { candidate_relation(ids) })
+      VersionScopeFilter.whole_transactions(scope, relation)
     end
 
     # Accepts a model class as readily as a relation: `Article` and
@@ -184,10 +177,7 @@ module PaperTrailDiff
 
     #: () -> void
     def reject_unversioned!
-      return if Support.versioned?(model)
-
-      raise UnversionedAssociationError,
-            "scope: #{model} is not versioned, so it has no history to select from"
+      ReadableHistory.check_model!(model)
     end
 
     # No Integer subclass has instances, so this is `is_a?` by another name.
@@ -213,6 +203,20 @@ module PaperTrailDiff
       end
     end
 
+    # The records, and how many the relation selects before its limit and
+    # offset. An unpaged relation has read them all already; a paged one is
+    # counted in one more statement, with each record once, and a relation
+    # grouped by another column by its groups, each of which reads a record.
+    #: (Array[untyped]) -> [Array[untyped], Integer]
+    def page_and_total(candidates)
+      records = selected_records(candidates)
+      paged = Support.limit(@scope) || Support.offset(@scope).positive?
+      return [records, records.length] unless paged
+
+      counted = candidate_relation(*candidates).unscope(:limit, :offset).distinct.count(primary_key)
+      [records, counted.instance_of?(Hash) ? counted.length : counted]
+    end
+
     # Deduplicate records rather than adding SQL DISTINCT: an otherwise valid
     # relation may order by joined columns or select a PostgreSQL json column.
     # Read bounded pages until the relation ends or too many unique roots appear.
@@ -225,6 +229,7 @@ module PaperTrailDiff
       consumed = 0
       loop do
         page = record_page(relation, consumed)
+        reject_keyless!(page)
         page.each { |record| records[record.id] ||= record }
         reject_oversized!(records.length)
         break if page.length < page_size
@@ -233,6 +238,20 @@ module PaperTrailDiff
       end
       records.values.freeze
     end
+
+    # A relation that selects columns without the primary key reads rows that
+    # name no record.
+    #: (Array[untyped]) -> void
+    def reject_keyless!(page)
+      return if page.none? { |record| keyless?(record.id) }
+
+      raise ConfigurationError, "scope: selects columns without #{primary_key}, so its rows name " \
+                                'no record; select it too'
+    end
+
+    # A composite key names a record only when every part of it is read.
+    #: (untyped) -> bool
+    def keyless?(id) = [id].flatten.include?(nil)
 
     # Pages are read by offset, so under a total order.
     #: (*untyped) -> untyped

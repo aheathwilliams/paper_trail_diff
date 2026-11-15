@@ -385,17 +385,29 @@ RSpec.describe PaperTrailDiff::ScopeCondition do
       end
     end
 
-    it 'declines relation parts other than conditions, and a scope that takes the owner' do
-      [-> { where(rank: 1).limit(1) }, -> { offset(1) }, -> { joins(:items) }, -> { distinct },
-       -> { select(:id) }, -> { group(:rank) }, lambda { |owner|
-                                                  where(rank: owner.rank)
-                                                }].each do |scope|
+    it 'declines parts that choose rows beyond conditions, and a scope that takes the owner' do
+      [-> { where(rank: 1).limit(1) }, -> { offset(1) }, -> { joins(:items) },
+       -> { group(:rank) }, lambda { |owner|
+                              where(rank: owner.rank)
+                            }].each do |scope|
         expect(build(scope)).to be_nil
       end
-      expect(build(lambda {
+    end
+
+    # A string order on a qualified column names its table, which chooses no
+    # rows, and so do the parts that lock, comment, or say what to load.
+    it 'reads the conditions beside parts that choose no rows' do
+      [lambda {
         where(rank: 1).order(:id).readonly.strict_loading.extending
-      })).not_to be_nil
-      expect(build(-> { reorder(:id) })).not_to be_nil
+      }, -> { reorder(:id) }, -> { distinct }, -> { select(:id) },
+       -> { where(rank: 1).order('scope_condition_items.rank') },
+       -> { where(rank: 1).unscope(:order) }, -> { where(rank: 2).rewhere(rank: 1) },
+       -> { where(rank: 1).lock.annotate('note').optimizer_hints('hint') },
+       -> { where(rank: 1).create_with(rank: 3).preload(:items) }].each do |scope|
+        expect(build(scope)).not_to be_nil
+      end
+      expect(matches(build(-> { where(rank: 2).rewhere(rank: 1) }), { rank: 1 }, { rank: 2 }))
+        .to eq([true, false])
     end
 
     # The ranking itself is ScopeRanking's; here only whether one applies.
@@ -432,6 +444,7 @@ RSpec.describe PaperTrailDiff::ScopeCondition do
         .to eq([{ 'id' => 9 }])
       pair = build(scoped, macro: :has_one, name: :pair, target: 'ScopeConditionPair')
       expect(first.call(pair, pairs)).to eq([{ 'owner_id' => 1, 'position' => 9 }])
+      expect(pair.first(pairs, in_order: true)).to eq(pairs.first(1))
     end
 
     # A has_many through keeps only its parts' conditions, so a part is read
@@ -507,23 +520,22 @@ RSpec.describe PaperTrailDiff::ScopeCondition do
         .with(reflection(:ranked), ScopeConditionItem, ranked: true).once
     end
 
-    it 'selects the records the scope admits, by their attributes' do
+    it 'builds conditions that select the records the scope admits, by their attributes' do
       records = [{ 'rank' => 1 }, { 'rank' => 2 }, { 'rank' => '1' }].map do |attributes|
         instance_double(ScopeConditionItem, attributes: attributes)
       end
-      expect(cache.select(reflection(:ranked), records, ranked: true))
-        .to eq([records[0], records[2]])
-      expect(cache.select(reflection(:target), records, ScopeConditionItem, ranked: true))
+      expect(cache.call(reflection(:ranked)).members(records)).to eq([records[0], records[2]])
+      expect(cache.call(reflection(:target), ScopeConditionItem).members(records))
         .to eq([records[0], records[2]])
     end
 
-    it 'ranks the records it selects only when asked' do
+    it 'builds conditions that rank the records they select only when asked' do
       ScopeConditionOwner.has_many :first_ranked, -> { where(rank: 1).order(id: :desc).limit(1) },
                                    class_name: 'ScopeConditionItem', foreign_key: :owner_id
       records = [{ 'id' => 1, 'rank' => 1 }, { 'id' => 2, 'rank' => 1 }, { 'id' => 3, 'rank' => 2 }]
                 .map { |attributes| instance_double(ScopeConditionItem, attributes: attributes) }
       expect([true, false].map do |ranked|
-        cache.select(reflection(:first_ranked), records, ranked: ranked)
+        cache.call(reflection(:first_ranked), ranked: ranked).members(records)
       end).to eq([[records[1]], records.first(2)])
     end
   end
@@ -647,14 +659,82 @@ RSpec.describe PaperTrailDiff::ScopeCondition do
       expect(relation_matches(ScopeConditionItem.where(id: []), { id: 1 })).to eq([false])
     end
 
+    # SQLite compares the date with the stored text, which no time equals.
+    it 'reads a date bound on a datetime column as midnight, except on SQLite' do
+      # The column types are read as the database in use lists them, under
+      # whichever adapter the example names.
+      adapter = ScopeConditionItem.connection_db_config.adapter
+      allow(PaperTrailDiff::ExactColumnType).to(receive(:sql_kind)
+        .and_wrap_original { |original, _adapter, sql_type| original.call(adapter, sql_type) })
+      read = lambda do |adapter, bound|
+        allow(ScopeConditionItem.connection_db_config).to receive(:adapter).and_return(adapter)
+        described_class.for_relation(ScopeConditionItem.where(seen_at: bound), ScopeConditionItem)
+      end
+
+      expect(read.call('sqlite3', Date.new(2026, 1, 1)..)).to be_nil
+      expect(matches(read.call('postgresql', Date.new(2026, 1, 1)..),
+                     { seen_at: Time.utc(2026, 1, 1) }, { seen_at: Time.utc(2025, 12, 31) }))
+        .to eq([true, false])
+      expect(read.call('sqlite3', Time.utc(2026)..)).not_to be_nil
+      expect(described_class.for_relation(ScopeConditionItem.where(due: Date.new(2026, 1, 1)..),
+                                          ScopeConditionItem)).not_to be_nil
+    end
+
+    # A destroyed record holds a skipped column only as its default.
+    it 'refuses a condition on a column history skips, but reads a default scope on it' do
+      stub_const('ScopeConditionSkipping', Class.new(ScopeConditionItem))
+      ScopeConditionSkipping.has_paper_trail skip: %i[note due]
+      stub_const('ScopeConditionSkippingDefault', Class.new(ScopeConditionSkipping))
+      # A date, which every database compares as Ruby does, unlike text.
+      kept = Date.new(2025, 6, 1)
+      ScopeConditionSkippingDefault.class_eval { default_scope { where(due: kept) } }
+      skipping = [ScopeConditionSkipping, ScopeConditionSkippingDefault]
+      refused = ->(model, condition) { described_class.for_relation(model.where(condition), model) }
+
+      day = Date.new(2026, 1, 1)
+      skipping.product([{ note: 'x' }, { note: %w[x y] }, { note: nil }, { note: 'a'..'b' },
+                        { due: day }, { due: day.. }])
+              .each { |model, condition| expect(refused.call(model, condition)).to be_nil }
+      expect(relation_matches(ScopeConditionSkipping.where(rank: 1), { rank: 1, note: 'x' }))
+        .to eq([true])
+      expect(relation_matches(ScopeConditionSkippingDefault.where(rank: 1),
+                              { rank: 1, due: kept }, { rank: 1, due: day }))
+        .to eq([true, false])
+      expect(relation_matches(ScopeConditionItem.where(due: day), { due: day })).to eq([true])
+    end
+
     it 'declines a relation that joins, groups, or that it cannot read' do
       [ScopeConditionItem.joins('JOIN tracked_articles ON 1 = 1'), ScopeConditionItem.group(:rank),
        ScopeConditionItem.where('rank = 1'), ScopeConditionItem.where(amount: 1),
        ScopeConditionItem.having('COUNT(*) > 1'), ScopeConditionItem.from('scope_condition_items'),
-       ScopeConditionItem.lock]
+       ScopeConditionItem.with(kept: ScopeConditionItem.all), ScopeConditionItem.left_joins(:items)]
         .each do |relation|
           expect(described_class.for_relation(relation, relation.model)).to be_nil
         end
+    end
+  end
+
+  describe '.in_key_order' do
+    def row(**attributes) = Struct.new(:attributes).new(attributes.transform_keys(&:to_s))
+
+    def model(key) = Struct.new(:primary_key).new(key)
+
+    # A row with no key yet, as one built but not saved, comes last.
+    it 'orders rows by their key, and rows without a key last, as given' do
+      rows = [row(id: 3), row(id: nil), row(id: 1), row(id: nil), row(id: 2)]
+
+      expect(described_class.in_key_order(rows) do
+        model('id')
+      end).to eq(rows.values_at(2, 4, 0, 1, 3))
+    end
+
+    # The last row's model is keyed by `code` alone, which it has.
+    it "reads each row's key, part by part, by the model the block names for it" do
+      rows = [row(a: 1, b: nil, code: 5), row(a: 2, b: 1, code: 0), row(a: 1, b: 5, code: 9),
+              row(a: 1, b: 2, code: 8), row(a: nil, b: nil, code: 1)]
+      keyed = ->(each) { each.attributes['code'] == 1 ? model('code') : model(%w[a b]) }
+
+      expect(described_class.in_key_order(rows, &keyed)).to eq(rows.values_at(4, 3, 2, 1, 0))
     end
   end
 

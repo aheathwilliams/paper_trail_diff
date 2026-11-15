@@ -6,15 +6,14 @@ module PaperTrailDiff
   # record's state there rather than by a query. A limit, offset or has_one
   # order then ranks the records that meet the conditions (ScopeRanking). It
   # reads the relation the scope builds once and never runs application code
-  # per record. A scope it cannot read exactly builds no condition, and the
-  # caller keeps its slower path.
+  # per record. A scope it cannot read exactly builds no condition, and a
+  # request that names it is refused (UnreadablePaths).
   class ScopeCondition
-    # Relation parts that leave membership to the where clause and the
-    # ranking alone.
-    RELATION_VALUES: untyped
-
-    # Relation parts that load or shape rows without choosing them.
-    LOADING_VALUES: untyped
+    # Relation parts that choose rows other than by the where clause and the
+    # ranking the reader follows. Any other part, such as a lock, a comment,
+    # a table named for a string order, or what to load, leaves membership
+    # alone; `reverse_order` is applied to the order at once.
+    ROW_CHOOSING_VALUES: untyped
 
     BIND_PARAM: ::String
 
@@ -49,6 +48,13 @@ module PaperTrailDiff
     # : (untyped, untyped) -> ScopeCondition?
     def self.for_relation: (untyped, untyped) -> ScopeCondition?
 
+    # A destroyed record's state holds a column `has_paper_trail skip:`
+    # leaves out of history only as its default. A default scope is read
+    # with it so; a condition the caller wrote is refused. PaperTrail lists
+    # the skipped columns by name.
+    # : (untyped, untyped) -> void
+    def self.check_recorded!: (untyped, untyped) -> void
+
     # A relation `none` built, whose where clause is SQL text. A condition
     # that matches nothing reads no attribute, so it names no model.
     # : () -> ScopeCondition
@@ -78,9 +84,16 @@ module PaperTrailDiff
     def self.scoped_relation: (untyped, untyped) -> untyped
 
     # Some parts, such as the having clause `or` sets, may be present but
-    # empty. `allowed` names the parts that may hold values.
-    # : (untyped, Array[Symbol]) -> bool
-    def self.plain_relation?: (untyped, Array[Symbol]) -> bool
+    # empty.
+    # : (untyped) -> bool
+    def self.plain_relation?: (untyped) -> bool
+
+    # Join rows in primary key order, the order whose first target an
+    # unordered has_one through reads (see #first). The block names a row's
+    # model; rows with no key yet come last, as given. Saved rows' keys
+    # differ.
+    # : (Array[untyped]) { (untyped) -> untyped } -> Array[untyped]
+    def self.in_key_order: (Array[untyped]) { (untyped) -> untyped } -> Array[untyped]
 
     # : (untyped, Array[untyped], ?ScopeRanking?) -> void
     def initialize: (untyped, Array[untyped], ?ScopeRanking?) -> void
@@ -104,9 +117,11 @@ module PaperTrailDiff
     # lowest primary key. Active Record reads an unordered has_one with
     # LIMIT 1, which SQLite, MySQL and SQL Server answer in key order for a
     # clustered or indexed key; reading any other row would differ from the
-    # current record where nothing changed. PostgreSQL promises no order.
-    # : (Array[untyped]) -> Array[untyped]
-    def first: (Array[untyped]) -> Array[untyped]
+    # current record where nothing changed. PostgreSQL promises no order. A
+    # has_one through gives its records in the order of its join rows, whose
+    # first target is the one Active Record reads (see AssociationTraversal.join_order?).
+    # : (Array[untyped], ?in_order: bool) -> Array[untyped]
+    def first: (Array[untyped], ?in_order: bool) -> Array[untyped]
 
     # Records that meet the conditions, as ranked; unchanged without a
     # ranking.
@@ -158,18 +173,13 @@ module PaperTrailDiff
       # : (untyped, ?untyped, ?ranked: bool) -> ScopeCondition?
       def call: (untyped, ?untyped, ?ranked: bool) -> ScopeCondition?
 
-      # The records the reflection's scope admits, as it ranks them. Its
-      # condition must exist.
-      # : (untyped, Array[untyped], ?untyped, ranked: bool) -> Array[untyped]
-      def select: (untyped, Array[untyped], ?untyped, ranked: bool) -> Array[untyped]
-
       @conditions: Hash[Array[untyped], ScopeCondition?]
     end
 
     # Compiles a where clause into nested arrays of plain comparisons.
     class Reader
-      # : (untyped) -> void
-      def initialize: (untyped) -> void
+      # : (untyped, ?refused: Array[String]) -> void
+      def initialize: (untyped, ?refused: Array[String]) -> void
 
       # : (untyped) -> Array[untyped]
       def call: (untyped) -> Array[untyped]
@@ -200,8 +210,13 @@ module PaperTrailDiff
 
       # A bound in the form the database holds, read back as the value the
       # database sorts by. Reading it back unwraps what an adapter wraps.
+      # SQLite keeps a time as text and compares a date with it as text, so
+      # a date there is no midnight, and is left unread.
       # : (String, untyped) -> untyped
       def sort_value: (String, untyped) -> untyped
+
+      # : (String, untyped) -> bool
+      def text_date?: (String, untyped) -> bool
 
       # Whether a value is NULL compares alike on every type.
       # : (Symbol, untyped) -> Array[untyped]

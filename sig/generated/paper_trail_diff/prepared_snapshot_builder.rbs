@@ -1,36 +1,45 @@
 # Generated from lib/paper_trail_diff/prepared_snapshot_builder.rb with RBS::Inline
 
 module PaperTrailDiff
-  # Normalizes supported recorded graphs without historical ActiveRecord instances.
+  # Normalizes recorded graphs from prepared history, reading each member's
+  # state without rebuilding its record.
   class PreparedSnapshotBuilder
     # : (AssociationTraversal) -> void
     def initialize: (AssociationTraversal) -> void
 
-    # : (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer, history: PreparedHistory?) -> [bool, RecordSnapshot?]
-    def call: (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer, history: PreparedHistory?) -> [ bool, RecordSnapshot? ]
+    # : (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer, history: PreparedHistory?) -> RecordSnapshot?
+    def call: (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer, history: PreparedHistory?) -> RecordSnapshot?
 
     # The state `call` builds a version's snapshot from, or nil when the
-    # version stored none or must be reified.
+    # version stored none. A model whose records need their own
+    # initialization is read by reifying it, once per version.
     # : (untyped) -> PreparedRecordState?
     def state: (untyped) -> PreparedRecordState?
 
     # The current row of a root, given as its state, with its associations as
-    # `boundary` reads them. Its attributes are the record's own, as the record
-    # path normalizes them, so its model need not be plain; its members are
-    # read as a version's are.
-    # : (PreparedRecordState, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer, history: PreparedHistory?) -> [bool, RecordSnapshot?]
-    def live: (PreparedRecordState, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer, history: PreparedHistory?) -> [ bool, RecordSnapshot? ]
+    # `boundary` reads them. Its attributes are the record's own, as the
+    # current snapshot normalizes them, so its model need not be plain; its
+    # members are read as a version's are.
+    # : (PreparedRecordState, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer, history: PreparedHistory?) -> RecordSnapshot
+    def live: (PreparedRecordState, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer, history: PreparedHistory?) -> RecordSnapshot
+
+    # A state at `path` of the tree, with the associations `tree` selects
+    # below it as `boundary` reads them.
+    # : (PreparedRecordState, untyped, AssociationTree, SnapshotNormalizer, PreparedHistory?, path: String, ?incoming: untyped) -> RecordSnapshot
+    def build: (PreparedRecordState, untyped, AssociationTree, SnapshotNormalizer, PreparedHistory?, path: String, ?incoming: untyped) -> RecordSnapshot
 
     private
 
     @loader: DirectRecordStateLoader
 
+    @reified: Hash[Array[untyped], PreparedRecordState?]
+
     @traversal: AssociationTraversal
 
-    # : (PreparedRecordState, untyped, AssociationTree, SnapshotNormalizer, PreparedHistory?, path: String, ?incoming: untyped) -> [bool, RecordSnapshot?]
-    def build: (PreparedRecordState, untyped, AssociationTree, SnapshotNormalizer, PreparedHistory?, path: String, ?incoming: untyped) -> [ bool, RecordSnapshot? ]
+    # : (untyped) -> PreparedRecordState?
+    def reified_state: (untyped) -> PreparedRecordState?
 
-    # : (PreparedRecordState, untyped, untyped, AssociationTree, SnapshotNormalizer, PreparedHistory, String) -> [bool, AssociationSnapshot?]
-    def association: (PreparedRecordState, untyped, untyped, AssociationTree, SnapshotNormalizer, PreparedHistory, String) -> [ bool, AssociationSnapshot? ]
+    # : (PreparedRecordState, untyped, untyped, AssociationTree, SnapshotNormalizer, PreparedHistory, String) -> AssociationSnapshot
+    def association: (PreparedRecordState, untyped, untyped, AssociationTree, SnapshotNormalizer, PreparedHistory, String) -> AssociationSnapshot
   end
 end

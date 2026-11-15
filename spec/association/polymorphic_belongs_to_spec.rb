@@ -249,4 +249,17 @@ RSpec.describe 'Polymorphic belongs_to history' do
                       'unsupported association notable.notes: notable is polymorphic, ' \
                       'so a path cannot continue past it')
   end
+
+  it 'reads an id with no type as no target, as Active Record does' do
+    page = PolymorphicPage.create!(title: 'p')
+    note = PolymorphicNote.create!(body: 'n', notable_id: page.id, notable_type: nil)
+    note.update!(notable_type: 'PolymorphicPage')
+    note.update!(notable_type: '')
+
+    steps = PaperTrailDiff.analyze(note.reload, associations: [:notable], activity: true,
+                                                snapshots: true).activity_timeline
+    targets = steps.map { |step| step.to_snapshot.associations.fetch('notable').records.map(&:id) }
+    expect(targets).to eq([[], [page.id], []])
+    expect(PaperTrailDiff.compare(note.versions.first, note).to_h).not_to be_nil
+  end
 end

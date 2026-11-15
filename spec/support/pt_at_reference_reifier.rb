@@ -1,35 +1,26 @@
 # frozen_string_literal: true
-# rbs_inline: enabled
 
 module PaperTrailDiff
-  # Reconstructs selected nested edges at one root PaperTrail endpoint.
-  class HistoricalAssociationReifier
-    #: (untyped, ?habtm_version: untyped) -> void
-    def initialize(version, habtm_version: version)
+  # PT-AT's own reconstruction of selected nested edges at one root version:
+  # the independent reference the specs compare loaded history against.
+  class PtAtReferenceReifier
+    def initialize(version)
       @transaction_id = VersionBoundary.transaction_id(version)
-      @habtm_transaction_id = VersionBoundary.transaction_id(habtm_version)
       @version_at = version.created_at
       # Keyed on record identity rather than `object_id`, which Ruby may reuse
       # once an earlier record in the same pass has been collected.
-      reified = {} #: Hash[untyped, Hash[untyped, bool]]
+      reified = {}
       @reified_associations = reified.compare_by_identity
     end
 
-    #: (untyped, Array[untyped]) -> void
     def reify(record, reflections)
       reflections.each { |reflection| reify_association(record, reflection) }
     end
 
     private
 
-    # @rbs @transaction_id: untyped
-    # @rbs @habtm_transaction_id: untyped
-    # @rbs @version_at: untyped
-    # @rbs @reified_associations: Hash[untyped, Hash[untyped, bool]]
-
-    #: (untyped, untyped) -> void
     def reify_association(record, reflection)
-      reified = @reified_associations[record] ||= {} #: Hash[untyped, bool]
+      reified = @reified_associations[record] ||= {}
       return if reified[reflection.name]
 
       reified[reflection.name] = true
@@ -40,12 +31,9 @@ module PaperTrailDiff
         reifier(:HasOne).reify(reflection, record, options, @transaction_id)
       when :has_many
         reify_has_many(record, reflection)
-      when :has_and_belongs_to_many
-        reify_habtm(record, reflection)
       end
     end
 
-    #: (untyped, untyped) -> void
     def reify_belongs_to(record, reflection)
       ensure_versioned_target!(record, reflection) if reflection.polymorphic?
       reifier(:BelongsTo).reify(reflection, record, options, @transaction_id)
@@ -53,7 +41,6 @@ module PaperTrailDiff
 
     # A polymorphic target's class is known only from the record's type
     # column, so TraversalPreparer cannot check it is versioned up front.
-    #: (untyped, untyped) -> void
     def ensure_versioned_target!(record, reflection)
       model_class = AssociationTraversal.belongs_to_target(reflection, record)
       return if model_class.nil? || Support.versioned?(model_class)
@@ -65,7 +52,6 @@ module PaperTrailDiff
             'model that has it.'
     end
 
-    #: (untyped, untyped) -> void
     def reify_has_many(record, reflection)
       if reflection.options[:through]
         reify_association(record, reflection.through_reflection)
@@ -85,7 +71,6 @@ module PaperTrailDiff
 
     # PT-AT's collection-source helper reifies every has_many on each join
     # record. Walk only the requested source instead, including nested throughs.
-    #: (untyped, untyped) -> void
     def reify_through(record, reflection)
       source = reflection.source_reflection
       if pt_at_source?(reflection)
@@ -103,14 +88,12 @@ module PaperTrailDiff
 
     # PT-AT's belongs_to source ignores `source_type:` and reads targets by id
     # alone, so a typed through walks its join records instead.
-    #: (untyped) -> bool
     def pt_at_source?(reflection)
       reflection.source_reflection.belongs_to? && !reflection.options[:source_type]
     end
 
-    #: (untyped, untyped, untyped) -> Array[untyped]
     def through_members(record, reflection, source)
-      joins = Array(record.public_send(reflection.through_reflection.name)) #: Array[untyped]
+      joins = Array(record.public_send(reflection.through_reflection.name))
       joins = joins.select { |join| AssociationTraversal.source_type_join?(reflection, join) }
       joins.flat_map do |join|
         reify_association(join, source)
@@ -118,27 +101,6 @@ module PaperTrailDiff
       end
     end
 
-    #: (untyped, untyped) -> void
-    def reify_habtm(record, reflection)
-      unless @habtm_transaction_id
-        message = 'HABTM reconstruction requires a transaction-backed endpoint version'
-        raise IncompleteAssociationHistoryError, message
-      end
-      HabtmTransactionOwners.new(record.class, reflection)
-                            .ensure_single_owner!(@habtm_transaction_id)
-
-      paper_trail = Object.const_get(:PaperTrail) #: untyped
-      target_versioned = paper_trail.request.enabled_for_model?(reflection.klass)
-      reifier(:HasAndBelongsToMany).reify(
-        target_versioned,
-        reflection,
-        record,
-        options,
-        @habtm_transaction_id
-      )
-    end
-
-    #: () -> Hash[Symbol, untyped]
     def options
       {
         dup: true,
@@ -148,10 +110,9 @@ module PaperTrailDiff
       }
     end
 
-    #: (Symbol) -> untyped
     def reifier(name)
-      tracking = Object.const_get(:PaperTrailAssociationTracking) #: untyped
-      reifiers = tracking.const_get(:Reifiers) #: untyped
+      tracking = Object.const_get(:PaperTrailAssociationTracking)
+      reifiers = tracking.const_get(:Reifiers)
       reifiers.const_get(name)
     rescue NameError => e
       message = 'loaded association tracking does not support nested reconstruction'

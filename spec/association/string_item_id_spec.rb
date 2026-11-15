@@ -27,7 +27,7 @@ RSpec.describe 'Association history with a string versions.item_id' do
     checkpoint(post)
     note.update!(body: 'two')
 
-    steps = PaperTrailDiff.timeline(post, from: :first, to: post, associations: [:notes])
+    steps = SpecTimelines.timeline(post, from: :first, to: post, associations: [:notes])
 
     expect(note_changes(steps.last.diff)).to eq([[note.id, { from: 'one', to: 'two' }]])
   end
@@ -39,7 +39,7 @@ RSpec.describe 'Association history with a string versions.item_id' do
     edit = note.versions.last
     checkpoint(post)
 
-    steps = PaperTrailDiff.activity_timeline(
+    steps = SpecTimelines.activity_timeline(
       post, within: edit.created_at..edit.created_at, associations: [:notes]
     )
     analysis = PaperTrailDiff.analyze(

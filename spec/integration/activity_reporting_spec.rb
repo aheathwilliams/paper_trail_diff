@@ -14,7 +14,7 @@ RSpec.describe 'activity reporting at current state' do
 
   it 'reports a lone creation without requiring a preceding step' do
     article = CoreArticle.create!(title: 'Created', internal_note: 'stable')
-    steps = PaperTrailDiff.activity_timeline(article, **options, snapshots: true)
+    steps = SpecTimelines.activity_timeline(article, **options, snapshots: true)
 
     expect(steps.length).to eq(1)
     expect(steps.first.from_boundary.event).to eq('create')
@@ -27,7 +27,7 @@ RSpec.describe 'activity reporting at current state' do
     article = CoreArticle.create!(title: 'Before', internal_note: 'stable')
     article.versions.last.update_columns(created_at: Time.now.utc - 7200)
     article.update!(title: 'After')
-    step = PaperTrailDiff.activity_timeline(article, **options).fetch(0)
+    step = SpecTimelines.activity_timeline(article, **options).fetch(0)
 
     expect(step.diff.record_presence_change).to be_nil
     expect(step.diff.attributes.fetch('title').to_h).to eq(from: 'Before', to: 'After')
@@ -56,7 +56,7 @@ RSpec.describe 'activity reporting at current state' do
     article = CoreArticle.create!(title: 'Before', internal_note: 'stable')
     article.update!(title: 'After')
     range = { from: :first, to: article }
-    timeline = PaperTrailDiff.timeline(article, **range)
+    timeline = SpecTimelines.timeline(article, **range)
     analysis = PaperTrailDiff.analyze(article, **range)
     activity = PaperTrailDiff.analyze(article, **range, activity: true)
 
@@ -80,7 +80,7 @@ RSpec.describe 'activity reporting at current state' do
       CoreArticle.create!(title: 'No history', internal_note: 'stable')
     end
 
-    expect(PaperTrailDiff.timeline(article, from: :first, to: article)).to be_empty
+    expect(SpecTimelines.timeline(article, from: :first, to: article)).to be_empty
     expect(PaperTrailDiff.analyze(article, from: :first, to: article,
                                            activity: true).diff).to be_empty
   end

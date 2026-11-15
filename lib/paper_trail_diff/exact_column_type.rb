@@ -6,8 +6,8 @@ module PaperTrailDiff
   # as Ruby compares the attribute's values, which is what lets ScopeCondition
   # and ScopeRanking decide a scope in Ruby. Each adapter lists the SQL types
   # it compares that way, so a type it does not list, such as PostgreSQL's
-  # character(n) or citext, and an adapter it does not know, fall back to the
-  # caller's slower path rather than being trusted.
+  # character(n) or citext, and an adapter it does not know, leave a scope
+  # that compares them unreadable rather than being trusted.
   module ExactColumnType
     # Kinds by SQL type, without its size, precision or scale. Integers,
     # booleans and dates compare alike everywhere listed. Text compares
@@ -48,11 +48,10 @@ module PaperTrailDiff
     RUBY_TYPES = { integer: 'ActiveModel::Type::Integer', boolean: 'ActiveModel::Type::Boolean',
                    text: 'ActiveModel::Type::ImmutableString', date: 'ActiveModel::Type::Date',
                    datetime: 'ActiveModel::Type::DateTime' }.freeze
-    ENUM_TYPE = 'ActiveRecord::Enum::EnumType'
     # Rails wraps a time-zone-aware attribute's type, by default every
     # datetime's, in this delegator; the time it stores is the wrapped type's.
     TIME_ZONE_TYPE = 'ActiveRecord::AttributeMethods::TimeZoneConversion::TimeZoneConverter'
-    private_constant :MYSQL_TYPES, :RUBY_TYPES, :ENUM_TYPE, :TIME_ZONE_TYPE
+    private_constant :MYSQL_TYPES, :RUBY_TYPES, :TIME_ZONE_TYPE
 
     # nil for anything but a column of the model's own table whose SQL type
     # its adapter lists and whose attribute type reads that kind. Text with
@@ -78,7 +77,7 @@ module PaperTrailDiff
     # wrapper. An enum stores what its subtype casts.
     #: (untyped) -> untyped
     def self.stored_type(type)
-      type = type.subtype if ENUM_TYPE.eql?(type.class.name)
+      type = type.subtype if Support::ENUM_TYPE.eql?(type.class.name)
       TIME_ZONE_TYPE.eql?(type.class.name) ? type.__getobj__ : type
     end
 

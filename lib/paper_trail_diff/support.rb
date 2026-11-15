@@ -16,8 +16,17 @@ module PaperTrailDiff
     # under the wrapper's tag; any other wraps its time, and decodes as nil.
     TIME_VALUE = 'ActiveRecord::Type::Time::Value'
 
+    # Active Record's types for a `serialize`d attribute and for an enum,
+    # named so that loading needs no Active Record.
+    SERIALIZED_TYPE = 'ActiveRecord::Type::Serialized'
+    ENUM_TYPE = 'ActiveRecord::Enum::EnumType'
+
     # The date a database gives a time of day it reads back.
     TIME_OF_DAY_DATE = { year: 2000, month: 1, day: 1 }.freeze #: Hash[Symbol, Integer]
+
+    # Where a hash has no value for a key the other has (see .same?).
+    MISSING = Object.new.freeze
+    private_constant :MISSING
 
     # Answers a question about `value` once for each Active Record class, in
     # `answers`: its respond_to? also looks through the instance's attributes,
@@ -34,19 +43,39 @@ module PaperTrailDiff
 
     # Stored attributes or changes ready for PaperTrail to decode: keyed by
     # name, with each time of day unwrapped, which then decodes as any value
-    # does. A change's values are a pair.
-    #: (Hash[untyped, untyped]) -> Hash[String, untyped]
-    def self.decodable(stored)
-      stored.to_h { |name, value| [name.to_s, unwrapped_time(value)] }
+    # does. A change's values are a pair. JSON history keeps a time of day as
+    # the text of the time it was assigned, date and offset included, which
+    # decoding would read on 2000-01-01 in that offset; it is read as a time
+    # first, so that its clock is taken on its own date, as the row's was.
+    #: (Hash[untyped, untyped], untyped) -> Hash[String, untyped]
+    def self.decodable(stored, model_class)
+      times = TimeOfDay.columns(model_class)
+      datetimes = TimeOfDay.datetime_columns(model_class)
+      stored.to_h do |name, value|
+        name = name.to_s
+        value = DatabaseTime.stored(value) if datetimes.include?(name)
+        [name, unwrapped_time(value, times.include?(name))]
+      end
     end
 
-    #: (untyped) -> untyped
-    def self.unwrapped_time(value)
-      return value.map { |item| unwrapped_time(item) } if value.instance_of?(Array)
+    #: (untyped, bool) -> untyped
+    def self.unwrapped_time(value, time_of_day)
+      return value.map { |item| unwrapped_time(item, time_of_day) } if value.instance_of?(Array)
+      return written_time(value) if time_of_day && value.is_a?(String)
 
       TIME_VALUE.eql?(value.class.name) ? recorded_time(value) : value
     end
     private_class_method :unwrapped_time
+
+    # The time JSON wrote, or the text as it is when it names none.
+    #: (String) -> untyped
+    def self.written_time(text)
+      parser = Time #: untyped
+      time_of_day(parser.iso8601(text))
+    rescue ArgumentError
+      text
+    end
+    private_class_method :written_time
 
     # The time a stored wrapper holds -- the one it wraps, or the `@time`
     # PaperTrail reads -- on 2000-01-01, as the database keeps a time of day.
@@ -54,9 +83,23 @@ module PaperTrailDiff
     # PaperTrail stores, but the row holds only the time.
     #: (untyped) -> untyped
     def self.recorded_time(value)
-      value.__getobj__ { value.instance_variable_get(:@time) }&.change(**TIME_OF_DAY_DATE)
+      time = value.__getobj__ { value.instance_variable_get(:@time) }
+      time && time_of_day(time)
     end
     private_class_method :recorded_time
+
+    # A time of day on 2000-01-01, as the database gives it back. A time with
+    # a zone keeps it. A plain time is stored as its clock reads in Active
+    # Record's default time zone, and read back on that date there, where a
+    # local zone can have another offset: a summer time read back in winter.
+    #: (untyped) -> untyped
+    def self.time_of_day(value)
+      return value.change(**TIME_OF_DAY_DATE) unless value.instance_of?(Time)
+
+      local = constant('ActiveRecord').default_timezone == :local
+      clock = local ? value.getlocal : value.getutc #: untyped
+      clock.change(**TIME_OF_DAY_DATE)
+    end
 
     # PaperTrail's `reify`, with each time of day its version recorded.
     #: (untyped, **untyped) -> untyped
@@ -68,20 +111,47 @@ module PaperTrailDiff
     # version it was rebuilt from, which PaperTrail can decode as nil. PaperTrail
     # assigns stored attributes after building the record and links it to
     # that version, PT-AT's members too, so this assigns what PaperTrail would
-    # if it unwrapped the value. Only a version whose stored text names the
-    # wrapper is decoded again; any other record is returned as it is.
+    # if it unwrapped the value, or read JSON's text as decodable does. Only a
+    # version whose stored text names the wrapper, or JSON history of a model
+    # with a time of day, is decoded again; any other record is returned as
+    # it is.
     #: [T] (T) -> T
     def self.with_recorded_times(record)
       version = rebuilt_from(record)
       return record unless version
 
+      rebuilt = record #: untyped
+      times = TimeOfDay.columns(rebuilt.class)
+      datetimes = TimeOfDay.datetime_columns(rebuilt.class)
       version.object_deserialized.each do |name, value|
-        next unless TIME_VALUE.eql?(value.class.name)
-
-        assign_recorded(record, name, recorded_time(value))
+        recorded = recorded_value(value, name.to_s, times, datetimes)
+        assign_recorded(record, name.to_s, recorded) unless recorded.equal?(value)
       end
       record
     end
+
+    # The value PaperTrail would assign had it read the stored one as the
+    # row does, or the stored value itself.
+    #: (untyped, String, Array[String], Array[String]) -> untyped
+    def self.recorded_value(value, name, times, datetimes)
+      if TIME_VALUE.eql?(value.class.name)
+        recorded_time(value)
+      elsif written_time?(value, name, times)
+        written_time(value)
+      elsif datetimes.include?(name)
+        DatabaseTime.stored(value)
+      else
+        value
+      end
+    end
+    private_class_method :recorded_value
+
+    # JSON writes a time of day as text.
+    #: (untyped, String, Array[String]) -> bool
+    def self.written_time?(value, name, times)
+      value.is_a?(String) && times.include?(name)
+    end
+    private_class_method :written_time?
 
     #: (untyped) -> untyped
     def self.rebuilt_from(record)
@@ -89,10 +159,20 @@ module PaperTrailDiff
       return unless model.respond_to?(:version_association_name)
 
       version = record.public_send(model.version_association_name)
-      # A JSON column's Hash is keyed by attribute names, never this one.
-      version if version&.object&.include?(TIME_VALUE)
+      object = version&.object
+      version if object && read_again?(object, model)
     end
     private_class_method :rebuilt_from
+
+    # Whether PaperTrail decodes some stored value of this object otherwise
+    # than the row reads it.
+    #: (untyped, untyped) -> bool
+    def self.read_again?(object, model)
+      # A JSON column's Hash is keyed by attribute names, never this one.
+      json_times = TimeOfDay.columns(model).any? && StoredTimePrecision.digits(model)
+      json_times || object.include?(TIME_VALUE) || DatabaseTime.stored_date?(object, model)
+    end
+    private_class_method :read_again?
 
     # As PaperTrail assigns a stored attribute.
     #: (untyped, String, untyped) -> void
@@ -105,27 +185,32 @@ module PaperTrailDiff
     end
     private_class_method :assign_recorded
 
+    # A frozen plain Hash or Array whose contents are all frozen is returned as
+    # it is rather than copied again, as each value object that holds it would.
+    # Ractor.shareable? answers that and remembers a yes on the object, so a
+    # tree passed from one value object to the next is not walked again.
     #: (untyped) -> untyped
     def self.immutable_copy(value)
       case value
-      when Hash
-        immutable_hash(value)
-      when Array
-        value.map { |item| immutable_copy(item) }.freeze
+      when Hash, Array
+        plain = value.instance_of?(Hash) || value.instance_of?(Array)
+        plain && Ractor.shareable?(value) ? value : copy_tree(value)
       else
         value.frozen? ? value : duplicate_and_freeze(value)
       end
     end
 
-    #: (Hash[untyped, untyped]) -> Hash[untyped, untyped]
-    def self.immutable_hash(value)
-      copy = {} #: Hash[untyped, untyped]
-      value.each do |key, item|
-        copy[immutable_copy(key)] = immutable_copy(item)
+    #: (Hash[untyped, untyped] | Array[untyped]) -> (Hash[untyped, untyped] | Array[untyped])
+    def self.copy_tree(value)
+      if value.is_a?(Hash)
+        copy = {} #: Hash[untyped, untyped]
+        value.each { |key, item| copy[immutable_copy(key)] = immutable_copy(item) }
+        copy.freeze
+      else
+        value.map { |item| immutable_copy(item) }.freeze
       end
-      copy.freeze
     end
-    private_class_method :immutable_hash
+    private_class_method :copy_tree
 
     #: (untyped) -> untyped
     def self.serialize(value)
@@ -141,6 +226,13 @@ module PaperTrailDiff
       else
         paper_trail_diff_value?(value) ? value.to_h : value
       end
+    end
+
+    # Ids as strings, once each, in the order their records' ids take: an
+    # integer id by its value, so 2 comes before 10, and any other by its text.
+    #: (Array[untyped]) -> Array[String]
+    def self.sort_ids(ids)
+      ids.map(&:to_s).uniq.sort_by { |id| id.match?(/\A\d+\z/) ? [id.to_i, id] : [Float::INFINITY, id] }
     end
 
     # Records sort by type first so that mixed id types stay comparable, then
@@ -251,15 +343,6 @@ module PaperTrailDiff
     end
     private_class_method :version_table
 
-    # Versions sharing a timestamp, whether or not their ids order them. PT-AT
-    # indexes association membership per version but resolves it by timestamp,
-    # so association state cannot be told apart across such a pair even when the
-    # scalar sequence is perfectly recoverable.
-    #: (Array[untyped]) -> Array[untyped]?
-    def self.tied_timestamp_pair(versions)
-      versions.each_cons(2).find { |left, right| left.created_at == right.created_at }
-    end
-
     # Whether a model records history at all.
     #
     # PaperTrail defines `paper_trail` on every ActiveRecord model, so asking
@@ -271,6 +354,63 @@ module PaperTrailDiff
     #: (untyped) -> bool
     def self.versioned?(model_class)
       model_class.respond_to?(:paper_trail_options) && !model_class.paper_trail_options.nil?
+    end
+
+    # Whether two values are one, as a diff reads them: `==`, but a NaN is the
+    # same as a NaN, as PostgreSQL stores and compares it, though Ruby has
+    # NaN unequal to everything. A value a serialized attribute holds can be
+    # of any class, so `==` must hold both ways, which Active Support's
+    # Time == String does not, and a Float is not the Integer it equals: each
+    # is written differently, so the change is real. Hashes and arrays are
+    # compared by their members.
+    #: (untyped, untyped) -> bool
+    def self.same?(left, right)
+      return nan?(right) if nan?(left)
+      return same_hash?(left, right) if left.is_a?(Hash)
+      return same_array?(left, right) if left.is_a?(Array)
+
+      left == right && right == left && left.instance_of?(Float) == right.instance_of?(Float)
+    end
+
+    # A key the right side lacks reads as a value nothing else is.
+    #: (Hash[untyped, untyped], untyped) -> bool
+    def self.same_hash?(left, right)
+      right.is_a?(Hash) && left.length == right.length &&
+        left.all? { |key, value| same?(value, right.fetch(key, MISSING)) }
+    end
+
+    #: (Array[untyped], untyped) -> bool
+    def self.same_array?(left, right)
+      right.is_a?(Array) && left.length == right.length &&
+        left.zip(right).all? { |pair| same?(*pair) }
+    end
+    private_class_method :same_hash?, :same_array?
+
+    # A Float or BigDecimal NaN.
+    #: (untyped) -> bool
+    def self.nan?(value)
+      number = value #: untyped
+      number.respond_to?(:nan?) && number.nan?
+    end
+
+    # An option that is a switch takes only true or false, so a truthy value
+    # given by mistake, such as a string, is not read as one.
+    #: (Symbol, untyped) -> void
+    def self.boolean!(name, value)
+      raise ConfigurationError, "#{name}: must be true or false" unless [true,
+                                                                         false].include?(value)
+    end
+
+    # Why a versioned model's history holds no states, or nil. PaperTrail
+    # can keep versions in a table without an `object` column, and every
+    # state is rebuilt from that column.
+    #: (untyped) -> String?
+    def self.stateless_reason(model_class)
+      versions = model_class.paper_trail.version_class
+      return if versions.column_names.include?('object')
+
+      "#{versions.name} has no object column, so #{model_class.name} has no recorded states " \
+        'to rebuild history from: add one to its version table'
     end
 
     # `versions.item_id` is often a string column -- PaperTrail's setup for UUID

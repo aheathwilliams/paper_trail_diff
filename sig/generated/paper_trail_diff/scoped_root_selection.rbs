@@ -36,11 +36,14 @@ module PaperTrailDiff
 
       attr_reader unreachable: Array[Array[String]]
 
-      # : (records: Array[untyped], unreachable: Array[Array[String]]) -> void
-      def initialize: (records: Array[untyped], unreachable: Array[Array[String]]) -> void
+      # How many records the relation selects before its limit and offset.
+      attr_reader total: Integer
+
+      # : (records: Array[untyped], unreachable: Array[Array[String]], total: Integer) -> void
+      def initialize: (records: Array[untyped], unreachable: Array[Array[String]], total: Integer) -> void
     end
 
-    # `activity_tree` names the association paths whose changes also select a
+    # `activity_traversal` names the association paths whose changes also select a
     # root, as an activity analysis reports them. Without one, only a root's
     # own versions select it. `version_scope` narrows which of either count,
     # as it narrows which are reported.
@@ -51,15 +54,13 @@ module PaperTrailDiff
     # open at the window's start is reported in it, though it may have saved
     # the root's tree only before it, so with associations the roots are
     # selected from where the earliest such transaction began.
-    # : (untyped, time_range: TimeRange?, limit: Integer, ?historical_filter: untyped, ?max_filter_versions: Integer, ?activity_tree: AssociationTree?, ?version_scope: untyped) -> void
-    def initialize: (untyped, time_range: TimeRange?, limit: Integer, ?historical_filter: untyped, ?max_filter_versions: Integer, ?activity_tree: AssociationTree?, ?version_scope: untyped) -> void
+    # : (untyped, time_range: TimeRange?, limit: Integer, ?activity_traversal: AssociationTraversal?, ?version_scope: untyped) -> void
+    def initialize: (untyped, time_range: TimeRange?, limit: Integer, ?activity_traversal: AssociationTraversal?, ?version_scope: untyped) -> void
 
     # : () -> Result
     def call: () -> Result
 
     private
-
-    @historical_filter: FilteredCandidates?
 
     @limit: Integer
 
@@ -68,8 +69,6 @@ module PaperTrailDiff
     @scope: untyped
 
     @selecting: TimeRange?
-
-    @time_range: TimeRange?
 
     @version_scope: untyped
 
@@ -94,7 +93,7 @@ module PaperTrailDiff
 
     # Which candidates still have a row is asked without the relation's
     # conditions, so that "filtered out" and "no longer exists" stay
-    # separable. A filter then keeps those it matches (FilteredCandidates).
+    # separable.
     # : (Array[String]) -> Result
     def plucked_selection: (Array[String]) -> Result
 
@@ -108,12 +107,10 @@ module PaperTrailDiff
     def key_type: () -> Symbol?
 
     # Only the versions `version_scope` keeps select a root: one whose versions
-    # in the window it drops would have nothing to report.
+    # in the window it drops would have nothing to report. With associations
+    # it keeps whole transactions, as their activity reports them.
     # : () -> untyped
     def window_versions: () -> untyped
-
-    # : (untyped, Integer) -> FilteredCandidates?
-    def historical_filter_for: (untyped, Integer) -> FilteredCandidates?
 
     # Accepts a model class as readily as a relation: `Article` and
     # `Article.where(...)` both name a population, and `all` is what makes them
@@ -137,6 +134,13 @@ module PaperTrailDiff
     # : (untyped, Array[String]) -> Array[String]
     def ids_in: (untyped, Array[String]) -> Array[String]
 
+    # The records, and how many the relation selects before its limit and
+    # offset. An unpaged relation has read them all already; a paged one is
+    # counted in one more statement, with each record once, and a relation
+    # grouped by another column by its groups, each of which reads a record.
+    # : (Array[untyped]) -> [Array[untyped], Integer]
+    def page_and_total: (Array[untyped]) -> [ Array[untyped], Integer ]
+
     # Deduplicate records rather than adding SQL DISTINCT: an otherwise valid
     # relation may order by joined columns or select a PostgreSQL json column.
     # Read bounded pages until the relation ends or too many unique roots appear.
@@ -144,6 +148,15 @@ module PaperTrailDiff
     # CandidateTable's; a record matching any of them is selected.
     # : (Array[untyped]) -> Array[untyped]
     def selected_records: (Array[untyped]) -> Array[untyped]
+
+    # A relation that selects columns without the primary key reads rows that
+    # name no record.
+    # : (Array[untyped]) -> void
+    def reject_keyless!: (Array[untyped]) -> void
+
+    # A composite key names a record only when every part of it is read.
+    # : (untyped) -> bool
+    def keyless?: (untyped) -> bool
 
     # Pages are read by offset, so under a total order.
     # : (*untyped) -> untyped

@@ -28,10 +28,6 @@ RSpec.describe PaperTrailDiff::CrossingTransactions do
 
   def reach(tables: [FilterVersion]) = described_class.reach(tables, start)
 
-  def quoted(column) = FilterVersion.connection.quote_table_name("filter_versions.#{column}")
-
-  def own_number = "#{quoted(:id)} != #{quoted(:transaction_id)}"
-
   def statements(&)
     queries = []
     counter = ->(*, payload) { queries << payload[:sql] unless payload[:name] == 'SCHEMA' }
@@ -83,23 +79,24 @@ RSpec.describe PaperTrailDiff::CrossingTransactions do
       expect(statements { reach(tables: [FilterVersion, FilterJsonVersion]) }.length).to eq(2)
     end
 
-    it 'does not look up a version that began its transaction' do
+    # A callback that saves other records before its own version dates that
+    # one first, as its save began, so a transaction's first version by id
+    # can be dated after another of its own. With one version table, no
+    # anchor tells transactions of a number apart.
+    it 'reads a transaction as open by the dates of its versions, whichever was saved first' do
+      allow(ActiveRecord::Base).to receive(:descendants).and_return([FilterVersion])
       FilterVersion.create!(id: 7, item_type: 'FilterArticle', item_id: 2, event: 'update',
                             transaction_id: 7, created_at: at(1))
 
-      expect(reach).to be_nil
-      expect(statements { reach }.first).to include(own_number)
+      expect(reach).to eq(at(-2))
     end
 
-    # Ids of another type, or none, cannot number a transaction.
-    it 'looks up every version when the ids cannot number transactions' do
+    it 'reads the same whatever names the version table keys' do
       [nil, 'item_type'].each do |key|
         keyed = Class.new(FilterVersion) { self.primary_key = key }
         version(1, 7, item_id: 2)
 
         expect(reach(tables: [keyed])).to eq(at(-2))
-        expect(statements { reach(tables: [keyed]) }.first)
-          .not_to include("!= #{quoted(:transaction_id)}")
       end
     end
 
@@ -120,7 +117,7 @@ RSpec.describe PaperTrailDiff::CrossingTransactions do
   end
 
   it 'reads the version tables of a record and of the records on its paths' do
-    traversal = instance_double(PaperTrailDiff::AssociationTraversal)
+    traversal = instance_double(PaperTrailDiff::AssociationTraversal, polymorphic_paths?: false)
     allow(traversal).to receive(:path_types).with(FilterFeature).and_return(['FilterJsonEvent'])
     open_around = -> { described_class.open_around(FilterFeature, traversal, start) }
     version(-3, 9, table: FilterJsonVersion)
@@ -132,6 +129,39 @@ RSpec.describe PaperTrailDiff::CrossingTransactions do
     version(-2, 7)
     version(1, 7)
     expect(open_around.call).to eq(at(-2))
+  end
+
+  # Each record names its own polymorphic target's class.
+  it 'reads every version table for a path through a polymorphic belongs_to' do
+    traversal = instance_double(PaperTrailDiff::AssociationTraversal, polymorphic_paths?: true)
+    version(-3, 9, table: FilterJsonVersion)
+    version(1, 9, table: FilterJsonVersion)
+
+    expect(described_class.open_around(FilterFeature, traversal, start)).to eq(at(-3))
+  end
+
+  # An application's version classes can share a table, as subclasses do,
+  # stand for no table, or name one that is not there yet.
+  it 'reads one class for each version table there is, and nothing else' do
+    traversal = instance_double(PaperTrailDiff::AssociationTraversal, polymorphic_paths?: true)
+    stub_const('CrossingTwinVersion', Class.new(FilterVersion))
+    stub_const('CrossingAbstractVersion', Class.new(ActiveRecord::Base) do
+      include PaperTrail::VersionConcern
+
+      self.abstract_class = true
+    end)
+    stub_const('CrossingAbsentVersion', Class.new(CrossingAbstractVersion) do
+      self.table_name = 'crossing_absent_versions'
+    end)
+    read = nil
+    allow(described_class).to receive(:reach) { |classes, _| read = classes }
+
+    described_class.open_around(FilterFeature, traversal, start)
+
+    expect(read.map(&:table_name)).to include('filter_versions', FilterJsonVersion.table_name)
+    expect(read.map(&:table_name)).to eq(read.map(&:table_name).uniq)
+    expect(read.reject { |each| each.include?(PaperTrail::VersionConcern) }).to eq([])
+    expect(read).not_to include(CrossingAbstractVersion, CrossingAbsentVersion)
   end
 
   # A transaction's first version carries its own id as its number, in

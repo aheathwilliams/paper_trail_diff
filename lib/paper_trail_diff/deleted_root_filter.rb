@@ -15,7 +15,8 @@ module PaperTrailDiff
         raise ConfigurationError,
               'include_deleted: cannot test deleted records against this relation: its ' \
               "conditions must be equality, IN, NULL, or range tests on #{model.name}'s " \
-              'own columns, and a range or a text comparison must be on a column whose ' \
+              'own columns that its history records, and a range or a text comparison ' \
+              'must be on a column whose ' \
               'values compare in Ruby as the database compares them, as for an ' \
               'association scope; select deleted records some other way'
       end
@@ -39,11 +40,8 @@ module PaperTrailDiff
     def call(identities)
       return [] if @condition.none?
 
-      states = destroyed_states(identities.map(&:last))
-      identities.select do |identity|
-        id = identity.last
-        !states.key?(id) || selected?(states.fetch(id))
-      end
+      selected = selected(identities.map(&:last))
+      identities.select { |identity| selected.fetch(identity.last, true) }
     end
 
     private
@@ -58,6 +56,12 @@ module PaperTrailDiff
     #: () -> untyped
     def model
       @relation.model
+    end
+
+    # Whether the relation selects each root its destroy recorded, by id.
+    #: (Array[String]) -> Hash[String, bool]
+    def selected(ids)
+      destroyed_states(ids).transform_values { |attributes| selected?(attributes) }
     end
 
     #: (Hash[String, untyped]?) -> bool

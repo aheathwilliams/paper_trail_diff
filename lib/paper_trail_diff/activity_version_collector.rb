@@ -31,6 +31,11 @@ module PaperTrailDiff
       ordered(@registry.to_a)
     end
 
+    # Where the transactions of the collected events take effect, once #call
+    # has ordered them by it.
+    #: () -> TransactionEnds?
+    attr_reader :ends
+
     private
 
     # @rbs @prepared: PreparedActivityIndex
@@ -39,6 +44,7 @@ module PaperTrailDiff
     # @rbs @traversal: AssociationTraversal
     # @rbs @range: ActivityRange
     # @rbs @registry: ActivityEventRegistry
+    # @rbs @ends: TransactionEnds?
 
     #: (Array[ActivityEvent]) -> Array[ActivityEvent]
     def ordered(events)
@@ -46,10 +52,14 @@ module PaperTrailDiff
       pair = Support.ambiguous_pair(events.map(&:version))
       raise(AmbiguousVersionOrderError, Support.ambiguous_message(pair)) if pair
 
-      prepared = @prepared #: PreparedActivityIndex?
-      versions = events.map(&:version)
-      ends = prepared ? prepared.transaction_ends(versions) : TransactionEnds.new(versions)
+      ends = transaction_ends(events.map(&:version))
       events.sort_by { |event| ends.sort_key(event.version) }.freeze
+    end
+
+    #: (Array[untyped]) -> TransactionEnds
+    def transaction_ends(versions)
+      prepared = @prepared #: PreparedActivityIndex?
+      @ends = prepared ? prepared.transaction_ends(versions) : TransactionEnds.new(versions)
     end
 
     # Each event is credited to the top-level association it was reached
@@ -77,11 +87,8 @@ module PaperTrailDiff
     def edge_groups(parent, reflection, branch)
       return through_groups(parent, reflection, branch) if reflection.through_reflection?
 
-      case reflection.macro
-      when :belongs_to
+      if reflection.belongs_to?
         belongs_to_groups(parent.fetch(:model), parent.fetch(:ids), reflection)
-      when :has_and_belongs_to_many
-        habtm_groups(parent.fetch(:model), parent.fetch(:versions), reflection)
       else
         direct_child_groups(parent.fetch(:model), parent.fetch(:ids), reflection)
       end
@@ -94,11 +101,21 @@ module PaperTrailDiff
       targets = edge_groups(parent, reflection.through_reflection, branch).flat_map do |group|
         joins = @prepared.join_versions(parent, group, reflection)
         @registry.add(joins, branch: branch, join: true)
-        edge_groups(group, reflection.source_reflection, branch)
+        led(group, reflection, edge_groups(group, reflection.source_reflection, branch))
       end
       # Under `source_type:`, only targets of that type are members.
       type = reflection.options[:source_type]
       type ? targets.select { |group| type.to_s.eql?(group.fetch(:model).name) } : targets
+    end
+
+    # The targets a through reaches by a `belongs_to` name the join rows that
+    # lead to them, which judge them as join rows of a through over this one
+    # (see PreparedActivityIndex#join_versions).
+    #: (Hash[Symbol, untyped], untyped, Array[Hash[Symbol, untyped]]) -> Array[Hash[Symbol, untyped]]
+    def led(rows, reflection, targets)
+      return targets unless reflection.source_reflection.belongs_to?
+
+      targets.map { |target| target.merge(leads: { group: rows, reflection: reflection }) }
     end
 
     # Every target the owners pointed at in the range, not only those their own
@@ -108,36 +125,21 @@ module PaperTrailDiff
     # version -- has no state to compare.
     #: (untyped, Array[untyped], untyped) -> Array[Hash[Symbol, untyped]]
     def belongs_to_groups(parent_class, parent_ids, reflection)
-      rows = @prepared.target_rows(parent_class, parent_ids, reflection, @range)
-      identity_groups(rows, reflection) { |model_class, id| @prepared.loaded?(model_class, id) }
-    end
-
-    # With no children, nothing below them is read: prepared history registers
-    # only the classes it loaded records of.
-    #: (untyped, Array[untyped], untyped) -> Array[Hash[Symbol, untyped]]
-    def direct_child_groups(parent_class, parent_ids, reflection)
-      item_ids = @prepared.child_ids(parent_class, parent_ids, reflection, @range)
-      item_ids.empty? ? [] : [group(reflection.klass, item_ids)]
-    end
-
-    #: (untyped, Array[untyped], untyped) -> Array[Hash[Symbol, untyped]]
-    def habtm_groups(parent_class, parent_versions, reflection)
-      identity_groups(@prepared.habtm_rows(parent_class, parent_versions, reflection), reflection)
-    end
-
-    # A type a polymorphic row stored that names no class has no versions to
-    # read.
-    #: (Array[untyped], untyped) ?{ (untyped, untyped) -> bool } -> Array[Hash[Symbol, untyped]]
-    def identity_groups(rows, reflection)
+      rows = @prepared.target_rows(parent_class, parent_ids, reflection)
       identities = rows.group_by do |row|
         AssociationTraversal.stored_target(reflection, row.foreign_type)
       end
       identities.filter_map do |model_class, class_rows|
         next unless model_class
 
-        ids = target_ids(class_rows)
-        group(model_class, block_given? ? ids.select { |id| yield(model_class, id) } : ids)
+        ids = target_ids(class_rows).select { |id| @prepared.loaded?(model_class, id) }
+        group(model_class, ids)
       end
+    end
+
+    #: (untyped, Array[untyped], untyped) -> Array[Hash[Symbol, untyped]]
+    def direct_child_groups(parent_class, parent_ids, reflection)
+      [group(reflection.klass, @prepared.child_ids(parent_class, parent_ids, reflection, @range))]
     end
 
     # Each target once, however many rows name it, and none for a row that

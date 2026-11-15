@@ -3,6 +3,8 @@
 
 module PaperTrailDiff
   # Applies selected non-polymorphic belongs-to target updates to a snapshot.
+  # A target created there changes nothing unless an owner already named it,
+  # as one can where no foreign key constraint forbids it (see #created).
   class ActivityBelongsToEventApplier
     #: (route_finder: ActivityEventRouteFinder, record_resolver: ActivityEventRecordResolver, record_normalizer: ActivityEventRecordNormalizer) -> void
     def initialize(route_finder:, record_resolver:, record_normalizer:)
@@ -20,18 +22,18 @@ module PaperTrailDiff
       normalizer,
       version
     )
-      return [false, nil] unless %w[update destroy].include?(version.event.to_s)
+      event = version.event.to_s
+      return [false, nil] unless %w[create update destroy].include?(event)
 
       routes = @route_finder.belongs_to_routes(
         RecordedClass.of_endpoint(root_endpoint), tree, version.item_type.to_s
       )
-      return [false, nil] if routes.empty? || ActivityEventRouteFinder.scoped_route?(routes)
+      return [false, nil] if reread?(routes)
+      return created(previous, routes) if event == 'create'
 
       snapshot = previous
       routes.each do |route|
-        replacement = normalized_route_record(
-          route, version, normalizer, root_endpoint, context_endpoint
-        )
+        replacement = normalized_route_record(route, version, normalizer, context_endpoint)
         snapshot, = replace_route(snapshot, route, version, replacement)
       end
       [true, snapshot]
@@ -43,9 +45,41 @@ module PaperTrailDiff
     # @rbs @record_resolver: ActivityEventRecordResolver
     # @rbs @record_normalizer: ActivityEventRecordNormalizer
 
-    #: (Array[untyped], untyped, SnapshotNormalizer, untyped, untyped) -> RecordSnapshot?
-    def normalized_route_record(route, version, normalizer, root_endpoint, context_endpoint)
-      record = @record_resolver.record_after(version, direct: route.last.fetch(2).empty?)
+    # Whether the branch must be read again rather than patched. A target
+    # class that is an STI subclass holds a record only while its type names
+    # the subclass, so an update that retypes the record moves it in or out,
+    # which only the owner's key, read again, can tell.
+    #: (Array[Array[untyped]]) -> bool
+    def reread?(routes)
+      routes.empty? || ActivityEventRouteFinder.scoped_route?(routes) ||
+        routes.any? { |route| !route.last.fetch(1).klass.descends_from_active_record? }
+    end
+
+    # A created target is new to the snapshot unless an owner named it first.
+    # A snapshot leaves out an owner's key, but an owner that names a record
+    # holds one, and only an owner holding none can name a record that does
+    # not exist yet: the branch is read again only when there is such an
+    # owner.
+    #: (RecordSnapshot, Array[Array[untyped]]) -> [bool, RecordSnapshot?]
+    def created(previous, routes)
+      vacant = routes.any? { |route| vacant?(previous, route, 0) }
+      vacant ? [false, nil] : [true, previous]
+    end
+
+    # Whether a record along the route holds no target where it ends, or the
+    # snapshot does not say.
+    #: (RecordSnapshot, Array[untyped], Integer) -> bool
+    def vacant?(snapshot, route, depth)
+      association = snapshot.associations[route.fetch(depth).fetch(0)]
+      return true unless association
+      return association.records.empty? if depth == route.length - 1
+
+      association.records.any? { |record| vacant?(record, route, depth + 1) }
+    end
+
+    #: (Array[untyped], untyped, SnapshotNormalizer, untyped) -> RecordSnapshot?
+    def normalized_route_record(route, version, normalizer, context_endpoint)
+      record = @record_resolver.record_after(version)
       return unless record
 
       _name, reflection, subtree, path = route.last
@@ -55,7 +89,6 @@ module PaperTrailDiff
         subtree: subtree,
         path: path,
         normalizer: normalizer,
-        root_endpoint: root_endpoint,
         context_endpoint: context_endpoint
       )
     end

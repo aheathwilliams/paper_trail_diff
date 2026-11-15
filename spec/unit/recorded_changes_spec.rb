@@ -3,7 +3,7 @@
 require_relative '../support/recorded_changes_database'
 
 RSpec.describe PaperTrailDiff::RecordedChanges do
-  before { [RecordedVersion, UnrecordedVersion, RecordedNote].each(&:delete_all) }
+  before { [RecordedVersion, UnrecordedVersion, RecordedNote, RecordedPub].each(&:delete_all) }
 
   def recorded(version, **options)
     PaperTrailDiff.recorded_changes(version, **options)
@@ -13,9 +13,11 @@ RSpec.describe PaperTrailDiff::RecordedChanges do
     RecordedVersion.where(item_id: note.id, event: event).order(:id).last
   end
 
+  # The update moves updated_at a second on, so that JSON history, which keeps
+  # milliseconds, records it changed even when both saves share a millisecond.
   def edited_note
     note = RecordedNote.create!(title: 'Draft', rank: 1, stage: :draft)
-    note.update!(title: 'Published', rank: 2, stage: :published)
+    note.update!(title: 'Published', rank: 2, stage: :published, updated_at: note.updated_at + 1)
     note
   end
 
@@ -29,6 +31,15 @@ RSpec.describe PaperTrailDiff::RecordedChanges do
       'stage' => { from: 'draft', to: 'published' },
       'title' => { from: 'Draft', to: 'Published' }
     )
+  end
+
+  it 'reads an STI subclass version with the subclass types' do
+    book = RecordedBook.create!(code: 12)
+    book.update!(state: :printed, code: 13)
+    version = RecordedVersion.where(item_id: book.id, event: 'update').sole
+
+    expect(recorded(version).transform_values(&:to_h))
+      .to eq('code' => { from: 12, to: 13 }, 'state' => { from: 'draft', to: 'printed' })
   end
 
   it 'takes ignored names as strings or symbols, and includes updated_at given an empty list' do
@@ -53,12 +64,22 @@ RSpec.describe PaperTrailDiff::RecordedChanges do
     expect(recorded(version).keys).to eq(%w[colour])
   end
 
+  # Rails records a value assigned in another form than the column keeps,
+  # though the row holds what it held.
+  it 'leaves out a change whose sides read alike' do
+    changes = { 'rank' => ['1', 1], 'title' => %w[Draft Published] }
+    version = RecordedVersion.create!(item_type: 'RecordedNote', item_id: 1, event: 'update',
+                                      object_changes: PaperTrail.serializer.dump(changes))
+
+    expect(recorded(version).keys).to eq(%w[title])
+  end
+
   it 'reports no change to an attribute has_paper_trail ignores, which a step still shows' do
     note = RankIgnoringNote.create!(title: 'Draft', rank: 1)
     note.update!(title: 'Published', rank: 2)
     note.update!(title: 'Final')
     version = RecordedVersion.where(item_id: note.id, event: 'update').order(:id).first
-    step = PaperTrailDiff.timeline(note).find do |candidate|
+    step = SpecTimelines.timeline(note).find do |candidate|
       candidate.source_boundary.version_id == version.id
     end
 
@@ -152,6 +173,14 @@ RSpec.describe PaperTrailDiff::RecordedChanges do
     version.update_column(:object_changes, PaperTrail.serializer.dump(changes))
 
     expect(recorded(version.reload).keys).to eq(%w[rank stage title])
+  end
+
+  it 'rejects a version loaded without its object_changes column' do
+    version = RecordedVersion.select(:id, :item_type, :item_id,
+                                     :event).find(event_version(edited_note, 'update').id)
+
+    expect { recorded(version) }
+      .to raise_error(PaperTrailDiff::InvalidEndpointError, /without its object_changes column/)
   end
 
   it 'rejects anything but a version' do

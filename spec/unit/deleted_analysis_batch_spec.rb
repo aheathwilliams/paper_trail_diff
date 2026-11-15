@@ -14,13 +14,10 @@ RSpec.describe PaperTrailDiff::DeletedAnalysisBatch do
     analyze.tap { |call| call.define_singleton_method(:empty) { PaperTrailDiff::Analysis.empty } }
   end
   let(:history_preparer) do
-    lambda do |records, versions, reach: true, **range|
-      prepared << [records, versions, range]
-      reaches.shift if reach
-    end
+    ->(records, versions, **range) { prepared << [records, versions, range] }
   end
 
-  # How far the history of each read says its transactions reach, in turn.
+  # Where the earliest transaction open at a window's start began, in turn.
   def reaches = (@reaches ||= [])
   before do
     FilterVersion.delete_all
@@ -55,7 +52,7 @@ RSpec.describe PaperTrailDiff::DeletedAnalysisBatch do
     described_class.new(
       model, identities: identities, time_range: within && PaperTrailDiff::TimeRange.new(within),
              analyzer: analyzer, history_preparer: history_preparer, version_scope: version_scope,
-             context_required: context
+             context_required: context, reach: ->(_model, _start) { reaches.shift }
     ).call
   end
 
@@ -96,8 +93,7 @@ RSpec.describe PaperTrailDiff::DeletedAnalysisBatch do
     expect(statements.length).to eq(2)
   end
 
-  it 'plans a window again from where its open transactions began, and passes the window ' \
-     'as asked' do
+  it 'plans a window from where its open transactions began, and passes the window as asked' do
     article, _created, updated, = deleted
     reaches << at(1)
 
@@ -216,8 +212,9 @@ RSpec.describe PaperTrailDiff::DeletedAnalysisBatch do
   # A transaction open at the window's start saved its destroy, and may have
   # gone on to save its tree inside the window, which then reports both. The
   # root has no version in the window to find the transaction by, so the
-  # history is asked how far the transactions open there reach. Activity on
-  # associations replays the destroy, however little of it the scope keeps.
+  # window is planned from where the transactions open there began. Activity
+  # on associations replays the destroy, however little of it the scope
+  # keeps.
   it 'replays a root destroyed just before the start by a transaction open there' do
     article, _created, _updated, destroyed = deleted
     reaches << at(2)
@@ -225,20 +222,20 @@ RSpec.describe PaperTrailDiff::DeletedAnalysisBatch do
     analyze([key(article)], within: at(2.25)..at(3), version_scope: :none.to_proc, context: true)
 
     plan = analyzed.sole[1]
-    expect(prepared.first).to match([[an_object_having_attributes(id: article.id)], [],
-                                     { start_at: at(2.25), end_at: at(3) }])
+    expect(prepared.sole).to match([[an_object_having_attributes(id: article.id)], [destroyed],
+                                    { start_at: at(2), end_at: at(3) }])
     expect(plan.reconstruction_versions).to eq([destroyed])
     expect(plan.mutations).to eq([])
   end
 
-  it 'does not ask how far transactions reach for a root destroyed before the start ' \
-     'unless activity on associations is asked for, or when none is open' do
+  it 'reads nothing for a root destroyed before the start without activity on associations, ' \
+     'or when no transaction is open there' do
     article, = deleted
+    reaches << at(2)
 
     analyze([key(article)], within: at(2.25)..at(3))
-    expect(prepared).to eq([])
     analyze([key(article)], within: at(2.25)..at(3), context: true)
-    expect(analyzed).to eq([])
+    expect([prepared, analyzed]).to eq([[], []])
   end
 
   it 'passes the version scope on to version selection' do

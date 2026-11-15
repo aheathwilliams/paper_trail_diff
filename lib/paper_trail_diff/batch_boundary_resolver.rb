@@ -6,8 +6,6 @@ module PaperTrailDiff
   # of a model class. Left to the caller this is a per-root lookup, which
   # reintroduces exactly the queries a batched comparison exists to remove.
   class BatchBoundaryResolver
-    BOUNDARIES = %i[first].freeze
-
     class << self
       #: (untyped) -> bool
       def symbolic?(endpoint)
@@ -45,12 +43,8 @@ module PaperTrailDiff
     #: (untyped, untyped, Hash[Array[String], untyped]) -> untyped
     def resolve(endpoint, other, firsts)
       return endpoint unless symbolic?(endpoint)
-      raise ConfigurationError, TimelineRange::LAST_REMOVED if endpoint == :last
 
-      unless BOUNDARIES.include?(endpoint)
-        raise ConfigurationError,
-              "unsupported boundary: #{endpoint.inspect}; use :first, a version, or a record"
-      end
+      TimelineRange.check_symbol!(endpoint)
 
       identity = anchor_identity(other)
       unless identity

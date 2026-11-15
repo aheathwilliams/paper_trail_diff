@@ -32,7 +32,7 @@ RSpec.describe 'Change row sources',
   end
 
   def rows(article, **options)
-    PaperTrailDiff.activity_timeline(
+    SpecTimelines.activity_timeline(
       article, from: article.versions.reorder(:created_at, :id).first,
                associations: [:comments], **options
     ).flat_map(&:change_rows)
@@ -77,8 +77,8 @@ RSpec.describe 'Change row sources',
       end
 
       [{}, { group: :transaction }].each do |options|
-        expect(sorted(rows(article, **options))).to eq(unread)
-        expect(sorted(rows(article, recorded_changes: true, **options))).to eq(recorded)
+        expect(sorted(rows(article, recorded_changes: false, **options))).to eq(unread)
+        expect(sorted(rows(article, **options))).to eq(recorded)
       end
     end
 
@@ -90,7 +90,7 @@ RSpec.describe 'Change row sources',
         created = article.comments.create!(body: 'new')
         history.fetch(:second).destroy!
       end
-      steps = PaperTrailDiff.activity_timeline(
+      steps = SpecTimelines.activity_timeline(
         article, from: article.versions.reorder(:id).last, associations: [:comments],
                  group: :transaction
       )
@@ -106,6 +106,25 @@ RSpec.describe 'Change row sources',
     end
   end
 
+  describe 'records moved in one transaction' do
+    it 'credits each to its own update, whether grouped or not' do
+      from = TrackedArticle.create!(title: 'From')
+      to = TrackedArticle.create!(title: 'To')
+      moved = %w[one two].map { |body| from.comments.create!(body: body) }
+      TrackedArticle.transaction { moved.each { |comment| comment.update!(article: to) } }
+
+      [nil, :transaction].product([from, to]).each do |group, article|
+        rows = SpecTimelines.activity_timeline(article.reload, associations: [:comments],
+                                                               group: group)
+                            .flat_map(&:change_rows).select { |row| row.attribute.nil? }
+        moves = rows.select { |row| row.source.event == 'update' }
+
+        expect(moves.map { |row| [row.record.id, row.source.version_id] })
+          .to eq(moved.map { |comment| [comment.id, version_of(comment)] })
+      end
+    end
+  end
+
   describe 'a change saved without a version' do
     it 'splits it from the change before it, and credits it to no version' do
       article = TrackedArticle.create!(title: 'A')
@@ -113,11 +132,11 @@ RSpec.describe 'Change row sources',
       article.update_columns(title: 'Z', author_id: 7)
       update = version_of(article)
 
-      expect(table(edits(rows(article, recorded_changes: true))))
+      expect(table(edits(rows(article))))
         .to eq([[:changed, nil, 'author_id', nil, 7, :unversioned],
                 [:changed, nil, 'title', 'A', 'B', update],
                 [:changed, nil, 'title', 'B', 'Z', :unversioned]])
-      expect(table(edits(rows(article))))
+      expect(table(edits(rows(article, recorded_changes: false))))
         .to eq([[:changed, nil, 'author_id', nil, 7, update],
                 [:changed, nil, 'title', 'A', 'Z', update]])
     end
@@ -146,8 +165,8 @@ RSpec.describe 'Change row sources',
 
       expect(table(edits(rows(article, recorded_changes: true))))
         .to eq([[:changed, nil, 'title', 'A', 'Z', touched]])
-      ignored = PaperTrailDiff.activity_timeline(RankIgnoringNote.find(note.id),
-                                                 recorded_changes: true).flat_map(&:change_rows)
+      ignored = SpecTimelines.activity_timeline(RankIgnoringNote.find(note.id),
+                                                recorded_changes: true).flat_map(&:change_rows)
       expect(table(edits(ignored)).map { |row| row.values_at(2, 3, 4) })
         .to eq([['rank', 1, 2], %w[title n m]])
       expect(ignored).not_to include(be_unversioned)
@@ -163,7 +182,7 @@ RSpec.describe 'Change row sources',
         comment.update!(reviewer_id: 3)
       end
 
-      rows = PaperTrailDiff.activity_timeline(
+      rows = SpecTimelines.activity_timeline(
         article, within: start.., associations: [:comments], recorded_changes: true
       ).flat_map(&:change_rows)
 
@@ -186,7 +205,7 @@ RSpec.describe 'Change row sources',
       article.update_columns(author_id: 9)
       comment.update!(article_id: article.id)
 
-      steps = PaperTrailDiff.activity_timeline(
+      steps = SpecTimelines.activity_timeline(
         article, from: article.versions.reorder(:created_at, :id).first,
                  associations: [:comments], recorded_changes: true
       )

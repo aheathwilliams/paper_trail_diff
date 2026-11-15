@@ -169,12 +169,15 @@ RSpec.describe PaperTrailDiff::BatchedRootVersions do
       expect(plan.versions).to eq([])
     end
 
-    it 'cannot close a whole history with no versions on the live record' do
+    # As a record with no versions read alone: its whole history is empty.
+    it 'selects nothing to close for a whole history with no versions' do
       article, = history
       FilterVersion.delete_all
 
-      expect { select([article], live_endpoints: {}, context_required: true) }
-        .to raise_error(PaperTrailDiff::IncompleteTimeRangeError)
+      plan = select([article], live_endpoints: {}, context_required: true).fetch(key(article))
+
+      expect(plan.versions).to eq([])
+      expect(plan.closing_record).to be_nil
     end
   end
 end

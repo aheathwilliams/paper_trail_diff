@@ -5,8 +5,8 @@ module PaperTrailDiff
   # as Ruby compares the attribute's values, which is what lets ScopeCondition
   # and ScopeRanking decide a scope in Ruby. Each adapter lists the SQL types
   # it compares that way, so a type it does not list, such as PostgreSQL's
-  # character(n) or citext, and an adapter it does not know, fall back to the
-  # caller's slower path rather than being trusted.
+  # character(n) or citext, and an adapter it does not know, leave a scope
+  # that compares them unreadable rather than being trusted.
   module ExactColumnType
     # Kinds by SQL type, without its size, precision or scale. Integers,
     # booleans and dates compare alike everywhere listed. Text compares
@@ -24,8 +24,6 @@ module PaperTrailDiff
     # that loading needs no Active Model. An attribute type of another class,
     # such as one that serializes or encrypts the column, reads no kind.
     RUBY_TYPES: untyped
-
-    ENUM_TYPE: ::String
 
     # Rails wraps a time-zone-aware attribute's type, by default every
     # datetime's, in this delegator; the time it stores is the wrapped type's.

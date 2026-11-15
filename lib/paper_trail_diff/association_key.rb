@@ -5,34 +5,26 @@ module PaperTrailDiff
   # PT-AT records which record a child pointed at by that record's id, and
   # history matches children to owners and targets by id. An association
   # keyed on another column (`primary_key:`) would read other records'
-  # history, so it is refused.
+  # history, and one keyed on several columns has no single id to match, so
+  # both are refused.
   module AssociationKey
     # Why the association, or a part of a through, cannot be read by id.
     #: (untyped) -> String?
     def self.unsupported_reason(reflection)
-      part = keyed_part(reflection)
+      parts = [reflection, *AssociationTraversal.through_parts(reflection)]
+      composite = parts.find { |part| part.foreign_key.is_a?(Array) }
+      if composite
+        return "#{composite.active_record.name}##{composite.name} has a composite foreign " \
+               'key, and association history is recorded by a single id'
+      end
+
+      part = parts.find { |candidate| other_key?(candidate) }
       return unless part
 
       "#{part.active_record.name}##{part.name} matches records by " \
         "#{part.options[:primary_key]} rather than the primary key, and association " \
         'history is recorded by primary key'
     end
-
-    # The association's foreign key column, or nil for a composite key, which
-    # loaded history cannot index. Active Record names a column as a string.
-    #: (untyped) -> String?
-    def self.scalar_foreign_key(reflection)
-      key = reflection.foreign_key
-      key unless key.is_a?(Array)
-    end
-
-    # The reflection, or the first part of a through, keyed on a column other
-    # than its owner's or target's primary key.
-    #: (untyped) -> untyped
-    def self.keyed_part(reflection)
-      [reflection, *AssociationTraversal.through_parts(reflection)].find { |part| other_key?(part) }
-    end
-    private_class_method :keyed_part
 
     # A belongs_to names a key of its target; any other macro, one of its
     # owner. A polymorphic target has no single primary key to compare with.

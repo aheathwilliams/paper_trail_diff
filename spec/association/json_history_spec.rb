@@ -37,7 +37,7 @@ RSpec.shared_examples 'association history without timestamp noise' do
   it 'builds prepared activity through current state without timestamp noise' do
     article = create_history
 
-    steps = PaperTrailDiff.activity_timeline(
+    steps = SpecTimelines.activity_timeline(
       article, from: :first, to: article, associations: [:comments]
     )
 

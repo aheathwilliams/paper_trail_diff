@@ -5,10 +5,12 @@ rebuilds history and what that costs. You do not need it to use the gem.
 
 ## Two ways to rebuild a timeline
 
-`timeline` and `analyze(activity: true)` return the same root-record steps for
-the same range. They build them differently:
+`analyze` returns the same root-record steps for the same range with
+`activity: true` or without, except where a transaction crosses a window's
+edge: without it, each root version is reported where it was saved, and with
+it, activity on associations reports a transaction in the window it ends in. They build them differently:
 
-- `timeline` rebuilds the root record and every chosen association separately
+- Without `activity:`, `analyze` rebuilds the root record and every chosen association separately
   at each root version. Its cost grows with *root versions × size of the chosen
   associations*. It does not depend on how often the associations changed.
 - `analyze(activity: true)` rebuilds the state once, then applies each recorded
@@ -18,7 +20,7 @@ the same range. They build them differently:
 Neither is always faster. Choose by the output you need. If performance matters,
 measure on real history with the [instrumentation events](reference.md#instrumentation).
 As a rough guide, `analyze(activity: true)` suits wide associations with modest
-activity, and `timeline` suits a few root versions with many child events
+activity, and `analyze` without it suits a few root versions with many child events
 between them.
 
 ## Loading history
@@ -82,42 +84,45 @@ began, whatever records it saved. When one was open, the root's versions and
 the history are read once more from there, the whole of it is replayed, and
 the steps of the transactions that end inside the window are reported. A
 window is not read past its end. A transaction that saves inside it and ends
-later is left to the later window, and a timeline reads no version saved
-after its own last one, wherever that version's transaction ended
-(`TransactionEnds#beyond?`): a history holds such versions, as the next one
-of each record after the range, or as part of a batch's history that runs on
-for another root. A range of versions starts before its first version's
-transaction instead (`TransactionCut.range_start`), and so does a whole
-history, read without a window: a version saved before that by another
-transaction took effect before the history began, whenever its transaction
-ended, though a batch's history holds it when another of its roots is older
-(the `floor` of `TransactionEnds`).
+later is left to the later window.
 
-## When the gem falls back to PT-AT
+A range of versions, and a whole history read without a window, is read the
+same way. It starts before its first version's transaction
+(`TransactionCut.range_start`), and its history is read from where a
+transaction open there began (`TransactionCut.crossing_start`): what another
+transaction saved before the start is part of the starting state if that
+transaction ended first, and is reported in its own step if it ended later.
+It ends where its last version's transaction takes effect
+(`TransactionCut.range_end`), so what another transaction committed before
+then is read, and the steps of transactions that end after it are left out.
+`compare` reads each version the same way, so one version reads alike as the
+end of one range, the start of the next, and an endpoint of `compare`. A
+destroyed root's tree is read up to where its destruction takes effect, and
+nothing saved there by a transaction that ended later is the root's. Without
+associations no other record is read, so each of the record's versions takes
+effect where it was saved: row locks keep two transactions from interleaving
+one record's versions.
 
-These association shapes cannot be read from the loaded history. The gem asks
-PT-AT to rebuild them at each point instead, which costs queries per record and
-resolves association membership by timestamp only. PT-AT starts from the
-association's current members and swaps in their older versions, without
-checking a scope against them, so its membership is approximate:
+## What history cannot read
+
+Every association is read from the loaded history, or not at all. These
+shapes are refused, since who was in one at a past point cannot be told from
+stored versions:
 
 - associations with a scope the gem cannot read as plain conditions and an
   exact ranking, including owner-dependent scopes and a `limit` without a
   total integer order;
-- targets with such a default scope, including a polymorphic `belongs_to`
-  target, whose class and scope are known only from each record;
+- targets with such a default scope. A polymorphic `belongs_to` names its
+  target's class only in each record, so one that points at such a class is
+  refused when that record is read;
 - composite foreign keys.
 
-Every method that reads history rejects the scoped cases unless you pass
-`allow_approximate: true`; see [costly associations](reference.md#costly-associations).
+See [association scopes](reference.md#association-scopes).
 
-HABTM membership comes from the snapshots PT-AT records with each transaction,
-so it is only known at root versions saved in a transaction. Those snapshots
-name the transaction and the association but not the owner, so they give only
-the root's own membership, and a HABTM below the root is rejected before any
-history is read. Even at the root, a transaction in which another record with a
-HABTM of the same name saved a version holds both records' members;
-`HabtmTransactionOwners` finds those transactions, and reading one raises.
+A `has_and_belongs_to_many` is refused before any history is read: its join
+rows have no versions. The reference shows how to
+[replace one](reference.md#replacing-a-has_and_belongs_to_many) with a
+`has_many :through` a versioned join model.
 
 ## Database indexes
 

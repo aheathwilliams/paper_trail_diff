@@ -78,7 +78,7 @@ module SnapshotCases
       record('Article', 1,
              'author' => one(@author && record('Author', @author)),
              'comments' => many(:has_many, @attached.map { |id| comment(id) }),
-             'tags' => many(:has_and_belongs_to_many, @tags.map { |id| record('Tag', id) }))
+             'tags' => many(:has_many, @tags.map { |id| record('Tag', id) }))
     end
 
     def comment(id)

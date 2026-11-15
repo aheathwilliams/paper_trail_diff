@@ -31,14 +31,11 @@ RSpec.describe 'Ids per statement in a batch' do
     longest
   end
 
-  # Each article is tagged and then edited, so that activity on its tags,
-  # which needs a version to end at, can read up to the edits. Returns the
-  # articles and when the tagging ended.
+  # Returns the articles that are left and when their first changes ended.
   def history
     authors = Array.new(3) { |index| TrackedAuthor.create!(name: "Author #{index}") }
     articles = Array.new(7) do |index|
       article = TrackedArticle.create!(title: "Article #{index}", author: authors[index % 3])
-      TrackedArticle.find(article.id).tags << TrackedTag.create!(name: "Tag #{index}")
       article.comments.create!(body: 'First').replies.create!(body: 'Reply')
       article
     end
@@ -69,15 +66,15 @@ RSpec.describe 'Ids per statement in a batch' do
     PaperTrailDiff.compare_many(pairs, associations: paths).transform_values(&:to_h)
   end
 
-  def tags(articles, within)
-    view(PaperTrailDiff.analyze_many(articles, within: within, associations: [:tags],
+  def windowed(articles, within)
+    view(PaperTrailDiff.analyze_many(articles, within: within, associations: paths,
                                                activity: true))
   end
 
   it 'lists ids two to a statement and reports the same' do
     since = Time.now.utc
     articles, tagged = history
-    read = -> { [report(since), firsts(articles), tags(articles, since..tagged)] }
+    read = -> { [report(since), firsts(articles), windowed(articles, since..tagged)] }
     expected = read.call
     stub_const('PaperTrailDiff::Support::IDS_PER_STATEMENT', 2)
     actual = nil

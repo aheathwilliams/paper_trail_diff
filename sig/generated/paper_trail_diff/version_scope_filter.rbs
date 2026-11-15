@@ -6,18 +6,35 @@ module PaperTrailDiff
   # caller, because the one that reveals the last selected mutation is drawn
   # from them.
   class VersionScopeFilter
-    # A filter is a callable that narrows the version relation.
-    # : (untyped) -> untyped
-    def self.validated: (untyped) -> untyped
-
-    # The filter, with what it returns checked wherever it is called. A
-    # relation on another table would be read for its ids all the same, and
-    # choose the versions that happen to share them.
+    # The filter, checked once where it is given: a callable that takes the
+    # version relation, and that wherever it is called returns it narrowed,
+    # or an array of its versions. A relation on another table would be read
+    # for its ids all the same, and choose the versions that happen to share
+    # them.
     # : (untyped) -> untyped
     def self.checked: (untyped) -> untyped
 
+    # A proc that is not a lambda takes any number of arguments.
+    # : (untyped) -> bool
+    def self.takes_relation?: (untyped) -> bool
+
     # : (untyped, untyped) -> untyped
     def self.narrowed: (untyped, untyped) -> untyped
+
+    # The versions of `relation` that activity on associations reports under
+    # the filter (see ActivityScopeFilter): those it keeps, and those of a
+    # transaction it keeps a version of, of any record in their table. A
+    # table without transactions keeps each version alone.
+    # : (untyped, untyped) -> untyped
+    def self.whole_transactions: (untyped, untyped) -> untyped
+
+    # A column of what the filter returned, read in the database where it
+    # returned a relation.
+    # : (untyped, Symbol) -> untyped
+    def self.values: (untyped, Symbol) -> untyped
+
+    # : (untyped) -> bool
+    def self.versions?: (untyped) -> bool
 
     # : (untyped) -> void
     def initialize: (untyped) -> void

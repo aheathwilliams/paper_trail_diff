@@ -5,8 +5,87 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Breaking changes
+
+- `report` with `associations:` now defaults to `group: :transaction`, so each
+  save of a record and its associated records is one activity step, with every
+  version of that save in `step.sources`. Pass `group: nil` for the previous
+  step per version. A `report` without `associations:`, and `analyze`,
+  `analyze_many`, and `analyze_scope`, are unchanged.
+
+- `PaperTrailDiff.timeline` and `PaperTrailDiff.activity_timeline` are
+  removed. Each returned what `analyze` already returns alongside its diff,
+  from the same read:
+
+  ```ruby
+  PaperTrailDiff.timeline(article, **options)
+  # becomes
+  PaperTrailDiff.analyze(article, **options).timeline
+
+  PaperTrailDiff.activity_timeline(article, **options)
+  # becomes
+  PaperTrailDiff.analyze(article, activity: true, **options).activity_timeline
+  ```
+
+  The options are the same. The `activity_timeline.paper_trail_diff`
+  notification is replaced by `analyze.paper_trail_diff`, which every
+  `analyze` emits, with the same payload; its `step_count` counts the
+  activity timeline with `activity: true` and the root timeline without.
+- `has_and_belongs_to_many` associations are no longer read. Naming one in
+  `associations:`, at the root or below it, raises
+  `UnsupportedAssociationError`, `association_paths` leaves it out, and
+  `supported_association_macros` no longer lists it. A join table has no
+  versions, so its history could only be read at the root's own
+  transaction-backed versions, never up to the current record, and not at
+  all with a scope or below the root. Replace it with a `has_many :through`
+  a join model that has `has_paper_trail`, as
+  [the reference shows](docs/reference.md#replacing-a-has_and_belongs_to_many):
+  add an `id` to the join table, and put `dependent: :destroy` on the
+  through association so that a member leaving saves a version. With it go
+  `UnsupportedLiveActivityError`, which only a `has_and_belongs_to_many`
+  raised, and the `habtm_transaction_shared`, `transaction_id_missing`, and
+  `transaction_id_column_missing` codes of `diagnose`.
+- `allow_approximate:` is removed from every method, and no association is
+  read with PT-AT's reifier any more. An association whose scope history
+  cannot read, such as one that takes the owner or is written as SQL text,
+  raises `UnsupportedAssociationError` in every method that reads history:
+  PT-AT rebuilt it from its current members without checking the scope, so
+  a record that entered the scope since was reported as a member it was
+  not. Remove the path, or rewrite its scope as plain conditions on the
+  target's own columns. `diagnose` reports it as `unreadable_association`,
+  formerly `approximate_association`.
+- `historical_filter:` and `max_filter_versions:` are removed from
+  `analyze_scope` and `report`, and `FilterLimitExceededError` with them.
+  Select records with the relation, which tests current values, and narrow
+  the changes reported with `version_scope:`.
+- An association with a composite foreign key, or a `has_many :through`
+  that goes through one, raises `UnsupportedAssociationError`. It was read
+  with PT-AT's reifier, one record at a time and by timestamp alone.
+- A polymorphic `belongs_to` whose record points at a class with a default
+  scope history cannot read raises `UnsupportedAssociationError` when that
+  record is read, instead of being read with PT-AT's reifier.
+- The `ambiguous_association_boundary.paper_trail_diff` notification and
+  the `tied_version_timestamps` warning of `diagnose` are removed. Both
+  reported versions sharing a timestamp on a path PT-AT's reifier read;
+  every path is now read from loaded history, which orders such versions
+  by id.
+
+### Added
+
+- `ScopedAnalysis#total`, returned by `analyze_scope` and `report`, counts
+  the existing records the relation selects before its own `limit` and
+  `offset`, so a page of changed records can show how many pages there
+  are. A paged relation takes one more statement for it.
+
 ### Changed
 
+- Activity reads what each version recorded unless `recorded_changes: false`
+  is passed; `recorded_changes: true` was needed before. Change rows
+  therefore credit each field's change to the version that recorded it, and
+  a write saved without a version, such as `update_columns`, gets a row of
+  its own with `unversioned?` true, instead of being credited to the
+  record's last version. `to_h(metadata: true)` on an activity step
+  includes each boundary's recorded changes.
 - A transaction now takes effect where it saved its last version, in every
   activity timeline. A window from `within:` or `since:` reports the
   transactions that end inside it, each whole and under its own versions,
@@ -63,6 +142,28 @@ project follows [Semantic Versioning](https://semver.org/).
   longer sorts the collection again. A history of 3,200 comments edited
   3,200 times took 1.8 s instead of 11 s.
 
+- Reads with associations do less work, with the same results:
+  - A belongs_to target created inside an activity range no longer reads
+    its owners' branch again from history unless an owner holds no target.
+    An article with 1,000 comments, each given a newly created reviewer,
+    took 0.97 s instead of 28.5 s for `comments.reviewer`.
+  - Activity finds each owner's belongs_to targets in the states its history
+    already loaded, and no longer runs two more statements per belongs_to
+    path to read PT-AT's rows and the live rows.
+  - A window finds where the transactions open at its start began once,
+    before reading, instead of reading the window and then reading it again
+    from there; `analyze_scope` and `report` share that one statement
+    across record selection and every record of the model. A report with
+    an unrelated open transaction ran 19 statements instead of 27.
+  - `include_deleted:` with a relation that has no conditions, on a model
+    that is not a subclass, asks the version table which destroys stored a
+    state instead of decoding each one. 2,000 deleted articles took 37 ms
+    instead of 753 ms.
+  - A state read from JSON history converts only the attributes whose type
+    needs it, listed once per model, and a value already frozen throughout
+    is no longer walked again to keep it immutable. A report over records
+    with 100-key JSON values took 2.0 s instead of 2.4 s.
+
 - Association scopes, and ranges and orders in them, are read in Ruby only on
   the SQL column types the gem lists for each of SQLite, PostgreSQL, MySQL, and
   SQL Server, instead of on any column Active Record casts as an integer,
@@ -83,7 +184,157 @@ project follows [Semantic Versioning](https://semver.org/).
   target to request the path. Versions saved before then recorded no owner,
   so a record that left before then is still not reported.
 
+- A version now reads alike wherever it is used: as an endpoint of
+  `compare`, and as the start or the end of a range. Each reads the records
+  around it as they stood before every transaction that had not ended where
+  the version's own took effect, as windows already did. A range starts
+  before its first version's transaction took effect and ends where its last
+  version's took effect: what another transaction saved before the start is
+  in the starting state if that transaction ended first, and reported in its
+  own step if it ended later. `compare` used to read a version by when the
+  records around it were saved, and `from:` used to count everything saved
+  before it as settled. So two ranges that meet at a version now report each
+  change once, as the range over both does, and a range from a version
+  inside a transaction no longer reports another transaction's finished
+  change as its own. A read with associations of a range of versions runs one
+  more statement per version table, to find a transaction open at its start,
+  and one more to find where its last version's transaction ended.
+- A destroyed record's history ends where its destruction took effect. A
+  window holding the destruction reports it even when another transaction
+  that saved in the tree before it ends later, and a change another
+  transaction committed in the tree before the destroying one ended is
+  reported in the window it ended in.
+- Activity on the record alone, without associations, reports each version
+  where it was saved, as `timeline` does and as the reference said. A window
+  edge between two saves of one transaction no longer loses the first.
+- With associations, `version_scope:` selects a record in `analyze_scope`
+  and `report` whenever its activity reports something: a version selects it
+  when the filter keeps any version of its transaction, as activity keeps
+  whole transactions.
+- Values are compared in the form the database stores them, as the history
+  stores them: times to the column's precision (to 1/300 s on a SQL Server
+  `datetime`), MySQL `float` to single precision, SQLite decimals as the
+  numbers SQLite returns, and fixed-width `char` columns padded or stripped as
+  the database does. A record saved with a value the database rounds no
+  longer shows a change against its own version. `historical_filter:`
+  compares its expected values in the same form.
+- A time of day reads in `ActiveRecord.default_timezone`, as Active Record
+  stores it, including one stored as JSON text with a date and an offset.
+- Errors are raised up front with the gem's own classes: `analyze_scope` and
+  `report` on a model without PaperTrail raise `InvalidEndpointError`, and a
+  version class without an `object` column `ConfigurationError`;
+  `compare_many` with an unknown boundary symbol raises
+  `InvalidTimelineRangeError`; `version_scope:` is checked where it is given,
+  and must take the relation as its one argument and return it narrowed, or
+  an array of its versions; `report(since:)` must be a time, date or string;
+  boolean options must be `true` or `false`; a root with unsaved changes is
+  refused; a version loaded without `object` is refused; and a relation that
+  selects columns without the primary key raises `ConfigurationError`.
+- `historical_filter:` refuses an attribute named twice, as a string and a
+  symbol.
+- `diagnose` raises `ReversedEndpointsError` for two versions given newest
+  first, as `compare` does, instead of reporting `ok?`.
+- `within:` and `since:` refuse a string that names no real day, such as
+  `"12"` or `"2026-02-30"`, which `Time.zone.parse` read as noon today and
+  as 2 March.
+- `max_filter_versions:` is checked whether or not `historical_filter:` is
+  given, and `recorded_changes` refuses a version loaded without its
+  `object_changes` column instead of answering that it recorded nothing.
+- `unreachable` and `deleted` list integer ids by value, so 2 comes before 10.
+- A has_many or has_one read with associations runs one more statement per
+  read, for the first versions of children made without a version (see
+  Fixed).
+- History reads every association member from its recorded state, including
+  members of a model whose records need their own initialization (an
+  `after_initialize` callback, the attribute API, encryption, or a default
+  scope that assigns), which it instantiates once per state to read as a
+  record would hold it. Such a member's foreign keys and type columns are
+  read from its stored attributes, as Active Record loads its associations,
+  rather than through a reader method the model overrides.
+
 ### Fixed
+
+- On SQL Server, `analyze_scope` and `report` with `associations:` select
+  their records from a temporary table that each candidate subquery fills
+  in turn, rather than from one statement joining the subqueries with `OR`,
+  which SQL Server planned to run the associations' subqueries once per
+  record. Selecting the orders changed in a week, among 1,600 with line
+  items, took 35 s, past the adapter's default 5 s timeout, and now takes
+  0.4 s. A read that prevents writes still uses the single statement.
+- A `belongs_to` whose class is an STI subclass no longer keeps a target
+  that an update retyped out of the subclass, or misses one retyped into
+  it. The change was reported at the next event, under that event's author.
+- A polymorphic `belongs_to` with an id and no type reads as no target, as
+  Active Record reads it. History holding such a state raised
+  `UnsupportedAssociationError`.
+- A date assigned to a datetime column, which Active Record leaves on the
+  instance when time zone aware attributes are off or `update_columns`
+  writes it, and PaperTrail stores from there, is read as midnight in
+  Active Record's default time zone, as the database keeps it. It was read
+  in `Time.zone`, or kept as a Date, so a version and the unchanged row
+  differed.
+- The digits JSON history keeps for a time are read from what its writer
+  writes, a custom serializer that wraps PaperTrail's JSON one included.
+  They were assumed from Active Support's setting, so such a serializer, or
+  the legacy JSON format that writes whole seconds, read every unchanged
+  time as changed.
+- An attribute a model declares without a column, such as a form field, is
+  left out of every diff, change row and snapshot, as no row holds it.
+  PaperTrail stores whatever the instance held for it. `historical_filter:`
+  refuses it as an unknown attribute, as `where` cannot name it.
+- `historical_filter:` reads text or a date given for a datetime attribute
+  as `where` does, in the database's time zone. In any zone but UTC the two
+  selected different records. A value its attribute cannot take, such as a
+  Hash for a time, raises `ConfigurationError` instead of Active Record's
+  own error.
+- `nested_changes` tells 1 from 1.0 inside arrays, as under a hash key and
+  as the attribute diff does.
+- In `analyze_many` and `report`, a root that sits in another root's tree
+  is read there from the versions loaded for it. Its window's versions were
+  used instead, so the other root could report a record that joined it
+  only after the window, with the values it got then.
+- `analyze_many` with associations and `activity: true` gives a root with
+  no versions an empty analysis over its whole history, as `analyze` does.
+  It raised `IncompleteTimeRangeError`.
+- A `has_one :through` with no order reads, in history, the target Active
+  Record reads: that of its first join row by key on SQLite, PostgreSQL and
+  MySQL, and the target with the lowest id on SQL Server. It read the
+  lowest id everywhere. With two join rows, a diff from a past version to
+  the unchanged record reported it replaced.
+- Activity on a path below an association to an STI subclass no longer
+  raises `UnknownAssociationError` when a child is retyped to its base class
+  and back.
+- `report` and `analyze_scope` select a root whose change sits below a row
+  saved without versions, such as one from before PaperTrail, as `analyze`
+  reports it. Such a row holds its live key throughout.
+- With `version_scope:`, an analysis ends after the last change the filter
+  keeps. A kept version of a record that had left the tree moved its end to
+  the next event, so its `diff` and `to_snapshot` held a change the filter
+  drops.
+- A record moved by its own update is credited, in `change_rows`, to that
+  version. Two records moved in one transaction were both credited to the
+  last version the step read.
+- `compare` from a version saved outside a transaction, as
+  `save_with_version` saves one, reads a transaction still open there as
+  open, as the range from that version does. Such a comparison runs one more
+  statement, to find where the history's transactions end.
+- `report` and `analyze_scope` with associations no longer select a record
+  that changed only before the window while an unrelated transaction was
+  open across its start. Before the start, only the versions of the
+  transactions open there select a record. Such records came back with
+  nothing to report, counted toward `limit:`, and a destroyed one was listed
+  in `unreachable`.
+- A transaction takes effect at its latest dated version, ids breaking a
+  tie, and is open across a window's start when it has versions dated on
+  both sides. A callback or nested save declared before `has_paper_trail`
+  saves other records' versions first and its own last, dated as its save
+  began. The transaction was placed at its last version by id, so another
+  transaction's edit of the same record was reported by no step, and two
+  windows cut between its dates reported its change in neither.
+- Two ranges that meet at the destroy version of a record restored later
+  under its id report its removal once, in the range from the destroy. A
+  window over the record's earlier life credits the transaction that
+  restored it as a window that begins after the destruction does.
 
 - Comparing a JSON array that holds a BigDecimal NaN or infinity no longer
   raises `FloatDomainError`; it compares as a Float NaN or infinity did.
@@ -322,6 +573,27 @@ project follows [Semantic Versioning](https://semver.org/).
   the join row by its destroy alone, where it was on the root, so the change
   appeared in both halves. A join row's versions in one transaction are now
   judged by the whole transaction, wherever a window's edge falls in it.
+- A destroyed record read without `within:` ends at its last version,
+  instead of raising.
+- A NaN stored on both sides no longer reads as a change, in attributes,
+  nested JSON, arrays and recorded changes.
+- `recorded_changes: true` keeps a serialized hash's symbol keys, reads
+  versions of a custom class without `object_changes`, and leaves out a
+  change whose two sides are the same.
+- `analyze_many` and `analyze_scope` read a root that stands in another
+  root's tree as `analyze` does when the roots are of two STI classes of one
+  table, and a windowed batch reads such a root at its state in the window,
+  not from its current row.
+- A `belongs_to` naming an STI subclass reads no row of a sibling class, and
+  an `as:` child is a member only while its type is its owner's polymorphic
+  name, as Active Record reads them.
+- A `has_many :through` with `source_type:` and a path below it descends only
+  into targets of that type, instead of raising for another type's.
+- A `has_many :through` join row created and destroyed in one transaction is
+  no longer read as present, in another transaction's step or at the end of
+  a window.
+- The end boundary of a window's last step no longer depends on which other
+  roots are in a batch.
 
 ## [0.17.1] - 2026-11-07
 
@@ -337,6 +609,46 @@ project follows [Semantic Versioning](https://semver.org/).
   window's start, such as a comment moved to another parent and then saved
   again or destroyed. The window before it leaves such a change to this
   one, so a window split there no longer loses it from both halves.
+- A serialized attribute that changed between values Ruby's `==` calls
+  equal, such as a Time to the matching string or `1` to `1.0`, alone or
+  nested, is reported as a change. Values must now be equal both ways, and a
+  Float differs from the Integer it equals.
+- `recorded_changes` types an STI subclass's version with the subclass's
+  attribute types, as a step's states do, so an enum or a retyped column of
+  the subclass reads as its value.
+- A relation passed to `analyze_scope`, `report` or `include_deleted:` is
+  read beside parts that choose no rows, such as `distinct`, `select`,
+  `order`, `unscope`, `rewhere`, `lock`, `annotate`, `preload` or
+  `create_with`, instead of being refused. Joins, `from`, `group`,
+  `having` and `with` are still refused.
+- `include_deleted:` refuses a condition on a column `has_paper_trail skip:`
+  leaves out of history, as `historical_filter:` does, instead of comparing
+  it with the column's default; and, on SQLite, a `Date` bound on a datetime
+  column, which SQLite compares as text, instead of reading it as midnight.
+- `historical_filter:` matches nothing for a value the attribute's type
+  cannot write, such as `''` or `'abc'` for an integer or one out of its
+  range, as `where` does.
+- `historical_filter:`, with a hash or a callable, reads the live row as
+  history keeps it, so an unchanged value matches alike whether a version or
+  the live row closes the window, under JSON history too. A relation with
+  `limit(0)` selects nothing with a filter, as without one.
+- A child made without a version, whose first version moved it to another
+  owner, is under the owner it left until then: PT-AT names only the owner a
+  version saved, so the one before is read from the first version's state.
+- A `has_one :through` over a `has_one` reads every row of its parts, as its
+  one query joins them, rather than only the has_one's first row: a project
+  whose first pin has no user now has the user of the next, as Active Record
+  returns.
+- A through's join row whose transaction changed nothing the tree shows,
+  such as a pin that names no user, or a member's own versions under a
+  through of a through before the member joined, is no longer a step of the
+  root. A member's versions under such a through are steps only where a
+  membership of the root named the member, and a record that is a join row
+  under one association is judged as any member under the others.
+- `compare` between two versions of a record whose STI class changed
+  between them reads both from one history, so a change below the record in
+  between, such as a note moved to a member, is reported. It was read from
+  two histories, each beginning at its own version, and was missed.
 
 ## [0.17.0] - 2026-11-04
 

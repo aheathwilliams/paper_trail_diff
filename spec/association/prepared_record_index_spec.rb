@@ -64,15 +64,18 @@ RSpec.describe PaperTrailDiff::PreparedRecordIndex do
 
     index.load(TrackedAuthor, [author.id])
 
-    expect(index.record_before(TrackedAuthor, author.id, before).name).to eq('Before')
-    expect(index.record_before(TrackedAuthor, author.id, before).name).to eq('Before')
-    expect(index.record_before(TrackedAuthor, author.id, after).name).to eq('After')
+    expect(index.snapshot_state_before(TrackedAuthor, author.id,
+                                       before).attributes['name']).to eq('Before')
+    expect(index.snapshot_state_before(TrackedAuthor, author.id,
+                                       before).attributes['name']).to eq('Before')
+    expect(index.snapshot_state_before(TrackedAuthor, author.id,
+                                       after).attributes['name']).to eq('After')
   end
 
-  # A timeline whose last version belongs to a transaction that saved on,
-  # outside it, reads no version saved after its own last one, though that
-  # version's transaction ended before the timeline's last did.
-  it 'reads a record before a version saved after the last version of the timeline' do
+  # A timeline whose last version belongs to a transaction that saved on
+  # reads a version saved after its own last one whose transaction ended
+  # first: that change was committed before the timeline's last took effect.
+  it 'reads a version saved after the last of the timeline whose transaction ended first' do
     article = TrackedArticle.create!(title: 'Horizon')
     author = TrackedAuthor.create!(name: 'Before')
     last = boundary_for(article)
@@ -86,10 +89,12 @@ RSpec.describe PaperTrailDiff::PreparedRecordIndex do
 
     names = []
     index.reading(ends) do
-      names = [last, later].map { |at| index.record_before(TrackedAuthor, author.id, at).name }
+      names = [last, later].map do |at|
+        index.snapshot_state_before(TrackedAuthor, author.id, at).attributes['name']
+      end
     end
 
-    expect(names).to eq(%w[Before Before])
+    expect(names).to eq(%w[After After])
   end
 
   it 'keeps one trailing version per identity instead of everything after the range' do
@@ -104,9 +109,10 @@ RSpec.describe PaperTrailDiff::PreparedRecordIndex do
 
     # The state at the closing boundary only exists in the pre-change snapshot
     # of the first version recorded after it, so that one must survive.
-    expect(index.record_before(TrackedComment, comment.id, end_boundary).body).to eq('In range')
+    expect(index.snapshot_state_before(TrackedComment, comment.id,
+                                       end_boundary).attributes['body']).to eq('In range')
     # That trailing version plus the live record, not the whole tail.
-    expect(index.records_for(TrackedComment, [comment.id]).length).to eq(2)
+    expect(index.attribute_values_for(TrackedComment, [comment.id], 'body').length).to eq(2)
   end
 
   it 'prefers a boundary transaction sibling recorded before the boundary itself' do
@@ -127,7 +133,8 @@ RSpec.describe PaperTrailDiff::PreparedRecordIndex do
       version.transaction_id == boundary.transaction_id
     end
     expect(sibling.created_at).to be < boundary.created_at
-    expect(index.record_before(TrackedAuthor, author.id, boundary).name).to eq('Before')
+    expect(index.snapshot_state_before(TrackedAuthor, author.id,
+                                       boundary).attributes['name']).to eq('Before')
   end
 
   it 'reuses prepared predecessor, successor, and live attributes for transitions' do
@@ -162,11 +169,11 @@ RSpec.describe PaperTrailDiff::PreparedRecordIndex do
     boundary = Struct.new(:created_at).new(version.created_at)
     allow(version).to receive(:reify).and_raise('unexpected reification')
 
-    prepared = series.record_before(boundary)
+    prepared = series.state_before(boundary)
 
     expect(direct&.attributes).to eq(reified_attributes)
-    expect(prepared).to be_a(PreparedSpecialDocument)
-    expect(prepared.name).to eq('Before')
+    expect(prepared.model_class).to eq(PreparedSpecialDocument)
+    expect(prepared.attributes['name']).to eq('Before')
   end
 
   it 'rebuilds prepared state without reapplying overridden attribute writers' do
@@ -196,7 +203,7 @@ RSpec.describe PaperTrailDiff::PreparedRecordIndex do
     )
     boundary = Struct.new(:created_at).new(version.created_at)
 
-    expect(series.record_before(boundary).name).to eq('Before fallback')
+    expect(series.state_before(boundary).attributes['name']).to eq('Before fallback')
     expect(version).to have_received(:reify)
   end
 
@@ -228,10 +235,11 @@ RSpec.describe PaperTrailDiff::PreparedRecordIndex do
 
     index.load(TrackedAuthor, [author.id])
 
-    expect(index.record_before(TrackedAuthor, author.id, before)).to be_nil
-    expect(index.record_before(TrackedAuthor, author.id, during).name).to eq('Brief')
-    expect(index.record_before(TrackedAuthor, author.id, after)).to be_nil
-    expect(index.records_for(TrackedAuthor, [author.id]).map(&:name)).to eq(['Brief'])
+    expect(index.snapshot_state_before(TrackedAuthor, author.id, before)).to be_nil
+    expect(index.snapshot_state_before(TrackedAuthor, author.id,
+                                       during).attributes['name']).to eq('Brief')
+    expect(index.snapshot_state_before(TrackedAuthor, author.id, after)).to be_nil
+    expect(index.attribute_values_for(TrackedAuthor, [author.id], 'name')).to eq(['Brief'])
   end
 
   it 'loads multiple identities with one version query and one live query' do
@@ -250,7 +258,7 @@ RSpec.describe PaperTrailDiff::PreparedRecordIndex do
     end
 
     expect(queries).to eq(2)
-    expect(index.records_for(TrackedAuthor, authors.map(&:id)).length).to eq(6)
+    expect(index.attribute_values_for(TrackedAuthor, authors.map(&:id), 'name').length).to eq(6)
     expect(index.loaded?(TrackedAuthor, authors.first.id)).to be(true)
     expect(index.loaded?(TrackedAuthor, -1)).to be(false)
 
@@ -281,9 +289,9 @@ RSpec.describe PaperTrailDiff::PreparedRecordIndex do
 
     expect(statements.count { |name| name == 'PaperTrail::Version Load' }).to eq(1)
     expect(statements.count { |name| name == 'TrackedAuthor Load' }).to eq(1)
-    expect(index.record_before(TrackedAuthor, authors.first.id, before).name)
+    expect(index.snapshot_state_before(TrackedAuthor, authors.first.id, before).attributes['name'])
       .to eq('Author 0')
-    expect(index.record_before(TrackedAuthor, authors.last.id, before).name)
+    expect(index.snapshot_state_before(TrackedAuthor, authors.last.id, before).attributes['name'])
       .to eq('Author 2')
   end
 
@@ -301,7 +309,7 @@ RSpec.describe PaperTrailDiff::PreparedRecordIndex do
 
     index.load(TrackedAuthor, [author.id])
 
-    expect(index.record_before(TrackedAuthor, author.id, boundary).name)
+    expect(index.snapshot_state_before(TrackedAuthor, author.id, boundary).attributes['name'])
       .to eq('Before transaction')
   end
 
@@ -314,7 +322,7 @@ RSpec.describe PaperTrailDiff::PreparedRecordIndex do
     index = described_class.new(version)
     composite = class_double(TrackedAuthor, primary_key: %i[tenant_id id])
 
-    expect(series.record_before(boundary).name).to eq('Timestamp fallback')
+    expect(series.state_before(boundary).attributes['name']).to eq('Timestamp fallback')
     mismatched = PaperTrailDiff::PreparedRecordState.new(
       TrackedArticle.create!(title: 'Different transition type')
     )

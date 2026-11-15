@@ -43,15 +43,16 @@ matcher:
     - PaperTrailDiff::StoredTimePrecision*
     - PaperTrailDiff::StoredJsonValues*
     - PaperTrailDiff::TimeOfDay*
+    - PaperTrailDiff::DatabaseTime*
     - PaperTrailDiff::StoredValues*
     - PaperTrailDiff::Endpoint*
     - PaperTrailDiff::EndpointKind*
     - PaperTrailDiff::TimelineRange*
     - PaperTrailDiff::RootVersionPlan*
     - PaperTrailDiff::RootVersionSelection*
-    - PaperTrailDiff::HistoricalFilter*
     - PaperTrailDiff::VersionScopeFilter*
     - PaperTrailDiff::TimeRange*
+    - PaperTrailDiff::SelectionWindow*
     - PaperTrailDiff::TransactionCut*
     - PaperTrailDiff::CrossingTransactions*
     - PaperTrailDiff::VersionBoundary*
@@ -98,15 +99,17 @@ matcher:
     - PaperTrailDiff::ActivityView*
     - PaperTrailDiff::ActivityScopeFilter*
     - PaperTrailDiff::ActivitySnapshotDelta*
-    - PaperTrailDiff::ApproximatePaths*
-    - PaperTrailDiff::FallbackPaths*
+    - PaperTrailDiff::UnreadablePaths*
     - PaperTrailDiff::ScopeCondition*
     - PaperTrailDiff::ScopeRanking*
     - PaperTrailDiff::ExactColumnType*
     - PaperTrailDiff::AssociationTraversal*
     - PaperTrailDiff::AssociationKey*
-    - PaperTrailDiff::HabtmTransactionOwners*
     - PaperTrailDiff::ActivityRange*
     - PaperTrailDiff::VersionAssociationCandidateScope*
     - PaperTrailDiff::PreparedActivityIndex*
+    - PaperTrailDiff::ThroughPath*
+    - PaperTrailDiff::JoinRunJudge*
+    - PaperTrailDiff::ThroughLead*
+    - PaperTrailDiff::ComparisonBatch*
     - PaperTrailDiff::Support*

@@ -44,7 +44,7 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
   end
 
   def tree(*paths)
-    PaperTrailDiff::AssociationTree.build(paths)
+    PaperTrailDiff::AssociationTraversal.new(PaperTrailDiff::AssociationTree.build(paths))
   end
 
   # Pages of at least `min` and at most `max` rows.
@@ -94,9 +94,21 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
       expect { select(Struct.new(:where).new([])) }
         .to raise_error(PaperTrailDiff::ConfigurationError, /scope: must be/)
       expect { select(UnversionedAttachment.where(id: 1)) }
-        .to raise_error(PaperTrailDiff::UnversionedAssociationError,
-                        'scope: UnversionedAttachment is not versioned, so it has no ' \
-                        'history to select from')
+        .to raise_error(PaperTrailDiff::InvalidEndpointError,
+                        'UnversionedAttachment is not versioned, so it has no history: ' \
+                        'add has_paper_trail to it')
+    end
+
+    it 'refuses a relation whose rows name no record, for want of a key or a part of one' do
+      TrackedArticle.create!(title: 'One')
+      refusal = 'scope: selects columns without id, so its rows name no record; select it too'
+
+      expect { select(TrackedArticle.select(:title)) }
+        .to raise_error(PaperTrailDiff::ConfigurationError, refusal)
+      expect(select(TrackedArticle.select(:id, :title)).records.map(&:title)).to eq(['One'])
+      allow_any_instance_of(described_class).to receive(:record_page)
+        .and_return([TrackedArticle.new(id: 1), Struct.new(:id).new([1, nil])])
+      expect { select(TrackedArticle) }.to raise_error(PaperTrailDiff::ConfigurationError, refusal)
     end
 
     it 'requires a positive Integer limit' do
@@ -136,8 +148,8 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
       result = select(model.where(title: 'Nothing matches'), time_range: since(start))
 
       expect(result.records).to eq([])
-      # Ids sort as strings, so "1000000" comes before "999999".
-      expect(result.unreachable).to eq(gone.reverse.map { |record| [model.name, record.id.to_s] })
+      # Ids of digits sort by their value, so "999999" comes before "1000000".
+      expect(result.unreachable).to eq(gone.map { |record| [model.name, record.id.to_s] })
       expect(result.unreachable).to all(be_frozen)
       expect(select(model, time_range: since(start)).records).to eq([live])
     end
@@ -394,130 +406,6 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
     end
   end
 
-  describe 'historical_filter:' do
-    it 'filters plucked candidates by their state in the window' do
-      start = Time.now.utc
-      kept = TrackedArticle.create!(title: 'Draft')
-      kept.update!(title: 'Published')
-      TrackedArticle.create!(title: 'Draft')
-
-      result = select(TrackedArticle, time_range: since(start),
-                                      historical_filter: { 'title' => 'Draft' })
-      empty = select(TrackedArticle, time_range: since(Time.now.utc),
-                                     historical_filter: { 'title' => 'Draft' })
-
-      expect(result.records.map(&:id)).to eq(TrackedArticle.order(:id).ids)
-      expect(select(TrackedArticle, time_range: since(start),
-                                    historical_filter: { 'title' => 'Published' }).records)
-        .to eq([kept])
-      expect([empty.records, empty.unreachable]).to eq([[], []])
-    end
-
-    # Each author's latest article among those that were drafts: the
-    # relation groups the records that match, not the candidates.
-    it 'groups the records that match under a grouped relation' do
-      start = Time.now.utc
-      ann, bea = %w[Ann Bea].map { |name| TrackedAuthor.create!(name: name) }
-      ann_draft, = [['Draft', ann], ['Other', ann], ['Draft', bea], ['Draft', bea]]
-                   .map { |title, author| TrackedArticle.create!(title: title, author: author) }
-      latest = TrackedArticle.select('MAX(tracked_articles.id) AS id').group(:author_id)
-                             .order(:author_id)
-
-      result = select(latest, time_range: since(start), historical_filter: { 'title' => 'Draft' })
-
-      expect(result.records.map(&:id)).to eq([ann_draft.id, TrackedArticle.maximum(:id)])
-    end
-
-    it 'reads states from the window only' do
-      article = TrackedArticle.create!(title: 'Old')
-      article.update!(title: 'Draft')
-      start = Time.now.utc
-      article.update!(title: 'Final')
-
-      expect(select(TrackedArticle, time_range: since(start),
-                                    historical_filter: { 'title' => 'Old' }).records).to eq([])
-    end
-
-    # A busy neighbour's matching records cost nothing and count for nothing.
-    it 'reads the history of the relation\'s records only' do
-      start = Time.now.utc
-      mine, other = %w[Mine Other].map { |name| TrackedAuthor.create!(name: name) }
-      kept = TrackedArticle.create!(title: 'Draft', author: mine)
-      3.times { TrackedArticle.create!(title: 'Draft', author: other) }
-
-      result = select(TrackedArticle.where(author_id: mine.id),
-                      time_range: since(start), limit: 1, max_filter_versions: 2,
-                      historical_filter: { 'title' => 'Draft' })
-
-      expect(result.records).to eq([kept])
-    end
-
-    # A join that repeats a record still selects it once.
-    it 'counts a record the relation repeats once' do
-      start = Time.now.utc
-      article = TrackedArticle.create!(title: 'Draft')
-      2.times { |index| article.comments.create!(body: "Comment #{index}") }
-
-      result = select(TrackedArticle.joins(:comments),
-                      time_range: since(start), limit: 1, historical_filter: { 'title' => 'Draft' })
-
-      expect(result.records).to eq([article])
-    end
-
-    # As without a filter, they are listed but do not count toward the limit.
-    it 'tests deleted records, which no relation can select' do
-      start = Time.now.utc
-      kept = TrackedArticle.create!(title: 'Draft')
-      gone = Array.new(2) { TrackedArticle.create!(title: 'Draft').tap(&:destroy!) }
-      TrackedArticle.create!(title: 'Other').destroy!
-
-      result = select(TrackedArticle.where(id: kept.id), time_range: since(start), limit: 1,
-                                                         historical_filter: { 'title' => 'Draft' })
-
-      expect(result.records).to eq([kept])
-      expect(result.unreachable)
-        .to match_array(gone.map { |article| ['TrackedArticle', article.id.to_s] })
-    end
-
-    # The relation's order and page choose among the records that match.
-    it 'pages the records that match, not the candidates' do
-      start = Time.now.utc
-      first, _other, second, _third = %w[Draft Other Draft Draft].map do |title|
-        TrackedArticle.create!(title: title)
-      end
-
-      result = select(TrackedArticle.order(:id).limit(1).offset(1),
-                      time_range: since(start), historical_filter: { 'title' => 'Draft' })
-
-      expect(result.records).to eq([second])
-      expect(first.id).to be < second.id
-    end
-
-    # Ordering by a name the select list gives needs that list.
-    it 'reads a relation ordered by a column it selects' do
-      start = Time.now.utc
-      article = TrackedArticle.create!(title: 'Draft')
-      relation = TrackedArticle.select('tracked_articles.*, title AS sort_title')
-                               .order('sort_title')
-
-      result = select(relation, time_range: since(start),
-                                historical_filter: { 'title' => 'Draft' })
-
-      expect(result.records).to eq([article])
-    end
-
-    it 'passes its version budget on' do
-      start = Time.now.utc
-      article = TrackedArticle.create!(title: 'Draft')
-      2.times { |index| article.update!(title: "Draft #{index}") }
-
-      expect do
-        select(TrackedArticle, time_range: since(start), historical_filter: { 'title' => 'Draft' },
-                               max_filter_versions: 1)
-      end.to raise_error(PaperTrailDiff::FilterLimitExceededError, /max_filter_versions: 1/)
-    end
-  end
-
   describe 'version_scope:' do
     def by_people = ->(versions) { versions.where.not(whodunnit: nil) }
 
@@ -544,25 +432,35 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
       expect(result.unreachable).to eq([['TrackedArticle', by_alice.id.to_s]])
     end
 
+    # With associations the scope keeps whole transactions, as their activity
+    # reports them; on the root alone it keeps only the root's own versions.
+    it 'selects a root by a transaction the scope keeps, only with associations' do
+      article = TrackedArticle.create!(title: 'Draft')
+      start = Time.now.utc
+      article.update!(title: 'Final')
+      PaperTrail.request(whodunnit: 'alice') { TrackedAuthor.create!(name: 'Alice') }
+      PaperTrail::Version.where('created_at >= ?', start).update_all(transaction_id: 1_000_007)
+      options = { time_range: since(start), version_scope: by_people }
+
+      expect(select(TrackedArticle, **options, activity_traversal: tree(:comments)).records)
+        .to eq([article])
+      expect(select(TrackedArticle, **options).records).to eq([])
+    end
+
     it 'selects a root through its requested associations only by versions the scope keeps' do
       article = TrackedArticle.create!(title: 'Quiet')
       other = TrackedArticle.create!(title: 'Also quiet')
       start = Time.now.utc
       PaperTrail.request(whodunnit: 'alice') { article.comments.create!(body: 'by alice') }
       other.comments.create!(body: 'by the system')
-      options = { time_range: since(start), activity_tree: tree(:comments) }
+      options = { time_range: since(start), activity_traversal: tree(:comments) }
 
       expect(select(TrackedArticle, **options, version_scope: by_people).records).to eq([article])
       expect(select(TrackedArticle, **options).records).to eq([article, other])
     end
-
-    it 'rejects a scope that cannot be called' do
-      expect { select(TrackedArticle, version_scope: :people) }
-        .to raise_error(PaperTrailDiff::ConfigurationError, 'version_scope: must respond to call')
-    end
   end
 
-  describe 'activity_tree:' do
+  describe 'activity_traversal:' do
     it 'adds roots whose requested associations changed, and names those destroyed' do
       quiet = TrackedArticle.create!(title: 'Quiet')
       gone = TrackedArticle.create!(title: 'Gone')
@@ -572,11 +470,11 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
       comments.first(2).each { |comment| comment.update!(body: 'two') }
       TrackedArticle.where(id: gone.id).delete_all
 
-      result = select(TrackedArticle, time_range: since(start), activity_tree: tree(:comments))
+      result = select(TrackedArticle, time_range: since(start), activity_traversal: tree(:comments))
 
       expect(result.records).to eq([quiet])
       expect(result.unreachable).to eq([['TrackedArticle', gone.id.to_s]])
-      expect(select(TrackedArticle, time_range: since(start), activity_tree: tree).records)
+      expect(select(TrackedArticle, time_range: since(start), activity_traversal: tree).records)
         .to eq([])
     end
 
@@ -591,10 +489,26 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
       both.update!(title: 'Both, edited')
       both_note.update!(body: 'two')
 
-      result = select(StringItemPost, time_range: since(start), activity_tree: tree(:notes))
+      result = select(StringItemPost, time_range: since(start), activity_traversal: tree(:notes))
 
       expect(result.records).to eq([quiet, both, edited])
       expect(result.unreachable).to eq([])
+    end
+
+    # An association source that is read names ids, so the roots are plucked.
+    it 'merges plucked association ids with the roots of an integer item_id' do
+      named, gone = %w[Named Gone].map { |title| TrackedArticle.create!(title: title) }
+      start = Time.now.utc
+      edited = TrackedArticle.create!(title: 'Edited')
+      gone.update!(title: 'Gone, edited')
+      TrackedArticle.where(id: gone.id).delete_all
+      allow_any_instance_of(PaperTrailDiff::AssociationActivitySelection)
+        .to receive(:call).and_return([[named.id, edited.id]])
+
+      result = select(TrackedArticle, time_range: since(start), activity_traversal: tree(:comments))
+
+      expect(result.records).to eq([named, edited])
+      expect(result.unreachable).to eq([['TrackedArticle', gone.id.to_s]])
     end
 
     it 'names a root destroyed in the window once, however it was found' do
@@ -604,7 +518,7 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
       comment.update!(body: 'two')
       article.destroy!
 
-      result = select(TrackedArticle, time_range: since(start), activity_tree: tree(:comments))
+      result = select(TrackedArticle, time_range: since(start), activity_traversal: tree(:comments))
 
       expect(result.unreachable).to eq([['TrackedArticle', article.id.to_s]])
     end
@@ -620,7 +534,7 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
         itself = model.create!(id: 7_102, title: 'Itself')
         model.where(id: [quiet.id, itself.id]).delete_all
 
-        result = select(model, time_range: since(start), activity_tree: tree(path))
+        result = select(model, time_range: since(start), activity_traversal: tree(path))
 
         expect(result.unreachable).to eq([quiet, itself].map { |root| [model.name, root.id.to_s] })
       end
@@ -640,7 +554,7 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
       end
 
       sql = queries do
-        expect(select(TrackedArticle, time_range: since(start), activity_tree: tree(:comments))
+        expect(select(TrackedArticle, time_range: since(start), activity_traversal: tree(:comments))
                  .records).to eq([article])
       end
 
@@ -658,7 +572,8 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
       gone_comment.update!(body: 'two')
       ScopeHiddenArticle.where(id: gone.id).delete_all
 
-      result = select(ScopeHiddenArticle, time_range: since(start), activity_tree: tree(:comments))
+      result = select(ScopeHiddenArticle, time_range: since(start),
+                                          activity_traversal: tree(:comments))
 
       expect(result.records).to eq([])
       expect(result.unreachable).to eq([['ScopeHiddenArticle', gone.id.to_s]])
@@ -671,12 +586,17 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
       comment.update!(body: 'two')
 
       sql = queries do
-        expect(select(TrackedArticle, time_range: since(start), activity_tree: tree(:comments))
+        expect(select(TrackedArticle, time_range: since(start), activity_traversal: tree(:comments))
                  .records).to eq([article])
       end
 
-      expect(sql.grep(/FROM "tracked_articles" WHERE .*IN \(SELECT "version_associations"/).length)
-        .to eq(1)
+      # SQL Server fills a table from the subqueries, which a page then reads.
+      kept = if ActiveRecord::Base.connection.adapter_name == 'SQLServer'
+               /\AINSERT INTO #paper_trail_diff_candidates_\h+ .*\(SELECT "version_associations"/
+             else
+               /FROM "tracked_articles" WHERE .*IN \(SELECT "version_associations"/
+             end
+      expect(sql.grep(kept).length).to eq(1)
       plucked = sql.grep(/\ASELECT DISTINCT "version_associations"/)
       expect(plucked.reject { |query| query.include?('NOT (EXISTS (SELECT') }).to eq([])
     end
@@ -688,7 +608,7 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
       comment.update!(body: 'two')
       edited = TrackedArticle.create!(title: 'Edited')
       ids = PaperTrailDiff::AssociationActivitySelection.new(
-        TrackedArticle, tree: tree(:comments), time_range: since(start)
+        TrackedArticle, traversal: tree(:comments), time_range: since(start)
       ).call.flat_map(&:values)
       allow(PaperTrailDiff::AssociationActivitySelection).to receive(:new).and_wrap_original do
         |original, *args, **options|
@@ -697,9 +617,65 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
         end
       end
 
-      result = select(TrackedArticle, time_range: since(start), activity_tree: tree(:comments))
+      result = select(TrackedArticle, time_range: since(start), activity_traversal: tree(:comments))
 
       expect(result.records).to eq([quiet, edited])
+    end
+  end
+
+  # The count a pager shows: every record the relation selects, before its
+  # limit and offset.
+  describe 'total' do
+    it 'is the number of records an unpaged relation selects' do
+      articles = Array.new(2) { |index| TrackedArticle.create!(title: "Article #{index}") }
+
+      expect(select(TrackedArticle).total).to eq(articles.length)
+    end
+
+    it 'counts past the page a paged relation reads' do
+      Array.new(3) { |index| TrackedArticle.create!(title: "Article #{index}") }
+      result = select(TrackedArticle.order(:id).offset(1).limit(1))
+
+      expect([result.records.length, result.total]).to eq([1, 3])
+      expect(select(TrackedArticle.order(:id).offset(1)).total).to eq(3)
+    end
+
+    it 'counts the roots every source selects' do
+      quiet = TrackedArticle.create!(title: 'Quiet')
+      comment = quiet.comments.create!(body: 'one')
+      start = Time.now.utc
+      comment.update!(body: 'two')
+      TrackedArticle.create!(title: 'Edited')
+
+      result = select(TrackedArticle.order(:id).limit(1), time_range: since(start),
+                                                          activity_traversal: tree(:comments))
+      expect([result.records, result.total]).to eq([[quiet], 2])
+    end
+
+    it 'counts in no statement of its own for an unpaged relation' do
+      TrackedArticle.create!(title: 'Article')
+
+      expect(queries { select(TrackedArticle) }.grep(/COUNT/)).to eq([])
+    end
+
+    it 'counts each record a join repeats once' do
+      articles = Array.new(3) { |index| TrackedArticle.create!(title: "Article #{index}") }
+      articles.first(2).each { |article| 2.times { article.comments.create!(body: 'one') } }
+
+      expect(select(TrackedArticle.joins(:comments).order(:id).limit(1)).total).to eq(2)
+    end
+
+    it 'counts a relation grouped by another column by its groups' do
+      %w[a a b].each { |title| TrackedArticle.create!(title: title) }
+      scope = TrackedArticle.select('MAX(id) AS id').group(:title).order(:title)
+
+      expect(select(scope.limit(1)).total).to eq(2)
+    end
+
+    it 'counts the candidates of ids read first' do
+      Array.new(3) { |index| StringItemPost.create!(title: "Post #{index}") }
+
+      expect(select(StringItemPost.limit(1)).total).to eq(3)
     end
   end
 end

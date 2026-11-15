@@ -14,7 +14,14 @@ module PaperTrailDiff
     # : () -> Array[ActivityEvent]
     def call: () -> Array[ActivityEvent]
 
+    # Where the transactions of the collected events take effect, once #call
+    # has ordered them by it.
+    # : () -> TransactionEnds?
+    attr_reader ends: untyped
+
     private
+
+    @ends: TransactionEnds?
 
     @prepared: PreparedActivityIndex
 
@@ -30,6 +37,9 @@ module PaperTrailDiff
 
     # : (Array[ActivityEvent]) -> Array[ActivityEvent]
     def ordered: (Array[ActivityEvent]) -> Array[ActivityEvent]
+
+    # : (Array[untyped]) -> TransactionEnds
+    def transaction_ends: (Array[untyped]) -> TransactionEnds
 
     # Each event is credited to the top-level association it was reached
     # through.
@@ -48,6 +58,12 @@ module PaperTrailDiff
     # : (Hash[Symbol, untyped], untyped, String) -> Array[Hash[Symbol, untyped]]
     def through_groups: (Hash[Symbol, untyped], untyped, String) -> Array[Hash[Symbol, untyped]]
 
+    # The targets a through reaches by a `belongs_to` name the join rows that
+    # lead to them, which judge them as join rows of a through over this one
+    # (see PreparedActivityIndex#join_versions).
+    # : (Hash[Symbol, untyped], untyped, Array[Hash[Symbol, untyped]]) -> Array[Hash[Symbol, untyped]]
+    def led: (Hash[Symbol, untyped], untyped, Array[Hash[Symbol, untyped]]) -> Array[Hash[Symbol, untyped]]
+
     # Every target the owners pointed at in the range, not only those their own
     # changes there recorded: an author renamed under an article nobody edited
     # is still that article's activity. Prepared history holds every target its
@@ -56,18 +72,8 @@ module PaperTrailDiff
     # : (untyped, Array[untyped], untyped) -> Array[Hash[Symbol, untyped]]
     def belongs_to_groups: (untyped, Array[untyped], untyped) -> Array[Hash[Symbol, untyped]]
 
-    # With no children, nothing below them is read: prepared history registers
-    # only the classes it loaded records of.
     # : (untyped, Array[untyped], untyped) -> Array[Hash[Symbol, untyped]]
     def direct_child_groups: (untyped, Array[untyped], untyped) -> Array[Hash[Symbol, untyped]]
-
-    # : (untyped, Array[untyped], untyped) -> Array[Hash[Symbol, untyped]]
-    def habtm_groups: (untyped, Array[untyped], untyped) -> Array[Hash[Symbol, untyped]]
-
-    # A type a polymorphic row stored that names no class has no versions to
-    # read.
-    # : (Array[untyped], untyped) ?{ (untyped, untyped) -> bool } -> Array[Hash[Symbol, untyped]]
-    def identity_groups: (Array[untyped], untyped) ?{ (untyped, untyped) -> bool } -> Array[Hash[Symbol, untyped]]
 
     # Each target once, however many rows name it, and none for a row that
     # names none. The registry keeps a version once, and a missing target has

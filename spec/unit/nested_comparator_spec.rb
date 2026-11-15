@@ -197,20 +197,35 @@ RSpec.describe PaperTrailDiff::NestedComparator do
       expect(described_class.call({ 'k' => %w[a b] }, { 'k' => %w[a b] })).to eq({})
     end
 
-    it 'matches a whole number with its float, alone or inside an element, as == does' do
-      change = array_change([1, { 'n' => 2, 'tags' => [3.0] }, 4, [6]],
-                            [{ n: 2.0, tags: [3] }, [7], 1.0, 5, [6.0]])
+    # As the attribute diff and a hash's values do (Support.same?): a column
+    # that held 1 and now holds 1.0 changed, so a list holding them did too.
+    it 'tells a whole number from its float, alone or inside an element' do
+      change = array_change([1, { 'n' => 2, 'tags' => [3.0] }, 4, [6], BigDecimal('8')],
+                            [{ n: 2.0, tags: [3] }, [7], 1.0, 5, [6.0], 8])
 
-      expect(change.to_h).to include(added: [[7], 5], removed: [4], reordered: false)
+      expect(change.to_h).to include(added: [{ n: 2.0, tags: [3] }, [7], 1.0, 5, [6.0]],
+                                     removed: [1, { 'n' => 2, 'tags' => [3.0] }, 4, [6]])
     end
 
     it 'counts a number with no rational, such as NaN or a complex number, as itself' do
       odd = [Float::INFINITY, Float::NAN, BigDecimal('NaN'), BigDecimal('-Infinity'), Complex(1, 2)]
-      change = array_change(odd + [1], [1.0] + odd.reverse)
+      change = array_change(odd + [1], [1] + odd.reverse)
 
       expect(change.to_h).to include(added: [], removed: [], reordered: true)
       expect(array_change([Float::INFINITY], [nil]).to_h)
         .to include(added: [nil], removed: [Float::INFINITY])
+      expect(array_change([Float::INFINITY], [-Float::INFINITY]).to_h)
+        .to include(added: [-Float::INFINITY], removed: [Float::INFINITY])
+      expect(array_change([Complex(1, 2)], [Complex(1, 3)]).to_h)
+        .to include(added: [Complex(1, 3)], removed: [Complex(1, 2)])
+    end
+
+    # Ruby has NaN unequal to itself, but a database stores every NaN as one.
+    it 'counts every NaN as one value, of whatever class' do
+      change = array_change([Float::NAN, 1, BigDecimal('NaN')], [1, BigDecimal('NaN'), 0.0 / 0.0])
+
+      expect(change.to_h).to include(added: [], removed: [], reordered: true)
+      expect(array_change([Float::NAN], [nil]).to_h).to include(added: [nil])
     end
 
     # Each element is counted once, rather than searched for among the
@@ -236,6 +251,23 @@ RSpec.describe PaperTrailDiff::NestedComparator do
       .to raise_error(PaperTrailDiff::AmbiguousNestedKeyError, /"a"/)
   end
 
+  # A number retyped inside a list is a change wherever it sits, as it is
+  # under a key.
+  it 'reads every NaN as one inside an array, as under a key' do
+    expect(described_class.call({ 'a' => Float::NAN }, { 'a' => BigDecimal('NaN') }).keys).to eq([])
+    expect(described_class.call({ 'a' => [Float::NAN] }, { 'a' => [BigDecimal('NaN')] }).keys)
+      .to eq([])
+  end
+
+  it 'reports 1 to 1.0 inside an array as it does under a key' do
+    expect(described_class.call({ 'a' => 1 }, { 'a' => 1.0 }).keys).to eq([['a']])
+    expect(described_class.call({ 'a' => [1] }, { 'a' => [1.0] }).keys).to eq([['a']])
+    expect(described_class.call({ 'a' => [{ 'b' => 1 }] },
+                                { 'a' => [{ 'b' => 1.0 }] }).keys).to eq([['a']])
+    expect(described_class.call({ 'a' => [1, 2] }, { 'a' => [1.0, 3] }).fetch(['a']).to_h)
+      .to include(added: [1.0, 3], removed: [1, 2])
+  end
+
   it 'reports nothing when the two sides are not both readable structures' do
     expect(described_class.call('not json', { 'a' => 1 })).to eq({})
     expect(described_class.call('{oops', '{nope')).to eq({})
@@ -254,7 +286,7 @@ RSpec.describe PaperTrailDiff::NestedComparator do
                                         reordered: false)
     expect(described_class.call(%w[a], %w[a b]).fetch([]).added).to eq(['b'])
     expect(described_class.call(%w[a b], '["a","b"]')).to eq({})
-    expect(described_class.call([1], [1.0])).to eq({})
+    expect(described_class.call([1], [1.0]).fetch([]).to_h).to include(added: [1.0], removed: [1])
     expect(described_class.call(%w[a], %w[b])).to be_frozen
     expect(change.keys.first).to be_frozen
     list = Class.new(Array)

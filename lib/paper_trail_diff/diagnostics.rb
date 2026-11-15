@@ -65,21 +65,20 @@ module PaperTrailDiff
 
   # Performs read-only checks for known PaperTrail/PT-AT reconstruction hazards.
   #
-  # The endpoints are a comparison's: two versions, or a version and the
-  # current record, in either order. Two current records read no history, so
+  # The endpoints are a comparison's: two versions in time order, or a
+  # version and the current record, in either order. Two current records read no history, so
   # nothing is checked.
   class HistoryDiagnostics
     STOPPING_CODES = %i[
       unknown_association unsupported_association association_tracking_unavailable
     ].freeze
 
-    #: (untyped, untyped, associations: association_option, ?allow_approximate: bool) -> void
-    def initialize(from, to, associations:, allow_approximate: false)
+    #: (untyped, untyped, associations: association_option) -> void
+    def initialize(from, to, associations:)
       @versions = validated_versions(from, to)
       @tree = AssociationTree.build(associations)
       @traversal = AssociationTraversal.new(@tree)
-      @preparer = TraversalPreparer.new(traversal: @traversal, allow_approximate: allow_approximate)
-      @allow_approximate = allow_approximate
+      @preparer = TraversalPreparer.new(traversal: @traversal)
       @issues = [] #: Array[DiagnosticIssue]
     end
 
@@ -87,11 +86,15 @@ module PaperTrailDiff
     def call
       unless @versions.empty?
         model_class = Endpoint.model_class(@versions.fetch(0))
+        # Nothing else can be read from a history without states.
+        stateless = Support.stateless_reason(model_class)
+        return report_stateless(stateless) if stateless
+
         ReadSnapshot.call([model_class]) do
           # Runs whether or not associations are selected: unorderable versions
           # corrupt a scalar timeline just as surely, and a report that inspected
           # nothing has no business answering `ok?`.
-          inspect_version_sequence(model_class)
+          inspect_version_sequence
           inspect_associations(model_class) unless @tree.empty?
         end
       end
@@ -111,19 +114,17 @@ module PaperTrailDiff
 
       selected = @traversal.selected_reflections(model_class)
       inspect_polymorphic_targets(selected)
-      inspect_approximate_paths(model_class) if @allow_approximate
       inspect_checkpoint_timestamp(model_class)
-      inspect_habtm(model_class, selected)
     end
 
     # @rbs @versions: Array[untyped]
     # @rbs @tree: AssociationTree
     # @rbs @traversal: AssociationTraversal
     # @rbs @preparer: TraversalPreparer
-    # @rbs @allow_approximate: bool
     # @rbs @issues: Array[DiagnosticIssue]
 
-    # The endpoints that are versions, in the order given.
+    # The endpoints that are versions, in the order given. Endpoints that
+    # `compare` rejects whatever their history raise as it would.
     #: (untyped, untyped) -> Array[untyped]
     def validated_versions(from, to)
       Endpoint.validate!(from)
@@ -131,6 +132,8 @@ module PaperTrailDiff
       unless Endpoint.identity(from) == Endpoint.identity(to)
         raise VersionMismatchError, 'endpoints must belong to the same PaperTrail item'
       end
+
+      Endpoint.validate_order!(from, to)
 
       [from, to].select { |endpoint| Endpoint.version?(endpoint) }
     end
@@ -144,63 +147,12 @@ module PaperTrailDiff
       end
     end
 
-    # Accepted, but read the way `allow_approximate:` describes.
-    #: (untyped) -> void
-    def inspect_approximate_paths(model_class)
-      ApproximatePaths.call(@traversal, model_class).each do |path, reason|
-        add_warning(:approximate_association,
-                    "association #{path} is read approximately with PT-AT (#{reason}): a " \
-                    'record that entered or left it since is reported wrongly', path)
-      end
-    end
-
-    #: (untyped, Array[Array[untyped]]) -> void
-    def inspect_habtm(model_class, selected)
-      habtm = selected.select { |_, reflection| reflection.macro == :has_and_belongs_to_many }
-      return if habtm.empty?
-
-      inspect_transaction_metadata(habtm.map(&:first))
-      inspect_shared_transactions(model_class, habtm)
-    end
-
-    # PT-AT does not record which owner a HABTM member belongs to, so a
-    # transaction that more than one owner recorded members in cannot be read.
-    #: (untyped, Array[Array[untyped]]) -> void
-    def inspect_shared_transactions(model_class, habtm)
-      versions = @versions.select { |version| VersionBoundary.transaction_id(version) }
-      habtm.each do |path, reflection|
-        owners = HabtmTransactionOwners.new(model_class, reflection)
-        versions.each do |version|
-          next unless owners.ambiguous?(version.transaction_id)
-
-          add_error(:habtm_transaction_shared,
-                    'HABTM endpoint shares its transaction with another owner of the association',
-                    path, version.id)
-        end
-      end
-    end
-
     # With the current record as one endpoint there is one version, and the
     # sequence runs on from it.
-    #: (untyped) -> void
-    def inspect_version_sequence(model_class)
+    #: () -> void
+    def inspect_version_sequence
       first, last = @versions
-      @issues.concat(
-        VersionSequenceDiagnostics.new(first, last,
-                                       fallback_selected: fallback_selected?(model_class)).call
-      )
-    end
-
-    # Only a path PT-AT reads can lose a change between tied versions, and a
-    # traversal that does not resolve reads nothing at all.
-    #: (untyped) -> bool
-    def fallback_selected?(model_class)
-      return false if @tree.empty?
-
-      refusals = @preparer.refusals(model_class, historical: true)
-      return false if refusals.any? { |refusal| STOPPING_CODES.include?(refusal.code) }
-
-      FallbackPaths.any?(@traversal, model_class, approximate: @allow_approximate)
+      @issues.concat(VersionSequenceDiagnostics.new(first, last).call)
     end
 
     #: (untyped) -> void
@@ -211,24 +163,6 @@ module PaperTrailDiff
       add_warning(:synchronized_version_timestamp, message)
     end
 
-    #: (Array[String]) -> void
-    def inspect_transaction_metadata(paths)
-      @versions.each do |version|
-        if !version.respond_to?(:transaction_id)
-          add_error(:transaction_id_column_missing, 'version has no transaction_id column')
-        elsif version.transaction_id.nil?
-          paths.each do |path|
-            add_error(
-              :transaction_id_missing,
-              'HABTM endpoint has no transaction-backed association snapshot',
-              path,
-              version.id
-            )
-          end
-        end
-      end
-    end
-
     #: (untyped) -> bool
     def synchronized_timestamp_disabled?(model_class)
       options = model_class.paper_trail_options
@@ -237,9 +171,15 @@ module PaperTrailDiff
       false
     end
 
-    #: (Symbol, String, ?String?, ?untyped) -> void
-    def add_error(code, message, path = nil, version_id = nil)
-      add_issue(:error, code, message, path, version_id)
+    #: (String) -> DiagnosticReport
+    def report_stateless(reason)
+      add_error(:stateless_versions, reason)
+      DiagnosticReport.new(issues: @issues)
+    end
+
+    #: (Symbol, String, ?String?) -> void
+    def add_error(code, message, path = nil)
+      add_issue(:error, code, message, path, nil)
     end
 
     #: (Symbol, String, ?String?) -> void

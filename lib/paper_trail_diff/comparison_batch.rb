@@ -107,7 +107,7 @@ module PaperTrailDiff
         live_records.key?(Endpoint.identity(version))
       end
       loaded.group_by { |version| RecordedClass.for(version) }.each_value do |versions|
-        records = versions.map { |version| live_records.fetch(Endpoint.identity(version)) }.uniq
+        records = versions.map { |version| live_records.fetch(Endpoint.identity(version)) }
         @history_preparer.call(records, versions)
       end
       prepare_version_roots!(unloaded)
@@ -119,10 +119,18 @@ module PaperTrailDiff
     # that later moved to another owner. Such roots are prepared from identity
     # alone, like deleted ones. Their history still reads the live rows it
     # needs: a record's current row is its state after its last version.
+    #
+    # A root's versions share one history, which spans both: a root whose
+    # STI class changed between them is prepared as the class of the later.
+    # Prepared apart, each history would begin at its own version, and the
+    # earlier would miss what changed below the root before the later.
     #: (Array[untyped]) -> void
     def prepare_version_roots!(versions)
-      versions.group_by { |version| RecordedClass.for(version) }.each do |model, group|
-        ids = group.map(&:item_id).uniq(&:to_s)
+      # A pair's versions are in order (see Endpoint.validate_order!).
+      roots = versions.group_by { |version| Endpoint.identity(version) }.values
+      roots.group_by { |own| RecordedClass.for(own.last) }.each do |model, groups|
+        group = groups.flatten
+        ids = group.map(&:item_id).uniq
         @version_history_preparer.call(ids.map { |id| historical_root(model, id) }, group)
       end
     end
@@ -137,8 +145,7 @@ module PaperTrailDiff
 
     #: (Array[[untyped, untyped]]) -> Array[untyped]
     def historical_versions(pairs)
-      selected = pairs.flatten.select { |endpoint| Endpoint.version?(endpoint) }
-      selected.uniq { |version| Support.row_key(version) }
+      pairs.flatten.select { |endpoint| Endpoint.version?(endpoint) }.uniq
     end
 
     #: () -> Array[[untyped, untyped]]
@@ -162,7 +169,7 @@ module PaperTrailDiff
     def valid_comparison!(comparison, index)
       if comparison.is_a?(Hash)
         keys = comparison.keys.map(&:to_s)
-        return if keys.sort == %w[from to] && keys.length == 2
+        return if keys.sort == %w[from to]
       end
 
       message = "comparisons[#{index}]: must contain exactly from: and to:"

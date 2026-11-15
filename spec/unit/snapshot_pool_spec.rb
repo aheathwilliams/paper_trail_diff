@@ -49,7 +49,7 @@ RSpec.describe PaperTrailDiff::SnapshotPool do
         { 'tags' => tags, 'likes' => association },
         { 'likes' => tags },
         { 'tags' => association(record(5, type: 'Tag')) },
-        { 'tags' => association(*tags.records, kind: :has_and_belongs_to_many) }
+        { 'tags' => association(*tags.records, kind: :has_one) }
       ]
 
       variants.each do |associations|
@@ -72,13 +72,13 @@ RSpec.describe PaperTrailDiff::SnapshotPool do
     it 'replaces the held association when kind or records differ' do
       pool.association('comments', association(record(1)))
       other = association(record(1))
-      habtm = association(*other.records, kind: :has_and_belongs_to_many)
+      single = association(*other.records, kind: :has_one)
 
       expect(pool.association('comments', other)).to equal(other)
-      expect(pool.association('comments', habtm)).to equal(habtm)
-      same_habtm = association(*habtm.records, kind: :has_and_belongs_to_many)
+      expect(pool.association('comments', single)).to equal(single)
+      same_single = association(*single.records, kind: :has_one)
 
-      expect(pool.association('comments', same_habtm)).to equal(habtm)
+      expect(pool.association('comments', same_single)).to equal(single)
     end
   end
 end

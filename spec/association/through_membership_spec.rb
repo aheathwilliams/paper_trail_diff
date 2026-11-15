@@ -184,9 +184,9 @@ RSpec.describe 'A has_many :through whose source is a has_many' do
     other.update!(author: ada)
     elsewhere = other.versions.reorder(:id).first(2).map(&:id)
 
-    steps = PaperTrailDiff.activity_timeline(ada, associations: [:notes])
+    steps = SpecTimelines.activity_timeline(ada, associations: [:notes])
     added = steps.find { |step| notes_change(step.diff)[:added] == ['note'] }
-    grouped = PaperTrailDiff.activity_timeline(ada, associations: [:notes], group: :transaction)
+    grouped = SpecTimelines.activity_timeline(ada, associations: [:notes], group: :transaction)
 
     expect(added.source_boundary.item_type).to eq('MembershipNote')
     [steps, grouped].each do |timeline|
@@ -215,7 +215,7 @@ RSpec.describe 'A has_many :through whose source is a has_many' do
                 PaperTrailDiff.analyze_many([ada], activity: true, **options)
                               .values.first.activity_timeline
               else
-                PaperTrailDiff.activity_timeline(ada, **options)
+                SpecTimelines.activity_timeline(ada, **options)
               end
       steps.reject(&:empty?).map { |step| notes_change(step.diff)[:changed] }
     end

@@ -13,11 +13,16 @@ module PaperTrailDiff
     # the window, with what it saved before the start, and one that crosses
     # the end in a later window. A history read from the window's start holds
     # neither the versions the first saved before it, nor the records only
-    # those versions name, such as one it destroyed there. So a window's
-    # history says where the earliest of them began, its `reach`, and its
-    # reader reads it again from there. Where the second ends is read from
-    # its version table, so nothing past the window's end is.
-    #: (untyped, root_ids: Array[untyped], root_versions: Array[untyped], tree: AssociationTree, traversal: AssociationTraversal, start_at: untyped, end_at: untyped, live_records: Array[untyped], ?window: bool) -> void
+    # those versions name, such as one it destroyed there. So a window is
+    # read from where the earliest of them began, its `reach`, which its
+    # reader asks before reading (see AssociationTraversal#reach_before).
+    # Where the second ends is read from its version table, so nothing past
+    # the window's end is.
+    #
+    # A range of versions reads the same way from its first version's
+    # transaction (see TransactionCut), and from where a transaction open
+    # there began (`crossing`).
+    #: (untyped, root_ids: Array[untyped], root_versions: Array[untyped], tree: AssociationTree, traversal: AssociationTraversal, start_at: untyped, end_at: untyped, live_records: Array[untyped], window: bool) -> void
     def initialize( # rubocop:disable Metrics/ParameterLists
       record,
       root_ids:,
@@ -27,36 +32,34 @@ module PaperTrailDiff
       start_at:,
       end_at:,
       live_records:,
-      window: false
+      window:
     )
-      @window = window
       @record = record
       @root_ids = root_ids
-      @root_versions = root_versions
       @tree = tree
       @traversal = traversal
-      start_at = TransactionCut.range_start(root_versions, start_at) unless window
+      unless window
+        start_at = TransactionCut.range_start(root_versions, start_at)
+        start_at = TransactionCut.crossing_start(record.class, traversal, start_at)
+      end
       @records = PreparedRecordIndex.new(start_at, end_at: end_at, live_records: live_records)
-      @activity = PreparedActivityIndex.new(@records, root_versions, start_at: start_at)
+      @activity = PreparedActivityIndex.new(@records, start_at: start_at)
       @history = PreparedHistory.new(@records, activity_index: @activity)
-      @edges = PreparedEdgeLoader.new(@records, root_versions, children: @activity.children)
+      @edges = PreparedEdgeLoader.new(@records, children: @activity.children)
       @prepared = {} #: Hash[untyped, Set[String]]
     end
 
     #: () -> PreparedHistory
     def call
-      @records.seed(@record.class, @root_ids, @root_versions)
+      @records.load(@record.class, @root_ids)
       load_node(@record.class, @root_ids, @tree, path: '')
-      @history.reach = @records.reach if @window
       @history
     end
 
     private
 
-    # @rbs @window: bool
     # @rbs @record: untyped
     # @rbs @root_ids: Array[untyped]
-    # @rbs @root_versions: Array[untyped]
     # @rbs @tree: AssociationTree
     # @rbs @traversal: AssociationTraversal
     # @rbs @records: PreparedRecordIndex
@@ -87,7 +90,9 @@ module PaperTrailDiff
 
     # Either part can itself be a through, which has no key of its own to
     # read, so each part is prepared as what it is. Like an edge, it returns
-    # every group it holds, not only those of these owners.
+    # every group it holds, not only those of these owners. Under
+    # `source_type:`, only targets of that type are members, so the path
+    # descends into no other.
     #: (untyped, Array[untyped], untyped) -> Hash[String, Hash[Symbol, untyped]]
     def prepare_through(owner_class, owner_ids, reflection)
       through_groups = prepare_reflection(owner_class, owner_ids, reflection.through_reflection)
@@ -95,9 +100,16 @@ module PaperTrailDiff
       through_groups.each_value do |group|
         source = prepare_reflection(group.fetch(:model), group.fetch(:ids),
                                     reflection.source_reflection)
-        targets = merge_groups(targets, source)
+        targets = merge_groups(targets, of_source_type(reflection, source))
       end
       @history.merge_edge(owner_class, reflection, targets)
+    end
+
+    #: (untyped, Hash[String, Hash[Symbol, untyped]]) -> Hash[String, Hash[Symbol, untyped]]
+    def of_source_type(reflection, groups)
+      groups.select do |_name, group|
+        AssociationTraversal.source_type_member?(reflection, group.fetch(:model).name)
+      end
     end
 
     #: (untyped, Array[untyped], untyped) -> Hash[String, Hash[Symbol, untyped]]
@@ -105,11 +117,9 @@ module PaperTrailDiff
       missing = unprepared_ids(owner_ids, reflection)
       return @history.edge(owner_class, reflection) if missing.empty?
 
-      groups, memberships = @edges.call(owner_class, missing, reflection)
+      groups = @edges.call(owner_class, missing, reflection)
       @history.merge_edge(owner_class, reflection, groups)
-      @history.register_habtm(owner_class, reflection, memberships) if memberships
       mark_prepared(missing, reflection)
-      mark_unsupported(owner_class, reflection, groups)
       load_groups(groups)
       @history.edge(owner_class, reflection)
     end
@@ -125,13 +135,6 @@ module PaperTrailDiff
     #: (Array[untyped], untyped) -> void
     def mark_prepared(ids, reflection)
       (@prepared[reflection] ||= Set.new).merge(ids.map(&:to_s))
-    end
-
-    #: (untyped, untyped, Hash[String, Hash[Symbol, untyped]]) -> void
-    def mark_unsupported(owner_class, reflection, groups)
-      unsupported = reflection.foreign_key.is_a?(Array) ||
-                    groups.values.any? { |group| !versioned?(group.fetch(:model)) }
-      @history.mark_unsupported(owner_class, reflection) if unsupported
     end
 
     #: (Hash[String, Hash[Symbol, untyped]]) -> void

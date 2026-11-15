@@ -59,14 +59,13 @@ RSpec.describe 'version_scope: in activity on associations',
   def activity(article, method, **options)
     options = { associations: paths, **options }
     case method
-    when :activity_timeline then PaperTrailDiff.activity_timeline(article, **options)
     when :analyze then PaperTrailDiff.analyze(article, activity: true, **options).activity_timeline
     else PaperTrailDiff.analyze_many([article], activity: true, **options).values.sole
                        .activity_timeline
     end
   end
 
-  %i[activity_timeline analyze analyze_many].each do |method|
+  %i[analyze analyze_many].each do |method|
     it "reports the changes the filter keeps, each as the whole history shows it (#{method})" do
       article = turns
       within = window(article)
@@ -88,8 +87,8 @@ RSpec.describe 'version_scope: in activity on associations',
     by('alice') { article.comments.create!(body: 'from alice') }
     by('bob') { article.update!(title: 'Titled') }
 
-    steps = summary(activity(article, :activity_timeline, from: first, to: article,
-                                                          version_scope: alice))
+    steps = summary(activity(article, :analyze, from: first, to: article,
+                                                version_scope: alice))
 
     expect(steps).to eq([[['alice'], nil, [['from alice'], []], []]])
   end
@@ -111,8 +110,8 @@ RSpec.describe 'version_scope: in activity on associations',
     by('bob') { article.update!(title: 'Retitled') }
     within = window(article)
 
-    grouped = summary(activity(article, :activity_timeline, within: within, group: :transaction,
-                                                            version_scope: alice))
+    grouped = summary(activity(article, :analyze, within: within, group: :transaction,
+                                                  version_scope: alice))
 
     expect(grouped).to eq([[%w[alice bob], { from: 'Draft', to: 'Titled' },
                             [['from alice'], []], []]])
@@ -130,6 +129,27 @@ RSpec.describe 'version_scope: in activity on associations',
     expect(analysis.to_snapshot.attributes.fetch('title')).to eq('Retitled')
     expect(analysis.timeline.map { |step| step.diff.attributes.fetch('title').to_h })
       .to eq([{ from: 'Draft', to: 'Titled' }])
+  end
+
+  # A comment that left the tree changes nothing the article shows, so its
+  # destruction is no change to end at, though the filter keeps it.
+  it 'ends after the last change it keeps, not at a kept version outside the tree' do
+    article = TrackedArticle.create!(title: 'one')
+    stays = article.comments.create!(body: 'stays')
+    leaves = article.comments.create!(body: 'leaves')
+    leaves.update!(article: TrackedArticle.create!(title: 'other'))
+    by('bob') { article.update!(title: 'two') }
+    stays.update!(body: 'edited')
+    by('bob') { leaves.destroy! }
+    stays.update!(body: 'edited again')
+    bob = ->(versions) { versions.where(whodunnit: 'bob') }
+
+    analysis = PaperTrailDiff.analyze(article.reload, activity: true, associations: paths,
+                                                      version_scope: bob)
+
+    expect(bodies(analysis.to_snapshot.associations.fetch('comments').records)).to eq(['stays'])
+    expect(analysis.diff.associations).to be_empty
+    expect(analysis.diff.attributes.fetch('title').to_h).to eq(from: 'one', to: 'two')
   end
 
   # A range's last version opens no step, so a filter that keeps only that
@@ -227,8 +247,8 @@ RSpec.describe 'version_scope: in activity on associations',
                 { from: article.versions.first, to: article.versions.last }]
 
       ranges.each do |range|
-        steps = PaperTrailDiff.activity_timeline(article, **range, version_scope: alice)
-        timeline = PaperTrailDiff.timeline(article, **range, version_scope: alice)
+        steps = SpecTimelines.activity_timeline(article, **range, version_scope: alice)
+        timeline = SpecTimelines.timeline(article, **range, version_scope: alice)
 
         expect(diffs(steps)).to eq(diffs(timeline))
         expect(steps.map { |step| step.source_boundary.whodunnit }).to eq(%w[alice alice])
@@ -250,8 +270,8 @@ RSpec.describe 'version_scope: in activity on associations',
         PaperTrail.request.whodunnit = nil
       end
 
-      steps = PaperTrailDiff.activity_timeline(article, within: window(article),
-                                                        version_scope: alice)
+      steps = SpecTimelines.activity_timeline(article, within: window(article),
+                                                       version_scope: alice)
 
       expect(steps.map { |step| step.diff.attributes.fetch('title').to_h })
         .to eq([{ from: 'Draft', to: 'Titled' }])
@@ -263,9 +283,9 @@ RSpec.describe 'version_scope: in activity on associations',
       none = :none.to_proc
 
       readings = [
-        PaperTrailDiff.activity_timeline(article, from: first, to: article, version_scope: none),
-        PaperTrailDiff.activity_timeline(article, from: first, to: article.versions.last,
-                                                  version_scope: none)
+        SpecTimelines.activity_timeline(article, from: first, to: article, version_scope: none),
+        SpecTimelines.activity_timeline(article, from: first, to: article.versions.last,
+                                                 version_scope: none)
       ]
       analysis = PaperTrailDiff.analyze(article, from: first, to: article.versions.last,
                                                  activity: true, version_scope: none)

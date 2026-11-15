@@ -44,8 +44,8 @@ RSpec.describe 'activity reads under a concurrent commit' do
       commit_late_comment(article)
     end
     steps = ActiveSupport::Notifications.subscribed(callback, 'sql.active_record') do
-      PaperTrailDiff.activity_timeline(article, associations: [:comments],
-                                                group: :transaction, snapshots: true)
+      SpecTimelines.activity_timeline(article, associations: [:comments],
+                                               group: :transaction, snapshots: true)
     end
     [fired, steps]
   end
@@ -63,8 +63,8 @@ RSpec.describe 'activity reads under a concurrent commit' do
     expect(comment_bodies(steps.last.to_snapshot)).to eq(%w[before])
     expect(TrackedComment.where(article_id: article.id).pluck(:body))
       .to contain_exactly('before', 'late')
-    later = PaperTrailDiff.activity_timeline(article, associations: [:comments],
-                                                      group: :transaction, snapshots: true)
+    later = SpecTimelines.activity_timeline(article, associations: [:comments],
+                                                     group: :transaction, snapshots: true)
     expect(comment_bodies(later.last.to_snapshot)).to eq(%w[before late])
   end
 

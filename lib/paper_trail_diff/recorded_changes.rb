@@ -11,7 +11,9 @@ module PaperTrailDiff
   #
   # PaperTrail's `version.changeset` finds the model through `version.item`,
   # which is a query per version and nothing at all once the record is deleted.
-  # The version already names its model, so neither is needed here.
+  # The version already names its model, and an STI subclass's types are
+  # read from the class it recorded (see RecordedClass), so neither is needed
+  # here.
   class RecordedChanges
     IGNORE_NAMES_REQUIRED = 'ignore: must be an array of strings or symbols; a version ' \
                             'has no association path for paths: to match'
@@ -33,9 +35,10 @@ module PaperTrailDiff
       raise InvalidEndpointError, 'expected a PaperTrail version' unless Endpoint.version?(@version)
 
       ignored = ignored_names
+      ReadableHistory.check_version!(@version, 'object_changes')
       return unless recorded?
 
-      model_class = Endpoint.model_class(@version)
+      model_class = RecordedClass.for(@version)
       changes = ActivityEventRecordResolver.new.deserialized_changeset(@version, model_class)
       return if changes.nil?
 
@@ -61,10 +64,11 @@ module PaperTrailDiff
     end
 
     # Without the column, or with it left empty for this version, nothing was
-    # recorded. That is not the same answer as a recorded empty changeset.
+    # recorded. That is not the same answer as a recorded empty changeset. A
+    # version need not be an Active Record model, as for compare.
     #: () -> bool
     def recorded?
-      @version.class.column_names.include?('object_changes') && !@version.object_changes.nil?
+      @version.respond_to?(:object_changes) && !@version.object_changes.nil?
     end
 
     # An adapter may name its changes with symbols.
@@ -77,14 +81,26 @@ module PaperTrailDiff
     # Each side is read as a step's diff reads it (see StoredValues), so a
     # value compares equal to the state the change produced. A name the model
     # no longer has, such as a column since dropped, is left out, as a diff
-    # leaves it out.
+    # leaves it out. So is a change whose sides read alike, as a diff compares
+    # them: Rails records a value assigned in another form than the column
+    # keeps, such as a time of day with another date, though the row holds
+    # what it held.
+    # Each side of the changes in the form the database stores it.
+    #: (untyped, Hash[String, untyped]) -> [Hash[String, untyped], Hash[String, untyped]]
+    def stored_sides(model_class, kept)
+      [StoredValues.apply(model_class, kept.transform_values(&:first)),
+       StoredValues.apply(model_class, kept.transform_values(&:last))]
+    end
+
     #: (untyped, untyped, Array[String]) -> Hash[String, ValueChange]
     def value_changes(model_class, changes, excluded)
-      kept = named(changes).slice(*model_class.attribute_names).except(*excluded)
-      from = StoredValues.apply(model_class, kept.transform_values(&:first))
-      to = StoredValues.apply(model_class, kept.transform_values(&:last))
-      kept.keys.sort.to_h { |key| [key, ValueChange.new(from: from.fetch(key), to: to.fetch(key))] }
-          .freeze
+      kept = named(changes).slice(*model_class.column_names).except(*excluded)
+      from, to = stored_sides(model_class, kept)
+      kept.keys.sort.filter_map do |key|
+        before = from.fetch(key)
+        after = to.fetch(key)
+        [key, ValueChange.new(from: before, to: after)] unless Support.same?(before, after)
+      end.to_h.freeze
     end
   end
 end

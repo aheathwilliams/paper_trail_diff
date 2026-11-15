@@ -4,8 +4,11 @@
 module PaperTrailDiff
   # Where each transaction of a root's timeline takes effect: at the last
   # version it saved, of any record, as `recorded` holds it (see
-  # RecordedTransactionEnds); among the timeline's own versions where that is
-  # not known, as on a root read without its associations.
+  # RecordedTransactionEnds), or among the timeline's own versions where a
+  # number is shared (see TransactionAnchors). A root read without its
+  # associations is read without them: its versions take effect where they
+  # were saved, since row locks keep two transactions from interleaving the
+  # versions of one record.
   #
   # Two transactions that save in one tree at the same time interleave their
   # versions, yet neither sees what the other has not committed, and one may
@@ -19,25 +22,17 @@ module PaperTrailDiff
   # change is reported with its own transaction's.
   #
   # A version saved outside a transaction takes effect where it was saved.
+  #
+  # Every history, of a window or of a range of versions, is read from where
+  # the transactions open at its start began (see PreparedHistoryLoader), so
+  # what a root reports does not depend on what else a batch read with it.
   class TransactionEnds
-    #
-    # A whole history, read without a window, begins at its root's first
-    # version, its `floor`. A version saved before it took effect before the
-    # history began, whenever its transaction ended, unless that transaction
-    # is the floor's own: a history can hold such a version, as a batch's
-    # does when another of its roots is older, and what a root reports does
-    # not depend on what was read with it. A window has no floor: it is read
-    # from where the transactions open at its start began, since it reports
-    # them.
-    #: (Array[untyped], ?Hash[Array[untyped], untyped], ?floor: untyped) -> void
-    def initialize(versions, recorded = {}, floor: nil)
+    #: (Array[untyped], ?Hash[Array[untyped], untyped]?) -> void
+    def initialize(versions, recorded = nil)
       @recorded = recorded
-      @floor = floor && Support.chronological_version_key(floor)
-      @floor_transaction = ActivityTransactionGroups.transaction_key(floor)
       saved = versions.sort_by { |version| Support.chronological_version_key(version) }
       @last = TransactionEnds.lasts(saved)
-      @horizon = saved.last && Support.chronological_version_key(saved.last)
-      @reordered = !saved.eql?(saved.sort_by { |version| sort_key(version) })
+      @held = [] #: Array[untyped]
       freeze
     end
 
@@ -49,28 +44,30 @@ module PaperTrailDiff
            .transform_values(&:last)
     end
 
-    # Whether placing the versions at their transactions' ends changes their
-    # order: some transaction saved a version between two of another's.
-    #: () -> bool
-    def interleaved? = @reordered
-
     # The last version of the version's transaction, or the version itself.
     #: (untyped) -> untyped
     def last(version)
+      recorded = @recorded
       key = ActivityTransactionGroups.transaction_key(version)
-      return version if key.nil? || settled?(version, key)
+      return version if key.nil? || recorded.nil?
 
-      @recorded[key] || @last[key] || version
+      recorded[key] || @last[key] || version
     end
 
-    # Whether the version was saved after every version of the timeline. A
-    # history can hold such a version, as the next one of a record after the
-    # range it was read for, or as part of a batch's history that runs on for
-    # another root. The timeline ends before it, so it takes effect after
-    # everything the timeline holds, whenever its transaction ended.
-    #: (untyped) -> bool
-    def beyond?(version)
-      (Support.chronological_version_key(version) <=> @horizon) == 1
+    # Where a boundary takes effect, and when: at the last version of a
+    # version's transaction, or where a live record was read, since no
+    # transaction is keyed by a model that is not a version class. Every
+    # record of a snapshot is read at one boundary, so the last answer is
+    # kept.
+    #: (untyped) -> [untyped, untyped]
+    def target(boundary)
+      held = @held
+      return held.fetch(1) if !held.empty? && held.fetch(0).equal?(boundary)
+
+      target = last(boundary)
+      answer = [target, target.created_at] #: [untyped, untyped]
+      held.replace([boundary, answer])
+      answer
     end
 
     # Orders versions by where their transactions end, then as they were
@@ -81,21 +78,9 @@ module PaperTrailDiff
        Support.chronological_version_key(version)]
     end
 
-    private
-
-    # @rbs @recorded: Hash[Array[untyped], untyped]
-    # @rbs @floor: Array[untyped]?
-    # @rbs @floor_transaction: Array[untyped]?
+    # @rbs @recorded: Hash[Array[untyped], untyped]?
     # @rbs @last: Hash[Array[untyped]?, untyped]
-    # @rbs @horizon: Array[untyped]?
-    # @rbs @reordered: bool
-
-    # Whether the version was saved before the floor, by another transaction
-    # than the floor's.
-    #: (untyped, Array[untyped]) -> bool
-    def settled?(version, key)
-      !key.eql?(@floor_transaction) && (Support.chronological_version_key(version) <=> @floor) == -1
-    end
+    # @rbs @held: Array[untyped]
   end
 
   # Reads where transactions end from their version tables: the last version
@@ -108,10 +93,12 @@ module PaperTrailDiff
   # did would be reported in neither or in both.
   #
   # The versions held are asked about together, a statement for 500
-  # transactions, and one more for those whose last version is not held. Ids
-  # that count up name the last version; otherwise the time it was saved
-  # does. A number that transactions of two version tables took is not read
-  # (see TransactionAnchors), and its versions are placed at the last held.
+  # transactions, and one more for those whose last version is not held.
+  # The last version is the latest dated, ids breaking a tie, as every
+  # window compares versions by date: a callback that saves other records
+  # before its own version dates that one first, as its save began. A number
+  # that transactions of two version tables took is not read (see
+  # TransactionAnchors), and its versions are placed at the last held.
   class RecordedTransactionEnds
     #: () -> void
     def initialize
@@ -122,9 +109,12 @@ module PaperTrailDiff
     # The last version of each transaction asked about so far, by transaction
     # key, once those of `versions` are among them. They are asked about along
     # with every version the block returns, so that a history is read at once.
+    # A version saved outside a transaction is read beside the history's
+    # others, wherever their transactions end, so it asks about them all; a
+    # live record asks nothing.
     #: (Array[untyped]) { () -> Array[untyped] } -> Hash[Array[untyped], untyped]
     def call(versions)
-      ask(versions + yield) unless versions.all? { |version| asked?(version) }
+      ask(versions + yield) unless versions.all? { |version| answered?(version) }
       @ends
     end
 
@@ -132,6 +122,12 @@ module PaperTrailDiff
 
     # @rbs @ends: Hash[Array[untyped], untyped]
     # @rbs @asked: Set[Array[untyped]]
+
+    #: (untyped) -> bool
+    def answered?(version)
+      key = ActivityTransactionGroups.transaction_key(version)
+      key ? @asked.include?(key) : !VersionBoundary.version_record?(version)
+    end
 
     #: (untyped) -> bool
     def asked?(version)
@@ -155,40 +151,44 @@ module PaperTrailDiff
     # where it is, and the one read otherwise.
     #: (untyped, Array[untyped], Hash[untyped, Array[untyped]]) -> void
     def read(version_class, numbers, held)
-      column = last_column(version_class)
-      last = version_class.where(transaction_id: numbers).group(:transaction_id).maximum(column)
-      known = held.fetch_values(*last.keys).flatten + other(version_class, column, last, held)
-      note(version_class, known.select { |each| each[column] == last.fetch(each.transaction_id) })
-    end
-
-    # Of the versions with the id or the time of their transaction's last,
-    # the last of each transaction.
-    #: (untyped, Array[untyped]) -> void
-    def note(version_class, versions)
-      versions.group_by(&:transaction_id).each do |number, last|
-        @ends[[version_class.name, number]] =
-          last.max_by { |version| Support.chronological_version_key(version) }
+      last = latest(version_class, numbers)
+      known = held.fetch_values(*last.keys).flatten + other(version_class, last, held)
+      known.select { |version| version.id == last.fetch(version.transaction_id) }
+           .group_by(&:transaction_id).each do |number, versions|
+        @ends[[version_class.name, number]] = versions.first
       end
     end
 
-    # The versions not held that may be the last of their transactions:
-    # those with the id or the time of the last of one that holds no such
-    # version.
-    #: (untyped, String, Hash[untyped, untyped], Hash[untyped, Array[untyped]]) -> untyped
-    def other(version_class, column, last, held)
-      missing = last.reject do |number, value|
-        held.fetch(number).any? { |version| version[column] == value }
+    # The id of each transaction's last version: of those dated latest, the
+    # one versions sort last by id.
+    #: (untyped, Array[untyped]) -> Hash[untyped, untyped]
+    def latest(version_class, numbers)
+      table = version_class.arel_table
+      rows = version_class.where(transaction_id: numbers)
+                          .where(table[:created_at].eq(newest(table)))
+                          .pluck(:transaction_id, version_class.primary_key)
+      rows.group_by(&:first).transform_values do |tied|
+        tied.map(&:last).max_by { |id| Support.version_key(nil, id) }
       end
-      version_class.where(transaction_id: missing.keys, column => missing.values)
+    end
+
+    # When the transaction of a version of `table` saved its latest dated.
+    #: (untyped) -> untyped
+    def newest(table)
+      dated = table.alias
+      Support.arel::SelectManager.new.from(dated).project(dated[:created_at].maximum)
+                                 .where(dated[:transaction_id].eq(table[:transaction_id]))
+    end
+
+    # The last versions not held, read only for what places them. With
+    # none missing, the relation reads nothing.
+    #: (untyped, Hash[untyped, untyped], Hash[untyped, Array[untyped]]) -> Array[untyped]
+    def other(version_class, last, held)
+      missing = last.reject do |number, id|
+        held.fetch(number).any? { |version| version.id == id }
+      end
+      version_class.where(version_class.primary_key => missing.values)
                    .select(version_class.primary_key, :created_at, :transaction_id)
-    end
-
-    # What names a transaction's last version: its id where ids count up,
-    # and the time it was saved otherwise.
-    #: (untyped) -> String
-    def last_column(version_class)
-      key = version_class.primary_key
-      version_class.type_for_attribute(key).type == :integer ? key : 'created_at'
     end
   end
 end

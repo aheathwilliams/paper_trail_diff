@@ -12,10 +12,13 @@ module PaperTrailDiff
     # its start began. With `activity`, the roots are planned from there too,
     # and each reports the transactions that end inside the window (see
     # TransactionEnds). Without it each root version is reported where it
-    # was saved, so the roots are planned over the window as it is.
-    #: (time_range: TimeRange?, planner: untyped, history_preparer: untyped, analyzer: untyped, activity: bool) -> void
-    def initialize(time_range:, planner:, history_preparer:, analyzer:, activity:)
+    # was saved, so the roots are planned over the window as it is. `reach`
+    # answers where that transaction began, for a model and a window's start
+    # (see AssociationTraversal#reach_before).
+    #: (time_range: TimeRange?, planner: untyped, history_preparer: untyped, analyzer: untyped, activity: bool, reach: untyped) -> void
+    def initialize(time_range:, planner:, history_preparer:, analyzer:, activity:, reach:) # rubocop:disable Metrics/ParameterLists
       @time_range = time_range
+      @reach = reach
       @activity = activity
       @planner = planner
       @history_preparer = history_preparer
@@ -42,43 +45,38 @@ module PaperTrailDiff
     # @rbs @planner: untyped
     # @rbs @history_preparer: untyped
     # @rbs @analyzer: untyped
+    # @rbs @reach: untyped
 
     # The plans the roots are read with: over the window, or with activity
-    # from where the earliest transaction open at its start began, when the
-    # history read for it says one was.
+    # from where the earliest transaction open at its start began. The
+    # history is read from there either way.
     #: (Array[untyped], Hash[Array[String], untyped]) -> Hash[Array[String], RootVersionPlan]
     def prepare(records, loaded)
-      range = @time_range
-      plans = @planner.call(records, range)
-      reach = prepare_history(records, plans, loaded, range, reach: !range.nil?)
-      return plans unless reach
-
-      # Only a window is asked how far back it reaches.
-      window = range #: TimeRange
-      range = window.widened(reach)
-      plans = @planner.call(records, range) if @activity
-      prepare_history(records, plans, loaded, range, reach: false)
+      window = @time_range
+      range = window && widened(records.first.class, window)
+      plans = @planner.call(records, @activity ? range : window)
+      prepare_history(records, plans, loaded, range)
       plans
+    end
+
+    #: (untyped, TimeRange) -> TimeRange
+    def widened(model, window)
+      reach = @reach.call(model, window.begin_time)
+      reach ? window.widened(reach) : window
     end
 
     # Roots that close on their current state are prepared even without a
     # version in the window, since their descendants may have changed there.
-    #: (Array[untyped], Hash[Array[String], RootVersionPlan], Hash[Array[String], untyped], TimeRange?, reach: bool) -> untyped
-    def prepare_history(records, plans, loaded, range, reach:)
+    #: (Array[untyped], Hash[Array[String], RootVersionPlan], Hash[Array[String], untyped], TimeRange?) -> void
+    def prepare_history(records, plans, loaded, range)
       selected = records.map { |record| plans.fetch(Endpoint.identity(record)) }
       versions = selected.flat_map(&:reconstruction_versions)
       live = selected.any?(&:closing_record)
-      return if versions.empty? && !live && !gone_asked?(reach)
+      return if versions.empty? && !live
 
       @history_preparer.call(current(records, loaded), versions,
-                             reach: reach, **preparation_range(versions, range, live: live))
+                             **preparation_range(versions, range, live: live))
     end
-
-    # Roots gone before a window are still asked how far the transactions
-    # open at its start reach, since one of them may have destroyed them and
-    # ended inside it. Without activity nothing of theirs is reported there.
-    #: (bool) -> bool
-    def gone_asked?(reach) = reach && @activity
 
     # Each root as the batch loaded it, where it did.
     #: (Array[untyped], Hash[Array[String], untyped]) -> Array[untyped]
@@ -87,11 +85,11 @@ module PaperTrailDiff
     end
 
     # A plan closing on the live record reads history up to now; the others
-    # stop at the window's end or at the last version they replay past it, so
-    # a past window does not load everything since.
+    # stop at the window's end or where the transactions of the versions they
+    # replay past it end, so a past window does not load everything since.
     #: (Array[untyped], TimeRange?, live: bool) -> Hash[Symbol, untyped]
     def preparation_range(versions, range, live:)
-      ends = [versions.map(&:created_at).max, range&.end_time, (Time.now.utc if live)]
+      ends = [TransactionCut.ends_at(versions), range&.end_time, (Time.now.utc if live)]
       { start_at: range&.begin_time, end_at: ends.compact.max }
     end
 

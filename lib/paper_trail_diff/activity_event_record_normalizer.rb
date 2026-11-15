@@ -2,45 +2,31 @@
 # rbs_inline: enabled
 
 module PaperTrailDiff
-  # Normalizes one event record with the historical reader for its boundary.
+  # Normalizes the state an event left, with its selected associations as
+  # the event's boundary reads them.
   class ActivityEventRecordNormalizer
-    #: (?association_reader: untyped) -> void
-    def initialize(association_reader: nil)
-      @association_reader = association_reader || method(:historical_reader)
+    #: (member_snapshot: untyped) -> void
+    def initialize(member_snapshot:)
+      @member_snapshot = member_snapshot
     end
 
-    #: (untyped, reflection: untyped, subtree: AssociationTree, path: String, normalizer: SnapshotNormalizer, root_endpoint: untyped, context_endpoint: untyped) -> RecordSnapshot?
+    #: (PreparedRecordState, reflection: untyped, subtree: AssociationTree, path: String, normalizer: SnapshotNormalizer, context_endpoint: untyped) -> RecordSnapshot
     def call( # rubocop:disable Metrics/ParameterLists
-      record,
+      state,
       reflection:,
       subtree:,
       path:,
       normalizer:,
-      root_endpoint:,
       context_endpoint:
     )
-      if record.is_a?(PreparedRecordState)
-        return normalizer.from_state(record, tree: subtree, path: path, incoming: reflection)
+      if subtree.empty?
+        return normalizer.from_state(state, tree: subtree, path: path, incoming: reflection)
       end
 
-      boundary = Endpoint.version?(root_endpoint) ? root_endpoint : context_endpoint
-      reifier = @association_reader.call(context_endpoint, habtm_version: boundary)
-      normalizer.call_child(
-        record,
-        tree: subtree,
-        path: path,
-        incoming: reflection,
-        reifier: reifier
-      )
+      @member_snapshot.call(state, context_endpoint, tree: subtree, path: path,
+                                                     incoming: reflection, normalizer: normalizer)
     end
 
-    private
-
-    # @rbs @association_reader: untyped
-
-    #: (untyped, habtm_version: untyped) -> HistoricalAssociationReifier
-    def historical_reader(context_endpoint, habtm_version:)
-      HistoricalAssociationReifier.new(context_endpoint, habtm_version: habtm_version)
-    end
+    # @rbs @member_snapshot: untyped
   end
 end

@@ -80,7 +80,7 @@ RSpec.describe 'History of a time of day' do
         clock.reload
         _created, set, renamed = clock.versions.reorder(:created_at, :id).to_a
 
-        [PaperTrailDiff.timeline(clock), PaperTrailDiff.activity_timeline(clock)].each do |steps|
+        [SpecTimelines.timeline(clock), SpecTimelines.activity_timeline(clock)].each do |steps|
           expect(steps.drop(1).map { |step| step.diff.attributes.keys })
             .to eq([['rings_at'], ['name']])
         end
@@ -100,7 +100,7 @@ RSpec.describe 'History of a time of day' do
         clock.reload
         _created, set, renamed, = clock.versions.reorder(:created_at, :id).to_a
 
-        [PaperTrailDiff.timeline(clock), PaperTrailDiff.activity_timeline(clock),
+        [SpecTimelines.timeline(clock), SpecTimelines.activity_timeline(clock),
          PaperTrailDiff.report(model, since: Time.now.utc - 3600, limit: 1)
                        .analyses.values.first.activity_timeline].each do |steps|
           expect(steps.drop(1).map { |step| step.diff.attributes.keys })
@@ -111,23 +111,5 @@ RSpec.describe 'History of a time of day' do
           .to eq(as_recorded(clock.rings_at))
       end
     end
-  end
-
-  it 'gives a callable historical_filter: the time each version recorded' do
-    clock = AlarmClock.create!(name: 'Kitchen', rings_at: '07:30')
-    clock.update!(name: 'Bedroom')
-    seen = []
-    filter = lambda do |state|
-      seen << state.rings_at
-      true
-    end
-
-    PaperTrailDiff.analyze_scope(
-      AlarmClock, limit: 1, within: (Time.now.utc - 3600)..(Time.now.utc + 60),
-                  historical_filter: filter
-    )
-
-    expect(seen).not_to be_empty
-    expect(seen).to all(eq(clock.reload.rings_at))
   end
 end

@@ -9,7 +9,9 @@ RSpec.describe PaperTrailDiff::TimeOfDay do
     end
   end
 
-  it 'reads a time of day on 2000-01-01, keeping its time and zone' do
+  # A plain time is stored as its clock reads in the default time zone, UTC
+  # here, as Active Record writes it.
+  it 'reads a time of day on 2000-01-01, keeping a zone, and a plain time in UTC' do
     zoned = Time.use_zone('Pacific/Auckland') { Time.zone.local(2000, 1, 2, 7, 30, 15) }
     offset = Time.new(2032, 3, 4, 20, 0, Rational(1, 2), '-10:00')
     clock = model
@@ -18,7 +20,7 @@ RSpec.describe PaperTrailDiff::TimeOfDay do
     expect(read).to eq('rings_at' => zoned - 86_400, 'alarm_set_at' => zoned)
     expect(read.fetch('rings_at').time_zone).to eq(zoned.time_zone)
     expect(described_class.apply(clock, 'rings_at' => offset))
-      .to eq('rings_at' => Time.new(2000, 1, 1, 20, 0, Rational(1, 2), '-10:00'))
+      .to eq('rings_at' => Time.utc(2000, 1, 1, 6, 0, Rational(1, 2)))
     expect(described_class.apply(clock, 'rings_at' => nil)).to eq('rings_at' => nil)
   end
 
@@ -27,6 +29,17 @@ RSpec.describe PaperTrailDiff::TimeOfDay do
     alarm = model('alarm_set_at' => ActiveModel::Type::DateTime.new)
 
     expect(described_class.apply(alarm, attributes)).to equal(attributes)
+  end
+
+  it "names a model's datetime columns, read once" do
+    clock = model
+    allow(clock).to receive(:attribute_types).and_call_original
+
+    2.times { expect(described_class.datetime_columns(clock)).to eq(['alarm_set_at']) }
+
+    expect(clock).to have_received(:attribute_types).once
+    expect(described_class.datetime_columns(model('rings_at' => ActiveModel::Type::Time.new)))
+      .to eq([])
   end
 
   it "reads a model's time columns once" do
