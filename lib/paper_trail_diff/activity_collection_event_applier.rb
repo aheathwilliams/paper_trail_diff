@@ -32,11 +32,8 @@ module PaperTrailDiff
     )
       fallback_record = [] #: Array[untyped]
       endpoints = [root_endpoint, context_endpoint]
-      direct = routes.all? { |route| route.last.fetch(2).empty? }
       snapshot = routes.reduce(previous) do |current, route|
-        apply_route(
-          current, route, version, delta, fallback_record, normalizer, endpoints, direct: direct
-        )
+        apply_route(current, route, version, delta, fallback_record, normalizer, endpoints)
       end
       [true, snapshot]
     end
@@ -48,12 +45,12 @@ module PaperTrailDiff
     # @rbs @route_updater: ActivityCollectionRouteUpdater
     # @rbs @relationship: ActivityRelationship
 
-    #: (RecordSnapshot, Array[untyped], untyped, ActivitySnapshotDelta?, Array[untyped], SnapshotNormalizer, Array[untyped], ?direct: bool) -> RecordSnapshot
+    #: (RecordSnapshot, Array[untyped], untyped, ActivitySnapshotDelta?, Array[untyped], SnapshotNormalizer, Array[untyped]) -> RecordSnapshot
     def apply_route( # rubocop:disable Metrics/ParameterLists
-      snapshot, route, version, delta, fallback_record, normalizer, endpoints, direct: false
+      snapshot, route, version, delta, fallback_record, normalizer, endpoints
     )
       record, replacement = route_event_state(
-        snapshot, route, version, delta, fallback_record, normalizer, endpoints, direct: direct
+        snapshot, route, version, delta, fallback_record, normalizer, endpoints
       )
       change = ActivityCollectionRouteChange.new(
         route: route,
@@ -110,20 +107,18 @@ module PaperTrailDiff
       return owned_keys(reflection.through_reflection) if reflection.through_reflection?
       return [] unless reflection.belongs_to?
 
-      keys = Array(reflection.foreign_key)
-      reflection.polymorphic? ? [*keys, reflection.foreign_type] : keys
+      key = reflection.foreign_key
+      reflection.polymorphic? ? [key, reflection.foreign_type] : [key]
     end
 
-    #: (RecordSnapshot, Array[untyped], untyped, ActivitySnapshotDelta?, Array[untyped], SnapshotNormalizer, Array[untyped], ?direct: bool) -> [untyped, RecordSnapshot?]
+    #: (RecordSnapshot, Array[untyped], untyped, ActivitySnapshotDelta?, Array[untyped], SnapshotNormalizer, Array[untyped]) -> [untyped, RecordSnapshot?]
     def route_event_state( # rubocop:disable Metrics/ParameterLists
-      snapshot, route, version, delta, fallback_record, normalizer, endpoints, direct: false
+      snapshot, route, version, delta, fallback_record, normalizer, endpoints
     )
       existing = existing_delta_record(snapshot, route, version, delta) if delta
       return [delta, delta.apply(existing)] if delta && existing
 
-      if fallback_record.empty?
-        fallback_record << @record_resolver.record_after(version, direct: direct)
-      end
+      fallback_record << @record_resolver.record_after(version) if fallback_record.empty?
       record = fallback_record.first
       return [record, nil] unless record
 

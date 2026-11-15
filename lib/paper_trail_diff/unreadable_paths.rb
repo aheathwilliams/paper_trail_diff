@@ -8,7 +8,7 @@ module PaperTrailDiff
     #: (AssociationTraversal, untyped) -> Array[[String, String]]
     def self.call(traversal, model)
       traversal.selected_reflections(model).filter_map do |path, reflection|
-        reason = path_reason(reflection, ranked: true)
+        reason = path_reason(reflection)
         [path, reason] if reason
       end
     end
@@ -16,9 +16,9 @@ module PaperTrailDiff
     # A has_many through reads its parts' conditions only, at any depth. A
     # has_one through over a ranked part is refused whole, so its parts, too,
     # are checked for conditions alone.
-    #: (untyped, ranked: bool) -> String?
-    def self.path_reason(reflection, ranked:)
-      reason_for(reflection, ranked) ||
+    #: (untyped) -> String?
+    def self.path_reason(reflection)
+      reason_for(reflection, true) ||
         AssociationTraversal.through_parts(reflection).filter_map do |part|
           reason_for(part, false)
         end.first

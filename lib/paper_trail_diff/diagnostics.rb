@@ -177,9 +177,9 @@ module PaperTrailDiff
       DiagnosticReport.new(issues: @issues)
     end
 
-    #: (Symbol, String, ?String?, ?untyped) -> void
-    def add_error(code, message, path = nil, version_id = nil)
-      add_issue(:error, code, message, path, version_id)
+    #: (Symbol, String, ?String?) -> void
+    def add_error(code, message, path = nil)
+      add_issue(:error, code, message, path, nil)
     end
 
     #: (Symbol, String, ?String?) -> void

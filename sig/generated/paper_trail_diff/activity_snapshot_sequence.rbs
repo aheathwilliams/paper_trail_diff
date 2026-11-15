@@ -76,14 +76,15 @@ module PaperTrailDiff
     # : (untyped) -> PreparedRecordState?
     def root_state: (untyped) -> PreparedRecordState?
 
-    # : (untyped) -> untyped
-    def association_reader: (untyped) -> untyped
+    # See HistoricalSnapshotStore#member.
+    # : (PreparedRecordState, untyped, tree: AssociationTree, path: String, incoming: untyped, normalizer: SnapshotNormalizer) -> RecordSnapshot
+    def member: (PreparedRecordState, untyped, tree: AssociationTree, path: String, incoming: untyped, normalizer: SnapshotNormalizer) -> RecordSnapshot
 
     # : (untyped) -> [Hash[untyped, untyped], Hash[untyped, untyped]]?
     def record_transition: (untyped) -> [ Hash[untyped, untyped], Hash[untyped, untyped] ]?
 
-    # : (untyped, ?direct: bool) -> [bool, untyped]
-    def record_after: (untyped, ?direct: bool) -> [ bool, untyped ]
+    # : (untyped) -> [bool, PreparedRecordState?]
+    def record_after: (untyped) -> [ bool, PreparedRecordState? ]
 
     @refresher: untyped
 

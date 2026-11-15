@@ -70,7 +70,7 @@ RSpec.describe PaperTrailDiff::PreparedHistoryLoader do
     expect(nodes(history, TrackedReply)).to eq([reply.id])
     expect(nodes(history, TrackedArticle)).to eq([article.id])
     handled, after = history.record_after(TrackedComment, comment.id, versions_of(comment).first)
-    expect([handled, after.body]).to eq([true, 'comment'])
+    expect([handled, after.attributes['body']]).to eq([true, 'comment'])
   end
 
   it 'prepares every root it is given, as one batch' do

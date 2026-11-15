@@ -1168,7 +1168,10 @@ RSpec.describe 'PaperTrailDiff association tracking' do
       traversal: traversal,
       pool: pool,
       components: ->(_branches) { [tree, normalizer] },
-      association_reader: ->(version) { PaperTrailDiff::PtAtReferenceReifier.new(version) }
+      member_snapshot: ->(*) { raise 'a leaf reads no associations' },
+      prepared_record_after: lambda do |_version|
+        [true, PaperTrailDiff::PreparedRecordState.new(TrackedComment.find(comment.id))]
+      end
     )
     comment_snapshot = PaperTrailDiff::RecordSnapshot.new(
       type: 'TrackedComment',

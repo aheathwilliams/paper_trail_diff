@@ -69,18 +69,12 @@ module PaperTrailDiff
     # effect. A record then reads as it stood before every transaction that
     # ends at or after the boundary's own (see TransactionEnds); without it,
     # as it stood before the boundary's transaction.
-    # : (untyped, ?TransactionEnds?) -> untyped
-    def record_before: (untyped, ?TransactionEnds?) -> untyped
-
     # : (untyped, ?TransactionEnds?) -> PreparedRecordState?
     def state_before: (untyped, ?TransactionEnds?) -> PreparedRecordState?
 
     # A handled nil is known absence, not permission to query the current row.
-    # : (untyped, ?direct: bool) -> [bool, untyped]
-    def record_after: (untyped, ?direct: bool) -> [ bool, untyped ]
-
-    # : () -> Array[untyped]
-    def records: () -> Array[untyped]
+    # : (untyped) -> [bool, PreparedRecordState?]
+    def record_after: (untyped) -> [ bool, PreparedRecordState? ]
 
     # : () -> Array[PreparedRecordState]
     def states: () -> Array[PreparedRecordState]
@@ -192,9 +186,6 @@ module PaperTrailDiff
     # : (Array[untyped]) -> TransactionEnds
     def transaction_ends: (Array[untyped]) -> TransactionEnds
 
-    # : (untyped, untyped, untyped) -> untyped
-    def record_before: (untyped, untyped, untyped) -> untyped
-
     # Reads for a root's timeline, each record as it stood before every
     # transaction that had not ended at the boundary it is read at (see
     # TransactionEnds).
@@ -205,8 +196,10 @@ module PaperTrailDiff
     # : () -> TransactionEnds?
     def reading_ends: () -> TransactionEnds?
 
-    # : (untyped, untyped, untyped) -> [bool, PreparedRecordState?]
-    def snapshot_state_before: (untyped, untyped, untyped) -> [ bool, PreparedRecordState? ]
+    # The record's state at the boundary, as a record of its class would
+    # hold it. The record must be loaded.
+    # : (untyped, untyped, untyped) -> PreparedRecordState?
+    def snapshot_state_before: (untyped, untyped, untyped) -> PreparedRecordState?
 
     # Typed as a reified record's attributes are. A JSON or JSONB `object`
     # column stores times and dates as strings, which PaperTrail does not cast
@@ -214,11 +207,10 @@ module PaperTrailDiff
     # : (untyped, untyped, untyped) -> [Hash[untyped, untyped], Hash[untyped, untyped]]?
     def transition: (untyped, untyped, untyped) -> [ Hash[untyped, untyped], Hash[untyped, untyped] ]?
 
-    # : (untyped, untyped, untyped, ?direct: bool) -> [bool, untyped]
-    def record_after: (untyped, untyped, untyped, ?direct: bool) -> [ bool, untyped ]
-
-    # : (untyped, Array[untyped]) -> Array[untyped]
-    def records_for: (untyped, Array[untyped]) -> Array[untyped]
+    # The record as the version left it, completed as snapshot_state_before's
+    # state is. A handled nil is known absence: the version destroyed it.
+    # : (untyped, untyped, untyped) -> [bool, PreparedRecordState?]
+    def record_after: (untyped, untyped, untyped) -> [ bool, PreparedRecordState? ]
 
     # : (untyped, Array[untyped], String) -> Array[untyped]
     def attribute_values_for: (untyped, Array[untyped], String) -> Array[untyped]
@@ -247,22 +239,21 @@ module PaperTrailDiff
 
     private
 
-    # A model whose records need their own initialization is cast by
-    # instantiating it, as reify does.
     # : (PreparedRecordState) -> Hash[untyped, untyped]
     def typed_attributes: (PreparedRecordState) -> Hash[untyped, untyped]
 
-    # A state completed as a record of its class would hold it, or nil where
-    # only instantiating can tell; each state is completed once.
-    # : (PreparedRecordState) -> PreparedRecordState?
-    def direct_state: (PreparedRecordState) -> PreparedRecordState?
+    # A state completed as a record of its class would hold it; each state is
+    # completed once. A model whose records need their own initialization is
+    # completed by instantiating it, as reify does.
+    # : (PreparedRecordState) -> PreparedRecordState
+    def direct_state: (PreparedRecordState) -> PreparedRecordState
 
     # : (untyped, String) -> bool
     def generated_reader?: (untyped, String) -> bool
 
     @direct_loader: DirectRecordStateLoader
 
-    @direct_states: Hash[PreparedRecordState, PreparedRecordState?]
+    @direct_states: Hash[PreparedRecordState, PreparedRecordState]
 
     @end_time: untyped
 

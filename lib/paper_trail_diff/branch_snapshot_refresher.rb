@@ -4,7 +4,7 @@
 module PaperTrailDiff
   # Reconstructs selected root branches and merges them into a prior immutable snapshot.
   class BranchSnapshotRefresher
-    #: (ignore_policy: IgnorePolicy, traversal: AssociationTraversal, pool: SnapshotPool, normalizer: SnapshotNormalizer, full_snapshotter: untyped, partial_snapshotter: untyped, association_reader: untyped, record_transition: untyped, ?prepared_record_after: untyped, ?root_state: untyped) -> void
+    #: (ignore_policy: IgnorePolicy, traversal: AssociationTraversal, pool: SnapshotPool, normalizer: SnapshotNormalizer, full_snapshotter: untyped, partial_snapshotter: untyped, member_snapshot: untyped, record_transition: untyped, ?prepared_record_after: untyped, ?root_state: untyped) -> void
     def initialize( # rubocop:disable Metrics/MethodLength, Metrics/ParameterLists
       ignore_policy:,
       traversal:,
@@ -12,7 +12,7 @@ module PaperTrailDiff
       normalizer:,
       full_snapshotter:,
       partial_snapshotter:,
-      association_reader:,
+      member_snapshot:,
       record_transition:,
       prepared_record_after: nil,
       root_state: nil
@@ -27,7 +27,7 @@ module PaperTrailDiff
       @event_refresher = ActivityEventSnapshotRefresher.new(
         traversal: traversal, pool: pool,
         components: method(:components),
-        association_reader: association_reader,
+        member_snapshot: member_snapshot,
         record_transition: record_transition,
         prepared_record_after: prepared_record_after
       )

@@ -69,7 +69,7 @@ module PaperTrailDiff
 
     #: (Array[untyped], untyped, SnapshotNormalizer, untyped) -> RecordSnapshot?
     def normalized_route_record(route, version, normalizer, context_endpoint)
-      record = @record_resolver.record_after(version, direct: route.last.fetch(2).empty?)
+      record = @record_resolver.record_after(version)
       return unless record
 
       _name, reflection, subtree, path = route.last

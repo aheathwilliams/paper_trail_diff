@@ -57,6 +57,9 @@ module PaperTrailDiff
     # : (untyped, untyped, String) -> untyped
     def self.polymorphic_target: (untyped, untyped, String) -> untyped
 
+    # : (untyped, untyped, untyped, untyped) -> bot
+    def self.unnamed_target!: (untyped, untyped, untyped, untyped) -> bot
+
     # Why a request cannot name this association of the model, or nil when it
     # can. Discovery lists only the associations this accepts, so every path
     # it lists can be requested. A has_many :through Active Record cannot

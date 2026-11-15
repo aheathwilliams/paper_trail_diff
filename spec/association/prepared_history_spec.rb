@@ -35,14 +35,20 @@ RSpec.describe PaperTrailDiff::PreparedHistory do
     )
   end
 
+  # The snapshot prepared history builds, or with no history PT-AT's own.
   def normalize_version(version, tree, traversal, history: nil)
+    normalizer = normalizer(tree, traversal)
+    if history
+      return PaperTrailDiff::PreparedSnapshotBuilder.new(traversal)
+                                                    .call(version, version, tree: tree,
+                                                                            normalizer: normalizer,
+                                                                            history: history)
+    end
+
     record = version.reify(dup: true)
-    reifier = if history
-                PaperTrailDiff::PreparedAssociationReifier.new(history, version)
-              else
-                PaperTrailDiff::PtAtReferenceReifier.new(version)
-              end
-    normalizer(tree, traversal).call(record, reifier: reifier)
+    reifier = PaperTrailDiff::PtAtReferenceReifier.new(version)
+    reifier.reify(record, traversal.reflections_for(record.class, tree, path: ''))
+    normalizer.call(record, reifier: reifier)
   end
 
   it 'matches PT-AT across direct, nested, and through relationships' do
@@ -98,11 +104,12 @@ RSpec.describe PaperTrailDiff::PreparedHistory do
       window: false
     ).call
 
-    root = before.reify(dup: true)
+    root = PaperTrailDiff::PreparedSnapshotBuilder.new(traversal).state(before)
     contributors = TrackedArticle.reflect_on_association(:contributors)
-    contributor_result = history.resolve(root, contributors, before)
-    expect(contributor_result.first).to be(true)
-    expect(contributor_result.last.map(&:id)).to eq([first_author.id])
+    expect(history.snapshot_states(root, contributors, before).map do |state|
+      state.attributes['id']
+    end)
+      .to eq([first_author.id])
 
     parity_tree = PaperTrailDiff::AssociationTree.build(associations - ['author.comments'])
     parity = PaperTrailDiff::AssociationTraversal.new(parity_tree)
@@ -127,20 +134,19 @@ RSpec.describe PaperTrailDiff::PreparedHistory do
                            [second_author.id, ['Comment after', 'Added comment']]])
   end
 
-  it 'refuses a reflection history cannot resolve' do
+  it 'refuses to read associations without a history' do
     article = TrackedArticle.create!(title: 'Prepared refusal')
+    article.update!(title: 'Edited')
+    tree = PaperTrailDiff::AssociationTree.build(['comments'])
+    traversal = PaperTrailDiff::AssociationTraversal.new(tree)
+    builder = PaperTrailDiff::PreparedSnapshotBuilder.new(traversal)
     version = article.versions.last
-    reflection = TrackedArticle.reflect_on_association(:comments)
-    history = instance_double(described_class)
-    allow(history).to receive(:resolve).and_return([false, []])
-    message = 'association TrackedArticle#comments cannot be read from history for ' \
-              "TrackedArticle #{article.id}: who was in it at a past point cannot be told"
+    message = 'association TrackedArticle#comments cannot be read: no history was prepared for it'
 
-    [history, nil].each do |source|
-      reifier = PaperTrailDiff::PreparedAssociationReifier.new(source, version)
-      expect { reifier.reify(article, [reflection]) }
-        .to raise_error(PaperTrailDiff::UnsupportedAssociationError, message)
-    end
+    expect do
+      builder.call(version, version, tree: tree, normalizer: normalizer(tree, traversal),
+                                     history: nil)
+    end.to raise_error(PaperTrailDiff::UnsupportedAssociationError, message)
   end
 
   it 'reconstructs empty optional, singular, and collection edges' do
@@ -216,10 +222,9 @@ RSpec.describe PaperTrailDiff::PreparedHistory do
       .to eq(left.dig('TrackedComment', :owners))
     expect(without_owners.dig('TrackedComment', :owners)).to be_nil
 
-    history = described_class.new(instance_double(PaperTrailDiff::PreparedRecordIndex))
-    owner = Struct.new(:id).new(10)
-    expect(history.send(:child_ids_for, { ids: [1, 2] }, owner)).to eq([1, 2])
-    expect(history.send(:child_ids_for, { ids: [1], owners: {} }, owner)).to eq([])
+    reader = PaperTrailDiff::PreparedStateAssociationReader.new(nil, nil, nil)
+    expect(reader.send(:ids_for, { ids: [1, 2] }, '10')).to eq([1, 2])
+    expect(reader.send(:ids_for, { ids: [1], owners: {} }, '10')).to eq([])
 
     loader = PaperTrailDiff::PreparedEdgeLoader.new(
       instance_double(PaperTrailDiff::PreparedRecordIndex),

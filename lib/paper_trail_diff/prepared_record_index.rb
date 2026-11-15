@@ -131,11 +131,6 @@ module PaperTrailDiff
     # effect. A record then reads as it stood before every transaction that
     # ends at or after the boundary's own (see TransactionEnds); without it,
     # as it stood before the boundary's transaction.
-    #: (untyped, ?TransactionEnds?) -> untyped
-    def record_before(boundary, ends = nil)
-      state_before(boundary, ends)&.instantiate
-    end
-
     #: (untyped, ?TransactionEnds?) -> PreparedRecordState?
     def state_before(boundary, ends = nil)
       index = ends ? effective_index(boundary, ends) : boundary_index(boundary)
@@ -145,18 +140,12 @@ module PaperTrailDiff
     end
 
     # A handled nil is known absence, not permission to query the current row.
-    #: (untyped, ?direct: bool) -> [bool, untyped]
-    def record_after(version, direct: false)
+    #: (untyped) -> [bool, PreparedRecordState?]
+    def record_after(version)
       index = @version_positions[version.id.to_s]
       return [false, nil] unless index
 
-      state = state_after(index)
-      [true, direct ? state : state&.instantiate]
-    end
-
-    #: () -> Array[untyped]
-    def records
-      states.map(&:instantiate)
+      [true, state_after(index)]
     end
 
     #: () -> Array[PreparedRecordState]
@@ -344,7 +333,7 @@ module PaperTrailDiff
       @series = {} #: Hash[Array[String], PreparedRecordSeries]
       @recorded_ends = RecordedTransactionEnds.new
       @direct_loader = DirectRecordStateLoader.new
-      @direct_states = {} #: Hash[PreparedRecordState, PreparedRecordState?]
+      @direct_states = {} #: Hash[PreparedRecordState, PreparedRecordState]
     end
 
     #: (untyped, Array[untyped]) -> void
@@ -372,11 +361,6 @@ module PaperTrailDiff
       TransactionEnds.new(versions, @recorded_ends.call(versions) { self.versions })
     end
 
-    #: (untyped, untyped, untyped) -> untyped
-    def record_before(model_class, id, boundary)
-      @series.fetch(identity(model_class, id)).record_before(boundary, @ends)
-    end
-
     # Reads for a root's timeline, each record as it stood before every
     # transaction that had not ended at the boundary it is read at (see
     # TransactionEnds).
@@ -393,16 +377,12 @@ module PaperTrailDiff
     #: () -> TransactionEnds?
     def reading_ends = @ends
 
-    #: (untyped, untyped, untyped) -> [bool, PreparedRecordState?]
+    # The record's state at the boundary, as a record of its class would
+    # hold it. The record must be loaded.
+    #: (untyped, untyped, untyped) -> PreparedRecordState?
     def snapshot_state_before(model_class, id, boundary)
-      series = @series[identity(model_class, id)]
-      return [false, nil] unless series
-
-      state = series.state_before(boundary, @ends)
-      return [true, nil] unless state
-
-      prepared = direct_state(state)
-      [!prepared.nil?, prepared]
+      state = @series.fetch(identity(model_class, id)).state_before(boundary, @ends)
+      direct_state(state) if state
     end
 
     # Typed as a reified record's attributes are. A JSON or JSONB `object`
@@ -416,19 +396,14 @@ module PaperTrailDiff
       [typed_attributes(states.fetch(0)), typed_attributes(states.fetch(1))]
     end
 
-    #: (untyped, untyped, untyped, ?direct: bool) -> [bool, untyped]
-    def record_after(model_class, id, version, direct: false)
-      handled, state = @series[identity(model_class, id)]&.record_after(version, direct: direct)
+    # The record as the version left it, completed as snapshot_state_before's
+    # state is. A handled nil is known absence: the version destroyed it.
+    #: (untyped, untyped, untyped) -> [bool, PreparedRecordState?]
+    def record_after(model_class, id, version)
+      handled, state = @series[identity(model_class, id)]&.record_after(version)
       return [false, nil] unless handled
-      return [true, state] unless direct && state
 
-      prepared = direct_state(state)
-      [!prepared.nil?, prepared]
-    end
-
-    #: (untyped, Array[untyped]) -> Array[untyped]
-    def records_for(model_class, ids)
-      ids.flat_map { |id| @series.fetch(identity(model_class, id)).records }
+      [true, state && direct_state(state)]
     end
 
     #: (untyped, Array[untyped], String) -> Array[untyped]
@@ -436,8 +411,7 @@ module PaperTrailDiff
       plain_reader = generated_reader?(model_class, name)
       ids.flat_map do |id|
         @series.fetch(identity(model_class, id)).states.map do |state|
-          direct = direct_state(state) if plain_reader
-          direct ? direct.attributes[name] : state.instantiate.public_send(name)
+          plain_reader ? direct_state(state).attributes[name] : state.instantiate.public_send(name)
         end
       end
     end
@@ -480,21 +454,18 @@ module PaperTrailDiff
 
     private
 
-    # A model whose records need their own initialization is cast by
-    # instantiating it, as reify does.
     #: (PreparedRecordState) -> Hash[untyped, untyped]
-    def typed_attributes(state)
-      typed = direct_state(state)
-      return typed.attributes if typed
+    def typed_attributes(state) = direct_state(state).attributes
 
-      PreparedRecordState.new(state.instantiate).attributes
-    end
-
-    # A state completed as a record of its class would hold it, or nil where
-    # only instantiating can tell; each state is completed once.
-    #: (PreparedRecordState) -> PreparedRecordState?
+    # A state completed as a record of its class would hold it; each state is
+    # completed once. A model whose records need their own initialization is
+    # completed by instantiating it, as reify does.
+    #: (PreparedRecordState) -> PreparedRecordState
     def direct_state(state)
-      @direct_states.fetch(state) { @direct_states[state] = @direct_loader.complete(state) }
+      @direct_states.fetch(state) do
+        @direct_states[state] = @direct_loader.complete(state) ||
+                                PreparedRecordState.new(state.instantiate)
+      end
     end
 
     #: (untyped, String) -> bool
@@ -509,7 +480,7 @@ module PaperTrailDiff
     # @rbs @state_loader: PreparedVersionStateLoader
     # @rbs @series: Hash[Array[String], PreparedRecordSeries]
     # @rbs @direct_loader: DirectRecordStateLoader
-    # @rbs @direct_states: Hash[PreparedRecordState, PreparedRecordState?]
+    # @rbs @direct_states: Hash[PreparedRecordState, PreparedRecordState]
     # @rbs @ends: TransactionEnds?
     # @rbs @recorded_ends: RecordedTransactionEnds
 

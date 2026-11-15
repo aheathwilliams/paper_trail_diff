@@ -22,8 +22,8 @@ module PaperTrailDiff
 
     @route_updater: ActivityCollectionRouteUpdater
 
-    # : (RecordSnapshot, Array[untyped], untyped, ActivitySnapshotDelta?, Array[untyped], SnapshotNormalizer, Array[untyped], ?direct: bool) -> RecordSnapshot
-    def apply_route: (RecordSnapshot, Array[untyped], untyped, ActivitySnapshotDelta?, Array[untyped], SnapshotNormalizer, Array[untyped], ?direct: bool) -> RecordSnapshot
+    # : (RecordSnapshot, Array[untyped], untyped, ActivitySnapshotDelta?, Array[untyped], SnapshotNormalizer, Array[untyped]) -> RecordSnapshot
+    def apply_route: (RecordSnapshot, Array[untyped], untyped, ActivitySnapshotDelta?, Array[untyped], SnapshotNormalizer, Array[untyped]) -> RecordSnapshot
 
     # : (Array[Array[untyped]], untyped) -> bool
     def unsafe_through_membership_event?: (Array[Array[untyped]], untyped) -> bool
@@ -44,8 +44,8 @@ module PaperTrailDiff
     # : (untyped) -> Array[untyped]
     def owned_keys: (untyped) -> Array[untyped]
 
-    # : (RecordSnapshot, Array[untyped], untyped, ActivitySnapshotDelta?, Array[untyped], SnapshotNormalizer, Array[untyped], ?direct: bool) -> [untyped, RecordSnapshot?]
-    def route_event_state: (RecordSnapshot, Array[untyped], untyped, ActivitySnapshotDelta?, Array[untyped], SnapshotNormalizer, Array[untyped], ?direct: bool) -> [ untyped, RecordSnapshot? ]
+    # : (RecordSnapshot, Array[untyped], untyped, ActivitySnapshotDelta?, Array[untyped], SnapshotNormalizer, Array[untyped]) -> [untyped, RecordSnapshot?]
+    def route_event_state: (RecordSnapshot, Array[untyped], untyped, ActivitySnapshotDelta?, Array[untyped], SnapshotNormalizer, Array[untyped]) -> [ untyped, RecordSnapshot? ]
 
     # A record the event took out of the association's class, such as an
     # STI row retyped to its base class, is no member to read a subtree for:

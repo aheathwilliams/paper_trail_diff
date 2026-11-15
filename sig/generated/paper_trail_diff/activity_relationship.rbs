@@ -14,9 +14,6 @@ module PaperTrailDiff
     # : (untyped, untyped, Symbol) -> bool
     def sti_member?: (untyped, untyped, Symbol) -> bool
 
-    # : (untyped, untyped, state: Symbol) -> Array[String]
-    def relationship_owner_values: (untyped, untyped, state: Symbol) -> Array[String]
-
     # : (untyped, untyped, state: Symbol) -> untyped
     def event_attribute: (untyped, untyped, state: Symbol) -> untyped
   end

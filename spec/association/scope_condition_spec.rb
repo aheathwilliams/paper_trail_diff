@@ -520,23 +520,22 @@ RSpec.describe PaperTrailDiff::ScopeCondition do
         .with(reflection(:ranked), ScopeConditionItem, ranked: true).once
     end
 
-    it 'selects the records the scope admits, by their attributes' do
+    it 'builds conditions that select the records the scope admits, by their attributes' do
       records = [{ 'rank' => 1 }, { 'rank' => 2 }, { 'rank' => '1' }].map do |attributes|
         instance_double(ScopeConditionItem, attributes: attributes)
       end
-      expect(cache.select(reflection(:ranked), records, ranked: true))
-        .to eq([records[0], records[2]])
-      expect(cache.select(reflection(:target), records, ScopeConditionItem, ranked: true))
+      expect(cache.call(reflection(:ranked)).members(records)).to eq([records[0], records[2]])
+      expect(cache.call(reflection(:target), ScopeConditionItem).members(records))
         .to eq([records[0], records[2]])
     end
 
-    it 'ranks the records it selects only when asked' do
+    it 'builds conditions that rank the records they select only when asked' do
       ScopeConditionOwner.has_many :first_ranked, -> { where(rank: 1).order(id: :desc).limit(1) },
                                    class_name: 'ScopeConditionItem', foreign_key: :owner_id
       records = [{ 'id' => 1, 'rank' => 1 }, { 'id' => 2, 'rank' => 1 }, { 'id' => 3, 'rank' => 2 }]
                 .map { |attributes| instance_double(ScopeConditionItem, attributes: attributes) }
       expect([true, false].map do |ranked|
-        cache.select(reflection(:first_ranked), records, ranked: ranked)
+        cache.call(reflection(:first_ranked), ranked: ranked).members(records)
       end).to eq([[records[1]], records.first(2)])
     end
   end

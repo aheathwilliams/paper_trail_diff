@@ -315,7 +315,7 @@ module PaperTrailDiff
         normalizer: @normalizer,
         full_snapshotter: snapshots.method(:call),
         partial_snapshotter: snapshots.method(:custom),
-        association_reader: snapshots.method(:association_reader),
+        member_snapshot: snapshots.method(:member),
         record_transition: snapshots.method(:record_transition),
         prepared_record_after: snapshots.method(:record_after),
         root_state: snapshots.method(:root_state)

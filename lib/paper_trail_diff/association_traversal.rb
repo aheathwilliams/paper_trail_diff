@@ -89,16 +89,18 @@ module PaperTrailDiff
     # and PT-AT raise a bare NameError for it, which does not say where it is.
     #: (untyped, untyped, String) -> untyped
     def self.polymorphic_target(reflection, record, type)
-      model_class = named_class(type)
-      return model_class if model_class
+      named_class(type) || unnamed_target!(reflection, record.class, record.id, type)
+    end
+    private_class_method :polymorphic_target
 
+    #: (untyped, untyped, untyped, untyped) -> bot
+    def self.unnamed_target!(reflection, owner_class, id, type)
       raise IncompleteAssociationHistoryError,
-            "association #{record.class.name}##{reflection.name} cannot be read: " \
-            "#{record.class.name} #{record.id} has #{reflection.foreign_type} #{type}, which " \
+            "association #{owner_class.name}##{reflection.name} cannot be read: " \
+            "#{owner_class.name} #{id} has #{reflection.foreign_type} #{type}, which " \
             'names no class. If the model was renamed, replace the old name in that column ' \
             'and in the versions that recorded it.'
     end
-    private_class_method :polymorphic_target
 
     # Why a request cannot name this association of the model, or nil when it
     # can. Discovery lists only the associations this accepts, so every path
@@ -243,7 +245,7 @@ module PaperTrailDiff
       direct = %i[has_one has_many].include?(reflection.macro) && !reflection.through_reflection?
       return [] unless direct
 
-      Array(reflection.foreign_key) + Array(reflection.type)
+      [reflection.foreign_key, *reflection.type]
     end
 
     private

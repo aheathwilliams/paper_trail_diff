@@ -112,9 +112,11 @@ module PaperTrailDiff
       @store.root_state(root_endpoint) if @history
     end
 
-    #: (untyped) -> untyped
-    def association_reader(context_version)
-      @store.association_reader(context_version, history: @history)
+    # See HistoricalSnapshotStore#member.
+    #: (PreparedRecordState, untyped, tree: AssociationTree, path: String, incoming: untyped, normalizer: SnapshotNormalizer) -> RecordSnapshot
+    def member(state, context_version, tree:, path:, incoming:, normalizer:) # rubocop:disable Metrics/ParameterLists
+      @store.member(state, context_version, tree: tree, path: path, incoming: incoming,
+                                            normalizer: normalizer, history: @history)
     end
 
     #: (untyped) -> [Hash[untyped, untyped], Hash[untyped, untyped]]?
@@ -122,10 +124,10 @@ module PaperTrailDiff
       @history&.record_transition(Endpoint.model_class(version), version.item_id, version)
     end
 
-    #: (untyped, ?direct: bool) -> [bool, untyped]
-    def record_after(version, direct: false)
-      @history&.record_after(Endpoint.model_class(version), version.item_id, version,
-                             direct: direct) || [false, nil]
+    #: (untyped) -> [bool, PreparedRecordState?]
+    def record_after(version)
+      @history&.record_after(Endpoint.model_class(version), version.item_id, version) ||
+        [false, nil]
     end
 
     # @rbs @store: HistoricalSnapshotStore

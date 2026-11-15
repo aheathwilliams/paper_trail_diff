@@ -37,10 +37,10 @@ module PaperTrailDiff
     #: (untyped, Array[untyped], untyped, String) -> Hash[String, Hash[Symbol, untyped]]
     def polymorphic_groups(owner_class, owner_ids, reflection, key)
       grouped = {} #: Hash[String, Hash[Symbol, untyped]]
-      @records.records_for(owner_class, owner_ids).each do |owner|
-        id = owner.public_send(key)
-        type = owner.public_send(reflection.foreign_type).to_s
-        model_class = AssociationTraversal.named_class(type)
+      ids = @records.attribute_values_for(owner_class, owner_ids, key)
+      types = @records.attribute_values_for(owner_class, owner_ids, reflection.foreign_type)
+      ids.zip(types).each do |id, type|
+        model_class = AssociationTraversal.named_class(type.to_s)
         add_identity(grouped, model_class, id) if model_class && id
       end
       grouped.transform_values { |group| group.merge(ids: group.fetch(:ids).uniq) }

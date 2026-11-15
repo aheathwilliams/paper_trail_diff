@@ -231,6 +231,13 @@ project follows [Semantic Versioning](https://semver.org/).
 - A has_many or has_one read with associations runs one more statement per
   read, for the first versions of children made without a version (see
   Fixed).
+- History reads every association member from its recorded state, including
+  members of a model whose records need their own initialization (an
+  `after_initialize` callback, the attribute API, encryption, or a default
+  scope that assigns), which it instantiates once per state to read as a
+  record would hold it. Such a member's foreign keys and type columns are
+  read from its stored attributes, as Active Record loads its associations,
+  rather than through a reader method the model overrides.
 
 ### Fixed
 

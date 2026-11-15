@@ -4,8 +4,8 @@
 module PaperTrailDiff
   # Dispatches safe descendant events to focused immutable snapshot appliers.
   class ActivityEventSnapshotRefresher
-    #: (traversal: AssociationTraversal, pool: SnapshotPool, components: untyped, association_reader: untyped, ?record_transition: untyped, ?prepared_record_after: untyped) -> void
-    def initialize(traversal:, pool:, components:, association_reader:, record_transition: nil, prepared_record_after: nil) # rubocop:disable Layout/LineLength, Metrics/ParameterLists
+    #: (traversal: AssociationTraversal, pool: SnapshotPool, components: untyped, member_snapshot: untyped, ?record_transition: untyped, ?prepared_record_after: untyped) -> void
+    def initialize(traversal:, pool:, components:, member_snapshot:, record_transition: nil, prepared_record_after: nil) # rubocop:disable Layout/LineLength, Metrics/ParameterLists
       @components = components
       @record_resolver = ActivityEventRecordResolver.new(
         record_transition: record_transition, prepared_record_after: prepared_record_after
@@ -13,15 +13,13 @@ module PaperTrailDiff
       @route_finder = ActivityEventRouteFinder.new(traversal)
       @places = ActivityTreePlaces.new(traversal)
       @relationship = ActivityRelationship.new
-      configure_appliers(pool, association_reader)
+      configure_appliers(pool, member_snapshot)
     end
 
     #: (SnapshotPool, untyped) -> void
-    def configure_appliers(pool, association_reader)
+    def configure_appliers(pool, member_snapshot)
       route_updater = collection_updater(pool)
-      record_normalizer = ActivityEventRecordNormalizer.new(
-        association_reader: association_reader
-      )
+      record_normalizer = ActivityEventRecordNormalizer.new(member_snapshot: member_snapshot)
       @collection_applier = collection_applier(record_normalizer, route_updater)
       @belongs_to_applier = belongs_to_applier(record_normalizer)
     end
@@ -107,7 +105,7 @@ module PaperTrailDiff
 
     #: (untyped) -> untyped
     def record_after(version)
-      @record_resolver.record_after(version, direct: true)
+      @record_resolver.record_after(version)
     end
 
     #: (untyped, untyped) -> untyped

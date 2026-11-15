@@ -421,7 +421,7 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
   end
 
   # Each state a link recorded names its target by type and id; one with no
-  # target names none, and a key of two columns is left to the record path.
+  # target names none.
   it "reads the targets an owner's recorded states name" do
     author = SourceTypeAuthor.create!(name: 'Author')
     tag = SourceTypeTag.create!(name: 'Tag')
@@ -432,12 +432,8 @@ RSpec.describe PaperTrailDiff::PreparedActivityIndex do
       index.target_rows(SourceTypeLink, [link.id], SourceTypeLink.reflect_on_association(name))
            .map { |row| [row.owner_id, row.foreign_type, row.foreign_key_id] }
     end
-    composite = SourceTypeLink.reflect_on_association(:target).dup
-    allow(composite).to receive(:foreign_key).and_return(Class.new(Array).new(%w[target_id x]))
-
     expect(fields.call(:target)).to eq([[link.id, 'SourceTypeAuthor', author.id],
                                         [link.id, 'SourceTypeTag', tag.id]])
-    expect(index.target_rows(SourceTypeLink, [link.id], composite)).to eq([])
   end
 
   def checkpoint(article)

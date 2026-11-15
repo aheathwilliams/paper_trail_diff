@@ -144,11 +144,14 @@ module PaperTrailDiff
       live_state(root_endpoint)
     end
 
-    #: (untyped, ?history: PreparedHistory?) -> untyped
-    def association_reader(context_version, history: nil)
-      # Callers pass the root's history; a batch's for the version is the rest.
+    # A member's snapshot at `path`, with the associations `tree` selects
+    # below it as the version reads them. Callers pass the root's history; a
+    # batch's for the version is the rest.
+    #: (PreparedRecordState, untyped, tree: AssociationTree, path: String, incoming: untyped, normalizer: SnapshotNormalizer, ?history: PreparedHistory?) -> RecordSnapshot
+    def member(state, context_version, tree:, path:, incoming:, normalizer:, history: nil) # rubocop:disable Metrics/ParameterLists
       history ||= @prepared_histories[Support.row_key(context_version)]
-      PreparedAssociationReifier.new(history, context_version)
+      @prepared_snapshotter.build(state, context_version, tree, normalizer, history,
+                                  path: path, incoming: incoming)
     end
 
     private
@@ -212,64 +215,30 @@ module PaperTrailDiff
     def snapshot_from_version(root_version, context_version, tree:, normalizer:, history:)
       model_class = RecordedClass.for(root_version)
       @preparer.call(model_class, historical: true)
-      handled, snapshot = @prepared_snapshotter.call(
-        root_version, context_version, tree: tree, normalizer: normalizer, history: history
-      )
-      return snapshot if handled
-
-      record = Support.reify(root_version, dup: true)
-      normalize(record, context_version, tree: tree, normalizer: normalizer, history: history)
+      @prepared_snapshotter.call(root_version, context_version, tree: tree, normalizer: normalizer,
+                                                                history: history)
     end
 
-    # Read from prepared history where it can be, as a version is, without
-    # instantiating the root's members. Only the fallback, which writes the
-    # members it rebuilds onto the root, needs a record of its own.
-    #: (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer, history: PreparedHistory?) -> RecordSnapshot?
+    # Read from prepared history, as a version is, without instantiating the
+    # root's members.
+    #: (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer, history: PreparedHistory?) -> RecordSnapshot
     def snapshot_from_live_root(root_record, context_version, tree:, normalizer:, history:)
       state = live_state(root_record)
       @preparer.call(state.model_class, historical: true)
-      handled, snapshot = @prepared_snapshotter.live(
-        state, context_version, tree: tree, normalizer: normalizer, history: history
-      )
-      return snapshot if handled
-
-      normalize(live_root(root_record), context_version, tree: tree, normalizer: normalizer,
+      @prepared_snapshotter.live(state, context_version, tree: tree, normalizer: normalizer,
                                                          history: history)
     end
 
     # The state of the root's row, read once for the call: every snapshot
-    # that starts from the row starts from the same state. Reading it writes
-    # nothing to the row, so it is read from the loaded record itself, whose
-    # columns the current snapshot reads too.
+    # that starts from the row starts from the same state. A batch loaded the
+    # row already; otherwise it is read here, from the record whose columns
+    # the current snapshot reads too.
     #: (untyped) -> PreparedRecordState
     def live_state(root_record)
       identity = Endpoint.identity(root_record)
-      @live_states[identity] ||= PreparedRecordState.new(loaded_root(root_record, identity))
-    end
-
-    # Rebuilding a version's associations writes them onto the record, so each
-    # snapshot that does gets its own copy of the root's row, built from the
-    # row's stored values without a query.
-    #: (untyped) -> untyped
-    def live_root(root_record)
-      loaded = loaded_root(root_record, Endpoint.identity(root_record))
-      loaded.class.instantiate(loaded.attributes_before_type_cast)
-    end
-
-    # A batch loaded the row already; otherwise it is read once, so every
-    # snapshot of the call starts from the same row.
-    #: (untyped, identity) -> untyped
-    def loaded_root(root_record, identity)
-      @live_roots[identity] ||= Endpoint.reload_record(root_record)
-    end
-
-    #: (untyped, untyped, tree: AssociationTree, normalizer: SnapshotNormalizer, history: PreparedHistory?) -> RecordSnapshot?
-    def normalize(record, context_version, tree:, normalizer:, history:)
-      reifier = association_reader(context_version, history: history)
-      reflections = [] #: Array[untyped]
-      reflections = @traversal.reflections_for(record.class, tree, path: '') if record
-      reifier.reify(record, reflections) if record && !reflections.empty?
-      normalizer.call(record, reifier: reifier)
+      @live_states[identity] ||= PreparedRecordState.new(
+        @live_roots[identity] || Endpoint.reload_record(root_record)
+      )
     end
 
     #: (untyped, untyped) -> Array[untyped]

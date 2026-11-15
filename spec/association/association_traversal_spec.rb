@@ -565,14 +565,6 @@ RSpec.describe PaperTrailDiff::AssociationTraversal do
       expect(columns(TrackedArticle, :profile)).to eq(['article_id'])
     end
 
-    it 'returns every column of a composite foreign key' do
-      reflection = instance_double(ActiveRecord::Reflection::HasManyReflection,
-                                   macro: :has_many, through_reflection?: false,
-                                   foreign_key: %w[article_id reviewer_id].freeze, type: nil)
-
-      expect(traversal.incoming_relationship_columns(reflection)).to eq(%w[article_id reviewer_id])
-    end
-
     it 'adds the type column of a polymorphic child' do
       expect(columns(TraversalArticle, :notes)).to eq(%w[holder_id holder_type])
     end

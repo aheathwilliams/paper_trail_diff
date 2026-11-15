@@ -7,8 +7,8 @@ module PaperTrailDiff
   # record's state there rather than by a query. A limit, offset or has_one
   # order then ranks the records that meet the conditions (ScopeRanking). It
   # reads the relation the scope builds once and never runs application code
-  # per record. A scope it cannot read exactly builds no condition, and the
-  # caller keeps its slower path.
+  # per record. A scope it cannot read exactly builds no condition, and a
+  # request that names it is refused (UnreadablePaths).
   class ScopeCondition
     # Relation parts that choose rows other than by the where clause and the
     # ranking the reader follows. Any other part, such as a lock, a comment,
@@ -297,14 +297,6 @@ module PaperTrailDiff
         return @conditions.fetch(key) if @conditions.key?(key)
 
         @conditions[key] = ScopeCondition.build(reflection, model_class, ranked: ranked)
-      end
-
-      # The records the reflection's scope admits, as it ranks them. Its
-      # condition must exist.
-      #: (untyped, Array[untyped], ?untyped, ranked: bool) -> Array[untyped]
-      def select(reflection, records, model_class = reflection.klass, ranked:)
-        condition = call(reflection, model_class, ranked: ranked) #: ScopeCondition
-        condition.members(records)
       end
 
       # @rbs @conditions: Hash[Array[untyped], ScopeCondition?]

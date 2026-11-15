@@ -14,9 +14,8 @@ module PaperTrailDiff
 
     # Unranked, as a part of a has_many through is read, it returns every row
     # the part's conditions admit, a record reached twice appearing twice.
-    #: (PreparedRecordState, untyped, untyped, ?ranked: bool) -> [bool, Array[PreparedRecordState]]
+    #: (PreparedRecordState, untyped, untyped, ?ranked: bool) -> Array[PreparedRecordState]
     def call(owner, reflection, boundary, ranked: true)
-      return [false, []] unless supported?(reflection, ranked)
       return through(owner, reflection, boundary, ranked) if reflection.options[:through]
       return target(owner, reflection, boundary, ranked) if reflection.belongs_to?
 
@@ -29,34 +28,52 @@ module PaperTrailDiff
     # @rbs @edges: untyped
     # @rbs @conditions: ScopeCondition::Cache
 
-    # A polymorphic target's class is known only once a record names it, so
-    # `target` reads its scope for each record instead.
-    #: (untyped, bool) -> bool
-    def supported?(reflection, ranked)
-      reflection.polymorphic? || !@conditions.call(reflection, ranked: ranked).nil?
-    end
-
     #: (PreparedRecordState, untyped, bool, ?untyped) -> bool
     def in_scope?(state, reflection, ranked, model_class = reflection.klass)
       condition = @conditions.call(reflection, model_class, ranked: ranked) #: ScopeCondition
       condition.matches?(state.attributes)
     end
 
-    # A type that names no class, or a class whose scope cannot be read as
-    # conditions, is left to the record path, which raises for the first and
-    # reads the second through its association.
-    #: (PreparedRecordState, untyped, untyped, bool) -> [bool, Array[PreparedRecordState]]
+    #: (PreparedRecordState, untyped, untyped, bool) -> Array[PreparedRecordState]
     def target(owner, reflection, boundary, ranked)
       id = owner.attributes[reflection.foreign_key.to_s]
-      return [true, []] if id.nil?
+      return [] if id.nil?
 
       type = owner.attributes[reflection.foreign_type]
       model_class = AssociationTraversal.stored_target(reflection, type)
-      return [false, []] unless model_class &&
-                                @conditions.call(reflection, model_class, ranked: ranked)
+      unless model_class && @conditions.call(reflection, model_class, ranked: ranked) &&
+             @records.loaded?(model_class, id)
+        unreadable!(owner, reflection, type, model_class)
+      end
 
-      handled, state = @records.snapshot_state_before(model_class, id, boundary)
-      [handled, state && target?(state, reflection, ranked, model_class) ? [state] : []]
+      state = @records.snapshot_state_before(model_class, id, boundary)
+      state && target?(state, reflection, ranked, model_class) ? [state] : []
+    end
+
+    # A polymorphic target's class is known only from the owner's type
+    # column, so TraversalPreparer cannot check it up front: the type may name
+    # no class, or one with no versions or a default scope history cannot read.
+    #: (PreparedRecordState, untyped, untyped, untyped) -> bot
+    def unreadable!(owner, reflection, type, model_class)
+      owner_class = owner.model_class
+      id = owner_id(owner)
+      if model_class.nil? && !type.to_s.empty?
+        AssociationTraversal.unnamed_target!(reflection, owner_class, id, type)
+      end
+      name = "#{owner_class.name}##{reflection.name}"
+      unversioned!(name, model_class) unless model_class.nil? || Support.versioned?(model_class)
+
+      raise UnsupportedAssociationError,
+            "association #{name} cannot be read from history for #{owner_class.name} " \
+            "#{id}: who was in it at a past point cannot be told"
+    end
+
+    #: (String, untyped) -> bot
+    def unversioned!(name, model_class)
+      raise UnversionedAssociationError,
+            "association #{name} cannot be compared historically: it points at " \
+            "#{model_class.name}, which is not versioned. Add `has_paper_trail` to " \
+            "#{model_class.name}, or mirror the fields you need onto a model that has it."
     end
 
     # A target class that is an STI subclass reads no sibling's row, as Active
@@ -67,25 +84,18 @@ module PaperTrailDiff
         in_scope?(state, reflection, ranked, model_class)
     end
 
-    # The members of each join record the owner had at the boundary, as
-    # PreparedHistory#through_records reads them from records. Under
+    # The members of each join record the owner had at the boundary. Under
     # `source_type:`, only join records of that type count. A through reads
     # its parts unranked, as its one query joins every row of each.
-    #: (PreparedRecordState, untyped, untyped, bool) -> [bool, Array[PreparedRecordState]]
+    #: (PreparedRecordState, untyped, untyped, bool) -> Array[PreparedRecordState]
     def through(owner, reflection, boundary, ranked)
-      handled, joins = call(owner, reflection.through_reflection, boundary, ranked: false)
-      return [false, []] unless handled
+      joins = call(owner, reflection.through_reflection, boundary, ranked: false)
+      rows = ScopeCondition.in_key_order(joins, &:model_class).flat_map do |join|
+        next [] unless typed_join?(reflection, join)
 
-      rows = [] #: Array[PreparedRecordState]
-      ScopeCondition.in_key_order(joins, &:model_class).each do |join|
-        next unless typed_join?(reflection, join)
-
-        handled, states = call(join, reflection.source_reflection, boundary, ranked: false)
-        return [false, []] unless handled
-
-        rows.concat(states)
+        call(join, reflection.source_reflection, boundary, ranked: false)
       end
-      [true, through_members(reflection, rows, ranked)]
+      through_members(reflection, rows, ranked)
     end
 
     # The through's own scope applies after its parts' scopes, to each row,
@@ -121,22 +131,20 @@ module PaperTrailDiff
 
     # The scope's condition and the owner's id are read once for all the
     # owner's children, which are read at every boundary.
-    #: (PreparedRecordState, untyped, untyped, bool) -> [bool, Array[PreparedRecordState]]
+    #: (PreparedRecordState, untyped, untyped, bool) -> Array[PreparedRecordState]
     def children(owner, reflection, boundary, ranked)
       condition = @conditions.call(reflection, ranked: ranked) #: ScopeCondition
       owner_id = owner_id(owner)
       selected = [] #: Array[PreparedRecordState]
       @edges.call(owner.model_class, reflection).each_value do |group|
         ids_for(group, owner_id).each do |id|
-          handled, child = @records.snapshot_state_before(group.fetch(:model), id, boundary)
-          return [false, []] unless handled
-
+          child = @records.snapshot_state_before(group.fetch(:model), id, boundary)
           selected << child if child && member?(child, owner_id, reflection, condition)
         end
       end
-      return [true, selected] unless ranked
+      return selected unless ranked
 
-      [true, first_if_one(reflection, condition, condition.rank(selected))]
+      first_if_one(reflection, condition, condition.rank(selected))
     end
 
     #: (untyped, String) -> Array[untyped]

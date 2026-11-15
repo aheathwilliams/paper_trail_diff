@@ -10,8 +10,8 @@ module PaperTrailDiff
     # A has_many through reads its parts' conditions only, at any depth. A
     # has_one through over a ranked part is refused whole, so its parts, too,
     # are checked for conditions alone.
-    # : (untyped, ranked: bool) -> String?
-    def self.path_reason: (untyped, ranked: bool) -> String?
+    # : (untyped) -> String?
+    def self.path_reason: (untyped) -> String?
 
     # A scope prepared history can read as conditions on stored attributes
     # is batched like any other path. A polymorphic target's class, and so

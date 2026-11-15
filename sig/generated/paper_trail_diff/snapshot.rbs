@@ -22,8 +22,6 @@ module PaperTrailDiff
 
   # A normalized association in a bounded record snapshot tree.
   class AssociationSnapshot
-    COLLECTION_KINDS: untyped
-
     # Whether a collection's identities were found distinct. The snapshots a
     # transition derives from one another share the answer: a transition
     # replaces a record in its place, takes one out, or puts in one that was
@@ -37,24 +35,6 @@ module PaperTrailDiff
       def call: (Array[RecordSnapshot]) -> void
     end
 
-    # Identifies one snapshot for internal carry-forward. A transition cannot
-    # hold its origin without retaining every earlier snapshot at that path,
-    # and `object_id` is only guaranteed unique among live objects, so Ruby may
-    # hand a collected snapshot's id to a later one.
-    class SerialSequence
-      # : () -> void
-      def initialize: () -> void
-
-      # : () -> Integer
-      def next_serial: () -> Integer
-
-      @counter: Integer
-
-      @mutex: Thread::Mutex
-    end
-
-    SERIALS: untyped
-
     # : (Symbol) -> bool
     def self.collection_kind?: (Symbol) -> bool
 
@@ -62,7 +42,11 @@ module PaperTrailDiff
 
     attr_reader records: Array[RecordSnapshot]
 
-    attr_reader serial: Integer
+    # Identifies this snapshot for internal carry-forward (see
+    # CollectionTransition). A token of its own, as `object_id` is unique
+    # only among live objects: Ruby may hand a collected snapshot's id to a
+    # later one.
+    attr_reader serial: Object
 
     # `ordered` says the records are already in documented order, as a
     # transition's are: checking them again for each event made a replay's

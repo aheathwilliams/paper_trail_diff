@@ -91,14 +91,4 @@ RSpec.describe PaperTrailDiff::ActivitySnapshotDelta do
 
     expect(delta.relationship_changed?(reflection('subject_id', as: :subject))).to be(true)
   end
-
-  it 'detects a change to any column of a composite foreign key' do
-    delta = described_class.new(
-      before_attributes: { shop_id: 1, article_id: 2, tenant_id: 5 },
-      after_attributes: { shop_id: 1, article_id: 3, tenant_id: 5 }
-    )
-
-    expect(delta.relationship_changed?(reflection(%w[shop_id article_id]))).to be(true)
-    expect(delta.relationship_changed?(reflection(%w[shop_id tenant_id]))).to be(false)
-  end
 end

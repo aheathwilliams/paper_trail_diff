@@ -6,8 +6,8 @@ module PaperTrailDiff
   # as Ruby compares the attribute's values, which is what lets ScopeCondition
   # and ScopeRanking decide a scope in Ruby. Each adapter lists the SQL types
   # it compares that way, so a type it does not list, such as PostgreSQL's
-  # character(n) or citext, and an adapter it does not know, fall back to the
-  # caller's slower path rather than being trusted.
+  # character(n) or citext, and an adapter it does not know, leave a scope
+  # that compares them unreadable rather than being trusted.
   module ExactColumnType
     # Kinds by SQL type, without its size, precision or scale. Integers,
     # booleans and dates compare alike everywhere listed. Text compares

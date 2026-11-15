@@ -2,10 +2,8 @@
 
 require_relative '../support/source_type_database'
 
-# The reader builds snapshots from stored attributes. A reflection it declines
-# sends the whole root to `reify` and PT-AT-shaped records instead, so every
-# result here is compared with that path, which the reader once took for
-# throughs and polymorphic `belongs_to`.
+# The reader builds snapshots from stored attributes. Each result here is
+# checked against what Active Record read when the version was saved.
 RSpec.describe PaperTrailDiff::PreparedStateAssociationReader do
   before do
     PaperTrail::VersionAssociation.delete_all
@@ -14,57 +12,25 @@ RSpec.describe PaperTrailDiff::PreparedStateAssociationReader do
      SourceTypeHolder, SourceTypeAuthor, SourceTypeTag].each(&:delete_all)
   end
 
-  # A current boundary records when each call read it.
-  def scrub(value)
-    case value
-    when Hash then value.except(:recorded_at).transform_values { |item| scrub(item) }
-    when Array then value.map { |item| scrub(item) }
-    else value
+  # Who the association holds now, as Active Record reads it.
+  def live_members(root, name)
+    Array(root.class.find(root.id).public_send(name)).map do |member|
+      [member.class.name, member.id]
+    end.sort
+  end
+
+  # Who the association held at each version, as prepared history reads it.
+  def read_members(root, from, to, name)
+    analysis = PaperTrailDiff.analyze(root, from: from, to: to, associations: [name],
+                                            activity: true, snapshots: true)
+    [analysis.from_snapshot, analysis.to_snapshot].map do |snapshot|
+      snapshot.associations.fetch(name.to_s).records.map { |record| [record.type, record.id] }.sort
     end
   end
 
-  def results(roots, versions, window, associations)
-    analyses = [false, true].map do |activity|
-      PaperTrailDiff.analyze_many(roots, within: window, associations: associations,
-                                         activity: activity, snapshots: activity)
-                    .transform_values { |analysis| analysis.to_h(snapshots: activity) }
-    end
-    comparisons = versions.map do |from, to|
-      PaperTrailDiff.compare_many([{ from: from, to: to }], associations: associations)
-                    .transform_values(&:to_h)
-    end
-    scrub([analyses, comparisons])
-  end
-
-  # The same results with the reader declining throughs and polymorphic
-  # `belongs_to`, as it did before it read them.
-  def declined_results(*arguments)
-    allow_any_instance_of(described_class).to receive(:call)
-      .and_wrap_original do |original, owner, reflection, boundary|
-        next [false, []] if reflection.options[:through] || reflection.polymorphic?
-
-        original.call(owner, reflection, boundary)
-      end
-    results(*arguments)
-  ensure
-    RSpec::Mocks.space.reset_all
-  end
-
-  # `reify:` says whether the root itself is still read by the record path.
-  def expect_same_results(roots, versions, window, associations, reify: false)
-    reified = 0
-    allow_any_instance_of(PaperTrail::Version).to receive(:reify)
-      .and_wrap_original do |original, *arguments, **options|
-        reified += 1
-        original.call(*arguments, **options)
-      end
-    read = results(roots, versions, window, associations)
-    expect(reified.positive?).to be(reify)
-    RSpec::Mocks.space.reset_all
-
-    expect(read).to eq(declined_results(roots, versions, window, associations))
-    changed = read.first.first.values.map { |analysis| analysis.dig(:diff, :associations) }
-    expect(changed.reject(&:empty?)).not_to be_empty
+  def expect_members(root, versions, name, before:, after:)
+    expect(read_members(root, *versions, name)).to eq([before, after])
+    expect(before).not_to eq(after)
   end
 
   def checkpoint(record)
@@ -108,6 +74,7 @@ RSpec.describe PaperTrailDiff::PreparedStateAssociationReader do
     destroyed = kept.comments.create!(body: 'destroyed')
     edited = gone.comments.create!(body: 'edited')
     starts = [ada, bea].map { |author| checkpoint(author) }
+    befores = [ada, bea].map { |author| live_members(author, :comments) }
     moved.update!(author: bea)
     travelling.update!(article: kept)
     destroyed.destroy!
@@ -116,8 +83,10 @@ RSpec.describe PaperTrailDiff::PreparedStateAssociationReader do
     kept.comments.create!(body: 'new')
     ends = [ada, bea].map { |author| checkpoint(author) }
 
-    expect_same_results([ada, bea], starts.zip(ends), starts.first.created_at..Time.now.utc,
-                        [:comments])
+    [ada, bea].each_with_index do |author, index|
+      expect_members(author, [starts[index], ends[index]], :comments,
+                     before: befores[index], after: live_members(author, :comments))
+    end
   end
 
   it 'reads a has_many :through whose source is a belongs_to' do
@@ -126,15 +95,25 @@ RSpec.describe PaperTrailDiff::PreparedStateAssociationReader do
     TrackedAuthorship.create!(article: article, author: writer, role: 'writer')
     leaving = TrackedAuthorship.create!(article: article, author: editor, role: 'editor')
     start = checkpoint(article)
+    before = live_members(article, :contributors)
     writer.update!(name: 'Writer renamed')
     leaving.destroy!
     finish = checkpoint(article)
 
-    expect_same_results([article], [[start, finish]], start.created_at..Time.now.utc,
-                        [:contributors])
+    expect_members(article, [start, finish], :contributors,
+                   before: before, after: live_members(article, :contributors))
   end
 
   describe 'a polymorphic source' do
+    # Who each record's association held when its start version was saved.
+    def befores(holder, links)
+      befores = { holder => %i[linked_authors symbol_authors].to_h do |name|
+        [name, live_members(holder, name)]
+      end }
+      links.each { |link| befores[link] = { target: live_members(link, :target) } }
+      befores
+    end
+
     def history
       holder = SourceTypeHolder.create!(name: 'Holder')
       ada = SourceTypeAuthor.create!(name: 'Ada')
@@ -144,38 +123,48 @@ RSpec.describe PaperTrailDiff::PreparedStateAssociationReader do
       to_author = SourceTypeLink.create!(holder: holder, target: tag)
       start = checkpoint(holder)
       starts = [to_tag, to_author].map { |link| checkpoint(link) }
+      before = befores(holder, [to_tag, to_author])
       ada.update!(name: 'Ada renamed')
       to_tag.update!(target: SourceTypeTag.create!(name: 'New tag'))
       to_author.update!(target: bea)
       tag.update!(name: 'Same id renamed')
-      [holder, start, [to_tag, to_author], starts]
+      [holder, start, [to_tag, to_author], starts, before]
     end
 
     it 'reads a through with source_type, only for links of that type' do
-      holder, start, = history
+      holder, start, _links, _starts, before = history
       finish = checkpoint(holder)
 
       %i[linked_authors symbol_authors].each do |name|
-        expect_same_results([holder], [[start, finish]], start.created_at..Time.now.utc, [name])
+        expect_members(holder, [start, finish], name, before: before.fetch(holder).fetch(name),
+                                                      after: live_members(holder, name))
       end
     end
 
     it 'reads a polymorphic belongs_to of each type a link names' do
-      _holder, start, links, starts = history
+      _holder, _start, links, starts, before = history
       ends = links.map { |link| checkpoint(link) }
 
-      expect_same_results(links, starts.zip(ends), start.created_at..Time.now.utc, [:target])
+      links.each_with_index do |link, index|
+        expect_members(link, [starts[index], ends[index]], :target,
+                       before: before.fetch(link).fetch(:target),
+                       after: live_members(link, :target))
+      end
     end
 
     # The tag a link moves to is outside the scope, so that link ends with no
     # target.
     it 'reads a target whose default scope is plain conditions, keeping it out' do
-      _holder, start, links, starts = history
+      _holder, _start, links, starts, before = history
       ends = links.map { |link| checkpoint(link) }
       hidden = links.first.target_id
       SourceTypeTag.class_eval { default_scope { where.not(id: hidden) } }
 
-      expect_same_results(links, starts.zip(ends), start.created_at..Time.now.utc, [:target])
+      expect_members(links.first, [starts.first, ends.first], :target,
+                     before: before.fetch(links.first).fetch(:target), after: [])
+      expect_members(links.last, [starts.last, ends.last], :target,
+                     before: before.fetch(links.last).fetch(:target),
+                     after: live_members(links.last, :target))
       steps = SpecTimelines.activity_timeline(
         links.first, from: starts.first, to: ends.first, associations: [:target], snapshots: true
       )

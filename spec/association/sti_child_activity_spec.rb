@@ -140,20 +140,21 @@ RSpec.describe 'Activity on an STI belongs_to target' do
       .to eq(['StiChildPinnedBadge', { from: 'pinned', to: 'pinned 2' }])
   end
 
-  # Without prepared history, the next version or the live row says what a
-  # version left, as the class the row held then.
-  describe PaperTrailDiff::ActivityEventRecordResolver do
-    def state_after(version)
-      described_class.new.record_after(version, direct: true)
+  # The state a version left is the one recorded next, or the live row's, as
+  # the class the row held then.
+  describe PaperTrailDiff::PreparedRecordIndex do
+    def states_after(badge)
+      versions = StiChildBadge.find(badge.id).versions.reorder(:id).to_a
+      index = described_class.new(versions.first.created_at - 1)
+      index.load(StiChildBadge, [badge.id])
+      versions.map { |version| index.record_after(StiChildBadge, badge.id, version).last }
     end
 
-    it 'reads a subclass row as its subclass without prepared history' do
+    it 'reads a subclass row as its subclass' do
       badge = StiChildPinnedBadge.create!(label: 'pinned')
       badge.update!(label: 'pinned 2')
-      created, updated = badge.versions.reorder(:id).to_a
 
-      expect([state_after(created), state_after(updated)]
-               .map { |record| [record.class, record.label] })
+      expect(states_after(badge).map { |state| [state.model_class, state.attributes['label']] })
         .to eq([[StiChildPinnedBadge, 'pinned'], [StiChildPinnedBadge, 'pinned 2']])
     end
 
@@ -163,7 +164,7 @@ RSpec.describe 'Activity on an STI belongs_to target' do
       badge = StiChildBadge.find(badge.id)
       badge.update!(type: 'StiChildPinnedBadge')
 
-      expect(badge.versions.reorder(:id).drop(1).map { |version| state_after(version).class })
+      expect(states_after(badge).drop(1).map(&:model_class))
         .to eq([StiChildBadge, StiChildPinnedBadge])
     end
 
@@ -174,7 +175,7 @@ RSpec.describe 'Activity on an STI belongs_to target' do
       badge = StiChildBadge.find(badge.id)
       badge.update_columns(label: 'unrecorded 2')
 
-      expect(badge.versions.reorder(:id).map { |version| state_after(version).label })
+      expect(states_after(badge).map { |state| state.attributes['label'] })
         .to eq(['unrecorded', 'unrecorded 2'])
     end
   end

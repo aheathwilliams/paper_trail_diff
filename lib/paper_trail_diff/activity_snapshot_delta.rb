@@ -53,9 +53,8 @@ module PaperTrailDiff
 
     #: (untyped) -> Array[untyped]
     def relationship_keys(reflection)
-      keys = Array(reflection.foreign_key)
-      keys << reflection.type if reflection.options.key?(:as)
-      keys
+      key = reflection.foreign_key
+      reflection.options.key?(:as) ? [key, reflection.type] : [key]
     end
   end
 end

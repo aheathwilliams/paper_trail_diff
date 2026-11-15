@@ -125,13 +125,10 @@ module PaperTrailDiff
     # after its change, which is the state the record's next version stores,
     # or its live row, and the history reads both; it also reads the state a
     # key changed without a version, such as one `has_paper_trail only:`
-    # leaves out, reaches only through. A key of two columns is read per
-    # record instead.
+    # leaves out, reaches only through.
     #: (untyped, Array[untyped], untyped) -> Array[TargetRow]
     def target_rows(model, ids, reflection)
       key = reflection.foreign_key
-      return [] if key.is_a?(Array)
-
       ids.flat_map do |id|
         targets = @records.attribute_values_for(model, [id], key)
         types = (@records.attribute_values_for(model, [id], reflection.foreign_type) if

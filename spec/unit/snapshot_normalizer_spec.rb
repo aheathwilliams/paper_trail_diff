@@ -7,7 +7,7 @@ RSpec.describe PaperTrailDiff::SnapshotNormalizer do
     [NormVersion, NormAuthor, NormPost, NormComment, NormCover, NormTag].each(&:delete_all)
   end
 
-  let(:reifier) { instance_spy(PaperTrailDiff::PreparedAssociationReifier) }
+  let(:reifier) { instance_spy(PaperTrailDiff::LiveAssociationReader) }
 
   def tree(*paths)
     PaperTrailDiff::AssociationTree.build(paths)
@@ -238,55 +238,6 @@ RSpec.describe PaperTrailDiff::SnapshotNormalizer do
     end
   end
 
-  describe '#call_child' do
-    let(:comments_tree) { tree('comments.post') }
-    let(:incoming) { NormPost.reflect_on_association(:comments) }
-
-    def child(normalizer, record, tree)
-      normalizer.call_child(record, tree: tree.child('comments'), path: 'comments',
-                                    incoming: incoming, reifier: reifier)
-    end
-
-    it 'normalizes one child of a selected branch, reifying its own associations' do
-      comment = post_with_comments.comments.first
-      normalizer = normalizer(comments_tree)
-
-      result = child(normalizer, comment, comments_tree)
-
-      expect(result.attributes.keys)
-        .to contain_exactly('body', 'type', 'subject_type', 'subject_id', 'parent_id')
-      expect(result.associations.keys).to eq(['post'])
-      expect(child(normalizer, comment, comments_tree)).to equal(result)
-      expect(reifier).to have_received(:reify)
-        .with(comment, [NormComment.reflect_on_association(:post)]).twice
-    end
-
-    it 'skips reifying when the child has no selected associations' do
-      leaf = tree('comments')
-      comment = post_with_comments.comments.first
-
-      result = child(normalizer(leaf), comment, leaf)
-
-      expect(result.associations).to eq({})
-      expect(result.attributes.keys).not_to include('post_id')
-      expect(reifier).not_to have_received(:reify)
-    end
-
-    it 'passes the reifier down a selected path' do
-      deep = tree('comments.post.comments')
-      comment = post_with_comments.comments.first
-
-      child(normalizer(deep), comment, deep)
-
-      expect(reifier).to have_received(:reify)
-        .with(comment.post, [NormPost.reflect_on_association(:comments)])
-    end
-
-    it 'is nothing when there is no record' do
-      expect(child(normalizer(comments_tree), nil, comments_tree)).to be_nil
-    end
-  end
-
   describe '#attributes_for' do
     it 'normalizes attributes without loading associations' do
       post = NormPost.find(post_with_comments.id)
@@ -317,16 +268,15 @@ RSpec.describe PaperTrailDiff::SnapshotNormalizer do
   end
 
   describe '#from_state' do
-    let(:comment) { post_with_comments.comments.first }
+    let(:post) { post_with_comments }
+    let(:comment) { post.comments.first }
     let(:state) { PaperTrailDiff::PreparedRecordState.from_attributes(NormComment, comment.attributes) }
     let(:incoming) { NormPost.reflect_on_association(:comments) }
 
     it 'builds the snapshot an Active Record child would give' do
       deep = tree('comments.post')
       branch = deep.child('comments')
-      expected = normalizer(deep).call_child(
-        comment, tree: branch, path: 'comments', incoming: incoming, reifier: reifier
-      )
+      expected = snapshot(post, 'comments.post').associations.fetch('comments').records.first
       fresh = normalizer(deep)
 
       result = fresh.from_state(state, tree: branch, path: 'comments', incoming: incoming)
