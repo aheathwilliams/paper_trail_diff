@@ -55,6 +55,19 @@ RSpec.describe 'Report API for a reporting page' do
       expect(report.analyses.fetch(identity(order)).window).to eq(start..finish)
     end
 
+    it 'reads from since: through now' do
+      order = ApiReportOrder.create!(status: 'open')
+      before = ApiReportOrder.create!(status: 'open')
+      start = Time.now.utc
+      order.update!(status: 'packed')
+
+      report = PaperTrailDiff.report(ApiReportOrder.all, since: start, limit: 5)
+
+      expect(report.analyses.keys).to eq([identity(order)])
+      expect(report.analyses.fetch(identity(order)).window).to eq(start..)
+      expect(before).to be_persisted
+    end
+
     it 'leaves out changes after the window ends' do
       order = ApiReportOrder.create!(status: 'open')
       start = Time.now.utc
@@ -98,6 +111,11 @@ RSpec.describe 'Report API for a reporting page' do
       expect { PaperTrailDiff.analyze_scope(ApiReportOrder, within: 1.day.ago..) }
         .to raise_error(PaperTrailDiff::ConfigurationError, /limit: is required/)
     end
+
+    it 'is required for a scope that is not a relation' do
+      expect { PaperTrailDiff.report([], since: 1.day.ago) }
+        .to raise_error(PaperTrailDiff::ConfigurationError, /limit: is required/)
+    end
   end
 
   describe 'Analysis#changed_attributes',
@@ -114,7 +132,7 @@ RSpec.describe 'Report API for a reporting page' do
       analysis = PaperTrailDiff.analyze(order, within: start.., associations: [:lines],
                                                activity: true)
 
-      expect(analysis.changed_attributes).to eq(%w[note status])
+      expect(analysis.changed_attributes).to eq(%w[note status]).and be_frozen
       expect(analysis.diff.attributes.keys).to eq(%w[status])
     end
 
@@ -126,7 +144,8 @@ RSpec.describe 'Report API for a reporting page' do
     end
   end
 
-  describe 'ActivityStep#root_sources', mutant_expression: 'PaperTrailDiff::ActivityStep#root_sources' do
+  describe 'ActivityStep#root_sources',
+           mutant_expression: 'PaperTrailDiff::ActivityStep#root_sources' do
     def saved_steps(order, start)
       PaperTrailDiff.analyze(order, within: start.., associations: [:lines], activity: true,
                                     group: :transaction).activity_timeline.reject(&:empty?)
@@ -156,10 +175,27 @@ RSpec.describe 'Report API for a reporting page' do
 
       expect(saved_steps(order, start).sole.root_sources).to eq([])
     end
+
+    it 'names changes saved without a version once' do
+      order = ApiReportOrder.create!(status: 'open')
+      start = Time.now.utc
+      order.update!(status: 'packed')
+      order.update_columns(note: 'call first', status: 'held')
+
+      steps = PaperTrailDiff.analyze(order, within: start.., activity: true,
+                                            recorded_changes: true).activity_timeline
+
+      step = steps.sole
+
+      expect(step.change_rows.count(&:unversioned?)).to eq(2)
+      expect(step.root_sources.map(&:kind)).to eq(%i[unversioned version])
+      expect(step.root_sources).to be_frozen
+    end
   end
 
   describe 'diagnose on a history YAML cannot load',
-           history: :yaml, mutant_expression: 'PaperTrailDiff::HistoryDiagnostics#inspect_decoding' do
+           history: :yaml,
+           mutant_expression: 'PaperTrailDiff::HistoryDiagnostics#inspect_decoding' do
     it 'names the class to permit' do
       order = ApiReportOrder.create!(status: 'open')
       order.update!(status: 'packed')
@@ -173,8 +209,14 @@ RSpec.describe 'Report API for a reporting page' do
       issue = report.errors.sole
       expect(issue.code).to eq(:disallowed_yaml_class)
       expect(issue.version_id).to eq(version.id)
-      expect(issue.message).to include('ApiReportOrder::Unpermitted',
+      expect(issue.message).to include('Tried to load unspecified class: ApiReportOrder::Unpermitted',
                                        'yaml_column_permitted_classes')
+    end
+
+    it 'reads nothing from a create, which stores no state' do
+      order = ApiReportOrder.create!(status: 'open')
+
+      expect(PaperTrailDiff.diagnose(order.versions.sole, order)).to be_ok
     end
   end
 end

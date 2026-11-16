@@ -141,16 +141,16 @@ module PaperTrailDiff
 
     # PaperTrail's YAML columns load only the classes Rails permits, and an
     # adapter can store its own value objects there, as SQL Server's does
-    # for dates and times. Every read of such a history then fails, `reify`
-    # included, so each version endpoint is decoded once to name the class.
+    # for dates and times. Every read of such a state then fails, `reify`
+    # included, so each version endpoint's state is decoded once to name the
+    # class. PaperTrail reads undecodable `object_changes` as empty instead.
     #: () -> void
     def inspect_decoding
       @versions.each do |version|
         version.object_deserialized if version.object
-        RecordedChanges.call(version, ignore: [])
       rescue Support.constant('Psych::DisallowedClass') => e
         add_issue(:error, :disallowed_yaml_class,
-                  "#{e.message}; add it to ActiveRecord.yaml_column_permitted_classes",
+                  "#{e}; add it to ActiveRecord.yaml_column_permitted_classes",
                   nil, version.id)
       end
     end
