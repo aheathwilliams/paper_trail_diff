@@ -157,7 +157,7 @@ RSpec.describe 'Report API for a reporting page' do
     end
   end
 
-  describe 'diagnose on a history YAML cannot load' do
+  describe 'diagnose on a history YAML cannot load', history: :yaml do
     it 'names the class to permit' do
       order = ApiReportOrder.create!(status: 'open')
       order.update!(status: 'packed')
