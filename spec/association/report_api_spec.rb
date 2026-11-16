@@ -38,7 +38,7 @@ RSpec.describe 'Report API for a reporting page' do
 
   def identity(record) = PaperTrailDiff::Endpoint.identity(record)
 
-  describe 'report(within:)' do
+  describe 'report(within:)', mutant_expression: 'PaperTrailDiff.report_window' do
     it 'selects a root whose only change in a closed window was to an association' do
       order = ApiReportOrder.create!(status: 'open')
       line = order.lines.create!(quantity: 1)
@@ -82,7 +82,7 @@ RSpec.describe 'Report API for a reporting page' do
     end
   end
 
-  describe 'limit:' do
+  describe 'limit:', mutant_expression: 'PaperTrailDiff::ScopedAnalysisBuilder#relation_limit' do
     it "defaults to the relation's own limit" do
       orders = Array.new(3) { ApiReportOrder.create!(status: 'open') }
 
@@ -100,7 +100,8 @@ RSpec.describe 'Report API for a reporting page' do
     end
   end
 
-  describe 'Analysis#changed_attributes' do
+  describe 'Analysis#changed_attributes',
+           mutant_expression: 'PaperTrailDiff::Analysis#changed_attributes' do
     it "names the root's own fields that changed, even those changed back" do
       order = ApiReportOrder.create!(status: 'open')
       line = order.lines.create!(quantity: 1)
@@ -125,7 +126,7 @@ RSpec.describe 'Report API for a reporting page' do
     end
   end
 
-  describe 'ActivityStep#root_sources' do
+  describe 'ActivityStep#root_sources', mutant_expression: 'PaperTrailDiff::ActivityStep#root_sources' do
     def saved_steps(order, start)
       PaperTrailDiff.analyze(order, within: start.., associations: [:lines], activity: true,
                                     group: :transaction).activity_timeline.reject(&:empty?)
@@ -157,7 +158,8 @@ RSpec.describe 'Report API for a reporting page' do
     end
   end
 
-  describe 'diagnose on a history YAML cannot load', history: :yaml do
+  describe 'diagnose on a history YAML cannot load',
+           history: :yaml, mutant_expression: 'PaperTrailDiff::HistoryDiagnostics#inspect_decoding' do
     it 'names the class to permit' do
       order = ApiReportOrder.create!(status: 'open')
       order.update!(status: 'packed')
