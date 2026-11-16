@@ -95,6 +95,7 @@ module PaperTrailDiff
           # corrupt a scalar timeline just as surely, and a report that inspected
           # nothing has no business answering `ok?`.
           inspect_version_sequence
+          inspect_decoding
           inspect_associations(model_class) unless @tree.empty?
         end
       end
@@ -136,6 +137,22 @@ module PaperTrailDiff
       Endpoint.validate_order!(from, to)
 
       [from, to].select { |endpoint| Endpoint.version?(endpoint) }
+    end
+
+    # PaperTrail's YAML columns load only the classes Rails permits, and an
+    # adapter can store its own value objects there, as SQL Server's does
+    # for dates and times. Every read of such a history then fails, `reify`
+    # included, so each version endpoint is decoded once to name the class.
+    #: () -> void
+    def inspect_decoding
+      @versions.each do |version|
+        version.object_deserialized if version.object
+        RecordedChanges.call(version, ignore: [])
+      rescue Support.constant('Psych::DisallowedClass') => e
+        add_issue(:error, :disallowed_yaml_class,
+                  "#{e.message}; add it to ActiveRecord.yaml_column_permitted_classes",
+                  nil, version.id)
+      end
     end
 
     #: (Array[Array[untyped]]) -> void

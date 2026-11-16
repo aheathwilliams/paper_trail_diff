@@ -49,7 +49,7 @@ module PaperTrailDiff
     def self.check_since!(since)
       if since.nil? || since.is_a?(Range)
         raise InvalidTimeRangeError, '`since` must be a time, date, or string; for a range, ' \
-                                     'pass it as `within:` to analyze_scope'
+                                     'pass it as `within:`'
       end
 
       begin

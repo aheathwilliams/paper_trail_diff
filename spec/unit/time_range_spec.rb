@@ -49,7 +49,7 @@ RSpec.describe PaperTrailDiff::TimeRange do
       [nil, start_time..end_time, Class.new(Range).new(start_time, end_time)].each do |since|
         expect { described_class.check_since!(since) }
           .to invalid('`since` must be a time, date, or string; for a range, ' \
-                      'pass it as `within:` to analyze_scope')
+                      'pass it as `within:`')
       end
       [:soon, 'nonsense'].each do |since|
         expect { described_class.check_since!(since) }

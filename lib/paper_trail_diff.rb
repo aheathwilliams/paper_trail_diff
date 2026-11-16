@@ -249,9 +249,11 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
     # requested association paths also counts, because the activity timeline
     # reports it. Joined duplicates are read in bounded pages and analyzed once.
     #
-    # `limit:` is required and exceeding it raises. Selection moves into the gem
-    # here. The relation's own limit/offset select the live page; this separate
-    # ceiling rejects too many unique roots rather than truncating that page.
+    # `limit:` is a ceiling, and exceeding it raises. Selection moves into the
+    # gem here. The relation's own limit/offset select the live page; this
+    # separate ceiling rejects too many unique roots rather than truncating
+    # that page. It defaults to the relation's own limit, which a page has
+    # already, and is required for a relation without one.
     #
     # Returns a `ScopedAnalysis`, which destructures:
     #
@@ -270,10 +272,10 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
     # Note also that a relation selects on current state, not on state during
     # the window: `where(status: 'published')` means published *now*, which is a
     # different set from what was published while the window was open.
-    #: (untyped, limit: Integer?, ?within: untyped, ?associations: association_option, ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?, ?include_deleted: bool, ?recorded_changes: bool?) -> ScopedAnalysis
+    #: (untyped, ?limit: Integer?, ?within: untyped, ?associations: association_option, ?ignore: ignore_option, ?activity: bool, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?, ?include_deleted: bool, ?recorded_changes: bool?) -> ScopedAnalysis
     def analyze_scope( # rubocop:disable Metrics/ParameterLists
       scope,
-      limit:,
+      limit: nil,
       within: nil,
       associations: [],
       ignore: DEFAULT_IGNORED_ATTRIBUTES,
@@ -293,23 +295,23 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
       )
     end
 
-    # Recent root and selected-child activity through the current saved state,
-    # for every root that changed or whose requested associations did.
-    # Historical windows remain explicit on analyze_scope; this entry point is
-    # deliberately named for a report through now rather than an as-of query.
-    # With associations, each saved transaction is one step unless `group:
-    # nil` asks for every version on its own.
-    #: (untyped, since: untyped, limit: Integer, ?associations: association_option, ?ignore: ignore_option, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?, ?include_deleted: bool, ?recorded_changes: bool?) -> ScopedAnalysis
+    # Root and selected-child activity for every root that changed, or whose
+    # requested associations did, in a window: `since:` reads through now,
+    # including any version a server dated ahead of this one's clock, and
+    # `within:` takes a range, such as one closed on both ends. It is
+    # `analyze_scope` with `activity: true`, so a change to an association
+    # alone always selects its root. With associations, each saved
+    # transaction is one step unless `group: nil` asks for every version on
+    # its own.
+    #: (untyped, ?since: untyped, ?within: untyped, ?limit: Integer?, ?associations: association_option, ?ignore: ignore_option, ?version_scope: untyped, ?snapshots: bool, ?group: Symbol?, ?include_deleted: bool, ?recorded_changes: bool?) -> ScopedAnalysis
     def report( # rubocop:disable Metrics/ParameterLists
-      scope, since:, limit:, associations: [], ignore: DEFAULT_IGNORED_ATTRIBUTES,
-      version_scope: nil, snapshots: false, group: default_group(associations),
-      include_deleted: false, recorded_changes: nil
+      scope, since: nil, within: nil, limit: nil, associations: [],
+      ignore: DEFAULT_IGNORED_ATTRIBUTES, version_scope: nil, snapshots: false,
+      group: default_group(associations), include_deleted: false, recorded_changes: nil
     )
-      TimeRange.check_since!(since)
-      # Endless, so a version a server dated ahead of this one's clock is in it.
       analyze_scope(
         scope,
-        within: (since..), limit: limit, associations: associations,
+        within: report_window(since, within), limit: limit, associations: associations,
         ignore: ignore, activity: true, version_scope: version_scope, snapshots: snapshots,
         group: group,
         include_deleted: include_deleted,
@@ -387,6 +389,20 @@ module PaperTrailDiff # rubocop:disable Metrics/ModuleLength
     end
 
     private
+
+    # `report` reads one window, given as a start or as a range. A start
+    # becomes an endless range, so a version a server dated ahead of this
+    # one's clock is in it.
+    #: (untyped, untyped) -> untyped
+    def report_window(since, within)
+      unless since.nil? ^ within.nil?
+        raise InvalidTimeRangeError, 'report takes one of `since:` or `within:`'
+      end
+      return within if since.nil?
+
+      TimeRange.check_since!(since)
+      since..
+    end
 
     # `report` groups by transaction unless it reads no associations. A value
     # that is not a list, such as nil, groups too, and the option's own check

@@ -3,6 +3,29 @@
 All notable changes to this project will be documented in this file. The
 project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- `report` takes `within:`, a range such as one closed on both ends, as well
+  as `since:`. A fixed date range no longer needs `analyze_scope`, where
+  leaving out `activity: true` silently drops records whose only changes were
+  to their associations. Pass one of the two.
+- `limit:` on `report` and `analyze_scope` defaults to the relation's own
+  `limit`, so a page such as `Order.order(:id).limit(25)` needs no second
+  page size. A relation without a limit still needs `limit:`.
+- `Analysis#changed_attributes` names the root's own attributes that changed,
+  from the change rows, including fields changed and changed back. It needs
+  `activity: true`, which `report` always uses.
+- `ActivityStep#root_sources` lists the events credited with a step's changes
+  to the root itself. In a transaction group, `source_boundary` is the
+  transaction's first event, which can be an associated record's, such as a
+  line item's `destroy` in a save that only updated its order.
+- `diagnose` decodes each version endpoint and reports
+  `:disallowed_yaml_class` when PaperTrail's YAML history holds a class Rails
+  does not permit, as SQL Server's adapter stores dates and times. The
+  reference documents the classes to permit.
+
 ## [0.18.0] - 2026-11-15
 
 ### Breaking changes

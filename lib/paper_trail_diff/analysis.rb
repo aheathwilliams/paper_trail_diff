@@ -63,6 +63,18 @@ module PaperTrailDiff
       steps.flat_map(&:change_rows).freeze
     end
 
+    # The names of the root's own attributes that changed at any step, in the
+    # order they first changed, from the change rows. A field changed and
+    # changed back is named, though the diff leaves it out, which is what a
+    # report highlighting what moved in a window needs. A root created in the
+    # window names every field it was created with a value for.
+    #: () -> Array[String]
+    def changed_attributes
+      change_rows.filter_map do |row|
+        row.attribute if row.association_path.empty?
+      end.uniq.freeze
+    end
+
     # One entry for each record the activity's change rows are about: its
     # state before them, and that state with only the kept changes made (see
     # NetChange). The block picks the rows to keep, such as those with an
