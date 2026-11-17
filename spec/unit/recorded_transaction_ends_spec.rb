@@ -61,9 +61,8 @@ RSpec.describe PaperTrailDiff::RecordedTransactionEnds do
     expect(found.fetch(['FilterVersion', 7])).to eq(other)
     expect(found.fetch(['FilterVersion', 7]).created_at).to eq(noon + 104)
     expect(found.fetch(['FilterVersion', 8])).to equal(last_held)
-    # Only what places a version is read of one not held.
-    expect(found.fetch(['FilterVersion', 7]).attributes.keys)
-      .to contain_exactly('id', 'created_at', 'transaction_id')
+    # One not held is read whole, as a version every comparison can place.
+    expect(found.fetch(['FilterVersion', 7]).attributes).to eq(other.reload.attributes)
   end
 
   # Windows compare versions by date, so the latest dated is the last,
