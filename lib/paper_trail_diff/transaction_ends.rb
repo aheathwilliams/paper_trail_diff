@@ -180,15 +180,16 @@ module PaperTrailDiff
                                  .where(dated[:transaction_id].eq(table[:transaction_id]))
     end
 
-    # The last versions not held, read only for what places them. With
-    # none missing, the relation reads nothing.
+    # The last versions not held, read whole: a boundary placed at one is
+    # compared as a version, and what a version is, is asked once for its
+    # class (see Support.per_model), so a row read in part would answer for
+    # every version after it. With none missing, the relation reads nothing.
     #: (untyped, Hash[untyped, untyped], Hash[untyped, Array[untyped]]) -> Array[untyped]
     def other(version_class, last, held)
       missing = last.reject do |number, id|
         held.fetch(number).any? { |version| version.id == id }
       end
       version_class.where(version_class.primary_key => missing.values)
-                   .select(version_class.primary_key, :created_at, :transaction_id)
     end
   end
 end
