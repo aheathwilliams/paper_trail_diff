@@ -209,7 +209,8 @@ Three selection rules matter:
 - `limit: 100` is a safety ceiling, not pagination. Selecting too many records
   raises `BatchLimitExceededError`. With `include_deleted: true`, both existing
   and deleted records count toward it. Use a narrower relation or time window,
-  or deliberately raise the ceiling.
+  or deliberately raise the ceiling. Left out, it defaults to the relation's
+  own `limit`.
 
 Use the relation's `order`, `offset`, and `limit` to choose a page, for example
 `Article.order(:id).limit(20)`. `report.total` counts the records on every page, for
@@ -217,10 +218,11 @@ Use the relation's `order`, `offset`, and `limit` to choose a page, for example
 analyzed once. See the [reporting reference](docs/reference.md#which-records-are-selected)
 for pagination and deleted records.
 
-For a fixed past window, use `analyze_scope(Article.all, within: start_time...end_time,
-activity: true, limit: 100)`. Without `activity: true`, `analyze_scope` compares
-each record's own versions, so it selects only records with a version of their
-own.
+For a fixed window, such as 1 to 15 October, pass `within:` instead of
+`since:`: `report(Article.all, within: start_time...end_time, limit: 100)`.
+To highlight a record's changed fields, `report.analysis_for(article).changed_attributes`
+names its own attributes that changed in the window, including any that
+changed back.
 
 ## 4. Turn a report into rows
 
@@ -309,7 +311,7 @@ activity step. Labels, grouping, and formatting are left to your application.
 | The same, plus each change to its chosen associations, with who made it | `analyze(record, associations: ..., activity: true)`, then `activity_timeline` |
 | Analyses for an array of records | `analyze_many(records)` |
 | Analyses for the records a relation selects, over a time window | `analyze_scope(scope, within:, limit:)` |
-| Recent activity through now, for the records a relation selects | `report(scope, since:, limit:)` |
+| Activity for the records a relation selects, through now or over a date range | `report(scope, since:)` or `report(scope, within:)` |
 
 `analyze` covers the whole history through the current saved record by
 default. Narrow them with `from:` and `to:`

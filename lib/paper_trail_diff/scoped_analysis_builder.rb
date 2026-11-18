@@ -9,7 +9,7 @@ module PaperTrailDiff
       scope, limit:, within:, include_deleted:,
       analyzer:, deleted_analyzer:, activity_traversal: nil, version_scope: nil
     )
-      raise ConfigurationError, 'limit: is required when selecting roots by scope' if limit.nil?
+      limit = relation_limit(scope) if limit.nil?
 
       Support.boolean!(:include_deleted, include_deleted)
 
@@ -38,6 +38,16 @@ module PaperTrailDiff
     end
 
     private
+
+    # A page's own limit is the ceiling a caller leaves out. A relation
+    # without one has no size to bound it by.
+    #: (untyped) -> Integer
+    def relation_limit(scope)
+      limit = Support.limit(scope.all) if scope.respond_to?(:all)
+      return limit if limit
+
+      raise ConfigurationError, 'limit: is required when the relation has no limit of its own'
+    end
 
     # The window as the relation's version table keeps times. Anything but a
     # relation or a model is left for the selection to refuse.

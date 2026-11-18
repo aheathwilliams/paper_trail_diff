@@ -43,6 +43,14 @@ module PaperTrailDiff
     # : () -> Array[ChangeRow]
     def change_rows: () -> Array[ChangeRow]
 
+    # The names of the root's own attributes that changed at any step, in the
+    # order they first changed, from the change rows. A field changed and
+    # changed back is named, though the diff leaves it out, which is what a
+    # report highlighting what moved in a window needs. A root created in the
+    # window names every field it was created with a value for.
+    # : () -> Array[String]
+    def changed_attributes: () -> Array[String]
+
     # One entry for each record the activity's change rows are about: its
     # state before them, and that state with only the kept changes made (see
     # NetChange). The block picks the rows to keep, such as those with an

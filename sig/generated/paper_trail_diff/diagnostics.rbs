@@ -77,6 +77,14 @@ module PaperTrailDiff
     # : (untyped, untyped) -> Array[untyped]
     def validated_versions: (untyped, untyped) -> Array[untyped]
 
+    # PaperTrail's YAML columns load only the classes Rails permits, and an
+    # adapter can store its own value objects there, as SQL Server's does
+    # for dates and times. Every read of such a state then fails, `reify`
+    # included, so each version endpoint's state is decoded once to name the
+    # class. PaperTrail reads undecodable `object_changes` as empty instead.
+    # : () -> void
+    def inspect_decoding: () -> void
+
     # : (Array[Array[untyped]]) -> void
     def inspect_polymorphic_targets: (Array[Array[untyped]]) -> void
 

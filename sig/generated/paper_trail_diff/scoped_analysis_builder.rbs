@@ -11,6 +11,11 @@ module PaperTrailDiff
 
     private
 
+    # A page's own limit is the ceiling a caller leaves out. A relation
+    # without one has no size to bound it by.
+    # : (untyped) -> Integer
+    def relation_limit: (untyped) -> Integer
+
     # The window as the relation's version table keeps times. Anything but a
     # relation or a model is left for the selection to refuse.
     # : (untyped, untyped) -> TimeRange?

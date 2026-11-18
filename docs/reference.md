@@ -114,7 +114,7 @@ Six things follow from this:
 | The same, plus each change to its chosen associations, with who made it | `analyze(record, associations: ..., activity: true)`, then `activity_timeline` |
 | Analyses for an array of records | `analyze_many(records)` |
 | Analyses for the records a relation selects, over a time window | `analyze_scope(scope, within:, limit:)` |
-| Recent activity through now, for the records a relation selects | `report(scope, since:, limit:)` |
+| Activity for the records a relation selects, through now or over a date range | `report(scope, since:)` or `report(scope, within:)` |
 
 An analysis's `timeline` and `activity_timeline` differ in which versions
 become steps. Given
@@ -559,7 +559,12 @@ PaperTrailDiff.analyze(article, associations: [:comments], activity: true, group
 - A combined step compares the state before the transaction with the state after
   it. A field set and then restored inside the transaction is not reported.
 - Its `source_boundary` is the first event in the transaction. That event's
-  author is not necessarily the author of every grouped change. `step.sources`
+  author is not necessarily the author of every grouped change, and its
+  record is not necessarily the root: a save that removed a line item and
+  then updated its order starts with the line item's `destroy`. For a
+  history of the root, read `step.root_sources`, the events credited with
+  the step's changes to the root itself (the order's `update` here), or an
+  empty list when the save changed only associated records. `step.sources`
   lists every event in the transaction, each with its own author, except two
   kinds: those of records outside the tree before the transaction, after it,
   and at every version of the root it saved; and those saved before a window
@@ -745,16 +750,36 @@ analyses, unreachable = report # destructures into analyses and unreachable
 
 It takes the same options as `analyze_many`, plus `limit:` and
 `include_deleted:`. `within:` can be omitted to use
-all history.
+all history. `limit:` can be left out when the relation has a `limit` of its
+own, which it then defaults to (see [which records are
+selected](#which-records-are-selected)).
+
+Without `activity: true`, only a record's own versions select it, so an order
+whose only change in the window was to a line item is not selected even with
+`associations: [:line_items]`. For a report on a record and its associations,
+use [`report`](#report), which always reads activity.
 
 ### report
 
-`report(scope, since:, limit:)` is `analyze_scope` with `within: since..`, an
-endless window, and `activity: true`. Use it for "what happened recently":
+`report` is `analyze_scope` with `activity: true`, for a page of records
+that changed, or whose associations did, in a window. Give the window as
+`since:`, for "what happened recently", or as `within:`, a range such as a
+date range closed on both ends:
 
 ```ruby
 report = PaperTrailDiff.report(Article.all, since: 1.day.ago, limit: 100)
+
+report = PaperTrailDiff.report(
+  Order.order(:id).limit(25).offset(50),
+  within: Time.zone.parse("2026-10-01")...Time.zone.parse("2026-10-16"),
+  associations: [:line_items]
+)
 ```
+
+`since:` reads through now: it is `within: since..`, an endless window, so a
+version a database server dated ahead of the application's clock is still
+in it. Pass one of `since:` or `within:`; `limit:` defaults to the relation's
+own `limit`, as with `analyze_scope`.
 
 It accepts `associations:`, `ignore:`, `version_scope:`, `snapshots:`, `group:`,
 `recorded_changes:`, and `include_deleted:`.
@@ -786,7 +811,11 @@ grouped.
   now, not open during the window.
 - **`limit:` is a safety ceiling, not a page size.** If more records are
   selected, the call raises `BatchLimitExceededError` instead of returning part
-  of the answer. Narrow the relation or the window, or raise the limit.
+  of the answer. Narrow the relation or the window, or raise the limit. Left
+  out, it is the relation's own `limit`, which a page has already, and which
+  the live records cannot exceed; a relation without one needs `limit:`.
+  With `include_deleted: true` the ceiling covers deleted records too, so a
+  full page with any deleted record raises unless `limit:` leaves room.
 - **To paginate, use the relation.** Its `order`, `limit`, and `offset` choose
   the page. Without an `order`, records are taken in ascending ID order. Any
   other order gets the ID as a last tie-breaker unless it already sorts by it,
@@ -1362,6 +1391,17 @@ whole, credited to a version, where they cannot:
 Rows follow each step's diff, so a change a version recorded and a later write
 without a version undid, leaving the field as it was, has no row.
 
+To highlight the root's changed fields, such as cells in a report's row,
+`analysis.changed_attributes` names the root's own attributes that have a
+change row, in the order they first changed. A field that changed and changed
+back is named, though the analysis's `diff` leaves it out:
+
+```ruby
+analysis = PaperTrailDiff.analyze(order, within: october, associations: [:line_items],
+                                         activity: true)
+analysis.changed_attributes # => ["status", "note"]
+```
+
 ### Net changes
 
 `net_changes` folds change rows into one entry per record: its fields before
@@ -1546,6 +1586,12 @@ tracking, an unversioned target, or a path history cannot read. Endpoints `compa
 such as versions given newest first, two records, or an unsaved record, raise
 the error `compare` raises. `ok?` does not prove the history is complete.
 
+Each version endpoint is also decoded once. When PaperTrail's YAML history
+holds a class Rails does not permit, every read fails, PaperTrail's own
+`reify` included, and `diagnose` reports `:disallowed_yaml_class` with the
+class's name and the version's id. See [history stored as YAML on SQL
+Server](#history-stored-as-yaml-on-sql-server).
+
 ## Models, schemas, and edge cases
 
 - **Single-table inheritance.** Results are keyed by the base class, as
@@ -1690,6 +1736,35 @@ Two kinds of value come back as something their type cannot cast back:
   `{ "value" => bytes }`, and cannot store bytes that are not UTF-8. The gem
   reads the bytes. On PostgreSQL, PaperTrail cannot read such a `bytea` value
   back at all: its `reify` raises `TypeError`, and so does the gem.
+
+### History stored as YAML on SQL Server
+
+With PaperTrail's default YAML serializer and text `object` and
+`object_changes` columns, the SQL Server adapter hands PaperTrail its own
+value objects for dates and times, so the history holds
+`!ruby/object:ActiveRecord::ConnectionAdapters::SQLServer::Type::Data`
+wrapping the adapter's date or time type. Rails loads YAML columns only with
+the classes in `ActiveRecord.yaml_column_permitted_classes`, so every read of
+that history raises `Psych::DisallowedClass`, in PaperTrail's `reify` as well
+as in this gem. Permit the adapter's classes, for example in
+`config/initializers/paper_trail.rb`:
+
+```ruby
+ActiveRecord.yaml_column_permitted_classes |= [Symbol, Date, Time]
+if defined?(ActiveRecord::ConnectionAdapters::SQLServer::Type::Data)
+  sqlserver = ActiveRecord::ConnectionAdapters::SQLServer::Type
+  ActiveRecord.yaml_column_permitted_classes |= [
+    sqlserver::Data, sqlserver::Date, sqlserver::DateTime2
+  ]
+end
+```
+
+A column of another date or time type stores that type wrapped the same way,
+and the error names it; permit it too.
+
+Once permitted, the gem reads these values as the dates and times they wrap.
+A JSON serializer or column avoids the problem. `diagnose` names the case
+(see [checking your setup](#checking-your-setup)).
 
 ### Writing history in tests
 
