@@ -74,6 +74,32 @@ RSpec.describe 'Association history with tied version timestamps' do
         [{ from: article.versions[2], to: article }], associations: [:comments]
       ).values.first)).to eq(expected)
     end
+
+    # Found by the nightly oracle (seed 54926). The retitle's transaction
+    # ends at a comment's version the article's history does not hold, which
+    # is read on its own. What a version is, is asked once for its class, and
+    # that row answered first here: read in part, it made every later version
+    # read as a bare instant, which places the author's create after it.
+    it 'keeps a target created in the instant of a transaction that ends at a version it reads' do
+      author = TrackedAuthor.create!(name: 'Ann')
+      article = TrackedArticle.create!(title: 'v1', author: author)
+      other = TrackedArticle.create!(title: 'other')
+      TrackedArticle.transaction do
+        article.update!(title: 'v2')
+        other.comments.create!(body: 'elsewhere')
+      end
+      created, retitled = article.versions.order(:id).to_a
+      asked = PaperTrailDiff::VersionBoundary.instance_variable_get(:@version_records)
+      PaperTrailDiff::VersionBoundary.instance_variable_set(:@version_records, {})
+
+      analysis = PaperTrailDiff.analyze(article, from: created, to: retitled,
+                                                 associations: [:author])
+
+      expect(analysis.to_snapshot.associations.fetch('author').records.map(&:id))
+        .to eq([author.id])
+    ensure
+      PaperTrailDiff::VersionBoundary.instance_variable_set(:@version_records, asked)
+    end
   end
 
   def tied_version(table, id)

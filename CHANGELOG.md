@@ -26,6 +26,19 @@ project follows [Semantic Versioning](https://semver.org/).
   does not permit, as SQL Server's adapter stores dates and times. The
   reference documents the classes to permit.
 
+## [0.18.1] - 2026-11-18
+
+### Fixed
+
+- A record saved in the same instant as a transaction's last version no
+  longer drops out of a snapshot. Where that last version was of a record the
+  history does not hold, such as a comment on another article, it was read
+  with only some of its columns, and if it was the first version of its class
+  the gem asked about, every later version of that class was compared as a
+  bare time for the rest of the process. A `belongs_to` target created in the same second, as a
+  database that stores whole seconds dates it, then read as created after the
+  boundary, so the snapshot left it out. 0.18.0 is affected.
+
 ## [0.18.0] - 2026-11-15
 
 ### Breaking changes
