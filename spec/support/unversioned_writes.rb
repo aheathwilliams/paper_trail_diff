@@ -306,24 +306,47 @@ module UnversionedWrites
   end
 
   # Rows of steps grouped by transaction. A grouped step compares the state
-  # before its transaction with the state after it, so a field the
-  # transaction set and then restored shows nothing, though a write without a
-  # version set it in between. The step holds the write when one of the
-  # transaction's versions came before it; otherwise the write joins the step
-  # before the transaction, and shows there.
+  # before its transaction with the state after it, which is where the next
+  # step begins, so a field its span set and then restored shows nothing,
+  # though a write without a version set it in between. A write is in the
+  # step of the last version before it, which spans its transaction's
+  # versions and every write until another transaction's version: a write
+  # that comes before its transaction's versions, or in a transaction with
+  # none, joins the step before.
   class GroupedRowCheck < RowCheck
     private
 
     def shown?(writes, index)
-      super && !restored?(writes, writes.fetch(index))
+      super && !restored?(writes, index)
     end
 
-    def restored?(writes, write)
-      own = writes.select { |other| write.transaction && other.transaction == write.transaction }
-      return false unless own.take_while { |other| !other.equal?(write) }.any?(&:version)
+    def restored?(writes, index)
+      span = span(writes, index)
+      return false unless span
 
-      field = own.select { |other| same_field?(other, write) }
+      field = span.select { |other| same_field?(other, writes.fetch(index)) }
       field.first.before == field.last.after
+    end
+
+    # The writes of the grouped step that holds the write at `index`.
+    def span(writes, index)
+      opening = writes.first(index).rindex { |other| step?(other) }
+      group = opening && writes.fetch(opening).transaction
+      return unless group
+
+      first = writes.index { |other| step?(other) && other.transaction == group }
+      writes[first...next_step(writes, index, group)]
+    end
+
+    # Where another transaction's version opens the next step.
+    def next_step(writes, index, group)
+      later = writes.drop(index + 1).index { |other| step?(other) && other.transaction != group }
+      later ? index + 1 + later : writes.length
+    end
+
+    # A version of a record the article's tree always holds.
+    def step?(write)
+      write.version && CHECKED.include?(write.key.first)
     end
 
     def same_field?(other, write)
