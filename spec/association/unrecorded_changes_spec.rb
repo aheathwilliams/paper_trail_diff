@@ -137,6 +137,38 @@ RSpec.describe 'Changes saved without a version' do
     expect(rows.call(:transaction)).to eq([[['title', 'Draft', 'Published', false]]])
   end
 
+  # Found by the nightly oracle (seed 55551). Bob's transaction moves the
+  # article from Ann to Ben without a version and saves it to Cy, and a later
+  # write without a version, in no transaction that saves one, moves it back
+  # to Ann. That write joins the step before, so the grouped step runs from
+  # Ann to Ann and shows no author row; ungrouped, each write has its own.
+  it 'shows writes that a later write without a version undid only in ungrouped steps' do
+    ann, ben, cy = %w[Ann Ben Cy].map { |name| TrackedAuthor.create!(name: name) }
+    article = actor('alice') { TrackedArticle.create!(title: 'Draft', author: ann) }
+    actor('bob') do
+      ActiveRecord::Base.transaction do
+        article.update!(title: 'Published')
+        article.update_columns(author_id: ben.id)
+        article.update!(author_id: cy.id)
+      end
+    end
+    article.update_columns(author_id: ann.id)
+    rows = lambda do |group|
+      steps = PaperTrailDiff.analyze(article, associations: [:comments], activity: true,
+                                              group: group, recorded_changes: true)
+                            .activity_timeline
+      steps.drop(1).map do |step|
+        step.change_rows.map { |row| [row.attribute, row.from, row.to, row.unversioned?] }
+      end
+    end
+
+    expect(rows.call(nil)).to eq([[['author_id', ann.id, ben.id, true],
+                                   ['title', 'Draft', 'Published', false]],
+                                  [['author_id', ben.id, cy.id, false],
+                                   ['author_id', cy.id, ann.id, true]]])
+    expect(rows.call(:transaction)).to eq([[['title', 'Draft', 'Published', false]]])
+  end
+
   it "reads only the event's own edit from recorded_changes" do
     article = history
     carol = article.versions.find_by!(whodunnit: 'carol')
