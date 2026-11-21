@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative '../support/association_database'
+require_relative '../support/source_type_database'
 
 ActiveRecord::Schema.define do
   create_table :uv_orgs, force: true do |table|
@@ -17,8 +18,19 @@ ActiveRecord::Schema.define do
   create_table :uv_tasks, force: true do |table|
     table.string :title, null: false
     table.integer :uv_project_id
+    table.integer :uv_label_id
+    table.references :subject, polymorphic: true
     table.timestamps null: false
   end
+
+  create_table :uv_labels, force: true do |table|
+    table.string :name, null: false
+    table.timestamps null: false
+  end
+end
+
+class UvLabel < ActiveRecord::Base
+  has_paper_trail
 end
 
 class UvOrg < ActiveRecord::Base
@@ -30,11 +42,14 @@ end
 class UvProject < ActiveRecord::Base
   belongs_to :uv_org, optional: true
   has_many :uv_tasks
+  has_many :uv_labels, through: :uv_tasks
   has_paper_trail
 end
 
 class UvTask < ActiveRecord::Base
   belongs_to :uv_project, optional: true
+  belongs_to :uv_label, optional: true
+  belongs_to :subject, polymorphic: true, optional: true
   has_paper_trail
 end
 
@@ -44,7 +59,8 @@ RSpec.describe 'Selecting a root through a row without versions' do
   before do
     PaperTrail::VersionAssociation.delete_all
     PaperTrail::Version.delete_all
-    [UvTask, UvProject, UvOrg].each(&:delete_all)
+    [UvTask, UvProject, UvOrg, UvLabel, SourceTypeLink, SourceTypeHolder, SourceTypeAuthor,
+     SourceTypeTag].each(&:delete_all)
   end
 
   def old_tree
@@ -149,5 +165,110 @@ RSpec.describe 'Selecting a root through a row without versions' do
     project.update!(uv_org: other)
 
     expect(roots(since, 'uv_projects')).to eq([[org, other], [org, other]])
+  end
+
+  # PT-AT records a belongs_to on the owner's own versions, so an owner
+  # without any is in none of its rows, and holds its live key throughout.
+  describe 'when the row without versions is the one that points at the change' do
+    def unversioned(&block)
+      PaperTrail.request(enabled: false, &block)
+    end
+
+    def labelled(label)
+      unversioned do
+        org = UvOrg.create!(name: 'org')
+        project = UvProject.create!(name: 'project', uv_org: org)
+        [org, project, UvTask.create!(title: 'task', uv_project: project, uv_label: label)]
+      end
+    end
+
+    def selected(scope, since, path)
+      report = PaperTrailDiff.report(scope, since: since, limit: 5, associations: [path])
+      scoped = PaperTrailDiff.analyze_scope(scope, within: since.., limit: 5,
+                                                   associations: [path], activity: true)
+      [report.roots.sort_by(&:id), scoped.roots.sort_by(&:id)]
+    end
+
+    it 'selects a root without versions whose target changed' do
+      label = UvLabel.create!(name: 'label')
+      _org, _project, task = labelled(label)
+      labelled(UvLabel.create!(name: 'quiet'))
+      since = Time.now.utc
+      label.update!(name: 'renamed')
+
+      expect(selected(UvTask.all, since, 'uv_label')).to eq([[task], [task]])
+      report = PaperTrailDiff.report(UvTask.all, since: since, limit: 5, associations: ['uv_label'])
+      change = report.analysis_for(task).diff.associations.fetch('uv_label').changed
+      expect(change.attributes.fetch('name').to_h).to eq({ from: 'label', to: 'renamed' })
+    end
+
+    it 'selects a root without versions over a change below its target' do
+      org, project, task = old_tree
+      since = Time.now.utc
+      org.update!(name: 'renamed')
+
+      expect(selected(UvTask.all, since, 'uv_project.uv_org')).to eq([[task], [task]])
+      expect(selected(UvProject.all, since, 'uv_org')).to eq([[project], [project]])
+    end
+
+    it 'selects the root above a row without versions whose target changed' do
+      label = UvLabel.create!(name: 'label')
+      org, project, _task = labelled(label)
+      labelled(UvLabel.create!(name: 'quiet'))
+      since = Time.now.utc
+      label.update!(name: 'renamed')
+
+      expect(selected(UvOrg.all, since, 'uv_projects.uv_tasks.uv_label')).to eq([[org], [org]])
+      expect(selected(UvProject.all, since, 'uv_tasks.uv_label')).to eq([[project], [project]])
+    end
+
+    it 'selects the root of a join row without versions whose target changed' do
+      label = UvLabel.create!(name: 'label')
+      _org, project, _task = labelled(label)
+      labelled(UvLabel.create!(name: 'quiet'))
+      since = Time.now.utc
+      label.update!(name: 'renamed')
+
+      expect(selected(UvProject.all, since, 'uv_labels')).to eq([[project], [project]])
+    end
+
+    it 'selects no root through a row that has versions, which name its targets' do
+      label = UvLabel.create!(name: 'label')
+      other = UvLabel.create!(name: 'other')
+      _org, _project, task = labelled(label)
+      task.update!(uv_label: other)
+      UvTask.where(id: task.id).update_all(uv_label_id: label.id)
+      since = Time.now.utc
+      label.update!(name: 'renamed')
+
+      expect(selected(UvTask.all, since, 'uv_label')).to eq([[], []])
+    end
+
+    it 'selects a root without versions by its polymorphic target, under its type' do
+      label = UvLabel.create!(id: 700, name: 'label')
+      other = UvOrg.create!(id: 700, name: 'org')
+      on_label = unversioned { UvTask.create!(title: 'on label', subject: label) }
+      unversioned { UvTask.create!(title: 'on org', subject: other) }
+      since = Time.now.utc
+      label.update!(name: 'renamed')
+
+      expect(selected(UvTask.all, since, 'subject')).to eq([[on_label], [on_label]])
+    end
+
+    it 'selects the root of a typed join row without versions whose target changed' do
+      author = SourceTypeAuthor.create!(id: 700, name: 'author')
+      tag = SourceTypeTag.create!(id: 700, name: 'tag')
+      holder, tagged = unversioned do
+        Array.new(2) { |index| SourceTypeHolder.create!(name: "holder #{index}") }
+      end
+      unversioned do
+        SourceTypeLink.create!(holder: holder, target: author)
+        SourceTypeLink.create!(holder: tagged, target: tag)
+      end
+      since = Time.now.utc
+      author.update!(name: 'renamed')
+
+      expect(selected(SourceTypeHolder.all, since, 'linked_authors')).to eq([[holder], [holder]])
+    end
   end
 end

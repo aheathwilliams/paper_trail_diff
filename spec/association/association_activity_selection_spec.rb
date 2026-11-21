@@ -259,6 +259,25 @@ RSpec.describe PaperTrailDiff::AssociationActivitySelection do
     end
   end
 
+  # A link without versions holds the target its row names, under its type.
+  it 'selects through a source_type by links without versions of that type' do
+    author = SourceTypeAuthor.create!(name: 'Ann')
+    tag = SourceTypeTag.create!(name: 'Same id', id: author.id)
+    linked, tagged = %w[linked tagged].map { |name| SourceTypeHolder.create!(name: name) }
+    PaperTrail.request(enabled: false) do
+      SourceTypeLink.create!(holder: linked, target: author)
+      SourceTypeLink.create!(holder: tagged, target: tag)
+    end
+    start = Time.now.utc
+    [author, tag].each { |record| record.update!(name: "#{record.name} renamed") }
+
+    analyses, = PaperTrailDiff.analyze_scope(SourceTypeHolder, within: start..Time.now.utc,
+                                                               associations: [:linked_authors],
+                                                               activity: true, limit: 10)
+
+    expect(analyses.keys.map { |identity| identity.last.to_i }).to eq([linked.id])
+  end
+
   # The article shares an id with the renamed page, so only the type keeps its
   # note out. polymorphic_belongs_to_spec.rb covers the report itself.
   it 'selects notes whose polymorphic target changed, and only those' do
@@ -550,7 +569,10 @@ RSpec.describe PaperTrailDiff::AssociationActivitySelection do
 
       expect(found).to eq([[note.id.to_s]])
       expect(sliced_found).to eq([[note.id.to_s]])
-      expect(sliced).to eq(whole + 1)
+      # A second slice is one more read of PT-AT's rows, and two more for
+      # the notes without versions: those that point at it, and of those the
+      # ones no version names, none of which is left to look up.
+      expect(sliced).to eq(whole + 3)
       expect(sources(StringItemNote, [:post], window: since(Time.now.utc))).to eq([])
     end
 
@@ -642,7 +664,9 @@ RSpec.describe PaperTrailDiff::AssociationActivitySelection do
 
         found = sources(SelectionNote, [:notable], window: since(start))
 
-        expect(found.length).to eq(1)
+        # The page's type alone, once for the owners PT-AT recorded and once
+        # for those without versions.
+        expect(found.length).to eq(2)
         expect(selected(found)).to eq([])
         expect(selected(sources(SelectionNote, [:notable]))).to eq([note.id])
       end

@@ -26,6 +26,18 @@ project follows [Semantic Versioning](https://semver.org/).
   does not permit, as SQL Server's adapter stores dates and times. The
   reference documents the classes to permit.
 
+### Fixed
+
+- `report` and `analyze_scope` with `activity: true` select a record that
+  has no version of its own when the target of one of its `belongs_to`
+  associations changed, as they already did for a `has_many` or `has_one`
+  child with no version. Rows from before PaperTrail was installed were
+  missed: a product renamed did not select an order whose line item had no
+  version, over `line_items.product`, nor a tag renamed an order whose join
+  row had none, over a `has_many :through`, though `analyze` on the order
+  reported the change. Such a record holds the keys its row has now, so
+  selection reads them from its table.
+
 ## [0.18.1] - 2026-11-18
 
 ### Fixed
