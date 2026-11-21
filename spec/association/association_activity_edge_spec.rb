@@ -286,6 +286,89 @@ RSpec.describe PaperTrailDiff::AssociationActivityEdge do
     end
   end
 
+  describe described_class::UnversionedOwner do
+    def unversioned(&block)
+      PaperTrail.request(enabled: false, &block)
+    end
+
+    it 'finds the owners without versions that point at a target' do
+      article = TrackedArticle.create!(title: 'Target')
+      quiet = unversioned { article.comments.create!(body: 'never versioned') }
+      article.comments.create!(body: 'versioned')
+      unversioned { TrackedArticle.create!(title: 'Other').comments.create!(body: 'not asked') }
+      edge = described_class::UnversionedOwner.new(reflection(TrackedComment, :article), nil)
+
+      expect(owners(edge, [article.id])).to eq([quiet.id])
+      expect(owners(edge, TrackedArticle.where(title: 'Target').select(:id))).to eq([quiet.id])
+      expect(owners(edge, [])).to eq([])
+      expect([edge.type, edge.filter_type]).to eq(%i[integer integer])
+      expect(edge.column).to eq(TrackedComment.arel_table[:id])
+    end
+
+    it 'types the filter as the foreign key and the owners as their key' do
+      edge = described_class::UnversionedOwner.new(reflection(SourceTypeLink, :origin), nil)
+      allow(SourceTypeLink).to receive(:type_for_attribute).and_call_original
+      allow(SourceTypeLink).to receive(:type_for_attribute).with('origin_id')
+                                                           .and_return(ActiveRecord::Type::String.new)
+      typed = described_class::UnversionedOwner.new(reflection(SourceTypeLink, :origin), nil)
+
+      expect([edge.type, edge.filter_type]).to eq(%i[integer integer])
+      expect([typed.type, typed.filter_type]).to eq(%i[integer string])
+    end
+
+    # The quiet row's key is the versioned row's version id, which only the
+    # versioned row's item_id may be told from.
+    it 'compares a string item_id with the key as values' do
+      post = StringItemPost.create!(title: 'Target')
+      versioned = post.notes.create!(id: 900, body: 'versioned')
+      quiet = unversioned do
+        post.notes.create!(id: versioned.versions.last.id, body: 'never versioned')
+      end
+      edge = described_class::UnversionedOwner.new(reflection(StringItemNote, :post), nil)
+
+      expect(owners(edge, [post.id])).to eq([quiet.id])
+      expect(edge.relation([post.id]).to_sql).not_to include('EXISTS')
+    end
+
+    it 'reads an STI owner by the versions of its base class' do
+      author = TrackedAuthor.create!(name: 'Sponsor')
+      EdgeSpecialSticker.create!(label: 'versioned', sponsor: author)
+      quiet = unversioned { EdgeSpecialSticker.create!(label: 'quiet', sponsor: author) }
+      edge = described_class::UnversionedOwner.new(reflection(EdgeSpecialSticker, :sponsor), nil)
+
+      expect(owners(edge, [author.id])).to eq([quiet.id])
+    end
+
+    it 'names the target types of a polymorphic key and narrows to one' do
+      article = TrackedArticle.create!(id: 500, title: 'Article holder')
+      author = TrackedAuthor.create!(id: 500, name: 'Author holder')
+      on_article = unversioned { EdgeSticker.create!(label: 'a', holder: article) }
+      unversioned { EdgeSticker.create!(label: 'a again', holder: article) }
+      on_author = unversioned { EdgeSticker.create!(label: 'b', holder: author) }
+      unversioned { EdgeSticker.create!(label: 'loose') }
+      unversioned { EdgeSticker.create!(label: 'blank', holder_type: '') }
+      polymorphic = reflection(EdgeSticker, :holder)
+      edge = described_class::UnversionedOwner.new(polymorphic, nil)
+      authors = described_class::UnversionedOwner.new(polymorphic, nil,
+                                                      foreign_type: 'TrackedAuthor')
+
+      expect(edge.target_types).to contain_exactly('TrackedArticle', 'TrackedAuthor')
+      expect(owners(edge, [500])).to include(on_article.id, on_author.id)
+      expect(owners(authors, [500])).to eq([on_author.id])
+    end
+
+    it 'reads owners past their default scope' do
+      holder = EdgeHolder.create!(title: 'Holder')
+      hidden = unversioned { EdgeQuietSticker.create!(label: 'hidden', holder: holder) }
+      polymorphic = reflection(EdgeQuietSticker, :holder)
+      edge = described_class::UnversionedOwner.new(polymorphic, nil, foreign_type: 'EdgeHolder')
+
+      expect(described_class::UnversionedOwner.new(polymorphic, nil).target_types)
+        .to eq(['EdgeHolder'])
+      expect(owners(edge, [holder.id])).to eq([hidden.id])
+    end
+  end
+
   describe described_class::FirstVersion do
     def unversioned(&block)
       PaperTrail.request(enabled: false, &block)

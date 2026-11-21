@@ -47,6 +47,33 @@ module PaperTrailDiff
       model.type_for_attribute(name).type
     end
 
+    # The rows of `model` among `rows` that no version was ever saved for. A
+    # database compares the key with item_id only when they share a type;
+    # otherwise the keys of the rows that have versions are read as values,
+    # which a database casts back to the key's type.
+    #: (untyped, untyped) -> untyped
+    def without_versions(model, rows)
+      return rows.where(versions_of(model).arel.exists.not) if item_key?(model)
+
+      key = model.primary_key
+      versioned = VersionQuery.for_items(model, rows.pluck(key)).distinct.pluck(:item_id)
+      saved = { key => versioned } #: Hash[untyped, untyped]
+      rows.where.not(saved)
+    end
+
+    #: (untyped) -> bool
+    def item_key?(model)
+      versions = model.paper_trail.version_class
+      column_type(versions, 'item_id') == column_type(model, model.primary_key)
+    end
+
+    # The versions of the row a statement over the model's table is at.
+    #: (untyped) -> untyped
+    def versions_of(model)
+      item_id = model.paper_trail.version_class.arel_table[:item_id]
+      VersionQuery.for_model(model).where(item_id.eq(model.arel_table[model.primary_key]))
+    end
+
     # The owners a child pointed at when the window opened or after a change
     # inside it, as PT-AT recorded them on the child's own versions.
     class Child < AssociationActivityEdge
@@ -89,47 +116,57 @@ module PaperTrailDiff
       def initialize(reflection, time_range)
         super
         @target = reflection.klass
-        @versions = @target.paper_trail.version_class
-        @key = @target.primary_key
         @column = @target.arel_table[reflection.foreign_key]
         @type = column_type(@target, reflection.foreign_key)
-        @filter_type = column_type(@target, @key)
+        @filter_type = column_type(@target, @target.primary_key)
       end
 
       #: (untyped) -> untyped
       def relation(filter)
-        rows = @target.unscoped.where(@key => filter)
+        asked = { @target.primary_key => filter } #: Hash[untyped, untyped]
+        rows = @target.unscoped.where(asked)
         type = @reflection.type
         held = { type => @owner.polymorphic_name } #: Hash[untyped, untyped]
         rows = rows.where(held) if type
-        comparable? ? rows.where(versioned.not) : rows.where.not(@key => versioned_ids(rows))
+        without_versions(@target, rows)
       end
-
-      private
 
       # @rbs @target: untyped
-      # @rbs @versions: untyped
-      # @rbs @key: String
+    end
 
-      # A database compares the key with item_id only when they share a type.
-      #: () -> bool
-      def comparable?
-        column_type(@versions, 'item_id') == @filter_type
+    # The owners no version was ever saved for that point at a target, such
+    # as line items from before PaperTrail that name a product: such an owner
+    # has held its live key throughout, as an analysis reads it, so a change
+    # to the target, or below it, is a change the owner holds. PT-AT records
+    # a belongs_to on the owner's own versions, and an owner without any is
+    # in none of its rows.
+    class UnversionedOwner < AssociationActivityEdge
+      # Such an owner holds its key through any window, so none is kept.
+      #: (untyped, TimeRange?, ?foreign_type: String?) -> void
+      def initialize(reflection, _time_range, foreign_type: nil)
+        super(reflection, nil)
+        @foreign_type = foreign_type
+        key = @owner.primary_key
+        @column = @owner.arel_table[key]
+        @type = column_type(@owner, key)
+        @filter_type = column_type(@owner, reflection.foreign_key)
       end
 
-      #: () -> untyped
-      def versioned
-        table = @versions.arel_table
-        VersionQuery.for_model(@target).where(table[:item_id].eq(@target.arel_table[@key]))
-                    .arel.exists
+      # The types the owners' polymorphic keys name now. One only owners with
+      # versions name costs a lookup that finds nothing.
+      #: () -> Array[String]
+      def target_types
+        @owner.unscoped.distinct.pluck(@reflection.foreign_type).reject(&:blank?)
       end
 
-      # The keys of the rows that have versions, read as values; a database
-      # casts them back to the key's type.
-      #: (untyped) -> Array[untyped]
-      def versioned_ids(rows)
-        VersionQuery.for_items(@target, rows.pluck(@key)).distinct.pluck(:item_id)
+      #: (untyped) -> untyped
+      def relation(filter)
+        held = { @reflection.foreign_key => filter } #: Hash[untyped, untyped]
+        held[@reflection.foreign_type] = @foreign_type if @foreign_type
+        without_versions(@owner, @owner.unscoped.where(held))
       end
+
+      # @rbs @foreign_type: String?
     end
 
     # The owners of children whose first version since the window opened did

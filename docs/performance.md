@@ -254,6 +254,29 @@ median of five runs, plan cache cleared before each on SQL Server:
 Once those rows have versions, each later move is found from
 PaperTrail-AssociationTracking's rows, and no state is decoded.
 
+## Selecting records that have no version through a `belongs_to`
+
+A record with no version, such as a row from before PaperTrail, is in none
+of PaperTrail-AssociationTracking's rows, so `analyze_scope` and `report`
+read the `belongs_to` keys of such records from their table: for each
+`belongs_to` on a requested path, the rows that point at a changed target
+and that no version names. An index on the foreign key serves it.
+
+A page of 25 from 3,000 orders with 15,000 line items over 500 products,
+after 50 products were renamed and 200 orders edited in the window,
+`report(..., associations: ['line_items.product'])`, median of five runs,
+plan cache cleared before each on SQL Server. With line items saved without
+versions, the report used to select only the 200 edited orders and now also
+the 308 others that hold a renamed product; with a version for every line
+item, it selects the same 508 as before and the added read finds nothing:
+
+| Database | Line items | Before | After |
+| --- | --- | --- | --- |
+| SQLite | No versions | 0.14 s (200 orders) | 0.13 s (508 orders) |
+| SQLite | All versioned | 0.14 s | 0.17 s |
+| SQL Server 2019 (local container) | No versions | 0.52 s (200 orders) | 0.61 s (508 orders) |
+| SQL Server 2019 (local container) | All versioned | 1.02 s | 1.11 s |
+
 ## Large reports
 
 - Report on a window with `since:` or `within:`, not on all history.

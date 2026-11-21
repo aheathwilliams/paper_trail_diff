@@ -836,17 +836,20 @@ grouped.
   for large tables. Each requested association adds one query per level, however
   many records it selects. Changes to associations are found from PT-AT's
   `version_associations`, so history recorded before PT-AT was installed selects
-  nothing, and neither does a `belongs_to` target's change for a record that
-  has no version of its own, such as one created with PaperTrail turned off:
-  `analyze` on that record reports the change, but no selection finds it.
-  The same holds below the root: a product renamed does not select an order
-  whose line item has no version, over `line_items.product`, nor a tag
-  renamed an order whose join row has none, over a `has_many :through`. After
-  adding PaperTrail to existing data, every row is in this state until it is
-  next saved. A
-  change below a `has_many` or `has_one` child that has no version selects
-  the owner its row names now, since such a child has held that key
-  throughout, as an analysis reads it.
+  nothing. A record that has no version of its own, such as one created with
+  PaperTrail turned off, is in none of those rows. It has held the keys its
+  row has now throughout, as an analysis reads it, so selection reads them
+  from its table: a `belongs_to` target's change selects the record that
+  points at it now, and a change below a `has_many` or `has_one` child
+  selects the owner the child's row names now. The same holds below the
+  root: a product renamed selects an order whose line item has no version,
+  over `line_items.product`, and a tag renamed an order whose join row has
+  none, over a `has_many :through`. After adding PaperTrail to existing
+  data, every row is in this state until it is next saved. That first save
+  ends it: once a record has a version, only PT-AT's rows name its
+  `belongs_to` targets, and those start at that version. A window that
+  closed before it still shows the target's change in `analyze`, but no
+  selection finds the record for it.
 - **A window with associations reads from where the transactions open at
   its start began**, and selects by the versions those transactions saved
   before it, but by no other version saved before the start.

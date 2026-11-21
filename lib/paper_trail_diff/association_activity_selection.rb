@@ -148,26 +148,32 @@ module PaperTrailDiff
     # targets of that type and changes to those rows count.
     #: (untyped, Array[source], untyped) -> Array[source]
     def typed_joins(reflection, ids, source_type)
-      edge = AssociationActivityEdge::BelongsTo.new(reflection.source_reflection, @time_range,
-                                                    foreign_type: source_type)
-      follow(edge, ids) + changed(reflection.through_reflection.klass, edge.typed_owners)
+      source = reflection.source_reflection
+      edge = AssociationActivityEdge::BelongsTo.new(source, @time_range, foreign_type: source_type)
+      unversioned = AssociationActivityEdge::UnversionedOwner.new(source, nil,
+                                                                  foreign_type: source_type)
+      follow(edge, ids) + follow(unversioned, ids) +
+        changed(reflection.through_reflection.klass, edge.typed_owners)
     end
 
     # A polymorphic key's targets are known only from the types its rows name,
     # and a path stops at one, so only the targets' own changes count.
     #: (untyped) -> Array[source]
     def polymorphic_owners(reflection)
-      edge = AssociationActivityEdge::BelongsTo.new(reflection, @time_range)
-      edge.target_types.flat_map do |name|
-        typed = AssociationActivityEdge::BelongsTo.new(reflection, @time_range, foreign_type: name)
-        follow(typed, changed(AssociationTraversal.named_class(name)))
+      kinds = [AssociationActivityEdge::BelongsTo, AssociationActivityEdge::UnversionedOwner]
+      names = kinds.flat_map { |kind| kind.new(reflection, @time_range).target_types }.uniq
+      names.flat_map do |name|
+        targets = changed(AssociationTraversal.named_class(name))
+        kinds.flat_map do |kind|
+          follow(kind.new(reflection, @time_range, foreign_type: name), targets)
+        end
       end
     end
 
     #: (untyped) -> Array[AssociationActivityEdge]
     def edges(reflection)
       kinds = if reflection.belongs_to?
-                [AssociationActivityEdge::BelongsTo]
+                [AssociationActivityEdge::BelongsTo, AssociationActivityEdge::UnversionedOwner]
               else
                 [AssociationActivityEdge::Child, AssociationActivityEdge::Unversioned]
               end
