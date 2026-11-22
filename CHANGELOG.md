@@ -52,6 +52,40 @@ project follows [Semantic Versioning](https://semver.org/).
   `Analysis#changed_attributes` names the foreign key, such as
   `customer_id`; both were empty. `ActivityStep#changed_attributes` gives the
   same per step.
+- `report` and `analyze_scope` with `activity: true` select a record whose
+  foreign key was changed without a version after its last one, such as
+  orders merged onto another customer with `update_all`, a line item moved
+  with `update_columns`, or an import with PaperTrail off, when the new
+  target changes. `analyze` on the record reported the change, but
+  selection read only the keys PT-AT recorded, which named the old target.
+  Selection now reads the live key of any record with no version after the
+  window, and the key held until a record's first version since the window
+  opened, from PT-AT's row on that version where it kept the key. A key
+  that names neither a row nor any version, as a bulk write can leave, is
+  not listed in `unreachable`.
+- An activity analysis, and each page of `report`, over a window in the
+  past no longer decodes the stored state of the first version of every
+  record in a child table saved since the window opened. Where a first
+  version kept the key, PT-AT's row already names the owner, so only first
+  versions whose recorded changes name the key, or that recorded none, are
+  decoded. With 200,000 line items from before PaperTrail, each first saved
+  after the window, one order's analysis took 12 s and now takes 0.17 s on
+  SQLite (14 s and 0.66 s on SQL Server); a page of 25 orders over
+  `line_items.product` went from 13.7 s to 1.1 s (18.9 s and 3.5 s on SQL
+  Server). This was in 0.18.0 and 0.18.1.
+- A polymorphic `belongs_to` given a target of another type with the same
+  id, which records only the type column, is credited to the root's version
+  that saved it: `ActivityStep#root_sources` names it, and
+  `changed_attributes` names `subject_type`, both empty before. A swap of
+  both columns names both, where only the id column was named.
+- The target of a `belongs_to` below a record that joined or left by its own
+  update, such as the product of a line item moved to another order in a
+  transaction group, names the line item's update, as the line item's own
+  row does, not the group's first event.
+- A new `belongs_to` target that was also edited in the same save credits
+  the fields its own versions did not record to the owner's version that
+  brought it in, as the target's row is; only the fields the edit recorded
+  name the edit.
 - `diagnose` given a `create` version, which stores no state, decodes the
   record's next version that stores one, so it reports
   `:disallowed_yaml_class` where `analyze` would raise.

@@ -38,15 +38,19 @@ module PaperTrailDiff
       end
 
       # The ids no row of the model has for its key, whatever scope the model
-      # has by default. They are asked for with NOT EXISTS: PostgreSQL does
-      # not plan `NOT IN (SELECT ...)` as an anti-join, so it reads every key
-      # of the table for the statement, and again for each id once the keys
-      # outgrow its working memory. An empty key names no record.
+      # has by default, and that a version of the model names. They are asked
+      # for with NOT EXISTS: PostgreSQL does not plan `NOT IN (SELECT ...)` as
+      # an anti-join, so it reads every key of the table for the statement,
+      # and again for each id once the keys outgrow its working memory. An
+      # empty key names no record, nor does one with neither a row nor a
+      # version, such as a key a bulk write left pointing nowhere: it is no
+      # deleted record.
       #: (untyped) -> Array[untyped]
       def missing(model)
         key = model.arel_table[model.primary_key]
         rows = model.unscoped.where(key.eq(@column)).arel.exists
-        @relation.where(rows.not).distinct.pluck(@column).compact
+        named = VersionQuery.naming(model, @column)
+        @relation.where(rows.not.and(named)).distinct.pluck(@column)
       end
     end
 
@@ -116,9 +120,10 @@ module PaperTrailDiff
       edges(reflection).flat_map { |edge| follow(edge, ids) } + first_owners(reflection, ids)
     end
 
-    # The owners records held until a first version that did not create
-    # them, read from those versions' stored states (see
-    # AssociationActivityEdge::FirstVersion and FirstOwnerVersion).
+    # The owners records held until the first version ever saved for them,
+    # where it may have changed the key, read from those versions' stored
+    # states (see AssociationActivityEdge::FirstVersion and FirstOwnerVersion); the
+    # rows of those that kept it join the edges' own (see FirstKeyVersions).
     #: (untyped, Array[source]) -> Array[source]
     def first_owners(reflection, ids)
       return stored_owners(first_owner_edge(reflection), ids) if reflection.belongs_to?
@@ -137,10 +142,9 @@ module PaperTrailDiff
       found.empty? ? [] : [found]
     end
 
-    #: (untyped, ?foreign_type: String?) -> AssociationActivityEdge::FirstOwnerVersion
-    def first_owner_edge(reflection, foreign_type: nil)
-      AssociationActivityEdge::FirstOwnerVersion.new(reflection, @time_range,
-                                                     foreign_type: foreign_type)
+    #: (untyped) -> AssociationActivityEdge::FirstOwnerVersion
+    def first_owner_edge(reflection)
+      AssociationActivityEdge::FirstOwnerVersion.new(reflection, @time_range)
     end
 
     # A join row that changes moves membership as surely as a target that does.
@@ -162,11 +166,10 @@ module PaperTrailDiff
     def typed_joins(reflection, ids, source_type)
       source = reflection.source_reflection
       edge = AssociationActivityEdge::BelongsTo.new(source, @time_range, foreign_type: source_type)
-      unversioned = AssociationActivityEdge::UnversionedOwner.new(source, nil,
+      unversioned = AssociationActivityEdge::UnversionedOwner.new(source, @time_range,
                                                                   foreign_type: source_type)
-      first = first_owner_edge(source, foreign_type: source_type)
-      follow(edge, ids) + follow(unversioned, ids) + follow(first, ids) +
-        stored_owners(first, ids, source_type) +
+      follow(edge, ids) + follow(unversioned, ids) +
+        stored_owners(first_owner_edge(source), ids, source_type) +
         changed(reflection.through_reflection.klass, edge.typed_owners)
     end
 
@@ -174,8 +177,7 @@ module PaperTrailDiff
     # and a path stops at one, so only the targets' own changes count.
     #: (untyped) -> Array[source]
     def polymorphic_owners(reflection)
-      kinds = [AssociationActivityEdge::BelongsTo, AssociationActivityEdge::UnversionedOwner,
-               AssociationActivityEdge::FirstOwnerVersion]
+      kinds = [AssociationActivityEdge::BelongsTo, AssociationActivityEdge::UnversionedOwner]
       first = first_owner_edge(reflection)
       target_names(reflection, first).flat_map do |name|
         targets = changed(AssociationTraversal.named_class(name))
@@ -197,8 +199,7 @@ module PaperTrailDiff
     #: (untyped) -> Array[AssociationActivityEdge]
     def edges(reflection)
       kinds = if reflection.belongs_to?
-                [AssociationActivityEdge::BelongsTo, AssociationActivityEdge::UnversionedOwner,
-                 AssociationActivityEdge::FirstOwnerVersion]
+                [AssociationActivityEdge::BelongsTo, AssociationActivityEdge::UnversionedOwner]
               else
                 [AssociationActivityEdge::Child, AssociationActivityEdge::Unversioned]
               end

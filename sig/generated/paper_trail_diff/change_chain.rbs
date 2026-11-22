@@ -1,0 +1,28 @@
+# Generated from lib/paper_trail_diff/change_chain.rb with RBS::Inline
+
+module PaperTrailDiff
+  # A field's change as the runs that make it up, for ChangeAttribution: the
+  # changes its record's versions recorded, and between them whatever moved
+  # without a version.
+  module ChangeChain
+    # The value's path from `start` to `finish` as links of [from, to,
+    # version], with nil for no version: each recorded change, and between
+    # them whatever moved without one. A first change that does not start
+    # where the row does joins the row's start unless `trusted`.
+    # : (untyped, untyped, Array[[ActivityBoundary, ValueChange]], trusted: bool) -> Array[[untyped, untyped, ActivityBoundary?]]
+    def self.call: (untyped, untyped, Array[[ ActivityBoundary, ValueChange ]], trusted: bool) -> Array[[ untyped, untyped, ActivityBoundary? ]]
+
+    # A move from `value` to `to` that no version recorded, as a link; returns
+    # where it ends.
+    # : (Array[[untyped, untyped, ActivityBoundary?]], untyped, untyped) -> untyped
+    def self.bridge: (Array[[ untyped, untyped, ActivityBoundary? ]], untyped, untyped) -> untyped
+
+    # : (untyped, untyped, ActivityBoundary?) -> [untyped, untyped, ActivityBoundary?]
+    def self.link: (untyped, untyped, ActivityBoundary?) -> [ untyped, untyped, ActivityBoundary? ]
+
+    # Consecutive links of the same kind as one: recorded ones credited to the
+    # last of their versions.
+    # : (Array[[untyped, untyped, ActivityBoundary?]]) -> Array[[untyped, untyped, ActivityBoundary?]]
+    def self.merge: (Array[[ untyped, untyped, ActivityBoundary? ]]) -> Array[[ untyped, untyped, ActivityBoundary? ]]
+  end
+end

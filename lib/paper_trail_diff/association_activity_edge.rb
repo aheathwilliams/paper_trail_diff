@@ -13,6 +13,14 @@ module PaperTrailDiff
     attr_reader :type #: Symbol?
     attr_reader :filter_type #: Symbol?
 
+    # The columns of an association's key: a polymorphic `belongs_to`, or a
+    # `has_many` or `has_one` with `as:`, has a type column too.
+    #: (untyped) -> Array[String]
+    def self.key_names(reflection)
+      type = reflection.polymorphic? ? reflection.foreign_type : reflection.type
+      [reflection.foreign_key, type].compact
+    end
+
     #: (untyped, TimeRange?) -> void
     def initialize(reflection, time_range)
       @reflection = reflection
@@ -42,23 +50,46 @@ module PaperTrailDiff
                                       .call(relation)
     end
 
+    # PT-AT's rows among `rows`, on `model`'s versions, that name a key held
+    # in the window: the candidates, and the rows on first versions after it
+    # that kept the key (see FirstKeyVersions#kept_after), in one statement.
+    #: (untyped, untyped, Array[String]) -> untyped
+    def held(model, rows, key_names)
+      windowed = candidates(model.paper_trail.version_class, rows)
+      kept = FirstKeyVersions.new(model, key_names, @time_range&.begin_time,
+                                  end_at: @time_range&.end_time).kept_after(rows)
+      kept ? windowed.or(kept) : windowed
+    end
+
     #: (untyped, String) -> Symbol?
     def column_type(model, name)
       model.type_for_attribute(name).type
     end
 
-    # The rows of `model` among `rows` that no version was ever saved for. A
-    # database compares the key with item_id only when they share a type;
-    # otherwise the keys of the rows that have versions are read as values,
-    # which a database casts back to the key's type.
+    # The rows of `model` among `rows` that no version was saved for after
+    # the window closed: an analysis reads such a row's state there, and
+    # from its last version on, from the row itself, so the key the row
+    # holds now is the key it held then, whether a version saved it or a
+    # write without one did, such as `update_all` or a row from before
+    # PaperTrail. With no end, the state at the end is the row. A database
+    # compares the key with item_id only when they share a type; otherwise
+    # the keys of the rows saved since are read as values, which a database
+    # casts back to the key's type.
     #: (untyped, untyped) -> untyped
-    def without_versions(model, rows)
-      return rows.where(versions_of(model).arel.exists.not) if item_key?(model)
+    def without_later_versions(model, rows)
+      finish = @time_range&.end_time
+      return rows unless finish
+      return rows.where(after(versions_of(model), finish).arel.exists.not) if item_key?(model)
 
       key = model.primary_key
-      versioned = VersionQuery.for_items(model, rows.pluck(key)).distinct.pluck(:item_id)
-      saved = { key => versioned } #: Hash[untyped, untyped]
-      rows.where.not(saved)
+      saved = after(VersionQuery.for_items(model, rows.pluck(key)), finish).distinct.pluck(:item_id)
+      later = { key => saved } #: Hash[untyped, untyped]
+      rows.where.not(later)
+    end
+
+    #: (untyped, untyped) -> untyped
+    def after(versions, finish)
+      versions.where(versions.arel_table[:created_at].gt(finish))
     end
 
     #: (untyped) -> bool
@@ -75,7 +106,8 @@ module PaperTrailDiff
     end
 
     # The owners a child pointed at when the window opened or after a change
-    # inside it, as PT-AT recorded them on the child's own versions.
+    # inside it, as PT-AT recorded them on the child's own versions, or until
+    # its first version after the window, where that kept the owner.
     class Child < AssociationActivityEdge
       #: (untyped, TimeRange?) -> void
       def initialize(reflection, time_range)
@@ -94,7 +126,7 @@ module PaperTrailDiff
                                .where(foreign_key_name: @reflection.foreign_key,
                                       foreign_type: owner_types)
                                .where(@versions.table_name => versions)
-        candidates(@versions, relation)
+        held(@reflection.klass, relation, AssociationActivityEdge.key_names(@reflection))
       end
 
       private
@@ -108,9 +140,11 @@ module PaperTrailDiff
       end
     end
 
-    # The owners of children no version was ever saved for, such as rows from
-    # before PaperTrail: such a child has held its live key throughout, as an
-    # analysis reads it, and so leads to a change further down.
+    # The owners children hold now, for children no version was saved for
+    # after the window closed, such as rows from before PaperTrail or a child
+    # moved with `update_columns`: as an analysis reads it, such a child held
+    # its live key at the window's end, and so leads to a change further
+    # down. PT-AT's rows name only the keys versions saved.
     class Unversioned < AssociationActivityEdge
       #: (untyped, TimeRange?) -> void
       def initialize(reflection, time_range)
@@ -128,23 +162,23 @@ module PaperTrailDiff
         type = @reflection.type
         held = { type => @owner.polymorphic_name } #: Hash[untyped, untyped]
         rows = rows.where(held) if type
-        without_versions(@target, rows)
+        without_later_versions(@target, rows)
       end
 
       # @rbs @target: untyped
     end
 
-    # The owners no version was ever saved for that point at a target, such
-    # as line items from before PaperTrail that name a product: such an owner
-    # has held its live key throughout, as an analysis reads it, so a change
-    # to the target, or below it, is a change the owner holds. PT-AT records
-    # a belongs_to on the owner's own versions, and an owner without any is
-    # in none of its rows.
+    # The owners that point at a target now and that no version was saved
+    # for after the window closed, such as line items from before PaperTrail
+    # that name a product, or orders moved to another customer with
+    # `update_all`: as an analysis reads it, such an owner held its live key
+    # at the window's end, so a change to the target, or below it, is a
+    # change the owner holds. PT-AT records a belongs_to on the owner's own
+    # versions, and only the keys they saved.
     class UnversionedOwner < AssociationActivityEdge
-      # Such an owner holds its key through any window, so none is kept.
       #: (untyped, TimeRange?, ?foreign_type: String?) -> void
-      def initialize(reflection, _time_range, foreign_type: nil)
-        super(reflection, nil)
+      def initialize(reflection, time_range, foreign_type: nil)
+        super(reflection, time_range)
         @foreign_type = foreign_type
         key = @owner.primary_key
         @column = @owner.arel_table[key]
@@ -163,35 +197,28 @@ module PaperTrailDiff
       def relation(filter)
         held = { @reflection.foreign_key => filter } #: Hash[untyped, untyped]
         held[@reflection.foreign_type] = @foreign_type if @foreign_type
-        without_versions(@owner, @owner.unscoped.where(held))
+        without_later_versions(@owner, @owner.unscoped.where(held))
       end
 
       # @rbs @foreign_type: String?
     end
 
-    # The owners of children whose first version since the window opened did
-    # not create them, such as rows from before PaperTrail that the window
-    # moves or detaches. PT-AT stores the keys a version saved, so the owner
-    # such a child held until that version is in no row, only in the
-    # version's stored state, as ActivityChildCandidateLoader reads it. One
-    # saved after the window's end holds the owner the child had there too.
+    # The owners of children whose first version ever, since the window
+    # opened, may have changed the key, such as rows from before PaperTrail
+    # that the window moves or detaches. PT-AT stores the keys a version
+    # saved, so the owner such a child held until that version is in no row,
+    # only in the version's stored state, as ActivityChildCandidateLoader
+    # reads it. One saved after the window's end held the owner through it
+    # too. A first version that kept the owner has a row naming it, which
+    # Child reads.
     class FirstVersion < AssociationActivityEdge
       #: (untyped, TimeRange?) -> void
       def initialize(reflection, time_range)
         super
         @target = reflection.klass
         @filter_type = column_type(@target.paper_trail.version_class, 'item_id')
-      end
-
-      # A create stores no state, so the first versions read are those that
-      # did not create their child.
-      #: (untyped) -> untyped
-      def relation(filter)
-        relation = VersionQuery.for_model(@target).where(item_id: filter).where.not(object: nil)
-        versions = relation.arel_table
-        relation = relation.where(VersionQuery.no_earlier_version(versions))
-        start = @time_range&.begin_time
-        start ? relation.where(versions[:created_at].gteq(start)) : relation
+        @first = FirstKeyVersions.new(@target, AssociationActivityEdge.key_names(reflection),
+                                      time_range&.begin_time)
       end
 
       # The owners the first versions of the children `filter` selects name in
@@ -201,7 +228,7 @@ module PaperTrailDiff
       #: (untyped) -> Array[untyped]
       def owners(filter)
         types = RecordedOwner.types(@reflection, @owner)
-        relation(filter).select(:object).filter_map do |version|
+        @first.stored.where(item_id: filter).select(:object).filter_map do |version|
           state = version.object_deserialized
           state[@reflection.foreign_key] if types.include?(state[@reflection.type])
         end
@@ -214,33 +241,21 @@ module PaperTrailDiff
       end
 
       # @rbs @target: untyped
+      # @rbs @first: FirstKeyVersions
     end
 
-    # The owners whose first version since the window opened did not create
-    # them, such as line items from before PaperTrail that name a product:
-    # until that version, such an owner held the key its stored state holds,
-    # though PT-AT has no row for it. PT-AT records the key a version saved,
-    # so where the version kept the key, as any destroy does, its row names
-    # the key held and is matched in SQL (`relation`). Where the version may
-    # have changed the key, only the stored state names it (`stored_owners`).
-    # One saved after the window's end held that key through it too.
+    # The owners whose first version ever, since the window opened, may have
+    # changed the key, such as line items from before PaperTrail moved to
+    # another product: until that version, such an owner held the key its
+    # stored state holds, though PT-AT has no row for it. A first version
+    # that kept the key has a row naming it, which BelongsTo reads. One saved
+    # after the window's end held that key through it too.
     class FirstOwnerVersion < AssociationActivityEdge
-      #: (untyped, TimeRange?, ?foreign_type: String?) -> void
-      def initialize(reflection, time_range, foreign_type: nil)
-        super(reflection, time_range)
-        @foreign_type = foreign_type
-        @versions = @owner.paper_trail.version_class
-        @associations = @owner.paper_trail.version_association_class
-        @column = @versions.arel_table[:item_id]
-        @type = column_type(@versions, 'item_id')
-        @filter_type = column_type(@associations, 'foreign_key_id')
-      end
-
-      #: (untyped) -> untyped
-      def relation(filter)
-        conditions = { foreign_key_id: filter } #: Hash[Symbol, untyped]
-        conditions[:foreign_type] = @foreign_type if @foreign_type
-        kept_rows.where(conditions)
+      #: (untyped, TimeRange?) -> void
+      def initialize(reflection, time_range)
+        super
+        @first = FirstKeyVersions.new(@owner, AssociationActivityEdge.key_names(reflection),
+                                      time_range&.begin_time)
       end
 
       # The owners whose first version may have changed the key, and whose
@@ -260,100 +275,31 @@ module PaperTrailDiff
         end
       end
 
-      # The types a polymorphic key's first versions held: PT-AT's rows for
-      # those that kept the key, and the stored states of the others.
+      # The types the stored states of a polymorphic key's first versions
+      # held, where those versions may have changed it.
       #: () -> Array[String]
       def target_types
-        kept = kept_rows.pluck(@associations.arel_table[:foreign_type])
-        stored = stored_states.map { |_item_id, state| state[@reflection.foreign_type] }
-        (kept + stored).reject(&:blank?).uniq
+        stored_states.map { |_item_id, state| state[@reflection.foreign_type] }.reject(&:blank?)
       end
 
       private
 
-      # @rbs @foreign_type: String?
-      # @rbs @versions: untyped
-      # @rbs @associations: untyped
+      # @rbs @first: FirstKeyVersions
       # @rbs @stored_states: Array[[untyped, Hash[String, untyped]]]?
-
-      # PT-AT's rows for the key on the first versions that kept it.
-      #: () -> untyped
-      def kept_rows
-        table = @versions.arel_table
-        VersionTable.joined(@associations, @versions)
-                    .where(foreign_key_name: @reflection.foreign_key)
-                    .where(@versions.table_name => { item_type: @owner.base_class.name })
-                    .where(first_saved(table)).where(key_changes(table).not)
-      end
-
-      # A create stores no state and holds no earlier key, so the first
-      # versions read are those that did not create their owner.
-      #: (untyped) -> untyped
-      def first_saved(table)
-        first = table[:object].not_eq(nil).and(VersionQuery.no_earlier_version(table))
-        start = @time_range&.begin_time
-        start ? first.and(table[:created_at].gteq(start)) : first
-      end
 
       # Item ids and stored states of the first versions that may have
       # changed the key.
       #: () -> Array[[untyped, Hash[String, untyped]]]
       def stored_states
-        @stored_states ||= begin
-          table = @versions.arel_table
-          VersionQuery.for_model(@owner).where(first_saved(table)).where(key_changes(table))
-                      .map { |version| [version.item_id, version.object_deserialized] }
+        @stored_states ||= @first.stored.map do |version|
+          [version.item_id, version.object_deserialized]
         end
-      end
-
-      # The versions that may have changed the key: any but a destroy whose
-      # recorded changes name it, or that records none. Without PaperTrail's
-      # own recorded changes for the key, any but a destroy may have.
-      #: (untyped) -> untyped
-      def key_changes(table)
-        saved = table[:event].not_eq('destroy')
-        return saved unless key_names.all? { |name| recorded?(name) }
-
-        saved.and(naming_key(table))
-      end
-
-      # Versions that recorded no changes, or whose recorded changes name the key.
-      #: (untyped) -> untyped
-      def naming_key(table)
-        changes = recorded_text(table)
-        key_names.map { |name| changes.matches("%#{name}%") }
-                 .inject(table[:object_changes].eq(nil)) { |any, name| any.or(name) }
-      end
-
-      #: () -> Array[String]
-      def key_names
-        names = [@reflection.foreign_key]
-        @reflection.polymorphic? ? names << @reflection.foreign_type : names
-      end
-
-      #: (String) -> bool
-      def recorded?(name)
-        adapter = Support.constant('PaperTrail').config.object_changes_adapter
-        @versions.column_names.include?('object_changes') &&
-          !adapter.respond_to?(:load_changeset) && RecordedColumns.recorded?(@owner, name)
-      end
-
-      # PostgreSQL compares a json column with text only once it is cast.
-      # Only a json column on PostgreSQL takes the cast, which the SQLite
-      # database mutation testing runs on never has.
-      # mutant:disable
-      #: (untyped) -> untyped
-      def recorded_text(table)
-        column = table[:object_changes]
-        json = StoredTimePrecision.json_column?(@versions, 'object_changes')
-        return column unless json && @versions.connection.adapter_name.match?(/postg/i)
-
-        Support.arel::Nodes::NamedFunction.new('CAST', [column.as(Support.arel.sql('text'))])
       end
     end
 
     # The owners that pointed at a target when the window opened or after a
-    # change inside it, as PT-AT recorded them on the owners' versions.
+    # change inside it, as PT-AT recorded them on the owners' versions, or
+    # until their first version after the window, where that kept the key.
     class BelongsTo < AssociationActivityEdge
       #: (untyped, TimeRange?, ?foreign_type: String?) -> void
       def initialize(reflection, time_range, foreign_type: nil)
@@ -369,7 +315,8 @@ module PaperTrailDiff
       # The types a polymorphic key's rows name, the only way to know its targets.
       #: () -> Array[String]
       def target_types
-        candidates(@versions, owner_rows(foreign_key_name: @reflection.foreign_key))
+        rows = owner_rows(foreign_key_name: @reflection.foreign_key)
+        held(@owner, rows, AssociationActivityEdge.key_names(@reflection))
           .distinct.pluck(@associations.arel_table[:foreign_type]).compact
       end
 
@@ -378,14 +325,15 @@ module PaperTrailDiff
       #: () -> untyped
       def typed_owners
         conditions = { foreign_key_name: @reflection.foreign_key, foreign_type: @foreign_type }
-        candidates(@versions, owner_rows(conditions)).select(@column)
+        held(@owner, owner_rows(conditions), AssociationActivityEdge.key_names(@reflection))
+          .select(@column)
       end
 
       #: (untyped) -> untyped
       def relation(filter)
         conditions = { foreign_key_name: @reflection.foreign_key, foreign_key_id: filter }
         conditions[:foreign_type] = @foreign_type if @foreign_type
-        candidates(@versions, owner_rows(conditions))
+        held(@owner, owner_rows(conditions), AssociationActivityEdge.key_names(@reflection))
       end
 
       private

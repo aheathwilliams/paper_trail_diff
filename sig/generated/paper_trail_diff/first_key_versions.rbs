@@ -1,0 +1,86 @@
+# Generated from lib/paper_trail_diff/first_key_versions.rb with RBS::Inline
+
+module PaperTrailDiff
+  # The first versions of a model's records since a start, split by whether
+  # they may have changed a key. PT-AT stores the key a version saved, so a
+  # version that kept the key has a row naming the key its record held until
+  # then, which SQL can match (`kept`). Only a version that may have changed
+  # the key needs its stored state decoded to name the key held before it
+  # (`stored`), and only where no earlier version has a row for it: the
+  # first version ever saved for its record, such as a row from before
+  # PaperTrail. Selection and activity read both through this, so neither
+  # decodes the stored state of a version whose key a row already names.
+  class FirstKeyVersions
+    # `key_names` are the key's columns: a polymorphic or `as:` key has a
+    # type column too.
+    # : (untyped, Array[String], untyped, ?end_at: untyped) -> void
+    def initialize: (untyped, Array[String], untyped, ?end_at: untyped) -> void
+
+    # PT-AT's rows for `foreign_key_name` on the first version of each record
+    # since the start that kept the key, where it was saved after the end
+    # (see #kept_after).
+    # : (String) -> untyped
+    def kept: (String) -> untyped
+
+    # Those of `rows`, PT-AT's rows on the model's versions, that are on the
+    # first version of their record since the start that kept the key, where
+    # it was saved after the end: the key the record held from the start
+    # until that version, as an analysis reads its state there, even where a
+    # write without a version gave it that key. One saved by the end is a
+    # version in the window, whose row names the same key and which a
+    # window's own reads find, so without an end there are none, and nil.
+    # : (untyped) -> untyped
+    def kept_after: (untyped) -> untyped
+
+    # The first versions ever saved for their records, since the start, that
+    # may have changed the key: only their stored states name the key held
+    # before them.
+    # : () -> untyped
+    def stored: () -> untyped
+
+    private
+
+    @associations: untyped
+
+    @end_at: untyped
+
+    @key_names: Array[String]
+
+    @model: untyped
+
+    @start_at: untyped
+
+    @versions: untyped
+
+    # PT-AT's rows for the key on the model's versions.
+    # : (String) -> untyped
+    def key_rows: (String) -> untyped
+
+    # A create stores no state and holds no earlier key.
+    # : (untyped) -> untyped
+    def stored_state: (untyped) -> untyped
+
+    # : (untyped) -> untyped
+    def first_since_start: (untyped) -> untyped
+
+    # The versions that may have changed the key: any but a destroy whose
+    # recorded changes name it, or that records none. Without PaperTrail's
+    # own recorded changes for the key, any but a destroy may have.
+    # : (untyped) -> untyped
+    def key_changes: (untyped) -> untyped
+
+    # Versions that recorded no changes, or whose recorded changes name the key.
+    # : (untyped) -> untyped
+    def naming_key: (untyped) -> untyped
+
+    # : (String) -> bool
+    def recorded?: (String) -> bool
+
+    # PostgreSQL compares a json column with text only once it is cast.
+    # Only a json column on PostgreSQL takes the cast, which the SQLite
+    # database mutation testing runs on never has.
+    # mutant:disable
+    # : (untyped) -> untyped
+    def recorded_text: (untyped) -> untyped
+  end
+end

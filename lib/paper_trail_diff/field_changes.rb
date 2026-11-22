@@ -20,6 +20,33 @@ module PaperTrailDiff
       touched
     end
 
+    # The last of the versions that recorded any of the fields changing, nil
+    # when none did, or the last of them when one recorded nothing or their
+    # changes were not read.
+    #: (Array[ActivityBoundary], Array[String]) -> ActivityBoundary?
+    def self.last_changing(versions, names)
+      changes = all_recorded(versions)
+      return versions.last unless changes
+
+      found = (versions.length - 1).downto(0).find do |index|
+        names.any? { |name| changes.fetch(index)[name] }
+      end
+      versions.fetch(found) if found
+    end
+
+    # Those of the fields the versions recorded changing, or all of them when
+    # one recorded nothing or their changes were not read: none when the
+    # versions are none.
+    #: (Array[ActivityBoundary], Array[String]) -> Array[String]
+    def self.changed_names(versions, names)
+      return [] if versions.empty?
+
+      changes = all_recorded(versions)
+      return names unless changes
+
+      names.select { |name| changes.any? { |saved| saved[name] } }
+    end
+
     # A row about a whole record has no field name, which no version records.
     #: (Array[ActivityBoundary]) -> Array[Hash[untyped, ValueChange]]?
     def self.all_recorded(versions)

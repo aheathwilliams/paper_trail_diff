@@ -32,10 +32,13 @@ module PaperTrailDiff
       def values: () -> Array[untyped]
 
       # The ids no row of the model has for its key, whatever scope the model
-      # has by default. They are asked for with NOT EXISTS: PostgreSQL does
-      # not plan `NOT IN (SELECT ...)` as an anti-join, so it reads every key
-      # of the table for the statement, and again for each id once the keys
-      # outgrow its working memory. An empty key names no record.
+      # has by default, and that a version of the model names. They are asked
+      # for with NOT EXISTS: PostgreSQL does not plan `NOT IN (SELECT ...)` as
+      # an anti-join, so it reads every key of the table for the statement,
+      # and again for each id once the keys outgrow its working memory. An
+      # empty key names no record, nor does one with neither a row nor a
+      # version, such as a key a bulk write left pointing nowhere: it is no
+      # deleted record.
       # : (untyped) -> Array[untyped]
       def missing: (untyped) -> Array[untyped]
     end
@@ -80,17 +83,18 @@ module PaperTrailDiff
     # : (untyped, Array[source]) -> Array[source]
     def owners: (untyped, Array[source]) -> Array[source]
 
-    # The owners records held until a first version that did not create
-    # them, read from those versions' stored states (see
-    # AssociationActivityEdge::FirstVersion and FirstOwnerVersion).
+    # The owners records held until the first version ever saved for them,
+    # where it may have changed the key, read from those versions' stored
+    # states (see AssociationActivityEdge::FirstVersion and FirstOwnerVersion); the
+    # rows of those that kept it join the edges' own (see FirstKeyVersions).
     # : (untyped, Array[source]) -> Array[source]
     def first_owners: (untyped, Array[source]) -> Array[source]
 
     # : (AssociationActivityEdge::FirstOwnerVersion, Array[source], ?String?) -> Array[source]
     def stored_owners: (AssociationActivityEdge::FirstOwnerVersion, Array[source], ?String?) -> Array[source]
 
-    # : (untyped, ?foreign_type: String?) -> AssociationActivityEdge::FirstOwnerVersion
-    def first_owner_edge: (untyped, ?foreign_type: String?) -> AssociationActivityEdge::FirstOwnerVersion
+    # : (untyped) -> AssociationActivityEdge::FirstOwnerVersion
+    def first_owner_edge: (untyped) -> AssociationActivityEdge::FirstOwnerVersion
 
     # A join row that changes moves membership as surely as a target that does.
     # : (untyped, Array[source]) -> Array[source]

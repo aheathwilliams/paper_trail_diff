@@ -304,6 +304,37 @@ nothing is read in Ruby and the added statement finds nothing:
 | SQL Server 2019 (local container) | None | 0.47 s (508 orders) | 0.53 s (508 orders) |
 | SQL Server 2019 (local container) | 3,000 | 0.74 s (442 orders) | 0.91 s (508 orders) |
 
+## Reading first versions over a past window
+
+A record from before PaperTrail holds, until its first version, the key that
+version stores. An activity analysis, and `report`, over a window in the past
+match the first versions that kept the key against
+PaperTrail-AssociationTracking's rows in SQL, in the same statements that read
+those rows for the window, and decode only the stored states of first versions
+whose recorded changes name the key, or that recorded none. An analysis
+decodes those only for the records under the owners it reads, so its cost
+grows with the owner's own children, not with the table.
+
+200,000 line items under 40,000 orders, all saved without versions, each
+first saved after a closed window in which 20 products were repriced (2% of
+them moved to another product); one order's `analyze(order, within:,
+associations:, activity: true)`, and a page of 25 of `report(Order.all, within:, associations: ['line_items.product'])`,
+plan cache cleared before each run on SQL Server. Before, both decoded the
+first version of every line item in the table:
+
+| Database | Read | Before | After |
+| --- | --- | --- | --- |
+| SQLite | One order | 12.3 s | 0.17 s |
+| SQLite | Page of 25 | 13.7 s | 1.1 s |
+| SQL Server 2019 (local container) | One order | 14.4 s | 0.66 s |
+| SQL Server 2019 (local container) | Page of 25 | 18.9 s | 3.5 s |
+
+The selection benchmarks above, on SQL Server, median of five: with 3,000
+first versions after the window, 0.70 s and 41 statements before, 0.66 s and
+38 after; with none, 0.67 s before and 0.43 s after; with line items that
+have no version, 0.66 s before and 0.51 s after, and with every line item
+versioned, 1.21 s before and 1.15 s after.
+
 ## Large reports
 
 - Report on a window with `since:` or `within:`, not on all history.

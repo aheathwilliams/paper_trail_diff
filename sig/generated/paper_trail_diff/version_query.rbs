@@ -20,6 +20,17 @@ module PaperTrailDiff
     # : (untyped, untyped) -> untyped
     def self.for_items: (untyped, untyped) -> untyped
 
+    # The ids among `ids` that a version of the model names, as strings, read
+    # in slices.
+    # : (untyped, Array[untyped]) -> Array[String]
+    def self.named_ids: (untyped, Array[untyped]) -> Array[String]
+
+    # Whether a version of the model names the id `column` holds, in a
+    # statement over another table. Comparing them in SQL needs the column
+    # to share item_id's type.
+    # : (untyped, untyped) -> untyped
+    def self.naming: (untyped, untyped) -> untyped
+
     # The versions of the version's item saved after it, ids breaking a tie.
     # : (untyped, untyped) -> untyped
     def self.after: (untyped, untyped) -> untyped

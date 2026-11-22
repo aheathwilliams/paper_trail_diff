@@ -94,8 +94,16 @@ module PaperTrailDiff
     # Which candidates still have a row is asked without the relation's
     # conditions, so that "filtered out" and "no longer exists" stay
     # separable.
-    # : (Array[String]) -> Result
-    def plucked_selection: (Array[String]) -> Result
+    # : (Array[String], Array[String]) -> Result
+    def plucked_selection: (Array[String], Array[String]) -> Result
+
+    # The candidates without a row that a version names: one in the window,
+    # or another. A key that names neither a row nor a version, such as one a
+    # bulk write left pointing nowhere, is no deleted root, though a record's
+    # live key selects through it (see Query#missing, which asks the same in
+    # SQL).
+    # : (Array[String], Array[String]) -> Array[Array[String]]
+    def gone: (Array[String], Array[String]) -> Array[Array[String]]
 
     # Comparing the two columns in SQL needs them to share a type: PostgreSQL
     # rejects an integer key against a string item_id outright. A composite

@@ -76,7 +76,7 @@ module PaperTrailDiff
       queries = subqueries(related)
       return database_selection(queries) if queries
 
-      plucked_selection(versioned_ids | AssociationActivitySelection.values(related).map(&:to_s))
+      plucked_selection(versioned_ids, AssociationActivitySelection.values(related).map(&:to_s))
     end
 
     private
@@ -126,13 +126,23 @@ module PaperTrailDiff
     # Which candidates still have a row is asked without the relation's
     # conditions, so that "filtered out" and "no longer exists" stay
     # separable.
-    #: (Array[String]) -> Result
-    def plucked_selection(candidates)
+    #: (Array[String], Array[String]) -> Result
+    def plucked_selection(versioned, related)
+      candidates = versioned | related
       live = ids_in(base_class.unscoped, candidates)
-      missing = candidates - live
       records, total = CandidateTable.with(base_class, live) { |ids| page_and_total([ids]) }
-      unreachable = Support.sort_ids(missing).map { |id| identity(id) }.freeze
-      Result.new(records: records, unreachable: unreachable, total: total)
+      Result.new(records: records, unreachable: gone(candidates - live, versioned), total: total)
+    end
+
+    # The candidates without a row that a version names: one in the window,
+    # or another. A key that names neither a row nor a version, such as one a
+    # bulk write left pointing nowhere, is no deleted root, though a record's
+    # live key selects through it (see Query#missing, which asks the same in
+    # SQL).
+    #: (Array[String], Array[String]) -> Array[Array[String]]
+    def gone(missing, versioned)
+      named = VersionQuery.named_ids(model, missing - versioned)
+      Support.sort_ids((missing & versioned) | named).map { |id| identity(id) }.freeze
     end
 
     # Comparing the two columns in SQL needs them to share a type: PostgreSQL
