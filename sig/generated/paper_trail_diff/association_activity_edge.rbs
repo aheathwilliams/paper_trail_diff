@@ -14,7 +14,8 @@ module PaperTrailDiff
 
     attr_reader filter_type: Symbol?
 
-    # The columns of a `belongs_to` key: a polymorphic one has a type column.
+    # The columns of an association's key: a polymorphic `belongs_to`, or a
+    # `has_many` or `has_one` with `as:`, has a type column too.
     # : (untyped) -> Array[String]
     def self.key_names: (untyped) -> Array[String]
 

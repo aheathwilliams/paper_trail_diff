@@ -43,6 +43,43 @@ RSpec.describe PaperTrailDiff::VersionQuery do
       .to match_array(article_versions + feature_versions)
   end
 
+  # Ids come back as strings, whatever the column's type, and only those of
+  # the model's own items: a version of another type under the same id is
+  # not one.
+  it 'names the ids among those given that a version of the model names, in slices' do
+    article, = history
+    feature, = history(FilterFeature)
+    FilterVersion.insert({ item_type: 'FilterNote', item_id: 900, event: 'create',
+                           created_at: start_time })
+    stub_const('PaperTrailDiff::Support::IDS_PER_STATEMENT', 2)
+    reads = []
+    subscriber = ActiveSupport::Notifications.subscribe('sql.active_record') do |*, payload|
+      reads << payload[:sql] if payload[:sql].include?('filter_versions')
+    end
+
+    named = described_class.named_ids(FilterFeature, [article.id, 900, feature.id])
+
+    ActiveSupport::Notifications.unsubscribe(subscriber)
+    expect(named).to eq([article.id.to_s, feature.id.to_s])
+    expect(reads.length).to eq(2)
+    expect(described_class.named_ids(FilterArticle, [])).to eq([])
+  end
+
+  it 'tells, in a statement over another table, whether a version of the model names an id' do
+    article, = history
+    feature, = history(FilterFeature)
+    quiet = PaperTrail.request(enabled: false) { FilterArticle.create!(title: 'Quiet') }
+    FilterVersion.insert({ item_type: 'FilterNote', item_id: quiet.id, event: 'create',
+                           created_at: start_time })
+    naming = described_class.naming(FilterFeature, FilterArticle.arel_table[:id])
+
+    expect(FilterArticle.where(naming).ids).to contain_exactly(article.id, feature.id)
+    expect(FilterArticle.where(naming.not).ids).to eq([quiet.id])
+    # Over the version table itself, the versions it asks about are others.
+    over_versions = described_class.naming(FilterFeature, FilterVersion.arel_table[:item_id])
+    expect(FilterVersion.where(item_type: 'FilterNote').where(over_versions).count).to eq(0)
+  end
+
   it 'reads the versions of the given items' do
     article, *versions = history
     history

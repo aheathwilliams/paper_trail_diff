@@ -143,7 +143,7 @@ module PaperTrailDiff
     def first_versions
       return [] unless Support.versioned?(@reflection.klass)
 
-      names = [@foreign_key, @reflection.type].compact
+      names = AssociationActivityEdge.key_names(@reflection)
       FirstKeyVersions.new(@reflection.klass, names, @start_at).stored
     end
 

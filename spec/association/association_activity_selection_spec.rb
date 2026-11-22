@@ -263,15 +263,21 @@ RSpec.describe PaperTrailDiff::AssociationActivitySelection do
   it 'selects through a source_type by links without versions of that type' do
     author = SourceTypeAuthor.create!(name: 'Ann')
     tag = SourceTypeTag.create!(name: 'Same id', id: author.id)
-    linked, tagged = %w[linked tagged].map { |name| SourceTypeHolder.create!(name: name) }
+    linked, tagged, later = %w[linked tagged later].map do |name|
+      SourceTypeHolder.create!(name: name)
+    end
     PaperTrail.request(enabled: false) do
       SourceTypeLink.create!(holder: linked, target: author)
       SourceTypeLink.create!(holder: tagged, target: tag)
     end
+    # A link whose row names the author only from a version after the window.
+    moved = SourceTypeLink.create!(holder: later, target: tag)
     start = Time.now.utc
     [author, tag].each { |record| record.update!(name: "#{record.name} renamed") }
+    finish = Time.now.utc
+    moved.update!(target: author)
 
-    analyses, = PaperTrailDiff.analyze_scope(SourceTypeHolder, within: start..Time.now.utc,
+    analyses, = PaperTrailDiff.analyze_scope(SourceTypeHolder, within: start..finish,
                                                                associations: [:linked_authors],
                                                                activity: true, limit: 10)
 

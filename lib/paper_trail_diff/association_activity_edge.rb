@@ -13,11 +13,12 @@ module PaperTrailDiff
     attr_reader :type #: Symbol?
     attr_reader :filter_type #: Symbol?
 
-    # The columns of a `belongs_to` key: a polymorphic one has a type column.
+    # The columns of an association's key: a polymorphic `belongs_to`, or a
+    # `has_many` or `has_one` with `as:`, has a type column too.
     #: (untyped) -> Array[String]
     def self.key_names(reflection)
-      names = [reflection.foreign_key]
-      reflection.polymorphic? ? names << reflection.foreign_type : names
+      type = reflection.polymorphic? ? reflection.foreign_type : reflection.type
+      [reflection.foreign_key, type].compact
     end
 
     #: (untyped, TimeRange?) -> void
@@ -125,7 +126,7 @@ module PaperTrailDiff
                                .where(foreign_key_name: @reflection.foreign_key,
                                       foreign_type: owner_types)
                                .where(@versions.table_name => versions)
-        held(@reflection.klass, relation, [@reflection.foreign_key, @reflection.type].compact)
+        held(@reflection.klass, relation, AssociationActivityEdge.key_names(@reflection))
       end
 
       private
@@ -216,7 +217,7 @@ module PaperTrailDiff
         super
         @target = reflection.klass
         @filter_type = column_type(@target.paper_trail.version_class, 'item_id')
-        @first = FirstKeyVersions.new(@target, [reflection.foreign_key, reflection.type].compact,
+        @first = FirstKeyVersions.new(@target, AssociationActivityEdge.key_names(reflection),
                                       time_range&.begin_time)
       end
 
@@ -254,7 +255,7 @@ module PaperTrailDiff
       def initialize(reflection, time_range)
         super
         @first = FirstKeyVersions.new(@owner, AssociationActivityEdge.key_names(reflection),
-                                      time_range&.begin_time, end_at: time_range&.end_time)
+                                      time_range&.begin_time)
       end
 
       # The owners whose first version may have changed the key, and whose
@@ -278,8 +279,7 @@ module PaperTrailDiff
       # held, where those versions may have changed it.
       #: () -> Array[String]
       def target_types
-        types = stored_states.map { |_item_id, state| state[@reflection.foreign_type] }
-        types.reject(&:blank?).uniq
+        stored_states.map { |_item_id, state| state[@reflection.foreign_type] }.reject(&:blank?)
       end
 
       private

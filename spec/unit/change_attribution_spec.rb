@@ -483,7 +483,10 @@ RSpec.describe PaperTrailDiff::ChangeAttribution do
       root_edit = version('AttributedArticle', 1, 6, changes: { 'reviewer_id' => [nil, 4] })
       row = target(:added, path: %w[comments reviewer], record: reviewer)
 
+      later = version('AttributedComment', 7, 9, changes: { 'body' => %w[a b] })
+
       expect(sources_of(attribution([saved, root_edit]), [row], comment)).to eq([[5]])
+      expect(sources_of(attribution([saved, later]), [row], comment)).to eq([[5]])
     end
 
     it 'credits a target created or destroyed there to its own event' do
@@ -560,6 +563,7 @@ RSpec.describe PaperTrailDiff::ChangeAttribution do
 
       expect(sources_of(attribution([edited, swap]), rows)).to eq([[1], [4], [1]])
       expect(sources_of(attribution([unread, swap]), rows)).to eq([[5], [5], [5]])
+      expect(sources_of(attribution([unread, swap]), [target(:added)])).to eq([[1]])
     end
 
     # A comment moved to the article brings its reviewer: the reviewer rows
@@ -576,6 +580,7 @@ RSpec.describe PaperTrailDiff::ChangeAttribution do
       expect(sources_of(attribution([root_edit, moved]), [added, removed],
                         comment)).to eq([[5], [5]])
       expect(sources_of(attribution([moved, created]), [added], comment)).to eq([[6]])
+      expect(sources_of(attribution([created, moved]), [added], comment)).to eq([[6]])
       expect(sources_of(attribution([moved, destroyed]), [removed], comment)).to eq([[7]])
       expect(sources_of(attribution([root_edit]), [added], comment)).to eq([[90]])
       expect(sources_of(attribution([root_edit]), [target(:added)])).to eq([[90]])

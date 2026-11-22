@@ -108,6 +108,15 @@ RSpec.describe PaperTrailDiff::AssociationActivityEdge do
   end
 
   describe 'the base edge' do
+    it "names an association's key columns, with the type column of a polymorphic key" do
+      names = [reflection(TrackedComment, :article), reflection(EdgeSticker, :holder),
+               reflection(TrackedArticle, :comments), reflection(EdgeHolder, :stickers)]
+              .map { |association| described_class.key_names(association) }
+
+      expect(names).to eq([%w[article_id], %w[holder_id holder_type], %w[article_id],
+                           %w[holder_id holder_type]])
+    end
+
     it 'leaves the relation to each kind of edge' do
       edge = described_class.new(reflection(TrackedComment, :article), nil)
 
@@ -248,6 +257,7 @@ RSpec.describe PaperTrailDiff::AssociationActivityEdge do
 
       expect(owners(edge, [moved.id, edited.id])).to eq([to.id])
       expect(owners(unbounded, [moved.id, edited.id])).to eq([from.id, to.id].sort)
+      expect(unbounded.relation([moved.id]).to_sql).not_to include('EXISTS')
     end
 
     it 'reads only the children in the filter' do
@@ -491,6 +501,7 @@ RSpec.describe PaperTrailDiff::AssociationActivityEdge do
       expect(stored(edge, [other.id])).to eq([])
       later = edge_for(Time.now.utc)
       expect(later.stored_owners { raise 'no version to read' }).to eq([])
+      expect(stored(edge_for(nil), [reviewer.id])).to eq([moved.id])
     end
 
     it 'reads nothing for a key a stored state lacks' do
@@ -704,6 +715,8 @@ RSpec.describe PaperTrailDiff::AssociationActivityEdge do
       quiet = unversioned { article.comments.create!(body: 'quiet') }
       quiet.update!(body: 'first')
       other = TrackedArticle.create!(title: 'Other')
+      early = unversioned { article.comments.create!(body: 'early') }
+      early.update!(article: other)
       start = Time.now.utc
       created.update!(article: other)
       quiet.update!(article: other)
@@ -711,8 +724,9 @@ RSpec.describe PaperTrailDiff::AssociationActivityEdge do
                                                closed_at(start))
       everything = described_class::FirstVersion.new(reflection(TrackedArticle, :comments), nil)
 
-      expect(first_owners(edge, [created.id, quiet.id])).to eq([])
+      expect(first_owners(edge, [created.id, quiet.id, early.id])).to eq([])
       expect(first_owners(everything, [created.id, quiet.id])).to eq([])
+      expect(first_owners(everything, [early.id])).to eq([article.id])
     end
 
     it 'reads a first version saved after the window, which held the owner through it' do

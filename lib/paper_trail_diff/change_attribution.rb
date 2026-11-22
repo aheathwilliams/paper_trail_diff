@@ -167,7 +167,7 @@ module PaperTrailDiff
     # row about the whole target, or a target without versions here.
     #: (ChangeRow, Array[ActivityBoundary]) -> Array[[ActivityBoundary, ValueChange]]?
     def target_changes(row, versions)
-      return [] unless row.attribute && versions.any?
+      return [] unless row.attribute
 
       recorded_changes(versions, row.attribute)
     end
@@ -182,7 +182,7 @@ module PaperTrailDiff
     def owner_key_source(row, owner, names)
       owned = versions_of(owner)
       found = FieldChanges.last_changing(owned, names)
-      return found if found || owned.empty? || identity(owner) == identity(@root)
+      return found if found || identity(owner) == identity(@root)
 
       own_event(row, owned) || owned.last
     end

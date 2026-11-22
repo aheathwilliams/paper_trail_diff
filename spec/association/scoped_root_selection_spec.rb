@@ -497,18 +497,27 @@ RSpec.describe PaperTrailDiff::ScopedRootSelection do
 
     # An association source that is read names ids, so the roots are plucked.
     it 'merges plucked association ids with the roots of an integer item_id' do
-      named, gone = %w[Named Gone].map { |title| TrackedArticle.create!(title: title) }
+      named, gone, earlier = %w[Named Gone Earlier].map do |title|
+        TrackedArticle.create!(title: title)
+      end
       start = Time.now.utc
       edited = TrackedArticle.create!(title: 'Edited')
       gone.update!(title: 'Gone, edited')
-      TrackedArticle.where(id: gone.id).delete_all
+      TrackedArticle.where(id: [gone.id, earlier.id]).delete_all
+      # A key a bulk write left pointing at no row and no version is no root.
+      nowhere = edited.id + 1000
       allow_any_instance_of(PaperTrailDiff::AssociationActivitySelection)
-        .to receive(:call).and_return([[named.id, edited.id]])
+        .to receive(:call).and_return([[named.id, edited.id, earlier.id, nowhere]])
+      allow(PaperTrailDiff::VersionQuery).to receive(:named_ids).and_call_original
 
       result = select(TrackedArticle, time_range: since(start), activity_traversal: tree(:comments))
 
       expect(result.records).to eq([named, edited])
-      expect(result.unreachable).to eq([['TrackedArticle', gone.id.to_s]])
+      expect(result.unreachable)
+        .to eq([['TrackedArticle', gone.id.to_s], ['TrackedArticle', earlier.id.to_s]])
+      # Only the ids no version in the window names are looked up.
+      expect(PaperTrailDiff::VersionQuery).to have_received(:named_ids)
+        .with(TrackedArticle, [earlier.id.to_s, nowhere.to_s])
     end
 
     it 'names a root destroyed in the window once, however it was found' do

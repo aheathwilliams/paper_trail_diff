@@ -50,7 +50,7 @@ module PaperTrailDiff
         key = model.arel_table[model.primary_key]
         rows = model.unscoped.where(key.eq(@column)).arel.exists
         named = VersionQuery.naming(model, @column)
-        @relation.where(rows.not.and(named)).distinct.pluck(@column).compact
+        @relation.where(rows.not.and(named)).distinct.pluck(@column)
       end
     end
 
