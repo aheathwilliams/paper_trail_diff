@@ -255,15 +255,16 @@ module PaperTrailDiff
         states.filter_map do |item_id, state|
           next unless targets.include?(state[@reflection.foreign_key].to_s)
 
-          item_id if type.nil? || state[@reflection.foreign_type] == type
-        end.uniq
+          # A key that is not polymorphic has no type, which `state` lacks too.
+          item_id if state[@reflection.foreign_type] == type
+        end
       end
 
       # The types a polymorphic key's first versions held: PT-AT's rows for
       # those that kept the key, and the stored states of the others.
       #: () -> Array[String]
       def target_types
-        kept = kept_rows.distinct.pluck(@associations.arel_table[:foreign_type])
+        kept = kept_rows.pluck(@associations.arel_table[:foreign_type])
         stored = stored_states.map { |_item_id, state| state[@reflection.foreign_type] }
         (kept + stored).reject(&:blank?).uniq
       end
@@ -301,7 +302,6 @@ module PaperTrailDiff
         @stored_states ||= begin
           table = @versions.arel_table
           VersionQuery.for_model(@owner).where(first_saved(table)).where(key_changes(table))
-                      .select(:id, :item_id, :object)
                       .map { |version| [version.item_id, version.object_deserialized] }
         end
       end
@@ -314,7 +314,7 @@ module PaperTrailDiff
         saved = table[:event].not_eq('destroy')
         return saved unless key_names.all? { |name| recorded?(name) }
 
-        saved.and(Support.arel::Nodes::Grouping.new(naming_key(table)))
+        saved.and(naming_key(table))
       end
 
       # Versions that recorded no changes, or whose recorded changes name the key.
@@ -327,8 +327,8 @@ module PaperTrailDiff
 
       #: () -> Array[String]
       def key_names
-        names = [@reflection.foreign_key.to_s]
-        @reflection.polymorphic? ? names << @reflection.foreign_type.to_s : names
+        names = [@reflection.foreign_key]
+        @reflection.polymorphic? ? names << @reflection.foreign_type : names
       end
 
       #: (String) -> bool
@@ -339,6 +339,9 @@ module PaperTrailDiff
       end
 
       # PostgreSQL compares a json column with text only once it is cast.
+      # Only a json column on PostgreSQL takes the cast, which the SQLite
+      # database mutation testing runs on never has.
+      # mutant:disable
       #: (untyped) -> untyped
       def recorded_text(table)
         column = table[:object_changes]

@@ -200,6 +200,9 @@ module PaperTrailDiff
       def recorded?: (String) -> bool
 
       # PostgreSQL compares a json column with text only once it is cast.
+      # Only a json column on PostgreSQL takes the cast, which the SQLite
+      # database mutation testing runs on never has.
+      # mutant:disable
       # : (untyped) -> untyped
       def recorded_text: (untyped) -> untyped
     end

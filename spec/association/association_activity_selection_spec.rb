@@ -642,6 +642,70 @@ RSpec.describe PaperTrailDiff::AssociationActivitySelection do
                         'unknown association: comments.nope')
     end
 
+    describe 'records first saved after the window opened' do
+      def legacy(&block)
+        PaperTrail.request(enabled: false, &block)
+      end
+
+      it 'reads the key each held until a first version since the start' do
+        held, other = %w[Held Other].map { |name| TrackedAuthor.create!(name: name) }
+        moved = legacy { SelectionNote.create!(body: 'moved', author: held) }
+        early = legacy { SelectionNote.create!(body: 'early', author: held) }
+        early.update!(author: other)
+        start = Time.now.utc
+        held.update!(name: 'Renamed')
+        moved.update!(author: other)
+
+        found = sources(SelectionNote, [:author], window: since(start))
+
+        expect(selected(found)).to eq([moved.id])
+        expect(found.grep(Array)).to eq([[moved.id]])
+      end
+
+      it 'reads each type of a polymorphic key, from rows, the table and stored states' do
+        article = TrackedArticle.create!(id: 8_000, title: 'Article')
+        page = SelectionPage.create!(id: 8_000, title: 'Page')
+        author = TrackedAuthor.create!(id: 8_000, name: 'Author')
+        tag = TrackedTag.create!(id: 8_000, name: 'Tag')
+        moved = legacy { SelectionNote.create!(body: 'moved', notable: article) }
+        kept = legacy { SelectionNote.create!(body: 'kept', notable: page) }
+        quiet = legacy { SelectionNote.create!(body: 'quiet', notable: author) }
+        tagged = SelectionNote.create!(body: 'tagged', notable: tag)
+        start = Time.now.utc
+        [article, author, tag].each { |record| record.update!(updated_at: Time.now.utc + 1) }
+        finish = Time.now.utc
+        moved.update!(notable: page)
+        kept.update!(body: 'edited')
+        tagged.update!(notable: page)
+
+        found = sources(SelectionNote, [:notable], window: start..finish)
+
+        expect(selected(found)).to eq([moved.id, quiet.id, tagged.id].sort)
+        expect(found.grep(Array)).to eq([[moved.id]])
+      end
+
+      it 'reads only join rows of the source type' do
+        holders = Array.new(3) { |index| SourceTypeHolder.create!(name: "Holder #{index}") }
+        author = SourceTypeAuthor.create!(id: 9_000, name: 'Author')
+        tag = SourceTypeTag.create!(id: 9_000, name: 'Tag')
+        other = SourceTypeAuthor.create!(name: 'Other')
+        moved, kept, tagged = holders.zip([author, author, tag]).map do |holder, target|
+          legacy { SourceTypeLink.create!(holder: holder, target: target) }
+        end
+        retagged = legacy { SourceTypeLink.create!(holder: holders.last, target: tag) }
+        start = Time.now.utc
+        [author, tag].each { |target| target.update!(name: "#{target.name} renamed") }
+        finish = Time.now.utc
+        moved.update!(target: other)
+        [kept, tagged].each { |link| link.update!(updated_at: Time.now.utc + 1) }
+        retagged.update!(target: SourceTypeTag.create!(name: 'New tag'))
+
+        found = sources(SourceTypeHolder, [:linked_authors], window: start..finish)
+
+        expect(selected(found)).to eq(holders.first(2).map(&:id))
+      end
+    end
+
     describe 'a polymorphic belongs_to' do
       it 'reads each target type it names, and only targets of that type' do
         page = SelectionPage.create!(id: 7_000, title: 'Page')
