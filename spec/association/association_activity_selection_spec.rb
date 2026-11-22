@@ -569,10 +569,11 @@ RSpec.describe PaperTrailDiff::AssociationActivitySelection do
 
       expect(found).to eq([[note.id.to_s]])
       expect(sliced_found).to eq([[note.id.to_s]])
-      # A second slice is one more read of PT-AT's rows, and two more for
-      # the notes without versions: those that point at it, and of those the
-      # ones no version names, none of which is left to look up.
-      expect(sliced).to eq(whole + 3)
+      # A second slice is one more read of PT-AT's rows, one more of those
+      # on first versions that kept the key, and two more for the notes
+      # without versions: those that point at it, and of those the ones no
+      # version names, none of which is left to look up.
+      expect(sliced).to eq(whole + 4)
       expect(sources(StringItemNote, [:post], window: since(Time.now.utc))).to eq([])
     end
 
@@ -664,9 +665,9 @@ RSpec.describe PaperTrailDiff::AssociationActivitySelection do
 
         found = sources(SelectionNote, [:notable], window: since(start))
 
-        # The page's type alone, once for the owners PT-AT recorded and once
-        # for those without versions.
-        expect(found.length).to eq(2)
+        # The page's type alone, once each for the owners PT-AT recorded,
+        # those without versions, and those whose first version kept the key.
+        expect(found.length).to eq(3)
         expect(selected(found)).to eq([])
         expect(selected(sources(SelectionNote, [:notable]))).to eq([note.id])
       end
