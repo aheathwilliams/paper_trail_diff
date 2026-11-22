@@ -277,6 +277,33 @@ item, it selects the same 508 as before and the added read finds nothing:
 | SQL Server 2019 (local container) | No versions | 0.52 s (200 orders) | 0.61 s (508 orders) |
 | SQL Server 2019 (local container) | All versioned | 1.02 s | 1.11 s |
 
+## Selecting through a record's first version after a window
+
+A record from before PaperTrail that is first saved or deleted after a
+window began still held, until then, the `belongs_to` key its first
+version stores. For each `belongs_to` on a requested path, `analyze_scope`
+and `report` match the first versions since the window's start that kept
+the key against PaperTrail-AssociationTracking's rows in SQL, and read in
+Ruby the stored state of those whose recorded changes name the key (or
+that recorded none). The cost grows with the first versions saved since the
+window's start.
+
+A page of 25 from 3,000 orders with 15,000 line items over 500 products,
+all saved without versions; 50 products renamed and 200 orders edited in a
+closed window; then, after it, 3,000 line items given a first version (half
+edited, half moved to another product). `report(..., within:, associations:
+['line_items.product'])`, median of five runs, plan cache cleared before
+each on SQL Server. Before, the first versions hid 66 of the window's 508
+orders; now all 508 are selected. With no first version after the window,
+nothing is read in Ruby and the added statement finds nothing:
+
+| Database | First versions after the window | Before | After |
+| --- | --- | --- | --- |
+| SQLite | None | 0.09 s (508 orders) | 0.10 s (508 orders) |
+| SQLite | 3,000 | 0.31 s (442 orders) | 0.40 s (508 orders) |
+| SQL Server 2019 (local container) | None | 0.47 s (508 orders) | 0.53 s (508 orders) |
+| SQL Server 2019 (local container) | 3,000 | 0.74 s (442 orders) | 0.91 s (508 orders) |
+
 ## Large reports
 
 - Report on a window with `since:` or `within:`, not on all history.
