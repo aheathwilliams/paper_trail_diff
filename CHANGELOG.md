@@ -37,6 +37,26 @@ project follows [Semantic Versioning](https://semver.org/).
   row had none, over a `has_many :through`, though `analyze` on the order
   reported the change. Such a record holds the keys its row has now, so
   selection reads them from its table.
+- Such a record stays selected for a window that began before its first
+  version, including one that closed before it. Its first save or deletion
+  used to drop it, and its owners, from every earlier window in which its
+  `belongs_to` target changed, and from a window with `version_scope:` that
+  left out that first version, though `analyze` reported the change. Its
+  first version's stored state holds the key it had until then, so selection
+  reads it there.
+- A `belongs_to` target set, cleared or replaced in a transaction group is
+  credited to the owner's version that saved the key, not to the group's
+  first event: an order given another customer in a save that also removed a
+  line item named the line item's `destroy`. With the target's association
+  requested, `ActivityStep#root_sources` now names the root's update, and
+  `Analysis#changed_attributes` names the foreign key, such as
+  `customer_id`; both were empty. `ActivityStep#changed_attributes` gives the
+  same per step.
+- `diagnose` given a `create` version, which stores no state, decodes the
+  record's next version that stores one, so it reports
+  `:disallowed_yaml_class` where `analyze` would raise.
+- `Analysis#changed_attributes` without `activity: true` names itself in its
+  `ConfigurationError`.
 
 ## [0.18.1] - 2026-11-18
 

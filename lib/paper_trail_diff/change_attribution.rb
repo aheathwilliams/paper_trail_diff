@@ -14,8 +14,10 @@ module PaperTrailDiff
   # when what they recorded was not read. A record that appeared or
   # disappeared is credited to its own create or destroy, or else to the
   # last of its versions there, as a record that moved by its own update.
-  # Any other row keeps the step's source: a record that joined a collection
-  # or became a to-one target through another record's change, for one.
+  # A `belongs_to` target set, cleared or replaced is credited to its owner's
+  # version there that saved the key, unless it was created or destroyed
+  # there itself. Any other row keeps the step's source: a record that
+  # joined a collection through another record's change, for one.
   #
   # With recorded changes read, the part of a field's change that those
   # versions did not record is split off and credited to an unversioned
@@ -100,9 +102,12 @@ module PaperTrailDiff
 
     # The row as the rows it splits into, each credited to its change's
     # source: one row, unless part of its change was saved without a version.
-    #: (ChangeRow) -> Array[ChangeRow]
-    def call(row)
+    # `owner` is the record that holds the row's record, nil for the root.
+    #: (ChangeRow, ?RecordReference?) -> Array[ChangeRow]
+    def call(row, owner = nil)
       versions = versions_of(row.record || @root)
+      key_source = key_source(row, owner || @root, versions)
+      return [credit(row, key_source)] if key_source
       return [row] if versions.empty?
 
       case row.change
@@ -112,6 +117,20 @@ module PaperTrailDiff
       end
     end
 
+    # The root's foreign key that a row adding or removing a target of the
+    # root's own `belongs_to` stands for, or nil for any other row.
+    #: (ChangeRow) -> String?
+    def root_key(row)
+      TargetKey.name(row, @root) if row.association_path.length == 1 && row.attribute.nil?
+    end
+
+    # The root's own version that saved the key such a row stands for.
+    #: (ChangeRow) -> ActivityBoundary?
+    def root_key_source(row)
+      key = root_key(row)
+      key && key_version(versions_of(@root), key)
+    end
+
     private
 
     # @rbs @root: RecordReference
@@ -119,6 +138,33 @@ module PaperTrailDiff
     # @rbs @transaction: Transaction
     # @rbs @preceding: Integer
     # @rbs @versions: Hash[Array[String], Array[ActivityBoundary]]
+
+    # The owner's version that saved the key of a `belongs_to` target the
+    # row adds or removes. A target with its own create or destroy here is
+    # credited to that, and the fields of a target with versions here follow
+    # them. An owner whose versions recorded no change of the key leaves the
+    # row as it is.
+    #: (ChangeRow, RecordReference, Array[ActivityBoundary]) -> ActivityBoundary?
+    def key_source(row, owner, versions)
+      return unless versions.empty? || (row.attribute.nil? && !own_event?(row, versions))
+
+      key = TargetKey.name(row, owner)
+      key && key_version(versions_of(owner), key)
+    end
+
+    #: (ChangeRow, Array[ActivityBoundary]) -> bool
+    def own_event?(row, versions)
+      event = row.change == :added ? 'create' : 'destroy'
+      versions.any? { |version| version.event == event }
+    end
+
+    # The last of the versions that recorded the key changing, or the last of
+    # them when what they recorded was not read.
+    #: (Array[ActivityBoundary], String) -> ActivityBoundary?
+    def key_version(versions, key)
+      touched = recorded_changes(versions, key)
+      touched ? touched.last&.first : versions.last
+    end
 
     # A field's change follows what the record's versions recorded of it,
     # from the value the row starts at (see #relevant): each run of recorded
@@ -241,29 +287,8 @@ module PaperTrailDiff
       credit(row, destroy || versions.last)
     end
 
-    # The changes the versions recorded of a field, each with its version:
-    # nil when one of them recorded nothing, or their changes were not read.
     #: (Array[ActivityBoundary], String?) -> Array[[ActivityBoundary, ValueChange]]?
-    def recorded_changes(versions, name)
-      changes = recorded(versions)
-      return unless changes
-
-      touched = [] #: Array[[ActivityBoundary, ValueChange]]
-      versions.each_with_index do |version, index|
-        change = changes.fetch(index)[name]
-        touched << [version, change] if change
-      end
-      touched
-    end
-
-    # A row about a whole record has no field name, which no version records.
-    #: (Array[ActivityBoundary]) -> Array[Hash[untyped, ValueChange]]?
-    def recorded(versions)
-      return unless versions.all?(&:recorded_changes?)
-
-      changes = versions.filter_map(&:recorded_changes)
-      changes if changes.length == versions.length
-    end
+    def recorded_changes(versions, name) = FieldChanges.recorded(versions, name)
 
     #: (ChangeRow) -> bool
     def recorded_column?(row)

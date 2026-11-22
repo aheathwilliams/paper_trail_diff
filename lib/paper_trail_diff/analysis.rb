@@ -67,12 +67,15 @@ module PaperTrailDiff
     # order they first changed, from the change rows. A field changed and
     # changed back is named, though the diff leaves it out, which is what a
     # report highlighting what moved in a window needs. A root created in the
-    # window names every field it was created with a value for.
+    # window names every field it was created with a value for. A requested
+    # `belongs_to` given another target names its foreign key (see
+    # ActivityStep#changed_attributes).
     #: () -> Array[String]
     def changed_attributes
-      change_rows.filter_map do |row|
-        row.attribute if row.association_path.empty?
-      end.uniq.freeze
+      steps = activity_timeline
+      raise ConfigurationError, 'changed_attributes requires activity: true' unless steps
+
+      steps.flat_map(&:changed_attributes).uniq.freeze
     end
 
     # One entry for each record the activity's change rows are about: its

@@ -47,7 +47,9 @@ module PaperTrailDiff
     # order they first changed, from the change rows. A field changed and
     # changed back is named, though the diff leaves it out, which is what a
     # report highlighting what moved in a window needs. A root created in the
-    # window names every field it was created with a value for.
+    # window names every field it was created with a value for. A requested
+    # `belongs_to` given another target names its foreign key (see
+    # ActivityStep#changed_attributes).
     # : () -> Array[String]
     def changed_attributes: () -> Array[String]
 

@@ -369,6 +369,111 @@ RSpec.describe PaperTrailDiff::AssociationActivityEdge do
     end
   end
 
+  describe described_class::FirstOwnerVersion do
+    def unversioned(&block)
+      PaperTrail.request(enabled: false, &block)
+    end
+
+    def edge_for(start, model = TrackedComment, name = :reviewer, **options)
+      described_class::FirstOwnerVersion.new(reflection(model, name), start && window(start),
+                                             **options)
+    end
+
+    def stored(edge, targets, type = nil)
+      edge.stored_owners(type) { targets }.map(&:to_i).sort
+    end
+
+    def legacy_comment(reviewer, body)
+      article = TrackedArticle.create!(title: 'Article')
+      unversioned { article.comments.create!(body: body, reviewer: reviewer) }
+    end
+
+    it 'matches in SQL the key a first version kept, and a destroy held' do
+      reviewer = TrackedAuthor.create!(name: 'Reviewer')
+      kept = legacy_comment(reviewer, 'kept')
+      gone = legacy_comment(reviewer, 'gone')
+      start = Time.now.utc
+      kept.update!(body: 'edited')
+      gone.destroy!
+      edge = edge_for(start)
+
+      expect(owners(edge, [reviewer.id])).to eq([kept.id, gone.id].sort)
+      expect(owners(edge, TrackedAuthor.select(:id))).to eq([kept.id, gone.id].sort)
+      expect(stored(edge, [reviewer.id])).to eq([])
+      expect([edge.type, edge.filter_type]).to eq(%i[integer integer])
+      expect(edge.column).to eq(PaperTrail::Version.arel_table[:item_id])
+    end
+
+    it 'reads the stored state of a first version that changed the key' do
+      reviewer, other = %w[Reviewer Other].map { |name| TrackedAuthor.create!(name: name) }
+      moved = legacy_comment(reviewer, 'moved')
+      start = Time.now.utc
+      moved.update!(reviewer: other)
+      edge = edge_for(start)
+
+      expect(owners(edge, [reviewer.id, other.id])).to eq([])
+      expect(stored(edge, [reviewer.id])).to eq([moved.id])
+      expect(stored(edge, [other.id])).to eq([])
+      later = edge_for(Time.now.utc)
+      expect(later.stored_owners { raise 'no version to read' }).to eq([])
+    end
+
+    it 'reads a version that recorded no changes in its stored state' do
+      reviewer = TrackedAuthor.create!(name: 'Reviewer')
+      kept = legacy_comment(reviewer, 'kept')
+      start = Time.now.utc
+      kept.update!(body: 'edited')
+      kept.versions.last.update_column(:object_changes, nil)
+      edge = edge_for(start)
+
+      expect(owners(edge, [reviewer.id])).to eq([])
+      expect(stored(edge, [reviewer.id])).to eq([kept.id])
+    end
+
+    it 'reads no create, no version before the window, and no later version' do
+      reviewer = TrackedAuthor.create!(name: 'Reviewer')
+      created = TrackedArticle.create!(title: 'A').comments.create!(body: 'c', reviewer: reviewer)
+      early = legacy_comment(reviewer, 'early')
+      early.update!(body: 'first')
+      start = Time.now.utc
+      [created, early].each { |comment| comment.update!(body: 'later') }
+      edge = edge_for(start)
+
+      expect(owners(edge, [reviewer.id])).to eq([])
+      expect(owners(edge_for(nil), [reviewer.id])).to eq([early.id])
+      expect(stored(edge, [reviewer.id])).to eq([])
+    end
+
+    it 'skips the SQL match and reads every first version for a key PaperTrail does not record' do
+      reviewer = TrackedAuthor.create!(name: 'Reviewer')
+      kept = legacy_comment(reviewer, 'kept')
+      start = Time.now.utc
+      kept.update!(body: 'edited')
+      allow(PaperTrailDiff::RecordedColumns).to receive(:recorded?).and_return(false)
+      edge = edge_for(start)
+
+      expect(owners(edge, [reviewer.id])).to eq([])
+      expect(stored(edge, [reviewer.id])).to eq([kept.id])
+    end
+
+    it "names a polymorphic key's types and narrows to one" do
+      article = TrackedArticle.create!(id: 600, title: 'Article holder')
+      author = TrackedAuthor.create!(id: 600, name: 'Author holder')
+      kept = unversioned { EdgeSticker.create!(label: 'kept', holder: author) }
+      moved = unversioned { EdgeSticker.create!(label: 'moved', holder: article) }
+      start = Time.now.utc
+      kept.update!(label: 'edited')
+      moved.update!(holder: author)
+      edge = edge_for(start, EdgeSticker, :holder)
+      authors = edge_for(start, EdgeSticker, :holder, foreign_type: 'TrackedAuthor')
+
+      expect(edge.target_types).to contain_exactly('TrackedArticle', 'TrackedAuthor')
+      expect(owners(authors, [600])).to eq([kept.id])
+      expect(stored(edge, [600], 'TrackedArticle')).to eq([moved.id])
+      expect(stored(edge, [600], 'TrackedAuthor')).to eq([])
+    end
+  end
+
   describe described_class::FirstVersion do
     def unversioned(&block)
       PaperTrail.request(enabled: false, &block)

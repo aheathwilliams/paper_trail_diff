@@ -143,16 +143,26 @@ module PaperTrailDiff
     # adapter can store its own value objects there, as SQL Server's does
     # for dates and times. Every read of such a state then fails, `reify`
     # included, so each version endpoint's state is decoded once to name the
-    # class. PaperTrail reads undecodable `object_changes` as empty instead.
+    # class. A create stores none, so for one the record's next version that
+    # stores a state is decoded instead. PaperTrail reads undecodable
+    # `object_changes` as empty instead.
     #: () -> void
     def inspect_decoding
-      @versions.each do |version|
-        version.object_deserialized if version.object
+      @versions.filter_map { |version| stored(version) }.uniq(&:id).each do |version|
+        version.object_deserialized
       rescue Support.constant('Psych::DisallowedClass') => e
         add_issue(:error, :disallowed_yaml_class,
                   "#{e}; add it to ActiveRecord.yaml_column_permitted_classes",
                   nil, version.id)
       end
+    end
+
+    #: (untyped) -> untyped
+    def stored(version)
+      return version if version.object
+
+      later = VersionQuery.after(Endpoint.model_class(version), version).where.not(object: nil)
+      VersionQuery.chronological(later).first
     end
 
     #: (Array[Array[untyped]]) -> void

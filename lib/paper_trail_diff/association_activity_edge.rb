@@ -216,6 +216,139 @@ module PaperTrailDiff
       # @rbs @target: untyped
     end
 
+    # The owners whose first version since the window opened did not create
+    # them, such as line items from before PaperTrail that name a product:
+    # until that version, such an owner held the key its stored state holds,
+    # though PT-AT has no row for it. PT-AT records the key a version saved,
+    # so where the version kept the key, as any destroy does, its row names
+    # the key held and is matched in SQL (`relation`). Where the version may
+    # have changed the key, only the stored state names it (`stored_owners`).
+    # One saved after the window's end held that key through it too.
+    class FirstOwnerVersion < AssociationActivityEdge
+      #: (untyped, TimeRange?, ?foreign_type: String?) -> void
+      def initialize(reflection, time_range, foreign_type: nil)
+        super(reflection, time_range)
+        @foreign_type = foreign_type
+        @versions = @owner.paper_trail.version_class
+        @associations = @owner.paper_trail.version_association_class
+        @column = @versions.arel_table[:item_id]
+        @type = column_type(@versions, 'item_id')
+        @filter_type = column_type(@associations, 'foreign_key_id')
+      end
+
+      #: (untyped) -> untyped
+      def relation(filter)
+        conditions = { foreign_key_id: filter } #: Hash[Symbol, untyped]
+        conditions[:foreign_type] = @foreign_type if @foreign_type
+        kept_rows.where(conditions)
+      end
+
+      # The owners whose first version may have changed the key, and whose
+      # stored state names one of the targets `ids` reads, under `type` for a
+      # polymorphic key. The targets are read only when such a version exists.
+      #: (String?) { () -> Array[untyped] } -> Array[untyped]
+      def stored_owners(type = nil)
+        states = stored_states
+        return [] if states.empty?
+
+        targets = yield.to_set(&:to_s)
+        states.filter_map do |item_id, state|
+          next unless targets.include?(state[@reflection.foreign_key].to_s)
+
+          item_id if type.nil? || state[@reflection.foreign_type] == type
+        end.uniq
+      end
+
+      # The types a polymorphic key's first versions held: PT-AT's rows for
+      # those that kept the key, and the stored states of the others.
+      #: () -> Array[String]
+      def target_types
+        kept = kept_rows.distinct.pluck(@associations.arel_table[:foreign_type])
+        stored = stored_states.map { |_item_id, state| state[@reflection.foreign_type] }
+        (kept + stored).reject(&:blank?).uniq
+      end
+
+      private
+
+      # @rbs @foreign_type: String?
+      # @rbs @versions: untyped
+      # @rbs @associations: untyped
+      # @rbs @stored_states: Array[[untyped, Hash[String, untyped]]]?
+
+      # PT-AT's rows for the key on the first versions that kept it.
+      #: () -> untyped
+      def kept_rows
+        table = @versions.arel_table
+        VersionTable.joined(@associations, @versions)
+                    .where(foreign_key_name: @reflection.foreign_key)
+                    .where(@versions.table_name => { item_type: @owner.base_class.name })
+                    .where(first_saved(table)).where(key_changes(table).not)
+      end
+
+      # A create stores no state and holds no earlier key, so the first
+      # versions read are those that did not create their owner.
+      #: (untyped) -> untyped
+      def first_saved(table)
+        first = table[:object].not_eq(nil).and(VersionQuery.no_earlier_version(table))
+        start = @time_range&.begin_time
+        start ? first.and(table[:created_at].gteq(start)) : first
+      end
+
+      # Item ids and stored states of the first versions that may have
+      # changed the key.
+      #: () -> Array[[untyped, Hash[String, untyped]]]
+      def stored_states
+        @stored_states ||= begin
+          table = @versions.arel_table
+          VersionQuery.for_model(@owner).where(first_saved(table)).where(key_changes(table))
+                      .select(:id, :item_id, :object)
+                      .map { |version| [version.item_id, version.object_deserialized] }
+        end
+      end
+
+      # The versions that may have changed the key: any but a destroy whose
+      # recorded changes name it, or that records none. Without PaperTrail's
+      # own recorded changes for the key, any but a destroy may have.
+      #: (untyped) -> untyped
+      def key_changes(table)
+        saved = table[:event].not_eq('destroy')
+        return saved unless key_names.all? { |name| recorded?(name) }
+
+        saved.and(Support.arel::Nodes::Grouping.new(naming_key(table)))
+      end
+
+      # Versions that recorded no changes, or whose recorded changes name the key.
+      #: (untyped) -> untyped
+      def naming_key(table)
+        changes = recorded_text(table)
+        key_names.map { |name| changes.matches("%#{name}%") }
+                 .inject(table[:object_changes].eq(nil)) { |any, name| any.or(name) }
+      end
+
+      #: () -> Array[String]
+      def key_names
+        names = [@reflection.foreign_key.to_s]
+        @reflection.polymorphic? ? names << @reflection.foreign_type.to_s : names
+      end
+
+      #: (String) -> bool
+      def recorded?(name)
+        adapter = Support.constant('PaperTrail').config.object_changes_adapter
+        @versions.column_names.include?('object_changes') &&
+          !adapter.respond_to?(:load_changeset) && RecordedColumns.recorded?(@owner, name)
+      end
+
+      # PostgreSQL compares a json column with text only once it is cast.
+      #: (untyped) -> untyped
+      def recorded_text(table)
+        column = table[:object_changes]
+        json = StoredTimePrecision.json_column?(@versions, 'object_changes')
+        return column unless json && @versions.connection.adapter_name.match?(/postg/i)
+
+        Support.arel::Nodes::NamedFunction.new('CAST', [column.as(Support.arel.sql('text'))])
+      end
+    end
+
     # The owners that pointed at a target when the window opened or after a
     # change inside it, as PT-AT recorded them on the owners' versions.
     class BelongsTo < AssociationActivityEdge

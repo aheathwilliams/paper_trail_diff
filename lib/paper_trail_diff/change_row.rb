@@ -106,7 +106,7 @@ module PaperTrailDiff
         row = row_for(entry)
         next unless row
 
-        attribution ? rows.concat(attribution.call(row)) : rows << row
+        attribution ? rows.concat(attribution.call(row, entry.record_path[-2])) : rows << row
       end
       rows.freeze
     end

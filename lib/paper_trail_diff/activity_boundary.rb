@@ -254,12 +254,32 @@ module PaperTrailDiff
     # order its change rows name them: empty when the step changed only
     # associated records. In a transaction group, `source_boundary` can be an
     # associated record's event, such as a line item's destroy in a save that
-    # only updated its order; this names the order's own update. Changes
-    # saved without a version are named once, by an unversioned source.
+    # only updated its order; this names the order's own update. A root's
+    # update that gave it another target of a requested `belongs_to`, which
+    # is reported on the association, is named too. Changes saved without a
+    # version are named once, by an unversioned source.
     #: () -> Array[ActivityBoundary]
     def root_sources
-      change_rows.filter_map { |row| row.source if row.association_path.empty? }
-                 .uniq(&:version_id).freeze
+      attribution = @attribution
+      change_rows.filter_map do |row|
+        next row.source if row.association_path.empty?
+
+        attribution&.root_key_source(row)
+      end.uniq(&:version_id).freeze
+    end
+
+    # The names of the root's own attributes that changed in this step, in
+    # the order its change rows name them. A requested `belongs_to` of the
+    # root that the root's own version set, cleared or replaced names its
+    # foreign key, though the change is reported on the association.
+    #: () -> Array[String]
+    def changed_attributes
+      attribution = @attribution
+      change_rows.filter_map do |row|
+        next row.attribute if row.association_path.empty?
+
+        attribution.root_key(row) if attribution&.root_key_source(row)
+      end.uniq.freeze
     end
 
     # The diff as flat rows, each credited to the event that made its change:

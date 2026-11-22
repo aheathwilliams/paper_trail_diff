@@ -143,7 +143,7 @@ RSpec.describe PaperTrailDiff::ChangeRows,
   it 'lists the rows an attribution gives for each row, in order' do
     unversioned = PaperTrailDiff::ActivityBoundary.unversioned(item_type: 'Article', item_id: 1)
     attribution = Object.new
-    attribution.define_singleton_method(:call) do |row|
+    attribution.define_singleton_method(:call) do |row, _owner = nil|
       [row, PaperTrailDiff::ChangeRow.new(
         change: :changed, association_path: [], association_kind: nil, record: nil,
         attribute: row.attribute, from: row.to, to: "#{row.to}!", source: unversioned

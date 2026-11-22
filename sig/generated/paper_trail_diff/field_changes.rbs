@@ -1,0 +1,16 @@
+# Generated from lib/paper_trail_diff/field_changes.rb with RBS::Inline
+
+module PaperTrailDiff
+  # What a record's versions recorded of one field, as ChangeAttribution reads
+  # it to credit a change.
+  module FieldChanges
+    # The changes the versions recorded of a field, each with its version:
+    # nil when one of them recorded nothing, or their changes were not read.
+    # : (Array[ActivityBoundary], String?) -> Array[[ActivityBoundary, ValueChange]]?
+    def self.recorded: (Array[ActivityBoundary], String?) -> Array[[ ActivityBoundary, ValueChange ]]?
+
+    # A row about a whole record has no field name, which no version records.
+    # : (Array[ActivityBoundary]) -> Array[Hash[untyped, ValueChange]]?
+    def self.all_recorded: (Array[ActivityBoundary]) -> Array[Hash[untyped, ValueChange]]?
+  end
+end

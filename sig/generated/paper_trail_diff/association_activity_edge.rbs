@@ -133,6 +133,77 @@ module PaperTrailDiff
       @target: untyped
     end
 
+    # The owners whose first version since the window opened did not create
+    # them, such as line items from before PaperTrail that name a product:
+    # until that version, such an owner held the key its stored state holds,
+    # though PT-AT has no row for it. PT-AT records the key a version saved,
+    # so where the version kept the key, as any destroy does, its row names
+    # the key held and is matched in SQL (`relation`). Where the version may
+    # have changed the key, only the stored state names it (`stored_owners`).
+    # One saved after the window's end held that key through it too.
+    class FirstOwnerVersion < AssociationActivityEdge
+      # : (untyped, TimeRange?, ?foreign_type: String?) -> void
+      def initialize: (untyped, TimeRange?, ?foreign_type: String?) -> void
+
+      # : (untyped) -> untyped
+      def relation: (untyped) -> untyped
+
+      # The owners whose first version may have changed the key, and whose
+      # stored state names one of the targets `ids` reads, under `type` for a
+      # polymorphic key. The targets are read only when such a version exists.
+      # : (String?) { () -> Array[untyped] } -> Array[untyped]
+      def stored_owners: (String?) { () -> Array[untyped] } -> Array[untyped]
+
+      # The types a polymorphic key's first versions held: PT-AT's rows for
+      # those that kept the key, and the stored states of the others.
+      # : () -> Array[String]
+      def target_types: () -> Array[String]
+
+      private
+
+      @associations: untyped
+
+      @foreign_type: String?
+
+      @stored_states: Array[[ untyped, Hash[String, untyped] ]]?
+
+      @versions: untyped
+
+      # PT-AT's rows for the key on the first versions that kept it.
+      # : () -> untyped
+      def kept_rows: () -> untyped
+
+      # A create stores no state and holds no earlier key, so the first
+      # versions read are those that did not create their owner.
+      # : (untyped) -> untyped
+      def first_saved: (untyped) -> untyped
+
+      # Item ids and stored states of the first versions that may have
+      # changed the key.
+      # : () -> Array[[untyped, Hash[String, untyped]]]
+      def stored_states: () -> Array[[ untyped, Hash[String, untyped] ]]
+
+      # The versions that may have changed the key: any but a destroy whose
+      # recorded changes name it, or that records none. Without PaperTrail's
+      # own recorded changes for the key, any but a destroy may have.
+      # : (untyped) -> untyped
+      def key_changes: (untyped) -> untyped
+
+      # Versions that recorded no changes, or whose recorded changes name the key.
+      # : (untyped) -> untyped
+      def naming_key: (untyped) -> untyped
+
+      # : () -> Array[String]
+      def key_names: () -> Array[String]
+
+      # : (String) -> bool
+      def recorded?: (String) -> bool
+
+      # PostgreSQL compares a json column with text only once it is cast.
+      # : (untyped) -> untyped
+      def recorded_text: (untyped) -> untyped
+    end
+
     # The owners that pointed at a target when the window opened or after a
     # change inside it, as PT-AT recorded them on the owners' versions.
     class BelongsTo < AssociationActivityEdge

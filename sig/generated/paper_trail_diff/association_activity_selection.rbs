@@ -80,11 +80,17 @@ module PaperTrailDiff
     # : (untyped, Array[source]) -> Array[source]
     def owners: (untyped, Array[source]) -> Array[source]
 
-    # The owners children held until a first version that did not create
+    # The owners records held until a first version that did not create
     # them, read from those versions' stored states (see
-    # AssociationActivityEdge::FirstVersion).
+    # AssociationActivityEdge::FirstVersion and FirstOwnerVersion).
     # : (untyped, Array[source]) -> Array[source]
     def first_owners: (untyped, Array[source]) -> Array[source]
+
+    # : (AssociationActivityEdge::FirstOwnerVersion, Array[source], ?String?) -> Array[source]
+    def stored_owners: (AssociationActivityEdge::FirstOwnerVersion, Array[source], ?String?) -> Array[source]
+
+    # : (untyped, ?foreign_type: String?) -> AssociationActivityEdge::FirstOwnerVersion
+    def first_owner_edge: (untyped, ?foreign_type: String?) -> AssociationActivityEdge::FirstOwnerVersion
 
     # A join row that changes moves membership as surely as a target that does.
     # : (untyped, Array[source]) -> Array[source]
@@ -99,6 +105,11 @@ module PaperTrailDiff
     # and a path stops at one, so only the targets' own changes count.
     # : (untyped) -> Array[source]
     def polymorphic_owners: (untyped) -> Array[source]
+
+    # The types a polymorphic key names in PT-AT's rows, in the table and in
+    # the stored states of first versions.
+    # : (untyped, AssociationActivityEdge::FirstOwnerVersion) -> Array[String]
+    def target_names: (untyped, AssociationActivityEdge::FirstOwnerVersion) -> Array[String]
 
     # : (untyped) -> Array[AssociationActivityEdge]
     def edges: (untyped) -> Array[AssociationActivityEdge]
