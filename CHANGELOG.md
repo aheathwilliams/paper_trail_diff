@@ -69,9 +69,10 @@ project follows [Semantic Versioning](https://semver.org/).
   version kept the key, PT-AT's row already names the owner, so only first
   versions whose recorded changes name the key, or that recorded none, are
   decoded. With 200,000 line items from before PaperTrail, each first saved
-  after the window, one order's analysis took 12 s and now takes 0.16 s on
-  SQLite; a page of 25 orders over `line_items.product` went from 13.7 s to
-  2.3 s. This was in 0.18.0 and 0.18.1.
+  after the window, one order's analysis took 12 s and now takes 0.17 s on
+  SQLite (14 s and 0.66 s on SQL Server); a page of 25 orders over
+  `line_items.product` went from 13.7 s to 1.1 s (18.9 s and 3.5 s on SQL
+  Server). This was in 0.18.0 and 0.18.1.
 - A polymorphic `belongs_to` given a target of another type with the same
   id, which records only the type column, is credited to the root's version
   that saved it: `ActivityStep#root_sources` names it, and
