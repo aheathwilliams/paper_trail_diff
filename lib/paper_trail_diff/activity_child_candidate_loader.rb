@@ -116,15 +116,19 @@ module PaperTrailDiff
     end
 
     # PT-AT stores the keys a version saved, so the owner a child held before
-    # its first version is in no row when that version is not a create: the
-    # child was made without one, and its first version's state, which holds
-    # that owner, is read instead.
+    # its first version is in no row when that version is not a create and
+    # changed the key: the child was made without one, and its first
+    # version's state, which holds that owner, is read instead. A first
+    # version that kept the key has a row naming the owner, which
+    # `historical_rows` reads with the rest, so only the stored states of
+    # versions that may have changed it are decoded (see FirstKeyVersions):
+    # a range long past would otherwise decode every child first saved since.
     #: (String) -> Array[Array[untyped]]
     def first_owner_rows(foreign_key)
       held = @parent_ids.to_set(&:to_s)
       first_versions.filter_map do |version|
-        state = version.object && version.object_deserialized
-        owner = state[foreign_key] if state
+        state = version.object_deserialized
+        owner = state[foreign_key]
         # An `as:` child's type column must name one of the owner's types,
         # which take a child with no type, as any plain child has.
         next unless held.include?(owner.to_s) && parent_types.include?(state[@reflection.type])
@@ -133,20 +137,14 @@ module PaperTrailDiff
       end
     end
 
-    # The first version of each child since the start, unless it created its
-    # child: a create holds no state, and every child created after the
-    # range would be read for nothing. One saved after the end holds the
-    # state the child had there too. A model PaperTrail does not version has
-    # none.
+    # One saved after the end holds the state the child had there too. A
+    # model PaperTrail does not version has none.
     #: () -> untyped
     def first_versions
       return [] unless Support.versioned?(@reflection.klass)
 
-      relation = VersionQuery.for_model(@reflection.klass).where.not(event: 'create')
-      versions = relation.arel_table
-      relation = relation.where(VersionQuery.no_earlier_version(versions))
-      relation = relation.where(versions[:created_at].gteq(@start_at)) if @start_at
-      relation
+      names = [@foreign_key, @reflection.type].compact
+      FirstKeyVersions.new(@reflection.klass, names, @start_at).stored
     end
 
     #: (untyped, untyped) -> Array[Array[untyped]]

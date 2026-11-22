@@ -36,12 +36,20 @@ module PaperTrailDiff
     # : (untyped, String) -> Symbol?
     def column_type: (untyped, String) -> Symbol?
 
-    # The rows of `model` among `rows` that no version was ever saved for. A
-    # database compares the key with item_id only when they share a type;
-    # otherwise the keys of the rows that have versions are read as values,
-    # which a database casts back to the key's type.
+    # The rows of `model` among `rows` that no version was saved for after
+    # the window closed: an analysis reads such a row's state there, and
+    # from its last version on, from the row itself, so the key the row
+    # holds now is the key it held then, whether a version saved it or a
+    # write without one did, such as `update_all` or a row from before
+    # PaperTrail. With no end, the state at the end is the row. A database
+    # compares the key with item_id only when they share a type; otherwise
+    # the keys of the rows saved since are read as values, which a database
+    # casts back to the key's type.
     # : (untyped, untyped) -> untyped
-    def without_versions: (untyped, untyped) -> untyped
+    def without_later_versions: (untyped, untyped) -> untyped
+
+    # : (untyped, untyped) -> untyped
+    def after: (untyped, untyped) -> untyped
 
     # : (untyped) -> bool
     def item_key?: (untyped) -> bool
@@ -69,9 +77,11 @@ module PaperTrailDiff
       def owner_types: () -> Array[String?]
     end
 
-    # The owners of children no version was ever saved for, such as rows from
-    # before PaperTrail: such a child has held its live key throughout, as an
-    # analysis reads it, and so leads to a change further down.
+    # The owners children hold now, for children no version was saved for
+    # after the window closed, such as rows from before PaperTrail or a child
+    # moved with `update_columns`: as an analysis reads it, such a child held
+    # its live key at the window's end, and so leads to a change further
+    # down. PT-AT's rows name only the keys versions saved.
     class Unversioned < AssociationActivityEdge
       # : (untyped, TimeRange?) -> void
       def initialize: (untyped, TimeRange?) -> void
@@ -79,17 +89,24 @@ module PaperTrailDiff
       # : (untyped) -> untyped
       def relation: (untyped) -> untyped
 
+      private
+
+      # A key that names no row of the owner, such as one a bulk write left
+      # dangling, names no owner to select.
+      # : () -> untyped
+      def owner_row: () -> untyped
+
       @target: untyped
     end
 
-    # The owners no version was ever saved for that point at a target, such
-    # as line items from before PaperTrail that name a product: such an owner
-    # has held its live key throughout, as an analysis reads it, so a change
-    # to the target, or below it, is a change the owner holds. PT-AT records
-    # a belongs_to on the owner's own versions, and an owner without any is
-    # in none of its rows.
+    # The owners that point at a target now and that no version was saved
+    # for after the window closed, such as line items from before PaperTrail
+    # that name a product, or orders moved to another customer with
+    # `update_all`: as an analysis reads it, such an owner held its live key
+    # at the window's end, so a change to the target, or below it, is a
+    # change the owner holds. PT-AT records a belongs_to on the owner's own
+    # versions, and only the keys they saved.
     class UnversionedOwner < AssociationActivityEdge
-      # Such an owner holds its key through any window, so none is kept.
       # : (untyped, TimeRange?, ?foreign_type: String?) -> void
       def initialize: (untyped, TimeRange?, ?foreign_type: String?) -> void
 
@@ -104,25 +121,26 @@ module PaperTrailDiff
       @foreign_type: String?
     end
 
-    # The owners of children whose first version since the window opened did
-    # not create them, such as rows from before PaperTrail that the window
-    # moves or detaches. PT-AT stores the keys a version saved, so the owner
-    # such a child held until that version is in no row, only in the
-    # version's stored state, as ActivityChildCandidateLoader reads it. One
-    # saved after the window's end holds the owner the child had there too.
+    # The owners children held until their first version since the window
+    # opened, where that version kept the key: PT-AT's row for it names the
+    # owner, which is matched in SQL (`relation`). A child given that owner
+    # without a version, or a row from before PaperTrail, is found this way.
+    # Where the child's first version ever may have changed the key, only
+    # its stored state names the owner held before (`owners`), as
+    # ActivityChildCandidateLoader reads it. One saved after the window's
+    # end held that owner through it too.
     class FirstVersion < AssociationActivityEdge
       # : (untyped, TimeRange?) -> void
       def initialize: (untyped, TimeRange?) -> void
 
-      # A create stores no state, so the first versions read are those that
-      # did not create their child.
       # : (untyped) -> untyped
       def relation: (untyped) -> untyped
 
       # The owners the first versions of the children `filter` selects name in
-      # their stored states. An `as:` child's type must name one of the
-      # owner's types, which take a child with no type, as any plain child has.
-      # A version with no state for the key names no owner.
+      # their stored states, where those versions may have changed the key.
+      # An `as:` child's type must name one of the owner's types, which take a
+      # child with no type, as any plain child has. A version with no state
+      # for the key names no owner.
       # : (untyped) -> Array[untyped]
       def owners: (untyped) -> Array[untyped]
 
@@ -130,17 +148,27 @@ module PaperTrailDiff
       # : (Array[untyped]) -> Array[untyped]
       def owners_of: (Array[untyped]) -> Array[untyped]
 
+      private
+
+      @associations: untyped
+
+      @first: FirstKeyVersions
+
       @target: untyped
+
+      # : () -> Array[String?]
+      def owner_types: () -> Array[String?]
     end
 
-    # The owners whose first version since the window opened did not create
-    # them, such as line items from before PaperTrail that name a product:
-    # until that version, such an owner held the key its stored state holds,
-    # though PT-AT has no row for it. PT-AT records the key a version saved,
-    # so where the version kept the key, as any destroy does, its row names
-    # the key held and is matched in SQL (`relation`). Where the version may
-    # have changed the key, only the stored state names it (`stored_owners`).
-    # One saved after the window's end held that key through it too.
+    # The owners that held a key until their first version since the window
+    # opened, such as line items from before PaperTrail that name a product,
+    # or an order given another customer without a version: until that
+    # version, such an owner held the key its stored state holds. Where the
+    # version kept the key, as any destroy does, PT-AT's row for it names the
+    # key held and is matched in SQL (`relation`). Where the owner's first
+    # version ever may have changed the key, only the stored state names it
+    # (`stored_owners`). One saved after the window's end held that key
+    # through it too.
     class FirstOwnerVersion < AssociationActivityEdge
       # : (untyped, TimeRange?, ?foreign_type: String?) -> void
       def initialize: (untyped, TimeRange?, ?foreign_type: String?) -> void
@@ -163,48 +191,22 @@ module PaperTrailDiff
 
       @associations: untyped
 
+      @first: FirstKeyVersions
+
       @foreign_type: String?
 
       @stored_states: Array[[ untyped, Hash[String, untyped] ]]?
 
-      @versions: untyped
-
-      # PT-AT's rows for the key on the first versions that kept it.
       # : () -> untyped
       def kept_rows: () -> untyped
 
-      # A create stores no state and holds no earlier key, so the first
-      # versions read are those that did not create their owner.
-      # : (untyped) -> untyped
-      def first_saved: (untyped) -> untyped
+      # : () -> Array[String]
+      def key_names: () -> Array[String]
 
       # Item ids and stored states of the first versions that may have
       # changed the key.
       # : () -> Array[[untyped, Hash[String, untyped]]]
       def stored_states: () -> Array[[ untyped, Hash[String, untyped] ]]
-
-      # The versions that may have changed the key: any but a destroy whose
-      # recorded changes name it, or that records none. Without PaperTrail's
-      # own recorded changes for the key, any but a destroy may have.
-      # : (untyped) -> untyped
-      def key_changes: (untyped) -> untyped
-
-      # Versions that recorded no changes, or whose recorded changes name the key.
-      # : (untyped) -> untyped
-      def naming_key: (untyped) -> untyped
-
-      # : () -> Array[String]
-      def key_names: () -> Array[String]
-
-      # : (String) -> bool
-      def recorded?: (String) -> bool
-
-      # PostgreSQL compares a json column with text only once it is cast.
-      # Only a json column on PostgreSQL takes the cast, which the SQLite
-      # database mutation testing runs on never has.
-      # mutant:disable
-      # : (untyped) -> untyped
-      def recorded_text: (untyped) -> untyped
     end
 
     # The owners that pointed at a target when the window opened or after a

@@ -232,7 +232,9 @@ RSpec.describe 'Selecting a root through a row without versions' do
       expect(selected(UvProject.all, since, 'uv_labels')).to eq([[project], [project]])
     end
 
-    it 'selects no root through a row that has versions, which name its targets' do
+    # An analysis reads the row once no version follows, so the key the bulk
+    # write gave it is the one it holds through the window.
+    it 'selects a root whose key was changed without a version after its last one' do
       label = UvLabel.create!(name: 'label')
       other = UvLabel.create!(name: 'other')
       _org, _project, task = labelled(label)
@@ -241,7 +243,7 @@ RSpec.describe 'Selecting a root through a row without versions' do
       since = Time.now.utc
       label.update!(name: 'renamed')
 
-      expect(selected(UvTask.all, since, 'uv_label')).to eq([[], []])
+      expect(selected(UvTask.all, since, 'uv_label')).to eq([[task], [task]])
     end
 
     it 'selects a root without versions by its polymorphic target, under its type' do

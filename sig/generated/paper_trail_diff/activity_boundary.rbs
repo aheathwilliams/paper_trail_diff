@@ -161,7 +161,8 @@ module PaperTrailDiff
     # The names of the root's own attributes that changed in this step, in
     # the order its change rows name them. A requested `belongs_to` of the
     # root that the root's own version set, cleared or replaced names its
-    # foreign key, though the change is reported on the association.
+    # foreign key, and a polymorphic one its type column where that changed
+    # too, though the change is reported on the association.
     # : () -> Array[String]
     def changed_attributes: () -> Array[String]
 

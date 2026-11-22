@@ -567,7 +567,9 @@ PaperTrailDiff.analyze(article, associations: [:comments], activity: true, group
   empty list when the save changed only associated records. A root's update
   that gave it another target of a requested `belongs_to`, such as another
   customer with `associations: [:customer, :line_items]`, counts as a change
-  to the root, though the diff reports it on the association. `step.sources`
+  to the root, though the diff reports it on the association, and
+  `changed_attributes` names its key: `customer_id`, or for a polymorphic
+  key the id and type columns that changed. `step.sources`
   lists every event in the transaction, each with its own author, except two
   kinds: those of records outside the tree before the transaction, after it,
   and at every version of the root it saved; and those saved before a window
@@ -839,22 +841,29 @@ grouped.
   for large tables. Each requested association adds one query per level, however
   many records it selects. Changes to associations are found from PT-AT's
   `version_associations`, so history recorded before PT-AT was installed selects
-  nothing. A record that has no version of its own, such as one created with
-  PaperTrail turned off, is in none of those rows. It has held the keys its
-  row has now throughout, as an analysis reads it, so selection reads them
-  from its table: a `belongs_to` target's change selects the record that
+  nothing. Those rows hold only the keys versions saved. A record with no
+  version after the window closed, such as one created with PaperTrail
+  turned off, or one whose key a bulk write such as a customer merge with
+  `update_all` changed after its last version, holds the key its row has now
+  at the window's end, as an analysis reads it. So selection reads that key
+  from its table too: a `belongs_to` target's change selects the record that
   points at it now, and a change below a `has_many` or `has_one` child
-  selects the owner the child's row names now. The same holds below the
-  root: a product renamed selects an order whose line item has no version,
-  over `line_items.product`, and a tag renamed an order whose join row has
-  none, over a `has_many :through`. After adding PaperTrail to existing
-  data, every row is in this state until it is next saved. Its first
-  version, if it is not a `create`, stores the keys it held until then, so
-  selection reads them there for every window that began before that
-  version, including one that closed before it was saved. Where the version
-  kept the key, PT-AT's row on it names the key and is matched in SQL; where
-  PaperTrail's recorded changes name the key, or none were recorded, the
-  version's stored state is read in Ruby.
+  selects the owner the child's row names now, unless that key names no row.
+  The same holds below the root: a product renamed selects an order whose
+  line item has no version, over `line_items.product`, and a tag renamed an
+  order whose join row has none, over a `has_many :through`. After adding
+  PaperTrail to existing data, every row is in this state until it is next
+  saved. A record's first version since the window opened stores the key it
+  held until then. Where that version kept the key, PT-AT's row on it names
+  the key and is matched in SQL, so a key written without a version before
+  it selects the record too. Where the record's first version ever may have
+  changed the key, because PaperTrail's recorded changes name it or none
+  were recorded, the version's stored state is read in Ruby; only those
+  versions are read, so a window long past costs no more for the rows saved
+  since. Both hold for every window that began before that version,
+  including one that closed before it was saved. One case is not selected:
+  a key written without a version and then changed again by a version,
+  where only that version's stored state names the key held between.
 - **A window with associations reads from where the transactions open at
   its start began**, and selects by the versions those transactions saved
   before it, but by no other version saved before the start.
@@ -1363,7 +1372,13 @@ Which version a row names:
   step's transaction. A `belongs_to` target set, cleared or replaced, and
   its fields, name the owner's version in the step's transaction that saved
   the key, such as the order's `update` that gave it another customer, unless
-  the target was itself created or destroyed there. Any other record that
+  the target was itself created or destroyed there. A polymorphic key's type
+  column is part of the key, so a target of another type with the same id
+  names the version that saved the type. A field the target's own versions
+  in the step recorded names the last of them, and with
+  `recorded_changes: false` every field does. A target below a record that
+  joined or left by its own update, such as the product of a line item moved
+  to another order, names what that record names. Any other record that
   joined or left through another record's change names the step's
   `source_boundary`.
 

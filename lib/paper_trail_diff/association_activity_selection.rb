@@ -116,9 +116,9 @@ module PaperTrailDiff
       edges(reflection).flat_map { |edge| follow(edge, ids) } + first_owners(reflection, ids)
     end
 
-    # The owners records held until a first version that did not create
-    # them, read from those versions' stored states (see
-    # AssociationActivityEdge::FirstVersion and FirstOwnerVersion).
+    # The owners records held until the first version ever saved for them,
+    # where it may have changed the key, read from those versions' stored
+    # states (see AssociationActivityEdge::FirstVersion and FirstOwnerVersion).
     #: (untyped, Array[source]) -> Array[source]
     def first_owners(reflection, ids)
       return stored_owners(first_owner_edge(reflection), ids) if reflection.belongs_to?
@@ -162,7 +162,7 @@ module PaperTrailDiff
     def typed_joins(reflection, ids, source_type)
       source = reflection.source_reflection
       edge = AssociationActivityEdge::BelongsTo.new(source, @time_range, foreign_type: source_type)
-      unversioned = AssociationActivityEdge::UnversionedOwner.new(source, nil,
+      unversioned = AssociationActivityEdge::UnversionedOwner.new(source, @time_range,
                                                                   foreign_type: source_type)
       first = first_owner_edge(source, foreign_type: source_type)
       follow(edge, ids) + follow(unversioned, ids) + follow(first, ids) +
@@ -200,7 +200,8 @@ module PaperTrailDiff
                 [AssociationActivityEdge::BelongsTo, AssociationActivityEdge::UnversionedOwner,
                  AssociationActivityEdge::FirstOwnerVersion]
               else
-                [AssociationActivityEdge::Child, AssociationActivityEdge::Unversioned]
+                [AssociationActivityEdge::Child, AssociationActivityEdge::Unversioned,
+                 AssociationActivityEdge::FirstVersion]
               end
       kinds.map { |kind| kind.new(reflection, @time_range) }
     end

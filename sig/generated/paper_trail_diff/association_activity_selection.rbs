@@ -80,9 +80,9 @@ module PaperTrailDiff
     # : (untyped, Array[source]) -> Array[source]
     def owners: (untyped, Array[source]) -> Array[source]
 
-    # The owners records held until a first version that did not create
-    # them, read from those versions' stored states (see
-    # AssociationActivityEdge::FirstVersion and FirstOwnerVersion).
+    # The owners records held until the first version ever saved for them,
+    # where it may have changed the key, read from those versions' stored
+    # states (see AssociationActivityEdge::FirstVersion and FirstOwnerVersion).
     # : (untyped, Array[source]) -> Array[source]
     def first_owners: (untyped, Array[source]) -> Array[source]
 

@@ -95,7 +95,7 @@ module PaperTrailDiff
     #: (Array[AssociationActivitySelection::Query]) -> Result
     def database_selection(related)
       sources = [changed_roots, *related]
-      missing = Support.sort_ids(sources.flat_map { |ids| ids.missing(base_class) })
+      missing = Support.sort_ids(recorded(sources.flat_map { |ids| ids.missing(base_class) }))
       records, total = CandidateTable.union(base_class, sources.map(&:relation)) do |relations|
         page_and_total(relations)
       end
@@ -129,7 +129,7 @@ module PaperTrailDiff
     #: (Array[String]) -> Result
     def plucked_selection(candidates)
       live = ids_in(base_class.unscoped, candidates)
-      missing = candidates - live
+      missing = recorded(candidates - live)
       records, total = CandidateTable.with(base_class, live) { |ids| page_and_total([ids]) }
       unreachable = Support.sort_ids(missing).map { |id| identity(id) }.freeze
       Result.new(records: records, unreachable: unreachable, total: total)
@@ -196,10 +196,22 @@ module PaperTrailDiff
       window_versions.distinct.pluck(:item_id).map(&:to_s)
     end
 
-    #: (untyped, Array[String]) -> Array[String]
-    def ids_in(relation, candidates)
+    # The ids among `missing` that a version names. A key that names no row
+    # and no version, such as one a bulk write left pointing nowhere, is no
+    # deleted root: a record's live key selects through it (see
+    # AssociationActivityEdge#without_later_versions).
+    #: (Array[untyped]) -> Array[untyped]
+    def recorded(missing)
+      return missing if missing.empty?
+
+      named = ids_in(VersionQuery.for_model(model).distinct, missing.map(&:to_s), :item_id).to_set
+      missing.select { |id| named.include?(id.to_s) }
+    end
+
+    #: (untyped, Array[String], ?untyped) -> Array[String]
+    def ids_in(relation, candidates, key = primary_key)
       candidates.each_slice(Support::IDS_PER_STATEMENT).flat_map do |slice|
-        relation.where(primary_key => slice).pluck(primary_key).map(&:to_s)
+        relation.where(key => slice).pluck(key).map(&:to_s)
       end
     end
 

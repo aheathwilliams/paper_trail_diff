@@ -429,8 +429,8 @@ RSpec.describe PaperTrailDiff::AssociationActivitySelection do
 
       found = sources(TrackedArticle, [:comments], window: since(start))
 
-      expect(found.map(&:class)).to eq([described_class::Query] * 2)
-      expect(found.map(&:type)).to eq(%i[integer integer])
+      expect(found.map(&:class)).to eq([described_class::Query] * 3)
+      expect(found.map(&:type)).to eq(%i[integer integer integer])
       expect(selected(found)).to eq([article.id])
     end
 
@@ -567,8 +567,8 @@ RSpec.describe PaperTrailDiff::AssociationActivitySelection do
       whole, found = count.call(2)
       sliced, sliced_found = count.call(1)
 
-      expect(found).to eq([[note.id.to_s]])
-      expect(sliced_found).to eq([[note.id.to_s]])
+      expect(found).to eq([[note.id.to_s], [note.id]])
+      expect(sliced_found).to eq([[note.id.to_s], [note.id]])
       # A second slice is one more read of PT-AT's rows, one more of those
       # on first versions that kept the key, and two more for the notes
       # without versions: those that point at it, and of those the ones no
@@ -590,8 +590,8 @@ RSpec.describe PaperTrailDiff::AssociationActivitySelection do
 
       found = sources(StringItemPost, ['notes.post'], window: since(start))
 
-      expect(found.grep(Array)).to eq([[post.id]])
-      expect(found.grep(described_class::Query).map(&:type)).to eq([:integer])
+      expect(found.grep(Array).uniq).to eq([[post.id]])
+      expect(found.grep(described_class::Query).map(&:type)).to eq(%i[integer integer])
       expect(described_class.values(found)).to eq([post.id])
     end
 

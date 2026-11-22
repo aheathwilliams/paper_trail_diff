@@ -8,22 +8,27 @@ RSpec.describe PaperTrailDiff::ChangeAttribution do
   # Stand-ins for versioned models: the article's subclass shares its rows,
   # and the comment records every column but `rank`.
   # `belongs_to` maps an association's name to its foreign key; any other
-  # name is a `has_many`.
-  def model(options = {}, belongs_to: {})
+  # name is a `has_many`. `polymorphic` maps a belongs_to's name to its type
+  # column.
+  def model(options = {}, belongs_to: {}, polymorphic: {})
     paper_trail = { ignore: [], skip: [], only: [] }.merge(options)
+    reflection = Struct.new(:foreign_key, :belongs_to?, :polymorphic?, :foreign_type)
     Class.new do
       define_singleton_method(:base_class) { self }
       define_singleton_method(:paper_trail_options) { paper_trail }
       define_singleton_method(:reflect_on_association) do |name|
         key = belongs_to[name]
-        Struct.new(:foreign_key, :belongs_to?).new(key || "#{name}_id", !key.nil?)
+        type = polymorphic[name]
+        reflection.new(key || "#{name}_id", !key.nil?, !type.nil?, type)
       end
     end
   end
 
   before do
-    article = stub_const('AttributedArticle', model(belongs_to: { 'author' => :author_id,
-                                                                  'reviewer' => :reviewer_id }))
+    article = stub_const('AttributedArticle',
+                         model(belongs_to: { 'author' => :author_id, 'reviewer' => :reviewer_id,
+                                             'subject' => :subject_id },
+                               polymorphic: { 'subject' => :subject_type }))
     note = Class.new(article) { define_singleton_method(:base_class) { article } }
     stub_const('AttributedNote', note)
     stub_const('AttributedComment', model({ ignore: ['rank'] },
@@ -516,12 +521,64 @@ RSpec.describe PaperTrailDiff::ChangeAttribution do
     it "names the root's foreign key a target row at the root stands for" do
       attribution = attribution([version('AttributedArticle', 1, 1)])
 
-      expect([target(:added), target(:removed)].map { |row| attribution.root_key(row) })
-        .to eq(%w[author_id author_id])
+      expect([target(:added), target(:removed)].map { |row| attribution.root_keys(row) })
+        .to eq([%w[author_id], %w[author_id]])
+      expect(attribution.root_keys(target(:added, path: ['subject'])))
+        .to eq(%w[subject_id subject_type])
       others = [target(:added, 'name'), target(:changed), target(:added, kind: :has_many),
                 target(:added, path: %w[comments reviewer], record: reviewer),
                 target(:added, path: ['comments'], record: comment)]
-      expect(others.map { |row| attribution.root_key(row) }).to eq([nil] * 5)
+      expect(others.map { |row| attribution.root_keys(row) }).to eq([[]] * 5)
+      expect(attribution([]).root_keys(target(:added))).to eq([])
+    end
+
+    # Customer 1 and Product 1 share an id, so the swap records only the type.
+    it 'reads the type column of a polymorphic key as part of the key' do
+      retyped = version('AttributedArticle', 1, 1,
+                        changes: { 'subject_type' => %w[Customer Product] })
+      both = version('AttributedArticle', 1, 2, changes: { 'subject_id' => [1, 2],
+                                                           'subject_type' => %w[Product Customer] })
+      edit = version('AttributedArticle', 1, 3, changes: { 'title' => %w[A B] })
+      row = target(:added, path: ['subject'])
+
+      expect(attribution([retyped, edit]).root_key_source(row)).to equal(retyped)
+      expect(attribution([retyped, edit]).root_keys(row)).to eq(%w[subject_type])
+      expect(attribution([both]).root_keys(row)).to eq(%w[subject_id subject_type])
+      expect(attribution([retyped, both, edit]).root_key_source(row)).to equal(both)
+      expect(attribution([edit]).root_keys(row)).to eq([])
+      expect(sources_of(attribution([retyped, edit]), [row, target(:removed, path: ['subject'])]))
+        .to eq([[1], [1]])
+    end
+
+    # The target's own edit says nothing of the fields it left alone, which
+    # came with the target.
+    it "credits a target's fields its versions did not record to the owner's version" do
+      swap = version('AttributedArticle', 1, 1, changes: { 'author_id' => [2, 3] })
+      edited = version('AttributedAuthor', 3, 4, changes: { 'tier' => %w[silver gold] })
+      unread = version('AttributedAuthor', 3, 5)
+      rows = [target(:added, 'name'), target(:added, 'tier'), target(:removed, 'name')]
+
+      expect(sources_of(attribution([edited, swap]), rows)).to eq([[1], [4], [1]])
+      expect(sources_of(attribution([unread, swap]), rows)).to eq([[5], [5], [5]])
+    end
+
+    # A comment moved to the article brings its reviewer: the reviewer rows
+    # follow the comment's own row, though the move recorded only article_id.
+    it 'credits the targets under an owner that joined or left to what the owner is' do
+      moved = version('AttributedComment', 7, 5, changes: { 'article_id' => [2, 1] })
+      created = version('AttributedComment', 7, 6, event: 'create',
+                                                   changes: { 'body' => [nil, 'c'] })
+      destroyed = version('AttributedComment', 7, 7, event: 'destroy', changes: {})
+      added = target(:added, path: %w[comments reviewer], record: reviewer)
+      removed = target(:removed, path: %w[comments reviewer], record: reviewer)
+      root_edit = version('AttributedArticle', 1, 8, changes: { 'title' => %w[A B] })
+
+      expect(sources_of(attribution([root_edit, moved]), [added, removed],
+                        comment)).to eq([[5], [5]])
+      expect(sources_of(attribution([moved, created]), [added], comment)).to eq([[6]])
+      expect(sources_of(attribution([moved, destroyed]), [removed], comment)).to eq([[7]])
+      expect(sources_of(attribution([root_edit]), [added], comment)).to eq([[90]])
+      expect(sources_of(attribution([root_edit]), [target(:added)])).to eq([[90]])
     end
 
     it "names the root's version that saved such a key" do
