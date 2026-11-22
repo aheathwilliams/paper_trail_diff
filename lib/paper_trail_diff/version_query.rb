@@ -27,6 +27,25 @@ module PaperTrailDiff
       for_model(model_class).where(item_id: ids)
     end
 
+    # The ids among `ids` that a version of the model names, as strings, read
+    # in slices.
+    #: (untyped, Array[untyped]) -> Array[String]
+    def self.named_ids(model_class, ids)
+      ids.each_slice(Support::IDS_PER_STATEMENT).flat_map do |slice|
+        for_items(model_class, slice).distinct.pluck(:item_id).map(&:to_s)
+      end
+    end
+
+    # Whether a version of the model names the id `column` holds, in a
+    # statement over another table. Comparing them in SQL needs the column
+    # to share item_id's type.
+    #: (untyped, untyped) -> untyped
+    def self.naming(model_class, column)
+      versions = other_versions(model_class.paper_trail.version_class.arel_table)
+      item = versions[:item_type].eq(model_class.base_class.name).and(versions[:item_id].eq(column))
+      any(versions, item)
+    end
+
     # The versions of the version's item saved after it, ids breaking a tie.
     #: (untyped, untyped) -> untyped
     def self.after(model_class, version)

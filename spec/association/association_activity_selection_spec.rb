@@ -429,8 +429,8 @@ RSpec.describe PaperTrailDiff::AssociationActivitySelection do
 
       found = sources(TrackedArticle, [:comments], window: since(start))
 
-      expect(found.map(&:class)).to eq([described_class::Query] * 3)
-      expect(found.map(&:type)).to eq(%i[integer integer integer])
+      expect(found.map(&:class)).to eq([described_class::Query] * 2)
+      expect(found.map(&:type)).to eq(%i[integer integer])
       expect(selected(found)).to eq([article.id])
     end
 
@@ -569,11 +569,11 @@ RSpec.describe PaperTrailDiff::AssociationActivitySelection do
 
       expect(found).to eq([[note.id.to_s], [note.id]])
       expect(sliced_found).to eq([[note.id.to_s], [note.id]])
-      # A second slice is one more read of PT-AT's rows, one more of those
-      # on first versions that kept the key, and two more for the notes
-      # without versions: those that point at it, and of those the ones no
-      # version names, none of which is left to look up.
-      expect(sliced).to eq(whole + 4)
+      # A second slice is one more read of PT-AT's rows, with those on first
+      # versions that kept the key, and two more for the notes without
+      # versions: those that point at it, and of those the ones no version
+      # names, none of which is left to look up.
+      expect(sliced).to eq(whole + 3)
       expect(sources(StringItemNote, [:post], window: since(Time.now.utc))).to eq([])
     end
 
@@ -591,7 +591,7 @@ RSpec.describe PaperTrailDiff::AssociationActivitySelection do
       found = sources(StringItemPost, ['notes.post'], window: since(start))
 
       expect(found.grep(Array).uniq).to eq([[post.id]])
-      expect(found.grep(described_class::Query).map(&:type)).to eq(%i[integer integer])
+      expect(found.grep(described_class::Query).map(&:type)).to eq(%i[integer])
       expect(described_class.values(found)).to eq([post.id])
     end
 
@@ -730,8 +730,9 @@ RSpec.describe PaperTrailDiff::AssociationActivitySelection do
         found = sources(SelectionNote, [:notable], window: since(start))
 
         # The page's type alone, once each for the owners PT-AT recorded,
-        # those without versions, and those whose first version kept the key.
-        expect(found.length).to eq(3)
+        # with those whose first version kept the key, and those without
+        # versions.
+        expect(found.length).to eq(2)
         expect(selected(found)).to eq([])
         expect(selected(sources(SelectionNote, [:notable]))).to eq([note.id])
       end
@@ -821,14 +822,30 @@ RSpec.describe PaperTrailDiff::AssociationActivitySelection do
     end
 
     it 'names no id of a row the default scope of its model hides' do
-      hiding = Class.new(ActiveRecord::Base) do
+      hiding = stub_const('HidingComment', Class.new(ActiveRecord::Base) do
         self.table_name = 'tracked_comments'
         default_scope { where.not(body: 'hidden') }
-      end
+        has_paper_trail
+      end)
       article = TrackedArticle.create!(title: 'Article')
-      article.comments.create!(body: 'shown').update!(body: 'hidden')
+      hiding.create!(body: 'shown', article_id: article.id).update!(body: 'hidden')
 
-      expect(query.missing(hiding)).to eq([])
+      expect(query(PaperTrail::Version.where(item_type: 'HidingComment')).missing(hiding)).to eq([])
+    end
+
+    # A key a bulk write left pointing nowhere is no deleted record.
+    it 'names no id that neither a row nor a version has' do
+      article = TrackedArticle.create!(title: 'Article')
+      comment = article.comments.create!(body: 'one')
+      TrackedComment.where(id: comment.id).update_all(article_id: article.id + 1000)
+      keys = described_class.new(TrackedComment.all, TrackedComment.arel_table[:article_id],
+                                 :integer)
+
+      expect(keys.missing(TrackedArticle)).to eq([])
+      article.delete
+      expect(keys.missing(TrackedArticle)).to eq([])
+      TrackedComment.where(id: comment.id).update_all(article_id: article.id)
+      expect(keys.missing(TrackedArticle)).to eq([article.id])
     end
 
     # PostgreSQL does not plan `NOT IN (SELECT ...)` as an anti-join: it reads

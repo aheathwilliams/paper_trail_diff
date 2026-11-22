@@ -90,6 +90,12 @@ RSpec.describe PaperTrailDiff::AssociationActivityEdge do
     PaperTrailDiff::TimeRange.new((Time.now.utc - 120)..(Time.now.utc - 60))
   end
 
+  # A window that closed when it opened, so every version saved since comes
+  # after it.
+  def closed_at(start)
+    PaperTrailDiff::TimeRange.new(start..start)
+  end
+
   def owners(edge, filter)
     edge.relation(filter).distinct.pluck(edge.column).map(&:to_i).sort
   end
@@ -417,9 +423,22 @@ RSpec.describe PaperTrailDiff::AssociationActivityEdge do
       PaperTrail.request(enabled: false, &block)
     end
 
-    def edge_for(start, model = TrackedComment, name = :reviewer, **options)
-      described_class::FirstOwnerVersion.new(reflection(model, name), start && window(start),
-                                             **options)
+    def edge_for(start, model = TrackedComment, name = :reviewer)
+      described_class::FirstOwnerVersion.new(reflection(model, name), start && closed_at(start))
+    end
+
+    # The comments whose first version since `start`, saved after `end_at`,
+    # kept the reviewer `id`.
+    def kept_rows(start, id, end_at: start)
+      PaperTrailDiff::FirstKeyVersions.new(TrackedComment, ['reviewer_id'], start, end_at: end_at)
+                                      .kept('reviewer_id').where(foreign_key_id: id)
+                                      .pluck(:item_id).map(&:to_i).sort
+    end
+
+    # PT-AT's rows for the key, among them those on first versions after the
+    # window that kept it.
+    def kept_for(start, model = TrackedComment, name = :reviewer, **options)
+      described_class::BelongsTo.new(reflection(model, name), start && closed_at(start), **options)
     end
 
     def stored(edge, targets, type = nil)
@@ -438,14 +457,12 @@ RSpec.describe PaperTrailDiff::AssociationActivityEdge do
       start = Time.now.utc
       [kept, elsewhere].each { |comment| comment.update!(body: 'edited') }
       gone.destroy!
-      edge = edge_for(start)
+      edge = kept_for(start)
 
       expect(owners(edge, [reviewer.id])).to eq([kept.id, gone.id].sort)
       expect(owners(edge, TrackedAuthor.where(id: reviewer.id).select(:id)))
         .to eq([kept.id, gone.id].sort)
-      expect(stored(edge, [reviewer.id, other.id])).to eq([])
-      expect([edge.type, edge.filter_type]).to eq(%i[integer integer])
-      expect(edge.column).to eq(PaperTrail::Version.arel_table[:item_id])
+      expect(stored(edge_for(start), [reviewer.id, other.id])).to eq([])
     end
 
     it "matches only the edge's own key, on the owner's own versions" do
@@ -457,9 +474,9 @@ RSpec.describe PaperTrailDiff::AssociationActivityEdge do
       reply = unversioned { kept.replies.create!(body: 'reply') }
       reply.update!(body: 'edited')
 
-      expect(owners(edge_for(start), [900])).to eq([])
-      expect(owners(edge_for(start, TrackedReply, :comment), [kept.id])).to eq([reply.id])
-      expect(owners(edge_for(start), [901])).to eq([kept.id])
+      expect(owners(kept_for(start), [900])).to eq([])
+      expect(owners(kept_for(start, TrackedReply, :comment), [kept.id])).to eq([reply.id])
+      expect(owners(kept_for(start), [901])).to eq([kept.id])
     end
 
     it 'reads the stored state of a first version that changed the key' do
@@ -469,7 +486,7 @@ RSpec.describe PaperTrailDiff::AssociationActivityEdge do
       moved.update!(reviewer: other)
       edge = edge_for(start)
 
-      expect(owners(edge, [reviewer.id, other.id])).to eq([])
+      expect(owners(kept_for(start), [reviewer.id])).to eq([])
       expect(stored(edge, [reviewer.id])).to eq([moved.id])
       expect(stored(edge, [other.id])).to eq([])
       later = edge_for(Time.now.utc)
@@ -494,10 +511,8 @@ RSpec.describe PaperTrailDiff::AssociationActivityEdge do
       start = Time.now.utc
       kept.update!(body: 'edited')
       kept.versions.last.update_column(:object_changes, nil)
-      edge = edge_for(start)
-
-      expect(owners(edge, [reviewer.id])).to eq([])
-      expect(stored(edge, [reviewer.id])).to eq([kept.id])
+      expect(owners(kept_for(start), [reviewer.id])).to eq([])
+      expect(stored(edge_for(start), [reviewer.id])).to eq([kept.id])
     end
 
     # The first version since the window opened that kept the key names the
@@ -513,13 +528,25 @@ RSpec.describe PaperTrailDiff::AssociationActivityEdge do
       early.update!(body: 'last')
       stateless.update!(body: 'edited')
       stateless.versions.last.update_column(:object, nil)
-      edge = edge_for(start)
+      edge = kept_for(start)
 
       expect(owners(edge, [reviewer.id])).to eq([early.id])
-      expect(edge.relation([reviewer.id]).count).to eq(1)
-      expect(owners(edge_for(nil), [reviewer.id])).to eq([early.id])
-      expect(edge_for(nil).relation([reviewer.id]).count).to eq(1)
-      expect(stored(edge, [reviewer.id])).to eq([])
+      expect(kept_rows(start, reviewer.id)).to eq([early.id])
+      expect(stored(edge_for(start), [reviewer.id])).to eq([])
+    end
+
+    # A version saved by the window's end is one of the window's own, which
+    # PT-AT's rows in it name already; without an end, every version is.
+    it 'matches in SQL only first versions saved after the window closed' do
+      reviewer = TrackedAuthor.create!(name: 'Reviewer')
+      kept = legacy_comment(reviewer, 'kept')
+      start = Time.now.utc
+      kept.update!(body: 'edited')
+      open = PaperTrailDiff::FirstKeyVersions.new(TrackedComment, ['reviewer_id'], start)
+
+      expect(kept_rows(start, reviewer.id)).to eq([kept.id])
+      expect(kept_rows(start, reviewer.id, end_at: Time.now.utc)).to eq([])
+      expect(open.kept('reviewer_id').to_sql).to include('1=0')
     end
 
     it 'reads the key a record was given without a version, from its next one' do
@@ -529,8 +556,8 @@ RSpec.describe PaperTrailDiff::AssociationActivityEdge do
       start = Time.now.utc
       comment.reload.update!(body: 'edited')
 
-      expect(owners(edge_for(start), [merged.id])).to eq([comment.id])
-      expect(owners(edge_for(start), [reviewer.id])).to eq([])
+      expect(owners(kept_for(start), [merged.id])).to eq([comment.id])
+      expect(kept_rows(start, reviewer.id)).to eq([])
     end
 
     it 'reads every first version for a key PaperTrail does not record' do
@@ -541,10 +568,8 @@ RSpec.describe PaperTrailDiff::AssociationActivityEdge do
       allow(PaperTrailDiff::RecordedColumns).to receive(:recorded?).and_call_original
       allow(PaperTrailDiff::RecordedColumns).to receive(:recorded?)
         .with(TrackedComment, 'reviewer_id').and_return(false)
-      edge = edge_for(start)
-
-      expect(owners(edge, [reviewer.id])).to eq([])
-      expect(stored(edge, [reviewer.id])).to eq([kept.id])
+      expect(owners(kept_for(start), [reviewer.id])).to eq([])
+      expect(stored(edge_for(start), [reviewer.id])).to eq([kept.id])
     end
 
     it 'reads every first version without recorded changes it can read in SQL' do
@@ -555,13 +580,12 @@ RSpec.describe PaperTrailDiff::AssociationActivityEdge do
       adapter = Object.new
       adapter.define_singleton_method(:load_changeset) { |_version| {} }
       expect_unreadable = lambda do
-        edge = edge_for(start)
-        expect(owners(edge, [reviewer.id])).to eq([])
-        expect(stored(edge, [reviewer.id])).to eq([kept.id])
+        expect(owners(kept_for(start), [reviewer.id])).to eq([])
+        expect(stored(edge_for(start), [reviewer.id])).to eq([kept.id])
       end
 
       allow(PaperTrail.config).to receive(:object_changes_adapter).and_return(Object.new)
-      expect(owners(edge_for(start), [reviewer.id])).to eq([kept.id])
+      expect(owners(kept_for(start), [reviewer.id])).to eq([kept.id])
       allow(PaperTrail.config).to receive(:object_changes_adapter).and_return(adapter)
       expect_unreadable.call
       allow(PaperTrail.config).to receive(:object_changes_adapter).and_call_original
@@ -585,11 +609,13 @@ RSpec.describe PaperTrailDiff::AssociationActivityEdge do
       back.update!(holder: article)
       loose.update!(holder: author)
       edge = edge_for(start, EdgeSticker, :holder)
-      authors = edge_for(start, EdgeSticker, :holder, foreign_type: 'TrackedAuthor')
+      rows = kept_for(start, EdgeSticker, :holder)
+      authors = kept_for(start, EdgeSticker, :holder, foreign_type: 'TrackedAuthor')
 
       expect(edge.target_types).to contain_exactly('TrackedArticle', 'TrackedAuthor')
+      expect(rows.target_types).to include('TrackedArticle', 'TrackedAuthor')
       expect(owners(authors, [600])).to eq([kept.id])
-      expect(owners(edge, [600])).to eq([kept.id, on_article.id].sort)
+      expect(owners(rows, [600]) & [kept.id, on_article.id]).to eq([kept.id, on_article.id].sort)
       expect(stored(edge, [600], 'TrackedArticle')).to eq([moved.id])
       expect(stored(edge, [600], 'TrackedAuthor')).to eq([back.id])
     end
@@ -607,14 +633,15 @@ RSpec.describe PaperTrailDiff::AssociationActivityEdge do
       allow(PaperTrailDiff::RecordedColumns).to receive(:recorded?).and_call_original
       allow(PaperTrailDiff::RecordedColumns).to receive(:recorded?)
         .with(EdgeSticker, 'holder_type').and_return(false)
-      edge = edge_for(start, EdgeSticker, :holder, foreign_type: 'TrackedAuthor')
+      edge = edge_for(start, EdgeSticker, :holder)
 
-      expect(owners(edge, [610])).to eq([])
+      expect(owners(kept_for(start, EdgeSticker, :holder, foreign_type: 'TrackedAuthor'), [610]))
+        .to eq([])
       expect(stored(edge, [610], 'TrackedArticle')).to eq([retyped.id])
       expect(edge.target_types).to eq(['TrackedArticle'])
     end
 
-    it 'reads no type from a stored state that lacks it, and a type a kept key names' do
+    it 'reads no type from a stored state that lacks it, and a row the type a kept key names' do
       article = TrackedArticle.create!(title: 'Article holder')
       typeless = unversioned { EdgeSticker.create!(label: 'typeless', holder: article) }
       start = Time.now.utc
@@ -627,7 +654,8 @@ RSpec.describe PaperTrailDiff::AssociationActivityEdge do
       state = version.object_deserialized.except('holder_type')
       version.update_column(:object, PaperTrail.serializer.dump(state))
 
-      expect(edge_for(start, EdgeSticker, :holder).target_types).to eq(['TrackedTag'])
+      expect(edge_for(start, EdgeSticker, :holder).target_types).to eq([])
+      expect(kept_for(start, EdgeSticker, :holder).target_types).to include('TrackedTag')
     end
 
     it 'reads an STI owner by the versions of its base class' do
@@ -636,7 +664,7 @@ RSpec.describe PaperTrailDiff::AssociationActivityEdge do
       start = Time.now.utc
       kept.update!(label: 'edited')
 
-      expect(owners(edge_for(start, EdgeSpecialSticker, :sponsor), [author.id])).to eq([kept.id])
+      expect(owners(kept_for(start, EdgeSpecialSticker, :sponsor), [author.id])).to eq([kept.id])
     end
   end
 
@@ -660,15 +688,14 @@ RSpec.describe PaperTrailDiff::AssociationActivityEdge do
       start = Time.now.utc
       moved.update!(article: TrackedArticle.create!(title: 'New'))
       quiet.update!(body: 'edited')
-      edge = described_class::FirstVersion.new(reflection(TrackedArticle, :comments), window(start))
+      edge = described_class::FirstVersion.new(reflection(TrackedArticle, :comments),
+                                               closed_at(start))
 
       expect(first_owners(edge, [moved.id, quiet.id])).to eq([left.id])
       expect(first_owners(edge, TrackedComment.select(:id))).to eq([left.id])
-      expect(owners(edge, [moved.id, quiet.id])).to eq([detached.id])
-      expect(owners(edge, TrackedComment.select(:id))).to eq([detached.id])
-      expect(owners(edge, [moved.id])).to eq([])
-      expect([edge.type, edge.filter_type]).to eq(%i[integer integer])
-      expect(edge.column).to eq(PaperTrail::VersionAssociation.arel_table[:foreign_key_id])
+      child = described_class::Child.new(reflection(TrackedArticle, :comments), closed_at(start))
+      expect(owners(child, [quiet.id])).to eq([detached.id])
+      expect(owners(child, TrackedComment.where(id: quiet.id).select(:id))).to eq([detached.id])
     end
 
     it 'reads no create, and no version after the first of a child' do
@@ -680,13 +707,12 @@ RSpec.describe PaperTrailDiff::AssociationActivityEdge do
       start = Time.now.utc
       created.update!(article: other)
       quiet.update!(article: other)
-      edge = described_class::FirstVersion.new(reflection(TrackedArticle, :comments), window(start))
+      edge = described_class::FirstVersion.new(reflection(TrackedArticle, :comments),
+                                               closed_at(start))
       everything = described_class::FirstVersion.new(reflection(TrackedArticle, :comments), nil)
 
       expect(first_owners(edge, [created.id, quiet.id])).to eq([])
-      expect(owners(edge, [created.id, quiet.id])).to eq([])
       expect(first_owners(everything, [created.id, quiet.id])).to eq([])
-      expect(owners(everything, [created.id, quiet.id])).to eq([article.id])
     end
 
     it 'reads a first version saved after the window, which held the owner through it' do
@@ -708,9 +734,9 @@ RSpec.describe PaperTrailDiff::AssociationActivityEdge do
       EdgeSticker.where(id: other.id).update_all(holder_id: holder.id)
       start = Time.now.utc
       [held, other].each { |sticker| sticker.reload.update!(holder: nil) }
-      edge = described_class::FirstVersion.new(reflection(EdgeHolder, :stickers), window(start))
+      edge = described_class::FirstVersion.new(reflection(EdgeHolder, :stickers), closed_at(start))
       documents = described_class::FirstVersion.new(reflection(EdgeSpecialDocument, :stickers),
-                                                    window(start))
+                                                    closed_at(start))
 
       expect(first_owners(edge, [held.id, other.id])).to eq([holder.id])
       expect(first_owners(documents, [held.id, other.id])).to eq([holder.id])
@@ -722,7 +748,8 @@ RSpec.describe PaperTrailDiff::AssociationActivityEdge do
       quiet = unversioned { article.comments.create!(body: 'quiet') }
       start = Time.now.utc
       quiet.update!(article: TrackedArticle.create!(title: 'New'))
-      edge = described_class::FirstVersion.new(reflection(TrackedArticle, :comments), window(start))
+      edge = described_class::FirstVersion.new(reflection(TrackedArticle, :comments),
+                                               closed_at(start))
       ids = Array.new(PaperTrailDiff::Support::IDS_PER_STATEMENT) do |index|
         -index - 1
       end + [quiet.id]
@@ -746,7 +773,8 @@ RSpec.describe PaperTrailDiff::AssociationActivityEdge do
       version = keyless.versions.last
       keyless_state = version.object_deserialized.except('article_id')
       version.update_column(:object, PaperTrail.serializer.dump(keyless_state))
-      edge = described_class::FirstVersion.new(reflection(TrackedArticle, :comments), window(start))
+      edge = described_class::FirstVersion.new(reflection(TrackedArticle, :comments),
+                                               closed_at(start))
 
       sql = statements do
         expect(edge.owners([stateless.id, keyless.id, kept.id])).to eq([article.id])

@@ -13,15 +13,24 @@ module PaperTrailDiff
   class FirstKeyVersions
     # `key_names` are the key's columns: a polymorphic or `as:` key has a
     # type column too.
-    # : (untyped, Array[String], untyped) -> void
-    def initialize: (untyped, Array[String], untyped) -> void
+    # : (untyped, Array[String], untyped, ?end_at: untyped) -> void
+    def initialize: (untyped, Array[String], untyped, ?end_at: untyped) -> void
 
     # PT-AT's rows for `foreign_key_name` on the first version of each record
-    # since the start that kept the key: the key the record held from the
-    # start until that version, as an analysis reads its state there, even
-    # where a write without a version gave it that key.
+    # since the start that kept the key, where it was saved after the end
+    # (see #kept_after).
     # : (String) -> untyped
     def kept: (String) -> untyped
+
+    # Those of `rows`, PT-AT's rows on the model's versions, that are on the
+    # first version of their record since the start that kept the key, where
+    # it was saved after the end: the key the record held from the start
+    # until that version, as an analysis reads its state there, even where a
+    # write without a version gave it that key. One saved by the end is a
+    # version in the window, whose row names the same key and which a
+    # window's own reads find, so without an end there are none, and nil.
+    # : (untyped) -> untyped
+    def kept_after: (untyped) -> untyped
 
     # The first versions ever saved for their records, since the start, that
     # may have changed the key: only their stored states name the key held
@@ -33,6 +42,8 @@ module PaperTrailDiff
 
     @associations: untyped
 
+    @end_at: untyped
+
     @key_names: Array[String]
 
     @model: untyped
@@ -40,6 +51,10 @@ module PaperTrailDiff
     @start_at: untyped
 
     @versions: untyped
+
+    # PT-AT's rows for the key on the model's versions.
+    # : (String) -> untyped
+    def key_rows: (String) -> untyped
 
     # A create stores no state and holds no earlier key.
     # : (untyped) -> untyped

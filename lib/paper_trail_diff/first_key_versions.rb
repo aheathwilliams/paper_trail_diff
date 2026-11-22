@@ -14,27 +14,41 @@ module PaperTrailDiff
   class FirstKeyVersions
     # `key_names` are the key's columns: a polymorphic or `as:` key has a
     # type column too.
-    #: (untyped, Array[String], untyped) -> void
-    def initialize(model, key_names, start_at)
+    #: (untyped, Array[String], untyped, ?end_at: untyped) -> void
+    def initialize(model, key_names, start_at, end_at: nil)
       @model = model
       @key_names = key_names
       @start_at = start_at
+      @end_at = end_at
       @versions = model.paper_trail.version_class
       @associations = model.paper_trail.version_association_class
     end
 
     # PT-AT's rows for `foreign_key_name` on the first version of each record
-    # since the start that kept the key: the key the record held from the
-    # start until that version, as an analysis reads its state there, even
-    # where a write without a version gave it that key.
+    # since the start that kept the key, where it was saved after the end
+    # (see #kept_after).
     #: (String) -> untyped
     def kept(foreign_key_name)
+      rows = key_rows(foreign_key_name)
+      kept_after(rows) || rows.none
+    end
+
+    # Those of `rows`, PT-AT's rows on the model's versions, that are on the
+    # first version of their record since the start that kept the key, where
+    # it was saved after the end: the key the record held from the start
+    # until that version, as an analysis reads its state there, even where a
+    # write without a version gave it that key. One saved by the end is a
+    # version in the window, whose row names the same key and which a
+    # window's own reads find, so without an end there are none, and nil.
+    #: (untyped) -> untyped
+    def kept_after(rows)
+      finish = @end_at
+      return unless finish
+
       table = @versions.arel_table
-      VersionTable.joined(@associations, @versions)
-                  .where(foreign_key_name: foreign_key_name)
-                  .where(@versions.table_name => { item_type: @model.base_class.name })
-                  .where(stored_state(table).and(first_since_start(table)))
-                  .where(key_changes(table).not)
+      rows.where(table[:created_at].gt(finish))
+          .where(stored_state(table).and(first_since_start(table)))
+          .where(key_changes(table).not)
     end
 
     # The first versions ever saved for their records, since the start, that
@@ -53,8 +67,17 @@ module PaperTrailDiff
     # @rbs @model: untyped
     # @rbs @key_names: Array[String]
     # @rbs @start_at: untyped
+    # @rbs @end_at: untyped
     # @rbs @versions: untyped
     # @rbs @associations: untyped
+
+    # PT-AT's rows for the key on the model's versions.
+    #: (String) -> untyped
+    def key_rows(foreign_key_name)
+      VersionTable.joined(@associations, @versions)
+                  .where(foreign_key_name: foreign_key_name)
+                  .where(@versions.table_name => { item_type: @model.base_class.name })
+    end
 
     # A create stores no state and holds no earlier key.
     #: (untyped) -> untyped
