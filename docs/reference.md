@@ -564,7 +564,10 @@ PaperTrailDiff.analyze(article, associations: [:comments], activity: true, group
   then updated its order starts with the line item's `destroy`. For a
   history of the root, read `step.root_sources`, the events credited with
   the step's changes to the root itself (the order's `update` here), or an
-  empty list when the save changed only associated records. `step.sources`
+  empty list when the save changed only associated records. A root's update
+  that gave it another target of a requested `belongs_to`, such as another
+  customer with `associations: [:customer, :line_items]`, counts as a change
+  to the root, though the diff reports it on the association. `step.sources`
   lists every event in the transaction, each with its own author, except two
   kinds: those of records outside the tree before the transaction, after it,
   and at every version of the root it saved; and those saved before a window
@@ -845,11 +848,13 @@ grouped.
   root: a product renamed selects an order whose line item has no version,
   over `line_items.product`, and a tag renamed an order whose join row has
   none, over a `has_many :through`. After adding PaperTrail to existing
-  data, every row is in this state until it is next saved. That first save
-  ends it: once a record has a version, only PT-AT's rows name its
-  `belongs_to` targets, and those start at that version. A window that
-  closed before it still shows the target's change in `analyze`, but no
-  selection finds the record for it.
+  data, every row is in this state until it is next saved. Its first
+  version, if it is not a `create`, stores the keys it held until then, so
+  selection reads them there for every window that began before that
+  version, including one that closed before it was saved. Where the version
+  kept the key, PT-AT's row on it names the key and is matched in SQL; where
+  PaperTrail's recorded changes name the key, or none were recorded, the
+  version's stored state is read in Ruby.
 - **A window with associations reads from where the transactions open at
   its start began**, and selects by the versions those transactions saved
   before it, but by no other version saved before the start.
@@ -1355,8 +1360,11 @@ Which version a row names:
   name the version that recorded each value: the `create`, or a later save in
   the same step. A record that joined or left by its own update, such as a
   comment moved to another article, names the last of its versions in the
-  step's transaction. A record that joined or left through another record's
-  change, such as a new `belongs_to` target, names the step's
+  step's transaction. A `belongs_to` target set, cleared or replaced, and
+  its fields, name the owner's version in the step's transaction that saved
+  the key, such as the order's `update` that gave it another customer, unless
+  the target was itself created or destroyed there. Any other record that
+  joined or left through another record's change names the step's
   `source_boundary`.
 
 A change PaperTrail did not record gets a row of its own, unless
@@ -1397,7 +1405,10 @@ without a version undid, leaving the field as it was, has no row.
 To highlight the root's changed fields, such as cells in a report's row,
 `analysis.changed_attributes` names the root's own attributes that have a
 change row, in the order they first changed. A field that changed and changed
-back is named, though the analysis's `diff` leaves it out:
+back is named, though the analysis's `diff` leaves it out. A requested
+`belongs_to` that the root's own version set, cleared or replaced names its
+foreign key, such as `customer_id` with `associations: [:customer]`, though
+the change rows report it on the association:
 
 ```ruby
 analysis = PaperTrailDiff.analyze(order, within: october, associations: [:line_items],
@@ -1589,10 +1600,11 @@ tracking, an unversioned target, or a path history cannot read. Endpoints `compa
 such as versions given newest first, two records, or an unsaved record, raise
 the error `compare` raises. `ok?` does not prove the history is complete.
 
-Each version endpoint is also decoded once. When PaperTrail's YAML history
-holds a class Rails does not permit, every read fails, PaperTrail's own
-`reify` included, and `diagnose` reports `:disallowed_yaml_class` with the
-class's name and the version's id. See [history stored as YAML on SQL
+Each version endpoint is also decoded once, or for a `create`, which stores
+no state, the record's next version that stores one. When PaperTrail's YAML
+history holds a class Rails does not permit, every read fails, PaperTrail's
+own `reify` included, and `diagnose` reports `:disallowed_yaml_class` with
+the class's name and the version's id. See [history stored as YAML on SQL
 Server](#history-stored-as-yaml-on-sql-server).
 
 ## Models, schemas, and edge cases

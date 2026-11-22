@@ -116,12 +116,12 @@ module PaperTrailDiff
       edges(reflection).flat_map { |edge| follow(edge, ids) } + first_owners(reflection, ids)
     end
 
-    # The owners children held until a first version that did not create
+    # The owners records held until a first version that did not create
     # them, read from those versions' stored states (see
-    # AssociationActivityEdge::FirstVersion).
+    # AssociationActivityEdge::FirstVersion and FirstOwnerVersion).
     #: (untyped, Array[source]) -> Array[source]
     def first_owners(reflection, ids)
-      return [] if reflection.belongs_to?
+      return stored_owners(first_owner_edge(reflection), ids) if reflection.belongs_to?
 
       edge = AssociationActivityEdge::FirstVersion.new(reflection, @time_range)
       found = ids.flat_map do |source|
@@ -129,6 +129,18 @@ module PaperTrailDiff
         query ? edge.owners(query.relation) : edge.owners_of(self.class.values([source]))
       end.uniq
       found.empty? ? [] : [found]
+    end
+
+    #: (AssociationActivityEdge::FirstOwnerVersion, Array[source], ?String?) -> Array[source]
+    def stored_owners(edge, ids, type = nil)
+      found = edge.stored_owners(type) { self.class.values(ids) }
+      found.empty? ? [] : [found]
+    end
+
+    #: (untyped, ?foreign_type: String?) -> AssociationActivityEdge::FirstOwnerVersion
+    def first_owner_edge(reflection, foreign_type: nil)
+      AssociationActivityEdge::FirstOwnerVersion.new(reflection, @time_range,
+                                                     foreign_type: foreign_type)
     end
 
     # A join row that changes moves membership as surely as a target that does.
@@ -152,7 +164,9 @@ module PaperTrailDiff
       edge = AssociationActivityEdge::BelongsTo.new(source, @time_range, foreign_type: source_type)
       unversioned = AssociationActivityEdge::UnversionedOwner.new(source, nil,
                                                                   foreign_type: source_type)
-      follow(edge, ids) + follow(unversioned, ids) +
+      first = first_owner_edge(source, foreign_type: source_type)
+      follow(edge, ids) + follow(unversioned, ids) + follow(first, ids) +
+        stored_owners(first, ids, source_type) +
         changed(reflection.through_reflection.klass, edge.typed_owners)
     end
 
@@ -160,20 +174,31 @@ module PaperTrailDiff
     # and a path stops at one, so only the targets' own changes count.
     #: (untyped) -> Array[source]
     def polymorphic_owners(reflection)
-      kinds = [AssociationActivityEdge::BelongsTo, AssociationActivityEdge::UnversionedOwner]
-      names = kinds.flat_map { |kind| kind.new(reflection, @time_range).target_types }.uniq
-      names.flat_map do |name|
+      kinds = [AssociationActivityEdge::BelongsTo, AssociationActivityEdge::UnversionedOwner,
+               AssociationActivityEdge::FirstOwnerVersion]
+      first = first_owner_edge(reflection)
+      target_names(reflection, first).flat_map do |name|
         targets = changed(AssociationTraversal.named_class(name))
         kinds.flat_map do |kind|
           follow(kind.new(reflection, @time_range, foreign_type: name), targets)
-        end
+        end + stored_owners(first, targets, name)
       end
+    end
+
+    # The types a polymorphic key names in PT-AT's rows, in the table and in
+    # the stored states of first versions.
+    #: (untyped, AssociationActivityEdge::FirstOwnerVersion) -> Array[String]
+    def target_names(reflection, first)
+      kinds = [AssociationActivityEdge::BelongsTo, AssociationActivityEdge::UnversionedOwner]
+      (kinds.flat_map { |kind| kind.new(reflection, @time_range).target_types } +
+        first.target_types).uniq
     end
 
     #: (untyped) -> Array[AssociationActivityEdge]
     def edges(reflection)
       kinds = if reflection.belongs_to?
-                [AssociationActivityEdge::BelongsTo, AssociationActivityEdge::UnversionedOwner]
+                [AssociationActivityEdge::BelongsTo, AssociationActivityEdge::UnversionedOwner,
+                 AssociationActivityEdge::FirstOwnerVersion]
               else
                 [AssociationActivityEdge::Child, AssociationActivityEdge::Unversioned]
               end

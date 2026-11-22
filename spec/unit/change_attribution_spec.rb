@@ -7,19 +7,27 @@ require 'paper_trail_diff'
 RSpec.describe PaperTrailDiff::ChangeAttribution do
   # Stand-ins for versioned models: the article's subclass shares its rows,
   # and the comment records every column but `rank`.
-  def model(options = {})
+  # `belongs_to` maps an association's name to its foreign key; any other
+  # name is a `has_many`.
+  def model(options = {}, belongs_to: {})
     paper_trail = { ignore: [], skip: [], only: [] }.merge(options)
     Class.new do
       define_singleton_method(:base_class) { self }
       define_singleton_method(:paper_trail_options) { paper_trail }
+      define_singleton_method(:reflect_on_association) do |name|
+        key = belongs_to[name]
+        Struct.new(:foreign_key, :belongs_to?).new(key || "#{name}_id", !key.nil?)
+      end
     end
   end
 
   before do
-    article = stub_const('AttributedArticle', model)
+    article = stub_const('AttributedArticle', model(belongs_to: { 'author' => :author_id,
+                                                                  'reviewer' => :reviewer_id }))
     note = Class.new(article) { define_singleton_method(:base_class) { article } }
     stub_const('AttributedNote', note)
-    stub_const('AttributedComment', model(ignore: ['rank']))
+    stub_const('AttributedComment', model({ ignore: ['rank'] },
+                                          belongs_to: { 'reviewer' => 'reviewer_id' }))
   end
 
   let(:root) { PaperTrailDiff::RecordReference.new(type: 'AttributedArticle', id: 1) }
@@ -425,6 +433,111 @@ RSpec.describe PaperTrailDiff::ChangeAttribution do
       expect(credited(attribution([edit]), left)).to eq([[:removed, 'body', 'a', nil, 9]])
       prior = version('AttributedComment', 7, 7, changes: {})
       expect(credited(attribution([prior, destroy]), left)).to eq([[:removed, 'body', 'a', nil, 8]])
+    end
+  end
+
+  describe 'a belongs_to target set, cleared or replaced' do
+    let(:author) { PaperTrailDiff::RecordReference.new(type: 'AttributedAuthor', id: 3) }
+    let(:reviewer) { PaperTrailDiff::RecordReference.new(type: 'AttributedReviewer', id: 4) }
+
+    def target(change, attribute = nil, path: ['author'], record: author, kind: :belongs_to)
+      PaperTrailDiff::ChangeRow.new(
+        change: change, association_path: path, association_kind: kind, record: record,
+        attribute: attribute, from: nil, to: nil, source: step_source
+      )
+    end
+
+    def sources_of(attribution, rows, owner = nil)
+      rows.map { |row| attribution.call(row, owner).map { |result| result.source.version_id } }
+    end
+
+    it "credits the target and its fields to the owner's version that saved the key" do
+      swap = version('AttributedArticle', 1, 1, changes: { 'author_id' => [2, 3] })
+      edit = version('AttributedArticle', 1, 2, changes: { 'title' => %w[A B] })
+      rows = [target(:added), target(:added, 'name'), target(:removed), target(:removed, 'name')]
+
+      expect(sources_of(attribution([swap, edit]), rows)).to eq([[1], [1], [1], [1]])
+    end
+
+    it "credits the owner's last version when what it recorded is unknown" do
+      sources = [version('AttributedArticle', 1, 1), version('AttributedArticle', 1, 2)]
+
+      expect(sources_of(attribution(sources), [target(:added)])).to eq([[2]])
+    end
+
+    it 'keeps the row when the owner saved no change of the key, or has no version there' do
+      edit = version('AttributedArticle', 1, 2, changes: { 'title' => %w[A B] })
+      other = version('AttributedComment', 7, 3, changes: { 'reviewer_id' => [1, 2] })
+
+      expect(sources_of(attribution([edit]), [target(:added)])).to eq([[90]])
+      expect(sources_of(attribution([other]), [target(:added)])).to eq([[90]])
+    end
+
+    it 'reads the key of the owner the row names, below the root' do
+      saved = version('AttributedComment', 7, 5, changes: { 'reviewer_id' => [nil, 4] })
+      root_edit = version('AttributedArticle', 1, 6, changes: { 'reviewer_id' => [nil, 4] })
+      row = target(:added, path: %w[comments reviewer], record: reviewer)
+
+      expect(sources_of(attribution([saved, root_edit]), [row], comment)).to eq([[5]])
+    end
+
+    it 'credits a target created or destroyed there to its own event' do
+      swap = version('AttributedArticle', 1, 1, changes: { 'author_id' => [2, 3] })
+      created = version('AttributedAuthor', 3, 2, event: 'create',
+                                                  changes: { 'name' => [nil, 'Ann'] })
+      destroyed = version('AttributedAuthor', 3, 3, event: 'destroy', changes: {})
+      edited = version('AttributedAuthor', 3, 4, changes: { 'name' => %w[Ann Bo] })
+
+      expect(sources_of(attribution([swap, created]), [target(:added)])).to eq([[2]])
+      expect(sources_of(attribution([swap, destroyed]), [target(:removed)])).to eq([[3]])
+      expect(sources_of(attribution([swap, created]), [target(:removed)])).to eq([[1]])
+      expect(sources_of(attribution([swap, destroyed]), [target(:added)])).to eq([[1]])
+      expect(sources_of(attribution([swap, edited]), [target(:added), target(:removed)]))
+        .to eq([[1], [1]])
+      expect(sources_of(attribution([swap, created, edited]), [target(:added)])).to eq([[2]])
+    end
+
+    it 'lets the fields of a target with versions there follow them' do
+      swap = version('AttributedArticle', 1, 1, changes: { 'author_id' => [2, 3] })
+      edited = version('AttributedAuthor', 3, 4, changes: { 'name' => %w[Ann Bo] })
+
+      expect(sources_of(attribution([swap, edited]), [target(:added, 'name')])).to eq([[4]])
+    end
+
+    it 'keeps a changed target, a collection member, and a has_many named as belongs_to' do
+      swap = version('AttributedArticle', 1, 1,
+                     changes: { 'author_id' => [2, 3], 'comments_id' => [1, 2] })
+      rows = [target(:changed, 'name'), target(:added, kind: :has_many),
+              target(:added, path: ['comments'], record: comment)]
+
+      expect(sources_of(attribution([swap]), rows)).to eq([[90], [90], [90]])
+    end
+
+    it "names the root's foreign key a target row at the root stands for" do
+      attribution = attribution([version('AttributedArticle', 1, 1)])
+
+      expect([target(:added), target(:removed)].map { |row| attribution.root_key(row) })
+        .to eq(%w[author_id author_id])
+      others = [target(:added, 'name'), target(:changed), target(:added, kind: :has_many),
+                target(:added, path: %w[comments reviewer], record: reviewer),
+                target(:added, path: ['comments'], record: comment)]
+      expect(others.map { |row| attribution.root_key(row) }).to eq([nil] * 5)
+    end
+
+    it "names the root's version that saved such a key" do
+      swap = version('AttributedArticle', 1, 1, changes: { 'author_id' => [2, 3] })
+      edit = version('AttributedArticle', 1, 2, changes: { 'title' => %w[A B] })
+      reviewing = version('AttributedComment', 7, 3, changes: { 'reviewer_id' => [nil, 4] })
+      found = attribution([swap, edit, reviewing])
+
+      expect(found.root_key_source(target(:added))).to equal(swap)
+      expect(found.root_key_source(target(:added, 'name'))).to be_nil
+      expect(found.root_key_source(target(:added, path: %w[comments reviewer], record: reviewer)))
+        .to be_nil
+      expect(attribution([edit]).root_key_source(target(:removed))).to be_nil
+      unread = attribution([version('AttributedArticle', 1, 4)])
+      expect(unread.root_key_source(target(:added, 'name'))).to be_nil
+      expect(attribution([reviewing]).root_key_source(target(:removed))).to be_nil
     end
   end
 end

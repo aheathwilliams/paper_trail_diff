@@ -1,0 +1,15 @@
+# Generated from lib/paper_trail_diff/target_key.rb with RBS::Inline
+
+module PaperTrailDiff
+  # The foreign key a change row stands for when it adds or removes a
+  # `belongs_to` target: the owner's key, which a version of the owner saved,
+  # though the diff reports the change on the association.
+  module TargetKey
+    CHANGES: untyped
+
+    # The key of `owner`'s `belongs_to` the row's record was set, cleared or
+    # replaced as, or nil for any other row.
+    # : (ChangeRow, RecordReference) -> String?
+    def self.name: (ChangeRow, RecordReference) -> String?
+  end
+end

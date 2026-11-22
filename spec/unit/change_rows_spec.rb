@@ -143,7 +143,7 @@ RSpec.describe PaperTrailDiff::ChangeRows,
   it 'lists the rows an attribution gives for each row, in order' do
     unversioned = PaperTrailDiff::ActivityBoundary.unversioned(item_type: 'Article', item_id: 1)
     attribution = Object.new
-    attribution.define_singleton_method(:call) do |row|
+    attribution.define_singleton_method(:call) do |row, _owner = nil|
       [row, PaperTrailDiff::ChangeRow.new(
         change: :changed, association_path: [], association_kind: nil, record: nil,
         attribute: row.attribute, from: row.to, to: "#{row.to}!", source: unversioned
@@ -161,5 +161,38 @@ RSpec.describe PaperTrailDiff::ChangeRows,
     expect(split).to be_frozen
     expect(split.last.to_h).to include(version_id: nil, event: nil, whodunnit: nil,
                                        recorded_at: nil, transaction_id: nil)
+  end
+
+  it 'gives an attribution the record holding each row, nil for the root' do
+    owners = []
+    attribution = Object.new
+    attribution.define_singleton_method(:call) do |row, owner|
+      owners << [row.record&.type, row.attribute, owner&.type]
+      [row]
+    end
+    image = record('Image', 5, { 'url' => 'a' })
+    author = lambda { |*avatar|
+      record('Author', 3, { 'name' => 'Ann' }, avatar: association(:belongs_to, *avatar))
+    }
+    comment = lambda { |*reviewer|
+      record('Comment', 7, { 'body' => 'Hi' }, reviewer: association(:belongs_to, *reviewer))
+    }
+    editor = record('Editor', 4, { 'name' => 'Ed' })
+    other = lambda { |*reviewer|
+      record('Comment', 8, {}, reviewer: association(:belongs_to, *reviewer))
+    }
+    before = article('Same', editor: association(:belongs_to),
+                             comments: association(:has_many, comment.call(author.call),
+                                                   other.call))
+    after = article('Same', editor: association(:belongs_to, editor),
+                            comments: association(:has_many, comment.call(author.call(image)),
+                                                  other.call(editor)))
+
+    described_class.call(PaperTrailDiff::Engine.compare(before, after), source: source,
+                                                                        attribution: attribution)
+
+    expect(owners).to contain_exactly(['Image', nil, 'Author'], %w[Image url Author],
+                                      ['Editor', nil, nil], ['Editor', 'name', nil],
+                                      ['Editor', nil, 'Comment'], %w[Editor name Comment])
   end
 end

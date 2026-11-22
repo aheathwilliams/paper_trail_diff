@@ -569,10 +569,11 @@ RSpec.describe PaperTrailDiff::AssociationActivitySelection do
 
       expect(found).to eq([[note.id.to_s]])
       expect(sliced_found).to eq([[note.id.to_s]])
-      # A second slice is one more read of PT-AT's rows, and two more for
-      # the notes without versions: those that point at it, and of those the
-      # ones no version names, none of which is left to look up.
-      expect(sliced).to eq(whole + 3)
+      # A second slice is one more read of PT-AT's rows, one more of those
+      # on first versions that kept the key, and two more for the notes
+      # without versions: those that point at it, and of those the ones no
+      # version names, none of which is left to look up.
+      expect(sliced).to eq(whole + 4)
       expect(sources(StringItemNote, [:post], window: since(Time.now.utc))).to eq([])
     end
 
@@ -641,6 +642,70 @@ RSpec.describe PaperTrailDiff::AssociationActivitySelection do
                         'unknown association: comments.nope')
     end
 
+    describe 'records first saved after the window opened' do
+      def legacy(&block)
+        PaperTrail.request(enabled: false, &block)
+      end
+
+      it 'reads the key each held until a first version since the start' do
+        held, other = %w[Held Other].map { |name| TrackedAuthor.create!(name: name) }
+        moved = legacy { SelectionNote.create!(body: 'moved', author: held) }
+        early = legacy { SelectionNote.create!(body: 'early', author: held) }
+        early.update!(author: other)
+        start = Time.now.utc
+        held.update!(name: 'Renamed')
+        moved.update!(author: other)
+
+        found = sources(SelectionNote, [:author], window: since(start))
+
+        expect(selected(found)).to eq([moved.id])
+        expect(found.grep(Array)).to eq([[moved.id]])
+      end
+
+      it 'reads each type of a polymorphic key, from rows, the table and stored states' do
+        article = TrackedArticle.create!(id: 8_000, title: 'Article')
+        page = SelectionPage.create!(id: 8_000, title: 'Page')
+        author = TrackedAuthor.create!(id: 8_000, name: 'Author')
+        tag = TrackedTag.create!(id: 8_000, name: 'Tag')
+        moved = legacy { SelectionNote.create!(body: 'moved', notable: article) }
+        kept = legacy { SelectionNote.create!(body: 'kept', notable: page) }
+        quiet = legacy { SelectionNote.create!(body: 'quiet', notable: author) }
+        tagged = SelectionNote.create!(body: 'tagged', notable: tag)
+        start = Time.now.utc
+        [article, author, tag].each { |record| record.update!(updated_at: Time.now.utc + 1) }
+        finish = Time.now.utc
+        moved.update!(notable: page)
+        kept.update!(body: 'edited')
+        tagged.update!(notable: page)
+
+        found = sources(SelectionNote, [:notable], window: start..finish)
+
+        expect(selected(found)).to eq([moved.id, quiet.id, tagged.id].sort)
+        expect(found.grep(Array)).to eq([[moved.id]])
+      end
+
+      it 'reads only join rows of the source type' do
+        holders = Array.new(3) { |index| SourceTypeHolder.create!(name: "Holder #{index}") }
+        author = SourceTypeAuthor.create!(id: 9_000, name: 'Author')
+        tag = SourceTypeTag.create!(id: 9_000, name: 'Tag')
+        other = SourceTypeAuthor.create!(name: 'Other')
+        moved, kept, tagged = holders.zip([author, author, tag]).map do |holder, target|
+          legacy { SourceTypeLink.create!(holder: holder, target: target) }
+        end
+        retagged = legacy { SourceTypeLink.create!(holder: holders.last, target: tag) }
+        start = Time.now.utc
+        [author, tag].each { |target| target.update!(name: "#{target.name} renamed") }
+        finish = Time.now.utc
+        moved.update!(target: other)
+        [kept, tagged].each { |link| link.update!(updated_at: Time.now.utc + 1) }
+        retagged.update!(target: SourceTypeTag.create!(name: 'New tag'))
+
+        found = sources(SourceTypeHolder, [:linked_authors], window: start..finish)
+
+        expect(selected(found)).to eq(holders.first(2).map(&:id))
+      end
+    end
+
     describe 'a polymorphic belongs_to' do
       it 'reads each target type it names, and only targets of that type' do
         page = SelectionPage.create!(id: 7_000, title: 'Page')
@@ -664,9 +729,9 @@ RSpec.describe PaperTrailDiff::AssociationActivitySelection do
 
         found = sources(SelectionNote, [:notable], window: since(start))
 
-        # The page's type alone, once for the owners PT-AT recorded and once
-        # for those without versions.
-        expect(found.length).to eq(2)
+        # The page's type alone, once each for the owners PT-AT recorded,
+        # those without versions, and those whose first version kept the key.
+        expect(found.length).to eq(3)
         expect(selected(found)).to eq([])
         expect(selected(sources(SelectionNote, [:notable]))).to eq([note.id])
       end
