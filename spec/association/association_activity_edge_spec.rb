@@ -283,7 +283,7 @@ RSpec.describe PaperTrailDiff::AssociationActivityEdge do
       post = StringItemPost.create!(title: 'Owner')
       2.times { |index| post.notes.first_or_create!(body: 'versioned').update!(body: index.to_s) }
 
-      expect(integer_edge.relation([1]).to_sql).to match(/EXISTS \(SELECT.*"versions"/)
+      expect(integer_edge.relation([1]).to_sql).to match(/EXISTS \(SELECT.*[`"\[]versions[`"\]]/)
       sql = statements do
         expect(string_edge.relation(StringItemNote.select(:id)).to_sql)
           .not_to match(/EXISTS \(SELECT.*string_item_versions/)
